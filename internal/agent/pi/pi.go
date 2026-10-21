@@ -1109,3 +1109,42 @@ func limitToolCall(detail map[string]any, status string, result any, failed bool
 	}
 	return limitedDetail, errorText
 }
+
+// SetHostTools declares the daemon's orchestration tools to a provider that hosts them itself.
+//
+// omp has no MCP client in the modes BySpace uses, so the tools reach it through its RPC host-tool
+// channel. Returns the tool names the provider accepted, which is the authoritative list — omp may refuse
+// one whose schema it cannot parse, and silently assuming all of them are live means the model calls a
+// tool that does not exist.
+func (s *Session) SetHostTools(ctx context.Context, tools []map[string]any) ([]string, error) {
+	if len(tools) == 0 {
+		return nil, nil
+	}
+	raw, err := s.proc.Request(ctx, map[string]any{"type": "set_host_tools", "tools": tools})
+	if err != nil {
+		return nil, err
+	}
+	var wrapper struct {
+		ToolNames []string `json:"toolNames"`
+	}
+	if err := json.Unmarshal(raw, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.ToolNames, nil
+}
+
+// SendHostToolResult answers a host_tool_call.
+//
+// A result for a call the provider is not waiting on makes it report a protocol error, so the caller is
+// responsible for only answering calls it parsed.
+func (s *Session) SendHostToolResult(callID, output string, failed bool) error {
+	message := map[string]any{
+		"type":    "host_tool_result",
+		"callId":  callID,
+		"content": output,
+	}
+	if failed {
+		message["isError"] = true
+	}
+	return s.proc.SendRaw(message)
+}

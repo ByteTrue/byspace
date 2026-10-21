@@ -2707,10 +2707,28 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		}()
 	}
 
+	// omp has no MCP client in the modes BySpace uses: the orchestration tools reach it through its RPC
+	// host-tool channel. Declaring them is what makes an omp agent able to create agents, list
+	// workspaces or schedule anything at all.
+	var hostToolSink hostToolSession
+	if typed, ok := sess.(hostToolSession); ok {
+		hostToolSink = typed
+	}
+	if rec.Provider == "omp" && hostToolSink != nil {
+		go s.declareOmpHostTools(hostToolSink)
+	}
+
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
+
+		// A host tool call is the provider asking the daemon to run one of its own tools. Answered
+		// asynchronously so the event loop is not blocked for the length of the tool.
+		if call, ok := providers.ParseOmpHostToolCall(ev); ok && hostToolSink != nil {
+			go s.answerOmpHostToolCall(hostToolSink, call)
+		}
+
 		switch evType {
 		case "byspace_turn_started":
 			turnID, _ := ev["turnId"].(string)
@@ -4244,4 +4262,56 @@ func mcpToolRefs(tools []store.PreapprovedTool) []providers.McpToolRef {
 		out = append(out, providers.McpToolRef{Server: tool.Server, Tool: tool.Tool})
 	}
 	return out
+}
+
+// hostToolSession is a provider session that can host the daemon's own tools.
+//
+// omp implements it; the other providers take their tools through MCP or an extension instead.
+type hostToolSession interface {
+	SetHostTools(ctx context.Context, tools []map[string]any) ([]string, error)
+	SendHostToolResult(callID, output string, failed bool) error
+}
+
+// declareOmpHostTools sends the BySpace tool catalog to an omp session.
+//
+// Waits for the session to be ready first: omp does not answer RPC before its runtime is listening, and a
+// request sent too early sits in the queue and blocks the prompt behind it.
+func (s *Server) declareOmpHostTools(sess hostToolSession) {
+	for i := 0; i < 100; i++ {
+		if ready, ok := sess.(interface{ Ready() bool }); !ok || ready.Ready() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// The provider's answer is authoritative: it may refuse a tool whose schema it cannot parse, and
+	// assuming all of them are live means the model calls a tool that does not exist.
+	_, _ = sess.SetHostTools(ctx, mcpToolDefinitions())
+}
+
+// answerOmpHostToolCall runs one host tool call and returns its result.
+func (s *Server) answerOmpHostToolCall(sess hostToolSession, call providers.OmpHostToolCall) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	result, isError := s.callMCPTool(ctx, call.Name, call.Arguments)
+	output := ""
+	switch typed := result.(type) {
+	case string:
+		output = typed
+	case nil:
+		output = ""
+	default:
+		encoded, err := json.Marshal(typed)
+		if err != nil {
+			output = fmt.Sprint(typed)
+		} else {
+			output = string(encoded)
+		}
+	}
+	if output == "" && isError {
+		output = "the tool returned no output"
+	}
+	_ = sess.SendHostToolResult(call.CallID, output, isError)
 }
