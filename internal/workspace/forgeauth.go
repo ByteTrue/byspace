@@ -8,10 +8,11 @@ import (
 	"time"
 )
 
-// forgeProbeTimeout bounds an auth probe.
+// ForgeProbeTimeout bounds an auth probe.
 //
-// The CLI reaches the network; without a bound a slow forge makes the whole PR status request wait.
-const forgeProbeTimeout = 5 * time.Second
+// The CLI reaches the network; without a real deadline a slow forge makes the whole PR status request wait.
+// Node uses the same value for CLI_AUTH_PROBE_TIMEOUT_MS.
+const ForgeProbeTimeout = 10 * time.Second
 
 // ForgeAuthState explains why a forge's features are (un)available.
 //
@@ -94,6 +95,10 @@ func ProbeForgeAuth(cwd string, forge string) ForgeAuthState {
 	return ClassifyForgeAuth(true, path, nil, out)
 }
 
+// forgeProbeDeadline is the deadline the probe actually uses. A variable so a test can shrink it rather than
+// waiting out the real one.
+var forgeProbeDeadline = ForgeProbeTimeout
+
 // forgeBinaryName maps a forge to its CLI.
 func forgeBinaryName(forge string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(forge)) {
@@ -120,11 +125,19 @@ func runForgeProbe(cwd, binary string) (bool, error) {
 		// tea has no `auth status`; `login list` exits non-zero when there is no stored login.
 		args = []string{"login", "list"}
 	}
-	cmd := exec.Command(binary, args...)
+	// A deadline, not just WaitDelay: WaitDelay only begins once the context is done or the process has
+	// exited, so on its own it does not bound a command that never answers.
+	ctx, cancel := context.WithTimeout(context.Background(), forgeProbeDeadline)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = cwd
-	// A network-backed probe must not hang the request.
-	cmd.WaitDelay = forgeProbeTimeout
+	// Covers the case the deadline cannot: the process exits but a child keeps its pipes open.
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			// A non-zero exit is "not signed in", which is a state, not a failure.

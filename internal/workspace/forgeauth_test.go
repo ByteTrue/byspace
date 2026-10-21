@@ -1,6 +1,9 @@
 package workspace
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // `cli_missing` means the tool is not installed; telling that user to "sign in" sends them to a command that
 // does not exist.
@@ -45,3 +48,20 @@ func TestForgeAuthStatesAreTheWireValues(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// WaitDelay alone does not bound a command that never answers: its timer only starts once the context is done
+// or the process has exited. A probe without a real deadline would hang the whole PR status request.
+func TestProbeIsBoundedByADeadline(t *testing.T) {
+	const short = 150 * time.Millisecond
+	original := forgeProbeDeadline
+	forgeProbeDeadline = short
+	t.Cleanup(func() { forgeProbeDeadline = original })
+
+	start := time.Now()
+	// `sleep 30` stands in for a CLI that answers only after a forge stops responding.
+	_, _ = runForgeProbe(t.TempDir(), "sleep")
+	elapsed := time.Since(start)
+	if elapsed > 2*time.Second {
+		t.Fatalf("the probe was not bounded: %s", elapsed)
+	}
+}
