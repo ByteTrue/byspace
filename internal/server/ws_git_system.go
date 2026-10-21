@@ -1124,6 +1124,9 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		s.mu.Lock()
 		s.allowedHostnames = resolveAllowedHostnames(s.store)
 		s.mu.Unlock()
+		// The relay is the one setting that must actually act on change: it holds a live
+		// connection, and reporting "applied" without connecting would be a lie.
+		s.ApplyRelayConfig(ctx)
 		_ = sendSessionMsg(ctx, sink, "daemon.config.reload.response", map[string]any{
 			"requestId":               base.RequestID,
 			"appliedPaths":            report["appliedPaths"],

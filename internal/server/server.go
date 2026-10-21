@@ -148,6 +148,11 @@ type Server struct {
 	// capabilityToken authorizes an agent's own MCP bridge to /mcp/agents without the user's
 	// password, which the agent does not have.
 	capabilityToken string
+	// relay owns the relay connection's lifecycle so settings changes take effect without a
+	// restart.
+	relay *relayRuntime
+	// relayOverride is a --relay flag that outranks the stored config.
+	relayOverride string
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -218,6 +223,7 @@ func New(opts Options) (*Server, error) {
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,
 		capabilityToken:       capabilityToken,
+		relay:                 newRelayRuntime(RelayConfig{}),
 		serverID:              serverID,
 		version:               ver,
 		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
@@ -258,6 +264,8 @@ func New(opts Options) (*Server, error) {
 	// registered and then never fire, so an open editor never sees a file change made by an
 	// agent, and the diff panel never refreshes.
 	srv.startSubscriptionPoller()
+	// A relay configured in settings must connect at boot, not only when a CLI flag is passed.
+	srv.ApplyRelayConfig(context.Background())
 	return srv, nil
 }
 

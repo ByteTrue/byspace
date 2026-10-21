@@ -326,25 +326,12 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// The relay's lifecycle is owned by the server so a settings change takes effect without a
+	// restart (see internal/server/relay_runtime.go). A --relay flag is an explicit override: an
+	// operator launching the daemon with an endpoint means it, whatever an old config holds.
 	if strings.TrimSpace(*relayURL) != "" {
-		// Linear backoff to 30s, matching relay-transport.ts. A fixed 2s retry hammers a relay
-		// that is down for a while and gives no signal that the outage is long.
-		go func() {
-			attempt := 0
-			for ctx.Err() == nil {
-				_ = srv.ConnectRelay(ctx, *relayURL)
-				attempt++
-				delay := time.Duration(attempt) * time.Second
-				if delay > 30*time.Second {
-					delay = 30 * time.Second
-				}
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(delay):
-				}
-			}
-		}()
+		srv.SetRelayOverride(*relayURL)
+		srv.ApplyRelayConfig(ctx)
 	}
 
 	httpSrv := &http.Server{Handler: srv}
