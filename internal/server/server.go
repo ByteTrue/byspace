@@ -25,6 +25,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agentmode"
 	"github.com/ByteTrue/byspace/internal/agentroles"
 	"github.com/ByteTrue/byspace/internal/agenttitle"
+	"github.com/ByteTrue/byspace/internal/attachment"
 	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -1988,17 +1989,8 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
-		Attachments []struct {
-			Type string `json:"type"`
-			// ContextKind marks an attachment as conversation history, which must precede the
-			// user's text rather than follow it.
-			ContextKind string `json:"contextKind"`
-			FileName    string `json:"fileName"`
-			Path        string `json:"path"`
-			MimeType    string `json:"mimeType"`
-			Data        string `json:"data"`
-		} `json:"attachments"`
-		Config struct {
+		Attachments []promptAttachment `json:"attachments"`
+		Config      struct {
 			Provider         string            `json:"provider"`
 			Cwd              string            `json:"cwd"`
 			Title            *string           `json:"title"`
@@ -2204,16 +2196,7 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
-		Attachments []struct {
-			Type string `json:"type"`
-			// ContextKind marks an attachment as conversation history, which must precede the
-			// user's text rather than follow it.
-			ContextKind string `json:"contextKind"`
-			FileName    string `json:"fileName"`
-			Path        string `json:"path"`
-			MimeType    string `json:"mimeType"`
-			Data        string `json:"data"`
-		} `json:"attachments"`
+		Attachments []promptAttachment `json:"attachments"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	text := req.Text
@@ -3241,14 +3224,52 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 // They are the conversation the user is referring to ("continue that thread"), and the
 // instruction that follows only makes sense once the history is in context. Ported from
 // buildAgentPrompt, which orders the blocks the same way.
-func appendAttachmentHints(text string, attachments []struct {
+type promptAttachment struct {
 	Type        string `json:"type"`
 	ContextKind string `json:"contextKind"`
 	FileName    string `json:"fileName"`
 	Path        string `json:"path"`
 	MimeType    string `json:"mimeType"`
 	Data        string `json:"data"`
-}) string {
+	// The forge attachment fields. Without these, pointing the composer at a PR or a review sent the
+	// model nothing: the client supplied the title, number and body and the daemon dropped them.
+	Forge       string `json:"forge"`
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Body        string `json:"body"`
+	ProjectPath string `json:"projectPath"`
+	BaseRefName string `json:"baseRefName"`
+	HeadRefName string `json:"headRefName"`
+	ReviewMode  string `json:"mode"`
+	Cwd         string `json:"cwd"`
+	BaseRef     string `json:"baseRef"`
+	Text        string `json:"text"`
+	Size        int    `json:"size"`
+	Comments    []struct {
+		FilePath   string `json:"filePath"`
+		Side       string `json:"side"`
+		LineNumber int    `json:"lineNumber"`
+		Body       string `json:"body"`
+		Context    struct {
+			HunkHeader string `json:"hunkHeader"`
+			TargetLine struct {
+				OldLineNumber *int   `json:"oldLineNumber"`
+				NewLineNumber *int   `json:"newLineNumber"`
+				Type          string `json:"type"`
+				Content       string `json:"content"`
+			} `json:"targetLine"`
+			Lines []struct {
+				OldLineNumber *int   `json:"oldLineNumber"`
+				NewLineNumber *int   `json:"newLineNumber"`
+				Type          string `json:"type"`
+				Content       string `json:"content"`
+			} `json:"lines"`
+		} `json:"context"`
+	} `json:"comments"`
+}
+
+func appendAttachmentHints(text string, attachments []promptAttachment) string {
 	if len(attachments) == 0 {
 		return text
 	}
@@ -3263,13 +3284,10 @@ func appendAttachmentHints(text string, attachments []struct {
 		if name == "" || name == "." {
 			name = "attachment"
 		}
-		var line string
-		switch {
-		case strings.TrimSpace(att.Path) != "":
-			line = fmt.Sprintf("[Attached file: %s (%s) at %s]", name, att.MimeType, att.Path)
-		case att.Type == "uploaded_file":
-			line = fmt.Sprintf("[Attached file: %s (%s)]", name, att.MimeType)
-		}
+		// Each attachment type has its own rendering; a forge link and an uploaded file are not the
+		// same kind of thing to a model, and flattening them to "[Attached file]" loses the PR body
+		// and the review's diff context entirely.
+		line := renderAttachment(att, name)
 		if line == "" {
 			continue
 		}
@@ -3995,4 +4013,68 @@ func providerOptionsOf(rec store.AgentRecord) map[string]any {
 		return nil
 	}
 	return rec.Config.ProviderOptions
+}
+
+// renderAttachment turns one composer attachment into the text the model reads.
+//
+// The switch mirrors renderPromptAttachmentAsText. Legacy `github_pr` / `github_issue` kinds are still
+// accepted: a client at the compat floor sends them, and they mean the same as the forge-neutral
+// forms with the forge pinned to github.
+func renderAttachment(att promptAttachment, fallbackName string) string {
+	switch att.Type {
+	case "forge_change_request":
+		return attachment.ChangeRequest(att.Forge, att.Number, att.Title, att.URL, att.Body,
+			att.ProjectPath, att.BaseRefName, att.HeadRefName)
+	case "github_pr":
+		return attachment.ChangeRequest("github", att.Number, att.Title, att.URL, att.Body,
+			att.ProjectPath, att.BaseRefName, att.HeadRefName)
+	case "forge_issue":
+		return attachment.Issue(att.Forge, att.Number, att.Title, att.URL, att.Body, att.ProjectPath)
+	case "github_issue":
+		return attachment.Issue("github", att.Number, att.Title, att.URL, att.Body, "")
+	case "review":
+		comments := make([]attachment.ReviewComment, 0, len(att.Comments))
+		for _, comment := range att.Comments {
+			lines := make([]attachment.ReviewLine, 0, len(comment.Context.Lines))
+			for _, line := range comment.Context.Lines {
+				lines = append(lines, attachment.ReviewLine{
+					OldLineNumber: line.OldLineNumber,
+					NewLineNumber: line.NewLineNumber,
+					Type:          line.Type,
+					Content:       line.Content,
+				})
+			}
+			comments = append(comments, attachment.ReviewComment{
+				FilePath:   comment.FilePath,
+				Side:       comment.Side,
+				LineNumber: comment.LineNumber,
+				Body:       comment.Body,
+				HunkHeader: comment.Context.HunkHeader,
+				Target: attachment.ReviewLine{
+					OldLineNumber: comment.Context.TargetLine.OldLineNumber,
+					NewLineNumber: comment.Context.TargetLine.NewLineNumber,
+					Type:          comment.Context.TargetLine.Type,
+					Content:       comment.Context.TargetLine.Content,
+				},
+				Lines: lines,
+			})
+		}
+		return attachment.Review(att.ReviewMode, att.Cwd, att.BaseRef, comments)
+	case "text":
+		return attachment.Text(att.Text, att.Path, fallbackName, att.MimeType)
+	case "uploaded_file":
+		if strings.TrimSpace(att.Path) != "" {
+			// A materialised file is more useful with its path than with a size: the model can read
+			// it, and the size is what it learns from reading.
+			return attachment.UploadedFile(fallbackName, att.Path, att.MimeType, att.Size)
+		}
+		return attachment.UploadedFile(fallbackName, "", att.MimeType, att.Size)
+	}
+
+	// Fallback for a kind this build does not render: name it and its path so the model at least
+	// knows something was attached.
+	if strings.TrimSpace(att.Path) != "" {
+		return fmt.Sprintf("[Attached file: %s (%s) at %s]", fallbackName, att.MimeType, att.Path)
+	}
+	return ""
 }

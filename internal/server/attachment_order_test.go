@@ -5,14 +5,9 @@ import (
 	"testing"
 )
 
-type testAttachment = struct {
-	Type        string `json:"type"`
-	ContextKind string `json:"contextKind"`
-	FileName    string `json:"fileName"`
-	Path        string `json:"path"`
-	MimeType    string `json:"mimeType"`
-	Data        string `json:"data"`
-}
+// The production type, aliased so the test does not maintain a second copy of the field set — that
+// copy is exactly how the forge fields went missing from two of three call sites.
+type testAttachment = promptAttachment
 
 // A chat_history attachment is the conversation the user is referring to ("continue that
 // thread"); the instruction that follows only makes sense once the history is in context, so it
