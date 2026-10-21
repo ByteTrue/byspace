@@ -2172,6 +2172,12 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		},
 	}
 
+	// The workspace gets a real title from the first prompt, in the background: a worktree created
+	// from a request otherwise shows a slug in the sidebar until the user renames it by hand.
+	if req.InitialPrompt != nil {
+		s.scheduleWorkspaceAutoName(ws.WorkspaceID, cwd, *req.InitialPrompt)
+	}
+
 	mp, err := s.startOrGetPiAgent(rec)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
