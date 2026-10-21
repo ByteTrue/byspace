@@ -899,6 +899,23 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 `physical-socket.ts` / `encrypted-relay-socket.ts` 的抽象由 Go 的 `frameSink` 接口 + `internal/e2ee` 承担（同一个 handler 同时服务直连与 E2EE 中继）。
 
+### server/push/** | 3 文件 342 行 | **PORTED（Expo 分支属退休面）\*\*
+
+| 文件                  | 结论                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vapid-keys.ts`       | **PORTED（更严格）** — Go 的 `LoadOrCreateVAPIDKeys` 除了读写 `web-push-keys.json`，还校验密钥形状（公钥 65 字节且首字节 0x04、私钥 32 字节），不合格就重新生成。Node 只读 JSON，损坏的密钥会让每次签名失败。                                                                                                                                                             |
+| `web-push-service.ts` | **PORTED** — RFC 8291 aes128gcm + RFC 8292 VAPID ES256，见前面「Web Push 只生成密钥、从不投递」那条。404/410 会剪掉订阅。                                                                                                                                                                                                                                                 |
+| `push-service.ts`     | **N/A（退休面）** — 这是 **Expo Push** 投递（`expo-server-sdk` / `EXPO_PUSH_URL`）。前端在 Web 构建下走 `web-subscription.ts`（`PushManager.subscribe` + VAPID），`getExpoPushTokenAsync` 那条只在原生上生效，而原生与 Electron 在 issue 025 已退役。Go 只实现 Web Push，token 存储故意不透明（`register_push_token` 收任意字符串），所以将来要恢复 Expo 也不需要改协议。 |
+
+### server/agent/providers 剩余小文件 | 9 文件 1353 行
+
+| 文件                                                                                                             | 结论                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `copilot-acp-agent.ts`                                                                                           | **PARTIAL** — Go 有 agent / plan / allow-all 三个模式，**缺 `autopilot`**（`session-modes#autopilot`）。Node 还带一条 `COMPAT(copilotAutopilotMode)` 的旧 id 兼容，本项目不做兼容。补一个模式定义即可，但与「只用 pi」的产品方向无关，且 Copilot 未安装无法验证，暂记为缺口。 |
+| `cursor-acp-agent.ts` / `kimi-acp-agent.ts` / `kiro-acp-agent.ts` / `trae-acp-agent.ts` / `generic-acp-agent.ts` | **PORTED** — 各自是通用 ACP 驱动的薄特化（binary 名、默认 args、模式与模型清单）。这些是**可选预设**（`extends: "acp"`），只有用户在 `config.json` 里添加后才以 `source: "custom"` 出现，不是常驻内置。Go 的 `ACPPresets` 表覆盖了同样的字段。                                |
+| `codex-feature-definitions.ts`                                                                                   | **PORTED** — feature 定义（`Kind: "toggle"` 等）在 `driver.go` 的 `Features`。                                                                                                                                                                                                |
+| `diagnostic-utils.ts`                                                                                            | **PORTED** — provider 诊断（路径 + `--version` + 失败区分）在 `internal/execres` 与 `daemon status` 的 providers 列表。                                                                                                                                                       |
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
