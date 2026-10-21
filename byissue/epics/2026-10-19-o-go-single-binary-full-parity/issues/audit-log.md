@@ -968,6 +968,18 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 `agent-updates-service.ts` 是 Node 内部的 `agent_updates` 订阅服务，**协议里没有这个消息类型**——Go 用 `agent.timeline.set_subscription` + `agent_update` 广播，语义等价。`workspace-recovery` 的 `inspect`/`restore` 对应 `workspace.recovery.*` 那批 RPC（已实现，`restore` 走取消归档那条路径，本轮补上了它的正确语义）。
 
+### cli/commands/{agent,daemon}/** | 10 + 10 文件 | **PARTIAL → 已补五个子命令\*\*
+
+用脚本把 Node 的子命令清单与 Go 的 `case` 清单求差，找到五个缺口，逐个补上：
+
+| 命令                                                              | 结论                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `daemon install-service` / `uninstall-service` / `service-status` | **MISSING → 已补**。`print-plist`/`print-unit` 只输出定义文件，**从没告诉平台去加载它**——「装好但未加载」和「装好且在工作」在下次登录前看起来完全一样。现在三个子命令都有，且 status **分开报告两件事**：未安装 / 已注册但没在跑（它崩了）/ 已注册且运行中。重装会先 bootout，这样更新后能拿到新的二进制路径。平台拒绝注册时报 `registered: no` 并附上平台自己的输出，而不是打印「installed」。 |
+| `agent mode`                                                      | **MISSING → 已补**。之前 `mode` 被**静默路由到 `agent update`**（`case "update", "mode":`），所以 `byspace agent mode <id> <plan>` 会去改标题。现在列出时标注当前模式，带第二个参数时切换。列出的必要性在于：模式 id 是 provider 的 URL（`https://agentclientprotocol.com/protocol/session-modes#plan`），没人会去猜，所以不先列出的话「切换」不可用。                                          |
+| `daemon runtime-toolchain` / `daemon set-password`                | **N/A**。前者是 Node 特有的「node 版本与包管理器」诊断——Go 是静态二进制，没有工具链要检查。后者 `set-password` 是 py 密码设置；Go 侧 `auth.passwordHash` 由 `set_daemon_config` 承担（bcrypt cost 12，本轮之前已实现并端到端验证过）。                                                                                                                                                          |
+
+其余子命令（`agent` 的 ls/run/logs/wait/send/stop/archive/delete/inspect/detach/update/import/reload/attach、`project`/`workspace`/`terminal`/`script`/`provider`/`permit`/`schedule` 各组）都已逐条核对存在。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
