@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/projecticon"
 	"net/http"
 	"os"
 	"os/exec"
@@ -293,6 +294,11 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 				icon = s.store.LoadProjectIcon(p.ProjectID)
 				break
 			}
+		}
+		// No custom icon: use the one the project already ships. A repository with
+		// `public/favicon.svg` should not show a placeholder until the user uploads something.
+		if icon == nil {
+			icon = detectShippedIcon(req.Cwd)
 		}
 		_ = sendSessionMsg(ctx, sink, "project_icon_response", map[string]any{
 			"requestId": req.RequestID,
@@ -1354,4 +1360,37 @@ func ValidateProjectDirectoryName(name string) error {
 		return fmt.Errorf("directory name must not be an absolute path")
 	}
 	return nil
+}
+
+// detectShippedIcon returns a project's own favicon as an icon payload, or nil.
+//
+// The file is read and base64-encoded rather than served by path: the client renders the icon in
+// many places and a filesystem path would only work for a local connection.
+func detectShippedIcon(projectDir string) map[string]any {
+	if strings.TrimSpace(projectDir) == "" {
+		return nil
+	}
+	path := projecticon.Find(projectDir)
+	if path == "" {
+		return nil
+	}
+	mime := projecticon.MimeTypeFor(path)
+	if mime == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	// Icons are small; anything larger is not one, and shipping a megabyte per project through
+	// the directory listing would be worse than showing nothing.
+	const maxIconBytes = 512 * 1024
+	if len(raw) > maxIconBytes {
+		return nil
+	}
+	return map[string]any{
+		"data":     base64.StdEncoding.EncodeToString(raw),
+		"mimeType": mime,
+		"source":   "detected",
+	}
 }
