@@ -436,6 +436,20 @@ approval 建模成 system note，提升为 review；Gitea 只有一个 comments 
 
 顺带修了既有测试——它一直在断言我自己发明的形状。这也说明**测试断言了错误的东西时，测试反而是缺口的掩护**。
 
+### server/migrations/backfill-workspace-id | 95 | **MISSING** → 已补
+
+每个代码路径都把 `WorkspaceID` 当权威归属，所以早于该字段的 agent 记录**是不可见的**：不出现在任何工作区，History 也恢复不了。那些记录还在磁盘上，所以会话看起来像丢了。
+
+解析规则按 Node：exact cwd 匹配（最早的优先）→ 否则最深的包含目录，带分隔符检查（`/repo/app` 不能匹配 `/repo/application`）。**home 目录永远不拥有其后代**——所有无关 agent 都住在那下面，把它们全归到一个工作区比留作无主更糟。
+
+live 记录只解析到 live 工作区，archived 记录可以解析到 archived 的，这样 History 保留归属。启动时跑一次并写回，因此幂等，下游不需要兜底。
+
+### server/file-download/token-store.ts | 64 | **PARTIAL** → 已补
+
+过期下载 token 只在**使用时**检查，从不清理——用户打开过的每个文件预览都会在 map 里留一条，直到 daemon 重启。
+
+在签发新 token 时清理：那是 map 唯一增长的时机，任意时刻集合都很小，为它加一个后台清扫器是多余的部件。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
