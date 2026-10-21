@@ -277,6 +277,24 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 - `file-observer`：Node 用原生递归 watcher + 协调；Go 用 1 秒轮询 `fs.file.update`。**语义等价但机制不同**——轮询在超大仓库上有成本，接 `internal/gitmeta` 规则表 + watcher 是后续性能工作（已在 `decisions/004` 记录）。
 - `websocket/runtime-metrics`：诊断计数器，只写日志、不进协议。Go 无结构化日志子系统（已在 `logger.ts` 条目说明），N/A。
 
+### server/auto-archive-on-merge/** | 231 | **MISSING\*\* → 已补
+
+`daemon.autoArchiveAfterMerge` 是「可热更新」的配置项，但**背后没有任何行为**：打开它什么也不会发生，用户仍要手工清理已合并的 worktree。
+
+**守卫本身就是这个功能。** 归档会删掉 worktree，所以只在：PR 已合并、工作树干净、没有未推送的提交、worktree 是 BySpace 自己创建的、且没有因为这个 PR URL 归档过（URL 是幂等键）时才做。
+
+「未推送」这一条尤其关键：PR 打开之后追加的 commit 不在那个 PR 里，「已合并且干净」不足以判断。计数失败返回 -1 并拦截——不可验证的状态不许删东西。
+
+跑在慢的 workspace-reconcile tick 上，不是每秒那个：每分钟每个工作区一次 forge 调用是不礼貌的。
+
+### server/pagination/** | 203 | **PARTIAL\*\* → 已补
+
+游标原来是「行偏移量的十进制字符串」。这种游标只在数据不变时稳定：agent 列表按最后活动排序，而最后活动**一直在变**，所以两次翻页之间若有 agent 完成或新增，后面每一行都位移——客户端会看到重复项，并且永远看不到落进缝隙的那条。对这个列表来说这不是边缘情况，是常态。
+
+已移植 `server/pagination/cursor`：游标携带排序规格 + 最后一行的排序值 + id，下一页从那一行继续，不受之前插入的影响。排序规格不符的游标**拒绝**（否则会跳行），格式错误的游标返回空页（而不是静默从头发起，那会让客户端在第一页上无限循环），排序键相同的按 id 打破平局（否则页边界会落在同值组中间而丢行）。
+
+端到端验证：4 页每页 2 条，共 8 个唯一 agent，无重复无遗漏。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
