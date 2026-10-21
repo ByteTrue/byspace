@@ -531,6 +531,16 @@ id 按前缀匹配——完整 id 很长，用户从 `ls` 复制到的在窄终�
 - 把 `--mcp` 和 `--no-mcp` 注册到同一个 `*bool` 上，第二次注册会覆盖第一次的默认值，**静默把注入关掉**了；
 - 不读 stdin 会让 provider 的 hook 进程阻塞，所以即使不需要也把 payload 排空。
 
+### commands/daemon/status.ts | 464 | **PARTIAL** → 已补 provider 健康与版本漂移
+
+`daemon status` 只回答两件事：在不在跑、serverId 是什么。而**首次配置真正会失败的地方是 provider 列表**，那个失败原来不可见——一个二进制存在但 `--version` 非零退出的 provider，和一个没安装的 provider 看起来完全一样，而两者需要不同的修法。
+
+现在逐个列出内置 provider 的解析路径与 `--version` 输出，或者 `(not found)` / `(--version failed)`。
+
+daemon 版本与 CLI 版本不一致时也会警告：版本不匹配的症状是命令静默无效，值得直接说出来而不是让用户从行为反推。
+
+验证（对真实 daemon）：pi 解析到真实路径与版本 1.3.0，其余五个报 not found。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
