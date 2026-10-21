@@ -21,14 +21,16 @@ import (
 
 // setupSnapshot is the in-memory record of a worktree setup run (matches WorkspaceSetupSnapshotSchema).
 type setupSnapshot struct {
-	WorkspaceID  string
-	Status       string // "running" | "completed" | "failed" | "blocked"
-	WorktreePath string
-	BranchName   string
-	Log          strings.Builder
-	Commands     []map[string]any
-	Error        *string
-	mu           sync.Mutex
+	WorkspaceID string
+	Status      string // "running" | "completed" | "failed" | "blocked"
+	// BlockedSource names the change request a gate stopped for.
+	BlockedSource *store.UntrustedSource
+	WorktreePath  string
+	BranchName    string
+	Log           strings.Builder
+	Commands      []map[string]any
+	Error         *string
+	mu            sync.Mutex
 }
 
 // handleWorkspaceSetupProject serves workspace.setup.run.request and workspace_setup_status_request.
@@ -111,11 +113,12 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	// request: that byspace.json belongs to the author, and running it is running their code.
 	if blocked, reason := s.automationBlocked(workspaceID); blocked {
 		snap := &setupSnapshot{
-			WorkspaceID:  workspaceID,
-			Status:       "blocked",
-			WorktreePath: cwd,
-			BranchName:   branch,
-			Error:        &reason,
+			WorkspaceID:   workspaceID,
+			Status:        "blocked",
+			WorktreePath:  cwd,
+			BranchName:    branch,
+			Error:         &reason,
+			BlockedSource: s.untrustedSourceFor(workspaceID),
 		}
 		s.mu.Lock()
 		s.setupSnapshots[workspaceID] = snap
@@ -316,9 +319,9 @@ func (s *Server) broadcastSetupProgress(snap *setupSnapshot) {
 			"truncated":    len(snap.Log.String()) > maxLog,
 		},
 		"error": snap.Error,
-		// `blockedSource` is set only when a change-request gate stopped the run; the banner
-		// links to it instead of showing a bare failure.
-		"blockedSource": nil,
+		// Set only when a change-request gate stopped the run, so the banner can name the PR the
+		// user has to trust instead of showing a bare failure.
+		"blockedSource": blockedSourcePayload(snap.BlockedSource),
 	}
 	snap.mu.Unlock()
 	s.broadcastSessionMsg("workspace_setup_progress", payload)
@@ -618,4 +621,35 @@ func (s *Server) automationBlocked(workspaceID string) (bool, string) {
 		return true, workspace.AutomationBlockedError{Source: *ws.UntrustedSource}.Error()
 	}
 	return false, ""
+}
+
+// untrustedSourceFor returns the change-request origin that blocked a workspace, if any.
+func (s *Server) untrustedSourceFor(workspaceID string) *store.UntrustedSource {
+	workspaces, err := s.store.ListWorkspaces()
+	if err != nil {
+		return nil
+	}
+	for _, ws := range workspaces {
+		if ws.WorkspaceID == workspaceID && ws.UntrustedSource.IsBlocked() {
+			source := *ws.UntrustedSource
+			return &source
+		}
+	}
+	return nil
+}
+
+// blockedSourcePayload renders the wire shape, or nil when nothing blocked the run.
+//
+// Optional (not nullable) in the schema, so an absent gate must omit the key rather than send
+// null — a null there fails validation and the client shows no banner at all.
+func blockedSourcePayload(source *store.UntrustedSource) any {
+	if source == nil {
+		return nil
+	}
+	return map[string]any{
+		"kind":           "change_request",
+		"forge":          source.Forge,
+		"number":         source.Number,
+		"headRepository": source.HeadRepository,
+	}
 }
