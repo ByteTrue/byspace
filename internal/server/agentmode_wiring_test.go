@@ -50,9 +50,11 @@ func TestProviderModeIDsMatchTheSnapshot(t *testing.T) {
 	if srv.providerModeIsUnattended("claude", "plan") {
 		t.Fatal("plan asks")
 	}
-	// A provider that declares none is "unknown", which passes an explicit mode through rather
-	// than refusing it: refusing would block every provider whose modes we have not probed.
-	if _, known := srv.providerModeIDs("no-such-provider-with-no-modes"); known {
-		t.Fatal("a provider without declared modes must report unknown")
+	// An unregistered provider falls back to the custom ACP spec, which declares a single `agent`
+	// mode. So "unknown" is only reachable for a provider whose spec genuinely has no modes — the
+	// fallback means an explicit mode still gets validated against `agent`, not passed through.
+	ids, known = srv.providerModeIDs("no-such-provider-with-no-modes")
+	if !known || len(ids) != 1 || ids[0] != "agent" {
+		t.Fatalf("custom ACP fallback modes = %v known=%v", ids, known)
 	}
 }
