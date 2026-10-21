@@ -538,6 +538,11 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	baseBranch := fs.String("base", "", "base ref for branch-off (default: the current HEAD)")
 	branch := fs.String("branch", "", "existing branch (with --worktree-mode checkout-branch)")
 	prNumber := fs.Int("pr-number", 0, "change request number (with --worktree-mode checkout-pr)")
+	// --new-workspace is the node CLI's shorthand for "isolate this agent": local keeps the current
+	// directory, worktree branches one. Exposed here because it is how the node CLI documents the
+	// intent, while --worktree-mode spells out which branch.
+	newWorkspace := fs.String("new-workspace", "", "local | worktree (shorthand for the isolation mode)")
+	forge := fs.String("forge", "", "forge for a change-request checkout (default: detected)")
 	imagePaths := multiFlag{}
 	fs.Var(&imagePaths, "image", "image file to attach to the first message (repeatable)")
 	var labels multiFlag
@@ -614,14 +619,37 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		request["labels"] = parsed
 	}
 
-	if worktreeModeValue := strings.TrimSpace(*worktreeMode); worktreeModeValue != "" {
+	effectiveWorktreeMode := strings.TrimSpace(*worktreeMode)
+	// --new-workspace worktree with no explicit mode means "branch off a new branch", which is what
+	// the node CLI does; --new-workspace local cancels any worktree request.
+	switch strings.TrimSpace(*newWorkspace) {
+	case "local":
+		effectiveWorktreeMode = ""
+	case "worktree":
+		if effectiveWorktreeMode == "" {
+			effectiveWorktreeMode = "branch-off"
+		}
+	case "":
+		// No opinion: --worktree-mode decides on its own.
+	default:
+		return fmt.Errorf("--new-workspace %q is not local or worktree", *newWorkspace)
+	}
+
+	if worktreeModeValue := effectiveWorktreeMode; worktreeModeValue != "" {
 		worktree := map[string]any{"mode": worktreeModeValue}
 		switch worktreeModeValue {
 		case "branch-off":
-			if strings.TrimSpace(*newBranch) == "" {
+			branchName := strings.TrimSpace(*newBranch)
+			if branchName == "" && strings.TrimSpace(*newWorkspace) == "worktree" {
+				// `--new-workspace worktree` alone means "isolate me"; the daemon names the branch
+				// from the prompt, which is what the app does. Omitting newBranch is how that is
+				// requested, so only an explicit --worktree-mode branch-off requires the name.
+				worktree["mode"] = "branch-off"
+			} else if branchName == "" {
 				return errors.New("--worktree-mode branch-off needs --new-branch")
+			} else {
+				worktree["newBranch"] = branchName
 			}
-			worktree["newBranch"] = strings.TrimSpace(*newBranch)
 			if strings.TrimSpace(*baseBranch) != "" {
 				worktree["base"] = strings.TrimSpace(*baseBranch)
 			}
@@ -642,6 +670,9 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		}
 		if slug := strings.TrimSpace(*worktreeSlug); slug != "" {
 			worktree["slug"] = slug
+		}
+		if strings.TrimSpace(*forge) != "" {
+			worktree["forge"] = strings.TrimSpace(*forge)
 		}
 		request["worktree"] = worktree
 	}

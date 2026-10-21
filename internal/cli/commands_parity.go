@@ -182,11 +182,14 @@ func runAgentStop(args []string, stdout io.Writer) error {
 func runAgentArchive(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("archive", flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	// Archiving a running agent interrupts its turn. That is destructive enough that it has to be
+	// asked for explicitly — silently killing a run the user forgot about loses work they paid for.
+	force := fs.Bool("force", false, "interrupt a running agent before archiving")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return errors.New("usage: byspace archive [--addr host:port] <agent-id>")
+		return errors.New("usage: byspace archive [--force] [--addr host:port] <agent-id>")
 	}
 	agentID := fs.Arg(0)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -196,6 +199,33 @@ func runAgentArchive(args []string, stdout io.Writer) error {
 		return err
 	}
 	defer ws.CloseNow()
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "fetch_agent_request",
+		"requestId": "cli_arch_status",
+		"agentId":   agentID,
+	}); err != nil {
+		return err
+	}
+	fetched, err := waitSessionResp(ctx, ws, "fetch_agent_response", "")
+	if err != nil {
+		return err
+	}
+	agent, _ := fetched["agent"].(map[string]any)
+	if status, _ := agent["status"].(string); status == "running" {
+		if !*force {
+			return fmt.Errorf("%s is running; pass --force to interrupt it and archive", agentID)
+		}
+		// Cancel first so the archive does not race a turn that is still writing its transcript.
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":      "cancel_agent_request",
+			"requestId": "cli_arch_cancel",
+			"agentId":   agentID,
+		}); err != nil {
+			return err
+		}
+		_, _ = waitSessionResp(ctx, ws, "cancel_agent_response", "")
+	}
 
 	_ = sendSessionReq(ctx, ws, map[string]any{
 		"type":      "archive_agent_request",
