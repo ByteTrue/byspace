@@ -130,10 +130,12 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		var req struct {
 			RequestID string `json:"requestId"`
 			Cwd       string `json:"cwd"`
-			NewName   string `json:"newName"`
+			// The protocol field is `branch`; `newName` was my own invention, so every rename
+			// silently renamed the branch to "" (and failed).
+			Branch string `json:"branch"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		cur, err := workspace.RenameBranch(ctx, req.Cwd, req.NewName)
+		cur, err := workspace.RenameBranch(ctx, req.Cwd, req.Branch)
 		if err != nil {
 			_ = sendSessionMsg(ctx, sink, "checkout.rename_branch.response", map[string]any{
 				"requestId":     req.RequestID,
@@ -247,10 +249,17 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		var req struct {
 			RequestID string `json:"requestId"`
 			Cwd       string `json:"cwd"`
-			Message   string `json:"message"`
+			// `branch` is the label the picker shows when restoring; `message` is my own
+			// invention and does not exist on the wire.
+			Branch  string `json:"branch"`
+			Message string `json:"message"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		err := workspace.StashSave(ctx, req.Cwd, req.Message)
+		label := strings.TrimSpace(req.Branch)
+		if label == "" {
+			label = req.Message
+		}
+		err := workspace.StashSave(ctx, req.Cwd, label)
 		var errObj any
 		if err != nil {
 			errObj = checkoutErr(err.Error())
@@ -314,11 +323,18 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			Cwd       string `json:"cwd"`
 			Title     string `json:"title"`
 			Body      string `json:"body"`
-			Base      string `json:"base"`
-			Draft     bool   `json:"draft"`
+			// The protocol field is `baseRef`; reading `base` meant the PR always targeted the
+			// repository default instead of the branch the user picked.
+			BaseRef string `json:"baseRef"`
+			Base    string `json:"base"`
+			Draft   bool   `json:"draft"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		prURL, prNum, err := workspace.CreatePR(ctx, req.Cwd, req.Title, req.Body, req.Base, req.Draft)
+		baseRef := strings.TrimSpace(req.BaseRef)
+		if baseRef == "" {
+			baseRef = req.Base
+		}
+		prURL, prNum, err := workspace.CreatePR(ctx, req.Cwd, req.Title, req.Body, baseRef, req.Draft)
 		var urlVal any
 		var errObj any
 		if err != nil {
@@ -378,7 +394,13 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
-		err := workspace.SetAutoMerge(ctx, base.Cwd, base.Enabled)
+		// `mergeMethod` is optional in the protocol; without it a squash-only repo rejects
+		// the merge because this defaulted to --merge.
+		var autoMergeReq struct {
+			MergeMethod string `json:"mergeMethod"`
+		}
+		_ = json.Unmarshal(raw, &autoMergeReq)
+		err := workspace.SetAutoMerge(ctx, base.Cwd, base.Enabled, autoMergeReq.MergeMethod)
 		var errObj any
 		if err != nil {
 			errObj = checkoutErr(err.Error())

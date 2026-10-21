@@ -117,6 +117,24 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 `create_terminal_request.agentId` 未解析，开终端时回落到 daemon 的 cwd 而不是该 agent 的工作目录
 ——已补（优先 agent.cwd，其次 workspace.cwd）。
 
+### 入站字段名不一致：4 处功能直接失效
+
+协议字段名和我写的 struct tag 不一样时，`json.Unmarshal` 不报错、字段为空，功能静默不生效。
+本轮抓到的：
+
+| 消息                                | 我写的    | 协议          | 后果                                       |
+| ----------------------------------- | --------- | ------------- | ------------------------------------------ |
+| `checkout.rename_branch.request`    | `newName` | `branch`      | 重命名成空字符串，必然失败                 |
+| `stash_save_request`                | `message` | `branch`      | stash 没有标签，还原时无法识别             |
+| `checkout_pr_create_request`        | `base`    | `baseRef`     | PR 总是打到仓库默认分支                    |
+| `checkout.*.set_auto_merge.request` | 未解析    | `mergeMethod` | 硬编码 `--merge`，squash-only 仓库必然被拒 |
+
+另外两处更严重：
+
+- **`open_in_editor_request` 直接 `exec.Command(req.EditorID)`** —— `editorId` 来自客户端，
+  等于把任意字符串当命令执行。改为白名单 + `LookPath` 校验，列表接口用同一份白名单。
+- `terminal_input` 的嵌套形状（见上一条）。
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：

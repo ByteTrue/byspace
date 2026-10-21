@@ -861,16 +861,25 @@ func (s *Server) handleEditors(ctx context.Context, sink frameSink, msgType stri
 		RequestID string `json:"requestId"`
 		EditorID  string `json:"editorId"`
 		Path      string `json:"path"`
+		// `mode: "reveal"` opens the file and scrolls to it; "open" just opens the target.
+		Mode string `json:"mode"`
+		Cwd  string `json:"cwd"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	if msgType == "list_available_editors_request" {
 		editors := make([]map[string]any, 0)
+		// Same allow-list as open_in_editor, so the picker never offers something the open
+		// path would refuse.
 		for _, cand := range []struct{ id, label string }{
 			{"cursor", "Cursor"},
 			{"code", "VS Code"},
 			{"zed", "Zed"},
+			{"windsurf", "Windsurf"},
+			{"idea", "IntelliJ IDEA"},
+			{"subl", "Sublime Text"},
+			{"nvim", "Neovim"},
 		} {
-			if _, err := exec.LookPath(cand.id); err == nil {
+			if _, err := exec.LookPath(knownEditors[cand.id]); err == nil {
 				editors = append(editors, map[string]any{"id": cand.id, "label": cand.label})
 			}
 		}
@@ -881,8 +890,20 @@ func (s *Server) handleEditors(ctx context.Context, sink frameSink, msgType stri
 		})
 		return
 	}
-	if req.EditorID != "" && req.Path != "" {
-		_ = exec.Command(req.EditorID, req.Path).Start()
+	// `editorId` comes from the client and used to be executed verbatim, so any string was a
+	// command. Only launch an editor this build actually detected.
+	if target, ok := resolveEditorCommand(req.EditorID); ok && req.Path != "" {
+		args := []string{}
+		if req.Mode == "reveal" {
+			args = append(args, "--goto", req.Path)
+		} else {
+			args = append(args, req.Path)
+		}
+		cmd := exec.Command(target, args...)
+		if strings.TrimSpace(req.Cwd) != "" {
+			cmd.Dir = req.Cwd
+		}
+		_ = cmd.Start()
 	}
 	_ = sendSessionMsg(ctx, sink, "open_in_editor_response", map[string]any{
 		"requestId": req.RequestID,
@@ -1153,4 +1174,29 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		s.broadcastAgentUpdate(rec)
 	}
 	_ = ctx
+}
+
+// knownEditors is the allow-list of editor launchers. `open_in_editor_request` carries an
+// editorId from the client; executing it directly would run any string as a command.
+var knownEditors = map[string]string{
+	"cursor":   "cursor",
+	"code":     "code",
+	"zed":      "zed",
+	"windsurf": "windsurf",
+	"nvim":     "nvim",
+	"vim":      "vim",
+	"idea":     "idea",
+	"subl":     "subl",
+}
+
+// resolveEditorCommand maps an editor id to a binary that exists on this machine.
+func resolveEditorCommand(editorID string) (string, bool) {
+	binary, ok := knownEditors[strings.ToLower(strings.TrimSpace(editorID))]
+	if !ok {
+		return "", false
+	}
+	if _, err := exec.LookPath(binary); err != nil {
+		return "", false
+	}
+	return binary, true
 }

@@ -155,9 +155,18 @@ func MergePR(ctx context.Context, cwd, method string) error {
 }
 
 // SetAutoMerge enables or disables auto-merge on the current branch's PR via `gh pr merge`.
-func SetAutoMerge(ctx context.Context, cwd string, enabled bool) error {
+func SetAutoMerge(ctx context.Context, cwd string, enabled bool, mergeMethod string) error {
 	if enabled {
-		_, err := runGH(ctx, cwd, "pr", "merge", "--auto", "--merge")
+		// The strategy is the user's choice; hardcoding --merge meant a squash-only repo
+		// rejected every auto-merge attempt.
+		method := strings.TrimSpace(mergeMethod)
+		switch method {
+		case "merge", "squash", "rebase":
+			// valid
+		default:
+			method = "merge"
+		}
+		_, err := runGH(ctx, cwd, "pr", "merge", "--auto", "--"+method)
 		return err
 	}
 	_, err := runGH(ctx, cwd, "pr", "merge", "--disable-auto")
