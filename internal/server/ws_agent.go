@@ -973,6 +973,8 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		ParentAgentID string `json:"parentAgentId"`
 		SubagentID    string `json:"subagentId"`
 		Direction     string `json:"direction"`
+		// Limit is omitted for "all"; the node store defaults it to 200 and treats 0 as all.
+		Limit *int `json:"limit"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	dir := req.Direction
@@ -1034,9 +1036,33 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 			"seq":       e.Seq,
 		})
 	}
-	minSeq := 0
-	if len(rows) > 0 {
-		minSeq = 1
+
+	// The window semantics are what make the panel usable for a long subagent: `tail` shows the
+	// most recent N with hasOlder set, `head` the first N with hasNewer set. Returning everything
+	// ignores both the limit and the direction, so a subagent that ran for an hour ships its whole
+	// transcript on every poll.
+	total := len(rows)
+	minSeq, maxSeq := 0, total
+	hasOlder, hasNewer := false, false
+	if req.Limit != nil {
+		limit := *req.Limit
+		if limit < 0 {
+			limit = 0
+		}
+		if limit > 0 && limit < total {
+			// The protocol's directions are tail (newest N), before (older than a cursor) and
+			// after (newer than a cursor). `after` reads forward from the cursor, so it keeps the
+			// leading rows and reports that newer ones remain; `tail` and `before` keep the
+			// trailing rows and report older ones.
+			if dir == "after" {
+				rows = rows[:limit]
+				hasNewer = true
+			} else {
+				rows = rows[total-limit:]
+				hasOlder = true
+			}
+			minSeq = 1
+		}
 	}
 
 	_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.timeline.get.response", map[string]any{
@@ -1051,11 +1077,11 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		"gap":           false,
 		"window": map[string]any{
 			"minSeq":  minSeq,
-			"maxSeq":  len(rows),
-			"nextSeq": len(rows) + 1,
+			"maxSeq":  maxSeq,
+			"nextSeq": total + 1,
 		},
-		"hasOlder": false,
-		"hasNewer": false,
+		"hasOlder": hasOlder,
+		"hasNewer": hasNewer,
 		"rows":     rows,
 		"error":    nil,
 	})
