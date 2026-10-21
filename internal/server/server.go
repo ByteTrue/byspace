@@ -1571,6 +1571,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "read_project_config_request", "write_project_config_request":
 		s.handleProjectConfig(ctx, sink, base.Type, raw)
 
+	// COMPAT(workspaceScriptStartFlat): added before v0.21, remove after 2027-06-01. The flat name is
+	// `start_workspace_script_request`; the protocol still declares it, so the daemon must keep parsing it —
+	// but it must not run a second, different implementation. Both names reach the same handler.
 	case "start_workspace_script_request",
 		"workspace.script.list.request",
 		"workspace.script.start.request",
@@ -1750,16 +1753,33 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 
 func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID         string  `json:"requestId"`
-		Title             *string `json:"title"`
-		FirstAgentContext any     `json:"firstAgentContext"`
+		RequestID string  `json:"requestId"`
+		Title     *string `json:"title"`
+		// Cwd is what the CLI sends; Source.Path is what the web client sends. Both name the directory to
+		// open, and reading only one of them silently opened the daemon's own working directory instead —
+		// the workspace appeared, just in the wrong place, with the requested path dropped.
+		Cwd string `json:"cwd"`
+		// Path is the flat form the CLI's older requests used.
+		Path              string `json:"path"`
+		FirstAgentContext any    `json:"firstAgentContext"`
 		Source            struct {
 			Kind string `json:"kind"`
 			Path string `json:"path"`
 		} `json:"source"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	prj, ws, err := s.store.EnsureWorkspaceForCwd(req.Source.Path)
+
+	cwd := firstNonEmptyTrimmed(req.Source.Path, req.Cwd, req.Path)
+	if cwd == "" {
+		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+			"requestId":       req.RequestID,
+			"workspace":       nil,
+			"setupTerminalId": nil,
+			"error":           "workspace.create needs a directory",
+		})
+		return
+	}
+	prj, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
 			"requestId":       req.RequestID,
@@ -4318,4 +4338,17 @@ func (s *Server) answerOmpHostToolCall(sess hostToolSession, call providers.OmpH
 		output = "the tool returned no output"
 	}
 	_ = sess.SendHostToolResult(call.CallID, output, isError)
+}
+
+// firstNonEmptyTrimmed returns the first value with content.
+//
+// Used where a request accepts the same fact under more than one key: guessing which one a client sends is how a field
+// ends up silently read from the wrong place.
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

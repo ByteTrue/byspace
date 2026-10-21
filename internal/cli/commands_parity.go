@@ -618,7 +618,7 @@ func runWorkspaceGroupCmd(args []string, stdout io.Writer) error {
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		createRequest := map[string]any{"type": "workspace.create.request", "requestId": "cli_wc", "cwd": cwd}
+		createRequest := map[string]any{"type": "workspace.create.request", "requestId": "cli_wc", "cwd": cwd, "source": map[string]any{"kind": "path", "path": cwd}}
 		if project := strings.TrimSpace(*wsProject); project != "" {
 			createRequest["projectId"] = project
 		}
@@ -943,16 +943,35 @@ func runScriptGroupCmd(args []string, stdout io.Writer) error {
 			return errors.New("usage: byspace script start [--workspace <id>] <script-name>")
 		}
 		_ = sendSessionReq(ctx, ws, map[string]any{
-			"type":        "start_workspace_script_request",
+			"type":        "workspace.script.start.request",
 			"requestId":   "cli_scs",
 			"workspaceId": *wsID,
 			"scriptName":  fs.Arg(0),
 		})
-		resp, err := waitSessionResp(ctx, ws, "start_workspace_script_response", "")
+		resp, err := waitSessionResp(ctx, ws, "workspace.script.start.response", "")
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, resp["terminalId"])
+		if errText, _ := resp["error"].(string); errText != "" {
+			return errors.New(errText)
+		}
+		// A service script's whole point is the URL: printing the terminal id told the user nothing about which
+		// address to open, and for a service script there is no terminal to look at.
+		if script, ok := resp["script"].(map[string]any); ok {
+			if url, _ := script["proxyUrl"].(string); url != "" {
+				fmt.Fprintln(stdout, url)
+				return nil
+			}
+			if url, _ := script["localProxyUrl"].(string); url != "" {
+				fmt.Fprintln(stdout, url)
+				return nil
+			}
+		}
+		if termID := resp["terminalId"]; termID != nil {
+			fmt.Fprintln(stdout, termID)
+			return nil
+		}
+		fmt.Fprintln(stdout, "started")
 		return nil
 
 	case "stop":

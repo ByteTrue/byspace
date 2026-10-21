@@ -971,38 +971,24 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 	}
 
 	switch msgType {
+	// COMPAT(workspaceScriptStartFlat): the flat name predates `workspace.script.start.request`. It is routed
+	// here so an old client still works; the implementation below is the same one, and the response type is
+	// chosen by the request's own type so each caller gets the shape it asked for.
 	case "start_workspace_script_request":
-		var termID any
-		if wsCwd != "" {
-			for _, sc := range readScripts() {
-				if sc["name"] == req.ScriptName {
-					cmdStr, _ := sc["command"].(string)
-					s.mu.Lock()
-					slot := uint8(len(s.terminals) + 1)
-					tid := fmt.Sprintf("term_%d", slot)
-					if sess, err := terminal.StartSession(terminal.StartOptions{
-						ID:          tid,
-						Name:        req.ScriptName,
-						Cwd:         wsCwd,
-						WorkspaceID: req.WorkspaceID,
-					}); err == nil {
-						s.terminals[slot] = sess
-						s.terminalSlotsByID[tid] = slot
-						_ = sess.WriteInput([]byte(cmdStr + "\n"))
-						termID = tid
-					}
-					s.mu.Unlock()
-					break
-				}
-			}
+		script, err := s.startWorkspaceScript(ctx, req.WorkspaceID, req.ScriptName)
+		var errText any
+		if err != nil {
+			errText = err.Error()
 		}
 		_ = sendSessionMsg(ctx, sink, "start_workspace_script_response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"scriptName":  req.ScriptName,
-			"terminalId":  termID,
-			"error":       nil,
+			"script":      script,
+			"error":       errText,
 		})
+		s.broadcastScriptStatus(req.WorkspaceID)
+
 	case "workspace.script.list.request":
 		_ = sendSessionMsg(ctx, sink, "workspace.script.list.response", map[string]any{
 			"requestId":   req.RequestID,
