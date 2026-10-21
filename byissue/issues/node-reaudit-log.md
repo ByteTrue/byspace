@@ -19,11 +19,11 @@
 
 | 结论    | 数量 |
 | ------- | ---- |
-| 待审    | 489  |
-| MATCH   | 9    |
-| FIXED   | 14   |
-| N/A     | 1    |
-| DROPPED | 1    |
+| 待审    | 632  |
+| MATCH   | 6    |
+| FIXED   | 3    |
+| N/A     | 0    |
+| DROPPED | 0    |
 
 ## server
 
