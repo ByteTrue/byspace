@@ -224,6 +224,19 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `git-metadata-event-rules.ts` | 177 | **PORTED**（本批此前已补） | 规则表已在 `internal/gitmeta`，7 个测试。仍**未接 watcher**——daemon 目前 1 秒轮询全量 diff，接上这张表是替换轮询的前置。 |
 | `workspace-registry-bootstrap-legacy.ts` | 89 | **N/A（COMPAT）** | 文件本身标注 `COMPAT(legacyRegistryBootstrap)`，用于把 v0.1.109 之前的旧记录迁移成注册表。`RebuildWorkspaceRegistryFromAgents` 已覆盖「注册表丢失 → 从 agent 记录重建」的核心语义；逐目录分类迁移属于一次性历史包袱，本项目是单一用户的硬分叉（见 memory #1807：不写向后兼容）。 |
 
+### server/authorization/** | 517 | **MISSING\*\* → 已补
+
+语义权限模型完全没移植。每个连接都能驱动 agent、推分支、改文件，不管它是怎么认证的、relay 给了它什么权限。协议里有这套模型，而没有任何地方检查它。
+
+做法：用脚本从 `operation-permissions.ts` **机械生成** 204 条入站 + 219 条出站表，而不是手抄——一条写错要么是安全边界上的洞，要么是某个功能对受限主体神秘失效。
+
+- 权限是语义的（`workspace.write`），不是 RPC 命名空间，新操作按「它做什么」自动继承正确要求
+- 支持 any-of（`["workspace.write", "hub.execute"]`）
+- 既不在要求表、也不在 unrestricted 表里的操作**拒绝**：表是生成的，缺条目要么是没分类的新 RPC、要么是拼写错误，默认放行会把两者都变成敞开的大门
+- 本地直连是 owner（持有全部权限），所以现有 app 行为不变；`SetSinkPermissions` 是给经 relay 进来的受限主体留的缝
+
+`TestEveryWSRouteIsClassified` 解析分发器，把「运行期才拒绝」变成「构建失败 + 清单」。当前 191 条真实 WS 路由全部覆盖，0 缺口。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
