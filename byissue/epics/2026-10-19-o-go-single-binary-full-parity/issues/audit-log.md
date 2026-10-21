@@ -612,6 +612,16 @@ usage 轮询。逐项对应记录在 `runtime-mcp-config`、`image 转发`、`�
 等）已按主题审过并记录（级联归档、timeline 上限、并发装载去重、run token、投影字段、
 系统信封过滤），但**没有逐文件过一遍**，留在未完成清单里。
 
+### agent/byspace-tool-policy.ts | 26 行 | **MISSING → 已补**
+
+daemon 给每个 agent 注入自己的 MCP server，那些工具能创建 agent、给它们发消息、读文件。用户对一个半信任的 provider 需要**只拿掉特定工具**而不关闭整个桥接（关掉桥接会把无害的一起拿走），而配置字段 `providers.<id>.byspaceTools` 存在、背后没有任何行为。
+
+`internal/agent/toolpolicy` 解析策略。默认开启：缺省条目不能悄悄把工具从所有既有 agent 上移除。`speak` 永远允许——它不能读、写或启动任何东西，允许策略禁掉它会把「我关掉了 BySpace 工具」变成「agent 哑了」。
+
+**在边界上执行，不只是从列表里藏起来**：`tools/call` 对被禁用的工具直接拒绝，因为藏起来的工具仍然可以按名字调用。桥接现在通过 env + header 带上自己的 agent id，daemon 才能解析出那个 provider 的策略——否则它只看到工具名，不知道是谁在问。
+
+**顺带修了一个我自己引入的崩溃**：`IsToolEnabled` 把 nil 策略当作「启用」（对的），然后读 `policy.DisabledTools`（空指针解引用）。任何没有配置的 agent 发起的第一个工具调用都会让 daemon panic，CLI 测试抓到了——整条 mcp-bridge 往返返回空 result。单元测试只测了非 nil 的启用路径，所以漏了；现在有显式的 nil 用例。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
