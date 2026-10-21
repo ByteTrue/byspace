@@ -431,4 +431,32 @@ func (s *Server) startSubscriptionPoller() {
 			}
 		}
 	}()
+	s.startWorkspacePlacementPoller()
+}
+
+// workspacePlacementInterval is how often git facts are re-read for every live workspace.
+// The node daemon uses five minutes: frequent enough that a branch switched in a terminal shows
+// up, rare enough that a large workspace list is not spawning git processes constantly.
+const workspacePlacementInterval = 5 * time.Minute
+
+// startWorkspacePlacementPoller re-derives each workspace's kind/branch from disk on a timer.
+//
+// Git facts belong to the checkout, not to the record. Without this, switching branches outside
+// the app leaves the sidebar showing the old branch until a full page reload, and a directory
+// that became a repository stays classified as a plain directory forever.
+func (s *Server) startWorkspacePlacementPoller() {
+	go func() {
+		ticker := time.NewTicker(workspacePlacementInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.pollStop:
+				return
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				s.reconcileAllWorkspacePlacements(ctx)
+				cancel()
+			}
+		}
+	}()
 }
