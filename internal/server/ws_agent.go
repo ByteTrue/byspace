@@ -1027,7 +1027,23 @@ func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw 
 		RequestID string `json:"requestId"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	offerURL := s.BuildPairingOfferURL("", true, "")
+
+	// A pairing offer only makes sense through a relay: the phone cannot reach this daemon
+	// directly. With the relay off, node returns no url and no qr rather than handing out a
+	// link that can never connect — a scanned QR that silently fails is worse than "enable the
+	// relay first".
+	relayCfg := relayConfigFromStore(s.store.LoadDaemonConfig())
+	if !relayCfg.Enabled || strings.TrimSpace(relayCfg.Endpoint) == "" {
+		_ = sendSessionMsg(ctx, sink, "daemon.get_pairing_offer.response", map[string]any{
+			"requestId":    req.RequestID,
+			"url":          "",
+			"qr":           nil,
+			"relayEnabled": false,
+		})
+		return
+	}
+
+	offerURL := s.BuildPairingOfferURL("", relayCfg.UseTLS, relayCfg.Endpoint)
 	var qrText any
 	if qr, qrErr := RenderASCIIQRCode(offerURL); qrErr == nil {
 		qrText = qr

@@ -101,18 +101,23 @@ func (r *relayRuntime) Stop() {
 }
 
 // relayConfigFromStore reads the relay settings from the daemon config.
+//
+// LoadDaemonConfig already unwraps the `daemon` object, so the relay block sits at the top
+// level here. Reading it as cfg["daemon"]["relay"] silently returned the zero value, which is
+// why enabling the relay in settings never connected it.
 func relayConfigFromStore(cfg map[string]any) RelayConfig {
 	out := RelayConfig{}
 	if cfg == nil {
 		return out
 	}
-	daemon, ok := cfg["daemon"].(map[string]any)
+	relay, ok := cfg["relay"].(map[string]any)
 	if !ok {
-		return out
-	}
-	relay, ok := daemon["relay"].(map[string]any)
-	if !ok {
-		return out
+		if daemon, nested := cfg["daemon"].(map[string]any); nested {
+			relay, ok = daemon["relay"].(map[string]any)
+		}
+		if !ok {
+			return out
+		}
 	}
 	if enabled, ok := relay["enabled"].(bool); ok {
 		out.Enabled = enabled
