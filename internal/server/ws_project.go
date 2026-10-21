@@ -1119,6 +1119,10 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 		tok := "dl_" + hex.EncodeToString(b[:])
 		fileName := filepath.Base(req.Path)
 		s.mu.Lock()
+		// Expired tokens are only *checked* on use, so without this they accumulate for the
+		// life of the daemon: every file preview the user ever opened leaves an entry. Pruning
+		// on issue is cheap because the map is tiny at any moment.
+		s.pruneDownloadTokensLocked()
 		s.downloadTokens[tok] = downloadTokenEntry{
 			absPath:   filepath.Join(req.Cwd, req.Path),
 			fileName:  fileName,
@@ -1391,5 +1395,15 @@ func detectShippedIcon(projectDir string) map[string]any {
 		"data":     base64.StdEncoding.EncodeToString(raw),
 		"mimeType": mime,
 		"source":   "detected",
+	}
+}
+
+// pruneDownloadTokensLocked drops expired download tokens. Callers hold s.mu.
+func (s *Server) pruneDownloadTokensLocked() {
+	now := time.Now()
+	for token, entry := range s.downloadTokens {
+		if now.After(entry.expiresAt) {
+			delete(s.downloadTokens, token)
+		}
 	}
 }
