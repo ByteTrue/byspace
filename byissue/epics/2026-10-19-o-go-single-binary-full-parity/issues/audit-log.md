@@ -295,6 +295,16 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 
 端到端验证：4 页每页 2 条，共 8 个唯一 agent，无重复无遗漏。
 
+### server/managed-processes/** | 455 | **PARTIAL\*\* → 已补 PID 身份校验
+
+`managed-processes.ts` 存在的理由就是 **pid 复用**：文件里的 pid 不是句柄，崩溃后那个号会被机器上任何进程复用。Go 的 `StopRunning` 直接读 pid 就 `SIGTERM`/`SIGKILL`——`byspace daemon stop` 可能杀掉编辑器或另一个 daemon。
+
+已修：`ProcessMatches` 用 `ps -o command=` / `Get-CimInstance` 读出那个 pid 实际在跑什么，与 daemon 身份比对。存活但不是 daemon → 当作陈旧锁回收，**不发送任何信号**；命令行读不到也拒绝——不杀是可恢复的，杀错不是。
+
+端到端验证：把当前 shell 的 pid 写进 `byspace.pid` 再跑 `daemon stop`，报 `not running`、shell 存活、锁被清理。
+
+其余 `managed-processes` 的语义（`opencode serve` 池台账、优雅关停 5s + 强制 1s）Go 用的是 `exec.Command` 的进程句柄与进程组 kill，句柄本身不会指错进程，架构等价。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
