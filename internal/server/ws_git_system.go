@@ -494,11 +494,26 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 
 	case "checkout.forge.get_check_details.request", "checkout.github.get_check_details.request":
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
+		var checkReq struct {
+			CheckRunID int `json:"checkRunId"`
+		}
+		_ = json.Unmarshal(raw, &checkReq)
+
+		// Without this the only thing visible on a failing check is "it failed", which does
+		// not say what broke.
+		details, checkErr := workspace.CheckDetails(
+			ctx, workspace.DetectForge(ctx, base.Cwd), base.Cwd, checkReq.CheckRunID)
+		var checkErrObj any
+		success := checkErr == nil
+		if checkErr != nil {
+			checkErrObj = checkoutErr(checkErr.Error())
+			details = nil
+		}
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"cwd":       base.Cwd,
-			"success":   true,
-			"details":   nil,
-			"error":     nil,
+			"success":   success,
+			"details":   details,
+			"error":     checkErrObj,
 			"requestId": base.RequestID,
 		})
 

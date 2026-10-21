@@ -644,3 +644,100 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+// CheckDetails fetches a check run's details, annotations and failed jobs.
+//
+// Ported from the forge services' getCheckDetails. The checkout panel shows it when the user
+// clicks a failing check: without it the only thing visible is "this check failed", which does
+// not say what broke.
+//
+// `failedJobs` is GitHub-specific (a workflow run's failing jobs); the other forges report
+// annotations only and leave it empty rather than inventing an equivalent.
+func CheckDetails(ctx context.Context, forge, cwd string, checkRunID int) (map[string]any, error) {
+	if checkRunID <= 0 {
+		return nil, fmt.Errorf("check run id must be positive")
+	}
+	if forge != "" && forge != "github" {
+		return nil, fmt.Errorf("check details are not available for %s", forge)
+	}
+	if _, err := exec.LookPath("gh"); err != nil {
+		return nil, fmt.Errorf("gh is not installed")
+	}
+
+	raw, err := runGH(ctx, cwd, "api", fmt.Sprintf("repos/{owner}/{repo}/check-runs/%d", checkRunID))
+	if err != nil {
+		return nil, err
+	}
+	var run struct {
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
+		HTMLURL    string `json:"html_url"`
+		DetailsURL string `json:"details_url"`
+		Output     struct {
+			Title   string `json:"title"`
+			Summary string `json:"summary"`
+			Text    string `json:"text"`
+		} `json:"output"`
+		CheckSuite struct {
+			WorkflowRunID int64 `json:"workflow_run_id"`
+		} `json:"check_suite"`
+	}
+	if json.Unmarshal([]byte(raw), &run) != nil {
+		return nil, fmt.Errorf("could not read check run %d", checkRunID)
+	}
+
+	details := map[string]any{
+		"checkRunId":  int(run.ID),
+		"name":        run.Name,
+		"status":      nullableString(run.Status),
+		"conclusion":  nullableString(run.Conclusion),
+		"url":         nullableString(run.HTMLURL),
+		"detailsUrl":  nullableString(run.DetailsURL),
+		"annotations": []map[string]any{},
+		"failedJobs":  []map[string]any{},
+		"truncated":   false,
+	}
+	if run.CheckSuite.WorkflowRunID != 0 {
+		details["workflowRunId"] = run.CheckSuite.WorkflowRunID
+	}
+	if run.Output.Title != "" || run.Output.Summary != "" || run.Output.Text != "" {
+		details["output"] = map[string]any{
+			"title":   nullableString(run.Output.Title),
+			"summary": nullableString(run.Output.Summary),
+			"text":    nullableString(run.Output.Text),
+		}
+	}
+
+	// Annotations explain *why* the check failed; the check run alone only says that it did.
+	annotationsRaw, annotationsErr := runGH(ctx, cwd, "api",
+		fmt.Sprintf("repos/{owner}/{repo}/check-runs/%d/annotations", checkRunID))
+	if annotationsErr == nil {
+		details["annotations"] = decodeCheckAnnotations(annotationsRaw)
+	}
+	return details, nil
+}
+
+// decodeCheckAnnotations maps GitHub's annotation list onto the wire shape.
+func decodeCheckAnnotations(raw string) []map[string]any {
+	if strings.TrimSpace(raw) == "" {
+		return []map[string]any{}
+	}
+	var annotations []map[string]any
+	if json.Unmarshal([]byte(raw), &annotations) != nil {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(annotations))
+	for _, annotation := range annotations {
+		out = append(out, map[string]any{
+			"path":            stringOr(annotation["path"], ""),
+			"startLine":       annotation["start_line"],
+			"endLine":         annotation["end_line"],
+			"annotationLevel": stringOr(annotation["annotation_level"], ""),
+			"message":         stringOr(annotation["message"], ""),
+			"title":           stringOr(annotation["title"], ""),
+		})
+	}
+	return out
+}
