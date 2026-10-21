@@ -9,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/execres"
 	"io"
 	"net"
 	"net/http"
@@ -127,7 +129,7 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "daemon":
-		if err := runDaemonCmd(rest, stdout); err != nil {
+		if err := runDaemonCmd(version, rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace daemon:", err)
 			return 1
 		}
@@ -691,7 +693,7 @@ func probeHealth(addr string) (*healthStatus, error) {
 	return &st, nil
 }
 
-func runDaemonCmd(args []string, stdout io.Writer) error {
+func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 	sub := "status"
 	rest := args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
@@ -708,8 +710,16 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 			return err
 		}
 
-		if st, err := probeHealth(*addr); err == nil {
+		if st, healthErr := probeHealth(*addr); healthErr == nil {
 			fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", *addr, st.ServerID, st.Version)
+			// A version mismatch means the CLI and the daemon disagree about the protocol. The
+			// symptom is a command that silently does nothing, so it is worth saying out loud
+			// here rather than leaving the user to infer it from behaviour.
+			if st.Version != "" && cliVersion != "" && st.Version != cliVersion {
+				fmt.Fprintf(stdout, "warning: daemon runs %s but this CLI is %s; restart the daemon\n",
+					st.Version, cliVersion)
+			}
+			reportProviderHealth(stdout)
 			return nil
 		}
 
@@ -802,7 +812,7 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 		// lose the bind race against the one that is still shutting down, and `restart` reports
 		// success while nothing is listening.
 		daemon.WaitForShutdown(resolvedHome, *addr, 5*time.Second)
-		return runDaemonCmd([]string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
+		return runDaemonCmd(cliVersion, []string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
 
 	case "print-plist":
 		exe, _ := os.Executable()
@@ -1016,4 +1026,28 @@ func daemonLogTail(homeDir string) string {
 		return "daemon log is empty"
 	}
 	return "last log lines:\n" + tail
+}
+
+// reportProviderHealth lists each built-in provider's binary and version.
+//
+// "(--version failed)" is the difference between "not installed" and "installed but broken",
+// which need different fixes — and it is the state that used to be reported as simply missing.
+func reportProviderHealth(stdout io.Writer) {
+	fmt.Fprintln(stdout, "providers:")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	for _, spec := range providers.BuiltinProviders {
+		path := execres.Find(ctx, spec.Binary)
+		if path == "" {
+			fmt.Fprintf(stdout, "  %-16s %s (not found)\n", spec.ID, spec.Binary)
+			continue
+		}
+		versionText, err := execres.Version(ctx, path)
+		if err != nil || versionText == "" {
+			fmt.Fprintf(stdout, "  %-16s %s (--version failed)\n", spec.ID, path)
+			continue
+		}
+		fmt.Fprintf(stdout, "  %-16s %s (%s)\n", spec.ID, path, versionText)
+	}
 }

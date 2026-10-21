@@ -105,3 +105,29 @@ func TestProbe(t *testing.T) {
 		t.Fatal("an empty path must probe false")
 	}
 }
+
+// "(--version failed)" is the difference between "not installed" and "installed but broken",
+// which need different fixes.
+func TestVersionReportsFailureDistinctly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses shell scripts")
+	}
+	dir := t.TempDir()
+	good := writeScript(t, dir, "good", "#!/bin/sh\necho 1.2.3\necho extra line\nexit 0\n")
+	version, err := Version(t.Context(), good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the first line: some CLIs print more after the version.
+	if version != "1.2.3" {
+		t.Fatalf("version = %q", version)
+	}
+
+	broken := writeScript(t, dir, "broken", "#!/bin/sh\nexit 1\n")
+	if _, err := Version(t.Context(), broken); err == nil {
+		t.Fatal("a binary that exits non-zero must report an error")
+	}
+	if _, err := Version(t.Context(), ""); err == nil {
+		t.Fatal("an empty path must report an error")
+	}
+}

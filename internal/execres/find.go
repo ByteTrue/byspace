@@ -8,6 +8,7 @@ package execres
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,4 +127,27 @@ func isExecutable(info os.FileInfo) bool {
 // IsCommandAvailable reports whether a working binary exists for a command.
 func IsCommandAvailable(ctx context.Context, command string) bool {
 	return Find(ctx, command) != ""
+}
+
+// Version reports the output of `<binary> --version`, or an error when it does not run.
+//
+// The daemon status report shows this next to each provider's path: "(--version failed)" is the
+// difference between "not installed" and "installed but broken", which need different fixes.
+func Version(ctx context.Context, executablePath string) (string, error) {
+	if strings.TrimSpace(executablePath) == "" {
+		return "", fmt.Errorf("no executable")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, ProbeTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(probeCtx, executablePath, "--version")
+	var combined strings.Builder
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	// Only the first line: some CLIs print a changelog after the version.
+	first := strings.SplitN(strings.TrimSpace(combined.String()), "\n", 2)[0]
+	return strings.TrimSpace(first), nil
 }
