@@ -42,14 +42,14 @@
 
 ## 批次 5：quota 6 家（~1500 行）
 
-| 文件                                                | 结论 | Go 实现 | 测试 | 备注 |
-| --------------------------------------------------- | ---- | ------- | ---- | ---- |
-| `services/quota-fetcher/providers/claude.ts` (480)  | 待做 | —       | —    | —    |
-| `services/quota-fetcher/providers/copilot.ts` (97)  | 待做 | —       | —    | —    |
-| `services/quota-fetcher/providers/cursor.ts` (250)  | 待做 | —       | —    | —    |
-| `services/quota-fetcher/providers/grok.ts` (181)    | 待做 | —       | —    | —    |
-| `services/quota-fetcher/providers/kimi.ts` (342)    | 待做 | —       | —    | —    |
-| `services/quota-fetcher/providers/minimax.ts` (275) | 待做 | —       | —    | —    |
+| 文件                                                | 结论              | Go 实现                     | 测试              | 备注                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------- | ----------------- | --------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/quota-fetcher/providers/claude.ts` (480)  | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | 读 `~/.claude/.credentials.json` + `api.anthropic.com/api/oauth/usage`（带 `anthropic-beta`）；五个窗口映射、extra_usage 余额。macOS keychain 未读，明确返回 unavailable 而不是猜。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字 |
+| `services/quota-fetcher/providers/copilot.ts` (97)  | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | `~/.config/github-copilot/hosts.json` + `api.github.com/copilot_internal/user`；用 GitHub 的 `token` 方案而非 Bearer；把「剩余百分比」转成「已用」。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字                                |
+| `services/quota-fetcher/providers/cursor.ts` (250)  | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | `~/.config/cursor/auth.json`（headless）+ `api2.cursor.sh` 的 DashboardService；百分比缺失时从 used/limit 派生。桌面版 SQLite 未读（需驱动），明确 unavailable。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字                    |
+| `services/quota-fetcher/providers/grok.ts` (181)    | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | `~/.grok/auth.json` + `cli-chat-proxy.grok.com/v1/billing`；余额而非窗口。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字                                                                                                          |
+| `services/quota-fetcher/providers/kimi.ts` (342)    | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | `~/.kimi/kimi-code.json` + `api.kimi.com/coding/v1/usages`；多窗口。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字                                                                                                                |
+| `services/quota-fetcher/providers/minimax.ts` (275) | PORTED-UNVERIFIED | `internal/quota/vendors.go` | `vendors_test.go` | `~/.minimax/credentials.json` + 全球/CN 两个 host 逐个试（token 只被其中一个接受）；把 used/total 转成百分比。**未验证**：真实凭据未提供，端点形状来自读 TS 解析器；形状不符时返回「unexpected shape」或无窗口，不会给出错误数字                                                                      |
 
 ## 批次 6：复核上一轮只「读导出面」的部分
 
