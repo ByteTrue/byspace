@@ -406,6 +406,15 @@ approval 建模成 system note，提升为 review；Gitea 只有一个 comments 
 
 端到端验证（stub gh）：prNumber 7、一条评审 + 一条评论按序返回、schema 通过。
 
+`listPullRequests` / `listIssues` 没有对应的 WS RPC：协议里没有这两个消息类型，客户端通过
+`forge.search` 拿到的是两者合流的结果。MCP 工具的 `forge.search` 已实现（gh/glab/tea 三家）。
+所以这两项是 **N/A**，不是缺口。
+
+**本轮还补了 `get_check_details`**：之前返回 `details: null` + `success: true`，checkout 面板点
+一个失败的 check 只看到「这个检查失败了」，看不出哪里坏了。已移植 check run + annotations（文件、
+行号、级别、消息）——annotations 才是用户能动手改的部分。只有 GitHub 有 check run，其他 forge 返
+回错误而不是空对象，因为 UI 把空对象渲染成「没有详情」，用户会以为检查静默通过了。
+
 ### terminal/terminal-capture.ts | 71 | **PARTIAL** → 已补
 
 `capture_terminal_request` 解析了 `start`/`end`/`stripAnsi` 但都没用对：start/end 只当非负
