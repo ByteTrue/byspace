@@ -172,6 +172,9 @@ type Server struct {
 	corsCache          []string
 	setupSnapshots     map[string]*setupSnapshot
 	workspaceScripts   map[string]*workspaceScript
+	// notifiedChildren records which (child, reason) pairs already prompted their parent.
+	notifiedChildren   map[string]bool
+	notifiedChildrenMu sync.Mutex
 	scriptPorts        *servicePortAllocator
 	idempotentAgents   map[string]string
 	cachedPiModels     []pi.CatalogModel
@@ -2587,6 +2590,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			// pi does not answer get_session_stats while it is still producing tokens, so the
 			// final sample has to wait until the provider settles. captureFinalUsage retries.
 			go s.captureFinalUsage(mp, sess)
+			// Tell the parent this child finished. A parent that delegated work has no other
+			// way to learn the outcome: the child is a separate agent with its own turn.
+			go s.notifyParentChildFinished(context.Background(), rec.ID, finishReasonFinished)
 			s.mu.Lock()
 			mp.record.LastStatus = "idle"
 			mp.record.UpdatedAt = nowStr
@@ -2641,6 +2647,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 							reason = detail
 						}
 					}
+					// A child that died must tell its parent, or the parent waits forever for a
+					// result that will never arrive.
+					go s.notifyParentChildFinished(context.Background(), rec.ID, finishReasonErrored)
 					s.broadcastSessionMsg("agent_stream", map[string]any{
 						"agentId":   rec.ID,
 						"provider":  rec.Provider,
