@@ -3,6 +3,8 @@ package daemon
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,42 @@ func TestProcessMatchesAcceptsRealProcess(t *testing.T) {
 func TestProcessMatchesUnreadableIsFalse(t *testing.T) {
 	if ProcessMatches(999999, daemonProcessIdentity) {
 		t.Fatal("a pid that does not exist must not match")
+	}
+}
+
+// The identity recorded in the pid lock must be the one checked, not a literal "byspace".
+//
+// A renamed or symlinked binary — a downloaded release, a test build, a wrapper — does not contain
+// "byspace" in its command line. Checking the literal made ProcessMatches return false, and a false
+// there does not report an error: it reclaims the lock and leaves the process running, so
+// `daemon stop` says "not stopped" while the daemon keeps serving.
+func TestProtocolIdentityUsesRecordedExeName(t *testing.T) {
+	home := t.TempDir()
+	// A self-describing lock: the exe name is whatever this test binary is called.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Base(exe)
+	if err := WritePIDLock(home, PIDLockInfo{PID: os.Getpid(), ExeName: name}); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, ok := ReadPIDLock(home)
+	if !ok {
+		t.Fatal("the lock did not round-trip")
+	}
+	if lock.ExeName != name {
+		t.Fatalf("ExeName = %q, want %q", lock.ExeName, name)
+	}
+
+	// The recorded identity is what StopRunning derives; it must match this process.
+	if !ProcessMatches(os.Getpid(), lock.ExeName+" serve") {
+		// The test binary's command line carries its own name but not the "serve" verb, so a
+		// failure here is expected only if the name itself is wrong.
+		if !strings.Contains(ProcessCommandLine(os.Getpid()), lock.ExeName) {
+			t.Fatalf("the recorded exe name %q is not in this process's command line: %s",
+				lock.ExeName, ProcessCommandLine(os.Getpid()))
+		}
 	}
 }

@@ -22,6 +22,15 @@ const builtinMCPServerName = "byspace"
 // Order matters: the built-in bridge is added first so a user config of the same name cannot
 // shadow it, and the user's own servers follow.
 func (s *Server) piMCPServersFor(rec store.AgentRecord) []pi.MCPConfig {
+	// `serve --no-inject-mcp` is the operator's decision for this process, and it outranks config:
+	// the flag exists precisely so a daemon started this way leaves the agent's MCP setup alone.
+	s.mu.Lock()
+	disabled := s.disableMCPInjection
+	s.mu.Unlock()
+	if disabled {
+		return s.userMCPServers(rec)
+	}
+
 	cfg := s.store.LoadDaemonConfig()
 	if cfg != nil {
 		if mcp, ok := cfg["mcp"].(map[string]any); ok {

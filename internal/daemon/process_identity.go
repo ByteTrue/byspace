@@ -65,4 +65,9 @@ func ProcessMatches(pid int, expectSubstring string) bool {
 }
 
 // daemonProcessIdentity is what a daemon process's command line must contain.
+//
+// Used when the pid lock does not record its own identity (an older home, or a caller that only
+// wrote a pid). A renamed or symlinked binary does not match this, which is why the lock records
+// what it actually launched: `serve` under any name is still our daemon, and refusing to signal it
+// leaves a process running that `daemon stop` reported as stopped.
 const daemonProcessIdentity = "byspace serve"

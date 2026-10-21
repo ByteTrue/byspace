@@ -69,6 +69,15 @@ type Options struct {
 	// ListenAddr is the address the daemon bound to; the MCP bridge it injects into agents
 	// must call the same one.
 	ListenAddr string
+	// DisableMCPInjection stops the daemon from adding its own MCP server to created agents.
+	// Set from `serve --no-inject-mcp`: a user who configures their agent's MCP servers by hand
+	// does not want one appearing behind their back.
+	DisableMCPInjection bool
+	// DisableWebUI turns off the bundled web UI. Set from `serve --no-web-ui`, which matters when
+	// the daemon is one half of a split deployment and the UI is served elsewhere.
+	DisableWebUI bool
+	// RelayUseTLS marks pairing offers as wss://. Set from `serve --relay-use-tls`.
+	RelayUseTLS bool
 }
 
 type managedPi struct {
@@ -131,6 +140,9 @@ type Server struct {
 	webUI        *webui.Handler
 	piCommand    string
 	piSessionDir string
+	// disableMCPInjection comes from --no-inject-mcp; read where the MCP server is attached to a
+	// new agent.
+	disableMCPInjection bool
 
 	mu                sync.Mutex
 	agents            map[string]*managedPi
@@ -225,10 +237,12 @@ func New(opts Options) (*Server, error) {
 		ver = "0.20.2-go"
 	}
 	ui := opts.WebUI
-	if ui == nil {
+	if ui == nil && !opts.DisableWebUI {
 		ui = webui.NewHandler(opts.WebDir)
 	}
-	ui = ui.WithConnectionHint("BySpace")
+	if ui != nil {
+		ui = ui.WithConnectionHint("BySpace")
+	}
 
 	st := store.New(homeDir)
 	st.SetServerID(serverID)
@@ -282,6 +296,7 @@ func New(opts Options) (*Server, error) {
 		webUI:                 ui,
 		piCommand:             opts.PiCommand,
 		piSessionDir:          opts.PiSessionDir,
+		disableMCPInjection:   opts.DisableMCPInjection,
 		agents:                make(map[string]*managedPi),
 		terminals:             make(map[uint8]*terminal.Session),
 		terminalSlotsByID:     make(map[string]uint8),

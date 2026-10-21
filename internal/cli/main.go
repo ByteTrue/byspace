@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -303,6 +304,12 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	homeDir := fs.String("home", "", "byspace home directory")
 	relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay ws:// or wss:// endpoint")
 	webDir := fs.String("web-dir", os.Getenv("BYSPACE_WEB_DIR"), "optional static web UI directory")
+	// The flags the node daemon accepts. Each one changes what the daemon does; accepting it and
+	// ignoring it would be worse than rejecting it, because the user believes it worked.
+	noWebUI := fs.Bool("no-web-ui", false, "do not serve the bundled web UI")
+	webUI := fs.Bool("web-ui", false, "serve the bundled web UI (the default)")
+	noInjectMCP := fs.Bool("no-inject-mcp", false, "do not inject the BySpace MCP server into created agents")
+	relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -312,7 +319,10 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		Version: version,
 		WebDir:  *webDir,
 		// The MCP bridge injected into agents must call back to this daemon's address.
-		ListenAddr: *addr,
+		ListenAddr:          *addr,
+		DisableWebUI:        *noWebUI && !*webUI,
+		DisableMCPInjection: *noInjectMCP,
+		RelayUseTLS:         *relayUseTLS,
 	})
 	if err != nil {
 		return err
@@ -336,7 +346,15 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if existing, ok := daemon.ReadPIDLock(srv.HomeDir()); ok && !daemon.IsStale(srv.HomeDir(), existing) && existing.PID != myPID {
 		return fmt.Errorf("another byspace daemon is already running (pid %d, started %s)", existing.PID, existing.StartedAt)
 	}
-	_ = daemon.WritePIDLock(srv.HomeDir(), daemon.PIDLockInfo{PID: myPID, Listen: &listenAddr})
+	exeName := ""
+	if exe, exeErr := os.Executable(); exeErr == nil {
+		exeName = filepath.Base(exe)
+	}
+	_ = daemon.WritePIDLock(srv.HomeDir(), daemon.PIDLockInfo{
+		PID:     myPID,
+		Listen:  &listenAddr,
+		ExeName: exeName,
+	})
 	defer daemon.RemovePID(srv.HomeDir(), myPID)
 
 	heartbeatStop := make(chan struct{})
@@ -1092,6 +1110,10 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
 		homeDir := fs.String("home", "", "byspace home directory")
 		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
+		relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
+		noInjectMCP := fs.Bool("no-inject-mcp", false, "do not inject the BySpace MCP server into created agents")
+		noWebUI := fs.Bool("no-web-ui", false, "do not serve the bundled web UI")
+		webUI := fs.Bool("web-ui", false, "serve the bundled web UI (the default)")
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
@@ -1103,7 +1125,25 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", *addr, st.ServerID)
 			return nil
 		}
-		pid, err := daemon.StartBackground("", resolvedHome, *addr, *relayURL)
+		// The flags are forwarded to the serve process: accepting them here and not passing them on
+		// would leave the user believing a setting took effect.
+		var webUISetting *bool
+		switch {
+		case *noWebUI && !*webUI:
+			disabled := false
+			webUISetting = &disabled
+		case *webUI && !*noWebUI:
+			enabled := true
+			webUISetting = &enabled
+		}
+		pid, err := daemon.StartBackgroundWithOptions(daemon.StartOptions{
+			HomeDir:     resolvedHome,
+			Addr:        *addr,
+			RelayURL:    *relayURL,
+			RelayUseTLS: *relayUseTLS,
+			InjectMCP:   !*noInjectMCP,
+			WebUI:       webUISetting,
+		})
 		if err != nil {
 			return err
 		}

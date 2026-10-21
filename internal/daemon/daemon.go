@@ -144,7 +144,11 @@ type PIDLockInfo struct {
 	Hostname  string  `json:"hostname"`
 	UID       int     `json:"uid"`
 	Listen    *string `json:"listen"`
-	Heartbeat bool    `json:"heartbeat,omitempty"`
+	// ExeName is the base name of the binary that was launched. Recorded so `daemon stop` can
+	// verify the pid belongs to this daemon even when the binary was renamed or symlinked — the
+	// alternative is a literal "byspace" check that silently declines to stop it.
+	ExeName   string `json:"exeName,omitempty"`
+	Heartbeat bool   `json:"heartbeat,omitempty"`
 }
 
 // PidLockStaleAfter is how long a lock may go without a heartbeat before it is reclaimed.
@@ -255,7 +259,14 @@ func StopRunning(homeDir string) (int, bool, error) {
 		RemovePID(homeDir, 0)
 		return 0, false, nil
 	}
-	if !ProcessMatches(pid, daemonProcessIdentity) {
+	// Prefer the identity the lock recorded. A literal "byspace serve" check fails for a renamed
+	// binary, and a failing check does not report an error: it reclaims the lock and leaves the
+	// process running, so `daemon stop` says "not running" while the daemon still serves.
+	identity := daemonProcessIdentity
+	if lock, ok := ReadPIDLock(homeDir); ok && strings.TrimSpace(lock.ExeName) != "" {
+		identity = lock.ExeName + " serve"
+	}
+	if !ProcessMatches(pid, identity) {
 		// Alive but not ours: the pid was recycled after a crash. Reclaim the lock instead of
 		// signalling whatever now owns that number.
 		RemovePID(homeDir, 0)
@@ -278,7 +289,58 @@ func StopRunning(homeDir string) (int, bool, error) {
 }
 
 // StartBackground spawns `byspace serve` detached in the background, logging to $BYSPACE_HOME/daemon.log.
+// StartOptions are the flags a background start forwards to the serve process.
+//
+// Passed through rather than kept as CLI-only flags: `daemon start --no-web-ui` that does not turn
+// the web UI off on the process it launches is worse than not having the flag, because the user
+// believes it worked.
+type StartOptions struct {
+	ExePath  string
+	HomeDir  string
+	Addr     string
+	RelayURL string
+	// RelayUseTLS switches pairing offers to wss://.
+	RelayUseTLS bool
+	// InjectMCP controls whether created agents get the BySpace MCP injected.
+	InjectMCP bool
+	// WebUI controls the bundled web UI. Tri-state: nil means "leave to the daemon's config".
+	WebUI *bool
+}
+
+// StartBackgroundWithOptions launches the daemon with the given options.
+func StartBackgroundWithOptions(options StartOptions) (int, error) {
+	args := []string{"serve", "--addr", options.Addr, "--home", options.HomeDir}
+	if strings.TrimSpace(options.RelayURL) != "" {
+		args = append(args, "--relay", strings.TrimSpace(options.RelayURL))
+	}
+	if options.RelayUseTLS {
+		args = append(args, "--relay-use-tls")
+	}
+	if !options.InjectMCP {
+		args = append(args, "--no-inject-mcp")
+	}
+	if options.WebUI != nil {
+		if *options.WebUI {
+			args = append(args, "--web-ui")
+		} else {
+			args = append(args, "--no-web-ui")
+		}
+	}
+	return spawnBackground(options.ExePath, options.HomeDir, args)
+}
+
 func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
+	return StartBackgroundWithOptions(StartOptions{
+		ExePath:   exePath,
+		HomeDir:   homeDir,
+		Addr:      addr,
+		RelayURL:  relayURL,
+		InjectMCP: true,
+	})
+}
+
+// spawnBackground starts the process with the given serve arguments.
+func spawnBackground(exePath, homeDir string, args []string) (int, error) {
 	if pid, alive := ReadPID(homeDir); alive {
 		return pid, nil
 	}
@@ -298,10 +360,6 @@ func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
 	}
 	defer logFile.Close()
 
-	args := []string{"serve", "--addr", addr, "--home", homeDir}
-	if strings.TrimSpace(relayURL) != "" {
-		args = append(args, "--relay", strings.TrimSpace(relayURL))
-	}
 	cmd := exec.Command(exePath, args...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
