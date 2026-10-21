@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -57,6 +58,9 @@ func (s *Server) markAgentAttention(agentID, reason, timestamp string) bool {
 
 	_ = s.store.UpsertAgent(rec)
 	s.broadcastAgentUpdate(rec)
+	// A user who is not looking at the app needs the push; notifyAttention consults the
+	// presence policy so a client that is already showing this agent gets nothing.
+	s.notifyAttention(rec.ID, reason, pushTitleFor(reason), pushBodyFor(rec))
 	return true
 }
 
@@ -192,4 +196,29 @@ func (s *Server) attentionIsFocused(agentID string) bool {
 	}
 	plan := attention.ComputePlan(states, &attention.FocusTarget{Kind: "agent", ID: agentID}, true, time.Now())
 	return plan.InAppRecipient == -1 && !plan.ShouldPush
+}
+
+// pushTitleFor / pushBodyFor build the notification text.
+//
+// The title says what happened, the body says which conversation: a bare "Task finished" leaves
+// the user to guess which of several agents wants them.
+func pushTitleFor(reason string) string {
+	switch reason {
+	case AttentionReasonPermission:
+		return "Agent needs your input"
+	case AttentionReasonError:
+		return "Agent failed"
+	default:
+		return "Agent finished"
+	}
+}
+
+func pushBodyFor(rec store.AgentRecord) string {
+	if rec.Title != nil && strings.TrimSpace(*rec.Title) != "" {
+		return *rec.Title
+	}
+	if rec.LastUserMessageAt != nil && *rec.LastUserMessageAt != "" {
+		return "in " + filepath.Base(rec.Cwd)
+	}
+	return filepath.Base(rec.Cwd)
 }

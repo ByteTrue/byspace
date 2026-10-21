@@ -160,6 +160,9 @@ type Server struct {
 	// sinkPermissions holds the granted permissions per connection. A connection absent from
 	// this map acts as the owner, which is how a direct local connection behaves.
 	sinkPermissions map[frameSink][]string
+	// pushHTTPClient overrides the push transport; a test harness needs to reach a local
+	// TLS push service without a trusted certificate.
+	pushHTTPClient *http.Client
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
