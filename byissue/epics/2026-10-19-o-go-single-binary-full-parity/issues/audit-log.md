@@ -213,7 +213,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `workspace-automation-gate.ts` | 50 | **MISSING** → 已补 | **安全边界**：从别人的 PR 检出的 worktree 里，`byspace.json` 是那个作者写的；跑它的 setup/scripts 就是跑他的代码，而且是一次按钮触发、无确认。Node 在工作区上记 `untrustedSource` 并对这类工作区拒绝自动化，Go 无条件执行。已实现：记录来源、setup 与脚本启动都拦截、提示语点名「PR #42 from attacker/fork. Run setup to allow them.」（GitLab 用 MR），setup 快照记为 `blocked`。显式 `workspace.setup.run` 即用户授权，清掉标记后照常执行。同仓库的 PR 不拦（代码本来就在用户手里）。 |
 | `package-version.ts` / `daemon-keypair.ts` / `server-id.ts` / `exports.ts` / `json-utils.ts` | 76/69/83/82/61 | **PORTED 或 N/A** | `package-version` 是 Node 从 `package.json` 往上找版本的机制，Go 用 ldflags 编译期注入（`-X main.version`），架构差异，N/A。`daemon-keypair` 已有等价实现（v2 格式、0600、读失败重新生成）。`server-id` 已核对一致。`exports.ts` 是桶文件，`json-utils.ts` 是工具函数，Go 用标准库。 |
 
-### 未审计（本批剩余 14 文件）
+| `workspace-registry-model.ts` | 228 | **PARTIAL** → 已补 | 工作区 `displayName` 原来是目录名，Node 是「分支优先，非 git / detached HEAD 才回落到目录名」。同一仓库的两个 checkout 在侧边栏里因此同名——而这正是用户区分它们唯一的信息。已移植 `DeriveWorkspaceDisplayName`（含 `HEAD` 特判：detached 时 git 报的字面量是 "HEAD"，那不是名字）。`generateWorkspaceId`/`generateProjectId` 前缀与随机位数已核对一致。 |
+| `project-key.ts` / `private-files.ts` / `client-message-id.ts` / `lifecycle-reasons.ts` | 57/41/16/6 | **PORTED** | `projectkey.Derive` 与 `GroupingDisplayName` 已在 `internal/projectkey`（此前移植，含 GitHub 小写化、自建 forge 保留大小写、非默认端口、`#subdir:`）；`WriteAtomic` 与 `private-files` 一致（0700 目录、0600 文件、临时文件 + rename）；`client-message-id` 归一化已在使用；`lifecycle-reasons` 是常量表，Go 用字面量。 |
+
+### 未审计（本批剩余 9 文件）
 
 按行数排序，下一轮从这里继续：
 
