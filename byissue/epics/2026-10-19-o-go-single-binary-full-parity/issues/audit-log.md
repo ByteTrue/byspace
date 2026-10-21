@@ -313,6 +313,16 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 
 验证：用一个 trap SIGTERM 并写标记文件的 shell，`Close` 之后标记存在，说明优雅信号赢了；另一个测试确认忽略 SIGTERM 的进程仍会被收割而不是把 daemon 挂住。
 
+### utils/project-icon.ts | 531 | **MISSING** → 已补
+
+项目自带 favicon 的自动探测完全没实现，所以每个项目在侧边栏都是占位符——尽管几乎每个仓库都有 `public/favicon.svg`。用户得手动上传一个本来就存在的图标。
+
+已移植 `internal/projecticon`：优先目录（`public`/`static`/`assets`/…）→ monorepo 的 `packages/*`、`apps/*` → 限深递归扫描；`node_modules` 等永不进入（否则一棵依赖树就能让扫描花上几秒，还可能把依赖的图标当项目的）。
+
+**搜索顺序就是这个功能**：仓库根的 favicon 胜过 app 里的 logo，同名时 `.svg` 胜过 `.ico`（因为可缩放）。图标以 base64 返回而不是路径——客户端在很多地方渲染它，文件路径只对本地连接有效。
+
+端到端验证：有 `public/favicon.svg` 的项目返回 `detected image/svg+xml`，响应通过协议校验。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
