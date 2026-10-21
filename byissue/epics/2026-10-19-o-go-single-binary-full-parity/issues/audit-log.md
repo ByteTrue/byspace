@@ -219,7 +219,15 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `checkout-git-utils.ts` | 46 | **PARTIAL** → 已补 | `checkoutErr` 一律返回 `code: "UNKNOWN"`，而协议有四个码。码决定 UI 给什么下一步：合并冲突要「解决后重试」，非 git 目录要「这不是 checkout」，两者之前都显示成无法解释的失败。已按 git 措辞分类（MERGE_CONFLICT / NOT_GIT_REPO / NOT_ALLOWED / UNKNOWN），2 个测试。 |
 | `script-route-branch-handler.ts` / `script-proxy.ts` / `watcher-liveness-canary.ts` / `workspace-git-metadata.ts` | 24/8/66/28 | **DROPPED（依赖未实现子系统）** | 前三者全部是 service-proxy / 文件 watcher 的一部分——反向代理未实现，Go 用 1 秒轮询代替 watcher（无需 liveness canary）。`workspace-git-metadata` 的语义已由 `internal/gitmeta` + `FetchRemote` 覆盖。 |
 
-### 未审计（本批剩余 4 文件）
+| `worktree-errors.ts` | 43 | **MISSING** → 已补 | 协议允许 `branch_already_checked_out` / `missing_checkout_target` / `unknown_branch` / `unknown`，客户端按码给下一步（换名字 / 先 fetch / 名字不存在）。Go 的意图路径和创建路径各用一个自定义码，所有失败长得一样。已实现 `ToWorktreeWireError`（按 git 措辞分类，含 `errors.As` 解包），两处响应都改用分类后的码。2 个测试。 |
+| `bytspace-home.ts` / `atomic-file.ts` / `messages.ts` / `path-utils.ts` / `pairing-qr.ts` / `daemon-version.ts` / `process-diagnostics.ts` | 20/25/39/42/18/10/38 | **PORTED 或 N/A** | `byspace-home` 等价于 `internal/home`；`atomic-file` 等价于 `home.WriteAtomic`；`messages`/`path-utils` 是 Node 侧辅助（Go 用标准库）；`pairing-qr` 已用 `skip2/go-qrcode`（此前修正过假实现）；`daemon-version` 由 ldflags 注入；`process-diagnostics` 是 Node 进程诊断，Go 用 `runtime`/信号。 |
+| `git-metadata-event-rules.ts` | 177 | **PORTED**（本批此前已补） | 规则表已在 `internal/gitmeta`，7 个测试。仍**未接 watcher**——daemon 目前 1 秒轮询全量 diff，接上这张表是替换轮询的前置。 |
+| `workspace-registry-bootstrap-legacy.ts` | 89 | **N/A（COMPAT）** | 文件本身标注 `COMPAT(legacyRegistryBootstrap)`，用于把 v0.1.109 之前的旧记录迁移成注册表。`RebuildWorkspaceRegistryFromAgents` 已覆盖「注册表丢失 → 从 agent 记录重建」的核心语义；逐目录分类迁移属于一次性历史包袱，本项目是单一用户的硬分叉（见 memory #1807：不写向后兼容）。 |
+
+### server/ 顶层审计完成
+
+`archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
+下一步进入子目录：`session/**`、`agent/**`、`terminal/**`、`services/**`、`utils/**`。
 
 按行数排序，下一轮从这里继续：
 
