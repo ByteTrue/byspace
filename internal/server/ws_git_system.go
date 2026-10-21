@@ -553,6 +553,17 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		s.handleListTerminals(ctx, sink, raw)
 
 	case "unsubscribe_terminals_request", "unsubscribe_terminal_request":
+		// `unsubscribe_terminals_request` (plural) drops every subscription for this socket;
+		// `unsubscribe_terminal_request` names one terminal.
+		var unsubReq struct {
+			TerminalID string `json:"terminalId"`
+		}
+		_ = json.Unmarshal(raw, &unsubReq)
+		if msgType == "unsubscribe_terminals_request" {
+			s.releaseTerminalSubscriptions(sink, "")
+		} else {
+			s.releaseTerminalSubscriptions(sink, unsubReq.TerminalID)
+		}
 		return
 
 	case "terminal_input":

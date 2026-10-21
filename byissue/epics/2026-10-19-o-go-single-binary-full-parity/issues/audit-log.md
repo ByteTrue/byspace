@@ -146,6 +146,18 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
   大列表一次全量下发。已实现 `filterSortPageWorkspaces`（query 匹配名称/分支/项目名、
   projectId 过滤、4 种排序键含 `status_priority`、cursor 分页），4 个测试。
 
+### 终端订阅泄漏（真 bug）
+
+`Session.Subscribe` 返回 `unsubscribe` 函数，Go 侧两处调用都把它丢掉了；`unsubscribe_terminal_request`
+的 handler 直接 `return`。后果：
+
+- 对同一 terminal 重复 subscribe（重连时很常见）会让输出推送**成倍放大**
+- 关闭的 socket 仍然持续收到二进制帧
+- 客户端主动取消订阅完全无效
+
+已补 per-sink 订阅表（`terminalUnsubscribers`），支持按 terminal 取消与整个 socket 拆除时清理，
+两个测试；端到端验证「订阅两次 → 取消 → 不再收帧」。
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：

@@ -137,6 +137,9 @@ type Server struct {
 	allowedHostnames  []string
 	// agentLoads deduplicates concurrent cold-start attempts for one agent.
 	agentLoads map[string]*agentLoad
+	// terminalUnsubscribers lets a socket detach from terminal output; without it every
+	// subscribe leaked a permanent callback.
+	terminalUnsubscribers map[frameSink]map[string][]func()
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -191,30 +194,31 @@ func New(opts Options) (*Server, error) {
 		_ = st.EnsureHomeWorkspace(serverID)
 	}
 	srv := &Server{
-		homeDir:           homeDir,
-		serverID:          serverID,
-		version:           ver,
-		epoch:             fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
-		keyPair:           kp,
-		pubKeyB64:         pubB64,
-		vapidKeys:         vapidKeys,
-		store:             st,
-		webUI:             ui,
-		piCommand:         opts.PiCommand,
-		piSessionDir:      opts.PiSessionDir,
-		agents:            make(map[string]*managedPi),
-		terminals:         make(map[uint8]*terminal.Session),
-		terminalSlotsByID: make(map[string]uint8),
-		downloadTokens:    make(map[string]downloadTokenEntry),
-		setupSnapshots:    make(map[string]*setupSnapshot),
-		workspaceScripts:  make(map[string]*workspaceScript),
-		scriptPorts:       newServicePortAllocator(),
-		agentLoads:        make(map[string]*agentLoad),
-		idempotentAgents:  make(map[string]string),
-		fileSubs:          make(map[string]fileSubscription),
-		diffSubs:          make(map[string]diffSubscription),
-		clients:           make(map[frameSink]bool),
-		pollStop:          make(chan struct{}),
+		homeDir:               homeDir,
+		serverID:              serverID,
+		version:               ver,
+		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
+		keyPair:               kp,
+		pubKeyB64:             pubB64,
+		vapidKeys:             vapidKeys,
+		store:                 st,
+		webUI:                 ui,
+		piCommand:             opts.PiCommand,
+		piSessionDir:          opts.PiSessionDir,
+		agents:                make(map[string]*managedPi),
+		terminals:             make(map[uint8]*terminal.Session),
+		terminalSlotsByID:     make(map[string]uint8),
+		downloadTokens:        make(map[string]downloadTokenEntry),
+		setupSnapshots:        make(map[string]*setupSnapshot),
+		workspaceScripts:      make(map[string]*workspaceScript),
+		scriptPorts:           newServicePortAllocator(),
+		agentLoads:            make(map[string]*agentLoad),
+		terminalUnsubscribers: make(map[frameSink]map[string][]func()),
+		idempotentAgents:      make(map[string]string),
+		fileSubs:              make(map[string]fileSubscription),
+		diffSubs:              make(map[string]diffSubscription),
+		clients:               make(map[frameSink]bool),
+		pollStop:              make(chan struct{}),
 	}
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
 	// config.daemon.hostnames takes precedence when present.
@@ -590,6 +594,8 @@ func (s *Server) serveSessionOnSink(
 		s.mu.Lock()
 		delete(s.clients, sink)
 		s.mu.Unlock()
+		// A closed socket must stop receiving terminal output; the terminal outlives it.
+		s.releaseTerminalSubscriptions(sink, "")
 	}()
 
 	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
@@ -668,10 +674,15 @@ func (s *Server) ensureTerminalSlot(slot uint8, sink frameSink) *terminal.Sessio
 	s.terminals[slot] = created
 	s.mu.Unlock()
 
-	created.Subscribe(func(ev terminal.OutputEvent) {
+	// The creator is a subscriber like any other; registering it means unsubscribe works for
+	// the socket that opened the terminal too.
+	unsubscribe, _ := created.Subscribe(func(ev terminal.OutputEvent) {
 		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
 		_ = sink.SendBinary(context.Background(), outFrame)
 	})
+	// This helper only knows the slot; the id map is the canonical key and may not have an
+	// entry yet, so key the subscription by the session's own id.
+	s.registerTerminalSubscription(sink, created.ID, unsubscribe)
 	return created
 }
 

@@ -624,8 +624,55 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
 	}
 
-	sess.Subscribe(func(ev terminal.OutputEvent) {
+	// Subscribe returns an unsubscribe func; dropping it is why unsubscribe requests did
+	// nothing: every subscribe added another permanent callback, so reopening a terminal
+	// doubled its output and a closed one kept receiving frames forever.
+	unsubscribe, _ := sess.Subscribe(func(ev terminal.OutputEvent) {
 		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
 		_ = sink.SendBinary(context.Background(), outFrame)
 	})
+	s.registerTerminalSubscription(sink, req.TerminalID, unsubscribe)
+}
+
+// registerTerminalSubscription records how to detach a sink from a terminal's output.
+//
+// Keyed by sink and terminal id: the same socket may subscribe to the same terminal twice (a
+// reconnect before the old one is torn down), and both callbacks must be removable.
+func (s *Server) registerTerminalSubscription(sink frameSink, terminalID string, unsubscribe func()) {
+	if unsubscribe == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.terminalUnsubscribers == nil {
+		s.terminalUnsubscribers = make(map[frameSink]map[string][]func())
+	}
+	byTerminal := s.terminalUnsubscribers[sink]
+	if byTerminal == nil {
+		byTerminal = make(map[string][]func())
+		s.terminalUnsubscribers[sink] = byTerminal
+	}
+	byTerminal[terminalID] = append(byTerminal[terminalID], unsubscribe)
+	s.mu.Unlock()
+}
+
+// releaseTerminalSubscriptions detaches a sink from one terminal, or from all when terminalID
+// is empty (which is what socket teardown needs).
+func (s *Server) releaseTerminalSubscriptions(sink frameSink, terminalID string) {
+	s.mu.Lock()
+	byTerminal := s.terminalUnsubscribers[sink]
+	var toRun []func()
+	if terminalID == "" {
+		for _, fns := range byTerminal {
+			toRun = append(toRun, fns...)
+		}
+		delete(s.terminalUnsubscribers, sink)
+	} else if fns, ok := byTerminal[terminalID]; ok {
+		toRun = append(toRun, fns...)
+		delete(byTerminal, terminalID)
+	}
+	s.mu.Unlock()
+
+	for _, fn := range toRun {
+		fn()
+	}
 }
