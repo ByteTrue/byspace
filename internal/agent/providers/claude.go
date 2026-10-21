@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1003,4 +1004,59 @@ func imageAltText(mimeType string) string {
 		return "Generated " + trimmed + " image"
 	}
 	return "Generated image"
+}
+
+// RewindCapabilities reports what this provider can rewind.
+//
+// Claude can restore files through the SDK's `rewindFiles` checkpoints, which Go does not have, so only the conversation
+// is offered — and a client that only gets `Conversation` renders the conversation-only control.
+func (s *ClaudeSession) RewindCapabilities() RewindCapabilities {
+	return RewindCapabilities{Conversation: true}
+}
+
+// RewindConversation forks the transcript up to a message and continues in the fork.
+//
+// Ported from claude/rewind.ts, but implemented at the file level: the SDK's `forkSession` is a JS function, not a daemon
+// call, and the CLI protocol has no equivalent. What the function actually does is read the transcript, keep the entries
+// up to the message, give each a fresh uuid, and write a new file — all of which is available here.
+//
+// The session id changes, because Claude identifies a conversation by its transcript file. Handing the client the new id
+// is what makes the next prompt continue in the fork instead of appending to the original.
+func (s *ClaudeSession) RewindConversation(ctx context.Context, messageID string) error {
+	trimmed := strings.TrimSpace(messageID)
+	if trimmed == "" {
+		return errors.New("rewind needs a message id")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	sessionID := s.sessionID
+	s.mu.Unlock()
+	// The config directory comes from the environment (CLAUDE_CONFIG_DIR) or the default location; keeping it out of
+	// the session struct means a user who moves their config does not need a new session to rewind.
+	configDir := resolveClaudeConfigDir("")
+
+	if sessionID == "" {
+		return errors.New("Claude session is not ready for rewind")
+	}
+	forkedID, err := ForkClaudeSession(configDir, sessionID, trimmed)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.sessionID = forkedID
+	s.status = "idle"
+	s.mu.Unlock()
+	return nil
+}
+
+// TreeEntryForMessage maps a message id to the provider's own reference.
+//
+// Claude addresses messages by uuid directly, so the mapping is the identity.
+func (s *ClaudeSession) TreeEntryForMessage(messageID string) (string, bool) {
+	trimmed := strings.TrimSpace(messageID)
+	return trimmed, trimmed != ""
 }

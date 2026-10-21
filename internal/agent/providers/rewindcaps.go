@@ -6,9 +6,8 @@ package providers
 // appear for providers that cannot do it, and pressing it fails — which reads as the app being broken rather
 // than the feature being unavailable.
 //
-// These values describe what THIS daemon implements, not what the provider could do in principle. Claude and omp
-// still report nothing: claude's rewind needs the SDK's `forkSession` path and omp rejects the `--extension` that Go's
-// tree navigation lives in.
+// These values describe what THIS daemon implements, not what the provider could do in principle. omp still reports
+// nothing: it rejects the `--extension` that Go's tree navigation lives in, so there is no way to move its leaf.
 type RewindCapabilities struct {
 	Conversation bool
 	// Files means the working tree is restored as well as the conversation.
@@ -27,6 +26,10 @@ func RewindCapabilitiesFor(provider string) RewindCapabilities {
 		return RewindCapabilities{Conversation: true, Files: true}
 	case "codex":
 		// `thread/rollback` drops turns from the thread; the working tree is untouched.
+		return RewindCapabilities{Conversation: true}
+	case "claude":
+		// The transcript is forked at the file level. Files are not restored: the SDK's `rewindFiles` reads checkpoints
+		// that only its own query object can reach.
 		return RewindCapabilities{Conversation: true}
 	default:
 		// Everything else: no rewind. Claiming it is worse than not offering it.

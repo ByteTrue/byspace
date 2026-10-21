@@ -23,7 +23,12 @@ func TestRewindCapabilitiesFor(t *testing.T) {
 
 	// Everything else honestly reports nothing, including providers whose node implementation has rewind Go
 	// has not ported.
-	for _, provider := range []string{"claude", "omp", "copilot", "cursor", "unknown"} {
+	// claude forks the transcript; files are not restored because the SDK's checkpoints are unreachable from Go.
+	if claude := RewindCapabilitiesFor("claude"); !claude.Conversation || claude.Files {
+		t.Fatalf("claude = %+v", claude)
+	}
+
+	for _, provider := range []string{"omp", "copilot", "cursor", "unknown"} {
 		caps := RewindCapabilitiesFor(provider)
 		if caps.Conversation || caps.Files || caps.SupportsRewindBoth() {
 			t.Fatalf("%s = %+v, want no rewind", provider, caps)
