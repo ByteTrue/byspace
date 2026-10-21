@@ -166,6 +166,7 @@ func (s *Session) readLoop() {
 			} else if bytes.Contains(chunk, []byte("\x1b]633;C")) {
 				s.SetActivity("working")
 			}
+			s.answerOSCColorQueries(chunk)
 			s.vt.Write(chunk)
 
 			flushMu.Lock()
@@ -330,4 +331,37 @@ func (s *Session) ClearAttention() {
 	s.mu.Lock()
 	s.attentionReason = ""
 	s.mu.Unlock()
+}
+
+// terminalColorQueryResponses answers a program that asks the terminal for its colors.
+//
+// Ported from TERMINAL_OSC_COLOR_QUERY_RESPONSES. A TUI that adapts to the terminal's light/dark mode sends
+// OSC 10/11/12 and reads the reply; with no reply it falls back to its own default, which may be a light theme
+// rendered inside this app's dark one.
+//
+// The colors are the app's own theme, not the terminal's: BySpace renders the grid itself, so "the terminal
+// background" is the app's background.
+var terminalColorQueryResponses = map[string]string{
+	"10": "rgb:e6e6/e6e6/e6e6", // foreground
+	"11": "rgb:0b0b/0b0b/0b0b", // background
+	"12": "rgb:e6e6/e6e6/e6e6", // cursor
+}
+
+// answerOSCColorQueries writes replies for any color query in this chunk.
+//
+// A query can be split across reads — "\x1b]1" then "1;?" — so a chunk that ends inside a possible sequence is
+// skipped rather than half-answered: a malformed reply is worse than a late one, because the program reads it
+// as garbage in its input.
+func (s *Session) answerOSCColorQueries(chunk []byte) {
+	if s.ptmx == nil || !bytes.Contains(chunk, []byte("\x1b]")) {
+		return
+	}
+	for _, state := range []string{"10", "11", "12"} {
+		query := []byte("\x1b]" + state + ";?")
+		if !bytes.Contains(chunk, query) {
+			continue
+		}
+		response := "\x1b]" + state + ";" + terminalColorQueryResponses[state] + "\x1b\\"
+		_, _ = s.ptmx.Write([]byte(response))
+	}
 }
