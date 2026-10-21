@@ -1,7 +1,12 @@
 package cli
 
 import (
+	"encoding/base64"
 	"fmt"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -63,4 +68,26 @@ func waitBudget(timeout time.Duration) int64 {
 		return defaultWaitBudgetMs
 	}
 	return timeout.Milliseconds()
+}
+
+// readImageForPrompt loads an image as base64 with its media type.
+//
+// The daemon takes base64 because the prompt travels over the same JSON channel as the text; reading
+// and encoding here keeps the CLI from needing a second upload endpoint. The media type is derived
+// from the extension, with a sniff fallback — a wrong type makes the model reject the image.
+func readImageForPrompt(path string) (string, string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	mediaType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+	if mediaType == "" {
+		mediaType = http.DetectContentType(raw)
+	}
+	// Only the family the daemon accepts. Anything else is a mistake worth reporting: a PDF or a
+	// text file sent as an "image" fails deep inside the provider with a confusing message.
+	if !strings.HasPrefix(mediaType, "image/") {
+		return "", "", fmt.Errorf("%s is %s, not an image", path, mediaType)
+	}
+	return base64.StdEncoding.EncodeToString(raw), mediaType, nil
 }

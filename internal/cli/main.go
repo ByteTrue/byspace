@@ -529,6 +529,17 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	// run prints: the model's reply is the object, not prose, and printing prose (or the agent id)
 	// makes the flag useless to a script.
 	outputSchema := fs.String("output-schema", "", "JSON Schema the reply must satisfy (object or @file)")
+	// Worktree group. The three modes are what `create_agent_request.worktree` accepts; exposing
+	// them here is what lets a CLI user get the same isolation the app's "new worktree" button
+	// gives, instead of every agent sharing the main checkout.
+	worktreeMode := fs.String("worktree-mode", "", "branch-off | checkout-branch | checkout-pr")
+	worktreeSlug := fs.String("worktree-slug", "", "worktree directory name (default: derived from the branch)")
+	newBranch := fs.String("new-branch", "", "branch to create (with --worktree-mode branch-off)")
+	baseBranch := fs.String("base", "", "base ref for branch-off (default: the current HEAD)")
+	branch := fs.String("branch", "", "existing branch (with --worktree-mode checkout-branch)")
+	prNumber := fs.Int("pr-number", 0, "change request number (with --worktree-mode checkout-pr)")
+	imagePaths := multiFlag{}
+	fs.Var(&imagePaths, "image", "image file to attach to the first message (repeatable)")
 	var labels multiFlag
 	fs.Var(&labels, "label", "key=value label (repeatable)")
 	var envVars multiFlag
@@ -557,15 +568,10 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	ws, err := dialDaemonWS(ctx, *addr)
-	if err != nil {
-		return err
-	}
-	defer ws.CloseNow()
-
+	// Everything below validates flags before dialling. A typo in --worktree-mode or a non-image
+	// passed as --image has to fail with its own message, not "connection refused" because the
+	// daemon happened not to be running.
 	cfg := map[string]any{}
-	// An empty provider leaves the choice to the daemon, which is what `--provider` being absent
-	// means. Hardcoding "pi" made every run a pi agent even when the daemon's default was not.
 	if p := strings.TrimSpace(*provider); p != "" {
 		cfg["provider"] = p
 	}
@@ -602,6 +608,56 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if *role != "" {
 		request["role"] = *role
 	}
+	if parsed, labelErr := parseKeyValueFlags(labels, "label"); labelErr != nil {
+		return labelErr
+	} else if len(parsed) > 0 {
+		request["labels"] = parsed
+	}
+
+	if worktreeModeValue := strings.TrimSpace(*worktreeMode); worktreeModeValue != "" {
+		worktree := map[string]any{"mode": worktreeModeValue}
+		switch worktreeModeValue {
+		case "branch-off":
+			if strings.TrimSpace(*newBranch) == "" {
+				return errors.New("--worktree-mode branch-off needs --new-branch")
+			}
+			worktree["newBranch"] = strings.TrimSpace(*newBranch)
+			if strings.TrimSpace(*baseBranch) != "" {
+				worktree["base"] = strings.TrimSpace(*baseBranch)
+			}
+		case "checkout-branch":
+			if strings.TrimSpace(*branch) == "" {
+				return errors.New("--worktree-mode checkout-branch needs --branch")
+			}
+			worktree["branch"] = strings.TrimSpace(*branch)
+		case "checkout-pr":
+			if *prNumber <= 0 {
+				return errors.New("--worktree-mode checkout-pr needs --pr-number")
+			}
+			worktree["prNumber"] = *prNumber
+		default:
+			// Named rather than ignored: a typo in the mode would otherwise create an agent in the
+			// main checkout while the user believes they asked for isolation.
+			return fmt.Errorf("--worktree-mode %q is not branch-off, checkout-branch or checkout-pr", worktreeModeValue)
+		}
+		if slug := strings.TrimSpace(*worktreeSlug); slug != "" {
+			worktree["slug"] = slug
+		}
+		request["worktree"] = worktree
+	}
+
+	if len(imagePaths) > 0 {
+		images := make([]any, 0, len(imagePaths))
+		for _, path := range imagePaths {
+			data, mediaType, readErr := readImageForPrompt(path)
+			if readErr != nil {
+				return readErr
+			}
+			images = append(images, map[string]any{"data": data, "mimeType": mediaType})
+		}
+		request["images"] = images
+	}
+
 	if schemaText := strings.TrimSpace(*outputSchema); schemaText != "" {
 		if strings.HasPrefix(schemaText, "@") {
 			read, readErr := os.ReadFile(strings.TrimPrefix(schemaText, "@"))
@@ -616,11 +672,12 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		}
 		request["outputSchema"] = schema
 	}
-	if parsed, labelErr := parseKeyValueFlags(labels, "label"); labelErr != nil {
-		return labelErr
-	} else if len(parsed) > 0 {
-		request["labels"] = parsed
+
+	ws, err := dialDaemonWS(ctx, *addr)
+	if err != nil {
+		return err
 	}
+	defer ws.CloseNow()
 
 	if err := sendSessionReq(ctx, ws, request); err != nil {
 		return err
