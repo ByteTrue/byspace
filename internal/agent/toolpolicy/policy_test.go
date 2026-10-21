@@ -54,3 +54,17 @@ func TestFilterPreservesOrder(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+// A nil policy means "no policy", which allows everything. Dereferencing it here panicked the
+// daemon on the first tool call from an agent with no settings.
+func TestIsToolEnabledWithNilPolicy(t *testing.T) {
+	if !IsToolEnabled(nil, "list_agents") {
+		t.Fatal("nil policy must allow tools")
+	}
+	if !IsToolEnabled(nil, "create_agent") {
+		t.Fatal("nil policy must allow every tool")
+	}
+	if got := Filter(nil, []string{"a", "b"}); len(got) != 2 {
+		t.Fatalf("nil policy must keep the list: %v", got)
+	}
+}

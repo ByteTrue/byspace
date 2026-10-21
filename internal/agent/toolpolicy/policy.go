@@ -65,6 +65,12 @@ func IsToolEnabled(policy *Policy, toolName string) bool {
 	if toolName == SpeakToolName {
 		return true
 	}
+	if policy == nil {
+		// No policy means everything is allowed. Returning here rather than relying on
+		// PolicyEnabled is the difference between "enabled" and a nil dereference — the daemon
+		// panicked on the very first tool call without a policy.
+		return true
+	}
 	if !PolicyEnabled(policy) {
 		return false
 	}
