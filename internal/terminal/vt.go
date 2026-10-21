@@ -3,6 +3,7 @@ package terminal
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -338,7 +339,11 @@ func (s *Session) ValidateActivityToken(candidate string) bool {
 	return subtle.ConstantTimeCompare([]byte(s.ActivityToken), []byte(candidate)) == 1
 }
 
-const piTerminalActivityHookSource = `// Installed by BySpace for terminal activity reporting.
+// agentHookOwnedMarker identifies a hook file BySpace wrote. Anything without it belongs to the
+// user.
+const agentHookOwnedMarker = "// Installed by BySpace for terminal activity reporting."
+
+const piTerminalActivityHookSource = agentHookOwnedMarker + `
 export default function byspaceTerminalActivity(pi) {
   const url = process.env.BYSPACE_TERMINAL_ACTIVITY_URL;
   const terminalId = process.env.BYSPACE_TERMINAL_ID;
@@ -367,6 +372,22 @@ func EnsureAgentHooksInstalled(userHomeDir string) (string, error) {
 		}
 	}
 	extPath := filepath.Join(userHomeDir, ".pi", "agent", "extensions", "byspace-terminal-activity.ts")
+
+	// Own only what we wrote. A file at that path without our marker is the user's own
+	// extension, and overwriting it would silently delete their work — the node installer
+	// checks the same marker for the same reason.
+	if existing, err := os.ReadFile(extPath); err == nil {
+		if !strings.Contains(string(existing), agentHookOwnedMarker) {
+			return "", fmt.Errorf(
+				"%s exists and was not written by BySpace; move it aside to let BySpace install its hooks",
+				extPath)
+		}
+		if string(existing) == piTerminalActivityHookSource {
+			// Already current: rewriting would only change the mtime.
+			return extPath, nil
+		}
+	}
+
 	if err := home.WriteAtomic(extPath, []byte(piTerminalActivityHookSource), 0o644); err != nil {
 		return "", err
 	}
