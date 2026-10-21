@@ -203,7 +203,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `workspace-registry-bootstrap.ts` | 219 | **MISSING** → 已补核心 | 注册表丢失（部分拷贝、写失败、原地升级）时，Node 从存活的 agent 记录重建工作区；Go 什么都不做——侧边栏空白、每个 agent 不可达，看起来像数据全丢，实际记录和会话文件都在。已实现 `RebuildWorkspaceRegistryFromAgents`：按工作目录分组（**一个目录一个工作区，不是一个 agent 一个**）、取最早创建与最晚活动、跳过已归档、跳过目录已消失的（否则侧边栏会出现一条点开就失败的条目）、注册表非空时完全不动（重建会丢用户的标题和置顶）。2 个测试。仍缺：legacy worktree 的 branch identity 回填。 |
 | `tunnel-registry.ts` / `daemon-worker.ts` | 210 / 363 | **DROPPED（本轮不做）** | 隧道需要两台机器才能验证；supervisor IPC 生命周期（ready/restart/shutdown、heartbeat、父进程变化检测）依赖 Node 的 `process.send`，Go 用信号与 PID 锁实现等价语义（`daemon.go` + `pid-lock` 那批）。盲写这两块风险高于收益，已在 service-proxy Issue 里记明条件：需要第二台设备时再做。 |
 
-### 未审计（本批剩余 25 文件）
+| `agent-attention-policy.ts` | 80 | **MISSING** → 已补 | 注意力状态是侧边栏徽标和推送的依据。Go 里三个字段（`requiresAttention`/`attentionReason`/`attentionTimestamp`）都存在但**从不赋值**，三个 handler 全是空壳：`mark_unread` 返回 `markedAgentId: null` 且 `success: true` 却什么都没做，`clear_attention` 返回空数组，`clear_agent_attention` 返回空 agents。结果是徽标永远不亮，跑完的长任务和没启动过的一模一样。已移植 `internal/attention`（3 分钟在场阈值、聚焦抑制、最活跃在场客户端、error 不推送），并接线：轮次完成标记（除非用户正看着）、`mark_unread` 按 Node 前置条件标记工作区里最活跃的 finished agent、两个 clear 真正清除并返回快照。4 步端到端验证全通过。 |
+
+### 未审计（本批剩余 24 文件）
 
 按行数排序，下一轮从这里继续：
 
