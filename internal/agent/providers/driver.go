@@ -3,8 +3,8 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"github.com/ByteTrue/byspace/internal/execres"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -287,8 +287,10 @@ func IsBinaryAvailable(spec ProviderSpec, piCommandOverride string) bool {
 	if v := strings.TrimSpace(os.Getenv(envKey)); v != "" {
 		return true
 	}
-	_, err := exec.LookPath(spec.Binary)
-	return err == nil
+	// LookPath alone returns the first match on PATH, which is not the same as a binary that
+	// runs: a stale install earlier in PATH shadows a good one later and the providers page then
+	// reports "not installed" for a machine where it plainly is.
+	return execres.IsCommandAvailable(context.Background(), spec.Binary)
 }
 
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
