@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"net"
 	"net/http"
 	"sort"
@@ -154,6 +155,9 @@ func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 		payload["cwd"] = cwd
 	}
 	s.broadcastSessionMsg("terminals_changed", payload)
+	// Written on every membership change: the tabs that existed when the process died are what
+	// the user expects to find when the daemon comes back.
+	s.persistTerminalSessions()
 }
 
 // RegisterFileSubscription registers a live file watcher subscription for fs.file.update notifications.
@@ -523,4 +527,23 @@ func (s *Server) startWorkspacePlacementPoller() {
 			}
 		}
 	}()
+}
+
+// persistTerminalSessions writes the tab list so a restart can recreate it.
+//
+// Only metadata: a shell process cannot be brought back, and restoring a previous run's pid would
+// attach the UI to a process that is not there.
+func (s *Server) persistTerminalSessions() {
+	s.mu.Lock()
+	sessions := make([]terminal.PersistedTerminalSession, 0, len(s.terminals))
+	for _, t := range s.terminals {
+		sessions = append(sessions, terminal.PersistedTerminalSession{
+			ID:          t.ID,
+			Cwd:         t.Cwd,
+			WorkspaceID: t.WorkspaceID,
+			Name:        t.Name,
+		})
+	}
+	s.mu.Unlock()
+	_ = terminal.SavePersistedTerminals(s.homeDir, sessions)
 }

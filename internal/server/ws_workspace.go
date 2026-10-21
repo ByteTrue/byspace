@@ -527,6 +527,9 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 	s.terminalSlotsByID[termID] = slot
 	s.mu.Unlock()
 
+	// Persist the tab list so a restart can recreate it, and let other clients see the new tab.
+	s.broadcastTerminalsChanged(sess.Cwd, sess.WorkspaceID)
+
 	nowMs := time.Now().UnixMilli()
 	_ = sendSessionMsg(ctx, sink, "create_terminal_response", map[string]any{
 		"terminal": map[string]any{
