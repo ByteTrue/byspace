@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ByteTrue/byspace/internal/server"
 )
@@ -164,5 +165,42 @@ done
 	}
 	if !strings.Contains(out.String(), `"provider": "pi"`) {
 		t.Fatalf("expected pi in provider ls output: %q", out.String())
+	}
+}
+
+// `--env FOO` with no `=` is a mistake the user wants to hear about; quietly setting FOO to the
+// empty string would run the agent with a broken environment.
+func TestParseKeyValueFlagsRejectsMalformed(t *testing.T) {
+	for _, value := range []string{"novalue", "=value", "  ", "= "} {
+		if _, err := parseKeyValueFlags([]string{value}, "env"); err == nil {
+			t.Fatalf("%q should be rejected", value)
+		}
+	}
+}
+
+// Everything after the first `=` is the value, so a value may contain `=`.
+func TestParseKeyValueFlagsSplitsOnFirstEquals(t *testing.T) {
+	got, err := parseKeyValueFlags([]string{"URL=http://x?a=b", "EMPTY="}, "env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["URL"] != "http://x?a=b" {
+		t.Fatalf("URL = %q", got["URL"])
+	}
+	if value, present := got["EMPTY"]; !present || value != "" {
+		t.Fatalf("an empty value must be kept, got %q present=%v", value, present)
+	}
+}
+
+// Zero means the default, not "wait forever": an unbounded wait on a dead provider never returns.
+func TestWaitBudgetDefaults(t *testing.T) {
+	if got := waitBudget(0); got != defaultWaitBudgetMs {
+		t.Fatalf("zero = %d", got)
+	}
+	if got := waitBudget(-time.Second); got != defaultWaitBudgetMs {
+		t.Fatalf("negative = %d", got)
+	}
+	if got := waitBudget(90 * time.Second); got != 90_000 {
+		t.Fatalf("explicit = %d", got)
 	}
 }

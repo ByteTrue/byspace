@@ -514,6 +514,21 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	model := fs.String("model", "", "model identifier")
 	thinking := fs.String("thinking", "", "thinking level")
 	wait := fs.Bool("wait", true, "wait for turn completion")
+	// The node CLI spells "do not wait" as --detach / --background; --wait=false also works.
+	detach := fs.Bool("detach", false, "start the agent and return immediately (implies --wait=false)")
+	background := fs.Bool("background", false, "alias for --detach")
+	// The rest of the flags the node CLI accepts. Without them `byspace run` could only start an
+	// agent in the current directory with the default provider, so anything else needed the app.
+	provider := fs.String("provider", "", "agent provider (default: the daemon's)")
+	workspaceID := fs.String("workspace", "", "run inside an existing workspace")
+	mode := fs.String("mode", "", "provider mode (see: byspace agent mode <id>)")
+	title := fs.String("title", "", "agent title")
+	role := fs.String("role", "", "agent role")
+	waitTimeout := fs.Duration("wait-timeout", 0, "how long to wait when --wait is set")
+	var labels multiFlag
+	fs.Var(&labels, "label", "key=value label (repeatable)")
+	var envVars multiFlag
+	fs.Var(&envVars, "env", "NAME=value for the agent process (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -521,12 +536,21 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if prompt == "" {
 		return errors.New("prompt is required")
 	}
+	if *detach || *background {
+		*wait = false
+	}
 	workDir := *cwd
-	if workDir == "" {
+	if workDir == "" && strings.TrimSpace(*workspaceID) == "" {
 		workDir, _ = os.Getwd()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// The context must outlive the wait, or a caller asking for a 30-minute timeout gets cancelled
+	// after the default. Ten seconds of slack covers the create round trip.
+	budget := time.Duration(waitBudget(*waitTimeout))*time.Millisecond + 10*time.Second
+	if !*wait {
+		budget = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
 	ws, err := dialDaemonWS(ctx, *addr)
@@ -535,9 +559,14 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	}
 	defer ws.CloseNow()
 
-	cfg := map[string]any{
-		"provider": "pi",
-		"cwd":      workDir,
+	cfg := map[string]any{}
+	// An empty provider leaves the choice to the daemon, which is what `--provider` being absent
+	// means. Hardcoding "pi" made every run a pi agent even when the daemon's default was not.
+	if p := strings.TrimSpace(*provider); p != "" {
+		cfg["provider"] = p
+	}
+	if strings.TrimSpace(*workspaceID) == "" {
+		cfg["cwd"] = workDir
 	}
 	if *model != "" {
 		cfg["model"] = *model
@@ -545,13 +574,37 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if *thinking != "" {
 		cfg["thinkingOptionId"] = *thinking
 	}
+	if *mode != "" {
+		cfg["modeId"] = *mode
+	}
+	if env, envErr := parseKeyValueFlags(envVars, "env"); envErr != nil {
+		return envErr
+	} else if len(env) > 0 {
+		cfg["env"] = env
+	}
 
-	if err := sendSessionReq(ctx, ws, map[string]any{
+	request := map[string]any{
 		"type":          "create_agent_request",
 		"requestId":     "cli_create",
 		"initialPrompt": prompt,
 		"config":        cfg,
-	}); err != nil {
+	}
+	if workspace := strings.TrimSpace(*workspaceID); workspace != "" {
+		request["workspaceId"] = workspace
+	}
+	if *title != "" {
+		request["title"] = *title
+	}
+	if *role != "" {
+		request["role"] = *role
+	}
+	if parsed, labelErr := parseKeyValueFlags(labels, "label"); labelErr != nil {
+		return labelErr
+	} else if len(parsed) > 0 {
+		request["labels"] = parsed
+	}
+
+	if err := sendSessionReq(ctx, ws, request); err != nil {
 		return err
 	}
 
@@ -569,7 +622,7 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		"type":      "wait_for_finish_request",
 		"requestId": "cli_wait",
 		"agentId":   agentID,
-		"timeoutMs": 55000,
+		"timeoutMs": waitBudget(*waitTimeout),
 	}); err != nil {
 		return err
 	}
