@@ -388,14 +388,13 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 	if matchedProject.Kind == "git" {
 		wsKind = "local_checkout"
 	}
-	_ = gitRepoRoot(absCwd)
 	rootCopy := absCwd
 	newWS := WorkspaceRecord{
 		WorkspaceID:  NewWorkspaceID(),
 		ProjectID:    matchedProject.ProjectID,
 		Cwd:          absCwd,
 		Kind:         wsKind,
-		DisplayName:  baseName,
+		DisplayName:  DeriveWorkspaceDisplayName(absCwd),
 		WorktreeRoot: &rootCopy,
 		MainRepoRoot: &rootCopy,
 		CreatedAt:    now,
@@ -1266,4 +1265,40 @@ type UntrustedSource struct {
 // already trusts — only a cross-repository checkout blocks.
 func (s *UntrustedSource) IsBlocked() bool {
 	return s != nil && s.Kind == "change_request" && s.HeadRepository != ""
+}
+
+// DeriveWorkspaceDisplayName names a workspace for the sidebar.
+//
+// Ported from workspace-registry-model.ts. A checkout shows its branch, because that is how the
+// user tells two checkouts of the same repository apart; a detached HEAD or a non-git directory
+// falls back to the directory name, since "HEAD" is not a name.
+func DeriveWorkspaceDisplayName(cwd string) string {
+	if branch, err := gitCurrentBranch(cwd); err == nil {
+		if trimmed := strings.TrimSpace(branch); trimmed != "" && !strings.EqualFold(trimmed, "HEAD") {
+			return trimmed
+		}
+	}
+	cleaned := strings.ReplaceAll(strings.TrimSpace(cwd), "\\", "/")
+	segments := make([]string, 0, 4)
+	for _, seg := range strings.Split(cleaned, "/") {
+		if seg != "" {
+			segments = append(segments, seg)
+		}
+	}
+	if len(segments) == 0 {
+		return cwd
+	}
+	return segments[len(segments)-1]
+}
+
+// gitCurrentBranch reports the checked-out branch, or "" when detached.
+//
+// Separate from gitRepoRoot because a failure to read the branch must not make the repository
+// look like a non-repository.
+func gitCurrentBranch(repoPath string) (string, error) {
+	out, err := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
