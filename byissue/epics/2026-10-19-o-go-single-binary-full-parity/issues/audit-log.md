@@ -682,6 +682,14 @@ Go 侧的对应物是 `internal/agent/jsonl`（JSONL RPC 多路复用、V2 分�
 
 **其余 17 个文件（codex-app-server-agent 7411、opencode-agent 5329、acp-agent 3929 等）没有逐文件过**，留在未完成清单。这些是各 provider 的实现体，Go 侧对应 `internal/agent/providers/{claude,codex,acp,opencode}.go`，共享件对应 `internal/agent/{jsonl,sdk}`；按主题核对过（image 转发、重入锁、参数分流、子代理、问题应答），但没有逐文件。
 
+### terminal/activity/terminal-activity-tracker.ts | 96 | **MISSING → 已补（两处）**
+
+**第一个缺口**：`OnActivityChange` 回调从来没被任何调用方设置。活动状态在跟踪，但**没有任何地方广播它**——于是侧边栏里每个终端永远是 idle，包括 agent 正在里面工作的时候。
+
+**第二个缺口**：`attentionReason` 完全不存在。Node 在 working → idle 时设 `"finished"`，这是侧边栏汇总上那个标记；没有它，刚跑完的长任务和从未运行过的终端看起来一样，而普通 shell（unknown，不是 idle）和已完成的也分不清。
+
+现在回调携带 state 与 reason，终端保存 reason（只在 working → idle 时设，且 no-op 转换不会重新抬起），广播里带上它。活动状态走 `terminals_changed` 而不是单独的消息：客户端本来就从那个 payload 替换整个终端列表，另开一个事件需要第二个 reducer，还有和列表不一致的风险。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
