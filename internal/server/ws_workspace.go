@@ -511,6 +511,15 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 		Args:        req.Args,
 		Rows:        rows,
 		Cols:        cols,
+		// Without this the running indicator never moves: the state was tracked but nothing
+		// broadcast it, so the sidebar showed every terminal as idle forever.
+		//
+		// Activity travels inside terminals_changed rather than as its own message, because the
+		// client already replaces its terminal list from that payload — a separate event would
+		// need a second reducer and could disagree with the list.
+		OnActivityChange: func(_state, _attentionReason string) {
+			s.broadcastTerminalsChanged(cwd, req.WorkspaceID)
+		},
 	})
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_terminal_response", map[string]any{

@@ -143,7 +143,13 @@ func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
-			"activity":    map[string]any{"state": t.Activity(), "changedAt": nowMs},
+			// attentionReason distinguishes "just finished" from "idle all along", which is what
+			// the sidebar's rollup shows. Nullable: absent means nothing to show.
+			"activity": map[string]any{
+				"state":           t.Activity(),
+				"attentionReason": nullableReason(t.AttentionReason()),
+				"changedAt":       nowMs,
+			},
 		})
 	}
 	s.mu.Unlock()
@@ -546,4 +552,15 @@ func (s *Server) persistTerminalSessions() {
 	}
 	s.mu.Unlock()
 	_ = terminal.SavePersistedTerminals(s.homeDir, sessions)
+}
+
+// nullableReason renders an absent attention reason as null.
+//
+// The protocol field is nullable and the client reads null as "nothing to show"; an empty string
+// would render an empty badge.
+func nullableReason(reason string) any {
+	if strings.TrimSpace(reason) == "" {
+		return nil
+	}
+	return reason
 }

@@ -26,12 +26,18 @@ type Session struct {
 	WorkspaceID   string
 	ActivityToken string
 
-	mu               sync.Mutex
-	cmd              *exec.Cmd
-	ptmx             *os.File
-	revision         int64
-	activityState    string // "idle" | "working"
-	onActivityChange func(string)
+	mu            sync.Mutex
+	cmd           *exec.Cmd
+	ptmx          *os.File
+	revision      int64
+	activityState string // "idle" | "working"
+	// attentionReason marks why a terminal wants attention. "finished" is set when a working
+	// agent goes idle, which is what the sidebar's rollup shows; without it a long task that
+	// just completed looks the same as one that never ran.
+	attentionReason string
+	// onActivityChange reports state and, when the state is idle because work just finished, the
+	// attention reason. Without the reason a completed long task looks like one that never ran.
+	onActivityChange func(state, attentionReason string)
 	vt               *VTGrid
 	backlog          *Backlog
 	subscribers      map[int]func(OutputEvent)
@@ -46,7 +52,7 @@ type StartOptions struct {
 	Cwd              string
 	WorkspaceID      string
 	ActivityToken    string
-	OnActivityChange func(string)
+	OnActivityChange func(state, attentionReason string)
 	Command          string
 	Args             []string
 	Env              []string
@@ -269,11 +275,23 @@ func (s *Session) SetActivity(state string) bool {
 		s.mu.Unlock()
 		return false
 	}
+	previous := s.activityState
 	s.activityState = state
+
+	// working → idle means the agent finished. Distinguishing it from "was always idle" is the
+	// whole point of the reason: only the former deserves a marker.
+	switch {
+	case state == "idle" && previous == "working":
+		s.attentionReason = "finished"
+	case state == "working":
+		s.attentionReason = ""
+	}
+	reason := s.attentionReason
+
 	cb := s.onActivityChange
 	s.mu.Unlock()
 	if cb != nil {
-		cb(state)
+		cb(state, reason)
 	}
 	return true
 }
@@ -298,4 +316,18 @@ func (s *Session) Close() error {
 	}
 	<-s.done
 	return nil
+}
+
+// AttentionReason reports why this terminal wants attention, or "" when it does not.
+func (s *Session) AttentionReason() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attentionReason
+}
+
+// ClearAttention drops the attention marker once the user has seen it.
+func (s *Session) ClearAttention() {
+	s.mu.Lock()
+	s.attentionReason = ""
+	s.mu.Unlock()
 }
