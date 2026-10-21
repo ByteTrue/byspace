@@ -1012,6 +1012,149 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 三种情况**故意仍然新建**：没有名字（没有身份可匹配）、目标不同（「每晚检查」对 agent A 和对 agent B 是两件事）、已完成的日程（run 预算已用完，复活它等于静默什么都不做）。
 
+### 收尾：其余全部文件的结论 | 128 文件
+
+按主题分组给出结论。分组内的文件都逐一看过其导出面与调用点，但**没有逐行读**——这一层的
+判定依据是「它的语义在 Go 里有没有对应实现、行为是否可观测地一致」，而不是行级移植。凡有
+实质缺口的已在上文单独成条。
+
+#### PORTED — 语义已在 Go 侧落地
+
+| 文件                                                                                                                                   | Go 侧对应                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `executable-resolution/executable-resolution.ts`、`executable-resolution/windows.ts`                                                   | `internal/execres`（PATH 扫描、候选可用性校验、`--version` 探测、Windows `.exe`/`.cmd` 解析）                                   |
+| `server/agent/create-agent/create.ts`、`create-agent/intent.ts`                                                                        | `ws_agent.go` 的 `handleCreateAgent`（workspace/cwd/parent/labels 解析、标题生成、初始 prompt）                                 |
+| `server/agent/provider-subagents/observation.ts`                                                                                       | `ws_agent.go` 的子代理 list/timeline 与 `runtime_services.go` 的广播                                                            |
+| `server/agent/providers/omp/subagent-index.ts`                                                                                         | `internal/agent/pi/subagents.go`（omp 与 pi 子代理协议相同）                                                                    |
+| `server/auto-archive-on-merge/archive-if-safe.ts`                                                                                      | `internal/server/auto_archive.go`（含 `CountAheadOfOrigin` 的 `-1` 拦截）                                                       |
+| `server/byspace-home.ts`                                                                                                               | `internal/home`（`Resolve`、原子写、`ExternalProcessEnv`）                                                                      |
+| `server/byspace-worktree-service.ts`                                                                                                   | `internal/workspace/git.go` 的 worktree 生命周期（create/list/archive、`worktree.json` 元数据、baseRef）                        |
+| `server/checkout/status-projection.ts`                                                                                                 | `internal/workspace/git.go` 的 `CheckoutStatus`（isGit/branch/dirty/remote/mainRepoRoot）                                       |
+| `server/file-explorer/observer.ts`                                                                                                     | 目录枚举在 `internal/dirstream`，变更推送在 `fs.file.update` 轮询                                                               |
+| `server/migrations/backfill-workspace-id.migration.ts`                                                                                 | `store.BackfillWorkspaceOwnership`（启动时给 legacy agent 补 `WorkspaceID`）                                                    |
+| `server/pagination/cursor.ts`、`sortable-pager.ts`                                                                                     | `internal/server/cursor.go`（keyset 游标：排序键值 + id）                                                                       |
+| `server/session/agent-config/agent-config-session.ts`                                                                                  | `set_agent_model_request` / `set_agent_thinking_request` / `agent.config.apply.request`                                         |
+| `server/session/daemon/daemon-session.ts`                                                                                              | `daemon.config` / `daemon.reload` / `diagnostics.request` 那批 RPC                                                              |
+| `server/session/git-mutation/git-mutation-service.ts`                                                                                  | `ws_git_system.go` 的 checkout/stash/merge/branch 那批                                                                          |
+| `server/session/project-config/project-config-session.ts`、`worktree-setup-commit-status.ts`                                           | `write_project_config`（带乐观锁与 `stale_project_config`）+ `workspace.setup`                                                  |
+| `server/session/schedule/schedule-session.ts`                                                                                          | `handleScheduleMessage`（全套 schedule RPC）                                                                                    |
+| `server/session/workspace-git-observer/workspace-git-observer-service.ts`                                                              | `workspacePlacementInterval` 每 5 分钟重读 git facts，`reconcileWorkspacePlacement` 只在真变化时更新                            |
+| `server/session/workspace-recovery/workspace-recovery-service.ts`                                                                      | `workspace.recovery.*`，`restore` 走取消归档                                                                                    |
+| `server/workspace-labels/internal/catalog-store.ts`                                                                                    | `store` 的 `LabelCatalog`（generation + headSeq + 增量广播）                                                                    |
+| `terminal/terminal-output-backlog.ts`                                                                                                  | `internal/terminal/backlog.go`（100 万字符增量 + revision）                                                                     |
+| `output/json.ts`、`quiet.ts`、`render.ts`、`table.ts`、`with-output.ts`、`yaml.ts`                                                     | `internal/cli/output.go`（四种模式 + CJK 列宽）                                                                                 |
+| `utils/client-id.ts`、`command-options.ts`、`duration.ts`、`errors.ts`、`provider-model.ts`、`timeline.ts`                             | `internal/cli/main.go` 的参数解析与 `internal/agent/sdk` 的时间线类型                                                           |
+| `commands/` 下全部命令文件                                                                                                             | `internal/cli` 的分组命令；`agent/mode` 与 `daemon` 的三个 service 子命令本轮补齐                                               |
+| ---                                                                                                                                    | ---                                                                                                                             |
+| `commands/agent/archive.ts`、`delete.ts`、`detach.ts`、`import.ts`、`logs.ts`、`mode.ts`、`open.ts`、`reload.ts`、`stop.ts`、`wait.ts` | `runAgentGroupCmd` → `archive`/`delete`/`detach`/`import`/`logs`/`mode`/`open`/`reload`/`stop`/`wait`                           |
+| `commands/clone.ts`、`commands/open.ts`                                                                                                | `open`/`clone` 顶层子命令（`open` 也支持路径直开）                                                                              |
+| `commands/workspace/archive.ts`、`create.ts`、`rename.ts`、`setup.ts`                                                                  | `runWorkspaceGroupCmd` 的 `archive`/`create`/`rename`/`setup`                                                                   |
+| `commands/project/create.ts`、`delete.ts`、`rename.ts`                                                                                 | `runProjectGroupCmd`                                                                                                            |
+| `commands/schedule/{create,delete,logs,pause,resume,run-once}.ts`                                                                      | `runScheduleGroupCmd`                                                                                                           |
+| `commands/script/{start,stop}.ts`                                                                                                      | `runScriptGroupCmd`                                                                                                             |
+| `commands/terminal/{capture,create,kill,send-keys}.ts`                                                                                 | `runTerminalGroupCmd`                                                                                                           |
+| `commands/permit/{allow,deny}.ts`                                                                                                      | `runPermitGroupCmd`                                                                                                             |
+| `commands/provider/diagnostic.ts`                                                                                                      | `provider diagnostic`（路径 + `--version` + 失败区分）                                                                          |
+| `commands/worktree/{archive,create,create-input}.ts`                                                                                   | `runWorktreeGroupCmd`                                                                                                           |
+| `commands/daemon/{start,stop,restart,reload,pair,service-status,install-service,uninstall-service,set-password,runtime-toolchain}.ts`  | `runDaemonCmd`（`set-password` 由 `set_daemon_config` 承担，`runtime-toolchain` 是 Node 特有诊断，Go 为静态二进制无工具链可查） |
+| `commands/daemon/service/{backend,launchd,systemd,windows-task,service-spec,service-status}.ts`                                        | `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询）                                     |
+
+#### N/A — 测试辅助、类型定义、生成物
+
+`server/test-utils/` 下：`byspace-daemon.ts`、`class-mocks.ts`、`claude-auth.ts`、
+`claude-config.ts`、`daemon-client.ts`、`daemon-test-context.ts`、`fake-agent-client.ts`、
+`message-collector.ts`、`outdated-daemon-process.ts`、`session-stubs.ts`、`temp-github-repo.ts`、
+`workspace-git-service-stub.ts`。
+
+`server/daemon-e2e/` 下：`agent-configs.ts`、`opencode-omo-real-runtime.ts`、
+`real-provider-test-config.ts`、`send-while-running-stuck-test-utils.ts`、`test-utils/rewind-helpers.ts`。
+
+`test-utils/` 下：`platform.ts`、`test-logger.ts`、`vitest-setup.ts`。
+
+各 provider 的假 CLI：`server/agent/providers/pi/test-utils/fake-pi.ts`、
+`omp/test-utils/fake-omp.ts`、`omp/test-utils/omp-harness.ts`、
+`codex/test-utils/fake-app-server.ts`、`opencode/test-utils/test-opencode-harness.ts`、
+`providers/test-utils/session-stream-adapter.ts`。
+
+另有 `server/agent/providers/mock-slow-provider.ts`（压测假 provider）、
+`server/agent/rewind/test-rewind-session.ts`、`server/agent/providers/claude/test-rewind-claude-sdk.ts`（回滚测试桩）、
+`services/gitea-facts.ts`、`services/github-facts.ts`、`services/gitlab-facts.ts`（forge 事实类型定义）、
+`commands/schedule/schema.ts`、`commands/script/schema.ts`、`commands/terminal/schema.ts`（CLI 输出 schema）。
+
+Go 侧对应做法是 `testing` + `t.TempDir()` + 假 CLI 脚本（`writeFaithfulFakePi`）+
+`stream_conformance_test.go` 里冻结的真实事件序列。`*-facts.ts` 是各自 forge 的事实类型
+定义，Go 用 struct/map。
+
+#### 架构替换 — 无对应物，语义等价
+
+`server/file-observer/internal/{contracts,observation,native-recursive}.ts`：Node 的 inotify
+后端与目录树协调器（`native-recursive.ts` 里 610 行大部分是 Linux watch 上限与 reconcile
+队列）。Go 用轮询 + `mtime/size` 跳过未变文件，没有 watch 数量上限，也没有要 reconcile 的
+后端状态。
+
+#### MISSING — 已记明阻塞条件
+
+| 文件                                                                                                                                                                     | 条件                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `terminal/agent-hooks/claude/claude-settings.ts`、`claude/claude.ts`、`codex/codex-settings.ts`、`codex/codex.ts`、`opencode/opencode-plugin.ts`、`opencode/opencode.ts` | 只有 pi 的安装。`byspace hooks <agent> <event>` shim 已能接受这些 provider 的事件，缺的是改写它们的配置文件。与「只用 pi」的方向一致。 |
+| `server/session/daemon/daemon-self-update-session-controller.ts`                                                                                                         | daemon 自更新（下载 release 覆盖自身并重启），未实现。                                                                                 |
+| `server/directory-sync/internal/versioned-collection.ts`                                                                                                                 | 跨主机目录同步，产品方向未定。                                                                                                         |
+| `services/quota-fetcher/providers/claude.ts`、`copilot.ts`、`cursor.ts`、`grok.ts`、`kimi.ts`、`minimax.ts`                                                              | 需要真实凭据才能验证；`codex`/`zai` 已实现，框架（`manifest`/`provider`/`usage`）已 PORTED。                                           |
+
+### 收尾清单：最后 31 个文件的逐条结论
+
+上一节按主题分组时用的是 `{a,b,c}` 简写，简写不算逐文件结论。这里逐个文件列出，避免
+「看起来覆盖了」的错觉。
+
+| 文件                                         | 结论                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `server/file-observer/internal/contracts.ts` | **N/A** — 类型契约定义；Go 用轮询实现，没有 inotify 后端要抽象                                           |
+| `services/quota-fetcher/manifest.ts`         | **PORTED** — `internal/quota` 框架（manifest / provider / usage）                                        |
+| `services/quota-fetcher/provider.ts`         | **PORTED** — `internal/quota` 框架（manifest / provider / usage）                                        |
+| `services/quota-fetcher/providers/zai.ts`    | **PORTED** — `internal/quota`（只读凭据不刷新——刷新归 provider CLI 管）                                  |
+| `services/quota-fetcher/usage.ts`            | **PORTED** — `internal/quota` 框架（manifest / provider / usage）                                        |
+| `terminal/agent-hooks/pi/pi-extension.ts`    | **PORTED** — `internal/terminal/vt.go` 的 `EnsureAgentHooksInstalled`（本轮补了 ownership marker 检查）  |
+| `terminal/agent-hooks/pi/pi.ts`              | **PORTED** — `internal/terminal/vt.go` 的 `EnsureAgentHooksInstalled`（本轮补了 ownership marker 检查）  |
+| `commands/daemon/install-service.ts`         | **PORTED** — `daemon install-service` / `uninstall-service` / `service-status`（本轮补齐）               |
+| `commands/daemon/pair.ts`                    | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/daemon/restart.ts`                 | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/daemon/runtime-toolchain.ts`       | **N/A** — Node 特有的 node 版本与包管理器诊断；Go 是静态二进制，无工具链可查                             |
+| `commands/daemon/service/backend.ts`         | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service/launchd.ts`         | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service/service-spec.ts`    | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service/service-status.ts`  | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service/systemd.ts`         | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service/windows-task.ts`    | **PORTED** — `internal/daemon/service.go`（launchd bootstrap/kickstart、systemd enable --now、状态查询） |
+| `commands/daemon/service-status.ts`          | **PORTED** — `daemon install-service` / `uninstall-service` / `service-status`（本轮补齐）               |
+| `commands/daemon/set-password.ts`            | **N/A** — 密码设置由 `set_daemon_config` 的 `auth.passwordHash` 承担（bcrypt cost 12）                   |
+| `commands/daemon/start.ts`                   | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/daemon/uninstall-service.ts`       | **PORTED** — `daemon install-service` / `uninstall-service` / `service-status`（本轮补齐）               |
+| `commands/permit/allow.ts`                   | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/permit/deny.ts`                    | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/schedule/pause.ts`                 | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/schedule/resume.ts`                | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/schedule/run-once.ts`              | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/script/start.ts`                   | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/terminal/capture.ts`               | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/terminal/kill.ts`                  | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/terminal/send-keys.ts`             | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+| `commands/worktree/create-input.ts`          | **PORTED** — `internal/cli` 对应分组命令                                                                 |
+
+### 关于这份台账的诚实说明
+
+512 个文件全部有结论，但**结论的强度不一样**，这里说清楚：
+
+- **逐行读过**：`server/` 顶层与子系统目录里发现实质缺口的那几十个文件，以及本轮逐条修掉的
+  （脚本 Stop 不杀进程、归档工作区重复、空提交消息挂起、子代理时间线窗口、finish 通知、
+  `createOrReplace` 等）。这些都有反向验证过的测试。
+- **读过导出面与调用点、核对过 Go 侧行为**：绝大多数 `commands/` 与 `utils/`。判定依据是
+  「它的语义在 Go 里有没有对应实现、行为是否可观测地一致」。
+- **只按类别判定**：`test-utils`、`*-facts.ts`、`schema.ts` 这批，看的是「它属于测试辅助 /
+  类型定义」这一事实，没有逐个读内容。
+
+换句话说：**「512/512 有结论」不等于「512 个文件都逐行读过」**。真正的保证来自那张 MISSING
+表——所有已知的能力缺口都在那里，每条带阻塞条件；以及 `npm run audit` 那三道机器检查。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
