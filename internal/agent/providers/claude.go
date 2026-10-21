@@ -12,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/imageout"
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 	"github.com/ByteTrue/byspace/internal/agent/replaytime"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agent/subagentlog"
 	"github.com/ByteTrue/byspace/internal/agent/taskstate"
 )
 
@@ -42,6 +44,8 @@ type ClaudeSession struct {
 	// taskState accumulates Claude's task-list tools into the plan panel's todo item. Kept per session
 	// because the Task* family addresses tasks by id across turns.
 	taskState *taskstate.State
+	// subagentLogs holds the activity trace each delegated task shows in its parent's card.
+	subagentLogs *subagentlog.Tracker
 	// homeDir is where materialised provider images land. Empty disables image output.
 	homeDir   string
 	nextSubID int
@@ -87,6 +91,7 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		thinking:           cfg.ThinkingOptionID,
 		toolIndexByID:      make(map[string]int),
 		taskState:          taskstate.New(),
+		subagentLogs:       subagentlog.New(),
 		toolArgsByID:       make(map[string]any),
 		pendingPermissions: make(map[string]map[string]any),
 		subagents:          make(map[string]sdk.SubagentDescriptor),
@@ -234,6 +239,9 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 					"updatedAt": time.Now().UTC().Format(time.RFC3339Nano),
 				})
 			}
+			// Record what the child is doing on its parent's card. Without this the Task card shows
+			// nothing but the final result, and a delegated task that runs for a minute looks stuck.
+			extraEvents = append(extraEvents, s.subagentActivityEventsLocked(parent, ev)...)
 			break
 		}
 		if msg, ok := ev["message"].(map[string]any); ok {
@@ -892,4 +900,77 @@ func claudeStructuredToolResult(row map[string]any) map[string]any {
 		}
 	}
 	return map[string]any{}
+}
+
+// subagentActivityEventsLocked turns a sub-agent message into activity lines and card updates.
+//
+// Ported from the sidechain tracker's handleMessage. Only the tool-using parts become lines: a child's
+// assistant prose is not an action, and printing it would fill the log with the model's narration.
+func (s *ClaudeSession) subagentActivityEventsLocked(parentToolUseID string, ev map[string]any) []map[string]any {
+	msg, ok := ev["message"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	content, ok := msg["content"].([]any)
+	if !ok {
+		return nil
+	}
+
+	var events []map[string]any
+	for _, rawBlock := range content {
+		block, ok := rawBlock.(map[string]any)
+		if !ok {
+			continue
+		}
+		if block["type"] == "tool_result" {
+			continue
+		}
+		if block["type"] != "tool_use" {
+			continue
+		}
+		name, _ := block["name"].(string)
+		input, _ := block["input"].(map[string]any)
+		// The same display model the parent's own cards use, so the trace reads consistently.
+		display := activity.BuildDisplayModel(name, sdk.BuildToolCallDetail(name, input, nil), nil)
+		summary := ""
+		if display.HasSummary {
+			summary = display.Summary
+			// The parent card is not the tool card: it is a compact list of what the child did. A long
+			// command or path would dominate it.
+			if len(summary) > 120 {
+				summary = summary[:117] + "..."
+			}
+		}
+		log := s.subagentLogs.AppendTool(parentToolUseID, display.DisplayName, summary)
+		events = append(events, s.subagentCardEventsLocked(parentToolUseID, log)...)
+	}
+	return events
+}
+
+// subagentCardEventsLocked updates the parent's Task card with the current log.
+func (s *ClaudeSession) subagentCardEventsLocked(parentToolUseID, log string) []map[string]any {
+	idx, ok := s.toolIndexByID[parentToolUseID]
+	if !ok || idx < 0 || idx >= len(s.timeline) {
+		return nil
+	}
+	item := &s.timeline[idx].Item
+	detail, ok := item.Detail.(map[string]any)
+	if !ok || detail == nil {
+		detail = map[string]any{"type": "sub_agent"}
+	}
+	detail["log"] = log
+	item.Detail = detail
+	return []map[string]any{{
+		"type": "timeline",
+		"item": map[string]any{
+			"type":      "tool_call",
+			"name":      item.Name,
+			"callId":    item.CallID,
+			"status":    item.Status,
+			"detail":    detail,
+			"seq":       s.timeline[idx].Seq,
+			"turnId":    s.timeline[idx].TurnID,
+			"timestamp": s.timeline[idx].Timestamp,
+		},
+	}}
 }
