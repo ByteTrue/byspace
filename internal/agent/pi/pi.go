@@ -83,6 +83,12 @@ type LaunchOptions struct {
 	// NoApprove suppresses the `--approve` flag for providers that do not have it. omp rejects
 	// unknown flags outright, so sending pi's flags made it exit immediately.
 	NoApprove bool
+	// ToolDetailBuilder builds a tool card. Nil uses the shared builder.
+	//
+	// A hook rather than a name check: pi and omp both have a tool called `read`, and they put the useful
+	// fields in different places — omp's are in the result, pi's in the arguments. Deciding by name would
+	// give one of them the other's shape.
+	ToolDetailBuilder func(toolName string, args any, result any) map[string]any
 }
 
 // BuildLaunchArgs constructs the command and argument slice matching buildPiLaunch in runtime.ts.
@@ -174,14 +180,16 @@ type Session struct {
 	toolIndexByID       map[string]int
 	toolArgsByID        map[string]any
 	pendingPermissions  map[string]map[string]any
-	subagents           map[string]SubagentDescriptor
-	commandWaiters      map[string]chan commandResult
-	treeEntries         map[string]string
-	ready               bool
-	cleanup             func()
-	finishWaiters       []chan error
-	eventSubscribers    map[int]func(map[string]any)
-	nextSubID           int
+	// toolDetailBuilder is the provider's card builder; nil means the shared one.
+	toolDetailBuilder func(toolName string, args any, result any) map[string]any
+	subagents         map[string]SubagentDescriptor
+	commandWaiters    map[string]chan commandResult
+	treeEntries       map[string]string
+	ready             bool
+	cleanup           func()
+	finishWaiters     []chan error
+	eventSubscribers  map[int]func(map[string]any)
+	nextSubID         int
 }
 
 // StartSession launches a Pi RPC subprocess and initializes timeline tracking.
@@ -209,6 +217,7 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		commandWaiters:     make(map[string]chan commandResult),
 		treeEntries:        make(map[string]string),
 		eventSubscribers:   make(map[int]func(map[string]any)),
+		toolDetailBuilder:  opts.ToolDetailBuilder,
 	}
 	proc.OnEvent(s.handleRawEvent)
 
@@ -375,13 +384,20 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		s.activeTextIdx = -1
 		s.activeThinkIdx = -1
 		s.activeMessageID = ""
+		// A tool the provider renders elsewhere gets no card. Decided here, before the placeholder is
+		// appended, rather than removed afterwards: the client has already been sent nothing at this
+		// point, so there is no stale entry to retract.
+		startDetail := s.buildToolDetail(toolName, ev["args"], nil)
+		if startDetail == nil {
+			break
+		}
 		s.streamSeq++
 		idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
 			Name:   toolName,
 			Status: "running",
-			Detail: BuildToolCallDetail(toolName, ev["args"], nil),
+			Detail: startDetail,
 			Error:  nil,
 		})
 		if callID != "" {
@@ -422,7 +438,13 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// omp wraps some calls in `xdev` and names the real tool in the result. Resolving it before the
 		// detail is built is what makes the card show the command or file rather than a generic row.
 		resolvedName := resolveWrappedToolName(toolName, ev["result"])
-		detail := BuildToolCallDetail(resolvedName, args, ev["result"])
+		detail := s.buildToolDetail(resolvedName, args, ev["result"])
+		if detail == nil {
+			// The provider says this tool produces no card — omp's `todo` is one, because its task list
+			// is rendered by the todo timeline item. The placeholder was never appended (see the start
+			// handler), so there is nothing to do here.
+			break
+		}
 		// A command's stdout is whatever it printed — a build log, a minified bundle, a `cat` of a
 		// large file — and it travels to every client on every timeline fetch. Capping it here means
 		// the oversized body never reaches the transcript, so it is not re-sent on every fetch.
@@ -1170,4 +1192,15 @@ func SetWrappedToolNameResolver(resolver func(toolName string, result any) strin
 	if resolver != nil {
 		resolveWrappedToolName = resolver
 	}
+}
+
+// buildToolDetail builds a tool card, using the provider's builder when one was supplied.
+//
+// A nil detail means "this tool produces no card" — omp's todo does, because the task list has its own
+// timeline item. The caller treats nil as "skip the card" rather than as an error.
+func (s *Session) buildToolDetail(toolName string, args, result any) map[string]any {
+	if s.toolDetailBuilder != nil {
+		return s.toolDetailBuilder(toolName, args, result)
+	}
+	return BuildToolCallDetail(toolName, args, result)
 }

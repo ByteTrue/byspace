@@ -460,6 +460,9 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 				AppendSystemPrompt: cfg.SystemPrompt,
 				NoApprove:          true,
 				ExtraArgs:          append(modeArgs, roleArgs...),
+				// omp puts a tool's useful fields in the result, not the arguments, so the shared
+				// builder gives a card with no file and no diff.
+				ToolDetailBuilder: OmpToolDetail,
 			})
 			if err != nil {
 				return nil, err
