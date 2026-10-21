@@ -237,6 +237,22 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 `TestEveryWSRouteIsClassified` 解析分发器，把「运行期才拒绝」变成「构建失败 + 清单」。当前 191 条真实 WS 路由全部覆盖，0 缺口。
 
+### server/push/** | 669 | **MISSING\*\* → 已补 Web Push
+
+VAPID 密钥会生成、`server_info.webPushPublicKey` 会下发、`push-tokens.json` 会写，但**从来没有真的发过一条通知**——设置页提供了一套能配置却不能送达的推送。
+
+`internal/push` 实现了 RFC 8291 载荷加密与 RFC 8292 VAPID：
+
+- `aes128gcm` 记录，每条消息独立 salt 与临时密钥，推送服务只转发它读不懂的密文（daemon 不把内容交给 Google/Mozilla/Apple）
+- ES256 JWT，`aud` 是推送服务的 origin，为一个服务签的 token 不能拿去重放到另一个
+- TTL 12 小时，与 Node 一致
+
+token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken[...]` 是 Expo。**Expo 投递没有假装实现**——那需要 Expo 的服务，报「已送达」比不提供更糟。
+
+404/410 会剪掉订阅：浏览器已退订的端点每次通知都白跑一趟。注意力标记现在经在场策略发送：正在看这个 agent 的客户端不推，`error` 原因不推。
+
+验证方式是**用自己的密文 + 订阅方私钥做往返解密**——只检查字节「看起来像」的测试，在密钥推导写错时也会通过。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
