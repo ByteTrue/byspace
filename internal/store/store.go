@@ -859,6 +859,16 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 			cfg[k] = v
 		}
 	}
+	// `passwordSet` is derived, not stored: the hash is the truth, and a stored boolean could
+	// drift from it (a hand-edited config, a failed write) leaving the settings page claiming a
+	// password exists when it does not — or worse, the reverse.
+	auth, _ := cfg["auth"].(map[string]any)
+	hash, _ := auth["passwordHash"].(string)
+	if merged, ok := cfg["auth"].(map[string]any); ok {
+		merged["passwordSet"] = strings.TrimSpace(hash) != ""
+	} else {
+		cfg["auth"] = map[string]any{"passwordSet": strings.TrimSpace(hash) != ""}
+	}
 	return cfg
 }
 

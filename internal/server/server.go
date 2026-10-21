@@ -302,6 +302,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Password auth. The daemon is reachable from anything that can open a loopback
+	// connection, and a relay/tunnel extends that; an operator who sets a password expects it
+	// to be enforced. /mcp/agents authenticates itself inside the handler with its capability
+	// token, so it is exempt here.
+	if path := r.URL.Path; path != "/mcp/agents" && !ShouldBypassBearerAuth(r.Method, path) {
+		if hash := s.daemonPasswordHash(); hash != "" {
+			token, ok := ExtractHTTPBearerToken(r.Header.Get("Authorization"))
+			if !ok || !VerifyDaemonPassword(hash, token) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/health" || r.URL.Path == "/api/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

@@ -176,7 +176,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `agent/agent-run-state.ts` | 313 | **PARTIAL** → 已补键点 | Node 用 run token 让**过期的 settle 事件失效**。Go 直接按 `turnId` 改状态：第二轮 prompt 发出后，第一轮的 `byspace_turn_completed` 若还没处理完，会把新轮次翻成 idle，UI 上「进行中」提前消失。已补 `Session.turnToken`（每轮新铸）与完成事件上的 token 比对，不匹配则丢弃。`ManagedSession` 接口加了 `TurnToken()`，其余 provider 返回空串（回落到 turnId 比较）。 |
 
-### 未审计（本批剩余 41 文件）
+| `auth.ts` | 162 | **MISSING** → 已补 | **密码鉴权完全没实现**：配置里能设 `auth.passwordHash`，但 daemon 对所有请求一律放行；`passwordSet` 还硬编码成 false。这意味着设了密码的用户以为有保护，实际任何能连 loopback（或经 relay/tunnel 连进来）的东西都能操作 daemon。已实现 bcrypt(12) 哈希、`Authorization: Bearer`、WebSocket 的 `byspace.bearer.<token>` 子协议、豁免路由表（`/api/health`、`/api/files/download`、`/mcp/agents`）、`/mcp/agents` 的 capability-token 自鉴权、`passwordSet` 由 hash 派生而非存储。端到端验证：无密码 200、有密码无 token 401、错 token 401、对 token 200、health 免鉴权 200、**改配置无需重启即生效**。 |
+
+### 未审计（本批剩余 40 文件）
 
 按行数排序，下一轮从这里继续：
 
