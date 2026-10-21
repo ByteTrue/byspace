@@ -399,6 +399,10 @@ type LaunchConfig struct {
 	ThinkingOptionID string
 	SessionHandle    string
 	Env              []string
+	// ProviderOptions is structured provider configuration the user set in the provider sheet
+	// (codex's sandbox_mode / approval_policy, opencode's model provider). Passed through to the
+	// adapter; it is not environment variables.
+	ProviderOptions map[string]any
 	// MCPServers are injected through the generated extension; pi has no launch flag for them.
 	MCPServers []pi.MCPConfig
 	// SystemPrompt is the daemon-side prompt appended to the provider's own.

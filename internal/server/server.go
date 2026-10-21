@@ -2008,6 +2008,10 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			Role             *string           `json:"role"`
 			SystemPrompt     *string           `json:"systemPrompt"`
 			Labels           map[string]string `json:"labels"`
+			// ProviderOptions carries provider-specific settings the client configured (reasoning
+			// effort, a model provider, sandbox flags). It was absent from this struct, so every
+			// value the user set in the provider sheet was silently dropped at create time.
+			ProviderOptions map[string]any `json:"providerOptions"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -2136,6 +2140,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			ModeID:           resolvedMode,
 			Role:             req.Config.Role,
 			SystemPrompt:     req.Config.SystemPrompt,
+			ProviderOptions:  req.Config.ProviderOptions,
 		},
 	}
 
@@ -2600,16 +2605,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	if rec.Provider == "pi" || rec.Provider == "" {
 		cmdOverride = s.piCommand
 	}
+	// providerOptions is structured provider configuration (codex's sandbox_mode, approval_policy,
+	// sandbox_workspace_write), passed through to the adapter — not environment variables. Turning
+	// each string value into `key=value` in the child environment gave the provider nothing it
+	// understood and polluted every process it started.
 	var providerEnv []string
-	if rec.Config != nil && len(rec.Config.ProviderOptions) > 0 {
-		base := os.Environ()
-		for k, v := range rec.Config.ProviderOptions {
-			if str, ok := v.(string); ok {
-				base = append(base, k+"="+str)
-			}
-		}
-		providerEnv = base
-	}
 	sess, err := providers.StartProviderSession(providers.LaunchConfig{
 		Provider:         rec.Provider,
 		CommandOverride:  cmdOverride,
@@ -2619,6 +2619,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		ThinkingOptionID: thinking,
 		SessionHandle:    sessionPath,
 		Env:              providerEnv,
+		ProviderOptions:  providerOptionsOf(rec),
 		// Injected through the extension: pi has no launch flag for MCP, and without this the
 		// agent never sees the daemon's orchestration tools.
 		MCPServers:   s.piMCPServersFor(rec),
@@ -3055,6 +3056,10 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 	}
 	// runtimeInfo and lastError are optional, not nullable, in AgentSnapshotPayloadSchema:
 	// emitting null fails the whole response, so they are added only when they carry a value.
+	// Optional, not nullable: sending null fails the schema, so the key is omitted when unset.
+	if options := providerOptionsOf(rec); options != nil {
+		payload["providerOptions"] = options
+	}
 	if rec.RuntimeInfo != nil {
 		payload["runtimeInfo"] = rec.RuntimeInfo
 	}
@@ -3979,4 +3984,15 @@ func (s *Server) providerModeIsUnattended(provider, modeID string) bool {
 		}
 	}
 	return false
+}
+
+// providerOptionsOf reads an agent's provider options, nil when it has none.
+//
+// Nil rather than an empty map: `providerOptions` is optional in the snapshot schema, and an empty
+// object tells the provider sheet "configured, all defaults" instead of "not configured".
+func providerOptionsOf(rec store.AgentRecord) map[string]any {
+	if rec.Config == nil || len(rec.Config.ProviderOptions) == 0 {
+		return nil
+	}
+	return rec.Config.ProviderOptions
 }
