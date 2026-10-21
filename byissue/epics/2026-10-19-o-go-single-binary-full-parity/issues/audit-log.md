@@ -331,6 +331,14 @@ git 调用没有任何节流：daemon 每秒轮询每个订阅的工作区、每
 
 验证：12 个并发在限制 3 下峰值不超过 3；每秒 4 个的速率下 8 次启动至少跨两个窗口；排队的 acquire 在 context 结束时返回。
 
+### utils/byspace-config-file.ts | 126 | **PARTIAL** → 已补校验
+
+`write_project_config` 把编辑器发来的一切原样落盘。而 daemon 之后要读这个文件跑 setup 和脚本，所以形状错**不是外观问题**：`"setup": "npm ci"`（该是数组却写成字符串）会让 setup 静默什么都不做；`"scripts": {"dev": "vite"}`（该是对象却写成字符串）会让脚本从选择器里消失。两种情况都要等下一次运行才暴露，离造成它的那次编辑很远。
+
+已加 `ValidateProjectConfig`：校验 setup 是字符串或字符串数组、scripts 是对象且每项是命令字符串或选项对象、type 只允许 `script`/`service`；错误信息点名字段（编辑器没别的可显示）。协议的 `invalid_project_config` 没有 message 字段，详细原因写 daemon 日志而不是在线上发明一个。
+
+端到端验证：错的 `type` 被拒且 schema 通过，合法配置正常写入。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
