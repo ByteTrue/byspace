@@ -84,7 +84,9 @@
 
 | `agent/agent-loading.ts` | 148 | **PARTIAL** → 已补 | 三个缺陷：① **并发冷启动不去重**——两个请求同时到达都看到「未加载」，各起一个 provider 进程，输的那个变成孤儿并继续占着会话文件；② **不检查归档状态**——归档的 agent 仍可被 resume，等于复活用户已经删掉的会话并继续烧 token；③ **不校验 provider 是否已注册**——记录指向本构建不认识的 provider 时，报的是 exec 失败而不是「你缺少这个 provider」。均已补，3 个测试；去重测试已验证移除修复即失败（`concurrent loads produced more than one session`）。 |
 
-### 未审计（本批剩余 46 文件）
+| `agent/agent-projections.ts` | 521 | **PARTIAL** → 已补 | `toAgentPayload` 有 `runtimeInfo` 与 `lastError`，Go 都没发。前者是 provider 实际使用的模型（可能被压制成支持的档位，与配置不同），composer 用它显示实时选择；后者是 agent 页的 `lastHostError`，缺了只会显示泛化的「出错了」。补的时候踩了一次：两者在 schema 里是 **optional 而非 nullable**，发 `null` 会让整个 `fetch_agents_response` 校验失败——已改成有值才加。 |
+
+### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：
 

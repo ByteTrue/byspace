@@ -2617,6 +2617,14 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"attentionReason":    rec.AttentionReason,
 		"attentionTimestamp": rec.AttentionTimestamp,
 	}
+	// runtimeInfo and lastError are optional, not nullable, in AgentSnapshotPayloadSchema:
+	// emitting null fails the whole response, so they are added only when they carry a value.
+	if rec.RuntimeInfo != nil {
+		payload["runtimeInfo"] = rec.RuntimeInfo
+	}
+	if rec.LastError != nil && strings.TrimSpace(*rec.LastError) != "" {
+		payload["lastError"] = *rec.LastError
+	}
 	// lastUsage is optional (not nullable) in AgentSnapshotPayloadSchema: emitting null fails
 	// validation, so the key is omitted until the provider reports something.
 	if rec.Usage != nil {
