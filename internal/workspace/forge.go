@@ -69,18 +69,37 @@ func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
 		title, _ := data["title"].(string)
 		url, _ := data["web_url"].(string)
 		state, _ := data["state"].(string)
+		lowerState := strings.ToLower(state)
+
+		// A merge request's readiness is its pipeline and its approvals. Reporting an empty
+		// check list and zero approvals makes a blocked MR look ready — the panel would offer a
+		// merge button that the forge then rejects.
+		checks := fetchGitLabPipelineChecks(ctx, cwd, int(iid))
+		approvals, approvalsRequired := fetchGitLabApprovals(ctx, cwd, int(iid))
+		mergeable := "UNKNOWN"
+		if approvalsRequired > 0 {
+			if approvals >= approvalsRequired {
+				mergeable = "MERGEABLE"
+			} else {
+				mergeable = "BLOCKED"
+			}
+		}
+
 		return map[string]any{
-			"number":         int(iid),
-			"title":          title,
-			"url":            url,
-			"state":          strings.ToLower(state),
-			"isDraft":        false,
-			"headRefName":    data["source_branch"],
-			"baseRefName":    data["target_branch"],
-			"updatedAt":      time.Now().UTC().Format(time.RFC3339Nano),
-			"mergeable":      "UNKNOWN",
-			"reviewDecision": nil,
-			"checks":         []any{},
+			"number":            int(iid),
+			"title":             title,
+			"url":               url,
+			"state":             lowerState,
+			"isDraft":           isGitLabDraft(data),
+			"headRefName":       data["source_branch"],
+			"baseRefName":       data["target_branch"],
+			"updatedAt":         time.Now().UTC().Format(time.RFC3339Nano),
+			"mergeable":         mergeable,
+			"reviewDecision":    nil,
+			"isMerged":          lowerState == "merged",
+			"checks":            checks,
+			"approvals":         approvals,
+			"approvalsRequired": approvalsRequired,
 		}, nil
 	}
 	raw, err := runGH(ctx, cwd, "pr", "view", "--json", "number,title,url,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,updatedAt")
@@ -740,4 +759,95 @@ func decodeCheckAnnotations(raw string) []map[string]any {
 		})
 	}
 	return out
+}
+
+// fetchGitLabPipelineChecks reads the merge request's pipeline statuses.
+//
+// GitLab calls them pipelines, not checks; the panel renders both through the same check list,
+// so each pipeline becomes one entry with the name and status the API reports.
+func fetchGitLabPipelineChecks(ctx context.Context, cwd string, iid int) []map[string]any {
+	if _, err := exec.LookPath("glab"); err != nil {
+		return []map[string]any{}
+	}
+	raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+		fmt.Sprintf("projects/:id/merge_requests/%d/pipelines", iid))
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return []map[string]any{}
+	}
+	var pipelines []map[string]any
+	if json.Unmarshal([]byte(raw), &pipelines) != nil {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(pipelines))
+	for _, pipeline := range pipelines {
+		// The protocol's status is a closed enum; an unknown GitLab state maps to "pending"
+		// rather than inventing a value the client would reject.
+		out = append(out, map[string]any{
+			"name":   fmt.Sprintf("pipeline #%v", pipeline["id"]),
+			"status": gitLabCheckStatus(stringOr(pipeline["status"], "")),
+			"url":    nullableString(stringOr(pipeline["web_url"], "")),
+		})
+	}
+	return out
+}
+
+// fetchGitLabApprovals returns (approved, required).
+//
+// A forge that does not expose approvals answers 0,0, which the caller treats as "no approval
+// requirement" rather than "blocked" — guessing blocked would hide a mergeable MR.
+func fetchGitLabApprovals(ctx context.Context, cwd string, iid int) (int, int) {
+	if _, err := exec.LookPath("glab"); err != nil {
+		return 0, 0
+	}
+	raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+		fmt.Sprintf("projects/:id/merge_requests/%d/approvals", iid))
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return 0, 0
+	}
+	var data struct {
+		ApprovedBy        []map[string]any `json:"approved_by"`
+		ApprovalsRequired int              `json:"approvals_required"`
+		ApprovalsLeft     int              `json:"approvals_left"`
+	}
+	if json.Unmarshal([]byte(raw), &data) != nil {
+		return 0, 0
+	}
+	required := data.ApprovalsRequired
+	if required == 0 {
+		required = len(data.ApprovedBy) + data.ApprovalsLeft
+	}
+	return len(data.ApprovedBy), required
+}
+
+// isGitLabDraft reads the draft flag, which lives in the title prefix or a dedicated field
+// depending on the GitLab version.
+func isGitLabDraft(data map[string]any) bool {
+	if draft, ok := data["draft"].(bool); ok {
+		return draft
+	}
+	if workInProgress, ok := data["work_in_progress"].(bool); ok {
+		return workInProgress
+	}
+	title := strings.ToLower(stringOr(data["title"], ""))
+	return strings.HasPrefix(title, "draft:") || strings.HasPrefix(title, "[draft]") ||
+		strings.HasPrefix(title, "wip:")
+}
+
+// gitLabCheckStatus maps a pipeline status onto the protocol's closed check-status enum.
+//
+// An unrecognised state maps to "pending" rather than inventing a value: the client rejects the
+// whole message on an out-of-enum string, so a new GitLab status would blank the panel.
+func gitLabCheckStatus(status string) string {
+	switch strings.ToLower(status) {
+	case "success":
+		return "success"
+	case "failed":
+		return "failure"
+	case "canceled", "cancelled":
+		return "cancelled"
+	case "skipped":
+		return "skipped"
+	default:
+		return "pending"
+	}
 }
