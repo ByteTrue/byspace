@@ -416,8 +416,29 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 
 	switch spec.Protocol {
 	case "pi-rpc":
-		if cmd == "" && spec.ID == "omp" {
-			cmd = "omp"
+		// omp shares pi's JSONL RPC transport but not its flags: it has no --extension and no
+		// --approve, and rejects unknown flags outright, so reusing pi's argument list made it
+		// exit immediately. It takes the system prompt as --append-system-prompt instead of
+		// through an extension.
+		isOMP := spec.ID == "omp"
+		if isOMP {
+			if cmd == "" {
+				cmd = "omp"
+			}
+			sess, err := pi.StartSession(pi.LaunchOptions{
+				Command:            cmd,
+				Cwd:                cfg.Cwd,
+				Env:                cfg.Env,
+				Model:              cfg.Model,
+				ThinkingOptionID:   cfg.ThinkingOptionID,
+				Session:            cfg.SessionHandle,
+				AppendSystemPrompt: cfg.SystemPrompt,
+				NoApprove:          true,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return sess, nil
 		}
 		// The integration extension is what makes rewind possible: pi exposes entry capture and
 		// tree navigation only through extensions, so without it `agent.rewind` has no way to

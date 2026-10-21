@@ -273,3 +273,34 @@ done
 		t.Fatalf("image block was not forwarded to pi prompt: %s", text)
 	}
 }
+
+// omp shares pi's JSONL RPC transport but not its flags: it has no --extension and no --approve,
+// and rejects unknown flags outright, so reusing pi's argument list made it exit immediately.
+func TestBuildLaunchArgsSuppressesPiOnlyFlags(t *testing.T) {
+	_, argv := BuildLaunchArgs(LaunchOptions{
+		Command:            "omp",
+		ProtocolMode:       "rpc",
+		AppendSystemPrompt: "be brief",
+		NoApprove:          true,
+	})
+	joined := strings.Join(argv, " ")
+	for _, banned := range []string{"--extension", "--approve"} {
+		if strings.Contains(joined, banned) {
+			t.Fatalf("%s must not reach a provider without it: %s", banned, joined)
+		}
+	}
+	if !strings.Contains(joined, "--append-system-prompt") {
+		t.Fatalf("the system prompt must be passed as a flag: %s", joined)
+	}
+
+	// pi still gets both.
+	_, piArgs := BuildLaunchArgs(LaunchOptions{
+		Command:        "pi",
+		ProtocolMode:   "rpc",
+		ExtensionPaths: []string{"/tmp/ext.mjs"},
+	})
+	piJoined := strings.Join(piArgs, " ")
+	if !strings.Contains(piJoined, "--extension") || !strings.Contains(piJoined, "--approve") {
+		t.Fatalf("pi needs both flags: %s", piJoined)
+	}
+}

@@ -76,6 +76,12 @@ type LaunchOptions struct {
 	NoSession        bool
 	ExtensionPaths   []string
 	ExtraArgs        []string
+	// AppendSystemPrompt is omp's `--append-system-prompt`. pi injects the prompt through the
+	// integration extension instead; the two providers do not offer the same mechanism.
+	AppendSystemPrompt string
+	// NoApprove suppresses the `--approve` flag for providers that do not have it. omp rejects
+	// unknown flags outright, so sending pi's flags made it exit immediately.
+	NoApprove bool
 }
 
 // BuildLaunchArgs constructs the command and argument slice matching buildPiLaunch in runtime.ts.
@@ -118,7 +124,10 @@ func BuildLaunchArgs(opts LaunchOptions) (string, []string) {
 			argv = append(argv, "--extension", ext)
 		}
 	}
-	if !hasApproveFlag(argv) {
+	if prompt := strings.TrimSpace(opts.AppendSystemPrompt); prompt != "" {
+		argv = append(argv, "--append-system-prompt", prompt)
+	}
+	if !opts.NoApprove && !hasApproveFlag(argv) {
 		argv = append(argv, "--approve")
 	}
 	return cmd, argv
