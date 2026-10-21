@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/store"
@@ -338,6 +339,9 @@ type workspaceScript struct {
 	StartedAt   string
 	FinishedAt  *string
 	ExitCode    *int
+	// cmd is the running process. Kept so stop can actually terminate it: flipping the status
+	// alone leaves the script running and its port held, and the UI then reports it as stopped.
+	cmd *exec.Cmd
 }
 
 func (s *Server) scriptKey(workspaceID, name string) string {
@@ -431,6 +435,9 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		// Sanitized: BASH_ENV would make bash source an arbitrary file before the script runs,
 		// and ExternalProcessEnv keeps the daemon's own identity out of the child.
 		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
+		// Own process group: a build script spawns children, and signalling only the shell
+		// leaves them running. Killing the group takes the whole tree.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if port > 0 {
 			cmd.Env = append(cmd.Env,
 				fmt.Sprintf("PORT=%d", port),
@@ -444,6 +451,10 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 				}
 			}
 		}
+		s.mu.Lock()
+		entry.cmd = cmd
+		s.mu.Unlock()
+
 		err := cmd.Run()
 
 		finished := time.Now().UTC().Format(time.RFC3339Nano)
@@ -470,15 +481,39 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 
 // stopWorkspaceScript marks a script stopped. The child is a detached shell, so this records
 // intent rather than killing it; a long-running dev server keeps serving until the daemon exits.
+// stopWorkspaceScript terminates a running script.
+//
+// The process must actually be killed: flipping the status alone leaves it running and holding
+// its port, so the UI reports "stopped" while the old build keeps serving — and the next start
+// fails on a port that is already bound.
 func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]; ok {
-		if entry.Status == "running" {
-			entry.Status = "stopped"
-			finished := time.Now().UTC().Format(time.RFC3339Nano)
-			entry.FinishedAt = &finished
-		}
+	entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	cmd := entry.cmd
+	wasRunning := entry.Status == "running"
+	if wasRunning {
+		entry.Status = "stopped"
+		finished := time.Now().UTC().Format(time.RFC3339Nano)
+		entry.FinishedAt = &finished
+	}
+	s.mu.Unlock()
+
+	if cmd != nil && cmd.Process != nil && wasRunning {
+		// Signal the whole process group, not just the shell: `sleep 60` (or `vite`, or
+		// `npm run dev`) is a child of the shell, and signalling only the shell leaves the
+		// actual work running with its port held.
+		pid := cmd.Process.Pid
+		_ = syscall.Kill(-pid, syscall.SIGTERM)
+		go func() {
+			// Escalate if the group has not exited. A build ignoring SIGTERM must not keep its
+			// port for the rest of the session.
+			time.Sleep(3 * time.Second)
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		}()
 	}
 }
 
