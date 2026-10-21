@@ -1004,6 +1004,14 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 - 父 agent 已删除、已归档、或没有活着的 runtime 时跳过——为了送一条没人要的通知去加载一个 agent 更糟
 - 子 agent 中途死掉时以 `errored` 通知，否则父 agent 会永远等一个不会来的结果
 
+### server/schedule/store.ts + service.ts 的 createOrReplace | **MISSING → 已补**
+
+`createOrReplace` 没移植，于是 MCP 的 `create_schedule` / `create_heartbeat` 无条件走 `Create`。模型重跑一次「设个每晚检查」——**这是常态，因为它不记得自己做过**——就多一条日程。用户要的是一个，拿到的是十几个，全部在触发、全部在烧 token。
+
+现在 name + target 命中已有活跃日程时**原地更新**：prompt、cadence、上限，以及**从当前时间重算** nextRunAt（替换不该立刻为一个旧定义的等待槽触发）。运行历史保留——prompt 改过的日程还是同一条日程，历史正是用户判断新 prompt 有没有效的依据。
+
+三种情况**故意仍然新建**：没有名字（没有身份可匹配）、目标不同（「每晚检查」对 agent A 和对 agent B 是两件事）、已完成的日程（run 预算已用完，复活它等于静默什么都不做）。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
