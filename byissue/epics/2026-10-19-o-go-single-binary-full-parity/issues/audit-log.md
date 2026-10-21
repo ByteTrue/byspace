@@ -86,6 +86,22 @@
 
 | `agent/agent-projections.ts` | 521 | **PARTIAL** → 已补 | `toAgentPayload` 有 `runtimeInfo` 与 `lastError`，Go 都没发。前者是 provider 实际使用的模型（可能被压制成支持的档位，与配置不同），composer 用它显示实时选择；后者是 agent 页的 `lastHostError`，缺了只会显示泛化的「出错了」。补的时候踩了一次：两者在 schema 里是 **optional 而非 nullable**，发 `null` 会让整个 `fetch_agents_response` 校验失败——已改成有值才加。 |
 
+### 审计工具补了一项：optional 字段禁止发 null
+
+`go-emit-parity.mjs` 只查「发没发」，不查「发的是不是 null」。而 protocol 里的功能字段大多是
+`optional` 而非 `nullable`，发 `null` 会让**整条响应**失效——比不发更糟，前端拿到的是零数据。
+这类错误我犯过两次（`projectIconRevision`、`runtimeInfo`），都是提交后才在浏览器里发现。
+
+新增 `NULLED_OPTIONAL` 检查，首跑就抓出 7 处：`tunnel.*.error`、`create_byspace_worktree_response`
+的 `errorCode`/`setupSkippedReason`、`providers_snapshot_update.cwd`、
+`hub.management.daemon.disconnect.response.warning`。全部改为「有值才添加」，并新增
+`CONDITIONALLY_OMITTED` 显式记录哪些字段是条件省略（每条写明条件），避免检查器把合法省略当成漏发。
+
+同时修了它自己的两个盲区：成员集合为空时整个审计会静默通过（现在退化为扫「所有带 type 字面量的
+schema」）；`payloadText` 只截到分号，导致嵌套 key 的 null 检查失效。
+
+接入 CI（`Validate CI contracts`）并补 3 个测试。
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：

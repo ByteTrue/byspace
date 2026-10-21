@@ -377,25 +377,25 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	wtPath, branch, err := workspace.CreateWorktree(ctx, req.Cwd, wtBase, req.WorktreeSlug, req.RefName)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-			"workspace":          nil,
-			"error":              err.Error(),
-			"errorCode":          "worktree_create_failed",
-			"setupTerminalId":    nil,
-			"setupSkippedReason": nil,
-			"requestId":          req.RequestID,
+			"workspace":       nil,
+			"error":           err.Error(),
+			"errorCode":       "worktree_create_failed",
+			"setupTerminalId": nil,
+			"requestId":       req.RequestID,
 		})
 		return
 	}
 
 	prj, _, err := s.store.EnsureWorkspaceForCwd(req.Cwd)
 	if err != nil {
+		// `errorCode` / `setupSkippedReason` are optional, not nullable: sending null makes the
+		// client reject the whole response, so the user sees nothing instead of the error.
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-			"workspace":          nil,
-			"error":              err.Error(),
-			"errorCode":          "project_register_failed",
-			"setupTerminalId":    nil,
-			"setupSkippedReason": nil,
-			"requestId":          req.RequestID,
+			"workspace":       nil,
+			"error":           err.Error(),
+			"errorCode":       "project_register_failed",
+			"setupTerminalId": nil,
+			"requestId":       req.RequestID,
 		})
 		return
 	}
@@ -431,15 +431,22 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
 	}
 
+	setupErrCode := ""
 	desc := buildWorkspaceDescriptor(wsRec, prj)
-	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-		"workspace":          desc,
-		"error":              nil,
-		"errorCode":          nil,
-		"setupTerminalId":    nil,
-		"setupSkippedReason": setupSkippedReason,
-		"requestId":          req.RequestID,
-	})
+	respPayload := map[string]any{
+		"workspace":       desc,
+		"error":           nil,
+		"setupTerminalId": nil,
+		"requestId":       req.RequestID,
+	}
+	// Both extra keys are optional-not-nullable; add them only when they carry a value.
+	if setupSkippedReason != nil {
+		respPayload["setupSkippedReason"] = setupSkippedReason
+	}
+	if setupErrCode != "" {
+		respPayload["errorCode"] = setupErrCode
+	}
+	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", respPayload)
 }
 
 func (s *Server) handleBySpaceWorktreeList(ctx context.Context, sink frameSink, raw json.RawMessage) {

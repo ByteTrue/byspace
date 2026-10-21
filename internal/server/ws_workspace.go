@@ -437,13 +437,16 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 
 func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID   string   `json:"requestId"`
-		Cwd         string   `json:"cwd"`
-		WorkspaceID string   `json:"workspaceId"`
-		Name        string   `json:"name"`
-		Command     string   `json:"command"`
-		Args        []string `json:"args"`
-		Size        *struct {
+		RequestID   string `json:"requestId"`
+		Cwd         string `json:"cwd"`
+		WorkspaceID string `json:"workspaceId"`
+		// AgentID: a terminal opened "for this agent" must start in that agent's cwd, not the
+		// daemon's. The client sends it whenever a session tab opens a shell.
+		AgentID string   `json:"agentId"`
+		Name    string   `json:"name"`
+		Command string   `json:"command"`
+		Args    []string `json:"args"`
+		Size    *struct {
 			Rows uint16 `json:"rows"`
 			Cols uint16 `json:"cols"`
 		} `json:"size"`
@@ -451,6 +454,20 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 	_ = json.Unmarshal(raw, &req)
 
 	cwd := strings.TrimSpace(req.Cwd)
+	if cwd == "" && strings.TrimSpace(req.AgentID) != "" {
+		if rec, err := s.store.GetAgent(req.AgentID); err == nil && rec != nil {
+			cwd = rec.Cwd
+		}
+	}
+	if cwd == "" && strings.TrimSpace(req.WorkspaceID) != "" {
+		workspaces, _ := s.store.ListWorkspaces()
+		for _, ws := range workspaces {
+			if ws.WorkspaceID == req.WorkspaceID {
+				cwd = ws.Cwd
+				break
+			}
+		}
+	}
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 	}

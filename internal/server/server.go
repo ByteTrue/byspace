@@ -947,7 +947,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
 		s.broadcastSessionMsg("providers_snapshot_update", map[string]any{
-			"cwd":             nil,
+			// `cwd` is optional, not nullable: a null makes the client drop the whole update.
 			"generatedAt":     nowStr,
 			"entries":         entries,
 			"snapshotHash":    providerSnapshotHash(entries),
@@ -1498,12 +1498,14 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 	}
 
 	respPayload := map[string]any{
-		"requestId":          req.RequestID,
-		"workspace":          buildWorkspaceDescriptor(ws, prj),
-		"setupTerminalId":    nil,
-		"setupSkippedReason": setupSkippedReason,
-		"error":              nil,
-		"errorCode":          nil,
+		"requestId":       req.RequestID,
+		"workspace":       buildWorkspaceDescriptor(ws, prj),
+		"setupTerminalId": nil,
+		"error":           nil,
+	}
+	// Optional-not-nullable: add only when it carries a value.
+	if setupSkippedReason != nil {
+		respPayload["setupSkippedReason"] = setupSkippedReason
 	}
 	s.broadcastWorkspaceUpsert(ws, prj)
 	s.broadcastCheckoutStatusUpdate(ctx, ws.Cwd)
@@ -1937,7 +1939,9 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		Direction   string `json:"direction"`
 		Projection  string `json:"projection"`
 		MergeWindow bool   `json:"mergeWindow"`
-		Cursor      *struct {
+		// limit bounds a windowed fetch; 0 means "server default".
+		Limit  int `json:"limit"`
+		Cursor *struct {
 			Epoch string `json:"epoch"`
 			Seq   int    `json:"seq"`
 		} `json:"cursor"`
@@ -2037,6 +2041,11 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		}
 	}
 
+	// A windowed request asks for at most `limit` entries. Ignoring it made a client
+	// that pages through a long conversation receive the whole history every time.
+	if req.Limit > 0 && len(entries) > req.Limit {
+		entries = entries[len(entries)-req.Limit:]
+	}
 	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
 		"requestId":   req.RequestID,
 		"agentId":     req.AgentID,

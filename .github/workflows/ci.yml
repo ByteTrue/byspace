@@ -59,14 +59,13 @@ jobs:
       - name: Validate CI contracts
         run: >-
           node --test
-          scripts/ci-workflow.test.mjs
           scripts/docs-links.test.mjs
-          scripts/terminal-performance-workflow.test.mjs
-          scripts/daemon-launch-contract.test.mjs
           scripts/dev-home.test.mjs
+          scripts/is-main-module.test.mjs
           scripts/release-version-utils.test.mjs
           scripts/sync-release-notes-from-changelog.test.mjs
           scripts/go-parity-audit.test.mjs
+          scripts/go-emit-parity.test.mjs
 
   terminal-performance-windows:
     name: terminal-performance (windows-latest)

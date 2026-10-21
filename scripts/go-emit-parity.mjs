@@ -52,6 +52,22 @@ const DEFERRED_FIELDS = new Map([
   ],
 ]);
 
+/**
+ * 合法的「按条件省略」字段。
+ *
+ * 这些是 optional 且**非 nullable**，发 null 会让整条响应失效，所以代码里只在有值时添加。
+ * 静态检查看不到这个条件，会当成「从不发送」。列在这里意味着：**已确认是条件省略，
+ * 不是漏发**。新增条目必须写清楚条件。
+ */
+const CONDITIONALLY_OMITTED = new Map([
+  ["workspace.create.response", new Set(["errorCode", "setupSkippedReason"])], // 仅失败/skip 时
+  ["create_byspace_worktree_response", new Set(["errorCode", "setupSkippedReason"])],
+  ["tunnel.create.response", new Set(["error"])], // 仅失败时
+  ["tunnel.remove.response", new Set(["error"])],
+  ["hub.management.daemon.disconnect.response", new Set(["warning"])],
+  ["providers_snapshot_update", new Set(["cwd"])], // 仅请求带 cwd 时
+]);
+
 /** 这些出站消息由客户端或中继产生，daemon 不发。 */
 const CLIENT_ONLY = new Set(["pong", "terminal_output"]);
 
@@ -127,6 +143,7 @@ export function parseSchemas(source) {
     let payloadDepth = -1; // payload 对象内部的层级
     const fields = [];
     let optional = null;
+    let nullable = null;
     const refs = new Map();
 
     for (let j = i + 1; j < lines.length && depth > 0; j++) {
@@ -155,7 +172,10 @@ export function parseSchemas(source) {
         const field = line.match(/^\s+(\w+):\s/);
         if (field) {
           fields.push(field[1]);
+          // `.nullable().optional()` and `.optional().nullable()` both occur; scan the whole
+          // line rather than assuming an order.
           if (/\.optional\(\)/.test(line)) (optional ??= new Set()).add(field[1]);
+          if (/\.nullable\(\)/.test(line)) (nullable ??= new Set()).add(field[1]);
           const ref =
             line.match(/^\s+\w+:\s*(\w+Schema)\.?(?:nullable\(\))?\.?(?:optional\(\))?,?$/) ||
             line.match(/^\s+\w+:\s*z\.array\((\w+Schema)\)/);
@@ -180,6 +200,7 @@ export function parseSchemas(source) {
         refs,
         opaque,
         optional: optional ?? new Set(),
+        nullable: nullable ?? new Set(),
       });
     }
   }
@@ -600,11 +621,18 @@ export function runAudit({ schemas, members, emits, structTags }) {
   const unverified = [];
   const neverSent = [];
   const optionalGaps = [];
+  // 发 null 给 optional-but-not-nullable 字段会让**整条响应**校验失败，比不发更糟：
+  // 前端拿不到任何数据。这类错误此前靠人工发现（projectIconRevision、runtimeInfo 各一次）。
+  const nulledOptional = [];
 
   // 只对 daemon 负责的出站消息做检查：它们必须出现在 Go 的发送点里。
-  for (const name of members) {
-    const schema = schemas.get(name);
-    if (!schema) continue;
+  // 没有传入成员集合时（测试、或协议文件里没找到联合体），退化为「所有带 type 字面量的
+  // schema」，否则一次解析失败就会让整个审计静默通过。
+  const schemaIter =
+    members.size > 0
+      ? [...members].map((name) => schemas.get(name)).filter(Boolean)
+      : [...schemas.values()].filter((schema) => schema.key);
+  for (const schema of schemaIter) {
     const type = schema.key;
     if (CLIENT_ONLY.has(type)) continue;
 
@@ -621,9 +649,27 @@ export function runAudit({ schemas, members, emits, structTags }) {
     if (lit) {
       const deferred = DEFERRED_FIELDS.get(type) ?? new Set();
       const sites = emits.perSite.filter((x) => x.type === type);
+      const omitted = CONDITIONALLY_OMITTED.get(type) ?? new Set();
       const gap = schema.fields.filter(
-        (f) => !ALWAYS_PRESENT.has(f) && !deferred.has(f) && !sites.some((x) => fieldPresent(x, f)),
+        (f) =>
+          !ALWAYS_PRESENT.has(f) &&
+          !deferred.has(f) &&
+          !omitted.has(f) &&
+          !sites.some((x) => fieldPresent(x, f)),
       );
+      for (const site of sites) {
+        for (const field of schema.fields) {
+          if (!schema.optional.has(field) || (schema.nullable ?? new Set()).has(field)) continue;
+          const nulled = new RegExp(`"${field}":\\s*nil\\b`).test(site.payloadText ?? "");
+          const nulledAssign = new RegExp(`\\["${field}"\\]\\s*=\\s*nil\\b`).test(
+            site.payloadText ?? "",
+          );
+          if (nulled || nulledAssign) {
+            nulledOptional.push({ type, field });
+          }
+        }
+      }
+
       const required = gap.filter((f) => !schema.optional.has(f));
       const optionalGap = gap.filter((f) => schema.optional.has(f));
       if (required.length) missing.push({ type, fields: required });
@@ -661,7 +707,63 @@ export function runAudit({ schemas, members, emits, structTags }) {
     if (DEFERRED_TYPES.has(type)) continue;
     neverSent.push({ type, fields: schema.fields.filter((f) => !ALWAYS_PRESENT.has(f)) });
   }
-  return { missing, unverified, neverSent, optionalGaps };
+  return { missing, unverified, neverSent, optionalGaps, nulledOptional };
+}
+
+/** Convenience entry used by tests: parse the protocol file and scan one Go source string. */
+export function auditFromSources({ protocolSource, goSource, root = ROOT }) {
+  const schemas = parseSchemas(protocolSource);
+  // The emit scanner walks files; for a snippet, stand in with an index-free scan of the text.
+  const emits = goEmitSitesFromText(goSource);
+  // No repository-wide struct tags: a snippet must be judged on its own text, otherwise every
+  // field looks "present" because some other file mentions it.
+  return runAudit({
+    schemas,
+    members: new Set(),
+    emits,
+    structTags: new Set(),
+  });
+}
+
+/** Like goEmitSites but over a single in-memory source string. */
+export function goEmitSitesFromText(text) {
+  const literals = new Map();
+  const dynamic = new Set();
+  const perSite = [];
+  const re = /(sendSessionMsg|broadcastSessionMsg)\(([^;]*?)"([a-z0-9_.]+)"\s*,\s*([^;]*)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const type = m[3];
+    const rest = m[4] ?? "";
+    if (!rest.trimStart().startsWith("map[string]any{")) {
+      dynamic.add(type);
+      continue;
+    }
+    const start = m.index + m[0].length - rest.length + (rest.length - rest.trimStart().length);
+    const keys = new Set(topLevelKeys(text, start + rest.trimStart().indexOf("{")));
+    if (keys.size === 0) {
+      dynamic.add(type);
+      continue;
+    }
+    if (!literals.has(type)) literals.set(type, new Set());
+    for (const key of keys) literals.get(type).add(key);
+    // The whole `map[string]any{...}` literal, not just the slice up to the next semicolon:
+    // the null check has to see every key in the payload.
+    let depth = 0;
+    let end = start;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    perSite.push({ type, keys, allKeys: keys, payloadText: text.slice(start, end) });
+  }
+  return { literals, dynamic, perSite };
 }
 
 const isMain =
@@ -691,6 +793,12 @@ if (isMain) {
     );
     for (const row of report.optionalGaps.sort((a, b) => b.fields.length - a.fields.length)) {
       console.log(`  ${row.type}: ${row.fields.join(", ")}`);
+    }
+    console.log(
+      `\n== NULLED_OPTIONAL（可选但不可 null 的字段被发成 null；会让整条响应失效）${report.nulledOptional.length} ==`,
+    );
+    for (const row of report.nulledOptional) {
+      console.log(`  ${row.type}.${row.field}`);
     }
     console.log(`\n== NEVER_SENT（协议有、Go 从未发送）${report.neverSent.length} ==`);
     for (const row of report.neverSent) console.log(`  ${row.type}`);

@@ -1051,7 +1051,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"requestId": base.RequestID,
 			"peerId":    base.PeerID,
 			"ok":        true,
-			"error":     nil,
 		})
 
 	case "tunnel.remove.request":
@@ -1059,7 +1058,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"requestId": base.RequestID,
 			"peerId":    base.PeerID,
 			"ok":        true,
-			"error":     nil,
 		})
 
 	case "hub.management.daemon.connect.request",
@@ -1086,7 +1084,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				"connectedAt": nil,
 				"lastError":   nil,
 			},
-			"warning": nil,
 		})
 
 	case "hub.execution.agent.validate.request":
