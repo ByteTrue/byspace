@@ -414,8 +414,12 @@ func runList(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("ls", flag.ContinueOnError)
 	homeDir := fs.String("home", "", "byspace home directory")
 	asJSON := fs.Bool("json", false, "output JSON")
-	var unusedAll, unusedGlobal bool
-	fs.BoolVar(&unusedAll, "a", false, "include all")
+	asYAML := fs.Bool("yaml", false, "output YAML")
+	quiet := fs.Bool("q", false, "output ids only")
+	fs.BoolVar(quiet, "quiet", false, "output ids only")
+	includeArchived := fs.Bool("a", false, "include archived agents")
+	fs.BoolVar(includeArchived, "all", false, "include archived agents")
+	var unusedGlobal bool
 	fs.BoolVar(&unusedGlobal, "g", false, "global")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -431,23 +435,44 @@ func runList(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	if *asJSON {
-		enc := json.NewEncoder(stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(agents)
+	// Archived agents are hidden by default: the list is what the user is working on, and a
+	// history of every finished agent makes it unreadable. -a brings them back.
+	if !*includeArchived {
+		visible := make([]store.AgentRecord, 0, len(agents))
+		for _, a := range agents {
+			if a.ArchivedAt == nil {
+				visible = append(visible, a)
+			}
+		}
+		agents = visible
+	}
+
+	switch resolveOutputMode(*asJSON, *asYAML, *quiet) {
+	case ModeJSON:
+		return writeJSON(stdout, agents)
+	case ModeYAML:
+		return writeYAML(stdout, toYAMLValue(agents))
+	case ModeQuiet:
+		ids := make([]string, 0, len(agents))
+		for _, a := range agents {
+			ids = append(ids, a.ID)
+		}
+		return writeQuiet(stdout, ids)
 	}
 
 	if len(agents) == 0 {
 		fmt.Fprintln(stdout, "No agents found.")
 		return nil
 	}
+	rows := make([][]string, 0, len(agents))
 	for _, a := range agents {
 		title := "(untitled)"
 		if a.Title != nil && *a.Title != "" {
 			title = *a.Title
 		}
-		fmt.Fprintf(stdout, "%-20s  %-8s  %-8s  %-30s  %s\n", a.ID, a.Provider, a.LastStatus, title, a.Cwd)
+		rows = append(rows, []string{a.ID, a.Provider, a.LastStatus, title, a.Cwd})
 	}
+	return renderTable(stdout, []string{"ID", "PROVIDER", "STATUS", "TITLE", "CWD"}, rows)
 	return nil
 }
 
