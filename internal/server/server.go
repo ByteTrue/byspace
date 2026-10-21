@@ -1076,23 +1076,35 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		s.handleSubscribeTerminal(ctx, sink, raw)
 
 	case "terminal.shell.detect.request":
-		sh := os.Getenv("SHELL")
-		if sh == "" {
-			sh = "/bin/sh"
+		// Discover every usable shell, not just $SHELL: the picker exists so a user can switch,
+		// and returning one entry made it look like only one shell was installed.
+		configured := ""
+		if cfg := s.store.LoadDaemonConfig(); cfg != nil {
+			if daemon, ok := cfg["daemon"].(map[string]any); ok {
+				if v, ok := daemon["terminalDefaultShell"].(string); ok {
+					configured = strings.TrimSpace(v)
+				}
+			}
+		}
+		detected := terminal.DetectInstalledShells()
+		shellList := make([]map[string]any, 0, len(detected))
+		for _, sh := range detected {
+			shellList = append(shellList, map[string]any{
+				"path":      sh.Path,
+				"name":      sh.Name,
+				"source":    sh.Source,
+				"isDefault": sh.IsDefault,
+			})
 		}
 		shellDetectPayload := map[string]any{
 			"requestId":       base.RequestID,
-			"shells":          []map[string]any{{"path": sh, "name": filepath.Base(sh)}},
-			"resolvedDefault": sh,
+			"shells":          shellList,
+			"resolvedDefault": terminal.ResolveDefaultShell(configured),
 			"error":           nil,
 		}
 		// `configured` is the explicit daemon.terminalDefaultShell; absent in auto mode.
-		if cfg := s.store.LoadDaemonConfig(); cfg != nil {
-			if daemon, ok := cfg["daemon"].(map[string]any); ok {
-				if v, ok := daemon["terminalDefaultShell"].(string); ok && strings.TrimSpace(v) != "" {
-					shellDetectPayload["configured"] = v
-				}
-			}
+		if configured != "" {
+			shellDetectPayload["configured"] = configured
 		}
 		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", shellDetectPayload)
 

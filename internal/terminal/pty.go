@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -56,10 +57,8 @@ func StartSession(opts StartOptions) (*Session, error) {
 	shell := opts.Command
 	args := opts.Args
 	if shell == "" {
-		shell = os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/sh"
-		}
+		// Same resolution the picker reports, so "Auto" and what actually spawns cannot drift.
+		shell = ResolveDefaultShell("")
 	}
 	rows := opts.Rows
 	if rows == 0 {
@@ -118,38 +117,82 @@ func StartSession(opts StartOptions) (*Session, error) {
 	return s, nil
 }
 
+// outputCoalesceWindow bounds how long a burst of PTY reads waits before being sent.
+//
+// Ported from terminal-output-coalescer.ts. Every read used to produce one websocket frame, so
+// a command that prints in many small writes (a build log, `yes`) produced a frame per read —
+// the client spent its time on frame overhead instead of rendering. The window is short enough
+// that interactive echo still feels immediate.
+const outputCoalesceWindow = 5 * time.Millisecond
+
 func (s *Session) readLoop() {
 	defer close(s.done)
 	buf := make([]byte, 32*1024)
+
+	var pending []byte
+	var pendingTimer *time.Timer
+	var flushMu sync.Mutex
+
+	flush := func() {
+		flushMu.Lock()
+		chunk := pending
+		pending = nil
+		pendingTimer = nil
+		flushMu.Unlock()
+		if len(chunk) == 0 {
+			return
+		}
+		s.publishOutput(chunk)
+	}
+
 	for {
 		n, err := s.ptmx.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
-			// Detect OSC 633 ;C (command start) and ;D (command finished) sequences
+			// Activity detection runs on arrival, not on flush: the indicator should react to a
+			// command boundary without waiting for the coalescing window.
 			if bytes.Contains(chunk, []byte("\x1b]633;D")) {
 				s.SetActivity("idle")
 			} else if bytes.Contains(chunk, []byte("\x1b]633;C")) {
 				s.SetActivity("working")
 			}
 			s.vt.Write(chunk)
-			s.mu.Lock()
-			s.revision++
-			rev := s.revision
-			s.backlog.Append(rev, string(chunk))
-			subs := make([]func(OutputEvent), 0, len(s.subscribers))
-			for _, fn := range s.subscribers {
-				subs = append(subs, fn)
-			}
-			s.mu.Unlock()
 
-			ev := OutputEvent{Data: chunk, Revision: rev}
-			for _, fn := range subs {
-				fn(ev)
+			flushMu.Lock()
+			leader := pendingTimer == nil
+			pending = append(pending, chunk...)
+			if leader {
+				// Leading edge: nothing pending, so send now and start a window during which
+				// further reads accumulate.
+				flushMu.Unlock()
+				flush()
+				flushMu.Lock()
+				pendingTimer = time.AfterFunc(outputCoalesceWindow, flush)
 			}
+			flushMu.Unlock()
 		}
 		if err != nil {
+			flush()
 			return
 		}
+	}
+}
+
+// publishOutput records a chunk in the backlog and hands it to subscribers.
+func (s *Session) publishOutput(chunk []byte) {
+	s.mu.Lock()
+	s.revision++
+	rev := s.revision
+	s.backlog.Append(rev, string(chunk))
+	subs := make([]func(OutputEvent), 0, len(s.subscribers))
+	for _, fn := range s.subscribers {
+		subs = append(subs, fn)
+	}
+	s.mu.Unlock()
+
+	ev := OutputEvent{Data: chunk, Revision: rev}
+	for _, fn := range subs {
+		fn(ev)
 	}
 }
 
