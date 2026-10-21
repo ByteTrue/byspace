@@ -170,7 +170,7 @@ func mcpToolDefinitions() []map[string]any {
 		mcpToolDef("rename_branch", "Rename the current git branch in a workspace.", map[string]any{"cwd": strProp, "newName": strProp}, "cwd", "newName"),
 
 		// Agents
-		mcpToolDef("create_agent", "Create and launch a new agent in the specified working directory.", map[string]any{"cwd": strProp, "initialPrompt": strProp, "title": strProp, "model": strProp, "thinking": strProp}),
+		mcpToolDef("create_agent", "Create and launch a new agent in the specified working directory.", map[string]any{"cwd": strProp, "initialPrompt": strProp, "title": strProp, "provider": strProp, "model": strProp, "thinking": strProp}),
 		mcpToolDef("send_agent_prompt", "Send a follow-up prompt to an existing agent.", map[string]any{"agentId": strProp, "prompt": strProp}, "agentId", "prompt"),
 		mcpToolDef("send_agent_message", "Alias for send_agent_prompt.", map[string]any{"agentId": strProp, "prompt": strProp}, "agentId", "prompt"),
 		mcpToolDef("get_agent_status", "Inspect the current lifecycle status and latest reply of an agent.", map[string]any{"agentId": strProp}, "agentId"),
@@ -356,9 +356,19 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 			trimmed := strings.TrimSpace(t)
 			titlePtr = &trimmed
 		}
+		// The provider is selectable and defaults to pi. A model given as `provider/model` sets both,
+		// which is the form the node tools document; a bare model keeps whatever provider was chosen.
+		providerID := strings.TrimSpace(stringArg(args, "provider"))
+		modelStr := strings.TrimSpace(stringArg(args, "model"))
+		if parsedProvider, parsedModel, ok := splitProviderModel(modelStr); ok {
+			providerID = parsedProvider
+			modelStr = parsedModel
+		}
+		if providerID == "" {
+			providerID = "pi"
+		}
+		thinkStr := strings.TrimSpace(stringArg(args, "thinking"))
 		var cfgPtr *store.AgentConfig
-		modelStr, _ := args["model"].(string)
-		thinkStr, _ := args["thinking"].(string)
 		if modelStr != "" || thinkStr != "" {
 			cfgPtr = &store.AgentConfig{}
 			if modelStr != "" {
@@ -372,7 +382,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		agentID := newAgentID()
 		rec := store.AgentRecord{
 			ID:          agentID,
-			Provider:    "pi",
+			Provider:    providerID,
 			Cwd:         cwd,
 			WorkspaceID: ws.WorkspaceID,
 			CreatedAt:   now,
@@ -730,4 +740,29 @@ func (s *Server) bySpaceToolPolicyFor(agentID string) *toolpolicy.Policy {
 	}
 	settings, _ := cfg["providers"].(map[string]any)
 	return toolpolicy.Resolve(record.Provider, settings)
+}
+
+// stringArg reads a string argument, tolerating an absent or non-string value.
+func stringArg(args map[string]any, key string) string {
+	value, _ := args[key].(string)
+	return value
+}
+
+// splitProviderModel parses `provider/model`.
+//
+// Ported from resolveRequiredProviderModel. A model id can itself contain a slash (`meta-llama/Llama-3`),
+// so only the first one separates: everything after it is the model. A bare word is not this format
+// and is left to the caller, which treats it as a model for the already-selected provider.
+func splitProviderModel(value string) (string, string, bool) {
+	trimmed := strings.TrimSpace(value)
+	index := strings.IndexByte(trimmed, '/')
+	if index <= 0 || index == len(trimmed)-1 {
+		return "", "", false
+	}
+	provider := strings.TrimSpace(trimmed[:index])
+	model := strings.TrimSpace(trimmed[index+1:])
+	if provider == "" || model == "" {
+		return "", "", false
+	}
+	return provider, model, true
 }

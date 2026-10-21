@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -311,10 +312,18 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		return
 	}
 
+	// A search scans deeper than the page it returns: filtering happens after listing, so scanning
+	// only `limit` sessions means a match on the 21st is never found and the search looks broken.
+	// 500 is the node daemon's bound — large enough to cover a real history, small enough not to
+	// read a directory of thousands of files on every keystroke.
+	listLimit := req.Limit
+	if strings.TrimSpace(req.Query) != "" && listLimit < importSessionSearchScanLimit {
+		listLimit = importSessionSearchScanLimit
+	}
 	sessions, _ := pi.ListImportableSessions(pi.HistoryOptions{
 		SessionDir: s.piSessionDir,
 		Cwd:        req.Cwd,
-		Limit:      req.Limit,
+		Limit:      listLimit,
 		Since:      req.Since,
 	})
 	if query := strings.ToLower(strings.TrimSpace(req.Query)); query != "" {
@@ -327,8 +336,21 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		sessions = filtered
 	}
 
+	// A session that is already imported must not appear again: the picker would offer a row that
+	// fails (or silently duplicates) when clicked. The count of what was hidden is reported so the
+	// user knows the list is filtered rather than short.
+	importedHandles, importedErr := s.importedProviderHandles()
+	if importedErr != nil {
+		importedHandles = map[string]bool{}
+	}
+	filteredCount := 0
+
 	entries := make([]map[string]any, 0, len(sessions))
 	for _, sess := range sessions {
+		if importedHandles["pi:"+sess.ProviderHandleID] {
+			filteredCount++
+			continue
+		}
 		entries = append(entries, map[string]any{
 			"providerId":         "pi",
 			"provider":           "pi",
@@ -344,6 +366,10 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 
 	if claudeSessions, err := providers.ListClaudeSessions("", req.Cwd, req.Limit); err == nil {
 		for _, cs := range claudeSessions {
+			if importedHandles["claude:"+cs.ProviderHandleID] {
+				filteredCount++
+				continue
+			}
 			entries = append(entries, map[string]any{
 				"providerId":         "claude",
 				"provider":           "claude",
@@ -361,9 +387,9 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
 		"requestId": req.RequestID,
 		"entries":   entries,
-		// The import picker shows "N already imported" and per-provider failures beside the
-		// list; both keys were missing entirely.
-		"filteredAlreadyImportedCount": 0,
+		// The import picker shows "N already imported" beside the list; it was hardcoded to 0 and
+		// nothing was filtered, so every previously imported session was offered again.
+		"filteredAlreadyImportedCount": filteredCount,
 		"providerErrors":               []any{},
 		"error":                        nil,
 	})
@@ -854,3 +880,39 @@ func matchesSessionQuery(session pi.ImportableSession, query string) bool {
 	}
 	return false
 }
+
+// importedProviderHandles returns the set of `provider:handle` pairs that are already imported.
+//
+// Read from the agent records rather than from a separate table: an imported session becomes an agent
+// whose persistence handle records where it came from, so the records are the authority and cannot
+// drift from an index.
+func (s *Server) importedProviderHandles() (map[string]bool, error) {
+	agents, err := s.store.ListAgents()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(agents))
+	for _, agent := range agents {
+		if agent.Persistence == nil {
+			continue
+		}
+		handle := strings.TrimSpace(agent.Persistence.SessionID)
+		if handle == "" {
+			continue
+		}
+		provider := agent.Provider
+		if secret := agent.Persistence.Provider; strings.TrimSpace(secret) != "" {
+			provider = secret
+		}
+		out[provider+":"+handle] = true
+		// The native handle records the provider's own id, which is what the picker lists. Both are
+		// recorded because a resumed session and an imported one identify the session differently.
+		out[provider+":"+fmt.Sprint(agent.Persistence.NativeHandle)] = true
+	}
+	return out, nil
+}
+
+// importSessionSearchScanLimit is how far a session search scans before filtering.
+//
+// Ported from IMPORT_SESSION_SEARCH_SCAN_LIMIT.
+const importSessionSearchScanLimit = 500
