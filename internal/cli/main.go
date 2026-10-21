@@ -1507,7 +1507,7 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 	}
 	ws.SetReadLimit(64 * 1024 * 1024)
 
-	hello := `{"type":"hello","clientId":"byspace_go_cli","protocolVersion":1}`
+	hello := fmt.Sprintf(`{"type":"hello","clientId":%q,"protocolVersion":1}`, cliClientKey(homeDirForClientID()))
 	if err := ws.Write(ctx, websocket.MessageText, []byte(hello)); err != nil {
 		ws.CloseNow()
 		return nil, err
@@ -1650,7 +1650,7 @@ func dialUnixSocket(ctx context.Context, socketPath string) (*websocket.Conn, er
 	}
 	ws.SetReadLimit(64 * 1024 * 1024)
 
-	hello := `{"type":"hello","clientId":"byspace_go_cli","protocolVersion":1}`
+	hello := fmt.Sprintf(`{"type":"hello","clientId":%q,"protocolVersion":1}`, cliClientKey(homeDirForClientID()))
 	if err := ws.Write(ctx, websocket.MessageText, []byte(hello)); err != nil {
 		ws.CloseNow()
 		return nil, err
