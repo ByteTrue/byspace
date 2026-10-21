@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/ByteTrue/byspace/internal/home"
 	"os"
 	"os/exec"
 	"sync"
@@ -74,9 +75,12 @@ func StartSession(opts StartOptions) (*Session, error) {
 		cmd.Dir = opts.Cwd
 	}
 	if len(opts.Env) > 0 {
-		cmd.Env = append([]string(nil), opts.Env...)
+		cmd.Env = home.ExternalProcessEnv(opts.Env)
 	} else {
-		cmd.Env = os.Environ()
+		// Strip runtime-control keys: a terminal that inherits the supervisor's identity makes
+		// the Pi activity extension believe it is an inherited child and register no handlers,
+		// so the terminal never reports running/idle.
+		cmd.Env = home.ExternalProcessEnv(os.Environ())
 	}
 	actToken := opts.ActivityToken
 	if actToken == "" {

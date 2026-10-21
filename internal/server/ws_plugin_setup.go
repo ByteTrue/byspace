@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/home"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,7 +124,7 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 
 		cmd := exec.Command("/bin/sh", "-lc", command)
 		cmd.Dir = cwd
-		cmd.Env = append(os.Environ(), "CI=1", "BYSPACE_WORKSPACE_SETUP=1")
+		cmd.Env = home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"})
 		out, err := cmd.CombinedOutput()
 		snap.mu.Lock()
 		snap.Log.Write(out)

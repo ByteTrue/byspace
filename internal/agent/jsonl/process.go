@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/home"
 	"io"
 	"os"
 	"os/exec"
@@ -94,10 +95,13 @@ func Start(cfg LaunchConfig) (*Process, error) {
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
 	}
+	// Every child gets the stripped environment, whether the caller supplied one or not: an
+	// agent that inherits the supervisor's markers changes behaviour (the Pi activity extension
+	// registers no handlers when it sees a foreign owner pid).
 	if len(cfg.Env) > 0 {
-		cmd.Env = cfg.Env
+		cmd.Env = home.ExternalProcessEnv(cfg.Env)
 	} else {
-		cmd.Env = os.Environ()
+		cmd.Env = home.ExternalProcessEnv(os.Environ())
 	}
 
 	stdin, err := cmd.StdinPipe()
