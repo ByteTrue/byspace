@@ -118,6 +118,10 @@ func (s *OpenCodeSession) LastError() string {
 	return ""
 }
 
+// TurnToken returns "" for providers without an explicit turn token; the daemon then relies
+// on its own turn id comparison.
+func (s *OpenCodeSession) TurnToken() string { return "" }
+
 // Usage reports token/cost accounting when the provider exposes it.
 func (s *OpenCodeSession) Usage(_ context.Context) *sdk.AgentUsage {
 	return nil

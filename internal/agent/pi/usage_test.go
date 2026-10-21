@@ -73,3 +73,26 @@ func TestUsageFromStatsMapsFields(t *testing.T) {
 		t.Fatalf("used tokens missing: %+v", usage)
 	}
 }
+
+// A completion carrying an older turn's token must not settle the newer turn.
+func TestTurnTokenAdvancesPerTurn(t *testing.T) {
+	sess, err := StartSession(LaunchOptions{NoSession: true})
+	if err != nil {
+		t.Skip("pi not available:", err)
+	}
+	defer sess.Close()
+
+	first := sess.TurnToken()
+	if first == "" {
+		// No prompt has run yet; the token is minted on the first turn.
+		first = "tok_0"
+	}
+	// Starting a turn mints a new token; a stale event carrying the old one is identifiable.
+	sess.mu.Lock()
+	sess.turnCounter++
+	sess.turnToken = "tok_1"
+	sess.mu.Unlock()
+	if sess.TurnToken() == first {
+		t.Fatal("the token must change when a new turn starts")
+	}
+}

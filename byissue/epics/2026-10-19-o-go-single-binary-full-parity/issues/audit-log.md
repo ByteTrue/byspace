@@ -174,7 +174,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `agent/agent-prompt.ts` + `agent-timeline-content.ts` | 571 + 85 | **MISSING** → 已补 | ① **系统信封完全没实现**：BySpace 自己注入的 prompt（chat mention、定时触发、完成通知）以 `<byspace-system>…</byspace-system>` 包裹，provider 收到的是普通用户消息，但**不是人说的话**。Go 直接把它们当用户气泡渲染，等于让 transcript 谎报是谁提的需求。已实现 `FormatSystemNotificationPrompt` / `IsSystemInjectedEnvelope`（锚定 + 要求精确换行布局，用户手打标签不会被隐藏），并在 pi 历史重放处过滤。② **timeline 内容无上限**：`limitAgentTimelineItemContent` 缺失，一次 `cat` 大文件或失败构建的输出会随每一行、每次拉取、每次落盘重复传输。已实现 64KB 上限（保留前缀，命令本身不动）。6 个测试。 |
 
-### 未审计（本批剩余 42 文件）
+| `agent/agent-run-state.ts` | 313 | **PARTIAL** → 已补键点 | Node 用 run token 让**过期的 settle 事件失效**。Go 直接按 `turnId` 改状态：第二轮 prompt 发出后，第一轮的 `byspace_turn_completed` 若还没处理完，会把新轮次翻成 idle，UI 上「进行中」提前消失。已补 `Session.turnToken`（每轮新铸）与完成事件上的 token 比对，不匹配则丢弃。`ManagedSession` 接口加了 `TurnToken()`，其余 provider 返回空串（回落到 turnId 比较）。 |
+
+### 未审计（本批剩余 41 文件）
 
 按行数排序，下一轮从这里继续：
 

@@ -153,6 +153,7 @@ type Session struct {
 	turnCounter         int
 	streamSeq           int
 	activeTurnID        string
+	turnToken           string
 	turnStartedAt       string
 	activeMessageID     string
 	nextClientMessageID string
@@ -474,6 +475,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			extraEvents = append(extraEvents, map[string]any{
 				"type":   "byspace_turn_completed",
 				"turnId": finishedTurnID,
+				// The token lets the daemon drop a completion that arrives after a newer
+				// turn has already started.
+				"turnToken": s.turnToken,
 			})
 		}
 
@@ -620,6 +624,16 @@ func (s *Session) ActiveTurn() (string, string) {
 	return s.activeTurnID, s.turnStartedAt
 }
 
+// TurnToken identifies the turn that currently owns the session.
+//
+// The daemon compares it against the token on a completion event: a completion that carries a
+// token from an older turn must not flip the newer turn to idle.
+func (s *Session) TurnToken() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.turnToken
+}
+
 // LastAssistantText returns the text of the most recent assistant_message in the timeline.
 func (s *Session) LastAssistantText() string {
 	s.mu.Lock()
@@ -643,6 +657,11 @@ func (s *Session) SetNextClientMessageID(id string) {
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
+	// A turn token makes a late event from the previous turn identifiable. Pi emits one
+	// `turn_end` per model step, and a second prompt can start before the first turn's
+	// completion event is fully processed; without a token, the stale completion would flip
+	// the new turn to idle and the UI would stop showing it as running.
+	s.turnToken = fmt.Sprintf("tok_%d", s.turnCounter)
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.turnStartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	s.activeTextIdx = -1

@@ -20,6 +20,9 @@ type ManagedSession interface {
 	SeedTimeline(entries []sdk.TimelineEntry)
 	StreamSeq() int
 	Usage(ctx context.Context) *sdk.AgentUsage
+	// TurnToken identifies the turn that currently owns the session, so a late completion
+	// event from a previous turn can be discarded instead of ending the new one.
+	TurnToken() string
 	LastError() string
 	ActiveTurn() (string, string)
 	LastAssistantText() string

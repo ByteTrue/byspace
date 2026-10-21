@@ -512,6 +512,10 @@ func (s *ACPSession) LastError() string {
 	return ""
 }
 
+// TurnToken returns "" for providers without an explicit turn token; the daemon then relies
+// on its own turn id comparison.
+func (s *ACPSession) TurnToken() string { return "" }
+
 // Usage reports token/cost accounting when the provider exposes it.
 func (s *ACPSession) Usage(_ context.Context) *sdk.AgentUsage {
 	return nil

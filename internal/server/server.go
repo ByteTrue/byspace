@@ -2436,6 +2436,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 		case "byspace_turn_completed":
 			turnID, _ := ev["turnId"].(string)
+			// Drop a completion from an older turn. Pi emits one completion per turn, but a
+			// second prompt can start before the first turn's event is fully processed; acting
+			// on the stale one would stop showing the newer turn as running.
+			if token, _ := ev["turnToken"].(string); token != "" && token != sess.TurnToken() {
+				break
+			}
 			mp.stopUsagePolling()
 			// pi does not answer get_session_stats while it is still producing tokens, so the
 			// final sample has to wait until the provider settles. captureFinalUsage retries.
