@@ -258,8 +258,17 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
-	case "hooks", "onboard":
-		fmt.Fprintf(stdout, "%s: ready\n", cmd)
+	case "onboard":
+		if err := runOnboard(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace onboard:", err)
+			return 1
+		}
+		return 0
+	case "hooks":
+		if err := runHooks(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace hooks:", err)
+			return 1
+		}
 		return 0
 	case "mcp-bridge":
 		if err := runMCPBridge(rest, os.Stdin, stdout); err != nil {
