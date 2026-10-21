@@ -698,6 +698,16 @@ Go 侧的对应物是 `internal/agent/jsonl`（JSONL RPC 多路复用、V2 分�
 | `provider-registry.ts` / `terminal-agent-hook-setting.ts` / `pi/*` | **PORTED** — 事件到状态的映射在 `internal/cli/hooks.go`（`byspace hooks <agent> <event>` 的 shim），安装的扩展源码在 `internal/terminal/vt.go`。                                                                                                                                                                                                                                                                                               |
 | `claude/*` / `codex/*` / `opencode/*`                              | **MISSING** — 只有 pi 的 hook 安装；其它三家的配置文件改写未移植。这是「其余 provider 暂不常用」的延伸，已在未完成清单里。                                                                                                                                                                                                                                                                                                                     |
 
+### terminal/terminal-persistence.ts | 155 | **PARTIAL → 已补启动恢复**
+
+上一轮补了**写**（`SavePersistedTerminals`），但从来没有人**读**它。于是元数据被忠实地持久化，而 tab 在每次重启后照样消失——崩溃恢复、自动更新、手动重启、休眠导致 daemon 退出，全部丢失。
+
+启动时按原始 id 重建每个记录的 tab。进程与 scrollback 回不来（没法复活一个 shell）；保留 id 是为了让客户端保存的布局引用仍然能解析，而不是留下空面板。
+
+目录已不存在的跳过，而不是恢复成一个点开就失败的 tab；文件按**实际恢复成功的**重写，这样一个起不来的终端不会每次重启都被重试。
+
+端到端验证：创建命名终端 → 重启 daemon → tab 以同样的名字和 id 重新出现。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
