@@ -980,6 +980,15 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 其余子命令（`agent` 的 ls/run/logs/wait/send/stop/archive/delete/inspect/detach/update/import/reload/attach、`project`/`workspace`/`terminal`/`script`/`provider`/`permit`/`schedule` 各组）都已逐条核对存在。
 
+### server/agent/provider-subagents/** | 2 文件 283 行 | **PARTIAL → 已补两处\*\*
+
+| 缺陷                                 | 后果                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`limit` / `direction` 完全没处理** | `agent.provider_subagents.timeline.get` 永远返回**全量** transcript，`hasOlder`/`hasNewer` 恒为 false。跑了一小时的子代理每次轮询都把整段历史发一遍，面板也无从知道还有没有更多。已按协议的方向语义实现：`tail`（最新 N）、`before`（游标之前）、`after`（游标之后，取**前导**行并置 `hasNewer`），`limit: 0` 与省略都表示全部（与 node 一致）。 |
+| **删除 agent 不清理子代理**          | 只从 runtime 与磁盘移除，从没通知任何人。Subagents 面板留着指向已删除父级的行，而且**永远清不掉**——`remove` 事件是客户端知道一行消失的唯一途径，而它本该来自那个已经不存在的父级。现在关闭 session 前把所有 descriptor 以 `kind: "remove"` 广播。                                                                                                |
+
+验证时抓到自己一个错误：第一版用了 `direction: "head"`，协议只接受 `tail`/`before`/`after`——`WSOutboundMessageSchema` 当场拒绝，这正是出站校验存在的意义。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
