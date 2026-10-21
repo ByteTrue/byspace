@@ -840,6 +840,21 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 		}
 	}
 
+	// Validate before writing: the daemon reads this file to run setup and scripts, so a wrong
+	// shape silently disables them long after the edit that caused it.
+	if validationErr := workspace.ValidateProjectConfig(req.Config); validationErr != nil {
+		fmt.Fprintf(os.Stderr, "project config rejected for %s: %v\n", req.RepoRoot, validationErr)
+		_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
+			"requestId": req.RequestID,
+			"repoRoot":  req.RepoRoot,
+			"ok":        false,
+			// The protocol's error union has no message field for this code, so the detail is
+			// logged rather than invented on the wire.
+			"error": map[string]any{"code": workspace.ConfigErrInvalidConfig},
+		})
+		return
+	}
+
 	b, _ := json.MarshalIndent(req.Config, "", "  ")
 	if err := home.WriteAtomic(cfgPath, append(b, '\n'), 0o644); err != nil {
 		_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
