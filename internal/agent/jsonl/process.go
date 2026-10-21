@@ -163,6 +163,7 @@ func (p *Process) readStdout() {
 		if len(line) > 0 {
 			trimmed := bytes.TrimSpace(line)
 			if len(trimmed) > 0 {
+				trace.record("<<", trimmed)
 				p.consumeLine(trimmed)
 			}
 		}
@@ -317,6 +318,7 @@ func (p *Process) SendRaw(payload any) error {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 	_, err = p.stdin.Write(b)
+	trace.record(">>", b)
 	return err
 }
 

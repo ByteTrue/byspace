@@ -198,45 +198,42 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 未开始。范围见 Issue。
 
-## 未定位的缺陷：agent 创建后不产出任何响应
+## 已修复：agent 创建后不产出任何响应（重复加锁死锁）
 
-`create_agent_request` 带 `initialPrompt` 时，浏览器和 CLI 都只看到：
-`turn_started` + 一条 `user_message` timeline，之后没有 `thinking`/`text_delta`/`tool_call`，
-也不会 `turn_completed`。daemon 侧 pi 子进程确实收到并写入了 `{"type":"prompt",...}`。
+### 根因
 
-已排除的假设（每条都实测过）：
+`handleRawEvent` 在 **持有 `s.mu` 的情况下** 处理每个 pi 事件，而它调用的
+`handleEntryCaptureNotification` / `handleCommandResultNotification` 内部又 `s.mu.Lock()`。
+Go 的 `sync.Mutex` 不可重入，于是 stdout 读循环**永久死锁**。
 
-| 假设                 | 结论                                                                                |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| MCP 注入导致         | **否**。手动用完全相同的扩展 + 参数（含 MCP 桥）跑 pi，`text_delta`/`turn_end` 正常 |
-| 环境变量被剥离导致   | **否**。去掉剥离后同样复现；手动 `env -u BYSPACE_*` 跑 pi 正常                      |
-| stdin 是管道导致     | **否**。用 Node `spawn` + `stdio: pipe` 喂同样的 prompt，pi 正常响应                |
-| 进程组 kill 误伤     | **否**。残留进程检查显示 pi 组独立                                                  |
-| `get_state` 抢跑阻塞 | **是其中一个因素**（已修：启动持久化同步改为等 ready），但修完仍不复现成功          |
-| 后端/模型问题        | **否**。同样的 `bytetrueapi/deepseek-flash` 手动跑正常                              |
+触发条件极其具体：pi 扩展必须在 `session_start` 时发一条 `BYSPACE_ENTRY_CAPTURE` 通知。
+没有扩展时锁不会被重入，所以「无扩展 → 有响应，有扩展 → 无响应」。
 
-**关键证据：该缺陷在 `8fd96541d`（本轮全部改动之前）同样复现**，所以它不是本轮引入的。
+这正是它难查的原因：pi 子进程**行为完全正常**（trace 显示 `agent_start`、`message_update`、
+`turn_end`、`agent_end` 全部到达、顺序正确），只是 Go 再也没读下一行。外部表现是
+「代理接受了 prompt 然后什么都不做，没有任何错误」。
 
-### 已定位的部分：`PI_SESSION_FILE` 等 pi 会话身份泄漏
+### 定位过程
 
-用 daemon 的完整 env 手动跑 pi 可以复现（`text_delta` 从 5 个降到 1 个），逐项二分后锁定
-`PI_SESSION_FILE` / `PI_SESSION_ID` / `PI_MODEL` / `PI_PROVIDER` / `PI_CODING_AGENT`：
-daemon 若从 pi agent 内部启动（本仓库的开发循环就是这样），这些变量描述的是**父**会话，
-子 pi 继承后往父 transcript 里追加而不是开新会话。
+1. 给 `jsonl.Process` 加持久化协议 trace（`BYSPACE_PI_TRACE=<path>`），写入两个方向的每一帧。
+   用 stderr 是不行的：daemon 自己的日志会与之交错。
+2. trace 显示 pi 发了 295 行、含完整事件序列 → 问题在 Go 侧。
+3. 用 `BYSPACE_PI_EXTENSION_PATH` 逐个替换扩展：**无扩展 → 正常**。
+4. 把扩展拆成最小片段二分：`session_start` + 发 `BYSPACE_ENTRY_CAPTURE` → 阻塞；
+   同一钩子发普通文本 → 正常。到此锁定为「标记 + 回环处理」的组合。
 
-已把这一组加入 `home.ExternalProcessEnv` 的剥离列表（含 BySpace 自己的
-`BYSPACE_AGENT_ID` / `BYSPACE_SUBAGENT_REPORT_*`）。**验证：子进程 env 里已确认为 0 个 PI\_\* 变量。**
+### 顺带修掉的两个真 bug
 
-但剥离之后 agent 仍不产出响应，说明还有第二个原因。
+- **`PI_SESSION_FILE` 等 pi 会话身份泄漏**：从 pi agent 内部启动的 daemon（本仓库的开发循环）
+  会导出这些变量，子 pi 继承后往父 transcript 追加而不是开新会话。已加入剥离列表。
+- **`syncPiPersistence` 抢跑**：启动时立刻发 `get_state`，而 pi 在 runtime 就绪前不响应，
+  把 stdio 队列堵在那里。
 
-### 剩余差异（已缩小到最后一步）
+### 验证
 
-| 实验                                    | 结果                          |
-| --------------------------------------- | ----------------------------- |
-| daemon + 扩展                           | 无响应                        |
-| daemon + **无扩展**                     | **有响应**（`ASSISTANT: 好`） |
-| 手动 + Go 生成的那份完整扩展 + 同样参数 | 正常（5 deltas）              |
-| 手动 + daemon 的完整 env + 该扩展       | 退化（1 delta）               |
-
-结论：需要「daemon 的 spawn 方式」和「扩展」同时成立才复现。下一步应该给 pi 的 stdout
-加持久化 trace（而不是 stderr，避免被打断），确认 `agent_start` 是否到达。
+- 回归测试 `TestExtensionNotificationDoesNotDeadlock`：持锁调用通知，3 秒超时。
+  已验证恢复死锁代码后该测试 **panic: test timed out**。
+- 端到端：`tools: ["bash:running","bash:running","bash:running","bash:completed"]`，
+  模型真的调用了 bash 工具并拿到输出。
+- `npm run audit` 的浏览器检查从 **7/8** 变成 **10/10** —— 之前那一项一直是这个死锁造成的
+  假失败（页面拿不到 agent 响应，思考菜单状态也就无从检查）。

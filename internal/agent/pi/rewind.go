@@ -84,6 +84,8 @@ func (s *Session) dropCommandWaiter(requestID string) {
 }
 
 // handleCommandResultNotification resolves a pending rewind after the extension reports back.
+//
+// Like the capture handler, this runs from handleRawEvent with s.mu held.
 func (s *Session) handleCommandResultNotification(text string) {
 	rest, ok := strings.CutPrefix(text, CommandResultMarker)
 	if !ok {
@@ -97,10 +99,8 @@ func (s *Session) handleCommandResultNotification(text string) {
 	if json.Unmarshal([]byte(strings.TrimSpace(rest)), &payload) != nil || payload.RequestID == "" {
 		return
 	}
-	s.mu.Lock()
 	ch, ok := s.commandWaiters[payload.RequestID]
 	delete(s.commandWaiters, payload.RequestID)
-	s.mu.Unlock()
 	if !ok {
 		return
 	}
@@ -129,6 +129,11 @@ func (s *Session) handleExtensionNotification(message string) {
 //
 // Rewind needs it: the client sends a BySpace message id, but pi navigates by its own tree entry
 // id. Without this mapping there is nothing to navigate to.
+//
+// The caller (handleRawEvent) already holds s.mu; this must not lock again. A re-entrant Lock
+// on a Go mutex deadlocks the whole read loop, which froze the session the moment an extension
+// emitted a capture on session_start — the agent accepted its prompt and then produced nothing,
+// with no error anywhere.
 func (s *Session) handleEntryCaptureNotification(message string) {
 	rest := strings.TrimPrefix(strings.TrimPrefix(message, EntryCaptureMarker), SubmittedUserEntryMarker)
 	var payload struct {
@@ -147,8 +152,6 @@ func (s *Session) handleEntryCaptureNotification(message string) {
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.treeEntries == nil {
 		s.treeEntries = make(map[string]string)
 	}
