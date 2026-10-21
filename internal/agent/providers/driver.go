@@ -104,13 +104,12 @@ var BuiltinProviders = []ProviderSpec{
 			{ID: "bypassPermissions", Label: "Bypass", Description: "Skip all permission prompts (use with caution)", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{
-			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
+			{ID: "fast_mode", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
 		},
-		Models: []sdk.CatalogModel{
-			{ID: "claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "claude", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-			{ID: "claude-opus-4-5", Label: "Claude Opus 4.5", Provider: "claude", IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-			{ID: "claude-haiku-4-5", Label: "Claude Haiku 4.5", Provider: "claude", IsSelectable: true},
-		},
+		// The manifest, not a hand-written list: three models on one side and sixteen plus aliases on
+		// the other meant the picker offered a fraction of what the provider has, missing every
+		// long-context variant.
+		Models: ClaudeManifestModels(),
 	},
 	{
 		ID:            "codex",
@@ -126,7 +125,10 @@ var BuiltinProviders = []ProviderSpec{
 			{ID: "full-access", Label: "Full Access", Description: "Edit files, run commands, and access the network without additional prompts.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{
-			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
+			// The id is `fast_mode` to match the node daemon (and Codex's own feature name). Go had
+			// shipped `fast`, which the provider sheet would send back as an unknown toggle.
+			{ID: "fast_mode", Label: "Fast", Description: "Priority inference at increased usage", Kind: "toggle", DefaultValue: false},
+			{ID: "plan_mode", Label: "Plan", Description: "Switch Codex into planning-only collaboration mode", Kind: "toggle", DefaultValue: false},
 		},
 		Models: []sdk.CatalogModel{
 			{ID: "gpt-5.3-codex", Label: "GPT-5.3 Codex", Provider: "codex", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
@@ -211,7 +213,7 @@ var ACPPresets = map[string]ProviderSpec{
 		DefaultArgs: []string{"--acp"},
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}, {ID: "plan", Label: "Plan"}},
-		Features:    []FeatureDefinition{{ID: "fast", Label: "Fast", Kind: "toggle", DefaultValue: false}},
+		Features:    []FeatureDefinition{{ID: "fast_mode", Label: "Fast", Kind: "toggle", DefaultValue: false}},
 		Models:      []sdk.CatalogModel{{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true}},
 	},
 	"kimi": {

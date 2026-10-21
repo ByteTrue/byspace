@@ -1269,7 +1269,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		_ = sendSessionMsg(ctx, sink, "list_provider_features_response", map[string]any{
 			"requestId": base.RequestID,
 			"provider":  prov,
-			"features":  providers.GetProviderSpec(prov).Features,
+			// The model comes from the draft: the provider sheet asks for features while the user is
+			// still choosing, and a model-gated feature (fast mode) must not appear before a model that
+			// supports it is picked.
+			"features":  providers.ProviderFeaturesFor(prov, draftModelFromConfig(req.DraftConfig)),
 			"error":     nil,
 			"fetchedAt": now,
 		})
@@ -4163,4 +4166,21 @@ func resolveChildCwd(parentCwd, requested string) string {
 		return filepath.Clean(expanded)
 	}
 	return filepath.Join(parentCwd, expanded)
+}
+
+// draftModelFromConfig reads the model id out of a provider draft config.
+//
+// The draft is the shape the provider sheet posts; a missing or non-string model yields "", which
+// ProviderFeaturesFor treats as "no model chosen" and so hides model-gated features.
+func draftModelFromConfig(draft map[string]any) string {
+	if draft == nil {
+		return ""
+	}
+	if model, ok := draft["model"].(string); ok {
+		return strings.TrimSpace(model)
+	}
+	if model, ok := draft["modelId"].(string); ok {
+		return strings.TrimSpace(model)
+	}
+	return ""
 }
