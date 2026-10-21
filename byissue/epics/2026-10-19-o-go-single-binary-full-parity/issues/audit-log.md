@@ -507,6 +507,17 @@ id 按前缀匹配——完整 id 很长，用户从 `ls` 复制到的在窄终�
 
 `--no-follow` 只打印历史后退出，给脚本和快速查看用。
 
+### commands/daemon/local-daemon.ts | 765 | **PARTIAL** → 已补就绪语义
+
+`byspace daemon start` 等 3 秒健康检查，**无论有没有应答都打印 `started`**。PID 文件已存在，用户以为 daemon 起来了，下一条命令超时且毫无线索。常见原因是端口被占用——子进程会把它写进日志然后退出，而那行日志被丢掉了。
+
+现在等 15 秒、检查子进程是否还活着，失败时报告 daemon 日志的最后几行而不是成功消息。
+
+验证方式：先用一个 socket 占住端口再 `daemon start`，命令失败并输出
+`daemon did not become ready within 15s` + `byspace serve: listen tcp 127.0.0.1:6792: bind: address already in use`。
+
+其余部分（detached spawn、PID 锁、优雅/强制关停、launchd/systemd unit 生成）Go 侧已有，见 `internal/daemon`。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
