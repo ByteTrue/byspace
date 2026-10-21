@@ -290,6 +290,11 @@ func New(opts Options) (*Server, error) {
 	srv.startSubscriptionPoller()
 	// A relay configured in settings must connect at boot, not only when a CLI flag is passed.
 	srv.ApplyRelayConfig(context.Background())
+	// Terminal tabs are recreated at startup from the persisted metadata. The processes and their
+	// scrollback are gone — nothing can bring a shell back — but the tabs are not: reopening the
+	// app should show the terminal the user was using, with its original id so the client's saved
+	// layout still resolves.
+	srv.restorePersistedTerminals()
 	return srv, nil
 }
 

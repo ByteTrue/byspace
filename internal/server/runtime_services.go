@@ -9,6 +9,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -563,4 +564,63 @@ func nullableReason(reason string) any {
 		return nil
 	}
 	return reason
+}
+
+// restorePersistedTerminals recreates the terminal tabs recorded by a previous run.
+//
+// Each restored terminal is a fresh shell under the original id: the process and its scrollback
+// cannot be recovered, but keeping the id means the client's saved layout references still
+// resolve instead of leaving empty panels.
+func (s *Server) restorePersistedTerminals() {
+	sessions := terminal.LoadPersistedTerminals(s.homeDir)
+	if len(sessions) == 0 {
+		return
+	}
+
+	restored := make([]terminal.PersistedTerminalSession, 0, len(sessions))
+	for _, record := range sessions {
+		// A directory that no longer exists cannot host a shell; keeping the tab would give the
+		// user a terminal that fails to start when they click it.
+		if info, err := os.Stat(record.Cwd); err != nil || !info.IsDir() {
+			continue
+		}
+		created, err := terminal.StartSession(terminal.StartOptions{
+			ID:          record.ID,
+			Name:        record.Name,
+			Cwd:         record.Cwd,
+			WorkspaceID: record.WorkspaceID,
+			Command:     record.Command,
+			Args:        record.Args,
+			OnActivityChange: func(_state, _attentionReason string) {
+				s.broadcastTerminalsChanged(record.Cwd, record.WorkspaceID)
+			},
+		})
+		if err != nil {
+			continue
+		}
+		slot := s.nextTerminalSlot()
+		s.mu.Lock()
+		s.terminals[slot] = created
+		s.mu.Unlock()
+		restored = append(restored, record)
+	}
+
+	// Rewrite the file with what actually came back, so a terminal that failed to start is not
+	// retried on every restart forever.
+	_ = terminal.SavePersistedTerminals(s.homeDir, restored)
+	if len(restored) > 0 {
+		fmt.Fprintf(os.Stderr, "restored %d terminal tab(s)\n", len(restored))
+	}
+}
+
+// nextTerminalSlot returns a free terminal slot index.
+func (s *Server) nextTerminalSlot() uint8 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for slot := 1; slot < 255; slot++ {
+		if _, taken := s.terminals[uint8(slot)]; !taken {
+			return uint8(slot)
+		}
+	}
+	return 1
 }
