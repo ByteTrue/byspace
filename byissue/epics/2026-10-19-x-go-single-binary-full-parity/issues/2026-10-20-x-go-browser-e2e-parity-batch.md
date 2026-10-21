@@ -14,7 +14,7 @@ created: 2026-10-20
 - **包含**：出站消息缺字段、流式时序、轮次存活状态、模型思考档位过滤、Home workspace 语义、多模态图片透传。
 - **不包含**：其它 Agent 宿主（Claude/Codex/ACP/OpenCode）真实二进制验证、双机 tunnel。
 
-归属：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
+归属：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
 
 ## 背景
 
@@ -378,3 +378,19 @@ go test ./...:   all pass
 
 - 假阳性：变量型 payload、多发送分支按并集判断
 - 假阴性：循环里构造的切片、经接口传递的字段
+
+## 验收与关闭（2026-10-21）
+
+**验收结论：交付。** 这个 bug 批次记录了真机浏览器里发现并修掉的十余项，全部有复验记录：
+
+Providers 多出 Cursor/Kimi/Kiro/Trae、Chief 不置顶且每行挂 `+0 -0`、前端拒收 workspaces
+回退旧缓存、用户消息渲染两次、上一轮回复串到下一轮、无思考/工具卡片且非流式、一卡一卡、
+结束后仍运行中、多步任务中途变 idle、思考档位固定 6 档缺 `Max`、图片不到模型手里。
+
+其中两处是根因层面的：
+
+- **`seq` 不单调**：所有流事件共用同一个 `seq`，前端 `classifySessionTimelineSeq` 要求严格
+  `endSeq + 1`，第 2 个以后全被当重复丢弃 → 输出只能等工具结束才蹦一段。
+- **pi 每步的 `turn_end` 被当成整轮结束**：19 秒的任务在第 2 秒第一个工具跑完时就报 idle。
+
+`audit:browser` 现在稳定 10/10（此前 7/8，失败项被三次误判为环境问题）。

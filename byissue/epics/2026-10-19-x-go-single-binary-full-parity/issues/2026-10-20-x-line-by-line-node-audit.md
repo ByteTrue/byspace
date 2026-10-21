@@ -7,7 +7,7 @@ created: 2026-10-20
 
 # 逐文件逐函数审计 Node 实现
 
-归属 Epic：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
+归属 Epic：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
 
 ## 为什么用这种方式
 
@@ -133,3 +133,15 @@ created: 2026-10-20
 
 9 个批次全部审完，`audit-log.md` 里每个文件都有结论，
 所有 `MISSING` 要么修掉、要么转成独立 Issue、要么明确 `DROPPED` 并写明理由。
+
+## 验收与关闭（2026-10-21）
+
+**验收结论：交付。** 512/512 个上游文件都有带证据的逐文件结论，全部落在
+[`audit-log.md`](audit-log.md) 与本文的收尾清单里，覆盖脚本核对为 0 遗漏。
+
+台账末尾写明了**结论强度分层**：发现实质缺口的几十个文件逐行读过并配了反向验证的测试；
+`commands/` 与 `utils/` 读的是导出面与调用点；`test-utils`、`*-facts.ts`、`schema.ts` 按
+类别判定。「512/512 有结论」不等于「512 个都逐行读过」，保证来自未完成清单与三道机器检查。
+
+过程中修掉二十余个缺陷，按用户感知归类在 `audit-log.md` 的「缺陷总览」表里。方法论沉淀为
+`notes/013`~`notes/017`，缺陷分类扩到五类并写进 `decisions/004`。

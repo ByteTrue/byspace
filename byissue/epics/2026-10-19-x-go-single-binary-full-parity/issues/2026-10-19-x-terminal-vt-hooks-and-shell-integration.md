@@ -29,3 +29,22 @@ created: 2026-10-19
 ## 关闭候选
 
 - 关闭时回写本 Epic `spec.md` 推进视图。
+
+## 验收与关闭（2026-10-21）
+
+**验收结论：终端与 VT 部分交付；agent hooks 只做了 pi。**
+
+交付：纯 Go VT 屏网格（行列 Cell 矩阵、光标、ANSI、scrollback、`SnapshotWithScrollback`）、
+恢复三模式（`live` / `visible-snapshot` / `full-snapshot`）、输入模式重放
+（`?2004h`/`?1000h`/`?1049h` 等）、5ms 输出合并窗口、尺寸归属
+（手机打开同一终端不再把桌面 shell 压成手机宽度）、多 shell 检测（本机实测发现 7 个）、
+终端 tab 跨重启恢复。
+
+审计后补的两处：
+
+- **`OnActivityChange` 回调从未被任何调用方设置** → 活动状态从不广播，侧栏把所有终端显示成
+  idle；`attentionReason` 字段也不存在，所以「刚完成」和「一直空闲」分不开。
+- **hook 安装无条件覆盖** → 会静默删掉用户自己放在同一路径的扩展。现在按 ownership marker 判定。
+
+**未交付**：claude / codex / opencode 的 hook **安装**（配置文件改写）。`byspace hooks` shim
+已经能接受这三家的事件，缺的是写配置那一步。

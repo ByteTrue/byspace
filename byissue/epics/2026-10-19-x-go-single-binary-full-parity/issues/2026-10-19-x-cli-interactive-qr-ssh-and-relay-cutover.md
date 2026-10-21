@@ -24,3 +24,18 @@ created: 2026-10-19
 ## 关闭候选
 
 - 关闭时回写本 Epic `spec.md` 推进视图。
+
+## 验收与关闭（2026-10-21）
+
+**验收结论：交付，其中 `ssh://` 部分为 DROPPED。**
+
+- `byspace attach`（前缀匹配 + 先回放历史再跟随）、`onboard`、`hooks`、`pair --qr`（真 QR，
+  `skip2/go-qrcode`）、统一输出层（`--json`/`--yaml`/`-q`/自适应表格，CJK 按显示列宽）、
+  Relay 切流代理全部落地。
+- 审计后补：`schedule update`、`workspace setup`、路径直开（`byspace .`）、
+  unix socket 连接、`BYSPACE_HOST`、`agent mode`（此前被**静默路由到 `agent update`**）、
+  `daemon install-service`/`uninstall-service`/`service-status`（`print-plist` 只打印文件，
+  从没让平台加载它）。
+
+**DROPPED**：`ssh://` 自动隧道。需要第二台机器验证，盲写风险高于收益，条件写在
+service-proxy Issue。

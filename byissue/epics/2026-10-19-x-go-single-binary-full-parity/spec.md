@@ -47,23 +47,46 @@ BySpace 此前由 Node/TypeScript 多包工作区（`packages/server`、`package
 
 ---
 
-## 当前推进视图（6 个所属 Issues 消灭全部 32 项差距）
+## 当前推进视图（9 个所属 Issue，已交付 6 个，部分交付 1 个）
 
-- [x] `issues/2026-10-19-x-agent-providers-full-parity.md` — **Issue 001：全 Agent 客户端宿主适配**（Claude Code、Codex `app-server`、ACP 全家族 Copilot/Cursor/Kimi/Kiro/Trae/Generic、OpenCode `serve` HTTP/SSE、OMP、Custom Providers & Profiles，含各自模型探测、模式切换、权限审批与本地历史会话导入恢复）
-- [x] `issues/2026-10-19-x-terminal-vt-hooks-and-shell-integration.md` — **Issue 002：终端 VT 屏幕快照、Input Mode 重放、Shell Integration 与 Agent Hooks 自动安装**（服务端 VT Cell 矩阵快照 `0x04`、模式恢复、`zsh`/`bash`/`pwsh` 脚本注入、`pi`/`claude`/`codex`/`opencode` 终端活动 Hooks 安装与 `/api/terminal-activity` 闭环）
-- [x] `issues/2026-10-19-x-file-watcher-rewind-search-and-sync.md` — **Issue 003：文件/Git 实时监听推送、Agent Rewind 快照回滚、历史全文搜索分页与目录同步**（后台 Watcher 主动推送 `fs.file.update`/`checkout_diff_update`/`workspace_update`、大文件二进制流与高亮、`directorySync`、Rewind 对话与代码回滚、`searchQuery` 全文检索与游标分页）
-- [x] `issues/2026-10-19-x-multi-forge-auto-archive-setup-and-naming.md` — **Issue 004：多 Forge（GitHub/GitLab/Gitea）、PR 自动归档、Workspace Setup 脚本与 AI 自动命名**（`glab`/`tea`/REST 适配、PR Timeline 与 Check 详情、Merged PR 自动归档、Worktree `setup` 脚本流式执行、`metadataGeneration` 自动分支与标题生成）
-- [x] `issues/2026-10-19-x-service-proxy-tunnels-quotas-skills-and-push.md` — **Issue 005：Service Proxy、TCP Tunnels、8 厂商 Quota Fetcher、Skills 事务同步（含 `skillTargets`）与 Web Push RFC 8291 投递**（子域名反向代理、脚本健康监控、WebSocket/TCP 端口隧道、8 厂商实时用量抓取、Skills SHA-256 事务同步与 `agents|claude` 目标选择、RFC 8291 `aes128gcm` 加密推送、Bearer 密码鉴权与语义化权限、Hub 协议与自更新）
-- [x] `issues/2026-10-19-x-cli-interactive-qr-ssh-and-relay-cutover.md`
-- [ ] `issues/2026-10-20-o-go-browser-e2e-parity-batch.md`
-- [ ] `issues/2026-10-20-o-e2e-harness-on-go-daemon.md` — **E2E 套件换 Go daemon 宿主**（config.json 嵌套结构、CORS、`BYSPACE_DISABLE_HOME_WORKSPACE`、`project.create_directory` 字段名、label 增量同步；`directory_suggestions` 的模糊搜索仍未对齐） — **真机浏览器对齐修复**（流式时序、轮次存活、思考档位、Chief 置顶、多模态图片透传） — **Issue 006：CLI 交互式 `attach`、终端二维码、`onboard`/`hooks`、`ssh://` 隧道、统一格式化输出与 Relay 切流代理**（流式终端附着、ASCII QR 码渲染、SSH 自动端口转发、`--json/--yaml/--quiet` 表格渲染器、`BYSPACE_RELAY_UPSTREAM` 切流代理）
+每一项的验收结论写在该 Issue 的「验收与关闭」章节里。
 
----
+- [x] `issues/2026-10-19-x-agent-providers-full-parity.md` — **Issue 001：全 Agent 客户端宿主适配**（Claude Code、Codex `app-server`、ACP 全家族、OpenCode、OMP、Custom Providers；含模型探测、模式切换、权限审批、本地历史导入恢复）。审计补了四处：omp 收到 pi 的 flag 会立刻退出、Claude 子代理混进主时间线且 Task 分支漏了广播、Codex 用量恒 nil、Codex `Steer` 未走 `turn/steer`。
+- [x] `issues/2026-10-19-x-terminal-vt-hooks-and-shell-integration.md` — **Issue 002：终端 VT 快照、Input Mode 重放、Shell Integration、Agent Hooks**。VT 网格与恢复三模式交付；hook 安装只做了 pi（claude/codex/opencode 的配置改写未做）。
+- [x] `issues/2026-10-19-x-file-watcher-rewind-search-and-sync.md` — **Issue 003：文件/Git 监听推送、Rewind、全文搜索**。补了三处：订阅轮询从未启动、每秒读整个文件算 revision、rewind 只截断内存时间线（pi 的树导航是扩展不是 RPC）。目录同步 DROPPED。
+- [x] `issues/2026-10-19-x-multi-forge-auto-archive-setup-and-naming.md` — **Issue 004：多 Forge、PR 自动归档、Setup、AI 命名**。补了合并就绪校验与 forge 精确 host 匹配（此前按 URL 子串判断，`gitlab-mirror` 会被判成 GitLab）。
+- [~] `issues/2026-10-19-x-service-proxy-tunnels-quotas-skills-and-push.md` — **Issue 005：Web Push / Skills 事务同步 / Quota 框架已交付；Service Proxy 与 Tunnels 未做，已转 DROPPED/MISSING 并写明条件**。Quota 只实现了 `codex`/`zai`，其余 6 家需要真实凭据。
+- [x] `issues/2026-10-19-x-cli-interactive-qr-ssh-and-relay-cutover.md` — **Issue 006：CLI 交互式能力**。`attach`、真 QR、`onboard`/`hooks`、统一输出层、Relay 切流全部交付；`ssh://` 隧道 DROPPED（需第二台机器）。审计补了 `agent mode`（此前被静默路由到 `agent update`）与 `daemon install-service` 三件套。
+- [x] `issues/2026-10-20-x-e2e-harness-on-go-daemon.md` — **Issue 007：E2E 套件换 Go daemon 宿主**。186 个 spec 一行未改，切换后抓出 config.json 层级、`parentPath` 字段名、label 增量同步三个缺陷。
+- [x] `issues/2026-10-20-x-go-browser-e2e-parity-batch.md` — **Issue 008：真机浏览器对齐修复**。流式时序、轮次存活、思考档位、Chief 置顶、多模态图片透传。`audit:browser` 现稳定 10/10。
+- [x] `issues/2026-10-20-x-line-by-line-node-audit.md` — **Issue 009：逐文件审计**。512/512 有结论；未完成项集中在 [`issues/audit-log.md`](issues/audit-log.md) 的 MISSING 表里，每条带阻塞条件。
 
-## 关闭条件与合并候选
+## 验收现状（2026-10-21）
 
-- **关闭条件**：上述 6 个所属 Issue 全部交付并通过验证（`go test ./...`、`WSOutboundMessageSchema` 校验、真实浏览器与 CLI 端到端实测），不存在任何“Node 版能做而 Go 版做不了”的功能缺口。
-- **毕业回写**：Epic 关闭时更新 `docs/architecture.md` 与 `byissue/spec/` 中关于后端宿主与构建分发的描述。
+**9 个所属 Issue：8 个交付，1 个部分交付（005）。**
+
+机器检查全绿：`go test ./...` 通过；`npm run audit` 出站 `MISSING 0 / OPTIONAL 0 / NEVER_SENT 0`；
+浏览器检查 10/10；入站字段缺口 31 条（全部属未实现的子系统，等于既定基线）。
+
+## 未完成项（各自独立 Issue，不再挂在本 Epic 下）
+
+| Issue                                                                                                                                   | 缺什么                                         | 阻塞条件                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------- |
+| [`issues/2026-10-21-o-go-service-proxy-and-script-preview.md`](../../../issues/2026-10-21-o-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL | 需要先定主机名方案（DNS 泛解析 vs 路径前缀） |
+| [`issues/2026-10-21-o-go-tcp-tunnels.md`](../../../issues/2026-10-21-o-go-tcp-tunnels.md)                                               | TCP Tunnels                                    | **需要第二台机器**才能验证，盲写风险高于收益 |
+| [`issues/2026-10-21-o-go-plugin-runtime-and-hub.md`](../../../issues/2026-10-21-o-go-plugin-runtime-and-hub.md)                         | plugin 运行时与 hub 远程控制                   | 需要沙箱设计与身份模型                       |
+| [`issues/2026-10-21-o-go-quota-fetcher-six-vendors.md`](../../../issues/2026-10-21-o-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                | **需要真实凭据**才能验证数字对不对           |
+| [`issues/2026-10-21-o-go-agent-hook-install-other-providers.md`](../../../issues/2026-10-21-o-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**         | 无硬阻塞，只是未做（shim 已就绪）            |
+
+`server_info.features` 里这五项对应的开关本轮已全部改为 `false`——此前声明为 `true`，
+客户端会渲染入口而背后什么都没有。`TestDeclaredFeaturesAreImplemented` 挡住回退。
+
+## Epic 关闭条件
+
+- ~~9 个所属 Issue 交付~~：8 个已交付，005 的剩余部分转成上面 5 个独立 Issue。
+- **本 Epic 关闭**，剩余工作由那 5 个 Issue 承接。
+- **毕业回写**：`docs/architecture.md` 与 `byissue/spec/` 中关于后端宿主与构建分发的描述，
+  在 Go 转正（合入 main、切换发布流水线）时更新——那一步尚未发生，因此本次不回写。
 
 ## 沉淀的方法论
 

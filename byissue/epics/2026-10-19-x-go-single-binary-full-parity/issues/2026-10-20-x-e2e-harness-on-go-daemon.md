@@ -7,7 +7,7 @@ created: 2026-10-20
 
 # 把 Playwright E2E 套件的 daemon 宿主从 Node 换到 Go 二进制
 
-归属 Epic：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
+归属 Epic：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
 
 ## 目标与范围
 
@@ -165,3 +165,19 @@ Node 走 `findOrCreateProjectForDirectory`（只建项目），Go 走 `EnsureWor
 - `workspace-labels` 剩余 2 个用例的 picker 渲染。
 - `go-parity-audit` 报的 48 条入站字段缺口，主要集中在 `hub.*`（未实现）、`plugin.*`（无运行时）、
   以及若干请求的可选能力字段。
+
+## 验收与关闭（2026-10-21）
+
+**验收结论：交付。** 186 个 Playwright spec 的 daemon 启动点从 Node supervisor 换成
+`bin/byspace serve`，spec 一行没改。补了 CORS 与 `BYSPACE_DISABLE_HOME_WORKSPACE`。
+
+切换后立刻抓出三个只有跑真实套件才会暴露的缺陷：
+
+1. `config.json` 读错层级（`{"version":1,"daemon":{...}}`），本机 `appendSystemPrompt: "永远使用中文回复"`
+   与 `cors.allowedOrigins` 全被静默忽略——这也解释了 Go daemon 下回复语言不受控。
+2. `project.create_directory` 读 `parentDirectory` 而协议是 `parentPath`，目录被建到 daemon
+   自己的工作目录下。
+3. `workspace.label.*` 缺增量同步，标签改动只在本端可见。
+
+验证：`add-project-flow` 8/8、`sidebar-project-grouping` 6/9、`sessions-empty` +
+`settings-navigation` + `workspace-lifecycle` 18/18。
