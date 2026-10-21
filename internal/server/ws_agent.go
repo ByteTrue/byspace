@@ -807,6 +807,14 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 
 func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.StoredSchedule) (schedule.ExecutionResult, error) {
 	if sched.Target.Type == "agent" && sched.Target.AgentID != "" {
+		// A target that no longer exists is permanent: the schedule must complete rather than
+		// fail on every tick until it burns through its budget.
+		record, loadErr := s.store.GetAgent(sched.Target.AgentID)
+		if loadErr != nil || record == nil || record.ArchivedAt != nil {
+			return schedule.ExecutionResult{}, schedule.TargetGoneError{
+				Reason: "target agent " + sched.Target.AgentID + " was deleted or archived",
+			}
+		}
 		mp, err := s.ensureAgentLoaded(sched.Target.AgentID)
 		if err != nil {
 			return schedule.ExecutionResult{}, err
@@ -826,6 +834,13 @@ func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.Store
 	cwd, _ := os.Getwd()
 	if sched.Target.Config != nil && sched.Target.Config.Cwd != "" {
 		cwd = sched.Target.Config.Cwd
+	}
+	// The same permanence rule as a deleted agent: a cwd that no longer exists cannot host an
+	// agent, and retrying every tick fails identically.
+	if info, statErr := os.Stat(cwd); statErr != nil || !info.IsDir() {
+		return schedule.ExecutionResult{}, schedule.TargetGoneError{
+			Reason: "target directory " + cwd + " no longer exists",
+		}
 	}
 	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
 	if err != nil {
