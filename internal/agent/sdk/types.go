@@ -170,6 +170,15 @@ type SubagentDescriptor struct {
 	UpdatedAt        string  `json:"updatedAt"`
 	ToolCallID       *string `json:"toolCallId"`
 	Cwd              *string `json:"cwd,omitempty"`
+	// Subtitle is the provider-formatted one-liner shown under the title: model, effort, token
+	// usage. Providers choose what belongs in it and clients must not parse it.
+	Subtitle *string `json:"subtitle,omitempty"`
+	// Model, Effort and TotalTokens are the raw facts a provider's own subtitle builder uses.
+	// Keeping them means a subtitle can be rebuilt when a later event fills in a value that was
+	// missing when the first upsert was sent.
+	Model       *string `json:"-"`
+	Effort      *string `json:"-"`
+	TotalTokens *int64  `json:"-"`
 
 	// Internal pointer fields used for timeline recovery
 	SessionID   string `json:"-"`

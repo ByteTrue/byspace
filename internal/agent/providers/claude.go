@@ -188,7 +188,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 								}
 							}
 							tcCopy := callID
-							s.subagents[callID] = sdk.SubagentDescriptor{
+							descriptor := sdk.SubagentDescriptor{
 								ID:          callID,
 								Provider:    "claude",
 								Status:      "running",
@@ -198,6 +198,14 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 								CreatedAt:   now,
 								UpdatedAt:   now,
 							}
+							sdk.RefreshSubagentSubtitle(&descriptor)
+							s.subagents[callID] = descriptor
+							extraEvents = append(extraEvents, map[string]any{
+								"type":      "agent.provider_subagents.update",
+								"kind":      "upsert",
+								"subagent":  descriptor,
+								"updatedAt": now,
+							})
 						}
 					}
 				}
@@ -755,6 +763,9 @@ func (s *ClaudeSession) markSubagentActiveLocked(parentToolUseID string) *sdk.Su
 	if sub.Status != "running" {
 		sub.Status = "running"
 	}
+	// The subtitle is rebuilt on every activity so it fills in as the subagent reports its model
+	// and token usage; the first upsert only knows the title.
+	sdk.RefreshSubagentSubtitle(&sub)
 	s.subagents[parentToolUseID] = sub
 	descriptor := sub
 	return &descriptor

@@ -162,3 +162,37 @@ func TestClaudeImageBlockSkipsUnusable(t *testing.T) {
 		t.Fatal("without a home directory the image must be skipped")
 	}
 }
+
+// A Task call must register the subagent: without the map entry and the broadcast, the subagent
+// never appears in the Subagents panel at all.
+func TestClaudeTaskRegistersSubagent(t *testing.T) {
+	sess := &ClaudeSession{
+		status:             "running",
+		toolIndexByID:      map[string]int{},
+		toolArgsByID:       map[string]any{},
+		pendingPermissions: map[string]map[string]any{},
+		subagents:          map[string]sdk.SubagentDescriptor{},
+		eventSubscribers:   map[int]func(map[string]any){},
+	}
+	sess.handleRawEvent(map[string]any{
+		"type": "assistant",
+		"message": map[string]any{"content": []any{
+			map[string]any{"type": "tool_use", "id": "task_9", "name": "Task",
+				"input": map[string]any{"description": "audit the repo", "prompt": "look around"}},
+		}},
+	})
+
+	sess.mu.Lock()
+	sub, ok := sess.subagents["task_9"]
+	sess.mu.Unlock()
+	if !ok {
+		t.Fatal("the Task call did not register a subagent")
+	}
+	if sub.Title == nil || *sub.Title != "audit the repo" {
+		t.Fatalf("title = %v", sub.Title)
+	}
+	// The subtitle is what the panel renders under the title.
+	if sub.Subtitle == nil || *sub.Subtitle != "audit the repo" {
+		t.Fatalf("subtitle = %v", sub.Subtitle)
+	}
+}
