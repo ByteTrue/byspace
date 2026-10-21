@@ -32,23 +32,27 @@ type ProjectRecord struct {
 
 // WorkspaceRecord mirrors PersistedWorkspaceRecord in packages/server/src/server/workspace-registry.ts.
 type WorkspaceRecord struct {
-	WorkspaceID                  string   `json:"workspaceId"`
-	ProjectID                    string   `json:"projectId"`
-	Cwd                          string   `json:"cwd"`
-	Kind                         string   `json:"kind"` // "local_checkout" | "worktree" | "directory"
-	DisplayName                  string   `json:"displayName"`
-	Title                        *string  `json:"title"`
-	Branch                       *string  `json:"branch"`
-	WorktreeRoot                 *string  `json:"worktreeRoot"`
-	BaseBranch                   *string  `json:"baseBranch"`
-	IsBySpaceOwnedWorktree       bool     `json:"isBySpaceOwnedWorktree"`
-	MainRepoRoot                 *string  `json:"mainRepoRoot"`
-	CreatedAt                    string   `json:"createdAt"`
-	UpdatedAt                    string   `json:"updatedAt"`
-	ArchivedAt                   *string  `json:"archivedAt"`
-	AutoArchivedChangeRequestURL *string  `json:"autoArchivedChangeRequestUrl"`
-	PinnedAt                     *string  `json:"pinnedAt"`
-	Labels                       []string `json:"labels,omitempty"`
+	WorkspaceID string `json:"workspaceId"`
+	ProjectID   string `json:"projectId"`
+	Cwd         string `json:"cwd"`
+	Kind        string `json:"kind"` // "local_checkout" | "worktree" | "directory"
+	// UntrustedSource marks a workspace checked out from someone else's change request. Its
+	// byspace.json belongs to that author, so setup and scripts stay blocked until the user
+	// explicitly allows them (`workspace.setup` clears it).
+	UntrustedSource              *UntrustedSource `json:"untrustedSource,omitempty"`
+	DisplayName                  string           `json:"displayName"`
+	Title                        *string          `json:"title"`
+	Branch                       *string          `json:"branch"`
+	WorktreeRoot                 *string          `json:"worktreeRoot"`
+	BaseBranch                   *string          `json:"baseBranch"`
+	IsBySpaceOwnedWorktree       bool             `json:"isBySpaceOwnedWorktree"`
+	MainRepoRoot                 *string          `json:"mainRepoRoot"`
+	CreatedAt                    string           `json:"createdAt"`
+	UpdatedAt                    string           `json:"updatedAt"`
+	ArchivedAt                   *string          `json:"archivedAt"`
+	AutoArchivedChangeRequestURL *string          `json:"autoArchivedChangeRequestUrl"`
+	PinnedAt                     *string          `json:"pinnedAt"`
+	Labels                       []string         `json:"labels,omitempty"`
 }
 
 // AgentRuntimeInfo mirrors runtimeInfo in StoredAgentRecord.
@@ -1243,4 +1247,23 @@ func (s *Store) RebuildWorkspaceRegistryFromAgents() (int, error) {
 		created++
 	}
 	return created, nil
+}
+
+// UntrustedSource records the change request a workspace was checked out from.
+//
+// It lives here rather than in the workspace package because the record is what persists it, and
+// the workspace package already depends on the store.
+type UntrustedSource struct {
+	Kind           string `json:"kind"` // "change_request"
+	Forge          string `json:"forge"`
+	Number         int    `json:"number"`
+	HeadRepository string `json:"headRepository"`
+}
+
+// IsBlocked reports whether automation must be refused for this source.
+//
+// A missing head repository means the change request came from this repository, which the user
+// already trusts — only a cross-repository checkout blocks.
+func (s *UntrustedSource) IsBlocked() bool {
+	return s != nil && s.Kind == "change_request" && s.HeadRepository != ""
 }

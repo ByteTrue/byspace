@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
 	"net"
@@ -71,6 +72,15 @@ func (s *Server) handleWorkspaceSetupProject(ctx context.Context, sink frameSink
 		return
 	}
 
+	// An explicit setup request is the user's consent: they are asking for this worktree to be
+	// prepared, which is exactly the action the gate was waiting for ("Run setup to allow them").
+	// Clearing the source makes the same request work from here on.
+	if target.UntrustedSource != nil {
+		target.UntrustedSource = nil
+		target.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		_ = s.store.UpsertWorkspace(*target)
+	}
+
 	commands := workspace.ReadSetupCommands(target.Cwd)
 	if len(commands) == 0 {
 		_ = sendSessionMsg(ctx, sink, "workspace.setup.run.response", map[string]any{
@@ -97,6 +107,23 @@ func (s *Server) handleWorkspaceSetupProject(ctx context.Context, sink frameSink
 }
 
 func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []string) {
+	// Never run a project's setup commands in a worktree checked out from someone else's change
+	// request: that byspace.json belongs to the author, and running it is running their code.
+	if blocked, reason := s.automationBlocked(workspaceID); blocked {
+		snap := &setupSnapshot{
+			WorkspaceID:  workspaceID,
+			Status:       "blocked",
+			WorktreePath: cwd,
+			BranchName:   branch,
+			Error:        &reason,
+		}
+		s.mu.Lock()
+		s.setupSnapshots[workspaceID] = snap
+		s.mu.Unlock()
+		s.broadcastSetupProgress(snap)
+		return
+	}
+
 	snap := &setupSnapshot{
 		WorkspaceID:  workspaceID,
 		Status:       "running",
@@ -312,6 +339,12 @@ func (s *Server) scriptKey(workspaceID, name string) string {
 // startWorkspaceScript launches a `byspace.json` script in its own shell and records it so
 // later status polls and `script_status_update` broadcasts have something to report.
 func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name string) (map[string]any, error) {
+	// Same gate as setup: the script command also comes from the change request author's
+	// byspace.json, so it is their code.
+	if blocked, reason := s.automationBlocked(workspaceID); blocked {
+		return nil, errors.New(reason)
+	}
+
 	workspaces, _ := s.store.ListWorkspaces()
 	var cwd string
 	for _, ws := range workspaces {
@@ -554,4 +587,25 @@ func isPortOpen(port int) bool {
 	}
 	_ = conn.Close()
 	return true
+}
+
+// automationBlocked reports whether a workspace refuses automation, with the message to show.
+//
+// The reason names the change request so the user knows what they are trusting if they allow it:
+// "Scripts are blocked for PR #123 from someone/fork" is actionable, "blocked" is not.
+func (s *Server) automationBlocked(workspaceID string) (bool, string) {
+	workspaces, err := s.store.ListWorkspaces()
+	if err != nil {
+		return false, ""
+	}
+	for _, ws := range workspaces {
+		if ws.WorkspaceID != workspaceID {
+			continue
+		}
+		if !ws.UntrustedSource.IsBlocked() {
+			return false, ""
+		}
+		return true, workspace.AutomationBlockedError{Source: *ws.UntrustedSource}.Error()
+	}
+	return false, ""
 }

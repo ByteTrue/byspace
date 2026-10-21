@@ -485,6 +485,17 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		CreatedAt:              now,
 		UpdatedAt:              now,
 	}
+	// A worktree checked out from someone else's change request carries that author's
+	// byspace.json. Remember where it came from so setup and scripts stay blocked until the user
+	// explicitly allows them.
+	if intent.Kind == workspace.IntentCheckoutChangeRequest && intent.HeadRepository != "" {
+		wsRec.UntrustedSource = &store.UntrustedSource{
+			Kind:           "change_request",
+			Forge:          intent.Forge,
+			Number:         intent.ChangeRequestNumber,
+			HeadRepository: intent.HeadRepository,
+		}
+	}
 	_ = s.store.UpsertWorkspace(wsRec)
 	s.broadcastWorkspaceUpsert(wsRec, prj)
 	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)
