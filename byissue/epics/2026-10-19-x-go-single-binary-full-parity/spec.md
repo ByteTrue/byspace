@@ -84,19 +84,34 @@ Go 侧保留 `plugin.*` 与 `hub.*` 的**解析**（wire 兼容面：旧客户�
 | Issue                                                                                                                                   | 缺什么                                          | 阻塞条件                                                             |
 | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
 | [`issues/2026-10-21-o-go-service-proxy-and-script-preview.md`](../../../issues/2026-10-21-o-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL  | 需要先定主机名方案（DNS 泛解析 vs 路径前缀）                         |
-| [`issues/2026-10-21-o-go-tunnel-parity.md`](../../../issues/2026-10-21-o-go-tunnel-parity.md)                                           | **tunnel 能力回填**——已交付过的功能，不是新功能 | 无硬阻塞：062 已真双机验证；本地 relay 三层 + WSL 单机等价形态即可验 |
+| [`issues/2026-10-22-x-tunnel-port.md`](2026-10-22-x-tunnel-port.md)                                                                     | **tunnel 能力回填**——已交付过的功能，不是新功能 | 无硬阻塞：062 已真双机验证；本地 relay 三层 + WSL 单机等价形态即可验 |
 | [`issues/2026-10-21-o-go-quota-fetcher-six-vendors.md`](../../../issues/2026-10-21-o-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                 | **需要真实凭据**才能验证数字对不对                                   |
 | [`issues/2026-10-21-o-go-agent-hook-install-other-providers.md`](../../../issues/2026-10-21-o-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**          | 无硬阻塞，只是未做（shim 已就绪）                                    |
 
 `server_info.features` 里这五项对应的开关本轮已全部改为 `false`——此前声明为 `true`，
 客户端会渲染入口而背后什么都没有。`TestDeclaredFeaturesAreImplemented` 挡住回退。
 
-## Epic 关闭条件
+## 关闭记录（2026-10-21）
 
-- ~~9 个所属 Issue 交付~~：8 个已交付，005 的剩余部分转成上面 5 个独立 Issue。
-- **本 Epic 关闭**，剩余工作由那 5 个 Issue 承接。
-- **毕业回写**：`docs/architecture.md` 与 `byissue/spec/` 中关于后端宿主与构建分发的描述，
-  在 Go 转正（合入 main、切换发布流水线）时更新——那一步尚未发生，因此本次不回写。
+**本 Epic 关闭，但它的关闭条件是错的，必须写在最前面。**
+
+原关闭条件写的是「不存在任何『Node 版能做而 Go 版做不了』的功能缺口」。实际交付时仍有约
+**4700 行、6 个子系统**没有移植（service-proxy 1513、tunnel 777、quota 6 家 ~1500、
+agent-hooks 3 家 448、directory-sync 315、self-update 138）。
+
+更严重的是判定方法：那个 Issue 009 做的是**只读审计**——读每个 Node 文件、判断 Go 有没有
+对应物、给一个结论，然后对缺失项写一个「阻塞条件」就过去了。而 owner 的要求一直是
+「**实现**所有 Node 功能」。把「记录成 MISSING」当成「已处理」，是这个 Epic 的根本错误。
+
+`sleep` 一类的措辞也误导过：六项未移植里只有 quota（需要真实凭据）的理由成立，其余五项
+要么是我把自己的判断写成了 owner 的决定（「产品方向未定」），要么是拿验证条件当实现前提
+（tunnel 的「需要两台机器」，而 062 早已用 WSL 做过等价验证）。
+
+**承接**：`epics/2026-10-22-o-node-to-go-functional-port/` —— 逐个文件读、缺什么就实现什么，
+不允许以「测不了」为由跳过实现。
+
+**毕业回写**：`docs/architecture.md` 与 `byissue/spec/` 中关于后端宿主与构建分发的描述，
+在 Go 转正（合入 main、切换发布流水线）时更新——那一步尚未发生，因此本次不回写。
 
 ## 沉淀的方法论
 
