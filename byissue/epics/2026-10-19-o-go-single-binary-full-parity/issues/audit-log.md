@@ -195,7 +195,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `workspace-git-fetch.ts` | 140 | **MISSING** → 已补 | fetch 前后对比 ref 快照，判断远端分支是新增/移动/删除。没有它，pull 后被 prune 的分支仍留在前端的选择器里。已实现 `ReadRefs`/`DiffRefs`/`FetchRemote`（本地 ref 变化单独报告，不与「远端分支变了」混为一谈），接入 `checkout_pull_request`。**顺带修了一个更大的问题**：`runGit` 对所有命令统一 5 秒超时，`git pull`/`fetch` 在真实网络下必然超时并报成 context deadline；现在网络动词 120 秒、本地 10 秒，并强制 `GIT_TERMINAL_PROMPT=0`（否则需要凭据的 fetch 会一直等人回答 prompt）。真实 clone + 上游建分支验证：`origin/<branch>` 被正确报为 added。 |
 | `workspace-service-port-allocator.ts` | 129 | **PARTIAL** → 已补 | 只有「任意空闲端口」一种策略。另两种各有非用不可的理由：`portRange` 因为防火墙规则/容器端口映射只允许一个窗口，`portScript` 因为外部服务已经对外声明了端口。已实现 `ParsePortRange`、`AllocateFromRange`（窗口耗尽时报错而不是逃出窗口）、`AllocatePortFromScript`（输出不可信、要进 bind，做了长度与范围校验）。端到端：portRange 得 43000、portScript 得 43500，两个值都真的进了脚本环境。 |
 
-### 未审计（本批剩余 30 文件）
+| `relay-runtime.ts` | 106 | **MISSING** → 已补 | relay 只在 CLI 传 `--relay` 时启动，**完全不读 config 的 `daemon.relay.*`**；而 `daemon.config.reload` 把这个路径报成「已应用」——用户去设置页打开 relay，什么都没发生，界面却说生效了。已实现 `relayRuntime`：启动/停止/改地址，**地址没变就不重连**（否则每次保存设置都会把手机上的连接踢掉），退避到 30 秒；启动时读 config、每轮 reload 后应用；`--relay` 作为覆盖优先于 config。端到端：config 改为 enabled 后 reload 正确报 `daemon.relay.enabled`，且 relay 被真正启动。 |
+| `worktree-core.ts` | 183 | **PARTIAL** → 已补公共规则 | 核心逻辑（解析 intent + 建 worktree）已在 `worktree_intent.go` 落地。本轮补的是它依赖的 `@bytetrue/protocol/branch-slug`：`slugify`（50 字符、优先在连字符处截断）与 `validateBranchSlug`（长度、`[a-z0-9-/]`、首尾与连续连字符）。客户端在发送前会跑这套规则，daemon 不认同一套就会出现「界面能过、后端拒绝」或反之。 |
+
+### 未审计（本批剩余 28 文件）
 
 按行数排序，下一轮从这里继续：
 
