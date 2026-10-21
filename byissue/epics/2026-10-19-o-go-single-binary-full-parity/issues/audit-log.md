@@ -210,7 +210,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `script-status-projection.ts` | 325 | **PARTIAL** → 已补健康探测 | `health` 是 schema 必填字段，Go 一律发 `null`，所以界面上永远看不出 dev server 到底在不在服务。「启动了」和「正在服务」是两件事，用户对这两者的后续动作完全不同。已改为按端口探测：running 的 service 脚本若能建立 TCP 连接即 `healthy`，否则 `unhealthy`。用连接测试而不是 HTTP 请求——工作区脚本不要求说 HTTP，监听中的非 HTTP 服务也是健康的。`hostname`/`proxyUrl` 仍为空，属于未实现的反向代理。 |
 | `server-id.ts` | 83 | **PORTED** | `$BYSPACE_HOME/server-id`、`BYSPACE_SERVER_ID` 覆盖（并持久化）、9 字节 → `srv_<12 base64url>`、0600 权限，与 Node 一致。 |
 
-### 未审计（本批剩余 20 文件）
+| `workspace-automation-gate.ts` | 50 | **MISSING** → 已补 | **安全边界**：从别人的 PR 检出的 worktree 里，`byspace.json` 是那个作者写的；跑它的 setup/scripts 就是跑他的代码，而且是一次按钮触发、无确认。Node 在工作区上记 `untrustedSource` 并对这类工作区拒绝自动化，Go 无条件执行。已实现：记录来源、setup 与脚本启动都拦截、提示语点名「PR #42 from attacker/fork. Run setup to allow them.」（GitLab 用 MR），setup 快照记为 `blocked`。显式 `workspace.setup.run` 即用户授权，清掉标记后照常执行。同仓库的 PR 不拦（代码本来就在用户手里）。 |
+| `package-version.ts` / `daemon-keypair.ts` / `server-id.ts` / `exports.ts` / `json-utils.ts` | 76/69/83/82/61 | **PORTED 或 N/A** | `package-version` 是 Node 从 `package.json` 往上找版本的机制，Go 用 ldflags 编译期注入（`-X main.version`），架构差异，N/A。`daemon-keypair` 已有等价实现（v2 格式、0600、读失败重新生成）。`server-id` 已核对一致。`exports.ts` 是桶文件，`json-utils.ts` 是工具函数，Go 用标准库。 |
+
+### 未审计（本批剩余 14 文件）
 
 按行数排序，下一轮从这里继续：
 
