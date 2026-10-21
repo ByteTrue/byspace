@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ type fileSubscription struct {
 	cwd         string
 	path        string
 	lastVersion string
+	// stamp is the file's mtime+size at the last poll. Reading a file to compute its revision
+	// once a second is affordable for a source file and ruinous for a 10 MB log; the stamp is a
+	// stat, and only a change in it is worth a read.
+	stamp string
 }
 
 type diffSubscription struct {
@@ -243,13 +248,32 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 	s.mu.Unlock()
 
 	for _, fs := range fSubs {
+		full := filepath.Join(fs.cwd, fs.path)
+		info, statErr := os.Stat(full)
+		if statErr != nil {
+			continue
+		}
+		stamp := fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+		if stamp == fs.stamp {
+			// Unchanged since the last poll; no read needed.
+			continue
+		}
 		fc, err := workspace.ReadFile(fs.cwd, fs.path)
 		if err != nil || fc.Revision == fs.lastVersion {
+			// Same revision despite a new stamp (a touched file, or a write that was undone):
+			// remember the stamp so the next poll does not read it again.
+			s.mu.Lock()
+			if cur, ok := s.fileSubs[fs.id]; ok {
+				cur.stamp = stamp
+				s.fileSubs[fs.id] = cur
+			}
+			s.mu.Unlock()
 			continue
 		}
 		s.mu.Lock()
 		if cur, ok := s.fileSubs[fs.id]; ok {
 			cur.lastVersion = fc.Revision
+			cur.stamp = stamp
 			s.fileSubs[fs.id] = cur
 		}
 		s.mu.Unlock()
