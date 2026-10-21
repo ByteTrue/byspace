@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1374,4 +1375,48 @@ func (s *Store) UnarchiveAgent(agentID string) (*AgentRecord, error) {
 		return nil, err
 	}
 	return &updated, nil
+}
+
+// ListByProviderSession finds agents sharing a provider session handle.
+//
+// Ported from agent-storage's listByProviderSession. A provider session file can back more than one
+// agent record — a fork, or a resume that created a second record — and importing a session has to know
+// about all of them or it will offer a session that is already in use.
+func (s *Store) ListByProviderSession(provider, sessionID string) ([]AgentRecord, error) {
+	agents, err := s.ListAgents()
+	if err != nil {
+		return nil, err
+	}
+	trimmedProvider := strings.TrimSpace(provider)
+	trimmedSession := strings.TrimSpace(sessionID)
+	out := make([]AgentRecord, 0, 1)
+	for _, agent := range agents {
+		if agent.Persistence == nil {
+			continue
+		}
+		if trimmedProvider != "" && agent.Persistence.Provider != trimmedProvider {
+			continue
+		}
+		handle := strings.TrimSpace(agent.Persistence.SessionID)
+		if handle == trimmedSession || fmt.Sprint(agent.Persistence.NativeHandle) == trimmedSession {
+			out = append(out, agent)
+		}
+	}
+	return out, nil
+}
+
+// ListByWorkspace finds the agents in a workspace.
+func (s *Store) ListByWorkspace(workspaceID string) ([]AgentRecord, error) {
+	agents, err := s.ListAgents()
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(workspaceID)
+	out := make([]AgentRecord, 0, 4)
+	for _, agent := range agents {
+		if agent.WorkspaceID == trimmed {
+			out = append(out, agent)
+		}
+	}
+	return out, nil
 }
