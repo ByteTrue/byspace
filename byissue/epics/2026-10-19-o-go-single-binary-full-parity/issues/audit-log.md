@@ -885,6 +885,20 @@ Node 用 `fs.watch`/inotify 事件驱动（`linux.ts` 里的 `MAX_WATCHED_DIRECT
 - **`countAffectedWorkspaces` / `delete.inspect`**：`ws_project.go:722` 有实现，删除前能告诉用户影响多少个工作区
 - **`headSeq` 递增 + 广播**：此前修过（前端要求 `update.seq === cursor.afterSeq + 1`，固定的 `gen_1`/`headSeq` 会让标签改动只在本端可见）
 
+### server/utils/diff-highlighter.ts | 427 行 | **PARTIAL → 已补行长上限**
+
+`MAX_DIFF_HIGHLIGHT_LINE_CHARS = 10000` 是这条文件存在的理由：压缩过的 bundle、单行 JSON 都是**一行几十万字符**，高亮它会把渲染器卡住，而且没人会读那么长的一行。Go 没有上限。
+
+已加 `MaxDiffLineChars` 与 `clampDiffLine`：超长行截断并在末尾标记 `… (truncated)`——标记必须可见，因为对比两个压缩文件的用户需要知道自己没看到整行。截断回退到 rune 边界，字节切分会印出替换字符。
+
+**仍缺**：服务端语法高亮（`tokens` 字段）。协议里 `HighlightToken` 是 optional，Go 走前端高亮，行为等价但不是同一套实现。
+
+### server/websocket/runtime-metrics.ts | 457 行（含 physical-socket / encrypted-relay-socket）| **PARTIAL**
+
+Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloResumed`、`validationFailed`、`originRejected`、`hostRejected`、`binaryBeforeHelloRejected` 等），只写日志不进协议。Go 侧这些事件都在（hello 超时、origin/host 拒绝、二进制在 hello 前拒绝），但没有汇总计数器——诊断时靠逐条日志。属可观测性增强，不是能力缺口。
+
+`physical-socket.ts` / `encrypted-relay-socket.ts` 的抽象由 Go 的 `frameSink` 接口 + `internal/e2ee` 承担（同一个 handler 同时服务直连与 E2EE 中继）。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
