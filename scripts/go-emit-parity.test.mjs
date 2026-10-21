@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { auditFromSources, parseSchemas, runAudit } from "./go-emit-parity.mjs";
+import { auditFromSources, parseSchemas } from "./go-emit-parity.mjs";
 
 // The audit is only useful if its parser agrees with the protocol file. A silently empty
 // schema would report "0 problems" for a broken daemon, which is worse than no check.

@@ -711,7 +711,7 @@ export function runAudit({ schemas, members, emits, structTags }) {
 }
 
 /** Convenience entry used by tests: parse the protocol file and scan one Go source string. */
-export function auditFromSources({ protocolSource, goSource, root = ROOT }) {
+export function auditFromSources({ protocolSource, goSource }) {
   const schemas = parseSchemas(protocolSource);
   // The emit scanner walks files; for a snippet, stand in with an index-free scan of the text.
   const emits = goEmitSitesFromText(goSource);
