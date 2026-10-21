@@ -184,6 +184,61 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "deleted %s\n", schedID)
 		return nil
 
+	case "update":
+		// Without this a schedule's prompt or cadence could only be changed by deleting and
+		// recreating it, which loses its run history.
+		fs := flag.NewFlagSet("schedule update", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		cronExpr := fs.String("cron", "", "cron expression")
+		everyMs := fs.Int64("every", 0, "interval in ms when --cron is not set")
+		name := fs.String("name", "", "schedule name")
+		maxRuns := fs.Int("max-runs", 0, "maximum number of runs (0 = unlimited)")
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() < 1 {
+			return errors.New("usage: byspace schedule update <schedule-id> [flags]")
+		}
+		scheduleID := fs.Arg(0)
+		payload := map[string]any{}
+		if prompt := strings.TrimSpace(strings.Join(fs.Args()[1:], " ")); prompt != "" {
+			payload["prompt"] = prompt
+		}
+		if *cronExpr != "" {
+			payload["cadence"] = map[string]any{"type": "cron", "expression": *cronExpr}
+		} else if *everyMs > 0 {
+			payload["cadence"] = map[string]any{"type": "every", "everyMs": *everyMs}
+		}
+		if *name != "" {
+			payload["name"] = *name
+		}
+		if *maxRuns > 0 {
+			payload["maxRuns"] = *maxRuns
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type": "schedule/update", "requestId": "cli_schedule_update",
+			"scheduleId": scheduleID, "patch": payload,
+		}); err != nil {
+			return err
+		}
+		resp, err := waitSessionResp(ctx, ws, "schedule/update/response", "")
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeJSON(stdout, resp)
+		}
+		fmt.Fprintf(stdout, "updated %s\n", scheduleID)
+		return nil
+
 	case "inspect", "logs", "pause", "resume", "run-once":
 		fs := flag.NewFlagSet("schedule "+sub, flag.ContinueOnError)
 		addr := fs.String("addr", defaultListenAddr(), "daemon address")

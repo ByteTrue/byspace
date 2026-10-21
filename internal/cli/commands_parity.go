@@ -547,6 +547,37 @@ func runWorkspaceGroupCmd(args []string, stdout io.Writer) error {
 		_, err := waitSessionResp(ctx, ws, "workspace.title.set.response", "")
 		return err
 
+	case "setup":
+		// Runs the project's setup commands for a worktree. This is also the action that clears
+		// an untrusted from-a-PR workspace's block, so "Run setup to allow them" is actionable
+		// from a terminal.
+		if fs.NArg() < 1 {
+			return errors.New("usage: byspace workspace setup <workspace-id>")
+		}
+		workspaceID := fs.Arg(0)
+		if reqErr := sendSessionReq(ctx, ws, map[string]any{
+			"type":        "workspace.setup.run.request",
+			"requestId":   "cli_ws_setup",
+			"workspaceId": workspaceID,
+		}); reqErr != nil {
+			return reqErr
+		}
+		resp, respErr := waitSessionResp(ctx, ws, "workspace.setup.run.response", "")
+		if respErr != nil {
+			return respErr
+		}
+		if *asJSON {
+			b, _ := json.MarshalIndent(resp, "", "  ")
+			fmt.Fprintln(stdout, string(b))
+			return nil
+		}
+		status, _ := resp["status"].(string)
+		fmt.Fprintf(stdout, "setup %s: %s\n", workspaceID, status)
+		if failure, _ := resp["error"].(string); failure != "" {
+			return errors.New(failure)
+		}
+		return nil
+
 	case "archive":
 		if fs.NArg() < 1 {
 			return errors.New("usage: byspace workspace archive <workspace-id>")
