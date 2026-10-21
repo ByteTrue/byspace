@@ -22,6 +22,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -153,6 +154,9 @@ type Server struct {
 	relay *relayRuntime
 	// relayOverride is a --relay flag that outranks the stored config.
 	relayOverride string
+	// clientPresence is what connected clients report about themselves, used to suppress
+	// notifications for an agent the user is already looking at.
+	clientPresence []attention.ClientPresence
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -1214,12 +1218,19 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		if mp != nil && mp.session != nil {
 			_ = mp.session.Abort(ctx)
 		}
+		// buildAgentSnapshotPayload takes s.mu itself, so it must be called with the lock
+		// released — calling it inside this block deadlocks the request handler.
 		s.mu.Lock()
-		var agentSnapshot any
+		var snapshotRecord *store.AgentRecord
 		if mp2 := s.agents[req.AgentID]; mp2 != nil {
-			agentSnapshot = s.buildAgentSnapshotPayload(mp2.record)
+			rec := mp2.record
+			snapshotRecord = &rec
 		}
 		s.mu.Unlock()
+		var agentSnapshot any
+		if snapshotRecord != nil {
+			agentSnapshot = s.buildAgentSnapshotPayload(*snapshotRecord)
+		}
 		_ = sendSessionMsg(ctx, sink, "cancel_agent_response", map[string]any{
 			"requestId": req.RequestID,
 			"agentId":   req.AgentID,
@@ -2523,7 +2534,17 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			mp.record.UpdatedAt = nowStr
 			recCopy := mp.record
 			s.mu.Unlock()
+			// A finished turn is what the sidebar badge means by "this agent wants you". Only
+			// apply it when the client is not looking at this agent, which the presence policy
+			// decides — marking unconditionally would badge a conversation the user just read.
+			//
+			// Computed after unlocking: attentionIsFocused takes s.mu, and a re-entrant Lock
+			// deadlocks the provider event loop (see notes/013).
+			shouldBadge := !s.attentionIsFocused(mp.record.ID)
 			_ = s.store.UpsertAgent(recCopy)
+			if shouldBadge {
+				s.markAgentAttention(mp.record.ID, AttentionReasonFinished, nowStr)
+			}
 			go s.syncPiPersistence(mp)
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,

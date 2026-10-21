@@ -731,10 +731,34 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			AgentID   any    `json:"agentId"`
 		}
 		_ = json.Unmarshal(raw, &req)
+
+		// One id or a list; the response echoes the same shape and carries the updated
+		// snapshots so the client does not need a follow-up fetch to lose the badge.
+		var agentIDs []string
+		switch v := req.AgentID.(type) {
+		case string:
+			if trimmed := strings.TrimSpace(v); trimmed != "" {
+				agentIDs = []string{trimmed}
+			}
+		case []any:
+			for _, item := range v {
+				if str, ok := item.(string); ok && strings.TrimSpace(str) != "" {
+					agentIDs = append(agentIDs, strings.TrimSpace(str))
+				}
+			}
+		}
+
+		agentsPayload := make([]any, 0, len(agentIDs))
+		for _, id := range agentIDs {
+			s.clearAgentAttention(id)
+			if rec, err := s.store.GetAgent(id); err == nil && rec != nil {
+				agentsPayload = append(agentsPayload, s.buildAgentSnapshotPayload(*rec))
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "clear_agent_attention_response", map[string]any{
 			"requestId": req.RequestID,
 			"agentId":   req.AgentID,
-			"agents":    []any{},
+			"agents":    agentsPayload,
 		})
 
 	case "refresh_agent_request":

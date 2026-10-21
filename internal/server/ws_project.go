@@ -575,25 +575,74 @@ func (s *Server) handleWorkspaceAttention(ctx context.Context, sink frameSink, m
 			WorkspaceID string `json:"workspaceId"`
 		}
 		_ = json.Unmarshal(raw, &req)
+
+		// Flag the most recently active finished agent in this workspace. The precondition is
+		// what stops a running agent (or one already flagged) from being marked: marking either
+		// would move the timestamp forward and re-notify the user about nothing new.
+		var markedID any
+		var errText any
+		if rec, ok := s.firstMarkableAgent(req.WorkspaceID); ok {
+			if s.markAgentAttention(rec.ID, AttentionReasonFinished, "") {
+				markedID = rec.ID
+			} else {
+				errText = "Agent is no longer finished and read"
+			}
+		} else {
+			errText = "No finished agent to mark in this workspace"
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.mark_unread.response", map[string]any{
 			"requestId":     req.RequestID,
 			"workspaceId":   req.WorkspaceID,
-			"markedAgentId": nil,
-			"success":       true,
-			"error":         nil,
+			"markedAgentId": markedID,
+			"success":       markedID != nil,
+			"error":         errText,
 		})
 		return
 	}
+
 	var req struct {
 		RequestID   string `json:"requestId"`
 		WorkspaceID any    `json:"workspaceId"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	// Both a single id and a list are accepted by the protocol; normalize to one list.
+	var workspaceIDs []string
+	switch v := req.WorkspaceID.(type) {
+	case string:
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			workspaceIDs = []string{trimmed}
+		}
+	case []any:
+		for _, item := range v {
+			if str, ok := item.(string); ok && strings.TrimSpace(str) != "" {
+				workspaceIDs = append(workspaceIDs, strings.TrimSpace(str))
+			}
+		}
+	}
+
+	cleared := make([]string, 0, 4)
+	results := make([]any, 0, len(workspaceIDs))
+	for _, wsID := range workspaceIDs {
+		clearedHere := make([]string, 0, 4)
+		for _, rec := range s.workspaceAttentionCandidates(wsID) {
+			if s.clearAgentAttention(rec.ID) {
+				clearedHere = append(clearedHere, rec.ID)
+			}
+		}
+		cleared = append(cleared, clearedHere...)
+		results = append(results, map[string]any{
+			"workspaceId":     wsID,
+			"clearedAgentIds": clearedHere,
+			"success":         true,
+			"error":           nil,
+		})
+	}
 	_ = sendSessionMsg(ctx, sink, "workspace.clear_attention.response", map[string]any{
 		"requestId":       req.RequestID,
 		"workspaceId":     req.WorkspaceID,
-		"clearedAgentIds": []string{},
-		"results":         []any{},
+		"clearedAgentIds": cleared,
+		"results":         results,
 		"success":         true,
 		"error":           nil,
 	})
