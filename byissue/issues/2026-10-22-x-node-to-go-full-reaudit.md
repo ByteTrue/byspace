@@ -14,7 +14,7 @@ created: 2026-10-22
 [2026-10-19 的 epic](../epics/2026-10-19-x-go-single-binary-full-parity/spec.md) 做过一轮
 512 文件审计，结论全在
 [audit-log](../epics/2026-10-19-x-go-single-binary-full-parity/issues/audit-log.md)。
-[2026-10-22 的 epic](../epics/2026-10-22-o-node-to-go-functional-port/spec.md) 又把当时判为
+[2026-10-22 的 epic](../epics/2026-10-22-x-node-to-go-functional-port/spec.md) 又把当时判为
 `MISSING` 的六个子系统实现掉了。
 
 两轮之后仍然要求重审，原因很简单：**前两轮的判据是「Go 有没有对应物」，不是「Go 的行为是否

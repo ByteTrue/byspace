@@ -59,4 +59,4 @@
 ## 历史证据
 
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
-- [Chief 按 host 可见（issue 2026-10-18）](../issues/2026-10-18-o-chief-per-host-sidebar-project.md)
+- Chief 按 host 可见（issue 2026-10-18）（issue 已归档，见 `byissue/issues/` 下的 `005-x-chief-floating-assistant`）

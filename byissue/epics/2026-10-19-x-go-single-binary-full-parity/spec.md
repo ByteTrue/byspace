@@ -70,10 +70,10 @@ BySpace 此前由 Node/TypeScript 多包工作区（`packages/server`、`package
 
 ## 已决策丢弃项（不是缺口，不应计入 Epic 完成度）
 
-| 能力                                                              | 决策出处                                                                                                                                                                                                             |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hub**（`hub.*` 远程控制、hub 关系）                             | [025](../../../issues/025-x-architecture-retention-audit.md) 已移除（commit `446bc38a3d`），归档 ref `archive/pre-hub-removal`                                                                                       |
-| **插件系统**（plugin 运行时、管理、日志、主题、设置、时间线条目） | [025](../../../issues/025-x-architecture-retention-audit.md) 已移除（commit `a5c6bb6588`），归档 ref `archive/pre-plugin-removal`；UI 入口另由 [033](../../../issues/033-x-ff-remove-plugins-settings-entry.md) 清掉 |
+| 能力                                                              | 决策出处                                                                                                                                                                                                       |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hub**（`hub.*` 远程控制、hub 关系）                             | [025](../../issues/025-x-architecture-retention-audit.md) 已移除（commit `446bc38a3d`），归档 ref `archive/pre-hub-removal`                                                                                    |
+| **插件系统**（plugin 运行时、管理、日志、主题、设置、时间线条目） | [025](../../issues/025-x-architecture-retention-audit.md) 已移除（commit `a5c6bb6588`），归档 ref `archive/pre-plugin-removal`；UI 入口另由 [033](../../issues/033-x-ff-remove-plugins-settings-entry.md) 清掉 |
 
 Go 侧保留 `plugin.*` 与 `hub.*` 的**解析**（wire 兼容面：旧客户端发来的消息不能崩），
 但实现端如实返回空目录 / `not_connected`，`server_info.features` 对应开关为 `false`。
@@ -81,12 +81,12 @@ Go 侧保留 `plugin.*` 与 `hub.*` 的**解析**（wire 兼容面：旧客户�
 
 ## 未完成项（各自独立 Issue，不再挂在本 Epic 下）
 
-| Issue                                                                                                                                   | 缺什么                                          | 阻塞条件                                                             |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
-| [`issues/2026-10-21-o-go-service-proxy-and-script-preview.md`](../../../issues/2026-10-21-o-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL  | 需要先定主机名方案（DNS 泛解析 vs 路径前缀）                         |
-| [`issues/2026-10-22-x-tunnel-port.md`](2026-10-22-x-tunnel-port.md)                                                                     | **tunnel 能力回填**——已交付过的功能，不是新功能 | 无硬阻塞：062 已真双机验证；本地 relay 三层 + WSL 单机等价形态即可验 |
-| [`issues/2026-10-21-o-go-quota-fetcher-six-vendors.md`](../../../issues/2026-10-21-o-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                 | **需要真实凭据**才能验证数字对不对                                   |
-| [`issues/2026-10-21-o-go-agent-hook-install-other-providers.md`](../../../issues/2026-10-21-o-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**          | 无硬阻塞，只是未做（shim 已就绪）                                    |
+| Issue                                                                                                                                | 缺什么                                          | 阻塞条件                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------------- |
+| [`issues/2026-10-21-x-go-service-proxy-and-script-preview.md`](../../issues/2026-10-21-x-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL  | 需要先定主机名方案（DNS 泛解析 vs 路径前缀）                         |
+| [`issues/2026-10-22-x-tunnel-port.md`](../2026-10-22-x-node-to-go-functional-port/issues/2026-10-22-x-tunnel-port.md)                | **tunnel 能力回填**——已交付过的功能，不是新功能 | 无硬阻塞：062 已真双机验证；本地 relay 三层 + WSL 单机等价形态即可验 |
+| [`issues/2026-10-21-x-go-quota-fetcher-six-vendors.md`](../../issues/2026-10-21-x-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                 | **需要真实凭据**才能验证数字对不对                                   |
+| [`issues/2026-10-21-x-go-agent-hook-install-other-providers.md`](../../issues/2026-10-21-x-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**          | 无硬阻塞，只是未做（shim 已就绪）                                    |
 
 `server_info.features` 里这五项对应的开关本轮已全部改为 `false`——此前声明为 `true`，
 客户端会渲染入口而背后什么都没有。`TestDeclaredFeaturesAreImplemented` 挡住回退。
@@ -107,7 +107,7 @@ agent-hooks 3 家 448、directory-sync 315、self-update 138）。
 要么是我把自己的判断写成了 owner 的决定（「产品方向未定」），要么是拿验证条件当实现前提
 （tunnel 的「需要两台机器」，而 062 早已用 WSL 做过等价验证）。
 
-**承接**：`epics/2026-10-22-o-node-to-go-functional-port/` —— 逐个文件读、缺什么就实现什么，
+**承接**：`epics/2026-10-22-x-node-to-go-functional-port/` —— 逐个文件读、缺什么就实现什么，
 不允许以「测不了」为由跳过实现。
 
 **毕业回写**：`docs/architecture.md` 与 `byissue/spec/` 中关于后端宿主与构建分发的描述，

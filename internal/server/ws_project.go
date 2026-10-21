@@ -980,10 +980,17 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 		if err != nil {
 			errText = err.Error()
 		}
+		// terminalId is what the flat response has always carried, and the protocol still requires it: a script
+		// started through the old path was shown in a terminal, and the caller attaches to that terminal by id.
+		var terminalID any
+		if script != nil {
+			terminalID = script["terminalId"]
+		}
 		_ = sendSessionMsg(ctx, sink, "start_workspace_script_response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"scriptName":  req.ScriptName,
+			"terminalId":  terminalID,
 			"script":      script,
 			"error":       errText,
 		})

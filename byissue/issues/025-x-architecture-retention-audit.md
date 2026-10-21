@@ -121,7 +121,7 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 当前打包器还明确记录了一处 ACP 版本折叠限制：server 使用 `@agentclientprotocol/sdk ^0.17.1`，plugin 使用 `^1.4.0`，单一 npm 产物以 daemon 版本为准。依赖新 ACP API 的插件不保证与 repo/desktop 安装行为一致。本轮只确认声明与打包逻辑，没有运行第三方插件复现。若保留插件支持，这是一项实际兼容风险；不是仅凭包名就能删除或合包的理由。
 
-证据：`packages/server/package.json`、`packages/plugin/package.json`；`scripts/package-bytetrue-baseline.mjs:95`；`packages/server/src/server/bootstrap.ts:587`、`:641`、`:1265`；`packages/server/src/server/plugins/index.ts:135`；[SDK 边界](../../docs/plugins.md#sdk-import-boundaries)、[Hub](../../docs/hub.md)、[Service Proxy](../../docs/service-proxy.md)、[Agent 生命周期](../../docs/agent-lifecycle.md)、[权限](../../docs/permissions.md)、[协议兼容](../../docs/protocol-compatibility.md)、[Terminal 契约](../spec/terminal.md)。
+证据：`packages/server/package.json`、`packages/plugin/package.json`；`scripts/package-bytetrue-baseline.mjs:95`；`packages/server/src/server/bootstrap.ts:587`、`:641`、`:1265`；`packages/server/src/server/plugins/index.ts:135`；SDK 边界（`docs/plugins.md`，已随本 issue 删除）、Hub（`docs/hub.md`，已随本 issue 删除）、[Service Proxy](../../docs/service-proxy.md)、[Agent 生命周期](../../docs/agent-lifecycle.md)、[权限](../../docs/permissions.md)、[协议兼容](../../docs/protocol-compatibility.md)、[Terminal 契约](../spec/terminal.md)。
 
 ## D · 发布、依赖与维护承诺
 

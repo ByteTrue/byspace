@@ -7,7 +7,7 @@ created: 2026-10-22
 
 # tunnel 移植
 
-归属 Epic：`byissue/epics/2026-10-22-o-node-to-go-functional-port`。
+归属 Epic：`byissue/epics/2026-10-22-x-node-to-go-functional-port`。
 
 ## 这不是新功能
 

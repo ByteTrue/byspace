@@ -7,6 +7,8 @@ created: 2026-10-22
 
 # Node → Go 功能移植
 
+状态：**已交付**（512/512 文件有结论，MISSING 0）
+
 > **读者：** 接手「把 Node 版每一行代码对应的功能都在 Go 里实现出来」的人。
 >
 > **自检：** 为什么上一个 Epic 失败 · 这一轮的规则 · 怎么判定完成 · 怎么记录。
@@ -100,3 +102,34 @@ commit）。已经确认的只有两项：
 ## 进度
 
 见 `issues/progress.md`。
+
+## 验收与关闭
+
+已关闭。
+
+**结论**：512 个 Node 文件全部有函数级结论，见 [`issues/node-reaudit-log.md`](../../issues/node-reaudit-log.md)。
+
+```
+MATCH 332 · FIXED 109 · N/A 69 · DROPPED 2 · MISSING 0 · 待审 0 · 已实现未接线 0
+```
+
+`MISSING` 与 `已实现未接线` 都是 0 —— 账本里没有灰色状态：每条要么行为一致，要么改过，要么有明确理由不做。
+
+**判据的变化**：从「Go 有没有对应物」改成「行为是否一致」。前两轮的结论只当线索，每一条都重新读过 Node 源码。
+109 个 `FIXED` 里几乎没有一条能靠函数名对上发现。
+
+**机器检查**（都在 `npm run audit` 里）：
+
+- `go-parity-audit`：入站字段 0 缺口 / 0 未路由
+- `go-emit-parity`：出站 MISSING 0 / OPTIONAL_GAP 0 / NEVER_SENT 0 / NULLED_OPTIONAL 0
+- `reaudit-ledger-check`：从磁盘重算文件列表要求完全覆盖、从行重算总览要求一致、拒绝无证据的结论
+- 浏览器验证 10/10
+
+**同轮补的三项自检**：`NULLED_OPTIONAL`（optional 字段发 null 会让整条响应失效）、入站检测器的两处误报（多行 case 续行、作用域跨函数）、账本写入的静默失效（表格 padding 导致 13 条结论丢失）。
+
+**如实记录的偏离**：
+
+- 8 家 quota 标 `PORTED-UNVERIFIED` —— 无真实凭据
+- agent-hooks 三家的安装器有测试，但没在真实 claude/codex/opencode 上验过侧栏指示灯
+- Windows 计划任务的服务安装未做（`commands/daemon/service/windows-task.ts` 记 N/A）
+- claude 的文件 rewind 未做 —— 需要 SDK 的 `rewindFiles` checkpoint，Go 拿不到
