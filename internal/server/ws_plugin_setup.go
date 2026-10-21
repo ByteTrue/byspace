@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -462,6 +463,17 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 			port = entry.Port
 		}
 	}
+	// A running service's health is whether anything is listening on its port. Without the
+	// proxy subsystem that is the only signal available, and it is the one that matters to the
+	// user: "it started" and "it is serving" are different facts.
+	var health any
+	if entry.IsService && entry.Status == "running" && entry.Port > 0 {
+		if isPortOpen(entry.Port) {
+			health = "healthy"
+		} else {
+			health = "unhealthy"
+		}
+	}
 	return map[string]any{
 		"scriptName": entry.Name,
 		"type":       scriptType,
@@ -472,10 +484,9 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 		"publicProxyUrl": nil,
 		"proxyUrl":       nil,
 		"lifecycle":      lifecycle,
-		// Health is only meaningful once a service route exists and is being probed.
-		"health":     nil,
-		"exitCode":   entry.ExitCode,
-		"terminalId": nil,
+		"health":         health,
+		"exitCode":       entry.ExitCode,
+		"terminalId":     nil,
 	}
 }
 
@@ -530,4 +541,17 @@ func (s *Server) servicePeers(workspaceID string) []workspace.ServicePeer {
 		peers = append(peers, workspace.ServicePeer{ScriptName: entry.Name, Port: entry.Port})
 	}
 	return peers
+}
+
+// isPortOpen reports whether something accepts connections on a loopback port.
+//
+// Deliberately a connect test rather than an HTTP request: workspace services are not required
+// to speak HTTP, and a non-HTTP service that is listening is still healthy.
+func isPortOpen(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
