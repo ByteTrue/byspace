@@ -684,13 +684,22 @@ type healthStatus struct {
 
 func probeHealth(addr string) (*healthStatus, error) {
 	u := addr
-	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+	transport := &http.Transport{Proxy: nil}
+	// A unix socket has no URL to build; the health check has to go over the same connection the
+	// rest of the client would use, or `daemon status` reports a running daemon as stopped.
+	if socketPath, ok := unixSocketPath(addr); ok {
+		u = "http://localhost"
+		transport = &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var dialer net.Dialer
+				return dialer.DialContext(ctx, "unix", socketPath)
+			},
+		}
+	} else if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		u = "http://" + u
 	}
-	client := &http.Client{
-		Timeout:   2 * time.Second,
-		Transport: &http.Transport{Proxy: nil},
-	}
+	client := &http.Client{Timeout: 2 * time.Second, Transport: transport}
 	resp, err := client.Get(strings.TrimRight(u, "/") + "/health")
 	if err != nil {
 		return nil, err
@@ -951,6 +960,21 @@ func defaultListenAddr() string {
 }
 
 func dialDaemonWS(ctx context.Context, addr string) (*websocket.Conn, error) {
+	// BYSPACE_HOST lets one shell point every command at a different daemon without repeating
+	// --addr, which is what a script or a second checkout needs.
+	if strings.TrimSpace(addr) == "" || addr == defaultListenAddr() {
+		if host := strings.TrimSpace(os.Getenv("BYSPACE_HOST")); host != "" {
+			addr = host
+		}
+	}
+
+	// A unix socket address (an absolute path, or named pipe on Windows) has no host to dial.
+	// The daemon supports listening on one for restricted environments, and without this every
+	// command would fail to connect to a daemon that is plainly running.
+	if socketPath, ok := unixSocketPath(addr); ok {
+		return dialUnixSocket(ctx, socketPath)
+	}
+
 	wsURL := addr
 	if !strings.HasPrefix(wsURL, "ws://") && !strings.HasPrefix(wsURL, "wss://") {
 		wsURL = strings.TrimPrefix(wsURL, "http://")
@@ -1068,4 +1092,54 @@ func reportProviderHealth(stdout io.Writer) {
 		}
 		fmt.Fprintf(stdout, "  %-16s %s (%s)\n", spec.ID, path, versionText)
 	}
+}
+
+// unixSocketPath reports whether an address names a unix socket or named pipe.
+//
+// An absolute path is the socket form; a host:port always contains a colon before any separator,
+// so the two cannot be confused.
+func unixSocketPath(addr string) (string, bool) {
+	trimmed := strings.TrimSpace(addr)
+	if trimmed == "" || strings.Contains(trimmed, "://") {
+		return "", false
+	}
+	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, `\\.\pipe\`) {
+		return trimmed, true
+	}
+	// A relative path with a separator is a socket too; a bare "host:port" is not.
+	if strings.ContainsRune(trimmed, '/') && !strings.ContainsRune(trimmed, ':') {
+		return trimmed, true
+	}
+	return "", false
+}
+
+// dialUnixSocket opens a WebSocket over a unix socket.
+func dialUnixSocket(ctx context.Context, socketPath string) (*websocket.Conn, error) {
+	transport := &http.Transport{
+		Proxy: nil,
+		DialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(dialCtx, "unix", socketPath)
+		},
+	}
+	// The Host header is checked by the daemon's allowed-hosts rule; a socket connection has no
+	// meaningful host, so it uses loopback, which the daemon always accepts.
+	ws, _, err := websocket.Dial(ctx, "ws://localhost/ws", &websocket.DialOptions{
+		HTTPClient: &http.Client{Transport: transport},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to daemon socket %s: %w", socketPath, err)
+	}
+	ws.SetReadLimit(64 * 1024 * 1024)
+
+	hello := `{"type":"hello","clientId":"byspace_go_cli","protocolVersion":1}`
+	if err := ws.Write(ctx, websocket.MessageText, []byte(hello)); err != nil {
+		ws.CloseNow()
+		return nil, err
+	}
+	if _, err := waitSessionResp(ctx, ws, "status", "server_info"); err != nil {
+		ws.CloseNow()
+		return nil, err
+	}
+	return ws, nil
 }
