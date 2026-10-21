@@ -1206,6 +1206,17 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			Config    map[string]any `json:"config"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		// Validated on write so a malformed entry is reported next to the edit that caused it,
+		// rather than failing later where the message says nothing about the settings.
+		if validationErr := store.ValidateDaemonConfig(req.Config); validationErr != nil {
+			fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", validationErr)
+			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+				"requestId": req.RequestID,
+				"config":    s.store.LoadDaemonConfig(),
+				"error":     validationErr.Error(),
+			})
+			return
+		}
 		updated := s.store.SaveDaemonConfig(req.Config)
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 			"requestId": req.RequestID,
