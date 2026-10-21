@@ -912,6 +912,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 					st.Version, cliVersion)
 			}
 			reportProviderHealth(stdout)
+			reportRelayStatus(stdout, *homeDir)
 			return nil
 		}
 

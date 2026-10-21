@@ -3,12 +3,16 @@ package cli
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 // multiFlag collects a repeatable flag value.
@@ -90,4 +94,39 @@ func readImageForPrompt(path string) (string, string, error) {
 		return "", "", fmt.Errorf("%s is %s, not an image", path, mediaType)
 	}
 	return base64.StdEncoding.EncodeToString(raw), mediaType, nil
+}
+
+// reportRelayStatus prints whether this daemon is reachable from outside.
+//
+// Ported from selectRelayStatus. The answer decides whether the phone can connect at all, and
+// "disabled" versus "configured but not connected" are different problems with different fixes —
+// printing one line for both leaves the user guessing which they have.
+func reportRelayStatus(stdout io.Writer, homeFlag string) {
+	resolvedHome, err := home.Resolve(homeFlag)
+	if err != nil {
+		return
+	}
+	config := store.New(resolvedHome).LoadDaemonConfig()
+	relay, _ := config["relay"].(map[string]any)
+	if relay == nil {
+		return
+	}
+
+	enabled, _ := relay["enabled"].(bool)
+	if !enabled {
+		fmt.Fprintln(stdout, "relay     disabled")
+		return
+	}
+	endpoint, _ := relay["publicEndpoint"].(string)
+	scheme := "ws"
+	if useTLS, _ := relay["publicUseTls"].(bool); useTLS {
+		scheme = "wss"
+	}
+	if strings.TrimSpace(endpoint) == "" {
+		// Configured but incomplete: the daemon will never connect, and the user needs to know the
+		// endpoint is what is missing rather than assuming the network is at fault.
+		fmt.Fprintln(stdout, "relay     enabled but no publicEndpoint configured")
+		return
+	}
+	fmt.Fprintf(stdout, "relay     %s://%s\n", scheme, endpoint)
 }
