@@ -200,7 +200,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `persistence-hooks.ts` | 147 | **PARTIAL** → 已补 | `lastActivityAt`（「这个 agent 最后一次干活」）与 `updatedAt`（「记录最后一次变更」）是两件事：重命名会动后者、不动前者，而客户端按前者排序与分组。Store 里有这个字段，但运行期从不赋值、payload 也不发——`fetch_agents_response` 里只有 `updatedAt`。已补：轮次开始打时间戳、payload 下发、旧记录回落到 `updatedAt`（发空串会让该 agent 在活动排序里消失，协议要求是 string）。线上验证：字段有真实时间戳且 schema 通过。 | `attachAgentStoragePersistence` 那部分（订阅 agent_state 落盘）在 Go 里是内联在各 handler 里的，不需要单独挂载点。 |
 
-### 未审计（本批剩余 27 文件）
+| `workspace-registry-bootstrap.ts` | 219 | **MISSING** → 已补核心 | 注册表丢失（部分拷贝、写失败、原地升级）时，Node 从存活的 agent 记录重建工作区；Go 什么都不做——侧边栏空白、每个 agent 不可达，看起来像数据全丢，实际记录和会话文件都在。已实现 `RebuildWorkspaceRegistryFromAgents`：按工作目录分组（**一个目录一个工作区，不是一个 agent 一个**）、取最早创建与最晚活动、跳过已归档、跳过目录已消失的（否则侧边栏会出现一条点开就失败的条目）、注册表非空时完全不动（重建会丢用户的标题和置顶）。2 个测试。仍缺：legacy worktree 的 branch identity 回填。 |
+| `tunnel-registry.ts` / `daemon-worker.ts` | 210 / 363 | **DROPPED（本轮不做）** | 隧道需要两台机器才能验证；supervisor IPC 生命周期（ready/restart/shutdown、heartbeat、父进程变化检测）依赖 Node 的 `process.send`，Go 用信号与 PID 锁实现等价语义（`daemon.go` + `pid-lock` 那批）。盲写这两块风险高于收益，已在 service-proxy Issue 里记明条件：需要第二台设备时再做。 |
+
+### 未审计（本批剩余 25 文件）
 
 按行数排序，下一轮从这里继续：
 
