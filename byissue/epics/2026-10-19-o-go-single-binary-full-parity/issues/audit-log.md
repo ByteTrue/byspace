@@ -1251,3 +1251,36 @@ Go 的 `sync.Mutex` 不可重入，于是 stdout 读循环**永久死锁**。
 
 `.dev/byspace-home` 里积累了大量 e2e 测试留下的工作区（`chat`、`server/Chief check`、`tmp`、`gt/test-slug` 等）。
 不影响功能，但走查时会把真实项目与测试残留混在一起。
+
+## 审计过程中修掉的缺陷总览
+
+按「用户能感知到什么坏了」归类，而不是按文件。这是这份台账最该被读的一段。
+
+| 用户感知到的                                     | 根因                                                                   | 位置                          |
+| ------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------- |
+| agent 发了消息**永远没反应**（只有转圈）         | 事件处理持锁又调会加锁的方法，读循环死锁                               | `notes/013`                   |
+| 终端指示灯**永远不亮**                           | `BYSPACE_PI_TERMINAL_HOOK_OWNER_PID` 泄漏给子进程                      | `notes/014`                   |
+| 消息**一卡一卡**、进行中状态提前消失             | 流事件共用 `seq` 被前端当重复丢弃；pi 每步的 `turn_end` 被当成整轮结束 | 历史记录                      |
+| 重新打开**归档工作区**多出一行重复               | 只匹配未归档的工作区，落到「新建」分支                                 | `store.EnsureWorkspaceForCwd` |
+| 脚本点了 **Stop 但还在跑**、端口被占             | 只改状态不杀进程；修了之后只发 shell 仍留下子进程                      | `notes/017`                   |
+| 提交**卡住不动**                                 | 空消息让 git 打开编辑器，daemon 没有终端                               | `checkout_commit_request`     |
+| 日程**越建越多**，都在跑                         | MCP `create_schedule` 无条件 `Create`                                  | `schedule.CreateOrReplace`    |
+| 父 agent **永远等不到**子 agent 的结果           | finish 通知的格式化函数存在但零调用者                                  | `server.go:2595`              |
+| 委派的子代理**从面板里消失**                     | Task 分支构造了 descriptor 却没存也没广播                              | `providers/claude.go`         |
+| Codex 的**上下文用量环永远空白**                 | `Usage()` 无条件返回 nil，`thread/tokenUsage/updated` 未处理           | `providers/codex.go`          |
+| 代码语法错误的自动修复中间态被当成正常结尾       | （见下方 `process_exit` 一条）                                         | —                             |
+| 文件上传**永远得到空文件**                       | 读 schema 里不存在的 `data` 字段                                       | `file-upload.ts`              |
+| 打开归档项目里工作区，**侧栏看不到它**           | 只恢复了工作区，没恢复项目                                             | `store.EnsureWorkspaceForCwd` |
+| `byspace daemon status` 说**没在跑**，其实在跑   | CLI 只会拼 `host:port`，不会连 unix socket                             | `dialDaemonWS`                |
+| 相对路径**找不到工作区**                         | 只做精确字符串比较                                                     | `internal/pathutil`           |
+| 克隆出来的项目**没有目录树图标**                 | 不探测仓库自带的 favicon                                               | `internal/projecticon`        |
+| 项目命令在**别人机器上跑不了**                   | `sh -lc` 会加载用户登录 shell 配置                                     | `shell_invocation.go`         |
+| diff 面板**卡死**（压缩后的 bundle）             | 单行几十万字符没有上限                                                 | `MaxDiffLineChars`            |
+| 每秒**读整个日志文件**算 revision                | 轮询实现没有 inotify 那种「只在变化时通知」                            | `fileSubscription.stamp`      |
+| 从别人的 PR 检出 worktree 后**执行了作者的代码** | `untrustedSource` 门禁缺失                                             | `automation_gate.go`          |
+| 任何连接都能**驱动 agent、推分支、改文件**       | 语义权限表整层缺失                                                     | `internal/authz`              |
+| `daemon stop` 可能**杀掉编辑器**                 | 裸 pid 直接 signals，pid 已被复用                                      | `process_identity.go`         |
+| 定时任务**一天触发 1440 次**                     | cron 只认 `*/N`，落在非匹配分钟就触发                                  | `internal/schedule/cron.go`   |
+| 设置了密码但**没有鉴权**                         | 整个 `auth.ts` 没移植                                                  | `internal/server/authz`       |
+| 终端捕获**选不到内容**                           | `start`/`end`/`stripAnsi` 解析了但没用                                 | `terminal.CaptureLines`       |
+| 分支名对但**内容是错的**（worktree 创建）        | `action`/`checkoutSource` 没解析，全当 branch-off                      | `worktree_intent.go`          |
