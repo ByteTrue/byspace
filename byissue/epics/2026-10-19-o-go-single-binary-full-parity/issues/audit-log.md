@@ -237,3 +237,34 @@ Go 的 `sync.Mutex` 不可重入，于是 stdout 读循环**永久死锁**。
   模型真的调用了 bash 工具并拿到输出。
 - `npm run audit` 的浏览器检查从 **7/8** 变成 **10/10** —— 之前那一项一直是这个死锁造成的
   假失败（页面拿不到 agent 响应，思考菜单状态也就无从检查）。
+
+## 2026-10-21 全功能走查（真实浏览器）
+
+死锁修复后第一次完整走查。**这是首次 agent 真正能对话**，此前所有「已实现」的项都无法验证。
+
+| 项目           | 结果       | 证据                                                                                                                                       |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 侧边栏         | ✅         | Chief 置顶（`BySpace-WorkSpace` 下第一个），其后 byspace / chat / server / tmp / gt 分组，右上角 `+`/History/排序/显示偏好齐全             |
+| 新建 Agent tab | ✅         | `New tab` → 菜单 `Agent ⇧⌘A` / `Terminal ⇧⌘T`，fallback 到 Terminal profiles（Claude Code / Codex）                                        |
+| 真实对话       | ✅         | `Thinking` 折叠块 → `Shell echo WALKTHROUGH_OK` 工具卡片 → 输出 `WALKTHROUGH_OK` → `Worked for 4s, ended 1:28 PM`                          |
+| 工具卡片展开   | ✅         | `$` / `echo WALKTHROUGH_OK` / `WALKTHROUGH_OK` 三段都在                                                                                    |
+| 上下文用量环   | ✅         | `Context window 2% used`（这是 `lastUsage` 的验证，之前一直空）                                                                            |
+| 消息操作       | ✅         | `Rewind to this message`、`Copy message`、`Copy turn`、`Fork chat from here`、`Collapse all tool calls`                                    |
+| 思考档位       | ✅         | `Select thinking option (Max)`，模型 `DeepSeek V4.1 Flash` → `Select model`                                                                |
+| 终端           | ✅         | canvas 渲染（observe 抓不到文本），真实敲 `echo TERMINAL_LIVE_OK` 有回显，提示符显示 `.dev/byspace-home/chief on git main`                 |
+| Settings 一级  | ✅         | Overview / Projects / Connections / Agents / Usage 五项                                                                                    |
+| Agents 页      | ✅         | Claude Code / Codex / OpenCode / Pi 都在，`Orchestration skills` 区块正常                                                                  |
+| Usage 页       | ✅         | Codex / Z.ai 各显示 `Unavailable`（未配凭据时的正确表述，不是空数组）                                                                      |
+| History        | ✅         | 搜索框可用，`Import session` 弹窗列出本机真实 pi 会话                                                                                      |
+| Explorer       | ✅（有限） | `Files` / `Changes` / `Browse workspace files` / `Working tree diff` 都在；当前工作区不是 git 仓库，显示 `Not a git repository` 是正确行为 |
+
+### 仍未走查
+
+- **git 仓库工作区**的 Changes / Commits / Diff（需要一个有未提交改动的 git 工作区）
+- **PWA 安装与离线**、手机尺寸布局
+- **Relay E2E**（需要第二个设备或真实 relay 地址）
+
+### 顺手发现的环境噪音
+
+`.dev/byspace-home` 里积累了大量 e2e 测试留下的工作区（`chat`、`server/Chief check`、`tmp`、`gt/test-slug` 等）。
+不影响功能，但走查时会把真实项目与测试残留混在一起。
