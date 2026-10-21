@@ -230,6 +230,7 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 	removedWS := make([]string, 0)
 	for _, w := range workspaces {
 		if w.ProjectID == req.ProjectID && w.ArchivedAt == nil {
+			s.teardownArchivedWorkspace(w.WorkspaceID, now)
 			_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
 			removedWS = append(removedWS, w.WorkspaceID)
 		}
@@ -447,6 +448,7 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			if !worktreeMatches(w, req.WorktreePath, resolvedID, req.RepoRoot, req.BranchName) {
 				continue
 			}
+			s.teardownArchivedWorkspace(w.WorkspaceID, now)
 			_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
 		}
 		if req.DeleteWorktreeFromDisk && strings.TrimSpace(req.WorktreePath) != "" {
@@ -1322,6 +1324,11 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		s.broadcastTerminalsChanged("", workspaceID)
 	}
 
+	// A setup run still writing into the worktree outlives the archive: it keeps node_modules and
+	// lockfiles moving in a directory that is no longer shown, and if the user asked to delete the
+	// worktree it is writing into a directory that is about to disappear.
+	s.stopWorkspaceSetup(workspaceID)
+
 	// Records that were already stopped still need archiving.
 	for _, rec := range agents {
 		if rec.WorkspaceID != workspaceID || rec.ArchivedAt != nil {
@@ -1483,4 +1490,116 @@ func worktreeMatches(record store.WorkspaceRecord, worktreePath, resolvedID, rep
 		return recordRoot == repoRoot && recordBranch == branchName
 	}
 	return false
+}
+
+// teardownArchivedWorkspace stops the work a workspace was doing before it is archived.
+//
+// Ported from workspace-archive-service.ts and workspace-setup-runtime.ts's stop(). Archiving used to
+// write ArchivedAt and nothing else, which left three things running against a directory that is
+// about to be removed or is no longer shown anywhere:
+//
+//   - the setup run, still writing node_modules into a worktree that may be deleted;
+//   - the terminals, whose shells keep the pty and its processes alive;
+//   - the agents, which keep spending tokens on a conversation the user just archived.
+//
+// Order matters: agents first (they can spawn terminals and setup), then terminals, then the setup
+// run's own commands.
+func (s *Server) teardownArchivedWorkspace(workspaceID, archivedAt string) {
+	agents, err := s.store.ListByWorkspace(workspaceID)
+	if err == nil {
+		for _, agent := range agents {
+			if agent.ArchivedAt != nil {
+				continue
+			}
+			s.mu.Lock()
+			mp := s.agents[agent.ID]
+			delete(s.agents, agent.ID)
+			s.mu.Unlock()
+			if mp != nil && mp.session != nil {
+				if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+					s.broadcastTurnCanceled(mp.record, turnID, "workspace archived")
+				}
+				_ = mp.session.Close()
+			}
+			archived := store.BuildArchivedAgentRecord(agent, archivedAt)
+			_ = s.store.UpsertAgent(archived)
+			s.broadcastAgentUpdate(archived)
+			s.cascadeArchiveChildren(agent.ID)
+		}
+	}
+
+	s.stopWorkspaceTerminals(workspaceID)
+	s.stopWorkspaceSetup(workspaceID)
+}
+
+// stopWorkspaceTerminals closes every terminal attached to a workspace.
+func (s *Server) stopWorkspaceTerminals(workspaceID string) {
+	s.mu.Lock()
+	terminals := make([]*terminal.Session, 0, 2)
+	var termCwd string
+	for slot, session := range s.terminals {
+		if session.WorkspaceID != workspaceID {
+			continue
+		}
+		if termCwd == "" {
+			termCwd = session.Cwd
+		}
+		terminals = append(terminals, session)
+		delete(s.terminals, slot)
+	}
+	s.mu.Unlock()
+
+	for _, session := range terminals {
+		_ = session.Close()
+	}
+	if len(terminals) > 0 {
+		s.broadcastTerminalsChanged(termCwd, workspaceID)
+	}
+}
+
+// stopWorkspaceSetup marks a running setup as stopped.
+//
+// The goroutine running the commands is not killed: it holds an exec.Cmd chain whose children are the
+// project's own build tools, and the honest outcome is that the snapshot says stopped while whatever
+// already started finishes. What matters is that the UI stops claiming it is running.
+func (s *Server) stopWorkspaceSetup(workspaceID string) {
+	s.setupRunsMu.Lock()
+	delete(s.setupRuns, workspaceID)
+	s.setupRunsMu.Unlock()
+
+	s.mu.Lock()
+	snap, ok := s.setupSnapshots[workspaceID]
+	s.mu.Unlock()
+	if !ok || snap == nil {
+		return
+	}
+	snap.mu.Lock()
+	if snap.Status == "running" {
+		reason := "workspace archived"
+		snap.Status = "stopped"
+		snap.Error = &reason
+	}
+	snap.mu.Unlock()
+	s.broadcastSetupProgress(snap)
+}
+
+// normalizeClientMessageID trims a client message id, returning "" when it carries nothing.
+//
+// Ported from client-message-id.ts. The id is what lets the client match its optimistic bubble to the
+// confirmed user_message, so a whitespace-only id must be treated as absent rather than used — two
+// messages with id " " would collide and one would be silently dropped as a duplicate.
+func normalizeClientMessageID(raw string) string {
+	return strings.TrimSpace(raw)
+}
+
+// resolveClientMessageID returns the id the user_message should carry.
+//
+// Ported from resolveClientMessageId: the client's id when it sent one, a generated one otherwise. A
+// user_message without an id cannot be matched to the optimistic bubble, which is what made a sent
+// message render twice.
+func resolveClientMessageID(raw, fallback string) string {
+	if trimmed := normalizeClientMessageID(raw); trimmed != "" {
+		return trimmed
+	}
+	return fallback
 }

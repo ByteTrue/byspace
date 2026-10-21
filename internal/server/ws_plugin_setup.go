@@ -110,6 +110,25 @@ func (s *Server) handleWorkspaceSetupProject(ctx context.Context, sink frameSink
 }
 
 func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []string) {
+	// One run per workspace. Two concurrent setups of the same worktree race on the same
+	// node_modules and lockfiles, and the second one's failure looks like the project is broken.
+	// A duplicate request is dropped rather than queued: the caller wanted the setup done, and it is.
+	s.setupRunsMu.Lock()
+	if s.setupRuns == nil {
+		s.setupRuns = make(map[string]bool)
+	}
+	if s.setupRuns[workspaceID] {
+		s.setupRunsMu.Unlock()
+		return
+	}
+	s.setupRuns[workspaceID] = true
+	s.setupRunsMu.Unlock()
+	defer func() {
+		s.setupRunsMu.Lock()
+		delete(s.setupRuns, workspaceID)
+		s.setupRunsMu.Unlock()
+	}()
+
 	// Never run a project's setup commands in a worktree checked out from someone else's change
 	// request: that byspace.json belongs to the author, and running it is running their code.
 	if blocked, reason := s.automationBlocked(workspaceID); blocked {

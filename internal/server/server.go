@@ -203,6 +203,9 @@ type Server struct {
 	serviceProxyRoutes *serviceproxy.Proxy
 	// labelSubscribers are sinks that asked for incremental label updates.
 	labelSubscribers map[frameSink]bool
+	// setupRuns guards against two concurrent setup runs for one workspace.
+	setupRunsMu sync.Mutex
+	setupRuns   map[string]bool
 	// timelineEpoch changes on every daemon start, so a client can tell its cached sequences are
 	// stale.
 	timelineEpoch string
@@ -2189,7 +2192,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
-		mp.session.SetNextClientMessageID(req.ClientMessageID)
+		mp.session.SetNextClientMessageID(normalizeClientMessageID(req.ClientMessageID))
 		createdImages := make([]pi.ImageContent, 0, len(req.Images))
 		for _, img := range req.Images {
 			if img.Data == "" {
@@ -2238,7 +2241,9 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 	clientMsgID := req.MessageID
 	if clientMsgID == "" {
-		clientMsgID = req.ClientMessageID
+		// A whitespace-only id is absent, not an id: two messages carrying " " would collide and one
+		// would be dropped as a duplicate of the other.
+		clientMsgID = resolveClientMessageID(req.ClientMessageID, newMessageID())
 	}
 
 	images := make([]pi.ImageContent, 0, len(req.Images))
@@ -3345,6 +3350,13 @@ func appendAttachmentHints(text string, attachments []promptAttachment) string {
 		parts = append(parts, strings.Join(otherLines, "\n"))
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// newMessageID generates a message id for a user_message that arrived without one.
+func newMessageID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return "msg_" + hex.EncodeToString(b[:])
 }
 
 func newAgentID() string {
