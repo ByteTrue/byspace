@@ -334,11 +334,32 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	// node daemon injects.
 	port := 0
 	if scriptCfg.IsService() {
-		allocated, allocErr := s.scriptPorts.Allocate(workspaceID, name, scriptCfg.Port)
-		if allocErr != nil {
-			return nil, allocErr
+		// Three strategies, in the order the project asked for them: a script that knows the
+		// port, a constrained window, then any free port.
+		switch {
+		case strings.TrimSpace(scriptCfg.PortScript) != "":
+			allocated, allocErr := AllocatePortFromScript(ctx, scriptCfg.PortScript, cwd, name, workspaceID, "")
+			if allocErr != nil {
+				return nil, allocErr
+			}
+			port = allocated
+		case strings.TrimSpace(scriptCfg.PortRange) != "":
+			window, rangeErr := ParsePortRange(scriptCfg.PortRange)
+			if rangeErr != nil {
+				return nil, rangeErr
+			}
+			allocated, allocErr := s.scriptPorts.AllocateFromRange(window, nil)
+			if allocErr != nil {
+				return nil, allocErr
+			}
+			port = allocated
+		default:
+			allocated, allocErr := s.scriptPorts.Allocate(workspaceID, name, scriptCfg.Port)
+			if allocErr != nil {
+				return nil, allocErr
+			}
+			port = allocated
 		}
-		port = allocated
 	}
 
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)

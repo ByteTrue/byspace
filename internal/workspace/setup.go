@@ -53,6 +53,12 @@ type ScriptConfig struct {
 	Command string
 	Type    string // "" (plain script) or "service"
 	Port    int    // requested port for a service script; 0 means "allocate"
+	// PortRange constrains allocation to a window ("3000-3010"); a firewall or container
+	// port map makes an arbitrary port useless.
+	PortRange string
+	// PortScript is a command that prints the port to use, for projects where an external
+	// service already advertises one.
+	PortScript string
 }
 
 // IsService reports whether this entry asks for a proxied, health-checked service.
@@ -81,12 +87,20 @@ func ReadScriptConfigs(cwd string) map[string]ScriptConfig {
 			continue
 		}
 		var obj struct {
-			Command string `json:"command"`
-			Type    string `json:"type"`
-			Port    int    `json:"port"`
+			Command    string `json:"command"`
+			Type       string `json:"type"`
+			Port       int    `json:"port"`
+			PortRange  string `json:"portRange"`
+			PortScript string `json:"portScript"`
 		}
 		if json.Unmarshal(value, &obj) == nil && strings.TrimSpace(obj.Command) != "" {
-			out[name] = ScriptConfig{Command: obj.Command, Type: obj.Type, Port: obj.Port}
+			out[name] = ScriptConfig{
+				Command:    obj.Command,
+				Type:       obj.Type,
+				Port:       obj.Port,
+				PortRange:  obj.PortRange,
+				PortScript: obj.PortScript,
+			}
 		}
 	}
 	return out

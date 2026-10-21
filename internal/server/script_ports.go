@@ -1,9 +1,18 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/home"
+	"io"
 	"net"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 // servicePortAllocator hands out stable local ports for `type: "service"` scripts.
@@ -95,4 +104,104 @@ func isPortFree(port int) bool {
 	}
 	_ = ln.Close()
 	return true
+}
+
+// Port range allocation, ported from workspace-service-port-allocator.ts.
+//
+// Three strategies exist because different projects have different constraints: some need a
+// fixed window (a firewall rule, a container port map), some need a project-specific script to
+// decide (a port an external service already advertises), and everything else just wants any
+// free port.
+
+// PortRange is an inclusive window to allocate inside.
+type PortRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// ParsePortRange reads "3000-3010" into a range.
+func ParsePortRange(spec string) (PortRange, error) {
+	trimmed := strings.TrimSpace(spec)
+	if trimmed == "" {
+		return PortRange{}, fmt.Errorf("port range is empty")
+	}
+	startText, endText, found := strings.Cut(trimmed, "-")
+	if !found {
+		// A single port is a range of one.
+		port, err := strconv.Atoi(trimmed)
+		if err != nil || port < 1 || port > 65535 {
+			return PortRange{}, fmt.Errorf("invalid port %q", spec)
+		}
+		return PortRange{Start: port, End: port}, nil
+	}
+	start, err1 := strconv.Atoi(strings.TrimSpace(startText))
+	end, err2 := strconv.Atoi(strings.TrimSpace(endText))
+	if err1 != nil || err2 != nil || start < 1 || end > 65535 || start > end {
+		return PortRange{}, fmt.Errorf("invalid port range %q", spec)
+	}
+	return PortRange{Start: start, End: end}, nil
+}
+
+// AllocateFromRange returns the first port in the window that is free and unassigned.
+func (a *servicePortAllocator) AllocateFromRange(r PortRange, reserved map[int]bool) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	inUse := make(map[int]bool, len(a.assigned)+len(reserved))
+	for _, port := range a.assigned {
+		inUse[port] = true
+	}
+	for port := range reserved {
+		inUse[port] = true
+	}
+
+	for port := r.Start; port <= r.End; port++ {
+		if inUse[port] {
+			continue
+		}
+		if !isPortFree(port) {
+			continue
+		}
+		return port, nil
+	}
+	return 0, fmt.Errorf("no free port in range %d-%d", r.Start, r.End)
+}
+
+// AllocatePortFromScript runs the project's port script and validates its answer.
+//
+// The script receives (scriptName, workspaceId, branchName, cwd) and prints one port on stdout.
+// Its output is untrusted: an arbitrary number would be used as a bind port, so it is range
+// checked before acceptance.
+func AllocatePortFromScript(ctx context.Context, command, cwd, scriptName, workspaceID, branchName string) (int, error) {
+	if strings.TrimSpace(command) == "" {
+		return 0, fmt.Errorf("port script command is empty")
+	}
+
+	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(sctx, "/bin/sh", "-lc", command, "port-script",
+		scriptName, workspaceID, branchName, cwd)
+	cmd.Dir = cwd
+	cmd.Env = home.ExternalProcessEnv(os.Environ())
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("port script failed: %w", err)
+	}
+
+	// Bound the output: a script that prints a log banner must not be parsed as a port.
+	out := strings.TrimSpace(stdout.String())
+	if len(out) > 1024 {
+		out = out[:1024]
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, fmt.Errorf("port script printed %q, which is not a port", strings.TrimSpace(out))
+	}
+	if port < 1 || port > 65535 {
+		return 0, fmt.Errorf("port script returned out-of-range port %d", port)
+	}
+	return port, nil
 }
