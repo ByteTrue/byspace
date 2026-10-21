@@ -708,6 +708,37 @@ Go 侧的对应物是 `internal/agent/jsonl`（JSONL RPC 多路复用、V2 分�
 
 端到端验证：创建命名终端 → 重启 daemon → tab 以同样的名字和 id 重新出现。
 
+### services/github-service.ts | 4127 | **PARTIAL → 已补合并就绪校验**
+
+**本轮补的是 `assertDirectPullRequestMergeReady`**：合并前必须确认 mergeStateStatus ∈ {CLEAN, HAS_HOOKS}、不在 merge queue、没有已开启的 auto-merge、且请求的合并方式在仓库允许列表里。Go 之前直接跑 `gh pr merge`，于是只要有 PR 就给出合并按钮，用户是从 gh 的原始报错里知道的——或者合并了一个仓库并不想要的状态。检查放在 `MergePR` 而不是只在 UI：RPC 能直接调，CLI 也走它。forge 不报 facts（非 GitHub forge、旧版 CLI）时返回「就绪」——缺信息就拒绝会让所有我们查不到的 forge 上都无法合并。
+
+**仍缺**：PR 状态的定时轮询（`scheduleGitHubPoll`/`armGitHubPollTimer` 那套带时间网格与退避的调度器）。Go 是**按需取**（`checkout_status_request`），所以开着的界面不会自己刷新 PR 状态——用户要手动触发一次。这不是正确性问题而是新鲜度问题，且引入它会带来 GitHub API 频率风险，所以没有顺手改。
+
+### services/forge-resolver.ts + forge-registry.ts | 257 + 178 | **MISSING → 已补 host 精确匹配**
+
+`DetectForge` 用**整条 remote URL 的子串**判断 forge。后果是双向的：
+
+- GitHub 上名叫 `gitlab-mirror` 的仓库被判成 GitLab，之后所有 gh 调用都跑成 glab
+- 不含关键字的自建 host（`git.company.com`）落回 GitHub
+
+Node 用 `forge-manifest` 的 `cloudHosts`——一份**有界的精确列表**（github.com、ssh.github.com、gitlab.com、gitea.com、codeberg.org）——匹配上了才决定，自建 host 才走探测。子串告诉你的是「这个仓库**叫** gitlab」，不是「它**托管在** gitlab」。
+
+`remoteHost` 解析 git 的所有 remote 形态（https、ssh://、scp 风格的 `git@host:path`、裸 `host:path`），并拒绝本地路径与 Windows 盘符——它们根本没有 forge。自建 host 先看主机名提示（gitlab/gitea/codeberg/forgejo），再落回 GitHub。
+
+### services/forge-cli-command.ts / \*-facts.ts | 338 + 82 | **PORTED / N/A**
+
+`forge-cli-command.ts` 是「跑 gh/glab/tea 并归一化失败」的工具层，对应 `runGH`/`runForgeCLI`/`runForgeCLI` 的 `GIT_TERMINAL_PROMPT=0` 与措辞分类。`*-facts.ts` 是各自 forge 的状态事实类型定义（Go 用 map/struct），其中 **GitHub 的 facts 字段已在本轮的 `CheckMergeReadiness` 里覆盖**。
+
+### services/gitea-service.ts | 2297 | **PARTIAL**
+
+`GetPRStatus`/`CreatePR`/`MergePR`/`SearchIssuesAndPullRequests`/`PullRequestTimeline`/`ResolveChangeRequestCheckoutTarget` 都有 gitea 分支。**缺**：`detectGiteaFamilySoftware`（区分 Gitea/Forgejo/Codeberg 以决定 API 路径差异）与 CI 状态抓取（`ciStatus`）。
+
+### services/quota-fetcher/** | 11 文件 2139 行 | **PARTIAL（框架 + 2 家）\*\*
+
+已有 `internal/quota`：**codex**（读 `~/.codex/auth.json`，**只读不刷新**——刷新归 codex CLI 管，两个 daemon 轮换同一 token 会把用户登出）与 **zai**。缺凭据返回 `unavailable` 而不是 `error`，这两种情况对用户意味着不同的事。
+
+其余 6 家（claude 480、cursor 250、kimi 342、minimax 275、copilot 97、grok 181）**需要真实凭据才能验证**，盲写风险高于收益，已记在未完成清单里。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
