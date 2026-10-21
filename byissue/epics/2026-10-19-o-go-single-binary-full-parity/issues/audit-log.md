@@ -305,6 +305,14 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 
 其余 `managed-processes` 的语义（`opencode serve` 池台账、优雅关停 5s + 强制 1s）Go 用的是 `exec.Command` 的进程句柄与进程组 kill，句柄本身不会指错进程，架构等价。
 
+### utils/tree-kill.ts | 216 | **PARTIAL** → 已补
+
+`Close` 从「关 stdin」直接跳到 500ms 后 SIGKILL。这样被杀掉的 provider 可能丢掉会话文件——而 transcript 就是用户的历史，丢了不可恢复。
+
+现在三段式（对齐 tree-kill.ts）：关 stdin（这些 CLI 的优雅信号）→ 2 秒后对整个进程组发 SIGTERM（还能 flush）→ 再 2 秒后 SIGKILL。进程组用负数 pid 发信号，MCP 桥和语言服务器一起走。
+
+验证：用一个 trap SIGTERM 并写标记文件的 shell，`Close` 之后标记存在，说明优雅信号赢了；另一个测试确认忽略 SIGTERM 的进程仍会被收割而不是把 daemon 挂住。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
