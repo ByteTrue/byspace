@@ -849,6 +849,26 @@ ACP 的客户端在 capabilities 里声明 `terminal: true`，意思是「你可
 
 **仍未逐文件过**的 3 个大实现体（codex-app-server-agent 7411、opencode-agent 5329、mock-load-test-agent 1946）与此provider 下 6 个 `test-utils` 假 CLI harness（假 app-server / 假 omp / 假 pi，属测试辅助，Go 侧用 `writeFaithfulFakePi` 等脚本等价）。
 
+### providers/codex-app-server-agent.ts | 7411 行 | **PARTIAL → 已补三处**
+
+用脚本把 Node 里的方法名集合与 Go 的 `case` 集合求差，31 vs 13，逐个核实后补了三个用户可见的：
+
+| 缺陷                                                                 | 后果                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`thread/tokenUsage/updated` 完全没处理**，`Usage()` 无条件返回 nil | Codex agent 的**上下文用量环永远空白**、token 数永远不显示，尽管 app-server 每一轮都在报。已移植 `toAgentUsage`：`last` 是本次请求的计数，上下文窗口属于模型（且有两种拼写，按 app-server 版本）。空负载返回 nil 而不是零值结构——把已报告的用量重置为 0 会让环在对话中途跳到 0%。                                                                                   |
+| **`Steer` 只是重新 `Prompt`**                                        | Codex 有专门的 `turn/steer`，把消息送进**正在跑的**那一轮。回落成 Prompt 会另起一轮：用户的纠偏没有作用到进行中的工作，而且两轮同时写同一个 thread。已实现，并记录 Codex 自己的 turn id（`nativeTurnID`，来自 `turn/started` 通知——它对「不是我们发起的轮次」也权威，比如恢复的 thread 或重试）。没有活跃轮次时回落 Prompt，而不是发一个会被拒绝的 RPC 把消息丢掉。 |
+| **`fs/read_text_file` 之外**的 `fs` 反向请求                         | 见 ACP 那条（同一套共享驱动）。                                                                                                                                                                                                                                                                                                                                     |
+
+**仍未逐文件过**（含 `turn/diff/updated` 实时 diff、`turn/plan/updated` 计划模式、`thread/fork`/`rollback`/`list`/`read` 那批线程管理方法）。Go 侧 `Abort` 已用 `turn/interrupt`，`thread/start`/`resume`/`turn/start` 都在；缺的是线程管理与 diff/plan 通知。留在未完成清单。
+
+### providers/opencode-agent.ts | 5329 行 | **PARTIAL（已验证架构等价）**
+
+见前面「opencode/server-manager」那条：Node 自己 spawn `opencode serve` 并用引用计数管理进程池，Go 走「已有 URL → HTTP；否则 `opencode acp` → ACP 驱动」。ACP 是 opencode 官方模式，复用同一个 ACP 会话，少了一个会泄漏子进程的子系统；代价是少了同 cwd 多 agent 共享 serve 进程的内存优化，那是优化不是能力。**没有逐文件过**，留在清单。
+
+### providers/mock-load-test-agent.ts + 6 个 test-utils | 1946 + 2209 行 | **N/A**
+
+`mock-load-test-agent` 是压测用的假 provider；`test-utils/*`（假 app-server / 假 omp / 假 pi / 假 opencode harness）是 Node 测试里模拟各家 CLI 的脚本。Go 侧对应的做法是 `writeFaithfulFakePi` 之类的 shell 脚本 + `stream_conformance_test.go` 里冻结的真实事件序列。**测试辅助，不是能力**。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
