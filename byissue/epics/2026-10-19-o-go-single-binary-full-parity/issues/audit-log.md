@@ -323,6 +323,14 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 
 端到端验证：有 `public/favicon.svg` 的项目返回 `detected image/svg+xml`，响应通过协议校验。
 
+### utils/git-process-scheduler.ts | 144 | **MISSING** → 已补
+
+git 调用没有任何节流：daemon 每秒轮询每个订阅的工作区、每次轮询跑好几条 git，十几个工作区同时打开就是每秒钟几十个 git 进程一起起——机器卡顿，而且用户自己的 git 命令排在我们的后面。
+
+两个限制，都可配置、默认值与 Node 一致：并发 8、每秒启动 64。context 取消时放弃等待，所以关闭不会卡在队列后面；调优变量写错回落到默认值而不是让 daemon 停止服务。
+
+验证：12 个并发在限制 3 下峰值不超过 3；每秒 4 个的速率下 8 次启动至少跨两个窗口；排队的 acquire 在 context 结束时返回。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
