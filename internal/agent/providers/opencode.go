@@ -50,6 +50,20 @@ func StartOpenCodeSession(cfg LaunchConfig, cmdOverride string) (ManagedSession,
 		return newHTTPOpenCodeSession(cfg, strings.TrimRight(urlOverride, "/"))
 	}
 
+	// No override and no explicit ACP request: start (or reuse) an `opencode serve` process. Without this
+	// an OpenCode agent on a machine with no manually started server did not work at all — the session
+	// appeared to exist and every request failed.
+	if !strings.HasSuffix(cmdOverride, "acp") {
+		spec := GetProviderSpec("opencode")
+		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, spec.DefaultArgs)
+		server, err := pool.Acquire(context.Background())
+		if err == nil && server != nil {
+			return newHTTPOpenCodeSession(cfg, server.URL)
+		}
+		// Fall through to ACP: a machine without the server binary can still drive the agent through
+		// stdio, and that is better than failing the create.
+	}
+
 	// If command override points to a stdio script/binary or `opencode acp`, drive via ACP/stdio
 	spec := GetProviderSpec("opencode")
 	spec.DefaultArgs = []string{"acp"}

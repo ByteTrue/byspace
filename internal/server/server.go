@@ -361,6 +361,11 @@ func (s *Server) Store() *store.Store  { return s.store }
 
 // Close shuts down any live Pi agent subprocesses and PTY sessions.
 func (s *Server) Close() error {
+	// The shared `opencode serve` process outlives individual agents, so it is stopped here rather
+	// than in an agent's Close. Without this the daemon exits and leaves an orphaned server holding a
+	// port until the machine restarts.
+	providers.ShutdownOpenCodePool()
+
 	// Stop the subscription poller before tearing down state it reads.
 	select {
 	case <-s.pollStop:
