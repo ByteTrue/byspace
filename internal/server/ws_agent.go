@@ -251,7 +251,18 @@ func (s *Server) handleDeleteAgent(ctx context.Context, sink frameSink, raw json
 	mp := s.agents[req.AgentID]
 	delete(s.agents, req.AgentID)
 	s.mu.Unlock()
+
+	// Tell every connected client to drop this agent's subagents before the session goes away.
+	// Otherwise the Subagents panel keeps rows for a parent that no longer exists, and they can
+	// never be cleared because the parent they point at is gone.
 	if mp != nil && mp.session != nil {
+		for _, sub := range mp.session.ListSubagents(req.AgentID) {
+			s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
+				"kind":          "remove",
+				"parentAgentId": req.AgentID,
+				"subagentId":    sub.ID,
+			})
+		}
 		_ = mp.session.Close()
 	}
 	_ = s.store.DeleteAgent(req.AgentID)
