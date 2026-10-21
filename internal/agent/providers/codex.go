@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -338,6 +340,55 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			"message": method,
 		})
 
+	case "item/tool/requestUserInput", "tool/requestUserInput", "codex/event/request_user_input":
+		// Codex asks the user a structured question and blocks the turn until it is answered.
+		// Without handling this the turn stalls: the agent is waiting, nothing is shown, and
+		// the only symptom is "it stopped".
+		reqID := fmt.Sprintf("codex_question_%v", rpcID)
+		s.permissionRPCIDs[reqID] = rpcID
+
+		// The payload is one or more questions, each with a title and optional choices.
+		questions := make([]map[string]any, 0, 3)
+		rawQuestions, _ := params["questions"].([]any)
+		for index, raw := range rawQuestions {
+			question, _ := raw.(map[string]any)
+			title, _ := question["title"].(string)
+			options := make([]map[string]any, 0, 4)
+			if rawOptions, ok := question["options"].([]any); ok {
+				for _, rawOption := range rawOptions {
+					label, _ := rawOption.(string)
+					if label != "" {
+						options = append(options, map[string]any{"label": label})
+					}
+				}
+			}
+			questions = append(questions, map[string]any{
+				"id":       fmt.Sprintf("%d", index),
+				"header":   fmt.Sprintf("Question %d", index+1),
+				"question": title,
+				"options":  options,
+				// The user can always type something else; a fixed list is a suggestion.
+				"isOther": true,
+			})
+		}
+
+		questionInput := map[string]any{"questions": questions}
+		s.pendingPermissions[reqID] = map[string]any{
+			"id":       reqID,
+			"provider": "codex",
+			"name":     "request_user_input_async",
+			"kind":     "question",
+			"title":    "Question",
+			"input":    questionInput,
+		}
+		extraEvents = append(extraEvents, map[string]any{
+			"type":    "extension_ui_request",
+			"id":      reqID,
+			"method":  "select",
+			"title":   "Question",
+			"message": firstQuestionTitle(questions),
+		})
+
 	case "turn/completed", "codex/event/task_complete":
 		if s.activeTextIdx >= 0 {
 			extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
@@ -541,12 +592,27 @@ func (s *CodexSession) PendingPermissions() []map[string]any {
 func (s *CodexSession) RespondToPermission(requestID string, resp map[string]any) error {
 	s.mu.Lock()
 	rpcID, ok := s.permissionRPCIDs[requestID]
+	pending := s.pendingPermissions[requestID]
 	delete(s.permissionRPCIDs, requestID)
 	delete(s.pendingPermissions, requestID)
 	s.mu.Unlock()
 	if !ok {
 		return nil
 	}
+
+	// A question and an approval are different RPCs: the question expects the answers, the
+	// approval expects a decision. Sending `decision` to a question leaves Codex waiting
+	// forever on a reply it cannot parse.
+	if kind, _ := pending["kind"].(string); kind == "question" {
+		return s.sendJSON(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      rpcID,
+			"result": map[string]any{
+				"answers": questionAnswersFrom(resp),
+			},
+		})
+	}
+
 	decision := "accept"
 	if b, _ := resp["behavior"].(string); b == "deny" {
 		decision = "decline"
@@ -558,6 +624,60 @@ func (s *CodexSession) RespondToPermission(requestID string, resp map[string]any
 			"decision": decision,
 		},
 	})
+}
+
+// questionAnswersFrom extracts the answers Codex expects: one string per question, in order.
+//
+// The client sends the answers either as a list or keyed by question id; both are flattened to
+// the ordered list the protocol wants.
+func questionAnswersFrom(resp map[string]any) []string {
+	answers := make([]string, 0, 3)
+	if updated, ok := resp["updatedInput"].(map[string]any); ok {
+		if raw, ok := updated["answers"]; ok {
+			switch value := raw.(type) {
+			case []any:
+				for _, item := range value {
+					if text, isString := item.(string); isString {
+						answers = append(answers, text)
+					}
+				}
+			case map[string]any:
+				// Ordered by the numeric id so "1" does not sort before "10".
+				keys := make([]string, 0, len(value))
+				for key := range value {
+					keys = append(keys, key)
+				}
+				sort.Slice(keys, func(i, j int) bool { return numericLess(keys[i], keys[j]) })
+				for _, key := range keys {
+					if text, isString := value[key].(string); isString {
+						answers = append(answers, text)
+					}
+				}
+			case string:
+				answers = append(answers, value)
+			}
+		}
+	}
+	if len(answers) == 0 {
+		if text, ok := resp["answer"].(string); ok && text != "" {
+			answers = append(answers, text)
+		}
+	}
+	if len(answers) == 0 {
+		// A denied question still needs a reply, or Codex waits forever.
+		answers = append(answers, "")
+	}
+	return answers
+}
+
+// numericLess compares two ids numerically when both are numbers, lexically otherwise.
+func numericLess(a, b string) bool {
+	ai, aErr := strconv.Atoi(a)
+	bi, bErr := strconv.Atoi(b)
+	if aErr == nil && bErr == nil {
+		return ai < bi
+	}
+	return a < b
 }
 
 func (s *CodexSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
@@ -587,4 +707,18 @@ func (s *CodexSession) Close() error {
 		_ = s.cmd.Process.Kill()
 	}
 	return nil
+}
+
+// firstQuestionTitle is the question text to show in the notification.
+//
+// The panel renders the full structured input; the notice has room for one line, and a question
+// with no text would show nothing at all.
+func firstQuestionTitle(questions []map[string]any) string {
+	if len(questions) == 0 {
+		return "Codex is waiting for your input"
+	}
+	if title, ok := questions[0]["question"].(string); ok && title != "" {
+		return title
+	}
+	return "Codex is waiting for your input"
 }
