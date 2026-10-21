@@ -679,3 +679,104 @@ func AssertSafeWorktreeSlug(slug string) error {
 	}
 	return nil
 }
+
+// worktreeLayout resolves the target directory and validates the slug.
+func worktreeLayout(ctx context.Context, repoCwd, worktreesBaseDir, slug string) (topLevel, wtPath, cleanSlug string, err error) {
+	if slugErr := AssertSafeWorktreeSlug(slug); slugErr != nil {
+		return "", "", "", slugErr
+	}
+	topLevel, err = runGit(ctx, repoCwd, "rev-parse", "--show-toplevel")
+	if err != nil || topLevel == "" {
+		return "", "", "", err
+	}
+	cleanSlug = strings.TrimSpace(slug)
+	if cleanSlug == "" {
+		cleanSlug = "wt-" + strconv.FormatInt(time.Now().Unix(), 36)
+	}
+	wtPath = filepath.Join(worktreesBaseDir, filepath.Base(topLevel), cleanSlug)
+	return topLevel, wtPath, cleanSlug, nil
+}
+
+// checkoutExistingBranch adds a worktree tracking an existing branch.
+//
+// `git worktree add -b` would fail here (the branch exists), so the branch is checked out
+// directly. `-B` is deliberately not used: overwriting an existing local branch would discard
+// work in a repository the user may have several worktrees on.
+func checkoutExistingBranch(ctx context.Context, repoCwd, worktreesBaseDir, slug, branch string) (string, string, error) {
+	if err := AssertSafeGitRef(branch, "branch"); err != nil {
+		return "", "", err
+	}
+	topLevel, wtPath, cleanSlug, err := worktreeLayout(ctx, repoCwd, worktreesBaseDir, slug)
+	if err != nil {
+		return "", "", err
+	}
+	// Prefer a remote-tracking branch when it exists, which is what "check out this branch"
+	// usually means for a branch the user has not fetched before.
+	target := branch
+	if _, err := runGit(ctx, topLevel, "rev-parse", "--verify", "refs/heads/"+branch); err != nil {
+		if _, remoteErr := runGit(ctx, topLevel, "rev-parse", "--verify", "refs/remotes/origin/"+branch); remoteErr == nil {
+			target = "origin/" + branch
+		}
+	}
+	if _, err := runGit(ctx, topLevel, "worktree", "add", wtPath, target); err != nil {
+		return "", "", err
+	}
+	return wtPath, cleanSlug, nil
+}
+
+// checkoutChangeRequest fetches and checks out a pull/merge request's head.
+//
+// Ported from the `checkout-change-request` branch of worktree-session.ts. `gh pr checkout` is
+// not used because it mutates the current worktree; the daemon needs an independent one.
+func checkoutChangeRequest(ctx context.Context, repoCwd, worktreesBaseDir, slug string, intent WorktreeIntent) (string, string, error) {
+	if err := AssertSafeGitRef(intent.HeadRef, "change request head ref"); err != nil {
+		return "", "", err
+	}
+	topLevel, wtPath, cleanSlug, err := worktreeLayout(ctx, repoCwd, worktreesBaseDir, slug)
+	if err != nil {
+		return "", "", err
+	}
+
+	// GitHub publishes every PR head at refs/pull/<n>/head, including cross-repository ones,
+	// which is the one ref that works without knowing the fork's URL.
+	fetchRef := fmt.Sprintf("refs/pull/%d/head", intent.ChangeRequestNumber)
+	if intent.Forge != "" && intent.Forge != "github" {
+		// Other forges expose the head branch under the same name as the source branch.
+		fetchRef = intent.HeadRef
+	}
+	if _, err := runGit(ctx, topLevel, "fetch", "origin", fetchRef); err != nil {
+		return "", "", err
+	}
+
+	if _, err := runGit(ctx, topLevel, "worktree", "add", "-b", cleanSlug, wtPath, "FETCH_HEAD"); err != nil {
+		return "", "", err
+	}
+	// Track the origin branch when the head lives in this repository, so a later push goes to
+	// the right place. A cross-repository head has no matching origin branch.
+	if !intent.IsCrossRepository {
+		_, _ = runGit(ctx, wtPath, "branch", "--set-upstream-to=origin/"+intent.HeadRef, cleanSlug)
+	}
+	return wtPath, cleanSlug, nil
+}
+
+// ResolveDefaultBranch reports the repository's default branch.
+//
+// Order: the remote HEAD (what a fresh clone would check out), then well-known names, then the
+// current branch. A repository with no remote still needs an answer, which is why the fallbacks
+// exist rather than returning an error.
+func ResolveDefaultBranch(ctx context.Context, repoRoot string) (string, error) {
+	if out, err := runGit(ctx, repoRoot, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		if name := strings.TrimPrefix(strings.TrimSpace(out), "origin/"); name != "" {
+			return name, nil
+		}
+	}
+	for _, candidate := range []string{"main", "master", "trunk", "develop"} {
+		if _, err := runGit(ctx, repoRoot, "rev-parse", "--verify", "refs/heads/"+candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	if out, err := runGit(ctx, repoRoot, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		return strings.TrimSpace(out), nil
+	}
+	return "", fmt.Errorf("could not determine the default branch")
+}

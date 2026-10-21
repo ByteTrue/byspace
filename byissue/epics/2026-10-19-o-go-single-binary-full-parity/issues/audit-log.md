@@ -182,7 +182,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `runtime-mcp-config.ts`（内联在 `providers/pi/agent.ts`） | ~60 | **MISSING** → 已补 | **内置 MCP 桥从未注入**：`byspace mcp-bridge`、`/mcp/agents` 和它背后 37 个工具都实现了，但没有任何东西把它们接到 agent 上——pi 没有 MCP 启动参数，只能通过扩展的 `pi.registerMcpServer` 注册。已在生成的扩展里注入（内置桥自举 `os.Executable()` + 用户配置的 server），并补了 daemon 侧的系统提示注入（`before_agent_start`）。`/mcp/agents` 现在用 per-run capability token 自鉴权。 |
 
-### 未审计（本批剩余 38 文件）
+| `resolve-worktree-creation-intent.ts` | 279 | **MISSING** → 已补 | `create_byspace_worktree_request` 的 `action` 与 `checkoutSource` 完全没解析，`refName` 被无条件当作「新分支的起点」，于是「检出已有分支」和「检出这个 PR」都变成了「从它开新分支」——分支名对，工作树内容错。已实现 `ResolveWorktreeIntent`（6 种组合 + 两个具名错误）、`ResolveChangeRequestCheckoutTarget`（gh/glab/tea 三家分别解析 head/base/cross-repo）、`checkoutExistingBranch`、`checkoutChangeRequest`（用 `refs/pull/<n>/head`，跨仓库 PR 也能检出）、`ResolveDefaultBranch`。端到端验证三条路径：branch-off 建 `feat-new`、checkout 检出 `existing-branch`、缺目标返回 `invalid_worktree_intent`。 |
+
+### 未审计（本批剩余 37 文件）
 
 按行数排序，下一轮从这里继续：
 

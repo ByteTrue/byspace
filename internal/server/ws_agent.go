@@ -370,11 +370,21 @@ func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw jso
 
 func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID         string         `json:"requestId"`
-		Cwd               string         `json:"cwd"`
-		WorktreeSlug      string         `json:"worktreeSlug"`
-		RefName           string         `json:"refName"`
-		CheckoutSource    string         `json:"checkoutSource"`
+		RequestID    string `json:"requestId"`
+		Cwd          string `json:"cwd"`
+		WorktreeSlug string `json:"worktreeSlug"`
+		BranchName   string `json:"branchName"`
+		RefName      string `json:"refName"`
+		// `action` and `checkoutSource` decide *what* to create; reading only `refName`
+		// meant "check out this PR" and "check out this existing branch" both became
+		// "create a new branch from refName".
+		Action         string `json:"action"`
+		CheckoutSource *struct {
+			Kind        string `json:"kind"`
+			Forge       string `json:"forge"`
+			Number      int    `json:"number"`
+			ProjectPath string `json:"projectPath"`
+		} `json:"checkoutSource"`
 		GithubPrNumber    *int           `json:"githubPrNumber"`
 		NameContext       map[string]any `json:"nameContext"`
 		FirstAgentContext map[string]any `json:"firstAgentContext"`
@@ -382,7 +392,35 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	_ = json.Unmarshal(raw, &req)
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
-	wtPath, branch, err := workspace.CreateWorktree(ctx, req.Cwd, wtBase, req.WorktreeSlug, req.RefName)
+	intentInput := workspace.WorktreeIntentInput{
+		WorktreeSlug:   req.WorktreeSlug,
+		BranchName:     req.BranchName,
+		RefName:        req.RefName,
+		Action:         req.Action,
+		GithubPRNumber: req.GithubPrNumber,
+	}
+	if req.CheckoutSource != nil {
+		intentInput.CheckoutSource = &workspace.CheckoutSource{
+			Number:      req.CheckoutSource.Number,
+			Forge:       req.CheckoutSource.Forge,
+			ProjectPath: req.CheckoutSource.ProjectPath,
+		}
+	}
+	intent, intentErr := workspace.ResolveWorktreeIntent(ctx, intentInput, req.Cwd, workspace.WorktreeIntentDeps{
+		Forge:         workspace.DetectForge(ctx, req.Cwd),
+		DefaultBranch: workspace.ResolveDefaultBranch,
+	})
+	if intentErr != nil {
+		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+			"workspace":       nil,
+			"error":           intentErr.Error(),
+			"errorCode":       "invalid_worktree_intent",
+			"setupTerminalId": nil,
+			"requestId":       req.RequestID,
+		})
+		return
+	}
+	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, req.Cwd, wtBase, intent, req.WorktreeSlug)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
 			"workspace":       nil,

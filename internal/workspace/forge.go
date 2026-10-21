@@ -325,3 +325,89 @@ func decodeForgeItems(raw, titleKey, urlKey string) ([]map[string]any, error) {
 	}
 	return out, nil
 }
+
+// ResolveChangeRequestCheckoutTarget asks the forge for a PR/MR's head and base refs.
+//
+// Ported from resolvePrCheckoutTarget. `gh pr view --json` gives the branch names directly;
+// for GitLab and Gitea the merge-request/issues API returns the same two fields under different
+// keys, so each branch is explicit rather than shared.
+func ResolveChangeRequestCheckoutTarget(ctx context.Context, forge, repoCwd string, number int) (ChangeRequestCheckoutTarget, error) {
+	if number <= 0 {
+		return ChangeRequestCheckoutTarget{}, fmt.Errorf("change request number must be positive")
+	}
+	numberArg := strconv.Itoa(number)
+
+	switch forge {
+	case "gitlab":
+		if _, err := exec.LookPath("glab"); err != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("glab is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "glab", repoCwd, "api",
+			fmt.Sprintf("projects/:id/merge_requests/%s", numberArg))
+		if err != nil {
+			return ChangeRequestCheckoutTarget{}, err
+		}
+		var mr struct {
+			SourceBranch    string `json:"source_branch"`
+			TargetBranch    string `json:"target_branch"`
+			SourceProjectID int    `json:"source_project_id"`
+			TargetProjectID int    `json:"target_project_id"`
+		}
+		if json.Unmarshal([]byte(raw), &mr) != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("could not read merge request %d", number)
+		}
+		return ChangeRequestCheckoutTarget{
+			HeadRef:           mr.SourceBranch,
+			BaseRefName:       mr.TargetBranch,
+			IsCrossRepository: mr.SourceProjectID != 0 && mr.TargetProjectID != 0 && mr.SourceProjectID != mr.TargetProjectID,
+		}, nil
+
+	case "gitea":
+		if _, err := exec.LookPath("tea"); err != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("tea is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "tea", repoCwd, "prs", numberArg, "--output", "json")
+		if err != nil {
+			return ChangeRequestCheckoutTarget{}, err
+		}
+		var pr struct {
+			Head struct {
+				Ref string `json:"ref"`
+			} `json:"head"`
+			Base struct {
+				Ref string `json:"ref"`
+			} `json:"base"`
+		}
+		if json.Unmarshal([]byte(raw), &pr) != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("could not read pull request %d", number)
+		}
+		return ChangeRequestCheckoutTarget{HeadRef: pr.Head.Ref, BaseRefName: pr.Base.Ref}, nil
+
+	default:
+		if _, err := exec.LookPath("gh"); err != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("gh is not installed")
+		}
+		raw, err := runGH(ctx, repoCwd, "pr", "view", numberArg,
+			"--json", "headRefName,baseRefName,isCrossRepository,headRepository")
+		if err != nil {
+			return ChangeRequestCheckoutTarget{}, err
+		}
+		var pr struct {
+			HeadRefName       string `json:"headRefName"`
+			BaseRefName       string `json:"baseRefName"`
+			IsCrossRepository bool   `json:"isCrossRepository"`
+			HeadRepository    struct {
+				Name string `json:"name"`
+			} `json:"headRepository"`
+		}
+		if json.Unmarshal([]byte(raw), &pr) != nil {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("could not read pull request %d", number)
+		}
+		return ChangeRequestCheckoutTarget{
+			HeadRef:           pr.HeadRefName,
+			BaseRefName:       pr.BaseRefName,
+			IsCrossRepository: pr.IsCrossRepository,
+			HeadRepository:    pr.HeadRepository.Name,
+		}, nil
+	}
+}
