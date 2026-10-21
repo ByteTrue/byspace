@@ -157,6 +157,9 @@ type Server struct {
 	// clientPresence is what connected clients report about themselves, used to suppress
 	// notifications for an agent the user is already looking at.
 	clientPresence []attention.ClientPresence
+	// sinkPermissions holds the granted permissions per connection. A connection absent from
+	// this map acts as the owner, which is how a direct local connection behaves.
+	sinkPermissions map[frameSink][]string
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -880,6 +883,20 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		RequestID string `json:"requestId"`
 	}
 	if err := json.Unmarshal(raw, &base); err != nil {
+		return
+	}
+
+	// Every request is authorized before it is dispatched. The table says which semantic
+	// permission each operation needs; a connection that authenticated with a password but was
+	// granted no permissions must not be able to drive agents or edit files just because it
+	// reached the handler. Local connections hold everything, which is what keeps the app
+	// working unchanged.
+	if !s.authorizationForSink(sink).AllowsInbound(base.Type) {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "error",
+			"error":     "Permission denied for " + base.Type,
+			"requestId": base.RequestID,
+		})
 		return
 	}
 
