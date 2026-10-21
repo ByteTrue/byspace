@@ -336,9 +336,14 @@ type workspaceScript struct {
 	Status      string // "running" | "stopped" | "failed"
 	IsService   bool
 	Port        int
-	StartedAt   string
-	FinishedAt  *string
-	ExitCode    *int
+	// hostname and the proxy URLs describe where the service is reachable. Filled when a
+	// service route is registered; empty for a plain script, which has no URL.
+	hostname       string
+	localProxyURL  any
+	publicProxyURL any
+	StartedAt      string
+	FinishedAt     *string
+	ExitCode       *int
 	// cmd is the running process. Kept so stop can actually terminate it: flipping the status
 	// alone leaves the script running and its port held, and the UI then reports it as stopped.
 	cmd *exec.Cmd
@@ -426,6 +431,20 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	s.workspaceScripts[s.scriptKey(workspaceID, name)] = entry
 	s.mu.Unlock()
 
+	// A service gets a hostname and a browsable URL, registered before the process starts so the
+	// client can show the link as soon as the script reports running.
+	if entry.IsService && entry.Port > 0 {
+		s.registerServiceRoute(workspaceID, name, entry.Port)
+		hostname := s.serviceProxyHostnameFor(workspaceID, name)
+		url := s.serviceProxyURLFor(workspaceID, name, entry.Port)
+		s.mu.Lock()
+		entry.hostname = hostname
+		if url != "" {
+			entry.localProxyURL = url
+		}
+		s.mu.Unlock()
+	}
+
 	go func() {
 		// bash -c, not -lc: a project-authored command must not depend on the user's login
 		// shell files, which can change PATH or cd elsewhere.
@@ -499,8 +518,17 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 		entry.Status = "stopped"
 		finished := time.Now().UTC().Format(time.RFC3339Nano)
 		entry.FinishedAt = &finished
+		// The route must go with the process: a stale route forwards to a port that may now
+		// belong to another workspace, and the user would see someone else's app.
+		entry.hostname = ""
+		entry.localProxyURL = nil
+		entry.publicProxyURL = nil
 	}
 	s.mu.Unlock()
+
+	if wasRunning && entry.IsService {
+		s.unregisterServiceRoute(workspaceID, name)
+	}
 
 	if cmd != nil && cmd.Process != nil && wasRunning {
 		// Signal the whole process group, not just the shell: `sleep 60` (or `vite`, or
@@ -558,12 +586,14 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 	return map[string]any{
 		"scriptName": entry.Name,
 		"type":       scriptType,
-		// hostname/port describe the service route; a plain script has neither.
-		"hostname":       "",
+		// hostname/port describe the service route; a plain script has neither. A running
+		// service gets a real hostname and a browsable URL: without them the user has a port
+		// number and no way to open the app, which is most of the feature's value.
+		"hostname":       entry.hostname,
 		"port":           port,
-		"localProxyUrl":  nil,
-		"publicProxyUrl": nil,
-		"proxyUrl":       nil,
+		"localProxyUrl":  entry.localProxyURL,
+		"publicProxyUrl": entry.publicProxyURL,
+		"proxyUrl":       entry.localProxyURL,
 		"lifecycle":      lifecycle,
 		"health":         health,
 		"exitCode":       entry.ExitCode,

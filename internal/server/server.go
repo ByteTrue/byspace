@@ -26,6 +26,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
+	"github.com/ByteTrue/byspace/internal/serviceproxy"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/tunnel"
@@ -182,6 +183,8 @@ type Server struct {
 	tunnelStreamSinks map[string]frameSink
 	// tunnelsEnabled is the experimental gate (issue 063). It starts closed.
 	tunnelsEnabled bool
+	// serviceProxyRoutes serves `type: "service"` scripts at their hostnames.
+	serviceProxyRoutes *serviceproxy.Proxy
 	// notifiedChildren records which (child, reason) pairs already prompted their parent.
 	notifiedChildren   map[string]bool
 	notifiedChildrenMu sync.Mutex
@@ -376,6 +379,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.hostAllowed(r.Host) {
 		http.Error(w, "Forbidden host", http.StatusForbidden)
 		return
+	}
+
+	// A registered service hostname is served by the reverse proxy, not by the daemon API. Checked
+	// after hostAllowed so a rebinding attempt cannot reach a script, and before auth because a dev
+	// server has its own access control (usually none).
+	s.mu.Lock()
+	proxy := s.serviceProxyRoutes
+	s.mu.Unlock()
+	if proxy != nil {
+		if _, registered := proxy.Lookup(r.Host); registered {
+			proxy.ServeHTTP(w, r)
+			return
+		}
 	}
 
 	// Password auth. The daemon is reachable from anything that can open a loopback
