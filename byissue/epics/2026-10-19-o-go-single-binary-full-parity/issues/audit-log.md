@@ -541,6 +541,16 @@ daemon 版本与 CLI 版本不一致时也会警告：版本不匹配的症状�
 
 验证（对真实 daemon）：pi 解析到真实路径与版本 1.3.0，其余五个报 not found。
 
+### packages/cli 其余 | —
+
+| 文件                                 | 行      | 结论                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classify.ts`                        | 70      | **MISSING** → 已补。`byspace ~/code/myapp` 直接打开那个项目（`cd`/`code` 都这样）。分类取保守值：既要 path-like（`.`/`..`/`~`/`./x`/`/abs`/盘符前缀）**又要**指向已存在目录；打错字仍然报 `unknown command`（说的是发生什么），而不是 `cannot open /typo`（看起来像 app 坏了）。裸词永不当路径——仓库里有个叫 `ls` 的目录时 `byspace ls` 仍然列清单。 |
+| `output/**`                          | 583     | **PORTED** — 上一轮实现（`--json`/`--yaml`/`-q`/自适应表格、按显示列宽而非字节）。`output/pairing.ts` 的二维码在 `daemon pair --qr` 里。                                                                                                                                                                                                             |
+| `ssh/ssh-tunnel.ts`                  | 90      | **DROPPED** — 需要第二台机器验证；属于 tunnel，条件写在 service-proxy Issue 里。                                                                                                                                                                                                                                                                     |
+| `run.ts` / `version.ts` / `index.ts` | 53+15+6 | **PORTED** — 入口、版本、退出码映射都在 `internal/cli/main.go`。                                                                                                                                                                                                                                                                                     |
+| `commands/*` 其余                    | —       | 已在上述条目逐项覆盖；本轮补了 `schedule update`、`workspace setup`，并核对了 `agent attach`/`agent mode`（都映射到已有实现）、`permit` 组（allow/deny/ls 齐全）、`project`/`terminal`/`script`/`provider` 组无缺口。                                                                                                                                |
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
