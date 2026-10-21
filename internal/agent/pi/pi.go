@@ -3,6 +3,7 @@ package pi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -744,6 +745,9 @@ func (s *Session) Abort(ctx context.Context) error {
 }
 
 // WaitForFinish blocks until the current turn settles (status becomes "idle") or ctx expires.
+// errSessionClosed is what a waiter receives when the agent is closed mid-turn.
+var errSessionClosed = errors.New("agent closed")
+
 func (s *Session) WaitForFinish(ctx context.Context) error {
 	s.mu.Lock()
 	if s.status != "running" {
@@ -951,6 +955,22 @@ func (s *Session) GetSubagent(parentAgentID, subagentID string) (SubagentDescrip
 
 // Close shuts down the underlying Pi subprocess.
 func (s *Session) Close() error {
+	// Wake every wait_for_finish waiter before tearing down: a close mid-turn would otherwise
+	// leave `byspace wait` blocked until its own timeout, long after the agent is gone.
+	s.mu.Lock()
+	if s.status == "running" {
+		s.status = "idle"
+	}
+	waiters := s.finishWaiters
+	s.finishWaiters = nil
+	s.mu.Unlock()
+	for _, ch := range waiters {
+		select {
+		case ch <- errSessionClosed:
+		default:
+		}
+	}
+
 	err := s.proc.Close()
 	// The generated extension lives in a temp dir; leaving it behind leaks one directory per
 	// agent over a long-running daemon.

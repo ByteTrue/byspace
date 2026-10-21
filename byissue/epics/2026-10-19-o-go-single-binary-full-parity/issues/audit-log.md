@@ -168,7 +168,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `terminal-restore.ts` | **MISSING** → 已补 | `subscribe_terminal_request.restore` 的三种模式完全没处理，每次重连都同时发快照 + 全量重放。已实现 `planTerminalRestore`：`live` 只重放字节（最省）、`visible-snapshot` 限定 scrollback 行数（默认 200，上限 1000）、`full-snapshot` 全量。并给 VTGrid 加了 `SnapshotWithScrollback`。 |
 
-### 未审计（本批剩余 45 文件）
+| `agent/agent-manager.ts` | 5496 | **PARTIAL** → 已补两处 | ① **归档父 agent 不级联**：`cascadeArchiveChildren` 缺失，归档一个会话后它派生的子 agent 继续跑、继续烧 token。已实现，含 `shouldDetachFromArchivedParent` 语义——跨工作区的、或用户已打开 tab 的子 agent 应**脱离父级**而不是被归档（归档等于删掉用户还在看的东西）。② **关闭时不取消等待者**：`prepareAgentForClosure` 会给所有 waiter 发 `turn_canceled`，Go 没有，导致 `wait_for_finish` / `byspace wait` 在 agent 已消失后仍挂到自己的超时。已补：`Session.Close` 唤醒所有 waiter，归档路径广播 `turn_canceled`。3 个测试。 |
+
+### 未审计（本批剩余 44 文件）
 
 按行数排序，下一轮从这里继续：
 

@@ -275,6 +275,11 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 	s.mu.Unlock()
 
 	if mp != nil && mp.session != nil {
+		// Clients waiting on this turn (a `wait_for_finish`, a blocking CLI) need a terminal
+		// event; otherwise they sit until their own timeout on an agent that no longer exists.
+		if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+			s.broadcastTurnCanceled(mp.record, turnID, "agent archived")
+		}
 		_ = mp.session.Close()
 	}
 	if rec, _ := s.store.GetAgent(req.AgentID); rec != nil {
@@ -283,6 +288,9 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 		rec.LastStatus = "closed"
 		_ = s.store.UpsertAgent(*rec)
 	}
+	// Archiving a conversation must not leave its subagents running: they would keep spending
+	// tokens and holding provider processes for a conversation the user removed.
+	s.cascadeArchiveChildren(req.AgentID)
 
 	_ = sendSessionMsg(ctx, sink, "agent_archived", map[string]any{
 		"agentId":    req.AgentID,
@@ -1036,5 +1044,24 @@ func (s *Server) handleDiagnostics(ctx context.Context, sink frameSink, raw json
 	_ = sendSessionMsg(ctx, sink, "diagnostics.response", map[string]any{
 		"requestId":  req.RequestID,
 		"diagnostic": diag,
+	})
+}
+
+// broadcastTurnCanceled tells clients a turn will never produce a result.
+//
+// Ported from prepareAgentForClosure, which cancels every waiter with `turn_canceled` when an
+// agent closes. Without it a `wait_for_finish` blocks until its own timeout even though the
+// agent is already gone.
+func (s *Server) broadcastTurnCanceled(rec store.AgentRecord, turnID, reason string) {
+	s.broadcastSessionMsg("agent_stream", map[string]any{
+		"agentId":   rec.ID,
+		"provider":  rec.Provider,
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+		"event": map[string]any{
+			"type":     "turn_canceled",
+			"provider": rec.Provider,
+			"turnId":   turnID,
+			"reason":   reason,
+		},
 	})
 }
