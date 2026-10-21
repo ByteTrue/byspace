@@ -35,7 +35,7 @@ func (s *Server) piMCPServersFor(rec store.AgentRecord) []pi.MCPConfig {
 	}
 
 	out := make([]pi.MCPConfig, 0, 2)
-	if bridge, ok := s.builtinMCPBridge(); ok {
+	if bridge, ok := s.builtinMCPBridge(rec.ID); ok {
 		out = append(out, bridge)
 	}
 	return append(out, s.userMCPServers(rec)...)
@@ -45,7 +45,7 @@ func (s *Server) piMCPServersFor(rec store.AgentRecord) []pi.MCPConfig {
 //
 // Self-bootstrapping: the daemon re-executes its own binary rather than shelling out to a
 // script, so the bridge is the same build as the daemon and cannot drift from it.
-func (s *Server) builtinMCPBridge() (pi.MCPConfig, bool) {
+func (s *Server) builtinMCPBridge(agentID string) (pi.MCPConfig, bool) {
 	exe, err := os.Executable()
 	if err != nil {
 		return pi.MCPConfig{}, false
@@ -57,10 +57,18 @@ func (s *Server) builtinMCPBridge() (pi.MCPConfig, bool) {
 	if token := s.capabilityTokenValue(); token != "" {
 		args = append(args, "--token", token)
 	}
+	// The bridge identifies its agent so the daemon can apply that provider's tool policy: a
+	// policy is per provider, and the daemon only sees the tool call, not who asked.
+	var env map[string]string
+	if agentID != "" {
+		env = map[string]string{"BYSPACE_MCP_AGENT_ID": agentID}
+	}
+
 	return pi.MCPConfig{
 		Name:    builtinMCPServerName,
 		Command: exe,
 		Args:    args,
+		Env:     env,
 	}, true
 }
 
