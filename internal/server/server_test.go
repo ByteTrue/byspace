@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -477,14 +478,36 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	upReq, _ := json.Marshal(map[string]any{
 		"type": "session",
 		"message": map[string]any{
-			"type":      "file.upload.request",
-			"requestId": "req_up_1",
-			"name":      "note.txt",
-			"mimeType":  "text/plain",
-			"data":      base64.StdEncoding.EncodeToString([]byte("uploaded")),
+			"type":       "file.upload.request",
+			"requestId":  "req_up_1",
+			"fileName":   "note.txt",
+			"mimeType":   "text/plain",
+			"size":       len("uploaded"),
+			"modifiedAt": "2026-01-01T00:00:00Z",
 		},
 	})
 	_ = ws.Write(ctx, websocket.MessageText, upReq)
+
+	// The bytes travel as binary frames, not as a JSON data field.
+	beginFrame, err := terminal.EncodeFileBegin("req_up_1", terminal.FileBeginMetadata{
+		Mime: "text/plain", Size: int64(len("uploaded")), Encoding: "binary",
+		ModifiedAt: "2026-01-01T00:00:00Z", FileName: "note.txt",
+	})
+	if err != nil {
+		t.Fatalf("encode begin: %v", err)
+	}
+	_ = ws.Write(ctx, websocket.MessageBinary, beginFrame)
+	chunkFrame, err := terminal.EncodeFileChunk("req_up_1", []byte("uploaded"))
+	if err != nil {
+		t.Fatalf("encode chunk: %v", err)
+	}
+	_ = ws.Write(ctx, websocket.MessageBinary, chunkFrame)
+	endFrame, err := terminal.EncodeFileEnd("req_up_1")
+	if err != nil {
+		t.Fatalf("encode end: %v", err)
+	}
+	_ = ws.Write(ctx, websocket.MessageBinary, endFrame)
+
 	upResp := readUntilSessionType(t, ctx, ws, "file.upload.response", "")
 	if upResp["file"] == nil {
 		t.Fatalf("expected uploaded file in file.upload.response: %+v", upResp)

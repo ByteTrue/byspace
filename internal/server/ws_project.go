@@ -1139,48 +1139,32 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 		})
 
 	case "file.upload.request":
+		// The protocol sends only metadata here; the bytes follow as binary
+		// FileBegin/FileChunk/FileEnd frames on the same socket. Reading a `data` field (which
+		// the schema does not have) produced an empty file every time.
 		var req struct {
-			RequestID  string   `json:"requestId"`
-			Name       string   `json:"name"`
-			MimeType   string   `json:"mimeType"`
-			Data       string   `json:"data"`
-			ModifiedAt *float64 `json:"modifiedAt"`
+			RequestID  string  `json:"requestId"`
+			FileName   string  `json:"fileName"`
+			MimeType   string  `json:"mimeType"`
+			Size       float64 `json:"size"`
+			ModifiedAt string  `json:"modifiedAt"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		decoded, err := base64.StdEncoding.DecodeString(req.Data)
-		if err != nil {
+
+		upload, uploadErr := s.beginUpload(req.RequestID, req.FileName, req.MimeType, int64(req.Size))
+		if uploadErr != nil {
 			_ = sendSessionMsg(ctx, sink, "file.upload.response", map[string]any{
 				"requestId": req.RequestID,
 				"file":      nil,
-				"error":     err.Error(),
+				"error":     uploadErr.Error(),
 			})
 			return
 		}
-		uploadDir := filepath.Join(s.homeDir, "uploads")
-		_ = os.MkdirAll(uploadDir, 0o700)
-		safeName := filepath.Base(req.Name)
-		if safeName == "" || safeName == "." {
-			safeName = "upload.bin"
-		}
-		dst := filepath.Join(uploadDir, safeName)
-		_ = os.WriteFile(dst, decoded, 0o600)
-		if req.ModifiedAt != nil && *req.ModifiedAt > 0 {
-			mtime := time.UnixMilli(int64(*req.ModifiedAt))
-			_ = os.Chtimes(dst, mtime, mtime)
-		}
-		var idBytes [8]byte
-		_, _ = rand.Read(idBytes[:])
-		_ = sendSessionMsg(ctx, sink, "file.upload.response", map[string]any{
+		// Acknowledge so the client starts streaming chunks; the completed file is reported
+		// when the FileEnd frame arrives.
+		_ = sendSessionMsg(ctx, sink, "file.upload.accepted", map[string]any{
 			"requestId": req.RequestID,
-			"file": map[string]any{
-				"type":     "uploaded_file",
-				"id":       "up_" + hex.EncodeToString(idBytes[:]),
-				"fileName": safeName,
-				"mimeType": req.MimeType,
-				"size":     len(decoded),
-				"path":     dst,
-			},
-			"error": nil,
+			"uploadId":  upload.id,
 		})
 	}
 }

@@ -163,6 +163,8 @@ type Server struct {
 	// pushHTTPClient overrides the push transport; a test harness needs to reach a local
 	// TLS push service without a trusted certificate.
 	pushHTTPClient *http.Client
+	// pendingUploads holds in-flight chunked uploads, keyed by request id.
+	pendingUploads map[string]*pendingUpload
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -687,6 +689,20 @@ func (s *Server) serveSessionOnSink(
 }
 
 func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []byte) {
+	// Terminal frames and file-transfer frames share the byte stream; they are discriminated by
+	// opcode. Trying the terminal decoder first dropped every upload silently, because a file
+	// frame carries a request id where the terminal decoder expects a slot.
+	if len(raw) > 0 && terminal.IsFileTransferOpcode(terminal.Opcode(raw[0])) {
+		fileFrame, err := terminal.DecodeFileFrame(raw)
+		if err != nil {
+			return
+		}
+		if response := s.receiveUploadFrame(fileFrame); response != nil {
+			_ = sendSessionMsg(ctx, sink, "file.upload.response", response)
+		}
+		return
+	}
+
 	tf, err := terminal.DecodeFrame(raw)
 	if err != nil {
 		return
