@@ -166,6 +166,8 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `terminal-output-coalescer.ts` | **MISSING** → 已补 | 每次 PTY read 都发一帧；大量小写入的命令（构建日志、`yes`）让客户端把时间花在帧开销上。已加前导沿 + 5ms 窗口，交互回显仍是立即的。实测 1647 字节 / 13 帧，无丢字节。                                                                                                   |
 | `terminal-size-ownership.ts`   | **MISSING** → 已补 | 两个客户端看同一终端时，后 resize 的赢：手机上打开会话会把桌面 shell 压成手机宽度、整段换行错乱。已按 claim/update 语义实现归属，缺省 intent 视为 claim（老客户端行为）。                                                                                              |
 
+| `terminal-restore.ts` | **MISSING** → 已补 | `subscribe_terminal_request.restore` 的三种模式完全没处理，每次重连都同时发快照 + 全量重放。已实现 `planTerminalRestore`：`live` 只重放字节（最省）、`visible-snapshot` 限定 scrollback 行数（默认 200，上限 1000）、`full-snapshot` 全量。并给 VTGrid 加了 `SnapshotWithScrollback`。 |
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：

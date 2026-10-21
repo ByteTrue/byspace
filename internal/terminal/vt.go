@@ -277,10 +277,33 @@ func (v *VTGrid) replayPreambleLocked() string {
 }
 
 // Snapshot returns a serializable StateSnapshot and its encoded OpcodeSnapshot (0x04) frame.
-func (v *VTGrid) Snapshot(slot uint8) (StateSnapshot, []byte) {
+// SnapshotWithScrollback emits the snapshot bounded to the last `scrollbackLines` rows of
+// scrollback plus the visible grid.
+//
+// Ported from extractScrollback: a reconnect only needs enough context to look continuous, not
+// the entire history, which is what makes "visible-snapshot" cheaper than a full one.
+func (v *VTGrid) SnapshotWithScrollback(slot uint8, scrollbackLines int) (StateSnapshot, []byte) {
+	if scrollbackLines <= 0 {
+		return v.Snapshot(slot)
+	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	snap, frame := v.snapshotLocked(slot)
+	if len(snap.Scrollback) > scrollbackLines {
+		snap.Scrollback = snap.Scrollback[len(snap.Scrollback)-scrollbackLines:]
+	}
+	return snap, frame
+}
+
+func (v *VTGrid) Snapshot(slot uint8) (StateSnapshot, []byte) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.snapshotLocked(slot)
+}
+
+// snapshotLocked builds the snapshot; callers hold v.mu.
+func (v *VTGrid) snapshotLocked(slot uint8) (StateSnapshot, []byte) {
 	grid := make([][]Cell, v.rows)
 	for r := 0; r < v.rows; r++ {
 		cells := make([]Cell, v.cols)

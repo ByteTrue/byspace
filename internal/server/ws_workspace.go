@@ -581,7 +581,17 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		RequestID       string `json:"requestId"`
 		TerminalID      string `json:"terminalId"`
 		InitialSnapshot string `json:"initialSnapshot"`
-		Restore         *bool  `json:"restore"`
+		// `restore` selects how the client catches up: replaying bytes is cheap but can be huge;
+		// a snapshot is bounded. Ignoring it meant every reconnect got both.
+		Restore *struct {
+			Mode            string `json:"mode"` // "live" | "visible-snapshot" | "full-snapshot"
+			Resume          *bool  `json:"resume"`
+			ScrollbackLines *int   `json:"scrollbackLines"`
+			Size            *struct {
+				Rows int `json:"rows"`
+				Cols int `json:"cols"`
+			} `json:"size"`
+		} `json:"restore"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -609,19 +619,36 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		"requestId":  req.RequestID,
 	})
 
-	if sess.VT() != nil {
-		_, snapFrame := sess.VT().Snapshot(slot)
-		_ = sink.SendBinary(ctx, snapFrame)
+	// Restore mode decides what the client receives; see restorePlan below.
+	plan := planTerminalRestore(req.Restore)
+	if plan.sendSnapshot && sess.VT() != nil {
+		if plan.scrollbackLines > 0 {
+			_, snapFrame := sess.VT().SnapshotWithScrollback(slot, plan.scrollbackLines)
+			_ = sink.SendBinary(ctx, snapFrame)
+		} else {
+			_, snapFrame := sess.VT().Snapshot(slot)
+			_ = sink.SendBinary(ctx, snapFrame)
+		}
 	}
-	var replay strings.Builder
-	if sess.VT() != nil {
-		replay.WriteString(sess.VT().ReplayPreamble())
-	}
-	if res := sess.ResumeSince(0); res != nil && res.Data != "" {
-		replay.WriteString(res.Data)
-	}
-	if replay.Len() > 0 {
-		_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
+	if plan.sendReplay {
+		var replay strings.Builder
+		if sess.VT() != nil {
+			replay.WriteString(sess.VT().ReplayPreamble())
+		}
+		// A "live" restore resumes from the client's cursor when it has one; otherwise the
+		// whole backlog is replayed.
+		var res *terminal.Resumption
+		if plan.resumeFromRevision > 0 {
+			res = sess.ResumeSince(plan.resumeFromRevision)
+		} else {
+			res = sess.ResumeSince(0)
+		}
+		if res != nil {
+			replay.WriteString(res.Data)
+		}
+		if replay.Len() > 0 {
+			_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
+		}
 	}
 
 	// Subscribe returns an unsubscribe func; dropping it is why unsubscribe requests did
@@ -674,5 +701,58 @@ func (s *Server) releaseTerminalSubscriptions(sink frameSink, terminalID string)
 
 	for _, fn := range toRun {
 		fn()
+	}
+}
+
+// terminalRestorePlan is what a subscribe should deliver.
+type terminalRestorePlan struct {
+	sendSnapshot       bool
+	scrollbackLines    int
+	sendReplay         bool
+	resumeFromRevision int64
+}
+
+// planTerminalRestore applies the protocol's restore modes.
+//
+// Ported from terminal-restore.ts. The three modes exist because catching up is a trade:
+// replaying bytes is exact but unbounded, a snapshot is bounded but loses scrollback fidelity.
+//
+//	live             — replay bytes only (cheapest; the client already has the grid)
+//	visible-snapshot — snapshot bounded to scrollbackLines, plus preamble
+//	full-snapshot    — full snapshot plus preamble
+//
+// No restore field means the historical behaviour: snapshot then replay, which the app used
+// for a first mount.
+func planTerminalRestore(restore *struct {
+	Mode            string `json:"mode"`
+	Resume          *bool  `json:"resume"`
+	ScrollbackLines *int   `json:"scrollbackLines"`
+	Size            *struct {
+		Rows int `json:"rows"`
+		Cols int `json:"cols"`
+	} `json:"size"`
+}) terminalRestorePlan {
+	if restore == nil {
+		return terminalRestorePlan{sendSnapshot: true, sendReplay: true}
+	}
+	switch restore.Mode {
+	case "live":
+		// Replay only. `resume` is handled by the caller's cursor; without one the full
+		// backlog is replayed, which is still cheaper than snapshot + replay.
+		return terminalRestorePlan{sendReplay: true}
+	case "visible-snapshot":
+		lines := 200
+		if restore.ScrollbackLines != nil {
+			lines = *restore.ScrollbackLines
+			if lines < 0 {
+				lines = 0
+			}
+			if lines > 1000 {
+				lines = 1000
+			}
+		}
+		return terminalRestorePlan{sendSnapshot: true, scrollbackLines: lines, sendReplay: true}
+	default: // "full-snapshot" or an unknown mode
+		return terminalRestorePlan{sendSnapshot: true, sendReplay: true}
 	}
 }
