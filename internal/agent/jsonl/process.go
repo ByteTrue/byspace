@@ -89,6 +89,8 @@ func Start(cfg LaunchConfig) (*Process, error) {
 		return nil, errors.New("empty command for JSONL RPC process")
 	}
 	cmd := exec.Command(cfg.Command, cfg.Args...)
+	// Own process group: killing only the parent would orphan whatever the provider spawned.
+	setupProcessGroup(cmd)
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
 	}
@@ -372,9 +374,7 @@ func (p *Process) Close() error {
 	case <-p.done:
 		return nil
 	case <-time.After(500 * time.Millisecond):
-		if p.cmd.Process != nil {
-			_ = p.cmd.Process.Kill()
-		}
+		killProcessTree(p.cmd)
 		<-p.done
 		return nil
 	}
