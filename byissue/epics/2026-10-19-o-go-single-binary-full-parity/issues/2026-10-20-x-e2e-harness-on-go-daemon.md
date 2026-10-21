@@ -7,7 +7,7 @@ created: 2026-10-20
 
 # 把 Playwright E2E 套件的 daemon 宿主从 Node 换到 Go 二进制
 
-归属 Epic：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
+归属 Epic：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
 
 ## 目标与范围
 

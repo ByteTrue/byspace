@@ -63,20 +63,30 @@ BySpace 此前由 Node/TypeScript 多包工作区（`packages/server`、`package
 
 ## 验收现状（2026-10-21）
 
-**9 个所属 Issue：8 个交付，1 个部分交付（005）。**
+**9 个所属 Issue：未全部交付。** 8 个功能面已交付，005 部分交付；本 Epic **不关闭**。
 
 机器检查全绿：`go test ./...` 通过；`npm run audit` 出站 `MISSING 0 / OPTIONAL 0 / NEVER_SENT 0`；
 浏览器检查 10/10；入站字段缺口 31 条（全部属未实现的子系统，等于既定基线）。
 
+## 已决策丢弃项（不是缺口，不应计入 Epic 完成度）
+
+| 能力                                                              | 决策出处                                                                                                                                                                                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hub**（`hub.*` 远程控制、hub 关系）                             | [025](../../../issues/025-x-architecture-retention-audit.md) 已移除（commit `446bc38a3d`），归档 ref `archive/pre-hub-removal`                                                                                       |
+| **插件系统**（plugin 运行时、管理、日志、主题、设置、时间线条目） | [025](../../../issues/025-x-architecture-retention-audit.md) 已移除（commit `a5c6bb6588`），归档 ref `archive/pre-plugin-removal`；UI 入口另由 [033](../../../issues/033-x-ff-remove-plugins-settings-entry.md) 清掉 |
+
+Go 侧保留 `plugin.*` 与 `hub.*` 的**解析**（wire 兼容面：旧客户端发来的消息不能崩），
+但实现端如实返回空目录 / `not_connected`，`server_info.features` 对应开关为 `false`。
+这是正确状态，不是待办。
+
 ## 未完成项（各自独立 Issue，不再挂在本 Epic 下）
 
-| Issue                                                                                                                                   | 缺什么                                         | 阻塞条件                                     |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------- |
-| [`issues/2026-10-21-o-go-service-proxy-and-script-preview.md`](../../../issues/2026-10-21-o-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL | 需要先定主机名方案（DNS 泛解析 vs 路径前缀） |
-| [`issues/2026-10-21-o-go-tcp-tunnels.md`](../../../issues/2026-10-21-o-go-tcp-tunnels.md)                                               | TCP Tunnels                                    | **需要第二台机器**才能验证，盲写风险高于收益 |
-| [`issues/2026-10-21-o-go-plugin-runtime-and-hub.md`](../../../issues/2026-10-21-o-go-plugin-runtime-and-hub.md)                         | plugin 运行时与 hub 远程控制                   | 需要沙箱设计与身份模型                       |
-| [`issues/2026-10-21-o-go-quota-fetcher-six-vendors.md`](../../../issues/2026-10-21-o-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                | **需要真实凭据**才能验证数字对不对           |
-| [`issues/2026-10-21-o-go-agent-hook-install-other-providers.md`](../../../issues/2026-10-21-o-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**         | 无硬阻塞，只是未做（shim 已就绪）            |
+| Issue                                                                                                                                   | 缺什么                                          | 阻塞条件                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
+| [`issues/2026-10-21-o-go-service-proxy-and-script-preview.md`](../../../issues/2026-10-21-o-go-service-proxy-and-script-preview.md)     | Service Proxy 整条链路：脚本能跑，没有预览 URL  | 需要先定主机名方案（DNS 泛解析 vs 路径前缀）                         |
+| [`issues/2026-10-21-o-go-tunnel-parity.md`](../../../issues/2026-10-21-o-go-tunnel-parity.md)                                           | **tunnel 能力回填**——已交付过的功能，不是新功能 | 无硬阻塞：062 已真双机验证；本地 relay 三层 + WSL 单机等价形态即可验 |
+| [`issues/2026-10-21-o-go-quota-fetcher-six-vendors.md`](../../../issues/2026-10-21-o-go-quota-fetcher-six-vendors.md)                   | 6 家 quota 抓取                                 | **需要真实凭据**才能验证数字对不对                                   |
+| [`issues/2026-10-21-o-go-agent-hook-install-other-providers.md`](../../../issues/2026-10-21-o-go-agent-hook-install-other-providers.md) | claude/codex/opencode 的 hook **安装**          | 无硬阻塞，只是未做（shim 已就绪）                                    |
 
 `server_info.features` 里这五项对应的开关本轮已全部改为 `false`——此前声明为 `true`，
 客户端会渲染入口而背后什么都没有。`TestDeclaredFeaturesAreImplemented` 挡住回退。

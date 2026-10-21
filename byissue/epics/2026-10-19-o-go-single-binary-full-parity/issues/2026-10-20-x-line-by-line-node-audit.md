@@ -7,7 +7,7 @@ created: 2026-10-20
 
 # 逐文件逐函数审计 Node 实现
 
-归属 Epic：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
+归属 Epic：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
 
 ## 为什么用这种方式
 

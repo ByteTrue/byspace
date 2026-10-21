@@ -79,4 +79,4 @@ Node 侧的 daemon 实现已移入 `archive/`（见 `archive/README.md`）：`ar
 2. **引入一个错误类型、一个格式化函数、一个分支时，必须同时确认生产端真的会产出它**。判据是
    `grep` 那个符号：如果在非测试代码里只出现在定义处，这段逻辑就是死的。
 
-讨论过程见 `../talks/008-go-rewrite-architecture-inspiration.md`；全量对齐范围见 `../epics/2026-10-19-x-go-single-binary-full-parity/spec.md`。
+讨论过程见 `../talks/008-go-rewrite-architecture-inspiration.md`；全量对齐范围见 `../epics/2026-10-19-o-go-single-binary-full-parity/spec.md`。

@@ -74,6 +74,6 @@ magpie 是「改各家 agent 的本地配置 + 在 `:3425` 转发 LLM 请求」�
 ## 五、出口
 
 - 架构层结论落 `byissue/decisions/004-go-single-binary-architecture.md`。
-- 全量功能对齐的范围与 32 项差距清单落 `byissue/epics/2026-10-19-x-go-single-binary-full-parity/spec.md`。
+- 全量功能对齐的范围与 32 项差距清单落 `byissue/epics/2026-10-19-o-go-single-binary-full-parity/spec.md`。
 - 暂不纳入：桌面壳（Wails）、`-tags nogui` 裁剪。当前只做 daemon / web / relay / CLI 四副面孔，
   桌面壳是 magpie 的做法，BySpace 的桌面已在 issue 025 退役，不因换语言复活。

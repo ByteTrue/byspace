@@ -833,11 +833,11 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentRoles":           true,
 			"agentRoleNames":       []string{"chief"},
 			"agentRequestReceipts": true,
-			// hub.* 未实现，只有权限表就位
+			// Hub was removed by decision (issue 025, commit 446bc38a3d). The wire messages still parse.
 			"hubAgentRpc": false,
-			// hub 关系管理未实现
+			// Hub was removed by decision (issue 025).
 			"hubRelationship": false,
-			// 跨主机目录同步未实现
+			// Cross-host directory sync is undecided product work.
 			"directorySync":                   false,
 			"workspaceLabels":                 true,
 			"workspaceSetupRun":               true,
@@ -855,22 +855,23 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"daemonConfigReload":              true,
 			"relayConfig":                     true,
 			"pushTokenRevocation":             true,
-			// 插件沙箱未实现，只读端返回空目录
+			// The plugin system was retired by decision (issue 025, commit a5c6bb6588). Wire parsing stays.
 			"plugins": false,
-			// 插件管理未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginManagement": false,
-			// 插件 git 管理未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginGitManagement": false,
-			// 插件日志未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginLogs": false,
-			// 插件主题未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginThemes": false,
-			// 插件设置未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginSettings": false,
-			// 插件时间线条目未实现
+			// Plugin system retired by decision (issue 025).
 			"pluginTimelineItems": false,
 			"skillManagement":     true,
-			// TCP tunnel 未实现（需两台机器验证，见 audit-log DROPPED）
+			// Tunnel is a delivered feature (issue 062) that the Go port has not picked up yet; the RPCs
+			// currently answer from stubs. See issues/2026-10-21-o-go-tunnel-parity.md.
 			"daemonTunnels":              false,
 			"projectSetupSkill":          true,
 			"terminalAgentHookProviders": true,
@@ -895,7 +896,7 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentDetach":                true,
 			"agentThinkingUpdate":        true,
 			"daemonDiagnostics":          true,
-			// daemon 自更新未实现
+			// Daemon self-update is not implemented.
 			"daemonSelfUpdate":             false,
 			"agentForkContext":             true,
 			"agentForkContextCursor":       true,

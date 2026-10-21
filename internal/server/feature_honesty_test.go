@@ -14,21 +14,23 @@ import (
 // This is the same defect the audit kept finding in individual handlers — a field that is present
 // and plausible but whose value is a lie — applied to the one place the client reads first.
 func TestDeclaredFeaturesAreImplemented(t *testing.T) {
-	// Capabilities this build deliberately does not serve. Each one has a recorded reason; the
-	// list is the answer to "why is this feature false".
-	unimplemented := map[string]string{
-		"hubAgentRpc":         "hub.* has no implementation, only the permission table",
-		"hubRelationship":     "hub relationship management is absent",
-		"directorySync":       "cross-host directory sync is undecided product work",
-		"plugins":             "no plugin sandbox; the read-only endpoints return an empty list",
-		"pluginManagement":    "no plugin runtime",
-		"pluginGitManagement": "no plugin runtime",
-		"pluginLogs":          "no plugin runtime",
-		"pluginThemes":        "no plugin runtime",
-		"pluginSettings":      "no plugin runtime",
-		"pluginTimelineItems": "no plugin runtime",
-		"daemonTunnels":       "TCP tunnels are not implemented (needs a second machine to verify)",
-		"daemonSelfUpdate":    "no self-update path",
+	// Capabilities this build does not serve, split by WHY. The two reasons are not
+	// interchangeable: "retired by decision" is finished work, "not yet ported" is a gap.
+	retired := map[string]string{
+		"hubAgentRpc":         "hub was removed by decision (issue 025, 446bc38a3d)",
+		"hubRelationship":     "hub was removed by decision (issue 025)",
+		"plugins":             "plugin system retired by decision (issue 025, a5c6bb6588)",
+		"pluginManagement":    "plugin system retired by decision (issue 025)",
+		"pluginGitManagement": "plugin system retired by decision (issue 025)",
+		"pluginLogs":          "plugin system retired by decision (issue 025)",
+		"pluginThemes":        "plugin system retired by decision (issue 025)",
+		"pluginSettings":      "plugin system retired by decision (issue 025)",
+		"pluginTimelineItems": "plugin system retired by decision (issue 025)",
+	}
+	notYetPorted := map[string]string{
+		"daemonTunnels":    "tunnel is a delivered feature (issue 062) the Go port has not picked up",
+		"daemonSelfUpdate": "daemon self-update is not implemented",
+		"directorySync":    "cross-host directory sync is undecided product work",
 	}
 
 	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", PiCommand: writeFaithfulFakePi(t)})
@@ -43,14 +45,16 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 		t.Fatal("server_info has no features map")
 	}
 
-	for name, reason := range unimplemented {
-		value, present := rawFeatures[name]
-		if !present {
-			// Omitting the key is also honest — the client treats it as unsupported.
-			continue
-		}
-		if value != false {
-			t.Fatalf("feature %q is declared true but %s", name, reason)
+	for _, group := range []map[string]string{retired, notYetPorted} {
+		for name, reason := range group {
+			value, present := rawFeatures[name]
+			if !present {
+				// Omitting the key is also honest — the client treats it as unsupported.
+				continue
+			}
+			if value != false {
+				t.Fatalf("feature %q is declared true but %s", name, reason)
+			}
 		}
 	}
 

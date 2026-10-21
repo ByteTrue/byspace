@@ -14,7 +14,7 @@ created: 2026-10-20
 - **包含**：出站消息缺字段、流式时序、轮次存活状态、模型思考档位过滤、Home workspace 语义、多模态图片透传。
 - **不包含**：其它 Agent 宿主（Claude/Codex/ACP/OpenCode）真实二进制验证、双机 tunnel。
 
-归属：`byissue/epics/2026-10-19-x-go-single-binary-full-parity`。
+归属：`byissue/epics/2026-10-19-o-go-single-binary-full-parity`。
 
 ## 背景
 

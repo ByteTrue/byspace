@@ -43,4 +43,4 @@ Go 侧没有对应实现，所以 payload 里没有可访问的 URL，脚本只�
 - Node 实现：`archive/packages/server/src/server/service-proxy.ts`（1039 行）、
   `script-health-monitor.ts`（229 行）、`workspace-service-port-registry.ts`
 - 已有：`internal/workspace` 的端口分配器、`workspaceScriptPayload` 的 `lifecycle`/`health`
-- 台账：`epics/2026-10-19-x-go-single-binary-full-parity/issues/audit-log.md` 的 MISSING 表
+- 台账：`epics/2026-10-19-o-go-single-binary-full-parity/issues/audit-log.md` 的 MISSING 表
