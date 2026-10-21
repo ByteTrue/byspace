@@ -591,7 +591,28 @@ Go:   全部覆盖，另加 agent project workspace terminal script schedule hea
 | `async-questions.ts`                                                                                          | **MISSING → 已补**。Codex 会向用户提结构化问题并**阻塞整轮**直到回答。Go 完全没处理，于是 agent 在等待、界面什么都不显示，症状就是「它停了」。现在映射成 `kind: "question"` 的权限请求（每个问题一项、带选项和「其他」出口），复用已有的提问弹窗。回复路径按 kind 分流：问题期待 answers，审批期待 decision——发错一个 Codex 会永远等一个它解析不了的回复。答案按数字 id 排序展平（"10" 不能排在 "2" 前面），拒绝时也发空答案而不是不发，因为整轮都在等。 |
 | `app-server-transport.ts` / `options.ts` / `rewind.ts` / `tool-call-mapper.ts` / `tool-call-detail-parser.ts` | **PORTED** — `codex app-server` JSON-RPC 传输、initialize/thread.start/turn.start、流式 delta、命令执行与文件修改卡片、rewind，实现在 `internal/agent/providers/codex.go`。                                                                                                                                                                                                                                                                              |
 
-### agent/providers/{pi,opencode}/\*\* — 结论见下
+### agent/providers/opencode/\*\* | 9 文件 1932 行
+
+| 文件                                                                                                                                                            | 结论                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server-manager.ts`                                                                                                                                             | **架构等价，非缺口**。Node 自己 spawn `opencode serve` 并用引用计数管理一个进程池（`acquireCurrent` 复用 / `acquireNew` 重建 / `acquireDedicated` 独立 env），然后走 HTTP + SSE。Go 有两条路：已有 URL（`OPENCODE_SERVER_URL` 或 cmd override 是 http(s)://）时走同一个 HTTP 客户端；否则回落到 `opencode acp` 走 ACP 驱动。**ACP 是 opencode 官方支持的模式**，复用已有的 ACP 会话，不需要自己管进程池——少了一个会泄漏子进程的子系统。代价是少了「同一 cwd 的多个 agent 共享一个 serve 进程」的内存优化，那是优化不是能力。 |
+| `event-consumer.ts` / `bridge.ts` / `tool-call-mapper.ts` / `tool-call-detail-parser.ts` / `subagent-presentation.ts` / `rewind.ts` / `options.ts` / `paths.ts` | **PORTED** — SSE 事件消费、工具卡片映射、子代理呈现、rewind 分别在 `internal/agent/providers/opencode.go` 与 ACP 驱动里。                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+### agent/providers/pi/\*\* | 11 文件 5289 行
+
+**PORTED** — 这是最早打通、也是验证最深的一条：`--mode rpc` 的 prompt/steer/abort/get_state、
+thinking 档位目录、`.jsonl` 历史发现与导入、子代理 tail、工具卡片映射、rewind 的树导航扩展、
+usage 轮询。逐项对应记录在 `runtime-mcp-config`、`image 转发`、`重入锁`、`把 provider 当子进程`
+等前面的条目里；`agent.ts` 里内联的树导航扩展已完整移植到 `internal/agent/pi/extension.go`。
+
+### server/agent/\*\* 其余 — 尚未逐文件审
+
+`server/agent/` 顶层 42 文件 15529 行（`agent-manager.ts` 5496、`agent-prompt.ts`、
+`agent-timeline-content.ts`、`agent-loading.ts`、`agent-projections.ts`、`agent-run-state.ts`
+等）已按主题审过并记录（级联归档、timeline 上限、并发装载去重、run token、投影字段、
+系统信封过滤），但**没有逐文件过一遍**，留在未完成清单里。
+
+### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
 `internal/agent/pi/**`，逐项对应关系已在前面的 `runtime-mcp-config`、`image` 转发、
