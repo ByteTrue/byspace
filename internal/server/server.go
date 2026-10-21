@@ -22,6 +22,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agentmode"
 	"github.com/ByteTrue/byspace/internal/agentroles"
 	"github.com/ByteTrue/byspace/internal/agenttitle"
 	"github.com/ByteTrue/byspace/internal/attention"
@@ -2103,6 +2104,20 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		callerPtr = &caller
 	}
 
+	// A mode id is provider-specific, so a child created from a parent in another provider cannot
+	// inherit it: the child would run with a mode its provider does not recognise, silently using
+	// the provider default instead of the posture the caller asked for. Resolve refuses that unless
+	// the intent can be bridged (both sides unattended) or the caller passed an explicit mode.
+	resolvedMode, modeErr := agentmode.Resolve(s.agentModeInput(provider, req.Config.ModeID, callerPtr))
+	if modeErr != nil {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "agent_create_failed",
+			"error":     modeErr.Error(),
+			"requestId": req.RequestID,
+		})
+		return
+	}
+
 	rec := store.AgentRecord{
 		ID:            agentID,
 		Provider:      provider,
@@ -2113,12 +2128,12 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		Title:         title,
 		Labels:        agentLabels,
 		LastStatus:    "idle",
-		LastModeID:    req.Config.ModeID,
+		LastModeID:    resolvedMode,
 		ParentAgentID: callerPtr,
 		Config: &store.AgentConfig{
 			Model:            req.Config.Model,
 			ThinkingOptionID: req.Config.ThinkingOptionID,
-			ModeID:           req.Config.ModeID,
+			ModeID:           resolvedMode,
 			Role:             req.Config.Role,
 			SystemPrompt:     req.Config.SystemPrompt,
 		},
@@ -3898,4 +3913,70 @@ func derefOr(value *string, fallback string) string {
 		return fallback
 	}
 	return *value
+}
+
+// agentModeInput assembles the mode-resolution input for a create request.
+//
+// The parent is read from the stored record rather than the request: the request only carries the
+// caller's id, and the parent's provider is what decides whether its mode id means anything.
+func (s *Server) agentModeInput(provider string, requested *string, callerID *string) agentmode.Input {
+	input := agentmode.Input{Requested: requested, Provider: provider}
+
+	if callerID != nil {
+		if record, err := s.store.GetAgent(*callerID); err == nil && record != nil {
+			parent := &agentmode.Parent{Provider: record.Provider}
+			if record.Config != nil {
+				parent.ModeID = record.Config.ModeID
+			}
+			// A parent's mode is "unattended" when the provider says its mode runs without asking.
+			// The provider snapshot is the authority; without it the flag stays false and the
+			// cross-provider case is refused rather than guessed.
+			if parent.ModeID != nil {
+				parent.Unattended = s.providerModeIsUnattended(record.Provider, *parent.ModeID)
+			}
+			input.Parent = parent
+		}
+	}
+
+	// The target provider's modes come from the same snapshot the UI uses, so a mode the picker
+	// offered is a mode this accepts.
+	if modes, known := s.providerModeIDs(input.Provider); known {
+		input.AvailableModes = modes
+		for _, mode := range modes {
+			if s.providerModeIsUnattended(input.Provider, mode) {
+				unattended := mode
+				input.TargetUnattendedMode = &unattended
+				break
+			}
+		}
+	}
+	return input
+}
+
+// providerModeIDs returns a provider's mode ids, and whether the set is known.
+//
+// "Known" means the provider declares modes. A custom or unknown provider declares none, and the
+// distinction matters: unknown passes an explicit mode through unvalidated, while a provider with a
+// declared-but-empty set means "this provider has no modes".
+func (s *Server) providerModeIDs(provider string) ([]string, bool) {
+	spec := providers.GetProviderSpec(provider)
+	if len(spec.Modes) == 0 {
+		return nil, false
+	}
+	ids := make([]string, 0, len(spec.Modes))
+	for _, mode := range spec.Modes {
+		ids = append(ids, mode.ID)
+	}
+	return ids, true
+}
+
+// providerModeIsUnattended reports whether a mode runs without asking the user.
+func (s *Server) providerModeIsUnattended(provider, modeID string) bool {
+	spec := providers.GetProviderSpec(provider)
+	for _, mode := range spec.Modes {
+		if mode.ID == modeID {
+			return mode.IsUnattended
+		}
+	}
+	return false
 }
