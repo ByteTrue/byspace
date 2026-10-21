@@ -148,7 +148,7 @@ func (s *Server) systemPromptFor(rec store.AgentRecord) string {
 			parts = append(parts, appendPrompt)
 		}
 	}
-	return strings.Join(parts, "\n\n")
+	return agentroles.ComposeSystemPromptParts(parts...)
 }
 
 // capabilityTokenValue returns the per-run token an agent's MCP bridge presents.

@@ -101,3 +101,25 @@ func SystemPrompt(name string) string {
 	}
 	return ""
 }
+
+// ComposeSystemPromptParts joins prompt segments into one system prompt.
+//
+// Ported from composeSystemPromptParts. Each part is trimmed and empty parts are dropped, and the
+// result is "" when nothing survives. Both details matter: a nil or empty part left in produces a
+// stray blank line, and returning a string of separators instead of "" makes the caller send a
+// system prompt that says nothing — which some providers treat as a real prompt and prepend to every
+// turn.
+func ComposeSystemPromptParts(parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		kept = append(kept, trimmed)
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	return strings.Join(kept, "\n\n")
+}

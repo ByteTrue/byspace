@@ -64,3 +64,22 @@ func TestNamesListsEveryRole(t *testing.T) {
 		t.Fatalf("names = %v", names)
 	}
 }
+
+// A nil or empty part left in produces a stray blank line; returning separators instead of "" makes
+// the caller send a system prompt that says nothing, which some providers prepend to every turn.
+func TestComposeSystemPromptParts(t *testing.T) {
+	if got := ComposeSystemPromptParts(); got != "" {
+		t.Fatalf("no parts → %q", got)
+	}
+	if got := ComposeSystemPromptParts("", "   ", ""); got != "" {
+		t.Fatalf("only blanks → %q", got)
+	}
+	if got := ComposeSystemPromptParts("a", "", "b"); got != "a\n\nb" {
+		t.Fatalf("got %q", got)
+	}
+	// Each part is trimmed: a trailing newline in one part would otherwise become three newlines
+	// between segments.
+	if got := ComposeSystemPromptParts("  a  ", "\n\nb\n"); got != "a\n\nb" {
+		t.Fatalf("got %q", got)
+	}
+}

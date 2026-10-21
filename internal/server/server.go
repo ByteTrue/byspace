@@ -23,6 +23,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/agentroles"
+	"github.com/ByteTrue/byspace/internal/agenttitle"
 	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -2055,15 +2056,18 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	agentID := newAgentID()
-	title := req.Config.Title
-	if title == nil && req.InitialPrompt != nil {
-		trimmed := strings.TrimSpace(*req.InitialPrompt)
-		if trimmed != "" {
-			if len(trimmed) > 60 {
-				trimmed = trimmed[:60]
-			}
-			title = &trimmed
-		}
+	// The derived title is the first content line of the prompt, whitespace-collapsed and clamped
+	// in characters. Slicing the raw prompt at 60 bytes produced a title containing a newline and
+	// could cut a multi-byte character in half — the sidebar then showed a broken glyph and a
+	// wrapped second line.
+	derived := agenttitle.Resolve(derefOr(req.Config.Title, ""), derefOr(req.InitialPrompt, ""))
+	var title *string
+	if derived.Explicit != "" {
+		explicit := derived.Explicit
+		title = &explicit
+	} else if derived.Provisional != "" {
+		provisional := derived.Provisional
+		title = &provisional
 	}
 
 	if strings.TrimSpace(req.IdempotencyKey) != "" {
@@ -3886,4 +3890,12 @@ func (s *Server) waitForRunStart(ctx context.Context, agentID, provider string) 
 			return fmt.Errorf("%s run did not start within %d seconds (phase: run start)", provider, int(AgentRunStartTimeout.Seconds()))
 		}
 	}
+}
+
+// derefOr reads an optional string with a fallback.
+func derefOr(value *string, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }

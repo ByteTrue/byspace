@@ -13,6 +13,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agentnotices"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -151,14 +152,24 @@ func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw
 	mp.record.Config.ThinkingOptionID = req.ThinkingOptionID
 	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	recCopy := mp.record
+	// A provider keeps the running turn on its original level and applies the new one next turn.
+	// Without telling the user, changing the level mid-turn looks like it did nothing.
+	midTurn := mp.record.LastStatus == "running"
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
 
+	var notice *agentnotices.Notice
+	if midTurn {
+		notice = &agentnotices.ThinkingAppliesNextTurn
+	}
 	_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
 		"accepted":  true,
 		"error":     nil,
+		// Nullable and optional: nil is the correct absent value, and an empty object fails the
+		// discriminated union that validates this field.
+		"notice": agentnotices.ToPayload(notice),
 	})
 }
 
@@ -190,14 +201,22 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	mp.record.LastModeID = &modeCopy
 	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	recCopy := mp.record
+	// Same as the thinking level: the running turn keeps its mode, and the user needs to know the
+	// change is not in effect yet.
+	midTurn := mp.record.LastStatus == "running"
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
 
+	var notice *agentnotices.Notice
+	if midTurn {
+		notice = &agentnotices.ModeAppliesNextTurn
+	}
 	_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
 		"accepted":  true,
 		"error":     nil,
+		"notice":    agentnotices.ToPayload(notice),
 	})
 }
 
