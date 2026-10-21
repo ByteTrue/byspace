@@ -487,6 +487,16 @@ provider 可用性用的是 `exec.LookPath`，它返回 PATH 上**第一个**匹
 `encrypted-channel.ts`（579 行）的会话状态机对应 `internal/e2ee/channel.go`；
 `base64.ts`/`types.ts`/`index.ts`/`e2ee.ts` 是转出与类型。
 
+### packages/cli/src/output/** | 570 | **MISSING\*\* → 已补
+
+`ls` 只有 `--json` 和一个硬编码的 `printf` 表格，其他列表命令各写各的格式化。同一条命令既被人在终端里读、也被脚本解析，而这套输出只服务了其中一种。
+
+`internal/cli/output` 现在提供 `--json`、`--yaml`、`-q/--quiet` 和默���自适应表格（列宽跟内容与终端宽度）。YAML 是手写的，因为 CLI 只输出 map/slice/标量，引一个完整编码器是 daemon 二进制要永久背负的依赖；有歧义的标量会加引号，保证输出可解析。
+
+表格按**显示列**而不是字节计算宽度。一个 CJK 字符是两列三字节，字节算术会让后面每一列错位，还可能把一个 rune 切成两半——在标题中间印出替换字符。终端宽度取 `COLUMNS`，再退回 `stty size`。
+
+`ls` 默认也不再显示已归档的 agent（`-a` 恢复）：这个列表是用户正在做的东西，把所有跑完的 agent 列出来会让它读不了。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
