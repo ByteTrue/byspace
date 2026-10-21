@@ -520,7 +520,7 @@
 | `commands/worktree/create.ts`               | 84  | 待审 | —    |
 | `commands/worktree/index.ts`                | 38  | 待审 | —    |
 | `commands/worktree/ls.ts`                   | 131 | 待审 | —    |
-| `index.ts`                                  | 6   | 待审 | —    |
+| `cli/index.ts`                              | 6   | 待审 | —    |
 | `output/index.ts`                           | 62  | 待审 | —    |
 | `output/json.ts`                            | 41  | 待审 | —    |
 | `output/pairing.ts`                         | 37  | 待审 | —    |
@@ -550,5 +550,5 @@
 | `crypto.ts`            | 181 | 待审 | —    |
 | `e2ee.ts`              | 11  | 待审 | —    |
 | `encrypted-channel.ts` | 579 | 待审 | —    |
-| `index.ts`             | 19  | 待审 | —    |
+| `relay/index.ts`       | 19  | 待审 | —    |
 | `types.ts`             | 28  | 待审 | —    |

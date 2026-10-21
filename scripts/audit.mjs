@@ -50,6 +50,13 @@ const STEPS = [
     why: "协议要求的字段 Go 没发 —— 界面上那块数据永远空着或显示旧值。",
   },
   {
+    name: "重审账本一致",
+    run: ["node", ["scripts/reaudit-ledger-check.mjs"]],
+    why:
+      "账本用精确字符串替换写入过，而 formatter 给表格加了 padding，于是替换静默失败：" +
+      "结论写了、报告成已提交、文件里其实没有。这一步让那个失败模式无法再发生。",
+  },
+  {
     name: "浏览器验证",
     run: ["node", ["scripts/browser-conformance.mjs"]],
     skip: skipBrowser,
@@ -82,6 +89,7 @@ function detailScript(step) {
   return (
     {
       入站字段对账: "audit:go-parity",
+      重审账本一致: "audit:ledger",
       出站字段对账: "audit:emit",
       浏览器验证: "audit:browser",
       "Go 测试": "test:go",

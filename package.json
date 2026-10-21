@@ -84,7 +84,8 @@
     "version:sync-internal": "node scripts/sync-workspace-versions.mjs",
     "watch:client": "tsc -p packages/client/tsconfig.json --watch --preserveWatchOutput",
     "watch:protocol": "npm run watch --workspace=@bytetrue/protocol",
-    "web": "npm run web --workspace=@bytetrue/app"
+    "web": "npm run web --workspace=@bytetrue/app",
+    "audit:ledger": "node scripts/reaudit-ledger-check.mjs"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",
