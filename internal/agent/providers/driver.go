@@ -593,3 +593,22 @@ func thinkingSetKey(options []pi.ThinkingOption, defaultID string) string {
 	}
 	return defaultID + "|" + string(b)
 }
+
+// IsKnownProvider reports whether id matches a built-in provider or an ACP preset.
+//
+// Resuming a record whose provider this build does not register cannot work: the command it
+// names may not exist, and the resulting failure is an opaque exec error instead of a clear
+// "this agent uses a provider you do not have".
+func IsKnownProvider(id string) bool {
+	if strings.TrimSpace(id) == "" {
+		// An empty provider means "pi" for records written before providers were explicit.
+		return true
+	}
+	for _, spec := range BuiltinProviders {
+		if spec.ID == id {
+			return true
+		}
+	}
+	_, ok := ACPPresets[id]
+	return ok
+}

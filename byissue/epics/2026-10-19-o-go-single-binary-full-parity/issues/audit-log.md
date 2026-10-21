@@ -82,7 +82,9 @@
 
 | `workspace-reconciliation-service.ts` | 542 | **MISSING** → 已补 | 没有任何「定时从磁盘重新读取 git 事实」的机制：在终端里切分支后侧边栏一直显示旧分支，一个原本是普通目录的工作区后来变成 git 仓库也永远还是 `directory`。已补 `workspace_placement.go`（移植 `reconcileWorkspacePlacement`，只改真正变化的字段；已稳定的记录不重复写，避免每 5 分钟把 `updatedAt` 刷一遍并广播一堆无意义 update），并挂到 5 分钟定时器上（对应 Node 的 `DEFAULT_RESCAN_INTERVAL_MS`）。 |
 
-### 未审计（本批剩余 47 文件）
+| `agent/agent-loading.ts` | 148 | **PARTIAL** → 已补 | 三个缺陷：① **并发冷启动不去重**——两个请求同时到达都看到「未加载」，各起一个 provider 进程，输的那个变成孤儿并继续占着会话文件；② **不检查归档状态**——归档的 agent 仍可被 resume，等于复活用户已经删掉的会话并继续烧 token；③ **不校验 provider 是否已注册**——记录指向本构建不认识的 provider 时，报的是 exec 失败而不是「你缺少这个 provider」。均已补，3 个测试；去重测试已验证移除修复即失败（`concurrent loads produced more than one session`）。 |
+
+### 未审计（本批剩余 46 文件）
 
 按行数排序，下一轮从这里继续：
 

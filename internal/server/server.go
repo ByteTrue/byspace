@@ -135,6 +135,8 @@ type Server struct {
 	clients           map[frameSink]bool
 	pollStop          chan struct{}
 	allowedHostnames  []string
+	// agentLoads deduplicates concurrent cold-start attempts for one agent.
+	agentLoads map[string]*agentLoad
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -207,6 +209,7 @@ func New(opts Options) (*Server, error) {
 		setupSnapshots:    make(map[string]*setupSnapshot),
 		workspaceScripts:  make(map[string]*workspaceScript),
 		scriptPorts:       newServicePortAllocator(),
+		agentLoads:        make(map[string]*agentLoad),
 		idempotentAgents:  make(map[string]string),
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),
@@ -2120,14 +2123,59 @@ func (s *Server) ensureAgentLoaded(agentID string) (*managedPi, error) {
 		s.mu.Unlock()
 		return mp, nil
 	}
+	// Concurrent requests for the same agent must share one initialization. Without this,
+	// two requests arriving while an agent is cold both see "not loaded" and each spawns a
+	// provider process — the loser's process is orphaned and keeps the session file open.
+	if pending, ok := s.agentLoads[agentID]; ok {
+		s.mu.Unlock()
+		<-pending.done
+		s.mu.Lock()
+		mp, exists := s.agents[agentID]
+		loadErr := pending.err
+		delete(s.agentLoads, agentID)
+		s.mu.Unlock()
+		if exists {
+			return mp, nil
+		}
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return nil, fmt.Errorf("agent %s failed to load", agentID)
+	}
+	load := &agentLoad{done: make(chan struct{})}
+	if s.agentLoads == nil {
+		s.agentLoads = make(map[string]*agentLoad)
+	}
+	s.agentLoads[agentID] = load
 	s.mu.Unlock()
 
+	mp, err := s.loadAgent(agentID)
+
+	s.mu.Lock()
+	load.err = err
+	close(load.done)
+	s.mu.Unlock()
+	return mp, err
+}
+
+// loadAgent performs the actual read-and-spawn, with no locking expectations.
+func (s *Server) loadAgent(agentID string) (*managedPi, error) {
 	rec, err := s.store.GetAgent(agentID)
 	if err != nil {
 		return nil, err
 	}
 	if rec == nil {
 		return nil, fmt.Errorf("agent not found: %s", agentID)
+	}
+	// An archived agent is history, not a runnable session. Resuming it would resurrect a
+	// conversation the user removed from the sidebar and start spending tokens on it again.
+	if rec.ArchivedAt != nil {
+		return nil, fmt.Errorf("agent is archived: %s", agentID)
+	}
+	// A record pointing at a provider this build does not register cannot be resumed; say so
+	// instead of spawning a command that does not exist.
+	if !providers.IsKnownProvider(rec.Provider) {
+		return nil, fmt.Errorf("agent %s references unavailable provider %q", agentID, rec.Provider)
 	}
 	return s.startOrGetPiAgent(*rec)
 }
@@ -3208,4 +3256,10 @@ func resolveAllowedHostnames(st *store.Store) []string {
 		}
 	}
 	return nil
+}
+
+// agentLoad is one in-flight cold start, shared by every concurrent caller.
+type agentLoad struct {
+	done chan struct{}
+	err  error
 }
