@@ -648,6 +648,31 @@ daemon 给每个 agent 注入自己的 MCP server，那些工具能创建 agent�
 | `provider/provider-catalog-session.ts`                                                                                                                                                                 | **PORTED** — 模型目录探测在 `internal/agent/providers/catalog.go`（短生命周期 `--no-session` 进程、失败重试而非缓存空结果）。                                                                                                                  |
 | `workspace-provisioning/*` / `workspace-recovery/*` / `workspace-scripts/*` / `workspace-git-observer/*` / `project-config/*` / `git-mutation/*` / `agent-config/*` / `agent-updates/*` / `schedule/*` | **PORTED** — 各自对应 `ws_workspace.go`、`ws_plugin_setup.go`、`ws_git_system.go`、`runtime_services.go` 里的实现；逐项记录在「脚本端口分配」「文件/Git diff 订阅轮询」「workspace.setup」「agent 深度控制」等前面的条目里。                   |
 
+### agent/tools/** | 3 文件 3252 行 | **PORTED（机器核对）\*\*
+
+不是靠读代码判断的——用脚本抽出 Node `byspace-tools.ts` 里的工具名集合，与
+`internal/server/mcp.go` 的 `mcpToolDef` 调用集合求交：
+
+```
+Node 声明的工具名 ∩ Go 注册的工具名 = 40
+Node 有 Go 无 = 0（另两个只在 Node 出现的词是枚举值 "change_request" / "local_checkout"，不是工具名）
+Go 多出的 2 个是同义别名（send_agent_prompt / send_agent_message）
+```
+
+`byspace-tool-serialization.ts`（工具结果序列化）与 `types.ts` 由 `json.MarshalIndent` 与 Go
+的 struct 承担。
+
+### server/agent/providers/\*\* 顶层 19 文件 | 22106 行
+
+这一层是**通用件**（`jsonl-rpc-process.ts`、`provider-runner.ts`、`tool-call-detail-primitives.ts`、
+`tool-call-mapper-utils.ts` 等），各 provider 共享的传输与映射逻辑。
+
+Go 侧的对应物是 `internal/agent/jsonl`（JSONL RPC 多路复用、V2 分片重组、超时）与
+`internal/agent/sdk`（TimelineItem、BuildToolCallDetail、thinking 目录等共享类型）。这几条已在
+`pi 的 rewind 扩展`、`image 转发`、`死锁`、`把 provider 当子进程` 等条目里逐项核实过。
+
+**但没有逐文件过一遍**，留在未完成清单里。这是剩余最大的一块。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
