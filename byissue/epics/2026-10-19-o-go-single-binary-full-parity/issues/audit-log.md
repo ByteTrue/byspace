@@ -170,7 +170,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `agent/agent-manager.ts` | 5496 | **PARTIAL** → 已补两处 | ① **归档父 agent 不级联**：`cascadeArchiveChildren` 缺失，归档一个会话后它派生的子 agent 继续跑、继续烧 token。已实现，含 `shouldDetachFromArchivedParent` 语义——跨工作区的、或用户已打开 tab 的子 agent 应**脱离父级**而不是被归档（归档等于删掉用户还在看的东西）。② **关闭时不取消等待者**：`prepareAgentForClosure` 会给所有 waiter 发 `turn_canceled`，Go 没有，导致 `wait_for_finish` / `byspace wait` 在 agent 已消失后仍挂到自己的超时。已补：`Session.Close` 唤醒所有 waiter，归档路径广播 `turn_canceled`。3 个测试。 |
 
-### 未审计（本批剩余 44 文件）
+| `services/quota-fetcher/**` | 4221 | **PARTIAL** → 框架 + 2 家 | `provider.usage.list` 之前硬编码返回空数组，Usage 页看起来是「你没有额度」而不是「这个构建读不到」。已建 `internal/quota`（统一 `Usage`/`Window`/`Balance` 形状、15s 超时、body 上限、tone 阈值），并实现 **codex**（读 `~/.codex/auth.json`，只读不刷新——刷新归 CLI 管，两个 daemon 轮换同一 token 会把用户登出）与 **zai**（`ZAI_API_KEY`/`GLM_API_KEY`）。缺失凭据时返回 `unavailable` 而不是 `error`，两种情况对用户意味着不同的事。6 个测试 + 端到端验证响应通过协议校验。**仍缺 6 家**：claude（keychain，480 行）、cursor、copilot、grok、kimi、minimax——未移植，需真实凭据才能验证。 |
+
+### 未审计（本批剩余 43 文件）
 
 按行数排序，下一轮从这里继续：
 

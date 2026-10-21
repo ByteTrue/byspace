@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/quota"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -1063,10 +1064,13 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "provider.usage.list.request":
+		// An empty array made the Usage page look like "you have no quotas"; a provider that
+		// cannot be read reports "unavailable" so the two cases stay distinguishable.
+		providers := quota.FetchAll(ctx)
 		_ = sendSessionMsg(ctx, sink, "provider.usage.list.response", map[string]any{
 			"requestId": base.RequestID,
 			"fetchedAt": time.Now().UTC().Format(time.RFC3339Nano),
-			"providers": []any{},
+			"providers": providers,
 		})
 
 	case "provider_diagnostic_request":
