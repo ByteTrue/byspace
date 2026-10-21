@@ -253,36 +253,41 @@ func (s *Server) handleTunnelStats(ctx context.Context, sink frameSink, requestI
 
 // handleTunnelCreate configures an outbound peer.
 func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	// The configuration is nested under `config`, not spread across the request. Reading it from
+	// the top level yields an empty peer every time, and only Add's validation stops it from being
+	// persisted as a broken entry.
 	var req struct {
-		RequestID       string  `json:"requestId"`
-		PeerID          string  `json:"peerId"`
-		PeerHostname    *string `json:"peerHostname"`
-		URL             string  `json:"url"`
-		Token           string  `json:"password"`
-		DaemonPublicKey string  `json:"daemonPublicKeyB64"`
-		Forwards        []struct {
-			RemotePort int    `json:"remotePort"`
-			Label      string `json:"label"`
-		} `json:"forwards"`
+		RequestID string `json:"requestId"`
+		Config    struct {
+			PeerID          string  `json:"peerId"`
+			PeerHostname    *string `json:"peerHostname"`
+			URL             string  `json:"url"`
+			Token           string  `json:"password"`
+			DaemonPublicKey string  `json:"daemonPublicKeyB64"`
+			Forwards        []struct {
+				RemotePort int    `json:"remotePort"`
+				Label      string `json:"label"`
+			} `json:"forwards"`
+		} `json:"config"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	forwards := make([]tunnel.ForwardConfig, 0, len(req.Forwards))
-	for _, forward := range req.Forwards {
+	forwards := make([]tunnel.ForwardConfig, 0, len(req.Config.Forwards))
+	for _, forward := range req.Config.Forwards {
 		forwards = append(forwards, tunnel.ForwardConfig{RemotePort: forward.RemotePort, Label: forward.Label})
 	}
 
 	err := s.tunnelRegistry().Add(tunnel.PeerConfig{
-		PeerID:          req.PeerID,
-		PeerHostname:    req.PeerHostname,
-		URL:             req.URL,
-		Token:           req.Token,
-		DaemonPublicKey: req.DaemonPublicKey,
+		PeerID:          req.Config.PeerID,
+		PeerHostname:    req.Config.PeerHostname,
+		URL:             req.Config.URL,
+		Token:           req.Config.Token,
+		DaemonPublicKey: req.Config.DaemonPublicKey,
 		Forwards:        forwards,
 	})
 	payload := map[string]any{
 		"requestId": req.RequestID,
-		"peerId":    req.PeerID,
+		"peerId":    req.Config.PeerID,
 		"ok":        err == nil,
 	}
 	if err != nil {

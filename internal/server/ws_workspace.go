@@ -294,8 +294,22 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		Limit     int      `json:"limit"`
 		Since     string   `json:"since"`
 		Providers []string `json:"providers"`
+		// Query filters by session title or first message. The import dialog has a search box, and
+		// without it every keystroke re-lists everything.
+		Query string `json:"query"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	// A provider filter is honoured before listing: asking for claude sessions and getting pi
+	// ones is worse than getting nothing.
+	if len(req.Providers) > 0 && !containsString(req.Providers, "pi") {
+		_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
+			"requestId": req.RequestID,
+			"entries":   []any{},
+			"error":     nil,
+		})
+		return
+	}
 
 	sessions, _ := pi.ListImportableSessions(pi.HistoryOptions{
 		SessionDir: s.piSessionDir,
@@ -303,6 +317,15 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		Limit:      req.Limit,
 		Since:      req.Since,
 	})
+	if query := strings.ToLower(strings.TrimSpace(req.Query)); query != "" {
+		filtered := sessions[:0]
+		for _, session := range sessions {
+			if matchesSessionQuery(session, query) {
+				filtered = append(filtered, session)
+			}
+		}
+		sessions = filtered
+	}
 
 	entries := make([]map[string]any, 0, len(sessions))
 	for _, sess := range sessions {
@@ -361,6 +384,10 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		SessionID        string         `json:"sessionId"`
 		Overrides        map[string]any `json:"overrides"`
 		Cwd              string         `json:"cwd"`
+		// Labels carry relationships the imported session already had — a parent agent id, a
+		// role. Dropping them imports the transcript but loses the structure around it, so a
+		// subagent comes back as a top-level agent.
+		Labels map[string]any `json:"labels"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	if strings.TrimSpace(req.Provider) == "" {
@@ -408,7 +435,7 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		CreatedAt:   now,
 		UpdatedAt:   desc.LastActivityAt,
 		Title:       desc.Title,
-		Labels:      map[string]string{},
+		Labels:      importLabels(req.Labels),
 		LastStatus:  "idle",
 		Config: &store.AgentConfig{
 			Model:            desc.Model,
@@ -767,4 +794,63 @@ func planTerminalRestore(restore *struct {
 	default: // "full-snapshot" or an unknown mode
 		return terminalRestorePlan{sendSnapshot: true, sendReplay: true}
 	}
+}
+
+// importLabels coerces a request's label map.
+//
+// Values are strings on the wire; anything else is dropped rather than stringified, because a
+// non-string label would be a client bug and inventing a representation for it makes the record
+// harder to reason about.
+func importLabels(raw map[string]any) map[string]string {
+	labels := make(map[string]string, len(raw))
+	for key, value := range raw {
+		if text, ok := value.(string); ok && strings.TrimSpace(key) != "" {
+			labels[key] = text
+		}
+	}
+	return labels
+}
+
+// releaseTerminalSubscriptionsForScope drops subscriptions whose terminal belongs to a workspace
+// or directory.
+//
+// The plural request carries a scope rather than ids: a closing panel knows which workspace it was
+// showing, not which terminal ids it had subscribed to.
+func (s *Server) releaseTerminalSubscriptionsForScope(sink frameSink, workspaceID, cwd string) {
+	if workspaceID == "" && cwd == "" {
+		s.releaseTerminalSubscriptions(sink, "")
+		return
+	}
+
+	// Collect the terminal ids that belong to the scope, then release those.
+	s.mu.Lock()
+	var scoped []string
+	for _, term := range s.terminals {
+		if workspaceID != "" && term.WorkspaceID != workspaceID {
+			continue
+		}
+		if cwd != "" && term.Cwd != cwd {
+			continue
+		}
+		scoped = append(scoped, term.ID)
+	}
+	s.mu.Unlock()
+
+	for _, id := range scoped {
+		s.releaseTerminalSubscriptions(sink, id)
+	}
+}
+
+// matchesSessionQuery tests a session against a lowercased search term.
+//
+// The title and both prompt previews are checked: a user searching for a session remembers either
+// what they called it or what they asked in it, and checking only the title misses the second.
+func matchesSessionQuery(session pi.ImportableSession, query string) bool {
+	candidates := []*string{session.Title, session.FirstPromptPreview, session.LastPromptPreview}
+	for _, candidate := range candidates {
+		if candidate != nil && strings.Contains(strings.ToLower(*candidate), query) {
+			return true
+		}
+	}
+	return false
 }

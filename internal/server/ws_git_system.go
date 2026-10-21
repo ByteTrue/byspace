@@ -127,7 +127,21 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		})
 
 	case "branch_suggestions_request":
-		branches := workspace.ListBranches(ctx, base.Cwd)
+		// The picker filters server-side: a repository with thousands of branches cannot ship the
+		// whole list on every keystroke, and the client sends what the user typed.
+		var suggestReq struct {
+			RequestID string `json:"requestId"`
+			Cwd       string `json:"cwd"`
+			Query     string `json:"query"`
+			Limit     int    `json:"limit"`
+		}
+		_ = json.Unmarshal(raw, &suggestReq)
+		suggestCwd := suggestReq.Cwd
+		if strings.TrimSpace(suggestCwd) == "" {
+			suggestCwd = base.Cwd
+		}
+		branches := workspace.ListBranches(ctx, suggestCwd)
+		branches = filterBranches(branches, suggestReq.Query, suggestReq.Limit)
 		_ = sendSessionMsg(ctx, sink, "branch_suggestions_response", map[string]any{
 			"branches": branches,
 			// The picker annotates each row with ahead/behind and last-commit info; without
@@ -682,10 +696,20 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		// `unsubscribe_terminal_request` names one terminal.
 		var unsubReq struct {
 			TerminalID string `json:"terminalId"`
+			// The plural form drops every subscription for a workspace or directory, which is what
+			// a closing panel needs — it does not track individual terminal ids.
+			Cwd         string `json:"cwd"`
+			WorkspaceID string `json:"workspaceId"`
 		}
 		_ = json.Unmarshal(raw, &unsubReq)
 		if msgType == "unsubscribe_terminals_request" {
-			s.releaseTerminalSubscriptions(sink, "")
+			// Scoped when the client names a workspace or directory: a panel closing should not
+			// unsubscribe terminals in a panel that is still open.
+			if unsubReq.WorkspaceID != "" || unsubReq.Cwd != "" {
+				s.releaseTerminalSubscriptionsForScope(sink, unsubReq.WorkspaceID, unsubReq.Cwd)
+			} else {
+				s.releaseTerminalSubscriptions(sink, "")
+			}
 		} else {
 			s.releaseTerminalSubscriptions(sink, unsubReq.TerminalID)
 		}
@@ -1032,7 +1056,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			_ = sendSessionMsg(ctx, sink, "agent.timeline.list_prompts.response", map[string]any{
 				"requestId": base.RequestID,
 				"agentId":   base.AgentID,
-				"epoch":     "ep_1",
+				"epoch":     s.currentTimelineEpoch(),
 				"prompts":   []any{},
 				"error":     err.Error(),
 			})
@@ -1052,16 +1076,31 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		_ = sendSessionMsg(ctx, sink, "agent.timeline.list_prompts.response", map[string]any{
 			"requestId": base.RequestID,
 			"agentId":   base.AgentID,
-			"epoch":     "ep_1",
+			"epoch":     s.currentTimelineEpoch(),
 			"prompts":   prompts,
 			"error":     nil,
 		})
 
 	case "agent.timeline.append.request":
+		// The only thing this message can carry is `item.type: "plugin"` — the plugin system was
+		// retired by decision (issue 025, a5c6bb6588), so there is nothing to append. The fields
+		// are parsed anyway: an old client sending this must get a well-formed answer rather than
+		// a dropped message, and seq 0 with the current epoch says plainly that nothing was added.
+		var appendReq struct {
+			RequestID string          `json:"requestId"`
+			AgentID   string          `json:"agentId"`
+			Item      json.RawMessage `json:"item"`
+		}
+		_ = json.Unmarshal(raw, &appendReq)
+		epoch := s.currentTimelineEpoch()
+		seq := 0
+		if record := s.findAgentRecord(appendReq.AgentID); record != nil {
+			seq = s.timelineHeadSeq(appendReq.AgentID)
+		}
 		_ = sendSessionMsg(ctx, sink, "agent.timeline.append.response", map[string]any{
-			"requestId": base.RequestID,
-			"seq":       1,
-			"epoch":     "ep_1",
+			"requestId": appendReq.RequestID,
+			"seq":       seq,
+			"epoch":     epoch,
 		})
 
 	case "set_agent_feature_request":
@@ -1286,6 +1325,20 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		s.handleDaemonUpdate(ctx, sink, raw)
 
 	case "restart_server_request", "shutdown_server_request":
+		// The reason is what the daemon logs before exiting. It used to be dropped along with the
+		// whole request: the client showed no reaction at all, so restarting from the app looked
+		// broken.
+		var controlReq struct {
+			RequestID string `json:"requestId"`
+			Reason    string `json:"reason"`
+		}
+		_ = json.Unmarshal(raw, &controlReq)
+		reason := controlReq.Reason
+		if reason == "" {
+			reason = "requested by a client"
+		}
+		fmt.Fprintf(os.Stderr, "daemon control: %s\n", reason)
+		s.requestShutdown(reason)
 		return
 
 	case "tunnel.list.request":
@@ -1397,6 +1450,15 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		"dictation_stream_cancel",
 		"voice_audio_chunk",
 		"audio_played":
+		// The client reports that it finished playing a spoken reply. Voice was removed by
+		// decision (issue 025, 8d96875115), so nothing is recorded — but the id is logged, which
+		// is the only honest use of it: it confirms the client and daemon agree on the protocol
+		// version, and it is where a future voice feature would pick up.
+		var audioReq struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(raw, &audioReq)
+		fmt.Fprintf(os.Stderr, "audio_played id=%s (voice is not implemented in this build)\n", audioReq.ID)
 		return
 	}
 }
@@ -1505,4 +1567,56 @@ func listLocalBranches(ctx context.Context, cwd string) []string {
 		return []string{}
 	}
 	return branches
+}
+
+// currentTimelineEpoch returns the process-level timeline epoch.
+//
+// The epoch changes on every daemon start, which is how a client knows its cached sequence numbers
+// are stale: sequences restart at zero with the process.
+func (s *Server) currentTimelineEpoch() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.timelineEpoch
+}
+
+// timelineHeadSeq reports the next sequence a timeline would assign.
+//
+// Zero for an unknown agent rather than a guess: a fabricated head would make the client believe it
+// had a position it does not.
+func (s *Server) timelineHeadSeq(agentID string) int {
+	s.mu.Lock()
+	mp := s.agents[agentID]
+	s.mu.Unlock()
+	if mp == nil || mp.session == nil {
+		return 0
+	}
+	return len(mp.session.Timeline())
+}
+
+// findAgentRecord reads an agent record without loading its runtime.
+func (s *Server) findAgentRecord(agentID string) *store.AgentRecord {
+	record, err := s.store.GetAgent(agentID)
+	if err != nil {
+		return nil
+	}
+	return record
+}
+
+// filterBranches applies the picker's query and limit.
+//
+// Matching is case-insensitive substring on the branch name, which is what a user expects when
+// typing "feat" or "log". An empty query keeps everything; a non-positive limit means no cap.
+func filterBranches(branches []string, query string, limit int) []string {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	out := make([]string, 0, len(branches))
+	for _, branch := range branches {
+		if needle != "" && !strings.Contains(strings.ToLower(branch), needle) {
+			continue
+		}
+		out = append(out, branch)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
 }

@@ -24,6 +24,10 @@ const GO_PI_DIR = path.join(ROOT, "internal/agent/pi");
 /** 明确不打算实现的入站消息（语音/口述）。新增排除项必须在这里写明理由。 */
 const INTENTIONALLY_UNSUPPORTED = new Map([
   [
+    "audio_played",
+    "voice was removed by decision (issue 025, 8d96875115); the message is logged and nothing is recorded",
+  ],
+  [
     "voice_audio_chunk",
     "voice mode is disabled; daemon replies set_voice_mode with accepted:false",
   ],

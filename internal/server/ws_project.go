@@ -428,15 +428,26 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			WorktreePath           string `json:"worktreePath"`
 			Scope                  string `json:"scope"`
 			DeleteWorktreeFromDisk bool   `json:"deleteWorktreeFromDisk"`
+			// RepoRoot and BranchName disambiguate when the caller identifies a worktree by its
+			// branch rather than a path — the sidebar knows the branch, and the path may have
+			// moved. Without them a stale path archives nothing and the response still says ok.
+			RepoRoot   string `json:"repoRoot"`
+			BranchName string `json:"branchName"`
 		}
 		_ = json.Unmarshal(raw, &req)
+
 		workspaces, _ := s.store.ListWorkspaces()
+		// A caller may pass a subdirectory of the worktree, so the path is resolved to its owning
+		// workspace first.
+		resolvedID := ""
+		if strings.TrimSpace(req.WorktreePath) != "" {
+			resolvedID = s.store.ResolveWorkspaceIDForPath(req.WorktreePath)
+		}
 		for _, w := range workspaces {
-			// Exact match first, then the deepest enclosing workspace — a caller may pass a
-			// subdirectory of the worktree.
-			if w.Cwd == req.WorktreePath || s.store.ResolveWorkspaceIDForPath(req.WorktreePath) == w.WorkspaceID {
-				_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
+			if !worktreeMatches(w, req.WorktreePath, resolvedID, req.RepoRoot, req.BranchName) {
+				continue
 			}
+			_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
 		}
 		if req.DeleteWorktreeFromDisk && strings.TrimSpace(req.WorktreePath) != "" {
 			_ = workspace.RemoveWorktreeFromDisk(ctx, req.WorktreePath)
@@ -662,6 +673,17 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "workspace.label.list.request":
+		// `subscribe` asks for incremental updates after the snapshot: the client keeps a cursor
+		// and applies `workspace.label.update` frames instead of re-reading the whole catalog. It
+		// is what makes a label rename cheap on a slow link, and without it the client has to poll
+		// the full list.
+		var listReq struct {
+			Subscribe bool `json:"subscribe"`
+		}
+		_ = json.Unmarshal(raw, &listReq)
+		if listReq.Subscribe {
+			s.addLabelSubscriber(sink)
+		}
 		catalog := s.store.LoadLabelCatalog()
 		_ = sendSessionMsg(ctx, sink, "workspace.label.list.response", map[string]any{
 			"requestId": base.RequestID,
@@ -1406,4 +1428,62 @@ func (s *Server) pruneDownloadTokensLocked() {
 			delete(s.downloadTokens, token)
 		}
 	}
+}
+
+// addLabelSubscriber records that a sink has the label catalog in hand.
+//
+// `workspace.label.update` is broadcast to every client, so the subscription is not a filter — it
+// records that this client's cursor is current, which is what the client asked for by sending
+// `subscribe: true`. Keeping the set means a future per-client cursor does not have to re-derive it.
+func (s *Server) addLabelSubscriber(sink frameSink) {
+	if sink == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.labelSubscribers == nil {
+		s.labelSubscribers = make(map[frameSink]bool)
+	}
+	s.labelSubscribers[sink] = true
+	s.mu.Unlock()
+}
+
+// removeLabelSubscriber drops a sink when its connection ends.
+func (s *Server) removeLabelSubscriber(sink frameSink) {
+	s.mu.Lock()
+	delete(s.labelSubscribers, sink)
+	s.mu.Unlock()
+}
+
+// labelSubscriberCount reports how many clients hold a current label cursor.
+func (s *Server) labelSubscriberCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.labelSubscribers)
+}
+
+// worktreeMatches decides whether a workspace record is the worktree the caller named.
+//
+// Three ways to name one, tried in order of specificity: an exact path, a path this workspace
+// encloses, or a (repo root, branch) pair. The last one exists because the sidebar addresses a
+// worktree by branch, and matching only on path left the request archiving nothing.
+func worktreeMatches(record store.WorkspaceRecord, worktreePath, resolvedID, repoRoot, branchName string) bool {
+	if strings.TrimSpace(worktreePath) != "" {
+		// Exact match first, then the workspace that encloses the given path — a caller may pass
+		// a subdirectory of the worktree.
+		if record.Cwd == worktreePath || (resolvedID != "" && record.WorkspaceID == resolvedID) {
+			return true
+		}
+	}
+	if strings.TrimSpace(repoRoot) != "" && strings.TrimSpace(branchName) != "" {
+		recordRoot := ""
+		if record.WorktreeRoot != nil {
+			recordRoot = *record.WorktreeRoot
+		}
+		recordBranch := ""
+		if record.Branch != nil {
+			recordBranch = *record.Branch
+		}
+		return recordRoot == repoRoot && recordBranch == branchName
+	}
+	return false
 }

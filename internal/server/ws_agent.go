@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,11 +19,24 @@ import (
 )
 
 func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
+	return s.probePiModelsInCwd(ctx, "")
+}
+
+// probePiModelsInCwd probes with an explicit working directory.
+//
+// The cache is keyed on the directory: a checkout can carry repo-local provider config, so a
+// model list probed in one project is not valid in another. An empty cwd reuses whatever was
+// cached, which is the common case.
+func (s *Server) probePiModelsInCwd(ctx context.Context, cwd string) []pi.CatalogModel {
 	s.mu.Lock()
-	if s.cachedPiModels != nil {
+	if s.cachedPiModels != nil && (cwd == "" || s.cachedPiModelsCwd == "" || s.cachedPiModelsCwd == cwd) {
 		out := s.cachedPiModels
 		s.mu.Unlock()
 		return out
+	}
+	if cwd != "" && s.cachedPiModels != nil && s.cachedPiModelsCwd != cwd {
+		// A different project: the cached list was probed elsewhere and must not be served.
+		s.cachedPiModels = nil
 	}
 	s.mu.Unlock()
 
@@ -32,7 +46,7 @@ func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
 	// never appeared for the rest of the daemon's life.
 	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	models, cmds, err := pi.ProbeCatalog(pctx, pi.LaunchOptions{Command: s.piCommand})
+	models, cmds, err := pi.ProbeCatalog(pctx, pi.LaunchOptions{Command: s.piCommand, Cwd: cwd})
 	if err != nil || len(models) == 0 {
 		return pi.DefaultFallbackModels()
 	}
@@ -40,6 +54,9 @@ func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
 	s.mu.Lock()
 	s.cachedPiModels = models
 	s.cachedPiCommands = cmds
+	if cwd != "" {
+		s.cachedPiModelsCwd = cwd
+	}
 	s.mu.Unlock()
 	return models
 }
@@ -397,7 +414,14 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 			Number      int    `json:"number"`
 			ProjectPath string `json:"projectPath"`
 		} `json:"checkoutSource"`
-		GithubPrNumber    *int           `json:"githubPrNumber"`
+		GithubPrNumber *int `json:"githubPrNumber"`
+		// ProjectID names the project when the caller is not inside it — the sidebar creates a
+		// worktree from a project row, and without the id the new worktree was registered under
+		// whatever directory happened to be current.
+		ProjectID string `json:"projectId"`
+		// Attachments are composer files the user queued for the first agent. Dropping them
+		// silently loses the images the user dragged in before the worktree even existed.
+		Attachments       []any          `json:"attachments"`
 		NameContext       map[string]any `json:"nameContext"`
 		FirstAgentContext map[string]any `json:"firstAgentContext"`
 		// AutoTitle is filled from the naming model so the workspace is not named after its
@@ -563,9 +587,17 @@ func (s *Server) handleBySpaceWorktreeList(ctx context.Context, sink frameSink, 
 	var req struct {
 		RequestID string `json:"requestId"`
 		Cwd       string `json:"cwd"`
+		// RepoRoot names the repository when the client is not sitting in it — the sidebar asks
+		// for a project's worktrees by repo root, and ignoring the field listed the daemon's own
+		// directory instead.
+		RepoRoot string `json:"repoRoot"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	wts, err := workspace.ListWorktrees(ctx, req.Cwd)
+	root := strings.TrimSpace(req.RepoRoot)
+	if root == "" {
+		root = req.Cwd
+	}
+	wts, err := workspace.ListWorktrees(ctx, root)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "byspace_worktree_list_response", map[string]any{
 			"worktrees": []any{},
@@ -986,6 +1018,9 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		Direction     string `json:"direction"`
 		// Limit is omitted for "all"; the node store defaults it to 200 and treats 0 as all.
 		Limit *int `json:"limit"`
+		// Cursor is the sequence to resume from, for both `before` and `after`. Asking for a
+		// window without a cursor means "the end of the timeline".
+		Cursor *int `json:"cursor"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	dir := req.Direction
@@ -1060,6 +1095,22 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		if limit < 0 {
 			limit = 0
 		}
+		// A cursor restricts the window to one side of it. Without this the two directions behave
+		// identically whenever the timeline is shorter than the limit, and a client paging
+		// backwards sees the newest rows again instead of the ones before its cursor.
+		if req.Cursor != nil && *req.Cursor > 0 && *req.Cursor <= total && dir != "tail" {
+			cursor := *req.Cursor
+			if dir == "after" {
+				rows = rows[cursor:]
+				hasOlder = cursor > 0
+			} else {
+				rows = rows[:cursor]
+				hasNewer = true
+			}
+			total = len(rows)
+			minSeq = 0
+		}
+
 		if limit > 0 && limit < total {
 			// The protocol's directions are tail (newest N), before (older than a cursor) and
 			// after (newer than a cursor). `after` reads forward from the cursor, so it keeps the
@@ -1072,6 +1123,8 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 				rows = rows[total-limit:]
 				hasOlder = true
 			}
+		}
+		if len(rows) > 0 {
 			minSeq = 1
 		}
 	}
@@ -1281,4 +1334,80 @@ func (s *Server) namingModel() string {
 		return strings.TrimSpace(model)
 	}
 	return ""
+}
+
+// createWorktreeForAgent creates a BySpace-owned worktree for an agent's requested name.
+//
+// Returns the new directory, or "" when a worktree already exists there. A failure is not fatal:
+// the agent still runs in the requested directory, which is what the caller asked for as a fallback
+// and better than refusing to create the agent.
+func (s *Server) createWorktreeForAgent(ctx context.Context, repoRoot, name string) (string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return "", fmt.Errorf("no directory to branch from")
+	}
+	slug := workspace.NormalizeWorktreeSlug(name)
+	if slug == "" {
+		return "", fmt.Errorf("worktree name has no usable characters")
+	}
+	path, _, err := workspace.CreateWorktree(ctx, repoRoot, s.worktreesBaseDir(), slug, "")
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// worktreesBaseDir is where BySpace-owned worktrees live.
+func (s *Server) worktreesBaseDir() string {
+	return filepath.Join(s.homeDir, "worktrees")
+}
+
+// createWorktreeForIntent branches a worktree according to the client's intent.
+//
+// The three modes map onto workspace.ResolveWorktreeIntent, which is the same resolver the
+// worktree RPCs use: one implementation, so a worktree created by creating an agent and one created
+// from the sidebar cannot diverge.
+func (s *Server) createWorktreeForIntent(ctx context.Context, repoRoot string, intent *struct {
+	Mode      string `json:"mode"`
+	NewBranch string `json:"newBranch"`
+	Base      string `json:"base"`
+	Branch    string `json:"branch"`
+	PrNumber  int    `json:"prNumber"`
+}) (string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return "", fmt.Errorf("no directory to branch from")
+	}
+	slug := workspace.NormalizeWorktreeSlug(intent.NewBranch)
+	if slug == "" {
+		slug = workspace.NormalizeWorktreeSlug(intent.Branch)
+	}
+	if slug == "" {
+		slug = fmt.Sprintf("pr-%d", intent.PrNumber)
+	}
+
+	baseRef := strings.TrimSpace(intent.Base)
+	switch intent.Mode {
+	case "branch-off":
+		if strings.TrimSpace(intent.NewBranch) == "" {
+			return "", fmt.Errorf("branch-off needs a new branch name")
+		}
+	case "checkout-branch":
+		if strings.TrimSpace(intent.Branch) == "" {
+			return "", fmt.Errorf("checkout-branch needs a branch")
+		}
+		// An existing branch is the base; the worktree is created on it rather than from it.
+		baseRef = intent.Branch
+	case "checkout-pr":
+		if intent.PrNumber <= 0 {
+			return "", fmt.Errorf("checkout-pr needs a pull request number")
+		}
+		baseRef = fmt.Sprintf("refs/pull/%d/head", intent.PrNumber)
+	default:
+		return "", fmt.Errorf("unknown worktree mode %q", intent.Mode)
+	}
+
+	path, _, err := workspace.CreateWorktree(ctx, repoRoot, s.worktreesBaseDir(), slug, baseRef)
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }

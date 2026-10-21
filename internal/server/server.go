@@ -185,13 +185,24 @@ type Server struct {
 	tunnelsEnabled bool
 	// serviceProxyRoutes serves `type: "service"` scripts at their hostnames.
 	serviceProxyRoutes *serviceproxy.Proxy
+	// labelSubscribers are sinks that asked for incremental label updates.
+	labelSubscribers map[frameSink]bool
+	// timelineEpoch changes on every daemon start, so a client can tell its cached sequences are
+	// stale.
+	timelineEpoch string
+	// shutdownRequested receives a reason when a client asks the daemon to restart or stop. The
+	// process owner (the CLI's `serve` loop) listens: a server cannot restart itself.
+	shutdownRequested chan string
 	// notifiedChildren records which (child, reason) pairs already prompted their parent.
 	notifiedChildren   map[string]bool
 	notifiedChildrenMu sync.Mutex
 	scriptPorts        *servicePortAllocator
 	idempotentAgents   map[string]string
 	cachedPiModels     []pi.CatalogModel
-	cachedPiCommands   []pi.SlashCommand
+	// cachedPiModelsCwd records which directory the cached model list was probed in: a different
+	// project can expose different models, so the cache must not outlive its context.
+	cachedPiModelsCwd string
+	cachedPiCommands  []pi.SlashCommand
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -253,6 +264,10 @@ func New(opts Options) (*Server, error) {
 	}
 
 	srv := &Server{
+		// A fresh epoch per process: sequence numbers restart, so a client must discard cached
+		// positions from the previous run rather than apply new items against an old cursor.
+		timelineEpoch:         fmt.Sprintf("ep_%d", time.Now().UnixNano()),
+		shutdownRequested:     make(chan string, 1),
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,
 		capabilityToken:       capabilityToken,
@@ -1117,13 +1132,29 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", respPayload)
 
 	case "refresh_providers_snapshot_request":
+		// `cwd` scopes the probe — a provider's model list can depend on the project — and
+		// `providers` narrows it to the cards the user touched, so refreshing one does not re-probe
+		// every provider. Both are optional: an empty request refreshes everything.
+		var refreshReq struct {
+			RequestID string   `json:"requestId"`
+			Cwd       string   `json:"cwd"`
+			Providers []string `json:"providers"`
+		}
+		_ = json.Unmarshal(raw, &refreshReq)
+
 		s.mu.Lock()
 		s.cachedPiModels = nil
+		if strings.TrimSpace(refreshReq.Cwd) != "" {
+			s.cachedPiModelsCwd = refreshReq.Cwd
+		}
 		s.mu.Unlock()
-		models := s.probeOrCachedPiModels(ctx)
+		models := s.probePiModelsInCwd(ctx, refreshReq.Cwd)
 		cfg := s.store.LoadDaemonConfig()
 		customProvs, _ := cfg["providers"].(map[string]any)
 		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
+		if len(refreshReq.Providers) > 0 {
+			entries = filterSnapshotEntries(entries, refreshReq.Providers)
+		}
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
@@ -1144,16 +1175,29 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		var req struct {
 			RequestID string `json:"requestId"`
 			Provider  string `json:"provider"`
+			// cwd scopes the probe: a project can carry repo-local provider config, so the same
+			// provider exposes different models in different checkouts.
+			Cwd string `json:"cwd"`
+			// DraftConfig describes a provider the user is configuring but has not saved. Its
+			// features must come from the draft, not from a saved entry that does not exist yet —
+			// otherwise the "add provider" form shows the wrong toggles and then changes them
+			// after saving.
+			DraftConfig map[string]any `json:"draftConfig"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		prov := strings.TrimSpace(req.Provider)
 		if prov == "" {
-			prov = "pi"
+			if draftProvider, ok := req.DraftConfig["provider"].(string); ok && strings.TrimSpace(draftProvider) != "" {
+				prov = strings.TrimSpace(draftProvider)
+			} else {
+				prov = "pi"
+			}
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		var models []pi.CatalogModel
 		if prov == "pi" {
-			models = s.probeOrCachedPiModels(ctx)
+			// cwd scopes the probe; empty means "whatever is cached".
+			models = s.probePiModelsInCwd(ctx, req.Cwd)
 		} else {
 			models = providers.GetProviderSpec(prov).Models
 		}
@@ -1169,6 +1213,8 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		var req struct {
 			RequestID string `json:"requestId"`
 			Provider  string `json:"provider"`
+			// Same reason as models: modes can depend on the checkout.
+			Cwd string `json:"cwd"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		prov := strings.TrimSpace(req.Provider)
@@ -1188,6 +1234,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		var req struct {
 			RequestID string `json:"requestId"`
 			Provider  string `json:"provider"`
+			// DraftConfig describes a provider the user is configuring but has not saved; its
+			// features must come from the draft rather than from an entry that does not exist yet.
+			DraftConfig map[string]any `json:"draftConfig"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		prov := strings.TrimSpace(req.Provider)
@@ -1744,8 +1793,30 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 		Subscribe *struct {
 			SubscriptionID string `json:"subscriptionId"`
 		} `json:"subscribe"`
+		// Sync carries the client's cursor for the agent directory. Without reading it every poll
+		// is a snapshot, so the client re-renders the whole list instead of applying a delta.
+		Sync *struct {
+			Generation string `json:"generation"`
+			AfterSeq   *int64 `json:"afterSeq"`
+		} `json:"sync"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	syncMode := "snapshot"
+	syncReason := ""
+	if req.Sync != nil {
+		catalog := s.store.LoadLabelCatalog()
+		switch {
+		case req.Sync.Generation == "":
+			syncMode, syncReason = "snapshot", "no_cursor"
+		case req.Sync.Generation != catalog.Generation:
+			syncMode, syncReason = "snapshot", "generation_changed"
+		case req.Sync.AfterSeq == nil:
+			syncMode, syncReason = "snapshot", "no_cursor"
+		default:
+			syncMode = "changes"
+		}
+	}
 
 	searchQuery := req.SearchQuery
 	if strings.TrimSpace(searchQuery) == "" {
@@ -1865,7 +1936,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
 	}
-	payload["sync"] = s.directorySyncMetadata("snapshot")
+	payload["sync"] = s.directorySyncMetadataWithReason(syncMode, syncReason)
 	if reqType == "fetch_agent_history_request" {
 		payload["searchTruncated"] = false
 	}
@@ -1874,18 +1945,28 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 
 func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID       string            `json:"requestId"`
-		WorkspaceID     string            `json:"workspaceId"`
-		InitialPrompt   *string           `json:"initialPrompt"`
-		ClientMessageID string            `json:"clientMessageId"`
-		IdempotencyKey  string            `json:"idempotencyKey"`
-		CallerAgentID   string            `json:"callerAgentId"`
-		WorktreeName    string            `json:"worktreeName"`
-		OutputSchema    any               `json:"outputSchema"`
-		AutoArchive     any               `json:"autoArchive"`
-		Git             any               `json:"git"`
-		Env             map[string]string `json:"env"`
-		Images          []struct {
+		RequestID       string  `json:"requestId"`
+		WorkspaceID     string  `json:"workspaceId"`
+		InitialPrompt   *string `json:"initialPrompt"`
+		ClientMessageID string  `json:"clientMessageId"`
+		IdempotencyKey  string  `json:"idempotencyKey"`
+		CallerAgentID   string  `json:"callerAgentId"`
+		WorktreeName    string  `json:"worktreeName"`
+		// Worktree is the structured intent: branch off a new branch, check out an existing one,
+		// or check out a change request. `worktreeName` is the simple form; this is the one the UI
+		// uses, and ignoring it meant every worktree agent landed on the default branch.
+		Worktree *struct {
+			Mode      string `json:"mode"`
+			NewBranch string `json:"newBranch"`
+			Base      string `json:"base"`
+			Branch    string `json:"branch"`
+			PrNumber  int    `json:"prNumber"`
+		} `json:"worktree"`
+		OutputSchema any               `json:"outputSchema"`
+		AutoArchive  any               `json:"autoArchive"`
+		Git          any               `json:"git"`
+		Env          map[string]string `json:"env"`
+		Images       []struct {
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
@@ -1916,6 +1997,24 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	cwd := strings.TrimSpace(req.Config.Cwd)
+
+	// A structured worktree intent wins over the simple name: it says which branch to be on, and
+	// the whole point of a worktree is that the branch is not the default one.
+	if req.Worktree != nil && strings.TrimSpace(req.Worktree.Mode) != "" {
+		if created, createErr := s.createWorktreeForIntent(ctx, cwd, req.Worktree); createErr == nil && created != "" {
+			cwd = created
+		}
+	}
+
+	// `worktreeName` asks for a BySpace-owned worktree for this agent. Without it a request to
+	// work on a branch shares the main checkout with every other agent, so two agents on two
+	// branches fight over one working tree — which is the reason worktrees exist.
+	if name := strings.TrimSpace(req.WorktreeName); name != "" {
+		if created, createErr := s.createWorktreeForAgent(ctx, cwd, name); createErr == nil && created != "" {
+			cwd = created
+		}
+	}
+
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 	}
@@ -2598,7 +2697,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 							"provider":  rec.Provider,
 							"timestamp": nowStr,
 							"seq":       tl[i].Seq,
-							"epoch":     "ep_1",
+							"epoch":     s.currentTimelineEpoch(),
 							"event": map[string]any{
 								"type":     "timeline",
 								"provider": rec.Provider,
@@ -3367,13 +3466,25 @@ func (s *Server) captureFinalUsage(mp *managedPi, sess providers.ManagedSession)
 // directorySyncMetadata is the cursor the client uses to detect a stale directory replica.
 // It is checked against the same counters that drive incremental updates.
 func (s *Server) directorySyncMetadata(mode string) map[string]any {
+	return s.directorySyncMetadataWithReason(mode, "")
+}
+
+// directorySyncMetadataWithReason adds the reason a snapshot was returned.
+//
+// `reason` is optional in the schema, so it is only present when there is one: an empty string
+// renders as a reason that does not exist.
+func (s *Server) directorySyncMetadataWithReason(mode, reason string) map[string]any {
 	catalog := s.store.LoadLabelCatalog()
-	return map[string]any{
+	metadata := map[string]any{
 		"generation": catalog.Generation,
 		"headSeq":    catalog.HeadSeq,
 		"mode":       mode,
 		"removals":   []any{},
 	}
+	if reason != "" && mode == "snapshot" {
+		metadata["reason"] = reason
+	}
+	return metadata
 }
 
 // broadcastWorkspaceUpsert tells connected clients that one workspace changed.
@@ -3574,4 +3685,40 @@ func lastActivityOf(rec store.AgentRecord) string {
 		return rec.LastActivityAt
 	}
 	return rec.UpdatedAt
+}
+
+// ShutdownRequested reports the channel a client's restart/shutdown request arrives on.
+//
+// A server cannot restart itself — it does not own its process. The command that started it does,
+// so the request is handed over rather than acted on here.
+func (s *Server) ShutdownRequested() <-chan string { return s.shutdownRequested }
+
+// requestShutdown asks the process owner to exit.
+//
+// Buffered with one slot and non-blocking: two clients pressing restart must not deadlock the
+// second one waiting for the owner to drain the first.
+func (s *Server) requestShutdown(reason string) {
+	select {
+	case s.shutdownRequested <- reason:
+	default:
+	}
+}
+
+// filterSnapshotEntries keeps only the providers named in a refresh request.
+//
+// Narrowing rather than replacing: the response and the broadcast carry the same set, so a client
+// that asked for one provider does not see the others vanish from its catalog.
+func filterSnapshotEntries(entries []map[string]any, wanted []string) []map[string]any {
+	keep := make(map[string]bool, len(wanted))
+	for _, id := range wanted {
+		keep[strings.ToLower(strings.TrimSpace(id))] = true
+	}
+	out := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		id, _ := entry["provider"].(string)
+		if keep[strings.ToLower(id)] {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
