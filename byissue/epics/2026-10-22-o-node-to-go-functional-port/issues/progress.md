@@ -54,3 +54,24 @@
 ## 批次 6：复核上一轮只「读导出面」的部分
 
 `commands/**`（约 40 个）、`utils/**`（6 个）——上一轮按「导出面 + 调用点」判定，本轮逐个核对实现细节。
+
+## 批次完成后的机器检查
+
+`npm run audit` 全绿。入站字段缺口 **31 → 12**，剩下的 12 条全部属于 hub 与 plugin
+（两项已由 issue 025 决策移除，`INTENTIONALLY_UNSUPPORTED` 之外的只有它们的字段）。
+出站 MISSING / OPTIONAL / NEVER_SENT 全 0，浏览器验证 10/10。
+
+修掉的字段缺口里有七条改变用户可见行为：
+
+| 字段                                                | 用户看到什么                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `tunnel.create.request.config`                      | 隧道表单提交后成功，实际什么都没保存（配置嵌套在 `config` 下，我读了顶层） |
+| `create_agent_request.worktree`                     | 每个 worktree agent 都落在默认分支上——worktree 本来要防止的就是这个        |
+| `restart_server_request.reason` / `shutdown`        | 应用里的重启按钮完全没反应，也没有错误                                     |
+| `byspace_worktree_archive.repoRoot`/`branchName`    | 按分支归档（侧栏知道的正是分支）什么都没归档，还报 ok                      |
+| `fetch_recent_provider_sessions.query`/`providers`  | 导入会话的搜索框无效；要 claude 会话拿到 pi 的                             |
+| `fetch_agents_request.sync`、`label.list.subscribe` | 每次轮询都是全量快照，客户端自己重算 diff                                  |
+| `branch_suggestions.query`/`limit`                  | 分支选择器没有过滤，几千条分支全量下发                                     |
+| `list_provider_models/modes.cwd`                    | 在一个 checkout 里探测的模型列表被用在另一个里                             |
+
+另外三处硬编码的 `"ep_1"` 也改成真实 epoch——客户端因此永远无法判断缓存的时间线已经过期。
