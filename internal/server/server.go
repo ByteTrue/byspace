@@ -943,8 +943,8 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentDetach":                true,
 			"agentThinkingUpdate":        true,
 			"daemonDiagnostics":          true,
-			// Daemon self-update is not implemented.
-			"daemonSelfUpdate":             false,
+			// Implemented: downloads the release for this platform and replaces the binary.
+			"daemonSelfUpdate":             true,
 			"agentForkContext":             true,
 			"agentForkContextCursor":       true,
 			"providerSubagents":            true,

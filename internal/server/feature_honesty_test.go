@@ -28,8 +28,7 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 		"pluginTimelineItems": "plugin system retired by decision (issue 025)",
 	}
 	notYetPorted := map[string]string{
-		"daemonSelfUpdate": "daemon self-update is not implemented",
-		"directorySync":    "cross-host directory sync is undecided product work",
+		"directorySync": "cross-host directory sync is undecided product work",
 	}
 
 	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", PiCommand: writeFaithfulFakePi(t)})
@@ -61,6 +60,7 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 	for _, name := range []string{
 		"workspaceLabels", "workspaceSetupRun", "providersSnapshot", "rewind",
 		"agentHistorySearch", "providerSubagents", "workspaceTerminals", "daemonTunnels",
+		"daemonSelfUpdate",
 	} {
 		if rawFeatures[name] != true {
 			t.Fatalf("feature %q should be true; the client would disable working UI", name)

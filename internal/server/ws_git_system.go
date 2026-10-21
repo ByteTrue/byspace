@@ -1283,13 +1283,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "daemon.update.request":
-		_ = sendSessionMsg(ctx, sink, "daemon.update.response", map[string]any{
-			"requestId":       base.RequestID,
-			"success":         true,
-			"error":           nil,
-			"previousVersion": s.version,
-			"newVersion":      s.version,
-		})
+		s.handleDaemonUpdate(ctx, sink, raw)
 
 	case "restart_server_request", "shutdown_server_request":
 		return
