@@ -207,7 +207,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `connection-offer.ts` / `pairing-offer.ts` | 80 / 76 | **PARTIAL** → 已补关键语义 | 配对 offer 之前无条件返回 `relayEnabled: true` 加一个 `#offer=` 链接，**不管 relay 是否真的在跑**——扫出来的二维码指向一个连不上的地址。Node 在 `relayEnabled === false` 时直接返回 `{relayEnabled: false, url: null, qr: null}`。已按此实现。**这里还挖出一个真 bug**：`relayConfigFromStore` 读的是 `cfg["daemon"]["relay"]`，而 `LoadDaemonConfig` 已经解包过 `daemon`，所以 relay 配置永远读到零值——上一轮「修好」的 relay runtime 实际上一直以为 relay 是关的。修正后端到端验证：relay 关 → 空 url/null qr；relay 配好 → `wss://relay.example/#offer=...` + 44 行终端二维码，两者都过 schema。 |
 
-### 未审计（本批剩余 22 文件）
+| `script-status-projection.ts` | 325 | **PARTIAL** → 已补健康探测 | `health` 是 schema 必填字段，Go 一律发 `null`，所以界面上永远看不出 dev server 到底在不在服务。「启动了」和「正在服务」是两件事，用户对这两者的后续动作完全不同。已改为按端口探测：running 的 service 脚本若能建立 TCP 连接即 `healthy`，否则 `unhealthy`。用连接测试而不是 HTTP 请求——工作区脚本不要求说 HTTP，监听中的非 HTTP 服务也是健康的。`hostname`/`proxyUrl` 仍为空，属于未实现的反向代理。 |
+| `server-id.ts` | 83 | **PORTED** | `$BYSPACE_HOME/server-id`、`BYSPACE_SERVER_ID` 覆盖（并持久化）、9 字节 → `srv_<12 base64url>`、0600 权限，与 Node 一致。 |
+
+### 未审计（本批剩余 20 文件）
 
 按行数排序，下一轮从这里继续：
 
