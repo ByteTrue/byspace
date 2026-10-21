@@ -40,14 +40,101 @@ func DetectForge(ctx context.Context, cwd string) string {
 	if err != nil || remote == "" {
 		return "github"
 	}
-	lower := strings.ToLower(remote)
-	if strings.Contains(lower, "gitlab") {
-		return "gitlab"
+	return ForgeForRemote(remote)
+}
+
+// forgeCloudHosts maps the public hosts each forge owns exactly.
+//
+// Ported from forge-manifest's cloudHosts. An exact list is the point: matching on substrings
+// means a GitHub repository called `gitlab-mirror` is detected as GitLab, and every gh call for
+// it is then run through glab.
+var forgeCloudHosts = map[string]string{
+	"github.com":     "github",
+	"ssh.github.com": "github",
+	"gitlab.com":     "gitlab",
+	"gitea.com":      "gitea",
+	"codeberg.org":   "gitea",
+}
+
+// selfHostedHostHints catch the common self-hosted naming without a network probe.
+//
+// Checked only after the exact list fails, and only on the host — never on the path, which is
+// what produced the `gitlab-mirror` bug.
+var selfHostedHostHints = []struct {
+	fragment string
+	forge    string
+}{
+	{"gitlab", "gitlab"},
+	{"gitea", "gitea"},
+	{"codeberg", "gitea"},
+	{"forgejo", "gitea"},
+}
+
+// ForgeForRemote resolves a forge from a git remote URL.
+func ForgeForRemote(remote string) string {
+	host := remoteHost(remote)
+	if host == "" {
+		return "github"
 	}
-	if strings.Contains(lower, "gitea") || strings.Contains(lower, "codeberg") {
-		return "gitea"
+	if forge, ok := forgeCloudHosts[host]; ok {
+		return forge
 	}
+	for _, hint := range selfHostedHostHints {
+		if strings.Contains(host, hint.fragment) {
+			return hint.forge
+		}
+	}
+	// A host we do not recognise: GitHub is the overwhelmingly common case, and the caller falls
+	// back to the forge CLI's own error if it is wrong.
 	return "github"
+}
+
+// remoteHost extracts the host from any of git's remote URL shapes.
+//
+// Handles `https://host/path`, `ssh://git@host:port/path`, `git@host:path` (scp syntax) and bare
+// `host:path`. Returns the lowercased host with any port stripped.
+func remoteHost(remote string) string {
+	trimmed := strings.TrimSpace(remote)
+	if trimmed == "" {
+		return ""
+	}
+
+	// scheme://[user@]host[:port]/path
+	if index := strings.Index(trimmed, "://"); index >= 0 {
+		rest := trimmed[index+3:]
+		if slash := strings.Index(rest, "/"); slash >= 0 {
+			rest = rest[:slash]
+		}
+		if at := strings.LastIndex(rest, "@"); at >= 0 {
+			rest = rest[at+1:]
+		}
+		if colon := strings.LastIndex(rest, ":"); colon >= 0 {
+			rest = rest[:colon]
+		}
+		return strings.ToLower(rest)
+	}
+
+	// [user@]host:path — scp syntax. The first colon separates host from path.
+	if at := strings.LastIndex(trimmed, "@"); at >= 0 {
+		rest := trimmed[at+1:]
+		if colon := strings.Index(rest, ":"); colon >= 0 {
+			return strings.ToLower(rest[:colon])
+		}
+		return strings.ToLower(rest)
+	}
+	if colon := strings.Index(trimmed, ":"); colon >= 0 {
+		head := trimmed[:colon]
+		// A Windows drive letter (C:\repo) is not a host.
+		if len(head) == 1 && (head[0] >= 'a' && head[0] <= 'z' || head[0] >= 'A' && head[0] <= 'Z') {
+			return ""
+		}
+		return strings.ToLower(head)
+	}
+	// A bare path with no host: local repository, no forge.
+	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, ".") {
+		return ""
+	}
+	return strings.ToLower(trimmed)
 }
 
 // GetPRStatus queries `gh pr view` (or `glab mr view`) for the active branch in cwd.
