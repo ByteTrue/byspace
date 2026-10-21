@@ -419,7 +419,10 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			status = "failed"
 		}
 		args := s.toolArgsByID[callID]
-		detail := BuildToolCallDetail(toolName, args, ev["result"])
+		// omp wraps some calls in `xdev` and names the real tool in the result. Resolving it before the
+		// detail is built is what makes the card show the command or file rather than a generic row.
+		resolvedName := resolveWrappedToolName(toolName, ev["result"])
+		detail := BuildToolCallDetail(resolvedName, args, ev["result"])
 		// A command's stdout is whatever it printed — a build log, a minified bundle, a `cat` of a
 		// large file — and it travels to every client on every timeline fetch. Capping it here means
 		// the oversized body never reaches the transcript, so it is not re-sent on every fetch.
@@ -430,6 +433,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			s.timeline[idx].Item.Status = status
 			s.timeline[idx].Item.Detail = detail
+			if resolvedName != "" && resolvedName != toolName {
+				s.timeline[idx].Item.Name = resolvedName
+			}
 			s.timeline[idx].SeqEnd = s.streamSeq
 			if isErr {
 				s.timeline[idx].Item.Error = limitedError
@@ -1147,4 +1153,21 @@ func (s *Session) SendHostToolResult(callID, output string, failed bool) error {
 		message["isError"] = true
 	}
 	return s.proc.SendRaw(message)
+}
+
+// resolveWrappedToolName unwraps a tool whose real name arrives in its result.
+//
+// omp's `xdev` does this: the outer call is generic and `details.xdev.tool` names what actually ran. A
+// resolver function is injected rather than imported to keep this package free of provider specifics; the
+// providers package sets it at init.
+var resolveWrappedToolName = func(toolName string, result any) string { return toolName }
+
+// SetWrappedToolNameResolver installs the provider-specific unwrapper.
+//
+// Called once during package setup. It is a variable rather than an interface so the hot path — one call
+// per tool result — does not pay for a dynamic dispatch.
+func SetWrappedToolNameResolver(resolver func(toolName string, result any) string) {
+	if resolver != nil {
+		resolveWrappedToolName = resolver
+	}
 }
