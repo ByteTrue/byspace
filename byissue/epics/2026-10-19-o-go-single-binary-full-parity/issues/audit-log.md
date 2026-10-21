@@ -819,6 +819,15 @@ daemon 能监听 unix socket（`serve --addr unix:///path`，受限环境需要�
 
 测试辅助（平台标记、日志桩、fixture 构造、vitest setup）。Go 侧用 `testing`、`t.TempDir()` 与假 provider 脚本（`writeFaithfulFakePi`）达到同样目的。
 
+### agent/providers/claude/subagents/** | 5 文件 1311 行 | **PARTIAL → 已补两处\*\*
+
+| 文件                                                                                       | 结论                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `presentation.ts`                                                                          | **MISSING → 已补 subtitle**。`subtitle` 是协议字段（`ProviderSubagentDescriptorPayloadSchema`），Go 的 `SubagentDescriptor` 里**根本没有**。没有它子代理那一行只显示状态，不显示 `标题 · 模型 · 强度 · token`。现在按 presentation.ts 的规则拼接（缺的跳过、全缺返回 nil 而不是空串——空串会让客户端渲染一行空白），token 压缩成 `12.3k tok`（完整数字会把模型和强度挤出窄行）。每次活动事件重建，所以随着子代理报告模型与用量逐步填充，而不是冻结在第一次 upsert。 |
+| `live-source.ts` / `replay-source.ts` / `workflow-replay-source.ts` / `workflow-output.ts` | **PARTIAL** — 子代理的实时来源（`parent_tool_use_id` 路由，本轮补）与 `.jsonl` 重放（`internal/agent/pi/subagents.go`）都在。**缺** workflow 型子代理（多步流水线）的重放来源——Claude 的 workflow 输出格式尚未解析。                                                                                                                                                                                                                                               |
+
+**顺带修掉一个真 bug**：`Task` 分支构造了 `SubagentDescriptor` 之后**没有存进 map、也没有广播**（我这次改动前的代码就是空的 `{ }` 块）。于是 Claude 的 agent 委派任务时，**Subagents 面板里什么都不出现**——委派从用户视角是完全不可见的，尽管 daemon 手里已经拿到了 descriptor。已补上 map 写入 + `agent.provider_subagents.update` 广播，并有测试断言 Task 会注册子代理且 subtitle 正确。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
