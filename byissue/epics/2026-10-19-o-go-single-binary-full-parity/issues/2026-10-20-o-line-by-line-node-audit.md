@@ -68,17 +68,39 @@ created: 2026-10-20
 
 审计结果写进 `audit-log.md`（同目录），逐条累积。每完成一个目录更新一次计数。
 
-| 批次 | 范围                               | 状态   |
-| ---- | ---------------------------------- | ------ |
-| 1    | `server/` 顶层 76 文件             | 未开始 |
-| 2    | `server/session/**`                | 未开始 |
-| 3    | `server/agent/**`                  | 未开始 |
-| 4    | `server/` 子系统目录               | 未开始 |
-| 5    | `terminal/**`                      | 未开始 |
-| 6    | `services/quota-fetcher/**`        | 未开始 |
-| 7    | `utils/`、`executable-resolution/` | 未开始 |
-| 8    | `archive/packages/cli/src`         | 未开始 |
-| 9    | `packages/relay/src`               | 未开始 |
+| 批次 | 范围                               | 文件 | 结论条数 | 状态   |
+| ---- | ---------------------------------- | ---- | -------- | ------ |
+| 1    | `server/` 顶层（含子系统目录）     | 195  | 约 90    | 进行中 |
+| 2    | `server/agent/**`                  | 194  | 部分     | 未完成 |
+| 3    | `services/**`                      | 20   | 8        | 进行中 |
+| 4    | `terminal/**`                      | 20   | 6        | 进行中 |
+| 5    | `utils/`、`executable-resolution/` | 24   | 24       | 完成   |
+| 6    | `archive/packages/cli/src`         | 117  | 19       | 进行中 |
+| 7    | `packages/relay/src`               | 6    | 6        | 完成   |
+
+**口径**：一个文件算有结论，当且仅当 `audit-log.md` 里出现它的文件名。目录级的结论
+（如「`server/agent/**` 见下表」）**不折算成逐文件结论**——那正是这个 Issue 要避免的
+自我欺骗。
+
+严格计数（按上面口径）：512 个文件里 **133 个有逐文件结论，379 个还没有（约 12.4 万行）**。
+
+已经完成的整块：`utils/**`、`executable-resolution/**`、`packages/relay/src`、`server/` 顶层
+非目录文件、以及 `server/` 的 `file-upload`/`file-download`/`migrations`/`pagination`/
+`managed-processes`/`auto-archive-on-merge`/`worktree`/`checks` 等子系统目录。
+
+### 仍未移植的部分（已记明条件，不是遗漏）
+
+| 子系统                                                             | 状态    | 条件                                             |
+| ------------------------------------------------------------------ | ------- | ------------------------------------------------ |
+| `service-proxy` + `script-health-monitor` + 端口注册表             | MISSING | 脚本预览链路的整块反向代理，需要独立设计         |
+| `tunnel-manager` / `tunnel-registry`                               | DROPPED | 需要第二台机器验证；盲写风险高于收益             |
+| `hub.*` 远程控制                                                   | MISSING | 未实现子系统，权限表已就位                       |
+| `plugin.*` 运行时                                                  | MISSING | 插件沙箱未实现，只读端返回空                     |
+| quota-fetcher 其余 6 家（claude/cursor/copilot/grok/kimi/minimax） | MISSING | 需要真实凭据才能验证；框架与 codex/zai 已实现    |
+| `workspace-create-shared` / 目录同步                               | MISSING | 跨主机同步，产品方向未定                         |
+| `persisted-config` 迁移路径                                        | N/A     | 本项目是 hard fork，明确不做数据迁移             |
+| `windows-command` 的 ConPTY 部分                                   | PARTIAL | 进程与 PowerShell 已对齐，ConPTY 走 `creack/pty` |
+| `project-custom-icon` 的 revision 指纹                             | PARTIAL | 行为差异未观察到用户可见故障                     |
 
 ## 与其他 Issue 的关系
 
