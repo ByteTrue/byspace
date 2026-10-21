@@ -459,6 +459,7 @@ func runProjectGroupCmd(args []string, stdout io.Writer) error {
 	}
 	fs := flag.NewFlagSet("project "+sub, flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	resetName := fs.Bool("reset", false, "rename: clear the custom name and use the directory name")
 	asJSON := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(rest); err != nil {
 		return err
@@ -466,6 +467,19 @@ func runProjectGroupCmd(args []string, stdout io.Writer) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	// Argument checks run before dialling: a missing <name> is the user's mistake, and reporting
+	// "connection refused" instead hides it behind an unrelated error.
+	if sub == "rename" {
+		// --reset clears the custom name and falls back to the directory name, which is the only way
+		// to undo a rename. Passing "" positionally would be read by the daemon as "no change".
+		if *resetName && fs.NArg() < 1 {
+			return errors.New("usage: byspace project rename --reset <project-id>")
+		}
+		if !*resetName && fs.NArg() < 2 {
+			return errors.New("usage: byspace project rename [--reset] <project-id> <name>")
+		}
+	}
+
 	ws, err := dialDaemonWS(ctx, *addr)
 	if err != nil {
 		return err
@@ -507,15 +521,17 @@ func runProjectGroupCmd(args []string, stdout io.Writer) error {
 		return nil
 
 	case "rename":
-		if fs.NArg() < 2 {
-			return errors.New("usage: byspace project rename <project-id> <name>")
+		renameRequest := map[string]any{
+			"type":      "project.rename.request",
+			"requestId": "cli_pr",
+			"projectId": fs.Arg(0),
 		}
-		_ = sendSessionReq(ctx, ws, map[string]any{
-			"type":       "project.rename.request",
-			"requestId":  "cli_pr",
-			"projectId":  fs.Arg(0),
-			"customName": fs.Arg(1),
-		})
+		if *resetName {
+			renameRequest["customName"] = nil
+		} else {
+			renameRequest["customName"] = fs.Arg(1)
+		}
+		_ = sendSessionReq(ctx, ws, renameRequest)
 		_, err := waitSessionResp(ctx, ws, "project.rename.response", "")
 		return err
 
