@@ -61,6 +61,8 @@
 | `commands/schedule/shared.ts` | `--every` 在 Go 侧是「毫秒整数」，`--every 15m` 根本解析不了、`--every 15` 变成 15 毫秒（每秒触发 60 次）。现在支持 `90s/15m/2h/1d` 与裸数字（分钟），并把「五段 cron 无法忠实表达」的间隔**拒绝**——`*/7 * * * *` 每到整点重新计数，真实间隔会变成每小时一次 5 分钟。已实现 `internal/cadence` 并端到端验证 `15m` 通过、`7m` 被拒 |
 | `utils/client.ts`             | Go 只尝试**一个**地址拨号。daemon 可能监听 unix socket 或 TCP，CLI 无从知道，于是对 plainly running 的 daemon 报连不上。现在按 `--addr` → `BYSPACE_HOST` → pid 锁里记录的地址 → 默认 TCP 逐个尝试并去重；显式地址仍**只**用自己（落空到别的 daemon 会连错对象）；失败时报出尝试过的每个地址                                       |
 
+| `commands/agent/run.ts` | Go 的 `run` 只有 5 个 flag，Node 有 25 个——除「在当前目录起一个 pi agent」之外的用法全部要开 app。本轮补齐到 23 个：`--provider`/`--workspace`/`--mode`/`--title`/`--role`/`--label`/`--env`/`--wait-timeout`/`--detach`/`--background`/`--output-schema`/`--image` 与 worktree 组（`--worktree-mode`/`--worktree-slug`/`--new-branch`/`--base`/`--branch`/`--pr-number`）。同时修掉三处语义错误：`provider` 被硬编码成 `"pi"`（daemon 的默认 provider 被忽略）；`--wait-timeout 30m` 因上下文仍是 60 秒而无效；`wait_for_finish` 的 `lastMessage` 为空时直接打印 agent id（脚本拿到不透明字符串，分不清是回复还是失败），现按 Node 的做法回退到时间线最后一条 assistant 消息 |
+
 **`utils/client.ts` 的 `resolveAgentId`（按名字解析 agent）** 也核对了：Go 侧 `attach` 已有前缀匹配
 与歧义报错，语义一致。
 
