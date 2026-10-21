@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agentroles"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -131,6 +132,14 @@ func (s *Server) userMCPServers(rec store.AgentRecord) []pi.MCPConfig {
 // systemPromptFor composes the daemon-side prompt appended to the provider's own.
 func (s *Server) systemPromptFor(rec store.AgentRecord) string {
 	var parts []string
+	// The role's prompt comes first: it defines what the agent is, and everything after it
+	// (the client's own prompt, the daemon's append) refines that. Without this the label existed
+	// and the behaviour did not.
+	if roleName := rec.Labels[agentroles.RoleLabel]; roleName != "" {
+		if prompt := agentroles.SystemPrompt(roleName); prompt != "" {
+			parts = append(parts, prompt)
+		}
+	}
 	if rec.Config != nil && rec.Config.SystemPrompt != nil && *rec.Config.SystemPrompt != "" {
 		parts = append(parts, *rec.Config.SystemPrompt)
 	}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ByteTrue/byspace/internal/agentroles"
+	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/tunnel"
 )
 
@@ -222,4 +224,37 @@ func (r *recordingSink) binaryCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.binaries
+}
+
+// A role is more than a label: it carries the instructions that make the agent behave as that role.
+// Go wrote the label and never appended the prompt, so Chief was created with no idea what it was.
+func TestRolePromptReachesTheAgent(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	prompt := srv.systemPromptFor(store.AgentRecord{
+		ID:     "agt_chief",
+		Labels: map[string]string{"byspace.agent-role": "chief"},
+	})
+	if !strings.Contains(prompt, "You are Chief") {
+		t.Fatalf("the role prompt was not appended: %q", prompt)
+	}
+
+	// An ordinary agent gets no role prompt.
+	plain := srv.systemPromptFor(store.AgentRecord{ID: "agt_x", Labels: map[string]string{"team": "infra"}})
+	if strings.Contains(plain, "You are Chief") {
+		t.Fatalf("a roleless agent got Chief's prompt: %q", plain)
+	}
+}
+
+// A client must not label its agent as one of the daemon's roles: the label carries the prompt.
+func TestReservedLabelsCannotBeForged(t *testing.T) {
+	stripped := agentroles.StripReserved(map[string]string{
+		"byspace.agent-role": "chief",
+		"mine":               "kept",
+	})
+	if _, present := stripped["byspace.agent-role"]; present {
+		t.Fatal("a client forged the role label")
+	}
+	if stripped["mine"] != "kept" {
+		t.Fatal("an ordinary label was dropped")
+	}
 }

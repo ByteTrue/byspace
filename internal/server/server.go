@@ -22,6 +22,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agentroles"
 	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -2077,10 +2078,13 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 	}
 
-	agentLabels := map[string]string{}
-	for k, v := range req.Config.Labels {
-		if !strings.HasPrefix(k, "byspace.") {
-			agentLabels[k] = v
+	// A client must not be able to label its agent as one of the daemon's own roles: the label
+	// carries Chief's prompt and privileges, so forging it would grant them.
+	agentLabels := agentroles.StripReserved(req.Config.Labels)
+	for key := range agentLabels {
+		if strings.HasPrefix(key, "byspace.") {
+			// Other byspace.* keys are daemon-owned for the same reason.
+			delete(agentLabels, key)
 		}
 	}
 	if req.Config.Role != nil && strings.TrimSpace(*req.Config.Role) != "" {
