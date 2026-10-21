@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -164,22 +163,23 @@ func computeNextRunAt(now time.Time, c Cadence) *string {
 		}
 		next = now.Add(time.Duration(ms) * time.Millisecond)
 	case "cron":
-		next = nextCronTime(now, c.Expression)
+		parsed, err := ParseCron(c.Expression)
+		if err != nil {
+			// An unparseable expression must not fall back to "every minute": that turns a
+			// daily schedule into a runaway loop. Park it far out so it is visibly broken
+			// rather than quietly wrong.
+			return nil
+		}
+		scheduled, err := parsed.Next(now)
+		if err != nil {
+			return nil
+		}
+		next = scheduled
 	default:
 		next = now.Add(time.Minute)
 	}
 	s := next.UTC().Format(time.RFC3339Nano)
 	return &s
-}
-
-func nextCronTime(now time.Time, expr string) time.Time {
-	fields := strings.Fields(expr)
-	if len(fields) > 0 && strings.HasPrefix(fields[0], "*/") {
-		if mins, err := strconv.Atoi(strings.TrimPrefix(fields[0], "*/")); err == nil && mins > 0 {
-			return now.Truncate(time.Minute).Add(time.Duration(mins) * time.Minute)
-		}
-	}
-	return now.Truncate(time.Minute).Add(time.Minute)
 }
 
 func (s *Service) schedulePath(id string) string {
