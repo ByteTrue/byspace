@@ -386,6 +386,37 @@ daemon 重启后终端的 tab 全没了。进程和 scrollback 回不来（没�
 
 **顺带补了一个缺口**：创建终端的路径从来没有调用过 `broadcastTerminalsChanged`，所以其他客户端看不到新 tab。
 
+### services/forge-service.ts | 539 | **PARTIAL** → 已补两种操作
+
+接口里有 `listPullRequests`、`listIssues`、`getPullRequestTimeline`、`getCheckDetails` 等。
+Go 已覆盖 status/create/merge/auto-merge/search/checkout-target/timeline（本轮补），仍缺
+`listPullRequests`、`listIssues`、`getCheckDetails` 三个独��操作。
+
+**本轮补的是 `pull_request_timeline`**——它之前返回空 items + null prNumber，checkout 面板会
+把每个 PR 都渲染成「还没有讨论」，包括用户正在等评审意见的那些。
+
+三家 forge 分别实现：GitHub 要合并两个端点（reviews + issue comments）成一条时间线，因为面板
+只显示一条线程并按 `kind` 区分，评审如果以普通评论到达会渲染成空 reviewState；GitLab 把
+approval 建模成 system note，提升为 review；Gitea 只有一个 comments 端点。
+
+评审和评论除了 `reviewState` 之外形状一致，`createdAt` 用 epoch 毫秒而不是原始 ISO 字符串——
+客户端按数值排序，字符串排序会把 "2026-01-10" 排到 "2026-01-9" 前面。
+
+截断会显式上报而不是静默丢弃：长线程在限额处停下却不说，看起来像讨论结束了。
+
+端到端验证（stub gh）：prNumber 7、一条评审 + 一条评论按序返回、schema 通过。
+
+### terminal/terminal-capture.ts | 71 | **PARTIAL** → 已补
+
+`capture_terminal_request` 解析了 `start`/`end`/`stripAnsi` 但都没用对：start/end 只当非负
+切片偏移，文档里写的负数形式（`-1` 是最后一行）什么也选不到，倒置区间静默给出错误的切片而不是空。
+
+已移植 `terminal.CaptureLines`：负数从末尾数、越界钳制而非报错（要最后 100 行而屏幕只有 10 行，
+就要这 10 行）、倒置区间为空、ANSI 剥离同时覆盖 OSC 与模式序列而不只是 CSI 颜色。
+
+这重要的原因是调用方在把文本喂给**不能渲染终端的东西**——读构建输出的 agent、对提示符断言的测试
+——切片边界上的半个行、文本中间的色码，都是错误输出而不是渲染细节。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
