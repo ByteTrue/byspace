@@ -2371,6 +2371,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			s.mu.Lock()
 			mp.record.LastStatus = "running"
 			mp.record.UpdatedAt = nowStr
+			// LastActivityAt is "when did this agent last do work", which is not the same as
+			// when the record changed (a rename touches UpdatedAt). The client sorts and
+			// groups by activity, so it has to be maintained separately.
+			mp.record.LastActivityAt = nowStr
 			recStartCopy := mp.record
 			s.mu.Unlock()
 			s.broadcastSessionMsg("agent_stream", map[string]any{
@@ -2390,6 +2394,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				s.mu.Lock()
 				mp.record.LastStatus = "running"
 				mp.record.UpdatedAt = nowStr
+				mp.record.LastActivityAt = nowStr
 				recStartCopy := mp.record
 				s.mu.Unlock()
 				s.broadcastSessionMsg("agent_stream", map[string]any{
@@ -2694,8 +2699,10 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"createdAt":                 rec.CreatedAt,
 		"updatedAt":                 rec.UpdatedAt,
 		"lastUserMessageAt":         rec.LastUserMessageAt,
-		"status":                    status,
-		"activeTurn":                activeTurn,
+		// "When did this agent last do work" — distinct from updatedAt, which a rename moves.
+		"lastActivityAt": lastActivityOf(rec),
+		"status":         status,
+		"activeTurn":     activeTurn,
 		"capabilities": map[string]any{
 			"supportsStreaming":          true,
 			"supportsSessionPersistence": true,
@@ -3377,4 +3384,16 @@ func resolveAllowedHostnames(st *store.Store) []string {
 type agentLoad struct {
 	done chan struct{}
 	err  error
+}
+
+// lastActivityOf reports when an agent last did work.
+//
+// Falls back to updatedAt for records written before LastActivityAt was maintained: a nil would
+// make the sidebar's activity ordering lose the agent entirely, and the protocol requires a
+// string.
+func lastActivityOf(rec store.AgentRecord) string {
+	if rec.LastActivityAt != "" {
+		return rec.LastActivityAt
+	}
+	return rec.UpdatedAt
 }
