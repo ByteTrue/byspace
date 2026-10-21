@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -298,6 +299,13 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 		switch role {
 		case "user":
 			if txt := extractUserContentText(msg["content"]); txt != "" {
+				// BySpace injects prompts on its own behalf (chat mentions, schedule fires,
+				// finish notifications) wrapped in a system envelope. They are user messages
+				// to the provider but not something the human said; showing them as user
+				// bubbles makes the transcript lie about who asked.
+				if sdk.IsSystemInjectedEnvelope(txt) {
+					break
+				}
 				turnCounter++
 				currentTurnID = fmt.Sprintf("turn_%d", turnCounter)
 				appendEntry(ts, TimelineItem{

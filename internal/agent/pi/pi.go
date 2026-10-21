@@ -524,11 +524,13 @@ func (s *Session) appendItemLocked(item TimelineItem) int {
 
 func (s *Session) appendItemWithSeqLocked(seq int, item TimelineItem) int {
 	entry := TimelineEntry{
-		Seq:       seq,
-		SeqEnd:    seq,
-		TurnID:    s.activeTurnID,
+		Seq:    seq,
+		SeqEnd: seq,
+		TurnID: s.activeTurnID,
+		// Bound tool output on the way in: the row is stored and re-sent on every timeline
+		// fetch, so an unbounded `cat` result makes every later refresh multi-megabyte.
+		Item:      sdk.LimitTimelineItemContent(item),
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item:      item,
 	}
 	s.timeline = append(s.timeline, entry)
 	return len(s.timeline) - 1
