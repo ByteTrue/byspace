@@ -807,6 +807,18 @@ daemon 能监听 unix socket（`serve --addr unix:///path`，受限环境需要�
 
 **没有逐文件读实现体**（`commands/schedule/shared.ts` 471 行、`commands/agent/inspect.ts` 280、`update.ts` 274、`ls.ts` 271、`send.ts` 246 等）。它们的输出格式由 `internal/cli/output.go` 统一，参数解析由各自的 `flag.FlagSet`，具体字段面由入站/出站对账脚本覆盖。**留在未完成清单**，不折算成逐文件结论。
 
+### server/orchestration-skills/internal/** | 5 文件 1585 行 | **PARTIAL → 已补两处\*\*
+
+| 文件                                                        | 结论                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selection-store.ts`                                        | **MISSING → 已补**。`coerceSkillNames` 会把保存的选择与 bundle 实际提供的 skills 求交；Go 在 custom 模式下保留每一个名字。后果：升级后某个 skill 被改名或删除，那个残留名字成了「想要但无源可拷」的条目，**整个 reconcile 失败**而不是丢掉一条——而用户在 UI 里既看不到也无法修（stale 名字不在选择器里）。                                                                            |
+| `operations.ts`                                             | **MISSING → 已补 `autoUpdateInstalledSkills`**。daemon 自带 skills，所以更新后每一份已安装副本都是旧的，直到有人在设置里重新保存选择——而用户没有任何理由去做这件事，也没人告诉他。设置页显示 drift、agent 继续用旧副本。现在启动时修复，**只应用非破坏性操作**：删除被排除，因为托管目录可能含用户放进去的文件，删除需要他确认计划。只有删除的 drift 留给交互路径，而不是报成已修复。 |
+| `paths.ts` / `transaction.ts` / `sync.ts` / `controller.ts` | **PORTED** — 路径解析（`resolveSkillsSourceDir`/`resolveSkillTargets`）、事务写入与回滚（`skills_rollback_test.go` 已验证失败时恢复原内容且不留备份目录）、diff/apply 在 `internal/server/skills.go`。                                                                                                                                                                                |
+
+### server/test-utils/** | 12 文件 2305 行 | **N/A\*\*
+
+测试辅助（平台标记、日志桩、fixture 构造、vitest setup）。Go 侧用 `testing`、`t.TempDir()` 与假 provider 脚本（`writeFaithfulFakePi`）达到同样目的。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
