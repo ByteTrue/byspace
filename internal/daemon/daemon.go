@@ -255,6 +255,12 @@ func StopRunning(homeDir string) (int, bool, error) {
 		RemovePID(homeDir, 0)
 		return 0, false, nil
 	}
+	if !ProcessMatches(pid, daemonProcessIdentity) {
+		// Alive but not ours: the pid was recycled after a crash. Reclaim the lock instead of
+		// signalling whatever now owns that number.
+		RemovePID(homeDir, 0)
+		return pid, false, nil
+	}
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return pid, false, err
 	}
