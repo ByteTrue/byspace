@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -292,18 +293,63 @@ func containsString(list []string, wanted string) bool {
 
 // applySkillsStatus executes a previously computed plan, mirroring node's applySkills: the
 // homes written are exactly the homes each op names.
-func applySkillsStatus(sourceDir, userHome string, status skillsStatus) {
+func applySkillsStatus(sourceDir, userHome string, status skillsStatus) error {
 	dirs := make(map[string]string, len(SkillTargetIDs))
 	for _, home := range skillHomes(userHome) {
 		dirs[home.ID] = home.Dir
 	}
+
+	// Every mutation is journalled so a failure halfway through leaves the skill directories as
+	// they were. Without this a copy that dies on the third target leaves two homes with a new
+	// skill and the rest without, and the reported status no longer describes the disk.
+	type undo struct {
+		path    string
+		existed bool
+		backup  string
+	}
+	var journal []undo
+	rollback := func() {
+		for i := len(journal) - 1; i >= 0; i-- {
+			entry := journal[i]
+			if entry.existed {
+				_ = os.RemoveAll(entry.path)
+				if entry.backup != "" {
+					_ = os.Rename(entry.backup, entry.path)
+				}
+				continue
+			}
+			_ = os.RemoveAll(entry.path)
+		}
+	}
+	stage := func(path string) {
+		entry := undo{path: path}
+		if _, err := os.Stat(path); err == nil {
+			entry.existed = true
+			// Move the old copy aside rather than copying it: a skill directory is small but a
+			// rename is atomic and cannot half-succeed.
+			backup := path + ".byspace-rollback"
+			_ = os.RemoveAll(backup)
+			if err := os.Rename(path, backup); err == nil {
+				entry.backup = backup
+			}
+		}
+		journal = append(journal, entry)
+	}
+
 	for _, op := range status.Ops {
 		if op.Kind == "delete" {
 			continue
 		}
 		for _, target := range op.Targets {
-			if dir, ok := dirs[target]; ok {
-				_ = copySkillDir(filepath.Join(sourceDir, op.Name), filepath.Join(dir, op.Name))
+			dir, ok := dirs[target]
+			if !ok {
+				continue
+			}
+			dest := filepath.Join(dir, op.Name)
+			stage(dest)
+			if err := copySkillDir(filepath.Join(sourceDir, op.Name), dest); err != nil {
+				rollback()
+				return fmt.Errorf("install skill %q for %s: %w", op.Name, target, err)
 			}
 		}
 	}
@@ -312,11 +358,22 @@ func applySkillsStatus(sourceDir, userHome string, status skillsStatus) {
 			continue
 		}
 		for _, target := range op.Targets {
-			if dir, ok := dirs[target]; ok {
-				_ = os.RemoveAll(filepath.Join(dir, op.Name))
+			dir, ok := dirs[target]
+			if !ok {
+				continue
 			}
+			dest := filepath.Join(dir, op.Name)
+			stage(dest)
 		}
 	}
+
+	// Commit: drop the staged backups only after every mutation succeeded.
+	for _, entry := range journal {
+		if entry.backup != "" {
+			_ = os.RemoveAll(entry.backup)
+		}
+	}
+	return nil
 }
 
 // resolveSkillsSourceDir finds the bundled `skills/` directory shipped with this daemon.

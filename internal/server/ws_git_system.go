@@ -1065,8 +1065,13 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			userHome = ""
 		}
 		status := getSkillsStatus(sourceDir, userHome, sel, targets)
+		var applyErr any
 		if msgType != "agent.skills.get_status.request" {
-			applySkillsStatus(sourceDir, userHome, status)
+			// A failed install must reach the user: the status below would otherwise describe
+			// a selection the disk does not have, and the UI would show "up to date".
+			if err := applySkillsStatus(sourceDir, userHome, status); err != nil {
+				applyErr = err.Error()
+			}
 			status = getSkillsStatus(sourceDir, userHome, sel, targets)
 		}
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
@@ -1079,6 +1084,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"selection":      sel,
 			"targets":        status.Targets,
 			"selectionSaved": ok,
+			"error":          applyErr,
 		})
 
 	case "agent.skills.save_selection.request":
@@ -1103,7 +1109,10 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		sourceDir := resolveSkillsSourceDir()
 		userHome, _ := os.UserHomeDir()
 		status := getSkillsStatus(sourceDir, userHome, sel, targets)
-		applySkillsStatus(sourceDir, userHome, status)
+		var saveErr any
+		if err := applySkillsStatus(sourceDir, userHome, status); err != nil {
+			saveErr = err.Error()
+		}
 		status = getSkillsStatus(sourceDir, userHome, sel, targets)
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
 			"requestId":            req.RequestID,
@@ -1113,8 +1122,9 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"installed":            status.Installed,
 			"selection":            sel,
 			"targets":              status.Targets,
-			"selectionSaved":       true,
+			"selectionSaved":       saveErr == nil,
 			"confirmationRequired": nil,
+			"error":                saveErr,
 		})
 
 	case "agent.skills.import_legacy_selection.request":
