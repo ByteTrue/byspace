@@ -200,6 +200,11 @@ func New(opts Options) (*Server, error) {
 	// picked up by nothing, but they do consume disk and confuse anyone inspecting the home.
 	_ = os.RemoveAll(filepath.Join(homeDir, "agent-timelines"))
 
+	// A home can lose its workspace registry while agent records survive (partial copy, failed
+	// write, an upgraded install). Rebuilding from the agents is the difference between an empty
+	// sidebar and a usable one.
+	_, _ = st.RebuildWorkspaceRegistryFromAgents()
+
 	// Existing homes may hold projects persisted before key derivation existed; without a key
 	// they cannot join a cross-host group.
 	_ = st.BackfillProjectKeys()

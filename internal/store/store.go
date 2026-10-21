@@ -1172,3 +1172,75 @@ func (s *Store) ResolveWorkspaceIDForPath(cwd string) string {
 	}
 	return bestID
 }
+
+// RebuildWorkspaceRegistryFromAgents recreates the workspace registry from agent records.
+//
+// Ported from bootstrapWorkspaceRegistries. The registry can be lost while agent records survive
+// (a partial home copy, a failed write, an old install upgraded in place). Without this the
+// sidebar shows nothing and every agent becomes unreachable, even though its session file and
+// history are intact.
+//
+// Only agents whose working directory still exists are considered: a missing directory cannot be
+// registered, and inventing a workspace for it would put an entry in the sidebar that fails the
+// moment it is opened.
+func (s *Store) RebuildWorkspaceRegistryFromAgents() (int, error) {
+	workspaces, err := s.ListWorkspaces()
+	if err != nil {
+		return 0, err
+	}
+	if len(workspaces) > 0 {
+		// Registry is intact; nothing to rebuild.
+		return 0, nil
+	}
+
+	agents, err := s.ListAgents()
+	if err != nil {
+		return 0, err
+	}
+
+	type candidate struct {
+		cwd       string
+		createdAt string
+		updatedAt string
+	}
+	byDir := make(map[string]*candidate)
+	for _, rec := range agents {
+		if rec.ArchivedAt != nil || strings.TrimSpace(rec.Cwd) == "" {
+			continue
+		}
+		info, statErr := os.Stat(rec.Cwd)
+		if statErr != nil || !info.IsDir() {
+			continue
+		}
+		resolved := filepath.Clean(rec.Cwd)
+		existing, ok := byDir[resolved]
+		if !ok {
+			byDir[resolved] = &candidate{cwd: resolved, createdAt: rec.CreatedAt, updatedAt: rec.UpdatedAt}
+			continue
+		}
+		// The workspace takes the earliest creation and the latest activity across its agents.
+		if rec.CreatedAt != "" && (existing.createdAt == "" || rec.CreatedAt < existing.createdAt) {
+			existing.createdAt = rec.CreatedAt
+		}
+		if rec.UpdatedAt > existing.updatedAt {
+			existing.updatedAt = rec.UpdatedAt
+		}
+	}
+
+	// Sorted so a rebuild is deterministic instead of following map order.
+	dirs := make([]string, 0, len(byDir))
+	for dir := range byDir {
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+
+	created := 0
+	for _, dir := range dirs {
+		c := byDir[dir]
+		if _, _, err := s.EnsureWorkspaceForCwd(c.cwd); err != nil {
+			continue
+		}
+		created++
+	}
+	return created, nil
+}
