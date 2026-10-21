@@ -12,6 +12,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/agentnotices"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -401,10 +402,19 @@ func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw jso
 	_ = json.Unmarshal(raw, &req)
 
 	var cmds []pi.SlashCommand
+	provider := ""
 	if req.AgentID != "" {
+		if record, err := s.store.GetAgent(req.AgentID); err == nil && record != nil {
+			provider = record.Provider
+		}
 		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil && mp.session != nil {
 			cmds, _ = mp.session.GetCommands(ctx)
 		}
+	}
+	// omp's harness implements a handful of commands itself, so its RPC never reports them. Merging them
+	// here is the only place that knows which provider reported the list.
+	if provider == "omp" {
+		cmds = providers.MapOmpSlashCommands(cmds)
 	}
 	if cmds == nil {
 		cmds = []pi.SlashCommand{}

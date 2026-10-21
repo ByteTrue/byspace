@@ -927,6 +927,24 @@ func (s *Session) GetCommands(ctx context.Context) ([]SlashCommand, error) {
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return nil, err
 	}
+	// The protocol requires description and argumentHint on every command, and pi sends neither. An
+	// empty value fails the whole list_commands_response, which empties the palette for every provider
+	// rather than for one — so the defaults are filled here rather than left to the client.
+	for index := range wrapper.Commands {
+		command := &wrapper.Commands[index]
+		if strings.TrimSpace(command.Name) == "" {
+			continue
+		}
+		if strings.TrimSpace(command.Description) == "" {
+			command.Description = command.Name
+		}
+		if command.ArgumentHint == "" {
+			command.ArgumentHint = ""
+		}
+		if strings.TrimSpace(command.Kind) == "" {
+			command.Kind = "command"
+		}
+	}
 	return wrapper.Commands, nil
 }
 

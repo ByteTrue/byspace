@@ -131,8 +131,15 @@ type AgentUsage struct {
 // SlashCommand is a command a provider exposes to the client.
 type SlashCommand struct {
 	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Source      string `json:"source"`
+	Description string `json:"description"`
+	// ArgumentHint names the argument's shape (`<message>`, `[on|off|toggle]`). Required by the
+	// protocol: an omitted value fails the whole list_commands_response, so the palette would be empty
+	// for every provider rather than for one.
+	ArgumentHint string `json:"argumentHint"`
+	// Kind is "command" or "skill". Optional on the wire, defaulting to "command".
+	Kind string `json:"kind,omitempty"`
+	// Source is provider bookkeeping, not part of AgentSlashCommand.
+	Source string `json:"-"`
 }
 
 // CatalogModel is a BySpace-formatted model definition shown in the model picker.
