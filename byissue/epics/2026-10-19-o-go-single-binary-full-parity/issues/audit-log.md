@@ -460,6 +460,33 @@ pipeline 状态映射到协议的封闭 check-status 枚举。未识别的 GitLa
 
 `isDraft` 也读标题前缀了：不同 GitLab 版本对标志位的表示不一致，两种都检查。
 
+### executable-resolution/** | 241 | **MISSING\*\* → 已补
+
+provider 可用性用的是 `exec.LookPath`，它返回 PATH 上**第一个**匹配。这和「一个能跑的二进制」不是一回事：PATH 上靠前的陈旧或损坏安装会遮住后面正常的那份，而 providers 页会因此对一个明明装了的机器报「未安装」。用户唯一的出路是去修 PATH。
+
+`internal/execres` 枚举 PATH 上每个候选、逐个用 `--version` 探测直到有一个成功，所以「可用」的含义就是「这个二进制能跑」，这也正是页面上那句话声称的东西。含分隔符的名字当字面路径处理并探测，不走搜索。Windows 通过 PATHEXT 解析扩展名。
+
+### test-utils/** | 27 | **N/A\*\* — 测试辅助（平台标记、日志桩、vitest setup），Go 侧用 `testing` 包与 build tag 达到同样目的。
+
+### packages/relay/src | 837 | **PORTED（兼容性已锁定）**
+
+注意：这里是**保留的** relay E2EE 代码，不是归档的 relay 服务端——Web 前端仍然 import
+`@bytetrue/relay/e2ee`，所以它必须与 Go 侧**字节级兼容**。
+
+`crypto.ts` 的形状是 `[24 字节 nonce][密文]`（XSalsa20-Poly1305）。Go 的 `internal/e2ee` 用
+`golang.org/x/crypto/nacl/box`，同一个 NaCl 标准实现。本轮补了 4 个兼容性测试锁定这一点：
+
+- 密文前 24 字节是 nonce（客户端按这个切分）
+- 双向派生出的共享密钥相同（否则一方只能发不能收）
+- 公钥长度不对/非 base64 要拒绝，不能静默使用
+- 篡改的密文必须解密失败而不是返回垃圾
+
+**为什么值得单独锁**：这里一旦失配，所有浏览器经 relay 的连接都会断，而现象是「relay 挂了」
+而不是「协议变了」——最难查的那类故障。
+
+`encrypted-channel.ts`（579 行）的会话状态机对应 `internal/e2ee/channel.go`；
+`base64.ts`/`types.ts`/`index.ts`/`e2ee.ts` 是转出与类型。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
