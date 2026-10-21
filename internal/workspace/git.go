@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type CheckoutStatus struct {
@@ -48,6 +49,15 @@ type Commit struct {
 	IsOnBase   bool         `json:"isOnBase"`
 	Files      []CommitFile `json:"files"`
 }
+
+// MaxDiffLineChars bounds the content of one diff line.
+//
+// A minified bundle or a one-line JSON file is a single line of hundreds of thousands of
+// characters. Highlighting it blocks the renderer, and the user cannot read one line that long
+// anyway — the client shows the truncated line with a marker rather than freezing.
+//
+// Ported from MAX_DIFF_HIGHLIGHT_LINE_CHARS in diff-highlighter.ts.
+const MaxDiffLineChars = 10000
 
 type DiffLine struct {
 	Type    string `json:"type"` // "add" | "remove" | "context" | "header"
@@ -344,13 +354,13 @@ func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
 				continue
 			}
 			if strings.HasPrefix(line, "+") {
-				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "add", Content: line[1:]})
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "add", Content: clampDiffLine(line[1:])})
 				additions++
 			} else if strings.HasPrefix(line, "-") {
-				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "remove", Content: line[1:]})
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "remove", Content: clampDiffLine(line[1:])})
 				deletions++
 			} else if strings.HasPrefix(line, " ") {
-				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "context", Content: line[1:]})
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "context", Content: clampDiffLine(line[1:])})
 			}
 		}
 		if curHunk != nil {
@@ -965,4 +975,22 @@ func parseCount(raw string) (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+// clampDiffLine truncates a diff line that is too long to render.
+//
+// A minified bundle is one line of hundreds of thousands of characters; highlighting it blocks
+// the renderer, and nobody reads a line that long. The truncation is visible in the output
+// rather than silent, because a user comparing two minified files needs to know they are not
+// seeing the whole line.
+func clampDiffLine(line string) string {
+	if len(line) <= MaxDiffLineChars {
+		return line
+	}
+	// Byte slicing could split a rune; back off to a boundary.
+	cut := MaxDiffLineChars
+	for cut > 0 && !utf8.RuneStart(line[cut]) {
+		cut--
+	}
+	return line[:cut] + "… (truncated)"
 }
