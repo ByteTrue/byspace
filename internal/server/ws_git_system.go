@@ -694,36 +694,27 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		slot, ok := s.terminalSlotsByID[capReq.TerminalID]
 		var sess = s.terminals[slot]
 		s.mu.Unlock()
-		lines := []string{}
+		allLines := []string{}
 		if ok && sess != nil {
 			if res := sess.ResumeSince(0); res != nil && res.Data != "" {
-				lines = strings.Split(strings.TrimRight(res.Data, "\r\n"), "\n")
+				allLines = strings.Split(strings.TrimRight(res.Data, "\r\n"), "\n")
 			}
 		}
-		if capReq.StripAnsi == nil || *capReq.StripAnsi {
-			for i := range lines {
-				lines[i] = terminal.StripAnsi(lines[i])
-			}
+		// Start/end accept negative indices counted from the end, and are clamped rather than
+		// erroring: a caller asking for the last 100 lines of a 10-line screen wants the 10.
+		stripAnsi := true
+		if capReq.StripAnsi != nil {
+			stripAnsi = *capReq.StripAnsi
 		}
-		total := len(lines)
-		if capReq.Start != nil || capReq.End != nil {
-			start := 0
-			end := total
-			if capReq.Start != nil && *capReq.Start > 0 {
-				start = *capReq.Start
-			}
-			if capReq.End != nil && *capReq.End > 0 && *capReq.End < end {
-				end = *capReq.End
-			}
-			if start > end {
-				start = end
-			}
-			lines = lines[start:end]
-		}
+		captured := terminal.CaptureLines(allLines, terminal.CaptureOptions{
+			Start:     capReq.Start,
+			End:       capReq.End,
+			StripANSI: stripAnsi,
+		})
 		_ = sendSessionMsg(ctx, sink, "capture_terminal_response", map[string]any{
 			"terminalId": capReq.TerminalID,
-			"lines":      lines,
-			"totalLines": total,
+			"lines":      captured.Lines,
+			"totalLines": captured.TotalLines,
 			"requestId":  capReq.RequestID,
 		})
 
