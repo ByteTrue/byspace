@@ -263,6 +263,20 @@ token 仍是不可解释字符串：JSON 是浏览器订阅，`ExponentPushToken
 
 端到端验证：06:29 UTC 创建 `0 9 * * *`，`nextRunAt` = `2026-10-21T09:00:00Z`。
 
+### server/orchestration-skills/** | 1665 | **PARTIAL\*\* → 已补回滚
+
+`applySkillsStatus` 逐个 home 拷贝、**每个错误都用 `_ =` 吞掉**。第二个目标失败时，第一个已经装上新版、其余没有，而回报的状态描述的是磁盘上并不存在的选择——设置页显示「已是最新」而实际半装。
+
+现在每次改动都记日志：已有的 skill 目录先 rename 到旁边再替换；任一目标失败则全部还原并返回错误，两个 skill handler 也会把错误报给客户端而不是吞掉。备份只在全部成功后删除。
+
+这覆盖了 Node 事务支持里最要紧的部分，但**没有**实现崩溃后恢复（那需要落盘 journal），已记为剩余工作。
+
+### server/file-explorer/**、server/file-observer/**、server/websocket/\*\* | 1093/1330/457
+
+- `file-explorer`：列表、读取、带 `expectedModifiedAt`/`expectedRevision` 乐观锁的写入、创建/重命名/删除，Go 均已实现（`internal/workspace/files.go` + `ws_workspace.go`）。
+- `file-observer`：Node 用原生递归 watcher + 协调；Go 用 1 秒轮询 `fs.file.update`。**语义等价但机制不同**——轮询在超大仓库上有成本，接 `internal/gitmeta` 规则表 + watcher 是后续性能工作（已在 `decisions/004` 记录）。
+- `websocket/runtime-metrics`：诊断计数器，只写日志、不进协议。Go 无结构化日志子系统（已在 `logger.ts` 条目说明），N/A。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
