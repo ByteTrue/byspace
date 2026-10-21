@@ -205,7 +205,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `agent-attention-policy.ts` | 80 | **MISSING** → 已补 | 注意力状态是侧边栏徽标和推送的依据。Go 里三个字段（`requiresAttention`/`attentionReason`/`attentionTimestamp`）都存在但**从不赋值**，三个 handler 全是空壳：`mark_unread` 返回 `markedAgentId: null` 且 `success: true` 却什么都没做，`clear_attention` 返回空数组，`clear_agent_attention` 返回空 agents。结果是徽标永远不亮，跑完的长任务和没启动过的一模一样。已移植 `internal/attention`（3 分钟在场阈值、聚焦抑制、最活跃在场客户端、error 不推送），并接线：轮次完成标记（除非用户正看着）、`mark_unread` 按 Node 前置条件标记工作区里最活跃的 finished agent、两个 clear 真正清除并返回快照。4 步端到端验证全通过。 |
 
-### 未审计（本批剩余 24 文件）
+| `connection-offer.ts` / `pairing-offer.ts` | 80 / 76 | **PARTIAL** → 已补关键语义 | 配对 offer 之前无条件返回 `relayEnabled: true` 加一个 `#offer=` 链接，**不管 relay 是否真的在跑**——扫出来的二维码指向一个连不上的地址。Node 在 `relayEnabled === false` 时直接返回 `{relayEnabled: false, url: null, qr: null}`。已按此实现。**这里还挖出一个真 bug**：`relayConfigFromStore` 读的是 `cfg["daemon"]["relay"]`，而 `LoadDaemonConfig` 已经解包过 `daemon`，所以 relay 配置永远读到零值——上一轮「修好」的 relay runtime 实际上一直以为 relay 是关的。修正后端到端验证：relay 关 → 空 url/null qr；relay 配好 → `wss://relay.example/#offer=...` + 44 行终端二维码，两者都过 schema。 |
+
+### 未审计（本批剩余 22 文件）
 
 按行数排序，下一轮从这里继续：
 
