@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"io"
@@ -39,6 +40,9 @@ type CodexSession struct {
 	thinking     string
 	turnCounter  int
 	activeTurnID string
+	// turnIDs is every turn the thread has run, in order. Rewind works in turns rather than messages, so
+	// resolving a message to a turn needs this list.
+	turnIDs []string
 	// nativeTurnID is Codex's own turn id, which `turn/steer` requires. activeTurnID is ours and
 	// means nothing to the provider.
 	nativeTurnID       string
@@ -259,10 +263,12 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		if turn, ok := params["turn"].(map[string]any); ok {
 			if id, ok := turn["id"].(string); ok && id != "" {
 				s.nativeTurnID = id
+				s.recordTurnIDLocked(id)
 			}
 		}
 		if id, ok := params["turnId"].(string); ok && id != "" {
 			s.nativeTurnID = id
+			s.recordTurnIDLocked(id)
 		}
 		extraEvents = append(extraEvents, map[string]any{"type": "turn_start"})
 
@@ -892,4 +898,99 @@ func codexMCPServerConfig(server pi.MCPConfig) map[string]any {
 		config["url"] = url
 	}
 	return config
+}
+
+// recordTurnIDLocked appends a turn id once.
+//
+// Codex announces the same turn from both `turn/started` and the `turn/start` response; recording twice would make
+// rewind's turn count wrong and roll back one turn too many.
+func (s *CodexSession) recordTurnIDLocked(id string) {
+	for _, existing := range s.turnIDs {
+		if existing == id {
+			return
+		}
+	}
+	s.turnIDs = append(s.turnIDs, id)
+}
+
+// RewindCapabilities reports what this provider can rewind.
+//
+// Codex rolls the thread back; the working tree is untouched, so files are not restored.
+func (s *CodexSession) RewindCapabilities() RewindCapabilities {
+	return RewindCapabilities{Conversation: true}
+}
+
+// Rewind rolls the conversation back to a turn.
+//
+// Ported from codex/rewind.ts. Codex counts in TURNS, not messages: `thread/rollback` takes how many turns to drop from
+// the end. The message id is resolved to its position in `turnIDs`, which is why every turn id is recorded as it
+// starts.
+func (s *CodexSession) RewindConversation(ctx context.Context, messageID string) error {
+	trimmed := strings.TrimSpace(messageID)
+	if trimmed == "" {
+		return errors.New("rewind needs a message id")
+	}
+
+	s.mu.Lock()
+	threadID := s.threadID
+	turns := append([]string(nil), s.turnIDs...)
+	targetIndex := -1
+	for index, entry := range s.timeline {
+		if entry.Item.MessageID == trimmed && entry.Item.Type == "user_message" {
+			// Count the turns that started at or before this message.
+			targetIndex = index
+			break
+		}
+	}
+	s.mu.Unlock()
+
+	if threadID == "" {
+		return errors.New("rewind needs a thread")
+	}
+	if targetIndex < 0 {
+		return fmt.Errorf("no user message with id %q in this thread", trimmed)
+	}
+	if len(turns) == 0 {
+		return errors.New("rewind needs at least one turn")
+	}
+
+	// Codex can only drop turns from the end, so a message in the middle asks for everything after it to go.
+	dropped := 1
+	s.mu.Lock()
+	for index, entry := range s.timeline {
+		if index <= targetIndex {
+			continue
+		}
+		if entry.Item.Type == "user_message" {
+			dropped++
+		}
+	}
+	s.mu.Unlock()
+	if dropped > len(turns) {
+		dropped = len(turns)
+	}
+
+	if _, err := s.rpcCall(ctx, "thread/rollback", map[string]any{
+		"threadId": threadID,
+		"numTurns": dropped,
+	}); err != nil {
+		return err
+	}
+
+	// The rolled-back turns are gone; the client's transcript is wrong until it is re-read.
+	s.mu.Lock()
+	s.turnIDs = s.turnIDs[:len(s.turnIDs)-dropped]
+	s.status = "idle"
+	s.nativeTurnID = ""
+	s.mu.Unlock()
+	return nil
+}
+
+// TreeEntryForMessage maps a message id to the provider's own reference.
+//
+// Codex addresses turns, resolved inside RewindConversation from the recorded turn list, so the identity mapping is
+// correct here too.
+func (s *CodexSession) TreeEntryForMessage(messageID string) (string, bool) {
+	trimmed := strings.TrimSpace(messageID)
+	return trimmed, trimmed != ""
 }

@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -349,4 +351,69 @@ func (s *OpenCodeSession) Close() error {
 		_ = s.cmd.Process.Kill()
 	}
 	return nil
+}
+
+// ConversationFSRewind reports what this provider can rewind.
+//
+// OpenCode's revert restores the conversation and the files the session changed, so both are true.
+func (s *OpenCodeSession) RewindCapabilities() RewindCapabilities {
+	return RewindCapabilities{Conversation: true, Files: true}
+}
+
+// Rewind reverts the conversation to a message.
+//
+// Ported from opencode/rewind.ts: `session.revert` with the message id. OpenCode keeps unrevert available only until a
+// later prompt triggers its cleanup, which permanently drops the reverted messages, so there is nothing to undo here
+// even if a caller asks.
+func (s *OpenCodeSession) RewindConversation(ctx context.Context, messageID string) error {
+	trimmed := strings.TrimSpace(messageID)
+	if trimmed == "" {
+		return errors.New("rewind needs a message id")
+	}
+	s.mu.Lock()
+	sid := s.sessionID
+	base := s.baseURL
+	s.mu.Unlock()
+	if sid == "" {
+		return errors.New("rewind needs a session")
+	}
+
+	s.mu.Lock()
+	directory := s.cwd
+	s.mu.Unlock()
+	body, err := json.Marshal(map[string]any{"messageID": trimmed, "directory": directory})
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		base+"/session/"+sid+"/revert", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= 400 {
+		raw, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("opencode revert failed (%d): %s", response.StatusCode, strings.TrimSpace(string(raw)))
+	}
+
+	// The reverted messages are gone, so the transcript the client holds is wrong until it is re-read.
+	s.mu.Lock()
+	s.status = "idle"
+	s.mu.Unlock()
+	return nil
+}
+
+// TreeEntryForMessage maps a message id to the provider's own reference.
+//
+// OpenCode addresses messages by id directly, so the mapping is the identity. The pi session needs a translation
+// because its rewind goes through a tree whose entries are not message ids.
+func (s *OpenCodeSession) TreeEntryForMessage(messageID string) (string, bool) {
+	trimmed := strings.TrimSpace(messageID)
+	return trimmed, trimmed != ""
 }

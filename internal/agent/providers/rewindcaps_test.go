@@ -13,9 +13,17 @@ func TestRewindCapabilitiesFor(t *testing.T) {
 		t.Fatal("both needs both halves")
 	}
 
+	// opencode reverts files as well; codex only rolls the thread back.
+	if opencode := RewindCapabilitiesFor("opencode"); !opencode.Conversation || !opencode.Files {
+		t.Fatalf("opencode = %+v", opencode)
+	}
+	if codex := RewindCapabilitiesFor("codex"); !codex.Conversation || codex.Files {
+		t.Fatalf("codex = %+v", codex)
+	}
+
 	// Everything else honestly reports nothing, including providers whose node implementation has rewind Go
 	// has not ported.
-	for _, provider := range []string{"claude", "codex", "opencode", "omp", "copilot", "cursor", "unknown"} {
+	for _, provider := range []string{"claude", "omp", "copilot", "cursor", "unknown"} {
 		caps := RewindCapabilitiesFor(provider)
 		if caps.Conversation || caps.Files || caps.SupportsRewindBoth() {
 			t.Fatalf("%s = %+v, want no rewind", provider, caps)

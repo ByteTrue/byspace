@@ -6,10 +6,9 @@ package providers
 // appear for providers that cannot do it, and pressing it fails — which reads as the app being broken rather
 // than the feature being unavailable.
 //
-// These values describe what THIS daemon implements, not what the provider could do in principle. Node's table
-// differs in two places for that reason: it implements claude's `forkSession` and omp's tree navigation, and Go
-// does not — claude's rewind needs the SDK's fork path and omp rejects pi's `--extension`, which is where Go's
-// tree navigation lives.
+// These values describe what THIS daemon implements, not what the provider could do in principle. Claude and omp
+// still report nothing: claude's rewind needs the SDK's `forkSession` path and omp rejects the `--extension` that Go's
+// tree navigation lives in.
 type RewindCapabilities struct {
 	Conversation bool
 	// Files means the working tree is restored as well as the conversation.
@@ -22,6 +21,12 @@ func RewindCapabilitiesFor(provider string) RewindCapabilities {
 	case "pi":
 		// Conversation rewind goes through the integration extension's tree navigation, which is pi's
 		// mechanism; files are not restored.
+		return RewindCapabilities{Conversation: true}
+	case "opencode":
+		// `session.revert` restores the conversation and the files the session changed.
+		return RewindCapabilities{Conversation: true, Files: true}
+	case "codex":
+		// `thread/rollback` drops turns from the thread; the working tree is untouched.
 		return RewindCapabilities{Conversation: true}
 	default:
 		// Everything else: no rewind. Claiming it is worse than not offering it.
