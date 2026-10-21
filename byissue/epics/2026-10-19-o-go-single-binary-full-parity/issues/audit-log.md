@@ -217,4 +217,26 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 **关键证据：该缺陷在 `8fd96541d`（本轮全部改动之前）同样复现**，所以它不是本轮引入的。
 
-下一步：对 `jsonl.Process` 的 stdout 解码加 trace，确认 pi 的 `message_update` 是否到达但被丢弃。
+### 已定位的部分：`PI_SESSION_FILE` 等 pi 会话身份泄漏
+
+用 daemon 的完整 env 手动跑 pi 可以复现（`text_delta` 从 5 个降到 1 个），逐项二分后锁定
+`PI_SESSION_FILE` / `PI_SESSION_ID` / `PI_MODEL` / `PI_PROVIDER` / `PI_CODING_AGENT`：
+daemon 若从 pi agent 内部启动（本仓库的开发循环就是这样），这些变量描述的是**父**会话，
+子 pi 继承后往父 transcript 里追加而不是开新会话。
+
+已把这一组加入 `home.ExternalProcessEnv` 的剥离列表（含 BySpace 自己的
+`BYSPACE_AGENT_ID` / `BYSPACE_SUBAGENT_REPORT_*`）。**验证：子进程 env 里已确认为 0 个 PI\_\* 变量。**
+
+但剥离之后 agent 仍不产出响应，说明还有第二个原因。
+
+### 剩余差异（已缩小到最后一步）
+
+| 实验                                    | 结果                          |
+| --------------------------------------- | ----------------------------- |
+| daemon + 扩展                           | 无响应                        |
+| daemon + **无扩展**                     | **有响应**（`ASSISTANT: 好`） |
+| 手动 + Go 生成的那份完整扩展 + 同样参数 | 正常（5 deltas）              |
+| 手动 + daemon 的完整 env + 该扩展       | 退化（1 delta）               |
+
+结论：需要「daemon 的 spawn 方式」和「扩展」同时成立才复现。下一步应该给 pi 的 stdout
+加持久化 trace（而不是 stderr，避免被打断），确认 `agent_start` 是否到达。

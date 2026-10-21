@@ -62,3 +62,27 @@ func TestIsRuntimeControlEnvKey(t *testing.T) {
 		t.Fatal("PATH is not runtime state")
 	}
 }
+
+// A daemon launched from inside a pi agent inherits that agent's session identity. A child pi
+// that keeps it appends to the parent's transcript instead of opening a new session, and the
+// new agent produces no visible turn at all — the failure looks like "the agent never replies"
+// with no error anywhere.
+func TestExternalProcessEnvStripsPiSessionIdentity(t *testing.T) {
+	base := []string{
+		"PATH=/usr/bin",
+		"PI_SESSION_FILE=/Users/x/.pi/agent/sessions/-tmp-/abc.jsonl",
+		"PI_SESSION_ID=01a15306",
+		"PI_MODEL=deepseek-flash",
+		"PI_PROVIDER=bytetrueapi",
+		"PI_CODING_AGENT=true",
+	}
+	joined := strings.Join(ExternalProcessEnv(base), "\n")
+	for _, banned := range []string{"PI_SESSION_FILE", "PI_SESSION_ID", "PI_MODEL", "PI_PROVIDER", "PI_CODING_AGENT"} {
+		if strings.Contains(joined, banned) {
+			t.Fatalf("%s leaked into a child pi:\n%s", banned, joined)
+		}
+	}
+	if !strings.Contains(joined, "PATH=/usr/bin") {
+		t.Fatal("ordinary variables must survive")
+	}
+}

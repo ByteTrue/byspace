@@ -16,6 +16,22 @@ const (
 )
 
 var runtimeControlEnvKeys = []string{
+	// pi's own session identity. A daemon launched *from inside a pi agent* (by an agent
+	// running BySpace's own dev loop, which is how this was found) exports these for its own
+	// session; a child pi that inherits them appends to the parent's transcript instead of
+	// opening a new one, and the agent producted no visible turn at all.
+	"PI_SESSION_FILE",
+	"PI_SESSION_ID",
+	"PI_MODEL",
+	"PI_PROVIDER",
+	"PI_REASONING_LEVEL",
+	"PI_CODING_AGENT",
+	// BySpace's own agent-scoped variables: they describe the current agent, and a grandchild
+	// that inherits them reports activity to the wrong agent.
+	"BYSPACE_AGENT_ID",
+	"BYSPACE_AGENT_CWD",
+	"BYSPACE_SUBAGENT_REPORT_TOKEN",
+	"BYSPACE_SUBAGENT_REPORT_URL",
 	"BYSPACE_NODE_ENV",
 	"BYSPACE_DESKTOP_MANAGED",
 	"BYSPACE_SUPERVISED",
