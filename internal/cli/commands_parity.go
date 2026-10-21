@@ -663,7 +663,17 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("terminal "+sub, flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
 	cwd := fs.String("cwd", "", "working directory")
+	workspaceID := fs.String("workspace", "", "workspace to open the terminal in")
 	name := fs.String("name", "Terminal", "terminal name")
+	// capture's flags. The daemon has supported start/end/stripAnsi since the capture was ported;
+	// the CLI simply never exposed them, so `terminal capture` could only dump the whole screen.
+	start := fs.Int("start", 0, "first line to capture (negative counts from the end)")
+	end := fs.Int("end", 0, "last line to capture (0 means the end)")
+	scrollback := fs.Bool("S", false, "include scrollback, not just the visible screen")
+	fs.BoolVar(scrollback, "scrollback", false, "include scrollback, not just the visible screen")
+	ansi := fs.Bool("ansi", false, "keep ANSI escape sequences instead of stripping them")
+	literal := fs.Bool("l", false, "send keys literally (no escape interpretation)")
+	fs.BoolVar(literal, "literal", false, "send keys literally (no escape interpretation)")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
@@ -696,12 +706,18 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 		if workCwd == "" {
 			workCwd, _ = os.Getwd()
 		}
-		_ = sendSessionReq(ctx, ws, map[string]any{
+		createRequest := map[string]any{
 			"type":      "create_terminal_request",
 			"requestId": "cli_tc",
 			"cwd":       workCwd,
 			"name":      *name,
-		})
+		}
+		if workspace := strings.TrimSpace(*workspaceID); workspace != "" {
+			createRequest["workspaceId"] = workspace
+		}
+		if err := sendSessionReq(ctx, ws, createRequest); err != nil {
+			return err
+		}
 		resp, err := waitSessionResp(ctx, ws, "create_terminal_response", "")
 		if err != nil {
 			return err
@@ -727,11 +743,27 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 		if fs.NArg() < 1 {
 			return errors.New("usage: byspace terminal capture <terminal-id>")
 		}
-		_ = sendSessionReq(ctx, ws, map[string]any{
+		captureRequest := map[string]any{
 			"type":       "capture_terminal_request",
 			"requestId":  "cli_tcap",
 			"terminalId": fs.Arg(0),
-		})
+			// stripAnsi is the inverse of the flag: the default keeps escape codes out of a
+			// terminal dump, and --ansi asks for them back.
+			"stripAnsi": !*ansi,
+		}
+		if *scrollback {
+			// A negative start reaches into the scrollback without needing a separate field.
+			captureRequest["start"] = -1
+		}
+		if *start != 0 {
+			captureRequest["start"] = *start
+		}
+		if *end != 0 {
+			captureRequest["end"] = *end
+		}
+		if err := sendSessionReq(ctx, ws, captureRequest); err != nil {
+			return err
+		}
 		resp, err := waitSessionResp(ctx, ws, "capture_terminal_response", "")
 		if err != nil {
 			return err
@@ -749,11 +781,21 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 		if fs.NArg() < 2 {
 			return errors.New("usage: byspace terminal send-keys <terminal-id> <keys>")
 		}
-		_ = sendSessionReq(ctx, ws, map[string]any{
+		// Without --literal the arguments are a line to type, so a newline is appended (that is
+		// what "send keys then Enter" means). With --literal the bytes go through unchanged, which
+		// is the only way to send a control character like Ctrl-C: appending a newline to it would
+		// turn an interrupt into an interrupt plus an empty command.
+		data := strings.Join(fs.Args()[1:], " ")
+		if !*literal {
+			data += "\n"
+		}
+		if err := sendSessionReq(ctx, ws, map[string]any{
 			"type":       "terminal_input",
 			"terminalId": fs.Arg(0),
-			"data":       strings.Join(fs.Args()[1:], " ") + "\n",
-		})
+			"data":       data,
+		}); err != nil {
+			return err
+		}
 		return nil
 
 	default:
