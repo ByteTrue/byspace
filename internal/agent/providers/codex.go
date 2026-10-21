@@ -26,6 +26,9 @@ type CodexSession struct {
 	writeMu sync.Mutex
 	nextID  atomic.Int64
 
+	// lastUsage is the token accounting from the most recent turn, for the context ring.
+	lastUsage *sdk.AgentUsage
+
 	mu                 sync.Mutex
 	pending            map[int64]chan map[string]any
 	status             string
@@ -389,6 +392,13 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			"message": firstQuestionTitle(questions),
 		})
 
+	case "thread/tokenUsage/updated", "codex/event/token_usage":
+		// Ported from toAgentUsage. `last` is the most recent request's usage; the context
+		// window is the model's, not the request's.
+		if usage := codexAgentUsage(params); usage != nil {
+			s.lastUsage = usage
+		}
+
 	case "turn/completed", "codex/event/task_complete":
 		if s.activeTextIdx >= 0 {
 			extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
@@ -465,9 +475,18 @@ func (s *CodexSession) LastError() string {
 // on its own turn id comparison.
 func (s *CodexSession) TurnToken() string { return "" }
 
-// Usage reports token/cost accounting when the provider exposes it.
+// Usage reports the token accounting the app-server most recently announced.
+//
+// The context-window ring in the composer reads this; without it a Codex agent shows no usage at
+// all even though the provider reports it on every turn.
 func (s *CodexSession) Usage(_ context.Context) *sdk.AgentUsage {
-	return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastUsage == nil {
+		return nil
+	}
+	usage := *s.lastUsage
+	return &usage
 }
 
 func (s *CodexSession) StreamSeq() int {
@@ -721,4 +740,57 @@ func firstQuestionTitle(questions []map[string]any) string {
 		return title
 	}
 	return "Codex is waiting for your input"
+}
+
+// codexAgentUsage maps the app-server's tokenUsage payload onto the protocol's usage shape.
+//
+// Returns nil when the payload carries nothing usable: an empty usage object must not reset a
+// previously reported one to zero.
+func codexAgentUsage(params map[string]any) *sdk.AgentUsage {
+	raw, _ := params["tokenUsage"].(map[string]any)
+	if raw == nil {
+		raw = params
+	}
+	if raw == nil {
+		return nil
+	}
+	last, _ := raw["last"].(map[string]any)
+
+	usage := &sdk.AgentUsage{}
+	changed := false
+	if last != nil {
+		if value, ok := numericParam(last, "inputTokens"); ok {
+			usage.InputTokens = value
+			changed = true
+		}
+		if value, ok := numericParam(last, "cachedInputTokens"); ok {
+			usage.CachedInputTokens = value
+			changed = true
+		}
+		if value, ok := numericParam(last, "outputTokens"); ok {
+			usage.OutputTokens = value
+			changed = true
+		}
+	}
+	// The context window is the model's, spelled two ways depending on the app-server version.
+	if window, ok := numericParam(raw, "model_context_window"); ok && window > 0 {
+		usage.ContextWindowMaxTokens = &window
+		changed = true
+	} else if window, ok := numericParam(raw, "modelContextWindow"); ok && window > 0 {
+		usage.ContextWindowMaxTokens = &window
+		changed = true
+	}
+	if last != nil {
+		if used, ok := numericParam(last, "total_tokens"); ok && used > 0 {
+			usage.ContextWindowUsedTokens = &used
+			changed = true
+		} else if used, ok := numericParam(last, "totalTokens"); ok && used > 0 {
+			usage.ContextWindowUsedTokens = &used
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return usage
 }
