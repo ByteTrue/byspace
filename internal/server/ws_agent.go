@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -896,10 +898,14 @@ func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.Store
 		}
 		_ = mp.session.WaitForFinish(ctx)
 		agtID := sched.Target.AgentID
-		out := mp.session.LastAssistantText()
+		items := make([]sdk.TimelineItem, 0, len(mp.session.Timeline()))
+		for _, entry := range mp.session.Timeline() {
+			items = append(items, entry.Item)
+		}
+		out := scheduledRunOutput(mp.session.LastAssistantText(), items)
 		return schedule.ExecutionResult{
 			AgentID: &agtID,
-			Output:  &out,
+			Output:  out,
 		}, nil
 	}
 
@@ -1410,4 +1416,23 @@ func (s *Server) createWorktreeForIntent(ctx context.Context, repoRoot string, i
 		return "", err
 	}
 	return path, nil
+}
+
+// scheduledRunOutput picks what a schedule run reports.
+//
+// Ported from buildRunOutput: the assistant's last message, then the curated timeline. The fallback
+// matters because a turn that produced only tool calls has no assistant text, and reporting nothing
+// makes a successful run look like it did not happen. The curated timeline is what tells the user
+// which tools ran.
+func scheduledRunOutput(lastMessage string, timeline []sdk.TimelineItem) *string {
+	if text := strings.TrimSpace(lastMessage); text != "" {
+		return &text
+	}
+	if curated := activity.CurateAgentActivity(timeline, activity.CuratorOptions{}); curated != "No activity to display." {
+		trimmed := strings.TrimSpace(curated)
+		if trimmed != "" {
+			return &trimmed
+		}
+	}
+	return nil
 }
