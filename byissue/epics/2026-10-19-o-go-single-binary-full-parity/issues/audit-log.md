@@ -836,6 +836,19 @@ daemon 能监听 unix socket（`serve --addr unix:///path`，受限环境需要�
 
 **这里我抓到了自己的一个半成品**：先给 `RunOnce` 加了「TargetGoneError → completed」的分支，但 executor 从来不返回这个错误，所以那段代码是**死代码**，行为没有任何变化。补上之后才真正生效——executor 现在对「agent 不存在/已归档」和「cwd 不存在」都返回它，普通失败仍然是普通错误（瞬时的 provider 超时不应当杀掉日程，这个区分正是这件事值得做的原因）。
 
+### providers/acp-agent.ts | 3929 行 | **PARTIAL → 已补反向终端与文件窗口**
+
+ACP 的客户端在 capabilities 里声明 `terminal: true`，意思是「你可以让我替你跑命令」。Go 实现了 `fs/read_text_file`、`fs/write_text_file`、`session/request_permission`，但**一个 `terminal/*` 方法都没实现**——于是 agent 的每个终端请求都无人应答：它在等一个永远不来的 terminal id，整轮静默挂住。
+
+已实现 `create`/`output`/`wait_for_exit`/`kill`/`release`（按 `acp-agent.ts`）。输出按 agent 给的 `outputByteLimit` **保留尾部**——构建的最后几行才是关键，开头是长日志埋掉的部分——并上报 `truncated`，让 agent 知道自己没看到全部。
+
+同一文件里另两处：
+
+- **`fs/read_text_file` 忽略 `line`/`limit`**：agent 请求「第 100 行起读 20 行」，Go 返回**整个文件**。它以为自己看的是 100-120 行，实际是第 1 行；大文件还会整份穿过管道。
+- **`fs/write_text_file` 不建父目录**：agent 在新 package 目录下写模块时，因为目录不存在而失败，而不是把它建出来。
+
+**仍未逐文件过**的 3 个大实现体（codex-app-server-agent 7411、opencode-agent 5329、mock-load-test-agent 1946）与此provider 下 6 个 `test-utils` 假 CLI harness（假 app-server / 假 omp / 假 pi，属测试辅助，Go 侧用 `writeFaithfulFakePi` 等脚本等价）。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
