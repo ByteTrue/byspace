@@ -809,6 +809,8 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 				"ok":        true,
 				"config":    nil,
 				"revision":  nil,
+				// Optional, not nullable: sending null fails the schema, so it is set only when true.
+				"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
 			})
 			return
 		}
@@ -828,6 +830,7 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 				"mtimeMs": mtimeMs,
 				"size":    len(b),
 			},
+			"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
 		})
 		return
 	}
@@ -909,6 +912,9 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 			"mtimeMs": mtimeMs,
 			"size":    size,
 		},
+		// Reported after the write, so the warning clears the moment the user commits rather than needing a
+		// reload.
+		"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
 	})
 }
 
@@ -1602,4 +1608,18 @@ func resolveClientMessageID(raw, fallback string) string {
 		return trimmed
 	}
 	return fallback
+}
+
+// setupChangesFlag reports whether the project's worktree setup differs from what is committed.
+//
+// Returns nil rather than false when there is nothing to say, because the field is optional and sending `false`
+// asserts "the setup is committed" — which the daemon has not checked when the config file is absent.
+func setupChangesFlag(ctx context.Context, repoRoot string) any {
+	if strings.TrimSpace(repoRoot) == "" {
+		return nil
+	}
+	if !workspace.HasUncommittedSetupChanges(ctx, repoRoot) {
+		return nil
+	}
+	return true
 }
