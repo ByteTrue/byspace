@@ -92,18 +92,31 @@ func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSin
 	if parentPath == "" {
 		parentPath = req.ParentDirectory
 	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" || strings.ContainsAny(name, `/\`) {
+	// Validate the name by the node rules before touching the filesystem: an absolute path, a
+	// drive letter or `..` would otherwise create a directory outside the chosen parent.
+	if err := ValidateProjectDirectoryName(req.Name); err != nil {
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
 			"requestId":     req.RequestID,
 			"directoryPath": nil,
 			"project":       nil,
-			"error":         "Invalid directory name",
+			"error":         err.Error(),
 			"errorCode":     "invalid_name",
 		})
 		return
 	}
+	name := req.Name
 	parent := expandUserPath(parentPath)
+	// The parent must already exist: `MkdirAll` would silently create a whole tree for a typo.
+	if info, statErr := os.Stat(parent); statErr != nil || !info.IsDir() {
+		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
+			"requestId":     req.RequestID,
+			"directoryPath": nil,
+			"project":       nil,
+			"error":         "Parent directory does not exist",
+			"errorCode":     "parent_directory_not_found",
+		})
+		return
+	}
 	target := filepath.Join(parent, name)
 	if _, err := os.Stat(target); err == nil {
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
@@ -115,24 +128,35 @@ func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSin
 		})
 		return
 	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
+	if err := os.Mkdir(target, 0o755); err != nil {
+		code := "filesystem_error"
+		if os.IsPermission(err) {
+			code = "permission_denied"
+		}
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
 			"requestId":     req.RequestID,
 			"directoryPath": nil,
 			"project":       nil,
 			"error":         err.Error(),
-			"errorCode":     "filesystem_error",
+			"errorCode":     code,
 		})
 		return
 	}
 	// Creating the directory registers a project; the workspace appears when the user opens it.
 	prj, err := s.store.FindOrCreateProjectForDirectory(target)
 	if err != nil {
+		// Roll back: leaving an empty directory behind after a failed registration is a mess
+		// the user has to clean up, and the response says the operation failed.
+		rollbackErr := os.Remove(target)
+		msg := fmt.Sprintf("Failed to register project: %v", err)
+		if rollbackErr != nil {
+			msg += fmt.Sprintf(" (and could not remove %s: %v)", target, rollbackErr)
+		}
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
 			"requestId":     req.RequestID,
 			"directoryPath": target,
 			"project":       nil,
-			"error":         err.Error(),
+			"error":         msg,
 			"errorCode":     "registration_failed",
 		})
 		return
@@ -1257,4 +1281,28 @@ func resolveEditorCommand(editorID string) (string, bool) {
 		return "", false
 	}
 	return binary, true
+}
+
+// ValidateProjectDirectoryName applies the node rules for a new directory name.
+//
+// Ported from validateDirectoryName. An absolute path, a Windows drive prefix or `..` would
+// place the directory outside the parent the user selected, so they are rejected here rather
+// than surviving as a surprising path.
+func ValidateProjectDirectoryName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("directory name cannot be empty")
+	}
+	if name != strings.TrimSpace(name) {
+		return fmt.Errorf("directory name cannot start or end with whitespace")
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("directory name cannot be . or ..")
+	}
+	if strings.ContainsAny(name, "/\\\x00") {
+		return fmt.Errorf("directory name must be a single name without path separators")
+	}
+	if filepath.IsAbs(name) || (len(name) >= 2 && name[1] == ':') {
+		return fmt.Errorf("directory name must not be an absolute path")
+	}
+	return nil
 }

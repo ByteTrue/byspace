@@ -189,7 +189,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `workspace-service-env.ts` | 121 | **PARTIAL** → 已补端口部分 | 我原来只注入了 `PORT` / `WORKSPACE_SCRIPT_PORT`。Node 还给脚本一整组互相发现用的变量：`HOST`（按 daemon 绑定地址推导，loopback 就只给 127.0.0.1）、`BYSPACE_PORT`、以及每个兄弟脚本的 `BYSPACE_SERVICE_<NAME>_PORT`。没有这组，一个前端 dev server 无法知道自己后端拿到哪个端口——多工作区并行时必然撞车。已实现（含 env 名归一化与**冲突检测**：`web app` 和 `web-app` 都会变成 `WEB_APP`，两个脚本会互相覆盖）。端到端：`api` 得 60548，`web` 得 60549 且 `BYSPACE_SERVICE_API_PORT=60548`。`BYSPACE_URL` / `..._URL` 仍缺——它们属于未实现的反向代理，发一个指向不存在路由的 URL 比不发更糟。 |
 
-### 未审计（本批剩余 34 文件）
+| `project-directory-service.ts` | 215 | **PARTIAL** → 已补 | 三个差异：① 用 `MkdirAll`，`parentPath` 打错一个字就把整条父目录链建出来，而不是报 `parent_directory_not_found`；② 名称校验弱（只查空和路径分隔符），绝对路径、盘符、`..` 都能过；③ 注册失败后**留下的空目录不清理**，却告诉用户失败了。已补 Node 的 `validateDirectoryName` 规则、父目录存在性检查、`permission_denied` 错误码、注册失败回滚。端到端四条路径验证（父不存在 / 绝对路径 / 路径穿越 / 正常），无残留目录。 |
+| `logger.ts` | 197 | **PARTIAL（不构成静默失败）** | Node 有完整的日志子系统（级别、格式、文件路径解析、`authorization`/`sec-websocket-protocol` 脱敏）。Go 没有结构化日志，`daemon.log` 只是 `daemon start` 的 stdout/stderr 重定向。**没有引入脱敏是因为没有任何地方记录请求头**——先造一套脱敏机制来防一个不存在的泄漏，等于为了对齐而发明。若将来加请求日志，脱敏必须同时加，`diagnostics` 端点会读这个文件。 |
+
+### 未审计（本批剩余 32 文件）
 
 按行数排序，下一轮从这里继续：
 
