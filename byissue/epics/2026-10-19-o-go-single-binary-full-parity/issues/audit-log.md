@@ -198,7 +198,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `relay-runtime.ts` | 106 | **MISSING** → 已补 | relay 只在 CLI 传 `--relay` 时启动，**完全不读 config 的 `daemon.relay.*`**；而 `daemon.config.reload` 把这个路径报成「已应用」——用户去设置页打开 relay，什么都没发生，界面却说生效了。已实现 `relayRuntime`：启动/停止/改地址，**地址没变就不重连**（否则每次保存设置都会把手机上的连接踢掉），退避到 30 秒；启动时读 config、每轮 reload 后应用；`--relay` 作为覆盖优先于 config。端到端：config 改为 enabled 后 reload 正确报 `daemon.relay.enabled`，且 relay 被真正启动。 |
 | `worktree-core.ts` | 183 | **PARTIAL** → 已补公共规则 | 核心逻辑（解析 intent + 建 worktree）已在 `worktree_intent.go` 落地。本轮补的是它依赖的 `@bytetrue/protocol/branch-slug`：`slugify`（50 字符、优先在连字符处截断）与 `validateBranchSlug`（长度、`[a-z0-9-/]`、首尾与连续连字符）。客户端在发送前会跑这套规则，daemon 不认同一套就会出现「界面能过、后端拒绝」或反之。 |
 
-### 未审计（本批剩余 28 文件）
+| `persistence-hooks.ts` | 147 | **PARTIAL** → 已补 | `lastActivityAt`（「这个 agent 最后一次干活」）与 `updatedAt`（「记录最后一次变更」）是两件事：重命名会动后者、不动前者，而客户端按前者排序与分组。Store 里有这个字段，但运行期从不赋值、payload 也不发——`fetch_agents_response` 里只有 `updatedAt`。已补：轮次开始打时间戳、payload 下发、旧记录回落到 `updatedAt`（发空串会让该 agent 在活动排序里消失，协议要求是 string）。线上验证：字段有真实时间戳且 schema 通过。 | `attachAgentStoragePersistence` 那部分（订阅 agent_state 落盘）在 Go 里是内联在各 handler 里的，不需要单独挂载点。 |
+
+### 未审计（本批剩余 27 文件）
 
 按行数排序，下一轮从这里继续：
 
