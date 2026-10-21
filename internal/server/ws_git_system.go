@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/quota"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
@@ -383,7 +384,39 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		if baseRef == "" {
 			baseRef = req.Base
 		}
-		prURL, prNum, err := workspace.CreatePR(ctx, req.Cwd, req.Title, req.Body, baseRef, req.Draft)
+
+		// A missing title or body is generated from the diff, the way the node daemon does it.
+		// Creating a PR with an empty title makes the forge reject it, and an empty body loses
+		// the explanation a reviewer needs.
+		prTitle := strings.TrimSpace(req.Title)
+		prBody := strings.TrimSpace(req.Body)
+		if prTitle == "" || prBody == "" {
+			if diff, diffErr := workspace.GetDiffSummaryForPrompt(ctx, req.Cwd); diffErr == nil && strings.TrimSpace(diff) != "" {
+				genCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+				generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.GeneratePRText(genCtx, diff)
+				cancel()
+				if genErr == nil {
+					if prTitle == "" {
+						prTitle = generated.Title
+					}
+					if prBody == "" {
+						prBody = generated.Body
+					}
+				}
+			}
+		}
+		if prTitle == "" {
+			_ = sendSessionMsg(ctx, sink, "checkout_pr_create_response", map[string]any{
+				"cwd":       req.Cwd,
+				"url":       nil,
+				"number":    nil,
+				"error":     map[string]any{"code": "title_required", "message": "A pull request title is required"},
+				"requestId": req.RequestID,
+			})
+			return
+		}
+
+		prURL, prNum, err := workspace.CreatePR(ctx, req.Cwd, prTitle, prBody, baseRef, req.Draft)
 		var urlVal any
 		var errObj any
 		if err != nil {

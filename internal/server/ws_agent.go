@@ -602,7 +602,36 @@ func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw j
 	}
 	_ = json.Unmarshal(raw, &req)
 	addAll := req.AddAll == nil || *req.AddAll
-	err := workspace.CommitWithOptions(ctx, req.Cwd, req.Message, addAll)
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		// An empty -m makes git open an editor, which hangs a daemon that has no terminal —
+		// and the UI offers Commit without requiring the user to type a message. Generate one
+		// from the diff instead of failing or hanging.
+		diff, diffErr := workspace.GetDiffSummaryForPrompt(ctx, req.Cwd)
+		if diffErr == nil && strings.TrimSpace(diff) != "" {
+			genCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+			generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.GenerateCommitMessage(genCtx, diff)
+			cancel()
+			if genErr == nil {
+				message = generated
+			}
+		}
+	}
+	if strings.TrimSpace(message) == "" {
+		_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
+			"cwd":     req.Cwd,
+			"success": false,
+			"error": map[string]any{
+				"code":    "message_required",
+				"message": "A commit message is required",
+			},
+			"requestId": req.RequestID,
+		})
+		return
+	}
+
+	err := workspace.CommitWithOptions(ctx, req.Cwd, message, addAll)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
 			"cwd":       req.Cwd,

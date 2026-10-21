@@ -3,6 +3,7 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -993,4 +994,43 @@ func clampDiffLine(line string) string {
 		cut--
 	}
 	return line[:cut] + "… (truncated)"
+}
+
+// GetDiffSummaryForPrompt renders the working diff as text for a model to read.
+//
+// The raw `git diff` rather than the parsed structure: the model wants the code, and rebuilding
+// it from ParsedDiffFile would drop line-break details and reorder hunks. Truncated to keep the
+// prompt bounded — a huge diff would cost more tokens than the message is worth.
+func GetDiffSummaryForPrompt(ctx context.Context, cwd string) (string, error) {
+	const maxDiffPromptBytes = 20000
+
+	if out, err := runGit(ctx, cwd, "diff", "HEAD"); err == nil && strings.TrimSpace(out) != "" {
+		return clampPromptDiff(out, maxDiffPromptBytes), nil
+	}
+	// Nothing tracked has changed; the change may be an untracked file.
+	untracked, err := runGit(ctx, cwd, "ls-files", "--others", "--exclude-standard")
+	if err != nil || strings.TrimSpace(untracked) == "" {
+		return "", errors.New("no changes to describe")
+	}
+	parts := make([]string, 0, 8)
+	for _, name := range strings.Split(strings.TrimSpace(untracked), "\n") {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		parts = append(parts, "new file: "+trimmed)
+	}
+	return clampPromptDiff(strings.Join(parts, "\n"), maxDiffPromptBytes), nil
+}
+
+// clampPromptDiff bounds the text sent to the model.
+func clampPromptDiff(diff string, limit int) string {
+	if len(diff) <= limit {
+		return diff
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(diff[cut]) {
+		cut--
+	}
+	return diff[:cut] + "\n… (diff truncated)"
 }

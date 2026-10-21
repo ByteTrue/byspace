@@ -137,3 +137,22 @@ func (g PiGenerator) Generate(ctx context.Context, seed string) (Result, error) 
 	}
 	return Parse(reply)
 }
+
+// cleanCommitMessage reduces a model reply to a usable git commit subject.
+//
+// Models reliably add a trailing period, wrap the line in quotes or backticks, or answer with a
+// whole paragraph. Any of those makes a worse commit log than the one line underneath.
+func cleanCommitMessage(reply string) string {
+	line := strings.TrimSpace(reply)
+	if index := strings.IndexByte(line, '\n'); index >= 0 {
+		line = line[:index]
+	}
+	line = strings.TrimSpace(line)
+	line = strings.Trim(line, "`\"'")
+	line = strings.TrimSuffix(line, ".")
+	line = strings.TrimSpace(line)
+	if len(line) > 200 {
+		line = line[:200]
+	}
+	return line
+}
