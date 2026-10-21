@@ -11,7 +11,7 @@
 | `server/tunnel-manager.ts` (567)                | PORTED | `internal/tunnel/{frame,peer,manager,relaypeer}.go`       | `frame_test.go`、`manager_test.go`、`relaypeer_test.go` | 帧编解码、本地 listener、字节泵、半关闭、peer 替换断开旧流、relay client（role=client + E2EE 发起方 + 退避重连）。未经真机验证的部分：relay 配对路径只断言了 URL 形状，等两个真实 daemon 跑起来再验 |
 | `server/tunnel-registry.ts` (210)               | PORTED | `internal/tunnel/registry.go`                             | `registry_test.go`                                      | 6 个用例：文件 0600、坏文件容错、门控即 kill switch（端口重绑定证明释放）、删除持久化、Add 校验、状态聚合                                                                                           |
 | `server/session/tunnel/tunnel-session.ts` (552) | PORTED | `internal/tunnel/target.go`、`internal/server/tunnels.go` | `target_test.go`、`internal/server/tunnels_test.go`     | D2 侧：三道门（特性门控、密码、白名单）+ 拨号 + 双向字节泵；RPC 已接真实实现（list/open/close/stats/create/remove）。二进制帧分发修了：tunnel opcode 在 terminal 之上，之前会被当坏 slot 静默丢弃   |
-| `cli/ssh/ssh-tunnel.ts` (90)                    | 待做   | —                                                         | —                                                       | —                                                                                                                                                                                                   |
+| `cli/ssh/ssh-tunnel.ts` (90)                    | PORTED | `internal/ssh/{parse,tunnel}.go`                          | `ssh_test.go`（6 用例）                                 | `ssh://` URI 解析与校验（含 option 注入）、`ssh -W` stdio 转发、非交互选项。**未接进 CLI 的 `-H` 参数**，下一步做                                                                                   |
 
 ## 批次 2：service-proxy（1513 行）
 
