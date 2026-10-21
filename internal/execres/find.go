@@ -8,6 +8,7 @@ package execres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -95,10 +96,24 @@ func Probe(ctx context.Context, executablePath string) bool {
 	// block on a full pipe before it exits.
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		return false
+	err := cmd.Run()
+	if err == nil {
+		return true
 	}
-	return true
+
+	// The question is "does this binary run", not "does --version exit 0". Node's
+	// classifyProbeError answers it the same way: a process that started and exited non-zero is
+	// available, and one killed for exceeding the timeout is available too (slow, not absent).
+	// Only a failure to start counts as absent — ENOENT, EACCES, ENOEXEC.
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) || probeCtx.Err() != nil {
+		// Timed out: the binary exists and started, it just did not answer in time.
+		return true
+	}
+	return false
 }
 
 // resolveWindowsCandidate appends each PATHEXT extension until one exists.
@@ -150,4 +165,36 @@ func Version(ctx context.Context, executablePath string) (string, error) {
 	// Only the first line: some CLIs print a changelog after the version.
 	first := strings.SplitN(strings.TrimSpace(combined.String()), "\n", 2)[0]
 	return strings.TrimSpace(first), nil
+}
+
+// EnumerateWindows adds the winget package directories to the PATH candidates.
+//
+// winget installs into %LOCALAPPDATA%\Microsoft\WinGet\Packages\<pkg>\ and does not necessarily add
+// itself to PATH, so a CLI installed that way is invisible to a PATH-only lookup. Node's
+// enumerateWingetPackageCandidates exists for exactly this case.
+func EnumerateWindows(name string, localAppData string) []string {
+	if strings.TrimSpace(localAppData) == "" {
+		localAppData = os.Getenv("LOCALAPPDATA")
+	}
+	if strings.TrimSpace(localAppData) == "" {
+		return nil
+	}
+	packagesDir := filepath.Join(localAppData, "Microsoft", "WinGet", "Packages")
+	entries, err := os.ReadDir(packagesDir)
+	if err != nil {
+		return nil
+	}
+
+	exeName := name + ".exe"
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		candidate := filepath.Join(packagesDir, entry.Name(), exeName)
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			out = append(out, candidate)
+		}
+	}
+	return out
 }
