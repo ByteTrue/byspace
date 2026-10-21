@@ -66,7 +66,7 @@ func runAgentGroupCmd(args []string, stdout io.Writer) error {
 		return runAgentInspect(rest, stdout)
 	case "detach":
 		return runAgentDetach(rest, stdout)
-	case "update", "mode":
+	case "update":
 		return runAgentUpdate(rest, stdout)
 	case "import":
 		return runAgentImport(rest, stdout)
@@ -74,6 +74,8 @@ func runAgentGroupCmd(args []string, stdout io.Writer) error {
 		return runAgentReload(rest, stdout)
 	case "open", "attach":
 		return runAgentInspect(rest, stdout)
+	case "mode":
+		return runAgentMode(rest, stdout)
 	default:
 		return fmt.Errorf("unknown agent subcommand %q", sub)
 	}
@@ -973,5 +975,96 @@ func runOpenCmd(args []string, stdout io.Writer) error {
 	}
 	b, _ := json.MarshalIndent(resp["workspace"], "", "  ")
 	fmt.Fprintln(stdout, string(b))
+	return nil
+}
+
+// runAgentMode lists or sets an agent's provider mode.
+//
+// Listing first is what makes setting discoverable: mode ids are provider URLs
+// ("https://agentclientprotocol.com/protocol/session-modes#plan"), not something a user guesses.
+func runAgentMode(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("agent mode", flag.ContinueOnError)
+	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	asJSON := fs.Bool("json", false, "output JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() < 1 {
+		return errors.New("usage: byspace agent mode <agent-id> [mode-id]")
+	}
+	agentID := fs.Arg(0)
+	modeID := ""
+	if fs.NArg() > 1 {
+		modeID = fs.Arg(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ws, err := dialDaemonWS(ctx, *addr)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "fetch_agent_request",
+		"requestId": "cli_mode_fetch",
+		"agentId":   agentID,
+	}); err != nil {
+		return err
+	}
+	fetched, err := waitSessionResp(ctx, ws, "fetch_agent_response", "")
+	if err != nil {
+		return err
+	}
+
+	if modeID == "" {
+		agent, _ := fetched["agent"].(map[string]any)
+		modes, _ := agent["availableModes"].([]any)
+		if *asJSON {
+			return writeJSON(stdout, modes)
+		}
+		if len(modes) == 0 {
+			fmt.Fprintln(stdout, "This agent's provider exposes no modes.")
+			return nil
+		}
+		current, _ := agent["modeId"].(string)
+		rows := make([][]string, 0, len(modes))
+		for _, raw := range modes {
+			mode, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := mode["id"].(string)
+			label, _ := mode["label"].(string)
+			description, _ := mode["description"].(string)
+			marker := ""
+			if id == current {
+				marker = "*"
+			}
+			rows = append(rows, []string{marker, id, label, description})
+		}
+		return renderTable(stdout, []string{"", "MODE", "LABEL", "DESCRIPTION"}, rows)
+	}
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "set_agent_mode_request",
+		"requestId": "cli_mode_set",
+		"agentId":   agentID,
+		"modeId":    modeID,
+	}); err != nil {
+		return err
+	}
+	resp, err := waitSessionResp(ctx, ws, "set_agent_mode_response", "")
+	if err != nil {
+		return err
+	}
+	if message, _ := resp["error"].(string); message != "" {
+		return errors.New(message)
+	}
+	if *asJSON {
+		return writeJSON(stdout, resp)
+	}
+	fmt.Fprintf(stdout, "%s → %s\n", agentID, modeID)
 	return nil
 }

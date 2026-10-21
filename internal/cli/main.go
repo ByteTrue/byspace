@@ -836,6 +836,98 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		daemon.WaitForShutdown(resolvedHome, *addr, 5*time.Second)
 		return runDaemonCmd(cliVersion, []string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
 
+	case "install-service":
+		fs := flag.NewFlagSet("daemon install-service", flag.ContinueOnError)
+		homeDir := fs.String("home", "", "byspace home directory")
+		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
+		fs.StringVar(addr, "listen", defaultListenAddr(), "daemon listen address")
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		resolvedHome, resolveErr := home.Resolve(*homeDir)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		exe, exeErr := os.Executable()
+		if exeErr != nil {
+			return exeErr
+		}
+		result, installErr := daemon.InstallLoginService(
+			exe,
+			[]string{"serve", "--addr", *addr, "--home", resolvedHome},
+			daemon.CarriedEnviron(),
+			daemon.LogPath(resolvedHome),
+		)
+		if installErr != nil {
+			return installErr
+		}
+		if *asJSON {
+			return writeJSON(stdout, map[string]any{
+				"action":         "installed",
+				"definitionPath": result.DefinitionPath,
+				"loaded":         result.Loaded,
+				"note":           result.Note,
+			})
+		}
+		fmt.Fprintf(stdout, "definition: %s\n", result.DefinitionPath)
+		if result.Loaded {
+			fmt.Fprintln(stdout, "registered: yes — the daemon starts at login")
+		} else {
+			// The file exists but the platform did not accept it; saying "installed" would hide
+			// the fact that nothing will start at login.
+			fmt.Fprintln(stdout, "registered: no — the definition was written but not loaded")
+			if result.Note != "" {
+				fmt.Fprintf(stdout, "  %s\n", result.Note)
+			}
+			return fmt.Errorf("could not register the login service")
+		}
+		return nil
+
+	case "uninstall-service":
+		fs := flag.NewFlagSet("daemon uninstall-service", flag.ContinueOnError)
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if err := daemon.UninstallLoginService(); err != nil {
+			return err
+		}
+		if *asJSON {
+			return writeJSON(stdout, map[string]any{"action": "uninstalled"})
+		}
+		fmt.Fprintln(stdout, "login service removed")
+		return nil
+
+	case "service-status":
+		fs := flag.NewFlagSet("daemon service-status", flag.ContinueOnError)
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		status := daemon.QueryServiceStatus()
+		if *asJSON {
+			return writeJSON(stdout, map[string]any{
+				"supported":  status.Supported,
+				"registered": status.Registered,
+				"running":    status.Running,
+				"detail":     status.Detail,
+			})
+		}
+		if !status.Supported {
+			fmt.Fprintf(stdout, "login service: unsupported (%s)\n", status.Detail)
+			return nil
+		}
+		switch {
+		case !status.Registered:
+			fmt.Fprintf(stdout, "login service: not installed (%s)\n", status.Detail)
+		case status.Running:
+			fmt.Fprintln(stdout, "login service: registered and running")
+		default:
+			fmt.Fprintf(stdout, "login service: registered but not running (%s)\n", status.Detail)
+		}
+		return nil
+
 	case "print-plist":
 		exe, _ := os.Executable()
 		fmt.Fprint(stdout, daemon.RenderLaunchdPlist(exe, []string{"serve"}, daemon.CarriedEnviron(), ""))
