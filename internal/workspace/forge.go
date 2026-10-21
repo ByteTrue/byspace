@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -410,4 +411,236 @@ func ResolveChangeRequestCheckoutTarget(ctx context.Context, forge, repoCwd stri
 			HeadRepository:    pr.HeadRepository.Name,
 		}, nil
 	}
+}
+
+// PullRequestTimeline fetches a PR's comments and reviews.
+//
+// Ported from the forge services' getPullRequestTimeline. The checkout panel shows it as one
+// chronological thread, so a review and a comment have to arrive in the same shape — the client
+// discriminates on `kind` and would otherwise render a review as an empty comment.
+//
+// `truncated` is reported rather than silently dropping: a long thread that stops at the limit
+// without saying so looks like the conversation ended.
+func PullRequestTimeline(ctx context.Context, forge, cwd string, number, limit int) ([]map[string]any, bool, error) {
+	if number <= 0 {
+		return nil, false, fmt.Errorf("pull request number must be positive")
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	numberArg := strconv.Itoa(number)
+	limitArg := strconv.Itoa(limit)
+
+	switch forge {
+	case "gitlab":
+		if _, err := exec.LookPath("glab"); err != nil {
+			return nil, false, fmt.Errorf("glab is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+			fmt.Sprintf("projects/:id/merge_requests/%s/notes?per_page=%s&sort=asc", numberArg, limitArg))
+		if err != nil {
+			return nil, false, err
+		}
+		return decodeGitLabNotes(raw, limit)
+
+	case "gitea":
+		if _, err := exec.LookPath("tea"); err != nil {
+			return nil, false, fmt.Errorf("tea is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "tea", cwd, "prs", numberArg, "--comments", "--output", "json")
+		if err != nil {
+			return nil, false, err
+		}
+		return decodeGiteaComments(raw, limit)
+
+	default:
+		if _, err := exec.LookPath("gh"); err != nil {
+			return nil, false, fmt.Errorf("gh is not installed")
+		}
+		// Reviews and comments are separate endpoints; the panel wants one thread.
+		reviewsRaw, reviewsErr := runGH(ctx, cwd, "api",
+			fmt.Sprintf("repos/{owner}/{repo}/pulls/%s/reviews?per_page=%s", numberArg, limitArg))
+		commentsRaw, commentsErr := runGH(ctx, cwd, "api",
+			fmt.Sprintf("repos/{owner}/{repo}/issues/%s/comments?per_page=%s", numberArg, limitArg))
+		if reviewsErr != nil && commentsErr != nil {
+			return nil, false, reviewsErr
+		}
+		items := make([]map[string]any, 0, limit)
+		items = append(items, decodeGitHubReviews(reviewsRaw)...)
+		items = append(items, decodeGitHubComments(commentsRaw)...)
+		return sortAndLimitTimeline(items, limit)
+	}
+}
+
+// sortAndLimitTimeline orders by creation time and reports whether anything was dropped.
+func sortAndLimitTimeline(items []map[string]any, limit int) ([]map[string]any, bool, error) {
+	sort.SliceStable(items, func(i, j int) bool {
+		ai, _ := items[i]["createdAt"].(int64)
+		aj, _ := items[j]["createdAt"].(int64)
+		return ai < aj
+	})
+	if len(items) > limit {
+		return items[:limit], true, nil
+	}
+	return items, false, nil
+}
+
+func decodeGitHubReviews(raw string) []map[string]any {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var reviews []map[string]any
+	if json.Unmarshal([]byte(raw), &reviews) != nil {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(reviews))
+	for _, review := range reviews {
+		user, _ := review["user"].(map[string]any)
+		author, _ := user["login"].(string)
+		avatar, _ := user["avatar_url"].(string)
+		profile, _ := user["html_url"].(string)
+		reviewState := "commented"
+		if state, ok := review["state"].(string); ok {
+			switch strings.ToUpper(state) {
+			case "APPROVED":
+				reviewState = "approved"
+			case "CHANGES_REQUESTED":
+				reviewState = "changes_requested"
+			}
+		}
+		out = append(out, map[string]any{
+			"id":          fmt.Sprintf("review-%v", review["id"]),
+			"kind":        "review",
+			"author":      firstNonEmpty(author, "unknown"),
+			"authorUrl":   nullableString(profile),
+			"avatarUrl":   nullableString(avatar),
+			"body":        stringOr(review["body"], ""),
+			"createdAt":   parseUnixOrISO(review["submitted_at"]),
+			"url":         stringOr(review["html_url"], ""),
+			"reviewState": reviewState,
+		})
+	}
+	return out
+}
+
+func decodeGitHubComments(raw string) []map[string]any {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var comments []map[string]any
+	if json.Unmarshal([]byte(raw), &comments) != nil {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(comments))
+	for _, comment := range comments {
+		user, _ := comment["user"].(map[string]any)
+		out = append(out, map[string]any{
+			"id":        fmt.Sprintf("comment-%v", comment["id"]),
+			"kind":      "comment",
+			"author":    firstNonEmpty(stringOr(user["login"], ""), "unknown"),
+			"authorUrl": nullableString(stringOr(user["html_url"], "")),
+			"avatarUrl": nullableString(stringOr(user["avatar_url"], "")),
+			"body":      stringOr(comment["body"], ""),
+			"createdAt": parseUnixOrISO(comment["created_at"]),
+			"url":       stringOr(comment["html_url"], ""),
+		})
+	}
+	return out
+}
+
+func decodeGitLabNotes(raw string, limit int) ([]map[string]any, bool, error) {
+	var notes []map[string]any
+	if json.Unmarshal([]byte(raw), &notes) != nil {
+		return nil, false, fmt.Errorf("could not read merge request notes")
+	}
+	out := make([]map[string]any, 0, len(notes))
+	for _, note := range notes {
+		author, _ := note["author"].(map[string]any)
+		body := stringOr(note["body"], "")
+		kind := "comment"
+		reviewState := ""
+		// GitLab models a review as a system note carrying the approval text.
+		if system, _ := note["system"].(bool); system && strings.Contains(strings.ToLower(body), "approved") {
+			kind = "review"
+			reviewState = "approved"
+		}
+		item := map[string]any{
+			"id":        fmt.Sprintf("note-%v", note["id"]),
+			"kind":      kind,
+			"author":    firstNonEmpty(stringOr(author["username"], ""), "unknown"),
+			"authorUrl": nullableString(stringOr(author["web_url"], "")),
+			"avatarUrl": nullableString(stringOr(author["avatar_url"], "")),
+			"body":      body,
+			"createdAt": parseUnixOrISO(note["created_at"]),
+			"url":       "",
+		}
+		if kind == "review" {
+			item["reviewState"] = reviewState
+		}
+		out = append(out, item)
+	}
+	return sortAndLimitTimeline(out, limit)
+}
+
+func decodeGiteaComments(raw string, limit int) ([]map[string]any, bool, error) {
+	var comments []map[string]any
+	if json.Unmarshal([]byte(raw), &comments) != nil {
+		return nil, false, fmt.Errorf("could not read pull request comments")
+	}
+	out := make([]map[string]any, 0, len(comments))
+	for _, comment := range comments {
+		user, _ := comment["user"].(map[string]any)
+		out = append(out, map[string]any{
+			"id":        fmt.Sprintf("comment-%v", comment["id"]),
+			"kind":      "comment",
+			"author":    firstNonEmpty(stringOr(user["login"], ""), "unknown"),
+			"authorUrl": nullableString(stringOr(user["html_url"], "")),
+			"avatarUrl": nullableString(stringOr(user["avatar_url"], "")),
+			"body":      stringOr(comment["body"], ""),
+			"createdAt": parseUnixOrISO(comment["created_at"]),
+			"url":       stringOr(comment["html_url"], ""),
+		})
+	}
+	return sortAndLimitTimeline(out, limit)
+}
+
+// parseUnixOrISO reads either an ISO timestamp or epoch seconds into epoch milliseconds.
+func parseUnixOrISO(value any) int64 {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return 0
+		}
+		if parsed, err := time.Parse(time.RFC3339, v); err == nil {
+			return parsed.UnixMilli()
+		}
+		return 0
+	case float64:
+		return int64(v) * 1000
+	default:
+		return 0
+	}
+}
+
+func stringOr(value any, fallback string) string {
+	if text, ok := value.(string); ok && text != "" {
+		return text
+	}
+	return fallback
+}
+
+func nullableString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

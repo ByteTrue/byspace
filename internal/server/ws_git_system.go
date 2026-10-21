@@ -431,12 +431,41 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			PrNumber  int    `json:"prNumber"`
 		}
 		_ = json.Unmarshal(raw, &prTimelineReq)
+
+		cwd := prTimelineReq.Cwd
+		if strings.TrimSpace(cwd) == "" {
+			cwd = base.Cwd
+		}
+		prNumber := prTimelineReq.PrNumber
+		if prNumber <= 0 {
+			// Fall back to the PR of the current branch rather than returning an empty thread
+			// the UI would render as "no discussion yet".
+			if pr, prErr := workspace.GetPRStatus(ctx, cwd); prErr == nil && pr != nil {
+				if n, ok := pr["number"].(int); ok {
+					prNumber = n
+				}
+			}
+		}
+
+		items, truncated, timelineErr := workspace.PullRequestTimeline(
+			ctx, workspace.DetectForge(ctx, cwd), cwd, prNumber, 50)
+		var timelineErrObj any
+		if timelineErr != nil {
+			timelineErrObj = checkoutErr(timelineErr.Error())
+			items = []map[string]any{}
+		} else if items == nil {
+			items = []map[string]any{}
+		}
+		var prNumberPayload any
+		if prNumber > 0 {
+			prNumberPayload = prNumber
+		}
 		_ = sendSessionMsg(ctx, sink, "pull_request_timeline_response", map[string]any{
-			"cwd":                   base.Cwd,
-			"prNumber":              nil,
-			"items":                 []any{},
-			"truncated":             false,
-			"error":                 nil,
+			"cwd":                   cwd,
+			"prNumber":              prNumberPayload,
+			"items":                 items,
+			"truncated":             truncated,
+			"error":                 timelineErrObj,
 			"requestId":             base.RequestID,
 			"githubFeaturesEnabled": true,
 			"authState":             map[string]any{"status": "authenticated"},
