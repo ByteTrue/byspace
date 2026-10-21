@@ -477,6 +477,13 @@ func SwitchBranch(ctx context.Context, cwd, branch string, create bool) error {
 	if err := AssertSafeGitRef(branch, "branch"); err != nil {
 		return err
 	}
+	// A new branch also has to satisfy the protocol's own rules, or the client will not accept
+	// the name it just created.
+	if create {
+		if err := ValidateBranchSlug(branch); err != nil {
+			return err
+		}
+	}
 	if create {
 		_, err := runGit(ctx, cwd, "checkout", "-b", branch)
 		return err

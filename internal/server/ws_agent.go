@@ -395,8 +395,11 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	// With no explicit slug, derive one from the prompt instead of shipping a timestamp slug
-	// the user would see in the sidebar and in `git branch` for the rest of the task.
+	// Normalize a supplied slug with the same rules the client uses, so a name that passed in
+	// the UI is not rejected here and a third-party client's name is held to the same standard.
+	if normalized := workspace.NormalizeWorktreeSlug(req.WorktreeSlug); normalized != "" {
+		req.WorktreeSlug = normalized
+	}
 	if strings.TrimSpace(req.WorktreeSlug) == "" {
 		if seed := firstAgentContextSeed(req.FirstAgentContext); seed != "" {
 			nctx, cancel := context.WithTimeout(ctx, 45*time.Second)
