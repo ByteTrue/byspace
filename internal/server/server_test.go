@@ -499,9 +499,13 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	})
 	_ = ws.Write(ctx, websocket.MessageText, pairReq)
 	pairResp := readUntilSessionType(t, ctx, ws, "daemon.get_pairing_offer.response", "")
-	pairURL, _ := pairResp["url"].(string)
-	if !strings.Contains(pairURL, "#offer=") {
-		t.Fatalf("expected #offer= in pairing response: %+v", pairResp)
+	// A pairing offer only makes sense through a relay: without one the daemon reports
+	// relayEnabled=false and no URL, rather than handing out a link that cannot connect.
+	if enabled, _ := pairResp["relayEnabled"].(bool); enabled {
+		t.Fatalf("relay is not configured in this harness, expected relayEnabled=false: %+v", pairResp)
+	}
+	if pairURL, _ := pairResp["url"].(string); pairURL != "" {
+		t.Fatalf("expected no offer URL without a relay: %+v", pairResp)
 	}
 
 	// 7. File download token -> HTTP /api/files/download
