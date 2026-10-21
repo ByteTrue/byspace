@@ -192,7 +192,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `project-directory-service.ts` | 215 | **PARTIAL** → 已补 | 三个差异：① 用 `MkdirAll`，`parentPath` 打错一个字就把整条父目录链建出来，而不是报 `parent_directory_not_found`；② 名称校验弱（只查空和路径分隔符），绝对路径、盘符、`..` 都能过；③ 注册失败后**留下的空目录不清理**，却告诉用户失败了。已补 Node 的 `validateDirectoryName` 规则、父目录存在性检查、`permission_denied` 错误码、注册失败回滚。端到端四条路径验证（父不存在 / 绝对路径 / 路径穿越 / 正常），无残留目录。 |
 | `logger.ts` | 197 | **PARTIAL（不构成静默失败）** | Node 有完整的日志子系统（级别、格式、文件路径解析、`authorization`/`sec-websocket-protocol` 脱敏）。Go 没有结构化日志，`daemon.log` 只是 `daemon start` 的 stdout/stderr 重定向。**没有引入脱敏是因为没有任何地方记录请求头**——先造一套脱敏机制来防一个不存在的泄漏，等于为了对齐而发明。若将来加请求日志，脱敏必须同时加，`diagnostics` 端点会读这个文件。 |
 
-### 未审计（本批剩余 32 文件）
+| `workspace-git-fetch.ts` | 140 | **MISSING** → 已补 | fetch 前后对比 ref 快照，判断远端分支是新增/移动/删除。没有它，pull 后被 prune 的分支仍留在前端的选择器里。已实现 `ReadRefs`/`DiffRefs`/`FetchRemote`（本地 ref 变化单独报告，不与「远端分支变了」混为一谈），接入 `checkout_pull_request`。**顺带修了一个更大的问题**：`runGit` 对所有命令统一 5 秒超时，`git pull`/`fetch` 在真实网络下必然超时并报成 context deadline；现在网络动词 120 秒、本地 10 秒，并强制 `GIT_TERMINAL_PROMPT=0`（否则需要凭据的 fetch 会一直等人回答 prompt）。真实 clone + 上游建分支验证：`origin/<branch>` 被正确报为 added。 |
+| `workspace-service-port-allocator.ts` | 129 | **PARTIAL** → 已补 | 只有「任意空闲端口」一种策略。另两种各有非用不可的理由：`portRange` 因为防火墙规则/容器端口映射只允许一个窗口，`portScript` 因为外部服务已经对外声明了端口。已实现 `ParsePortRange`、`AllocateFromRange`（窗口耗尽时报错而不是逃出窗口）、`AllocatePortFromScript`（输出不可信、要进 bind，做了长度与范围校验）。端到端：portRange 得 43000、portScript 得 43500，两个值都真的进了脚本环境。 |
+
+### 未审计（本批剩余 30 文件）
 
 按行数排序，下一轮从这里继续：
 
