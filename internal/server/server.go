@@ -135,14 +135,17 @@ type Server struct {
 	clients           map[frameSink]bool
 	pollStop          chan struct{}
 	allowedHostnames  []string
-	corsMu            sync.RWMutex
-	corsCache         []string
-	setupSnapshots    map[string]*setupSnapshot
-	workspaceScripts  map[string]*workspaceScript
-	scriptPorts       *servicePortAllocator
-	idempotentAgents  map[string]string
-	cachedPiModels    []pi.CatalogModel
-	cachedPiCommands  []pi.SlashCommand
+	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
+	// which paths changed.
+	lastConfigSnapshot map[string]any
+	corsMu             sync.RWMutex
+	corsCache          []string
+	setupSnapshots     map[string]*setupSnapshot
+	workspaceScripts   map[string]*workspaceScript
+	scriptPorts        *servicePortAllocator
+	idempotentAgents   map[string]string
+	cachedPiModels     []pi.CatalogModel
+	cachedPiCommands   []pi.SlashCommand
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -213,6 +216,7 @@ func New(opts Options) (*Server, error) {
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
 	// config.daemon.hostnames takes precedence when present.
 	srv.allowedHostnames = resolveAllowedHostnames(st)
+	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
 	go func() {
 		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

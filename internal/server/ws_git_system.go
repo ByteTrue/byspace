@@ -985,11 +985,26 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "daemon.config.reload.request":
+		// Report what actually took effect. Three empty lists told the settings page nothing:
+		// it could not distinguish "applied", "needs a restart" and "the environment owns
+		// this setting, your edit is ignored".
+		next := s.daemonConfigSnapshot()
+		changed := diffConfigPaths(s.lastConfigSnapshot, next)
+		s.lastConfigSnapshot = next
+		report := configReloadReport(s.lastConfigSnapshot, next, changed)
+		// Settings that drive live behaviour are re-read from disk on each use, so a reload
+		// only needs to drop the caches that memoise them.
+		s.corsMu.Lock()
+		s.corsCache = nil
+		s.corsMu.Unlock()
+		s.mu.Lock()
+		s.allowedHostnames = resolveAllowedHostnames(s.store)
+		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "daemon.config.reload.response", map[string]any{
 			"requestId":               base.RequestID,
-			"appliedPaths":            []string{},
-			"restartRequiredPaths":    []string{},
-			"overrideControlledPaths": []string{},
+			"appliedPaths":            report["appliedPaths"],
+			"restartRequiredPaths":    report["restartRequiredPaths"],
+			"overrideControlledPaths": report["overrideControlledPaths"],
 		})
 
 	case "daemon.update.request":

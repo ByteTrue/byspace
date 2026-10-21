@@ -76,7 +76,9 @@
 | `server.go` listen | — | **MISSING** → 已补 | daemon 只绑一个 loopback 族：前端把 `127.0.0.1` 归一成 `localhost` 后浏览器可能解析到 `::1`，连接超时并表现为「未连接主机」。已补双栈绑定（`listen_dual.go`），`127.0.0.1`/`localhost`/`[::1]` 三种地址实测均可连。 |
 | `hostnames.ts` | — | **已修正实现** | 我最初把 Host 白名单加在 `ServeHTTP` 上，拦掉了静态资源和 API，导致整个前端「未连接」。Node 只在 **WebSocket 升级**时校验（`websocket-server.ts:737`），并且未配置白名单时默认不限制。已改到 `handleDirectWS`，默认放行。 |
 
-### 未审计（本批剩余 50 文件）
+| `daemon-config-store.ts` | 1199 | **PARTIAL** → 已补核心 | `daemon.config.reload` 之前返回三个空数组：settings 页无法区分「已生效」「需要重启」「环境变量接管，你的修改被忽略」。已补 `config_reload.go`（移植 RELOADABLE_PATHS 25 条 + 环境变量归属表 + 前缀匹配 + JSON 值比较），并真的清掉 CORS / hostnames 缓存。端到端验证：改 `appendSystemPrompt` 后正确归入 `appliedPaths`。仍缺：brcf 密码哈希写入、provider 增删的事务回滚、`onFieldChange` 热应用（relay 重连、tunnel 重配）。 |
+
+### 未审计（本批剩余 49 文件）
 
 按行数排序，下一轮从这里继续：
 
