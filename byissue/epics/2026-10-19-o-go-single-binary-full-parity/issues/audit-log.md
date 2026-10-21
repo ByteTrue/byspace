@@ -339,6 +339,16 @@ git 调用没有任何节流：daemon 每秒轮询每个订阅的工作区、每
 
 端到端验证：错的 `type` 被拒且 schema 通过，合法配置正常写入。
 
+### utils/string-command-shell.ts | 54 | **MISSING** → 已补
+
+每个项目命令都跑 `/bin/sh -lc`。`-l` 会加载用户的登录文件，那能改 PATH、定义别名、打印横幅、甚至 `cd` 走——于是「一个人能跑的 setup 命令，另一个人跑不了，且看不出原因」。Node 用非登录的 `bash -c` 就是为了让 `byspace.json` 的命令可复现。
+
+`BASH_ENV` 也一直留在子进程环境里：非交互 bash 会在执行命令前 source 它指向的文件，等于项目命令执行了一个不属于项目的文件。现在连同 `ENV` 一起剥离。
+
+Windows 用 PowerShell 的 `-NoProfile -NonInteractive -ExecutionPolicy Bypass`，用户 profile 无法改写环境或阻塞在提示上。
+
+端到端验证：含算术展开的脚本仍然正常执行并写出结果。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
