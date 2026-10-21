@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ByteTrue/byspace/internal/agent/toolpolicy"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,9 +43,7 @@ func (s *Server) handleMCPHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The bridge names its agent so that provider's tool policy applies. Without it the
-	// daemon would have to allow every tool for every caller.
-	resp := s.executeMCPRequestForAgent(r.Context(), req, r.Header.Get("X-BySpace-Agent-Id"))
+	resp := s.ExecuteMCPRequest(r.Context(), req)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -54,17 +51,6 @@ func (s *Server) handleMCPHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ExecuteMCPRequest handles an MCP JSON-RPC 2.0 request (initialize, tools/list, tools/call).
 func (s *Server) ExecuteMCPRequest(ctx context.Context, req mcpRequest) map[string]any {
-	return s.executeMCPRequestForAgent(ctx, req, "")
-}
-
-// executeMCPRequestForAgent applies the requesting agent's tool policy.
-//
-// A policy is per provider, and the daemon only sees the tool call — not who asked. The bridge
-// passes its agent id so a tool the user disabled is refused at the boundary rather than merely
-// hidden from the list, which a determined prompt could work around.
-func (s *Server) executeMCPRequestForAgent(ctx context.Context, req mcpRequest, agentID string) map[string]any {
-	policy := s.bySpaceToolPolicyFor(agentID)
-
 	switch req.Method {
 	case "initialize":
 		return map[string]any{
@@ -83,38 +69,16 @@ func (s *Server) executeMCPRequestForAgent(ctx context.Context, req mcpRequest, 
 		}
 
 	case "tools/list":
-		definitions := mcpToolDefinitions()
-		if policy != nil {
-			filtered := make([]map[string]any, 0, len(definitions))
-			for _, definition := range definitions {
-				name, _ := definition["name"].(string)
-				if toolpolicy.IsToolEnabled(policy, name) {
-					filtered = append(filtered, definition)
-				}
-			}
-			definitions = filtered
-		}
 		return map[string]any{
 			"jsonrpc": "2.0",
 			"id":      req.ID,
 			"result": map[string]any{
-				"tools": definitions,
+				"tools": mcpToolDefinitions(),
 			},
 		}
 
 	case "tools/call":
 		name, _ := req.Params["name"].(string)
-		if !toolpolicy.IsToolEnabled(policy, name) {
-			// Refused at the boundary, not just hidden: a hidden tool is still callable by name.
-			return map[string]any{
-				"jsonrpc": "2.0",
-				"id":      req.ID,
-				"error": map[string]any{
-					"code":    -32601,
-					"message": "Tool " + name + " is disabled for this provider",
-				},
-			}
-		}
 		args, _ := req.Params["arguments"].(map[string]any)
 		out, isErr := s.callMCPTool(ctx, name, args)
 		b, _ := json.MarshalIndent(out, "", "  ")
@@ -707,24 +671,4 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 	default:
 		return map[string]any{"error": "unknown tool: " + name}, true
 	}
-}
-
-// bySpaceToolPolicyFor resolves the requesting agent's provider tool policy.
-//
-// An unknown or unspecified agent gets no policy, which means everything is allowed: the default
-// has to be on, or a caller that cannot identify itself would lose the tools.
-func (s *Server) bySpaceToolPolicyFor(agentID string) *toolpolicy.Policy {
-	if strings.TrimSpace(agentID) == "" {
-		return nil
-	}
-	record, err := s.store.GetAgent(agentID)
-	if err != nil || record == nil {
-		return nil
-	}
-	cfg := s.store.LoadDaemonConfig()
-	if cfg == nil {
-		return nil
-	}
-	settings, _ := cfg["providers"].(map[string]any)
-	return toolpolicy.Resolve(record.Provider, settings)
 }
