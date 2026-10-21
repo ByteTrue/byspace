@@ -187,7 +187,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `worktree-branch-name-generator.ts` | 145 | **MISSING** → 已补 | 没有 slug 时工作区叫 `wt-mabc123`／分支叫 `wt-mabc123`——用户在侧边栏和 `git branch` 里看到这个名字直到任务结束。已实现 `internal/naming`：用短生命周期的 `pi --no-session` 生成标题与分支名（**不用 agent 自己的会话**，否则会往用户正在读的 transcript 里插一轮），返回后做归一化（小写、只留 `[a-z0-9-]`、压缩连字符、100 字符上限、禁止 `-` 开头——模型输出是不可信输入且要进 git 参数）。端到端：中文 prompt「修复登录页在 Safari 上的自动填充失效问题」→ 分支 `fix-safari-login-autofill`。命名失败**不阻断**创建工作区，回落到生成式 slug。4 个测试。 |
 | `workspace-auto-name.ts` | 141 | **PARTIAL** | 自动命名已在创建路径上生效（标题 + slug）；仍缺「创建后再命名」与 currentSelection 透传——后者只影响用哪个模型生成，已在 `metadataGeneration.model` 读取。 |
 
-### 未审计（本批剩余 35 文件）
+| `workspace-service-env.ts` | 121 | **PARTIAL** → 已补端口部分 | 我原来只注入了 `PORT` / `WORKSPACE_SCRIPT_PORT`。Node 还给脚本一整组互相发现用的变量：`HOST`（按 daemon 绑定地址推导，loopback 就只给 127.0.0.1）、`BYSPACE_PORT`、以及每个兄弟脚本的 `BYSPACE_SERVICE_<NAME>_PORT`。没有这组，一个前端 dev server 无法知道自己后端拿到哪个端口——多工作区并行时必然撞车。已实现（含 env 名归一化与**冲突检测**：`web app` 和 `web-app` 都会变成 `WEB_APP`，两个脚本会互相覆盖）。端到端：`api` 得 60548，`web` 得 60549 且 `BYSPACE_SERVICE_API_PORT=60548`。`BYSPACE_URL` / `..._URL` 仍缺——它们属于未实现的反向代理，发一个指向不存在路由的 URL 比不发更糟。 |
+
+### 未审计（本批剩余 34 文件）
 
 按行数排序，下一轮从这里继续：
 

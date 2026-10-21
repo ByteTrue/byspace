@@ -368,6 +368,13 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 				fmt.Sprintf("PORT=%d", port),
 				fmt.Sprintf("WORKSPACE_SCRIPT_PORT=%d", port),
 			)
+			// Sibling ports, so one script can find another. Collisions are rejected before
+			// spawn: two scripts mapping to the same env name would shadow each other.
+			if env, envErr := workspace.BuildServiceEnv(name, s.listenAddr, s.servicePeers(workspaceID)); envErr == nil {
+				for key, value := range env {
+					cmd.Env = append(cmd.Env, key+"="+value)
+				}
+			}
 		}
 		err := cmd.Run()
 
@@ -488,4 +495,18 @@ func (s *Server) broadcastScriptStatus(workspaceID string) {
 		"workspaceId": workspaceID,
 		"scripts":     scripts,
 	})
+}
+
+// servicePeers lists the workspace's running service scripts and their ports.
+func (s *Server) servicePeers(workspaceID string) []workspace.ServicePeer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	peers := make([]workspace.ServicePeer, 0, 4)
+	for _, entry := range s.workspaceScripts {
+		if entry.WorkspaceID != workspaceID || !entry.IsService || entry.Port <= 0 {
+			continue
+		}
+		peers = append(peers, workspace.ServicePeer{ScriptName: entry.Name, Port: entry.Port})
+	}
+	return peers
 }
