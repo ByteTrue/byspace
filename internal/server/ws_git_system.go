@@ -17,10 +17,45 @@ import (
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
+// CheckoutErrorCode values the protocol accepts.
+const (
+	CheckoutErrNotGitRepo    = "NOT_GIT_REPO"
+	CheckoutErrNotAllowed    = "NOT_ALLOWED"
+	CheckoutErrMergeConflict = "MERGE_CONFLICT"
+	CheckoutErrUnknown       = "UNKNOWN"
+)
+
+// checkoutErr classifies a git failure into the code the protocol carries.
+//
+// The code is what lets the UI offer the right next step: a merge conflict needs "resolve in your
+// editor", a non-repository needs "this is not a git checkout", and neither is a generic failure.
+// Everything used to report UNKNOWN, so both looked like an unexplained error.
 func checkoutErr(msg string) map[string]any {
 	return map[string]any{
-		"code":    "UNKNOWN",
+		"code":    classifyCheckoutError(msg),
 		"message": msg,
+	}
+}
+
+// classifyCheckoutError maps git's own wording onto the protocol's codes.
+func classifyCheckoutError(msg string) string {
+	lowered := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lowered, "not a git repository"),
+		strings.Contains(lowered, "not a git repo"):
+		return CheckoutErrNotGitRepo
+	case strings.Contains(lowered, "would be overwritten"),
+		strings.Contains(lowered, "not allowed"),
+		strings.Contains(lowered, "refusing to"),
+		strings.Contains(lowered, "permission denied"):
+		return CheckoutErrNotAllowed
+	case strings.Contains(lowered, "merge conflict"),
+		strings.Contains(lowered, "conflict"),
+		strings.Contains(lowered, "needs merge"),
+		strings.Contains(lowered, "unmerged"):
+		return CheckoutErrMergeConflict
+	default:
+		return CheckoutErrUnknown
 	}
 }
 
