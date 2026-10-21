@@ -869,6 +869,22 @@ ACP 的客户端在 capabilities 里声明 `terminal: true`，意思是「你可
 
 `mock-load-test-agent` 是压测用的假 provider；`test-utils/*`（假 app-server / 假 omp / 假 pi / 假 opencode harness）是 Node 测试里模拟各家 CLI 的脚本。Go 侧对应的做法是 `writeFaithfulFakePi` 之类的 shell 脚本 + `stream_conformance_test.go` 里冻结的真实事件序列。**测试辅助，不是能力**。
 
+### server/file-observer/internal/** + server/file-explorer/** | 1091 + 1093 行 | **架构替换，语义已补**
+
+Node 用 `fs.watch`/inotify 事件驱动（`linux.ts` 里的 `MAX_WATCHED_DIRECTORIES = 5000` 就是 inotify watch 上限的产物），Go 用轮询。这是架构差异不是缺口：Go 没有 watch 数量上限，也不依赖平台后端。
+
+**但轮询实现必须自己买 inotify 免费给的东西**。本轮补的是最要紧的一件：文件订阅每秒读**整个文件**来算 revision——对源文件可以接受，对一个 agent 正在 tail 的 10 MB 日志就是每秒 10 MB IO 加一次哈希，每个订阅各一份。现在订阅记住文件的 `mtime+size`，只有它变了才读；被 touch 或写了又撤回的文件会更新 stamp 但不推送，所以下一轮也不会再读。
+
+`service.ts` 的目录枚举与 `paths.ts` 的忽略规则由 `internal/dirstream` 覆盖（七级排序、gitignore 感知、跳过 `node_modules`/`dist`/`target`/`vendor`）。
+
+### server/workspace-labels/internal/** | 3 文件 668 行 | **PORTED（本轮核实）\*\*
+
+`sequence.ts` 的增量同步（`generation` + `seq` + `upsert.previousName` + `remove`）已在 `pushLabelUpdate`（`ws_project.go:1213`）。逐项核对了三条容易漏的：
+
+- **改名时更新引用旧名的 workspace**：`pushLabelUpdate` 在 `previousName != ""` 时同时匹配旧名与新名（`:1228`、`:1238`）
+- **`countAffectedWorkspaces` / `delete.inspect`**：`ws_project.go:722` 有实现，删除前能告诉用户影响多少个工作区
+- **`headSeq` 递增 + 广播**：此前修过（前端要求 `update.seq === cursor.afterSeq + 1`，固定的 `gen_1`/`headSeq` 会让标签改动只在本端可见）
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
