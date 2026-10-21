@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/workspace"
 	"io"
 	"net"
 	"os"
@@ -180,8 +181,8 @@ func AllocatePortFromScript(ctx context.Context, command, cwd, scriptName, works
 	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(sctx, "/bin/sh", "-lc", command, "port-script",
-		scriptName, workspaceID, branchName, cwd)
+	invocation := workspace.BuildShellInvocation(command)
+	cmd := exec.CommandContext(sctx, invocation.Shell, invocation.Args...)
 	cmd.Dir = cwd
 	cmd.Env = home.ExternalProcessEnv(os.Environ())
 	var stdout bytes.Buffer

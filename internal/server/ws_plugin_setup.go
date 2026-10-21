@@ -150,9 +150,14 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		snap.Log.WriteString("$ " + command + "\n")
 		snap.mu.Unlock()
 
-		cmd := exec.Command("/bin/sh", "-lc", command)
+		// bash -c, not -lc: a project-authored command must not depend on the user's login
+		// shell files, which can change PATH or cd elsewhere.
+		invocation := workspace.BuildShellInvocation(command)
+		cmd := exec.Command(invocation.Shell, invocation.Args...)
 		cmd.Dir = cwd
-		cmd.Env = home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"})
+		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive
+		// bash source an arbitrary file before the project command runs.
+		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"}))
 		out, err := cmd.CombinedOutput()
 		snap.mu.Lock()
 		snap.Log.Write(out)
@@ -415,9 +420,14 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	s.mu.Unlock()
 
 	go func() {
-		cmd := exec.Command("/bin/sh", "-lc", command)
+		// bash -c, not -lc: a project-authored command must not depend on the user's login
+		// shell files, which can change PATH or cd elsewhere.
+		invocation := workspace.BuildShellInvocation(command)
+		cmd := exec.Command(invocation.Shell, invocation.Args...)
 		cmd.Dir = cwd
-		cmd.Env = os.Environ()
+		// Sanitized: BASH_ENV would make bash source an arbitrary file before the script runs,
+		// and ExternalProcessEnv keeps the daemon's own identity out of the child.
+		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
 		if port > 0 {
 			cmd.Env = append(cmd.Env,
 				fmt.Sprintf("PORT=%d", port),
