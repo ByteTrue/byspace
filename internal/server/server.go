@@ -3071,6 +3071,8 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		labels = map[string]string{}
 	}
 
+	rewindCaps := providers.RewindCapabilitiesFor(rec.Provider)
+
 	payload := map[string]any{
 		"id":               rec.ID,
 		"provider":         rec.Provider,
@@ -3098,9 +3100,11 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 			"supportsMcpServers":         true,
 			"supportsReasoningStream":    true,
 			"supportsToolInvocations":    true,
-			"supportsRewindConversation": true,
-			"supportsRewindFiles":        true,
-			"supportsRewindBoth":         true,
+			// A capability is a promise the client renders a button from; claiming it everywhere made
+			// Rewind appear for providers that cannot do it, and pressing it fails.
+			"supportsRewindConversation": rewindCaps.Conversation,
+			"supportsRewindFiles":        rewindCaps.Files,
+			"supportsRewindBoth":         rewindCaps.SupportsRewindBoth(),
 			"canCancel":                  true,
 			"canSelectModel":             true,
 			"canSelectThinking":          true,
