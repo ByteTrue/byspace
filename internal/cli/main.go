@@ -886,6 +886,11 @@ func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
 		if authHeader != "" {
 			httpReq.Header.Set("Authorization", authHeader)
 		}
+		// The daemon needs to know which agent is asking so it can apply that provider's
+		// tool policy; the bridge is the only one that knows.
+		if agentID := strings.TrimSpace(os.Getenv("BYSPACE_MCP_AGENT_ID")); agentID != "" {
+			httpReq.Header.Set("X-BySpace-Agent-Id", agentID)
+		}
 		// No proxy: the bridge always talks to its own daemon over loopback.
 		httpClient.Transport = &http.Transport{Proxy: nil}
 		resp, err := httpClient.Do(httpReq)
