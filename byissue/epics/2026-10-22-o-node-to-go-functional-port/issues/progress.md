@@ -15,11 +15,11 @@
 
 ## 批次 2：service-proxy（1513 行）
 
-| 文件                                              | 结论 | Go 实现 | 测试 | 备注 |
-| ------------------------------------------------- | ---- | ------- | ---- | ---- |
-| `server/service-proxy.ts` (1039)                  | 待做 | —       | —    | —    |
-| `server/script-health-monitor.ts` (229)           | 待做 | —       | —    | —    |
-| `server/workspace-service-port-registry.ts` (245) | 待做 | —       | —    | —    |
+| 文件                                              | 结论               | Go 实现                                                                                | 测试                                        | 备注                                                                                                                                                                       |
+| ------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/service-proxy.ts` (1039)                  | PORTED             | `internal/serviceproxy/{hostname,proxy}.go`、`internal/server/service_proxy_wiring.go` | `proxy_test.go`（8 用例，含真实 HTTP 往返） | 主机名规则（脚本·分支·项目、DNS 上限、重音分解）、按 Host 路由的反向代理、WebSocket 透传、Host 保留。已接进 daemon：脚本启动注册路由、停止注销、payload 带 hostname 与 URL |
+| `server/script-health-monitor.ts` (229)           | PORTED             | `internal/serviceproxy/health.go`                                                      | `health_test.go`（5 用例，含真实端口探测）  | 两次失败才 unhealthy（一次是抖动）、宽限期内不探测、只在变化时广播、路由消失时清理状态                                                                                     |
+| `server/workspace-service-port-registry.ts` (245) | PORTED（此前已有） | `internal/server/script_ports.go`                                                      | `script_ports_test.go`                      | 端口分配器（固定/范围/脚本三策略）、按 (workspace, script) 稳定分配、显式请求冲突检测                                                                                      |
 
 ## 批次 3：agent-hooks（448 行）
 
