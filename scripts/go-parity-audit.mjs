@@ -144,11 +144,30 @@ export function handlerScopeFor(goSource, messageType) {
     const lineStart = goSource.lastIndexOf("\n", idx) + 1;
     const lineEnd = goSource.indexOf("\n", idx);
     const line = goSource.slice(lineStart, lineEnd === -1 ? goSource.length : lineEnd);
-    // 只认 `case "<type>":` / `case "a", "<type>":` 这种分发行
-    if (/^\s*case\s/.test(line)) {
+    // 一个消息可能出现在两处：`case "a", "<type>":` 的开头行，或多行 case 列表里的续行
+    // `"<type>":`。早先只认第一种，于是多行列表里的消息拿不到作用域——`project.github.clone`
+    // 因此被判缺失字段，而它的 struct 就在旁边。
+    const isCaseHead = /^\s*case\s/.test(line);
+    const isCaseContinuation = /^\s*"[a-zA-Z][a-zA-Z0-9_.]*"(:|,\s*$)/.test(line);
+    if (isCaseHead || isCaseContinuation) {
+      // 作用域是这个 **case 组**，不是单行：续行没有自己的分支，它和组内其它消息共用同一个
+      // body。所以从组首的 `case ` 行开始切。
+      const fnStart = goSource.lastIndexOf("\nfunc ", idx);
+      const groupStart = isCaseHead
+        ? lineStart
+        : Math.max(fnStart, goSource.lastIndexOf("\n\tcase ", idx)) + 1 || lineStart;
+
+      // 组尾止于本函数内：早先一路找到下一个 `\n\tcase `，跨过函数边界后把别的 handler 的
+      // struct 也算了进来，于是字段对账的结果取决于函数顺序。
+      //
+      // 这里必须按 `\n+func ` 找边界：函数之间通常隔一个空行，只找 `\nfunc ` 会漏掉边界，
+      // 于是作用域一路跨到下下个函数。
+      const nextFuncMatch = /\n+func /.exec(goSource.slice(idx));
+      const nextFunc = nextFuncMatch === null ? -1 : idx + nextFuncMatch.index;
       const nextCase = goSource.indexOf("\n\tcase ", lineEnd);
-      const scopeEnd = nextCase === -1 ? goSource.length : nextCase;
-      blocks.push(goSource.slice(lineStart, scopeEnd));
+      const limit = nextFunc === -1 ? goSource.length : nextFunc;
+      const scopeEnd = nextCase === -1 || nextCase > limit ? limit : nextCase;
+      blocks.push(goSource.slice(groupStart, scopeEnd));
     }
     idx = goSource.indexOf(needle, idx + needle.length);
   }
