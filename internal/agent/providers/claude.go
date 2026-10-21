@@ -16,6 +16,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 	"github.com/ByteTrue/byspace/internal/agent/replaytime"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agent/taskstate"
 )
 
 // ClaudeSession hosts a local `claude` CLI process in `--output-format stream-json --input-format stream-json` mode.
@@ -38,6 +39,9 @@ type ClaudeSession struct {
 	subagents          map[string]sdk.SubagentDescriptor
 	finishWaiters      []chan error
 	eventSubscribers   map[int]func(map[string]any)
+	// taskState accumulates Claude's task-list tools into the plan panel's todo item. Kept per session
+	// because the Task* family addresses tasks by id across turns.
+	taskState *taskstate.State
 	// homeDir is where materialised provider images land. Empty disables image output.
 	homeDir   string
 	nextSubID int
@@ -82,6 +86,7 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		modeID:             cfg.ModeID,
 		thinking:           cfg.ThinkingOptionID,
 		toolIndexByID:      make(map[string]int),
+		taskState:          taskstate.New(),
 		toolArgsByID:       make(map[string]any),
 		pendingPermissions: make(map[string]map[string]any),
 		subagents:          make(map[string]sdk.SubagentDescriptor),
@@ -168,6 +173,12 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 							Detail: sdk.BuildToolCallDetail(normName, input, nil),
 							Error:  nil,
 						})
+						// Claude's task-list tools update the plan panel. Observed here because TodoWrite
+						// carries the whole list in its input, so the panel can move before the tool
+						// finishes; the Task* family reports in its result instead.
+						if snapshot := s.taskState.ObserveCall(callID, name, toArgMap(input)); snapshot != nil {
+							extraEvents = append(extraEvents, s.todoTimelineEvent(snapshot)...)
+						}
 						if callID != "" {
 							s.toolIndexByID[callID] = idx
 						}
@@ -259,6 +270,14 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 						s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail(tName, s.toolArgsByID[callID], block["content"])
 						if isErr {
 							s.timeline[idx].Item.Error = fmt.Sprint(block["content"])
+						}
+					}
+					// The Task* family reports the resulting state in a structured field, not in the
+					// text content. Applied after the call's own bookkeeping so a failed call leaves
+					// the list alone.
+					if !isErr {
+						if snapshot := s.taskState.ObserveResult(callID, claudeStructuredToolResult(msg)); snapshot != nil {
+							extraEvents = append(extraEvents, s.todoTimelineEvent(snapshot)...)
 						}
 					}
 					if sub, exists := s.subagents[callID]; exists {
@@ -813,4 +832,64 @@ func (s *ClaudeSession) materializeImageBlockLocked(block map[string]any) string
 		alt = "Generated " + strings.TrimPrefix(mimeType, "image/") + " image"
 	}
 	return "![" + alt + "](" + path + ")"
+}
+
+// toArgMap reads a tool input as a map.
+//
+// Claude sends `input` as a JSON object; anything else (a null, a string) means the tool has no
+// structured arguments, and the task-state observer simply sees an empty map.
+func toArgMap(value any) map[string]any {
+	if record, ok := value.(map[string]any); ok {
+		return record
+	}
+	return map[string]any{}
+}
+
+// todoTimelineEvent records a task-list snapshot in the timeline and returns the event to broadcast.
+//
+// A snapshot replaces the previous one rather than appending: the panel shows one list, and a run of
+// TodoWrite calls would otherwise leave a stack of stale lists in the transcript.
+func (s *ClaudeSession) todoTimelineEvent(snapshot *taskstate.Snapshot) []map[string]any {
+	items := make([]any, 0, len(snapshot.Items))
+	for _, item := range snapshot.Items {
+		items = append(items, map[string]any{
+			"id":         item.ID,
+			"text":       item.Text,
+			"status":     item.Status,
+			"completed":  item.Completed,
+			"activeForm": item.ActiveForm,
+		})
+	}
+	detail := map[string]any{"type": "todo", "items": items}
+
+	index := len(s.timeline) - 1
+	if index < 0 || s.timeline[index].Item.Type != "todo" {
+		index = s.appendItemLocked(sdk.TimelineItem{Type: "todo", Detail: detail})
+	} else {
+		s.timeline[index].Item.Detail = detail
+	}
+	entry := s.timeline[index]
+	return []map[string]any{{
+		"type": "timeline",
+		"item": map[string]any{
+			"type":      "todo",
+			"detail":    detail,
+			"seq":       entry.Seq,
+			"turnId":    entry.TurnID,
+			"timestamp": entry.Timestamp,
+		},
+	}}
+}
+
+// claudeStructuredToolResult reads the structured result Claude attaches to a tool_result message.
+//
+// `toolUseResult` (and the snake_case spelling in older transcripts) carries the task tools' parsed
+// output; the text content of the block is the human-readable form and has no ids in it.
+func claudeStructuredToolResult(row map[string]any) map[string]any {
+	for _, key := range []string{"toolUseResult", "tool_use_result"} {
+		if record, ok := row[key].(map[string]any); ok {
+			return record
+		}
+	}
+	return map[string]any{}
 }

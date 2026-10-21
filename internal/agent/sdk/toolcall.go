@@ -18,7 +18,10 @@ func BuildToolCallDetail(toolName string, args any, result any) map[string]any {
 	argsMap, _ := args.(map[string]any)
 	outText := ExtractResultText(result)
 
-	switch strings.TrimSpace(toolName) {
+	// Normalized first: a provider may capitalise the name or spell it `WebFetch`, and an unmatched name
+	// turned the whole card into an "unknown" entry with no command, file or output.
+	toolName = canonicalToolName(toolName)
+	switch toolName {
 	case "bash":
 		cmd, _ := argsMap["command"].(string)
 		if cmd == "" {
