@@ -34,7 +34,11 @@ const (
 // WorktreeIntent is the resolved plan.
 type WorktreeIntent struct {
 	Kind       IntentKind
-	BaseBranch string // branch-off: where the new branch starts
+	BaseBranch string // branch-off: where the new branch starts (display name)
+	// BaseRef is the exact ref the worktree was cut from, e.g. "refs/remotes/upstream/main".
+	// Recorded in the worktree metadata so a later diff uses the same base even if the remote's
+	// default branch changes.
+	BaseRef    string
 	BranchName string // branch-off/checkout-branch: the local branch
 	// ChangeRequest fields are set for IntentCheckoutChangeRequest.
 	Forge               string
@@ -111,7 +115,7 @@ func ResolveWorktreeIntent(ctx context.Context, input WorktreeIntentInput, repoR
 			}
 			base = resolved
 		}
-		return WorktreeIntent{Kind: IntentBranchOff, BaseBranch: base, BranchName: branchName}, nil
+		return WorktreeIntent{Kind: IntentBranchOff, BaseBranch: base, BaseRef: resolveBaseRef(base), BranchName: branchName}, nil
 	}
 
 	changeRequest, err := resolveInputChangeRequest(input, deps.Forge)
@@ -134,13 +138,17 @@ func ResolveWorktreeIntent(ctx context.Context, input WorktreeIntentInput, repoR
 		return resolveChangeRequestIntent(ctx, refName, *changeRequest, repoRoot, deps)
 	}
 	if refName != "" {
-		return WorktreeIntent{Kind: IntentBranchOff, BaseBranch: refName, BranchName: branchName}, nil
+		return WorktreeIntent{
+			Kind: IntentBranchOff, BaseBranch: refName, BaseRef: resolveBaseRef(refName), BranchName: branchName,
+		}, nil
 	}
 	resolved, err := deps.DefaultBranch(ctx, repoRoot)
 	if err != nil {
 		return WorktreeIntent{}, err
 	}
-	return WorktreeIntent{Kind: IntentBranchOff, BaseBranch: resolved, BranchName: branchName}, nil
+	return WorktreeIntent{
+		Kind: IntentBranchOff, BaseBranch: resolved, BaseRef: resolveBaseRef(resolved), BranchName: branchName,
+	}, nil
 }
 
 // resolveInputChangeRequest picks the change-request reference, preferring the structured field.
@@ -257,4 +265,22 @@ func ToWorktreeWireError(err error) (code, message string) {
 	default:
 		return WorktreeErrUnknown, message
 	}
+}
+
+// resolveBaseRef expands a branch name into the ref it actually points at.
+//
+// Recorded in the worktree metadata so a later diff uses the same base: "main" is ambiguous
+// between the local branch, origin/main and upstream/main, and the remote default branch can
+// change after the worktree was created.
+func resolveBaseRef(branch string) string {
+	name := strings.TrimSpace(branch)
+	if name == "" {
+		return ""
+	}
+	if strings.HasPrefix(name, "refs/") {
+		return name
+	}
+	// A remote-tracking name is what a cut-from-remote worktree actually branched from.
+	name = strings.TrimPrefix(name, "origin/")
+	return "refs/remotes/origin/" + name
 }

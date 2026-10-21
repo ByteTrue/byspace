@@ -98,3 +98,26 @@ func TestResolveWorktreeIntentForgeMismatch(t *testing.T) {
 		t.Fatalf("mismatch fields: %+v", mismatch)
 	}
 }
+
+// BaseRef is recorded so a later diff uses the same base even if the remote's default branch
+// changes. Every branch-off path must set it, not just the explicit action.
+func TestResolveWorktreeIntentSetsBaseRefOnEveryBranchOffPath(t *testing.T) {
+	deps := WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultMain}
+	cases := []WorktreeIntentInput{
+		{WorktreeSlug: "a"},                     // default branch
+		{WorktreeSlug: "b", RefName: "develop"}, // explicit base
+		{WorktreeSlug: "c", Action: "branch-off"},
+	}
+	for _, input := range cases {
+		got, err := ResolveWorktreeIntent(context.Background(), input, "/repo", deps)
+		if err != nil {
+			t.Fatalf("%+v: %v", input, err)
+		}
+		if got.Kind != IntentBranchOff {
+			continue
+		}
+		if got.BaseRef == "" {
+			t.Fatalf("%+v: BaseRef must be set for every branch-off", input)
+		}
+	}
+}
