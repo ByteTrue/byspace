@@ -216,7 +216,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 | `workspace-registry-model.ts` | 228 | **PARTIAL** → 已补 | 工作区 `displayName` 原来是目录名，Node 是「分支优先，非 git / detached HEAD 才回落到目录名」。同一仓库的两个 checkout 在侧边栏里因此同名——而这正是用户区分它们唯一的信息。已移植 `DeriveWorkspaceDisplayName`（含 `HEAD` 特判：detached 时 git 报的字面量是 "HEAD"，那不是名字）。`generateWorkspaceId`/`generateProjectId` 前缀与随机位数已核对一致。 |
 | `project-key.ts` / `private-files.ts` / `client-message-id.ts` / `lifecycle-reasons.ts` | 57/41/16/6 | **PORTED** | `projectkey.Derive` 与 `GroupingDisplayName` 已在 `internal/projectkey`（此前移植，含 GitHub 小写化、自建 forge 保留大小写、非默认端口、`#subdir:`）；`WriteAtomic` 与 `private-files` 一致（0700 目录、0600 文件、临时文件 + rename）；`client-message-id` 归一化已在使用；`lifecycle-reasons` 是常量表，Go 用字面量。 |
 
-### 未审计（本批剩余 9 文件）
+| `checkout-git-utils.ts` | 46 | **PARTIAL** → 已补 | `checkoutErr` 一律返回 `code: "UNKNOWN"`，而协议有四个码。码决定 UI 给什么下一步：合并冲突要「解决后重试」，非 git 目录要「这不是 checkout」，两者之前都显示成无法解释的失败。已按 git 措辞分类（MERGE_CONFLICT / NOT_GIT_REPO / NOT_ALLOWED / UNKNOWN），2 个测试。 |
+| `script-route-branch-handler.ts` / `script-proxy.ts` / `watcher-liveness-canary.ts` / `workspace-git-metadata.ts` | 24/8/66/28 | **DROPPED（依赖未实现子系统）** | 前三者全部是 service-proxy / 文件 watcher 的一部分——反向代理未实现，Go 用 1 秒轮询代替 watcher（无需 liveness canary）。`workspace-git-metadata` 的语义已由 `internal/gitmeta` + `FetchRemote` 覆盖。 |
+
+### 未审计（本批剩余 4 文件）
 
 按行数排序，下一轮从这里继续：
 
