@@ -49,3 +49,15 @@ created: 2026-10-10
 - **2026-09-11** 025 C11：Owner 确认收缩方向，列为待执行批次。
 - **2026-10-10** 从 025 抽取成独立 issue；025 据此关闭。mock 的测试基础设施身份为新发现，列为实现时首要确认项。
 - **2026-10-14** Owner 表示方向尚有争议，非当前想要的状态，先搁置待后续讨论。
+
+## 关闭记录
+
+**2026-10-22 · Owner 决定不做，直接 drop。**
+
+不做的主要原因：Go 重写后内置 provider 的维护成本结构与 025 C11 立论时不同了。
+
+- 六个内置（claude / codex / copilot / opencode / pi / omp）共用同一套 `ManagedSession` 抽象与 driver 表，新增一个的边际成本是启动参数与能力声明，不是一套独立适配器。
+- 六个 ACP 客户端（cursor / kimi / kiro / trae / z.ai / qwen）已经是 `ACPPresets` 条目而非内置 provider，用户按需在 `config.json` 里添加——这正是 025 C11 想要的形态，只是没有通过"删掉 Copilot"来实现。
+- Copilot 保留为内置，因为它有 Node 侧的特化（agent/plan/autopilot/allow-all 四种模式），不是纯 ACP 预设能覆盖的。
+
+**遗留**：Copilot 缺 `autopilot` 模式（Go 三个、Node 四个）。这是能力缺口，不是收缩问题，已在 `byissue/issues/node-reaudit-log.md` 的 `copilot-acp-agent.ts` 条目里记录。若将来要补，另开 issue，不在本条范围内。
