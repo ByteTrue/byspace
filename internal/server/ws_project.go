@@ -686,6 +686,13 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 		RequestID string         `json:"requestId"`
 		RepoRoot  string         `json:"repoRoot"`
 		Config    map[string]any `json:"config"`
+		// expectedRevision is the optimistic lock the editor holds. Comparing it before the
+		// write is what stops two open editors from silently overwriting each other — the
+		// second save would otherwise discard the first with no indication.
+		ExpectedRevision *struct {
+			MtimeMs int64 `json:"mtimeMs"`
+			Size    int   `json:"size"`
+		} `json:"expectedRevision"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	cfgPath := filepath.Join(req.RepoRoot, "byspace.json")
@@ -722,16 +729,67 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 		return
 	}
 
+	// Optimistic lock: refuse the write when the file moved since the client read it.
+	if req.ExpectedRevision != nil {
+		if info, statErr := os.Stat(cfgPath); statErr == nil {
+			if info.ModTime().UnixMilli() != req.ExpectedRevision.MtimeMs || int(info.Size()) != req.ExpectedRevision.Size {
+				// The error shape is a discriminated union keyed on `code`, and the client uses
+				// `currentRevision` to offer "reload and retry" without a second fetch.
+				_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"repoRoot":  req.RepoRoot,
+					"ok":        false,
+					"error": map[string]any{
+						"code": "stale_project_config",
+						"currentRevision": map[string]any{
+							"mtimeMs": info.ModTime().UnixMilli(),
+							"size":    int(info.Size()),
+						},
+					},
+				})
+				return
+			}
+		} else if !os.IsNotExist(statErr) {
+			// A stat failure other than "no file yet" means we cannot verify the lock.
+			_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
+				"requestId": req.RequestID,
+				"repoRoot":  req.RepoRoot,
+				"ok":        false,
+				"error":     map[string]any{"code": "write_failed"},
+			})
+			return
+		}
+	}
+
 	b, _ := json.MarshalIndent(req.Config, "", "  ")
-	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o644)
+	if err := home.WriteAtomic(cfgPath, append(b, '\n'), 0o644); err != nil {
+		_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
+			"requestId": req.RequestID,
+			"repoRoot":  req.RepoRoot,
+			"ok":        false,
+			"error":     map[string]any{"code": "write_failed"},
+		})
+		return
+	}
+	// Report the revision the file actually has now, so the editor's next save is locked to
+	// the content it just wrote.
+	var mtimeMs int64
+	var size int
+	if info, statErr := os.Stat(cfgPath); statErr == nil {
+		mtimeMs = info.ModTime().UnixMilli()
+		size = int(info.Size())
+	} else {
+		mtimeMs = time.Now().UnixMilli()
+		size = len(b) + 1
+	}
 	_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
 		"requestId": req.RequestID,
 		"repoRoot":  req.RepoRoot,
 		"ok":        true,
 		"config":    req.Config,
 		"revision": map[string]any{
-			"mtimeMs": time.Now().UnixMilli(),
-			"size":    len(b) + 1,
+			"mtimeMs": mtimeMs,
+			"size":    size,
 		},
 	})
 }

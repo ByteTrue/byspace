@@ -1410,6 +1410,11 @@ func (s *Server) handleProjectList(ctx context.Context, sink frameSink, requestI
 func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string `json:"requestId"`
+		// The list is searchable, sortable and pageable; ignoring these made the sidebar ignore
+		// its own search box and always render the full list in storage order.
+		Filter    *workspaceFilter   `json:"filter"`
+		Sort      []workspaceSortKey `json:"sort"`
+		Page      *workspacePage     `json:"page"`
 		Subscribe *struct {
 			SubscriptionID string `json:"subscriptionId"`
 		} `json:"subscribe"`
@@ -1437,6 +1442,8 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 		wsCountByPrj[ws.ProjectID]++
 		entries = append(entries, buildWorkspaceDescriptor(ws, prj))
 	}
+
+	entries = filterSortPageWorkspaces(entries, req.Filter, req.Sort, req.Page)
 
 	emptyProjects := make([]map[string]any, 0)
 	for _, p := range projects {

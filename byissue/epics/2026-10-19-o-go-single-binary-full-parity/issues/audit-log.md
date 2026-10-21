@@ -135,6 +135,17 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
   等于把任意字符串当命令执行。改为白名单 + `LookPath` 校验，列表接口用同一份白名单。
 - `terminal_input` 的嵌套形状（见上一条）。
 
+### 入站缺口 34 → 32：写配置的乐观锁 + 工作区列表的筛选排序分页
+
+- **`write_project_config_request.expectedRevision` 被忽略**：编辑器持有的 revision 没有比对，
+  两个打开的编辑器会互相覆盖、静默丢改动。已按协议实现：不匹配返回
+  `{code: "stale_project_config", currentRevision}`（`ProjectConfigRpcErrorSchema` 是
+  discriminated union，不能自己造 `errorCode`），失败分支也只允许 `{requestId, repoRoot, ok, error}`。
+  端到端验证：错误 revision 被拒且响应通过协议校验。
+- **`fetch_workspaces_request` 的 filter/sort/page 全被忽略**：侧边栏搜索框无效、排序不生效、
+  大列表一次全量下发。已实现 `filterSortPageWorkspaces`（query 匹配名称/分支/项目名、
+  projectId 过滤、4 种排序键含 `status_priority`、cursor 分页），4 个测试。
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：
