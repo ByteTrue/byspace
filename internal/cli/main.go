@@ -525,6 +525,10 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	title := fs.String("title", "", "agent title")
 	role := fs.String("role", "", "agent role")
 	waitTimeout := fs.Duration("wait-timeout", 0, "how long to wait when --wait is set")
+	// --output-schema asks the daemon for a JSON object with these properties. It also changes what
+	// run prints: the model's reply is the object, not prose, and printing prose (or the agent id)
+	// makes the flag useless to a script.
+	outputSchema := fs.String("output-schema", "", "JSON Schema the reply must satisfy (object or @file)")
 	var labels multiFlag
 	fs.Var(&labels, "label", "key=value label (repeatable)")
 	var envVars multiFlag
@@ -598,6 +602,20 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if *role != "" {
 		request["role"] = *role
 	}
+	if schemaText := strings.TrimSpace(*outputSchema); schemaText != "" {
+		if strings.HasPrefix(schemaText, "@") {
+			read, readErr := os.ReadFile(strings.TrimPrefix(schemaText, "@"))
+			if readErr != nil {
+				return readErr
+			}
+			schemaText = string(read)
+		}
+		var schema any
+		if err := json.Unmarshal([]byte(schemaText), &schema); err != nil {
+			return fmt.Errorf("--output-schema is not valid JSON: %w", err)
+		}
+		request["outputSchema"] = schema
+	}
 	if parsed, labelErr := parseKeyValueFlags(labels, "label"); labelErr != nil {
 		return labelErr
 	} else if len(parsed) > 0 {
@@ -636,8 +654,50 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		fmt.Fprintln(stdout, text)
 		return nil
 	}
+	// A provider can finish without a recorded last message (the run was interrupted, or the turn
+	// produced only tool calls). The timeline is the fallback the node CLI uses for the same case.
+	if text := lastAssistantTextFromTimeline(ctx, ws, agentID); text != "" {
+		fmt.Fprintln(stdout, text)
+		return nil
+	}
 	fmt.Fprintln(stdout, agentID)
 	return nil
+}
+
+// lastAssistantTextFromTimeline reads the newest assistant message from an agent's timeline.
+//
+// Needed because `wait_for_finish_response.lastMessage` can be empty while the transcript holds the
+// answer. Printing the agent id instead is a silent failure: a script gets an opaque string and no
+// way to tell it apart from a real reply.
+func lastAssistantTextFromTimeline(ctx context.Context, ws *websocket.Conn, agentID string) string {
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "fetch_agent_timeline_request",
+		"requestId": "cli_timeline",
+		"agentId":   agentID,
+		"direction": "tail",
+		"limit":     200,
+	}); err != nil {
+		return ""
+	}
+	resp, err := waitSessionResp(ctx, ws, "fetch_agent_timeline_response", "")
+	if err != nil {
+		return ""
+	}
+	entries, _ := resp["entries"].([]any)
+	for index := len(entries) - 1; index >= 0; index-- {
+		entry, ok := entries[index].(map[string]any)
+		if !ok {
+			continue
+		}
+		item, _ := entry["item"].(map[string]any)
+		if item["type"] != "assistant_message" {
+			continue
+		}
+		if text, _ := item["text"].(string); strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func runLogs(args []string, stdout io.Writer) error {
