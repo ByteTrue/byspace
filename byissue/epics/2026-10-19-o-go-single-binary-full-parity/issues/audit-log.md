@@ -828,6 +828,14 @@ daemon 能监听 unix socket（`serve --addr unix:///path`，受限环境需要�
 
 **顺带修掉一个真 bug**：`Task` 分支构造了 `SubagentDescriptor` 之后**没有存进 map、也没有广播**（我这次改动前的代码就是空的 `{ }` 块）。于是 Claude 的 agent 委派任务时，**Subagents 面板里什么都不出现**——委派从用户视角是完全不可见的，尽管 daemon 手里已经拿到了 descriptor。已补上 map 写入 + `agent.provider_subagents.update` 广播，并有测试断言 Task 会注册子代理且 subtitle 正确。
 
+### server/schedule/** | 3 文件 1404 行 | **PARTIAL → 已补目标消失语义\*\*
+
+`cron.ts` 的 `computeNextRunAt` / `validateScheduleCadence` 已移植（见前面「cron 只认 `*/N`」那条——那个 bug 会让每天 9 点的日程一天触发 1440 次）。
+
+**本轮补的是 `ScheduleTargetGoneError`**：目标**永久消失**（agent 被删或归档、new-agent 的 cwd 被删）时，调度应该**完成**而不是一直重试。Go 之前把所有失败都当普通错误，于是这样的日程每一次 tick 都以同样方式失败，直到烧完 `maxRuns` 或过期——用户看到的是一个从没成功过的日程，而不是一个因为目标被删而退役的日程。
+
+**这里我抓到了自己的一个半成品**：先给 `RunOnce` 加了「TargetGoneError → completed」的分支，但 executor 从来不返回这个错误，所以那段代码是**死代码**，行为没有任何变化。补上之后才真正生效——executor 现在对「agent 不存在/已归档」和「cwd 不存在」都返回它，普通失败仍然是普通错误（瞬时的 provider 超时不应当杀掉日程，这个区分正是这件事值得做的原因）。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
