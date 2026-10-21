@@ -603,7 +603,10 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		if sName != "" {
 			namePtr = &sName
 		}
-		created, err := s.schedules.Create(ctx, schedule.CreateInput{
+		// CreateOrReplace, not Create: a model re-running "set up a nightly check" must not
+		// accumulate one schedule per call — the user asked for one and would get a dozen, all
+		// firing.
+		created, err := s.schedules.CreateOrReplace(ctx, schedule.CreateInput{
 			Name:    namePtr,
 			Prompt:  prompt,
 			Cadence: cad,

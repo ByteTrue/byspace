@@ -460,3 +460,119 @@ type TargetGoneError struct {
 }
 
 func (e TargetGoneError) Error() string { return e.Reason }
+
+// CreateOrReplace creates a schedule, or updates the existing one with the same name and target.
+//
+// Ported from createOrReplace. The MCP `create_schedule` tool is the caller, and a model
+// re-running "set up a nightly check" must not accumulate one schedule per call — the user asked
+// for one schedule and would get a dozen, all firing.
+//
+// Replacing keeps the run history: a schedule whose prompt changed is still the same schedule,
+// and its history is what tells the user whether the new prompt is working.
+func (s *Service) CreateOrReplace(ctx context.Context, in CreateInput) (*StoredSchedule, error) {
+	if strings.TrimSpace(in.Prompt) == "" {
+		return nil, errors.New("prompt is required")
+	}
+	// An unnamed schedule has no identity to match on, so it is always a new one.
+	if in.Name == nil || strings.TrimSpace(*in.Name) == "" {
+		return s.Create(ctx, in)
+	}
+	name := strings.TrimSpace(*in.Name)
+
+	existing, err := s.findByNameAndTarget(name, in.Target)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		in.Name = &name
+		return s.Create(ctx, in)
+	}
+
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+
+	s.mu.Lock()
+	// Re-read under the lock: another call may have replaced it between the scan and here.
+	current, readErr := s.readLocked(existing.ID)
+	if readErr != nil {
+		s.mu.Unlock()
+		return nil, readErr
+	}
+	if current == nil || current.Status == "completed" {
+		// A completed schedule is finished business; the caller wants a fresh one rather than a
+		// revived series whose run count is already spent.
+		s.mu.Unlock()
+		in.Name = &name
+		return s.Create(ctx, in)
+	}
+
+	current.Name = &name
+	current.Prompt = in.Prompt
+	current.Cadence = in.Cadence
+	current.UpdatedAt = nowStr
+	if in.MaxRuns != nil {
+		current.MaxRuns = in.MaxRuns
+	}
+	if in.ExpiresAt != nil {
+		current.ExpiresAt = in.ExpiresAt
+	}
+	// Recompute from now, not from the old next-run time: the cadence may have changed, and a
+	// replacement should not immediately fire for a slot the previous definition was waiting on.
+	current.NextRunAt = computeNextRunAt(now, in.Cadence)
+	if writeErr := s.writeLocked(*current); writeErr != nil {
+		s.mu.Unlock()
+		return nil, writeErr
+	}
+	replaced := *current
+	s.mu.Unlock()
+
+	if in.RunOnCreate {
+		return s.RunOnce(ctx, replaced.ID)
+	}
+	return &replaced, nil
+}
+
+// findByNameAndTarget locates an active schedule with the same name and target.
+//
+// The target comparison is what keeps two schedules with one name apart when they drive
+// different agents — "nightly check" against agent A and against agent B are different work.
+func (s *Service) findByNameAndTarget(name string, target Target) (*StoredSchedule, error) {
+	all, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	for index := range all {
+		candidate := all[index]
+		if candidate.Status == "completed" {
+			continue
+		}
+		if candidate.Name == nil || strings.TrimSpace(*candidate.Name) != name {
+			continue
+		}
+		if sameScheduleTarget(candidate.Target, target) {
+			found := candidate
+			return &found, nil
+		}
+	}
+	return nil, nil
+}
+
+// sameScheduleTarget compares the fields that decide what a schedule acts on.
+func sameScheduleTarget(left, right Target) bool {
+	if left.Type != right.Type {
+		return false
+	}
+	if left.Type == "agent" {
+		return left.AgentID == right.AgentID
+	}
+	// A new-agent target is identified by its working directory and provider: two schedules in
+	// the same cwd spawn agents in the same place.
+	leftCwd, rightCwd := "", ""
+	if left.Config != nil {
+		leftCwd = left.Config.Cwd
+	}
+	if right.Config != nil {
+		rightCwd = right.Config.Cwd
+	}
+	return leftCwd == rightCwd
+}
