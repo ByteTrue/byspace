@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -213,5 +214,47 @@ func CreateWorktreeFromIntent(ctx context.Context, repoCwd, worktreesBaseDir str
 		return checkoutChangeRequest(ctx, repoCwd, worktreesBaseDir, slug, intent)
 	default:
 		return CreateWorktree(ctx, repoCwd, worktreesBaseDir, slug, intent.BaseBranch)
+	}
+}
+
+// Worktree wire error codes, ported from worktree-errors.ts.
+//
+// The client switches on these to offer the right next step: a branch already checked out means
+// "pick another name", an unknown branch means "fetch first". Go previously answered with one
+// generic code, so every failure looked the same.
+const (
+	WorktreeErrBranchAlreadyCheckedOut = "branch_already_checked_out"
+	WorktreeErrMissingCheckoutTarget   = "missing_checkout_target"
+	WorktreeErrUnknownBranch           = "unknown_branch"
+	WorktreeErrUnknown                 = "unknown"
+)
+
+// ToWorktreeWireError classifies a worktree creation failure.
+//
+// Classification is by git's own wording rather than typed errors: the git layer returns plain
+// errors from a dozen call sites, and threading a typed error through all of them would be a
+// larger change than the information is worth.
+func ToWorktreeWireError(err error) (code, message string) {
+	if err == nil {
+		return WorktreeErrUnknown, ""
+	}
+	message = err.Error()
+	lowered := strings.ToLower(message)
+
+	var missing MissingCheckoutTargetError
+	if errors.As(err, &missing) {
+		return WorktreeErrMissingCheckoutTarget, message
+	}
+	switch {
+	case strings.Contains(lowered, "already checked out"),
+		strings.Contains(lowered, "is already used by worktree"):
+		return WorktreeErrBranchAlreadyCheckedOut, message
+	case strings.Contains(lowered, "invalid reference"),
+		strings.Contains(lowered, "unknown revision"),
+		strings.Contains(lowered, "not a valid object name"),
+		strings.Contains(lowered, "did not match any"):
+		return WorktreeErrUnknownBranch, message
+	default:
+		return WorktreeErrUnknown, message
 	}
 }

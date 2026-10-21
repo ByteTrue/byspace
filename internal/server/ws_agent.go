@@ -435,10 +435,11 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		DefaultBranch: workspace.ResolveDefaultBranch,
 	})
 	if intentErr != nil {
+		code, msg := workspace.ToWorktreeWireError(intentErr)
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
 			"workspace":       nil,
-			"error":           intentErr.Error(),
-			"errorCode":       "invalid_worktree_intent",
+			"error":           msg,
+			"errorCode":       code,
 			"setupTerminalId": nil,
 			"requestId":       req.RequestID,
 		})
