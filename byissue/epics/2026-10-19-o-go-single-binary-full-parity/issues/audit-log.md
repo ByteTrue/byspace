@@ -929,6 +929,21 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 只有 pi 的 hook 安装（`internal/terminal/vt.go` 的 `EnsureAgentHooksInstalled`，本轮补了 ownership 检查）。claude 的 `settings.json`、codex 的 `hooks.json`、opencode 的插件文件改写未移植——`byspace hooks <agent> <event>` 的 shim 已经能接受这些 provider 的事件（映射表齐全），缺的是**安装**那一步。与「只用 pi」的产品方向一致，已记在未完成清单。
 
+### server/session/checkout/git-metadata-generator.ts | 241 行 | **MISSING → 已补（含一处挂起）**
+
+两个后果，一个是**挂起**：
+
+- **`checkout_commit_request` 空消息**：Go 直接把空 `-m` 交给 git，而 git 会**打开编辑器**——在一个没有终端的 daemon 里就是请求永久挂住。UI 的 Commit 按钮并不要求用户填消息，所以这不是边缘路径。
+- **`checkout_pr_create_request` 空标题**：直接交给 forge，被拒。
+
+两者现在都从工作区 diff 生成（用 `daemon.metadataGeneration.model`），机制与 `internal/naming` 的自动分支名相同：短生命周期的 `--no-session` pi 进程，因此命名轮次不会污染用户正在读的 transcript。
+
+提交标题在交给 git 前会清理：模型稳定地会加句号、用引号或反引号包裹、或答一整段——三者都比下面那一行更糟。超过 200 字符会截断，因为 git 和所有日志查看器会在**别的地方**截断它。
+
+生成失败时请求被拒绝（`message_required` / `title_required`），而不是用空标题提交。
+
+端到端验证两个方向：没有改动时返回 `message_required`（不再挂起）；有一处新增函数时自动提交，`git log -1 --format=%s` 得到 `Add subtract function to math helpers`。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
