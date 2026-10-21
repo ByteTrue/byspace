@@ -71,3 +71,30 @@ func TestApplySkillsStatusRollsBackOnFailure(t *testing.T) {
 		}
 	}
 }
+
+// A name left over from an older bundle (the skill was renamed or removed) must be dropped from
+// the desired set. Keeping it means a "desired" skill with no source to copy from, which fails
+// the whole reconcile instead of dropping one entry — and the user cannot see or fix that
+// selection from the UI.
+func TestResolveDesiredSkillsDropsStaleNames(t *testing.T) {
+	selection := map[string]any{
+		"mode":   "custom",
+		"skills": []any{"present", "removed-in-a-later-bundle"},
+	}
+	desired := resolveDesiredSkills(selection, []string{"present", "other"})
+	if !desired["present"] {
+		t.Fatal("a shipped skill must stay desired")
+	}
+	if desired["removed-in-a-later-bundle"] {
+		t.Fatal("a stale name must be dropped")
+	}
+	if desired["other"] {
+		t.Fatal("custom mode must not add skills the user did not select")
+	}
+
+	// "all" mode still takes every available skill.
+	all := resolveDesiredSkills(map[string]any{"mode": "all"}, []string{"a", "b"})
+	if !all["a"] || !all["b"] || len(all) != 2 {
+		t.Fatalf("all mode: %v", all)
+	}
+}

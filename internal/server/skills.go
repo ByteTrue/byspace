@@ -148,9 +148,17 @@ func resolveDesiredSkills(selection map[string]any, available []string) map[stri
 	desired := make(map[string]bool)
 	mode, _ := selection["mode"].(string)
 	if mode == "custom" {
+		// Filtered against what the bundle actually ships. A name left over from an older
+		// bundle (the skill was renamed or removed) would otherwise be "desired" with no source
+		// to copy from, which fails the whole reconcile instead of dropping one entry — and the
+		// user has no way to see or fix that selection.
+		availableSet := make(map[string]bool, len(available))
+		for _, name := range available {
+			availableSet[name] = true
+		}
 		raw, _ := selection["skills"].([]any)
 		for _, item := range raw {
-			if name, ok := item.(string); ok {
+			if name, ok := item.(string); ok && availableSet[name] {
 				desired[name] = true
 			}
 		}
