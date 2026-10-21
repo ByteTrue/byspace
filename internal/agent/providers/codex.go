@@ -29,15 +29,18 @@ type CodexSession struct {
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
 
-	mu                 sync.Mutex
-	pending            map[int64]chan map[string]any
-	status             string
-	threadID           string
-	cwd                string
-	model              string
-	thinking           string
-	turnCounter        int
-	activeTurnID       string
+	mu           sync.Mutex
+	pending      map[int64]chan map[string]any
+	status       string
+	threadID     string
+	cwd          string
+	model        string
+	thinking     string
+	turnCounter  int
+	activeTurnID string
+	// nativeTurnID is Codex's own turn id, which `turn/steer` requires. activeTurnID is ours and
+	// means nothing to the provider.
+	nativeTurnID       string
 	activeTextIdx      int
 	activeThinkIdx     int
 	timeline           []sdk.TimelineEntry
@@ -242,6 +245,17 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		s.status = "running"
 		s.activeTextIdx = -1
 		s.activeThinkIdx = -1
+		// Codex's own turn id, needed by turn/steer. `turn/start` returns it too, but the
+		// notification is authoritative and arrives for turns we did not start (a resumed
+		// thread, a retry).
+		if turn, ok := params["turn"].(map[string]any); ok {
+			if id, ok := turn["id"].(string); ok && id != "" {
+				s.nativeTurnID = id
+			}
+		}
+		if id, ok := params["turnId"].(string); ok && id != "" {
+			s.nativeTurnID = id
+		}
 		extraEvents = append(extraEvents, map[string]any{"type": "turn_start"})
 
 	case "item/agentMessage/delta", "codex/event/agent_message_delta":
@@ -405,6 +419,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		}
 		s.status = "idle"
 		s.activeTurnID = ""
+		s.nativeTurnID = ""
 		s.activeTextIdx = -1
 		s.activeThinkIdx = -1
 		s.notifyFinishLocked(nil)
@@ -538,8 +553,38 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	return err
 }
 
+// Steer delivers a message into the turn that is already running.
+//
+// Codex has a dedicated `turn/steer` for this. Falling back to Prompt starts a *new* turn while
+// the current one is still going: the user's correction is not applied to the work in progress,
+// and two turns write to the same thread.
 func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
-	return s.Prompt(ctx, message, images)
+	s.mu.Lock()
+	running := s.status == "running"
+	threadID := s.threadID
+	expectedTurnID := s.nativeTurnID
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.appendItemLocked(sdk.TimelineItem{
+		Type: "user_message",
+		Text: message,
+	})
+	s.mu.Unlock()
+
+	if !running || expectedTurnID == "" {
+		// Nothing to steer: the caller's behavior was "steer", but there is no active turn, so
+		// this is an ordinary prompt. Without this the RPC would be rejected and the message lost.
+		return s.Prompt(ctx, message, images)
+	}
+
+	input := []map[string]any{{"type": "text", "text": message}}
+	input = append(input, imageBlocksForCodex(images)...)
+	_, err := s.rpcCall(ctx, "turn/steer", map[string]any{
+		"threadId":       threadID,
+		"expectedTurnId": expectedTurnID,
+		"input":          input,
+	})
+	return err
 }
 
 func (s *CodexSession) Abort(ctx context.Context) error {
