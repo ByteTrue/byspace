@@ -924,3 +924,37 @@ func FetchRemote(ctx context.Context, cwd string) ([]GitRefChange, bool, error) 
 	}
 	return changes, nonRemote, nil
 }
+
+// CountAheadOfOrigin reports how many local commits are not on the upstream branch.
+//
+// Used before archiving a merged worktree: commits made after the PR was opened are not in it,
+// so "merged and clean" is not enough. A branch with no upstream counts as ahead by its own
+// commit count against the default branch — treating it as 0 would silently discard the work.
+func CountAheadOfOrigin(ctx context.Context, cwd string) (int, error) {
+	out, err := runGit(ctx, cwd, "rev-list", "--count", "@{upstream}..HEAD")
+	if err != nil {
+		// No upstream: count against the repository's default branch instead.
+		remoteHead, remoteErr := runGit(ctx, cwd, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+		if remoteErr != nil {
+			return 0, err
+		}
+		base := strings.TrimPrefix(strings.TrimSpace(remoteHead), "origin/")
+		if base == "" {
+			return 0, err
+		}
+		fallback, fallbackErr := runGit(ctx, cwd, "rev-list", "--count", "origin/"+base+"..HEAD")
+		if fallbackErr != nil {
+			return 0, fallbackErr
+		}
+		return parseCount(fallback)
+	}
+	return parseCount(out)
+}
+
+func parseCount(raw string) (int, error) {
+	count, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}

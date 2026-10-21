@@ -456,6 +456,14 @@ func (s *Server) startWorkspacePlacementPoller() {
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 				s.reconcileAllWorkspacePlacements(ctx)
 				cancel()
+				// Checking for merged PRs rides the same slow tick: a forge call per workspace
+				// per minute would be abusive, and the user does not need archiving to happen
+				// faster than the sidebar refresh.
+				if s.autoArchiveEnabled() {
+					actx, acancel := context.WithTimeout(context.Background(), 120*time.Second)
+					s.runAutoArchivePass(actx)
+					acancel()
+				}
 			}
 		}
 	}()
