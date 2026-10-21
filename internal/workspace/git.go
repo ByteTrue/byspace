@@ -103,6 +103,14 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	// Bounded: the daemon polls every subscribed workspace each second, and an unbounded burst
+	// of git processes makes the machine stutter and queues the user's own git commands behind
+	// ours.
+	release, acquireErr := acquireGitSlot(cctx)
+	if acquireErr != nil {
+		return "", acquireErr
+	}
+	defer release()
 	cmd := exec.CommandContext(cctx, "git", args...)
 	cmd.Dir = cwd
 	// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would
