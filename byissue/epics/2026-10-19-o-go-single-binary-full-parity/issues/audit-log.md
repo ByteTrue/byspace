@@ -690,6 +690,14 @@ Go 侧的对应物是 `internal/agent/jsonl`（JSONL RPC 多路复用、V2 分�
 
 现在回调携带 state 与 reason，终端保存 reason（只在 working → idle 时设，且 no-op 转换不会重新抬起），广播里带上它。活动状态走 `terminals_changed` 而不是单独的消息：客户端本来就从那个 payload 替换整个终端列表，另开一个事件需要第二个 reducer，还有和列表不一致的风险。
 
+### terminal/agent-hooks/\*\* | 12 文件 986 行
+
+| 文件                                                               | 结论                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent-hook-installer.ts`                                          | **PARTIAL → 已补所有权检查**。Node 在写 hook 文件前检查 ownership marker；Go 是无条件 `WriteAtomic`，而 `~/.pi/agent/extensions/byspace-terminal-activity.ts` 正是用户放自己扩展的常见位置——**无条件写会删掉用户的文件**。现在：路径上已有文件但不含 BySpace 标记 → 拒绝并给出路径提示；是自己写的旧版本 → 覆盖正文；已经是最新 → 不动（避免每次运行都改 mtime）。**仍缺**：claude/codex/opencode 三家 hook 配置的安装/卸载，Go 只做了 pi 的。 |
+| `provider-registry.ts` / `terminal-agent-hook-setting.ts` / `pi/*` | **PORTED** — 事件到状态的映射在 `internal/cli/hooks.go`（`byspace hooks <agent> <event>` 的 shim），安装的扩展源码在 `internal/terminal/vt.go`。                                                                                                                                                                                                                                                                                               |
+| `claude/*` / `codex/*` / `opencode/*`                              | **MISSING** — 只有 pi 的 hook 安装；其它三家的配置文件改写未移植。这是「其余 provider 暂不常用」的延伸，已在未完成清单里。                                                                                                                                                                                                                                                                                                                     |
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
