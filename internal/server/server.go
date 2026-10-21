@@ -2012,6 +2012,15 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 
 	cwd := strings.TrimSpace(req.Config.Cwd)
 
+	// A child agent's directory is resolved against its parent's, not against the daemon's working
+	// directory: an agent working in a worktree that spawns a helper with cwd "packages/app" means
+	// that path inside the worktree. Falling back to os.Getwd() put the child in the daemon's own
+	// directory, which is almost never where the parent is.
+	parentCwd := s.parentAgentCwd(req.CallerAgentID)
+	if parentCwd != "" {
+		cwd = resolveChildCwd(parentCwd, cwd)
+	}
+
 	// A structured worktree intent wins over the simple name: it says which branch to be on, and
 	// the whole point of a worktree is that the branch is not the default one.
 	if req.Worktree != nil && strings.TrimSpace(req.Worktree.Mode) != "" {
@@ -2037,14 +2046,34 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		cwd = absCwd
 	}
 
-	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
-	if err != nil {
-		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-			"status":    "agent_create_failed",
-			"requestId": req.RequestID,
-			"error":     err.Error(),
-		})
-		return
+	// An explicit workspace wins over the one inferred from cwd. Ignoring it put the agent in
+	// whichever workspace happened to own the directory — for a child created with the parent's
+	// cwd that is the same workspace, but for a caller that names a different one it silently
+	// placed the agent somewhere the sidebar will not show it under.
+	var ws *store.WorkspaceRecord
+	if explicit := strings.TrimSpace(req.WorkspaceID); explicit != "" {
+		ws = s.findWorkspaceRecord(explicit)
+		if ws == nil {
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status":    "agent_create_failed",
+				"requestId": req.RequestID,
+				"error":     "unknown workspace: " + explicit,
+			})
+			return
+		}
+	}
+	if ws == nil {
+		_, inferred, ensureErr := s.store.EnsureWorkspaceForCwd(cwd)
+		if ensureErr != nil {
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status":    "agent_create_failed",
+				"requestId": req.RequestID,
+				"error":     ensureErr.Error(),
+			})
+			return
+		}
+		inferredCopy := inferred
+		ws = &inferredCopy
 	}
 
 	provider := strings.TrimSpace(req.Config.Provider)
@@ -2098,6 +2127,10 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	if strings.TrimSpace(req.CallerAgentID) != "" {
 		caller := strings.TrimSpace(req.CallerAgentID)
 		callerPtr = &caller
+		// The parent relationship is carried in a label, not only in the field: the client groups a
+		// child under its parent by reading `byspace.parent-agent-id`, so a child created without it
+		// appears as an unrelated top-level agent. The constant existed and nothing wrote it.
+		agentLabels[ParentAgentIDLabel] = caller
 	}
 
 	// A mode id is provider-specific, so a child created from a parent in another provider cannot
@@ -4077,4 +4110,39 @@ func renderAttachment(att promptAttachment, fallbackName string) string {
 		return fmt.Sprintf("[Attached file: %s (%s) at %s]", fallbackName, att.MimeType, att.Path)
 	}
 	return ""
+}
+
+// parentAgentCwd returns the directory of the caller agent, or "" when there is none.
+func (s *Server) parentAgentCwd(callerAgentID string) string {
+	id := strings.TrimSpace(callerAgentID)
+	if id == "" {
+		return ""
+	}
+	record, err := s.store.GetAgent(id)
+	if err != nil || record == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Cwd)
+}
+
+// resolveChildCwd resolves a requested directory against the parent's.
+//
+// Ported from resolveChildAgentCwd: an empty request means "wherever the parent is", and a relative
+// one is relative to the parent. A path that is already absolute is left alone — a caller that names
+// /tmp/x means /tmp/x, not /parent/tmp/x. filepath.Join would otherwise clean away a leading slash.
+func resolveChildCwd(parentCwd, requested string) string {
+	trimmed := strings.TrimSpace(requested)
+	if trimmed == "" {
+		return parentCwd
+	}
+	expanded := trimmed
+	if strings.HasPrefix(expanded, "~") {
+		if userHome, err := os.UserHomeDir(); err == nil {
+			expanded = filepath.Join(userHome, strings.TrimPrefix(expanded, "~"))
+		}
+	}
+	if filepath.IsAbs(expanded) {
+		return filepath.Clean(expanded)
+	}
+	return filepath.Join(parentCwd, expanded)
 }
