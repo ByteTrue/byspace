@@ -789,6 +789,24 @@ Go 用 goroutine 与真实的 OS 线程处理 PTY 读写，没有事件循环可
 
 只有 pi 的 hook 安装（`internal/terminal/vt.go`）。claude 的 `settings.json` 与 codex 的 `hooks.json` 改写未移植——`byspace hooks <agent> <event>` 的 shim 已能接受这两个 provider 的事件（映射表齐全），缺的是**安装**那一步。已记在未完成清单。
 
+### cli/utils/client.ts | 484 | **PARTIAL → 已补 unix socket 与 BYSPACE_HOST**
+
+daemon 能监听 unix socket（`serve --addr unix:///path`，受限环境需要），但**没有任何客户端能连上它**：`dialDaemonWS` 与 `probeHealth` 都只会拼 `host:port`。后果是 `daemon status` 把一个明明在跑的 daemon 报成 stopped，其余命令全部连不上。
+
+两处现在都识别 socket 路径并拨号。socket 连接上的 Host 头是 `localhost`，daemon 的 allowed-hosts 规则永远接受它——socket 没有有意义的 host 可校验。
+
+`BYSPACE_HOST` 也会在没给 `--addr`（或给了默认值）时被读取，这样脚本或第二个 checkout 能一次把每条命令指向不同的 daemon，不用重复传 flag。
+
+端到端验证：`daemon status --addr /tmp/us3.sock` 报 running、带 serverId 与 provider 列表。
+
+**仍缺**：`ssh://` 传输（`createSshTunnel` / `parseSshTransportUri`）——属于 tunnel，需要第二台机器，条件记在 service-proxy Issue 里。
+
+### cli/commands/** 其余 | 约 60 文件 | **PORTED（命令面已逐条核对）\*\*
+
+按顶层命令逐个对过（见 `cli.ts` 那一条的对照表），每条 Node 命令在 Go 里都有承接；本轮补了 `schedule update`、`workspace setup`、`agent attach`、`onboard`、`hooks`、`--yaml`/`-q`、路径直开、provider 健康与版本漂移。
+
+**没有逐文件读实现体**（`commands/schedule/shared.ts` 471 行、`commands/agent/inspect.ts` 280、`update.ts` 274、`ls.ts` 271、`send.ts` 246 等）。它们的输出格式由 `internal/cli/output.go` 统一，参数解析由各自的 `flag.FlagSet`，具体字段面由入站/出站对账脚本覆盖。**留在未完成清单**，不折算成逐文件结论。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
