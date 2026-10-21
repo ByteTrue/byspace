@@ -105,6 +105,23 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		}
 
 	case "assistant":
+		if parent := parentToolUseID(ev); parent != "" {
+			// A message from inside a subagent. Its tool calls belong to that subagent's
+			// timeline, not to the conversation the user is reading — mixing them made a
+			// delegated task look like the parent agent had gone off and done unrelated work.
+			//
+			// Inlined rather than extracted: this function holds s.mu, and a helper that took it
+			// again would deadlock the read loop (see notes/013).
+			if sub := s.markSubagentActiveLocked(parent); sub != nil {
+				extraEvents = append(extraEvents, map[string]any{
+					"type":      "agent.provider_subagents.update",
+					"kind":      "upsert",
+					"subagent":  *sub,
+					"updatedAt": time.Now().UTC().Format(time.RFC3339Nano),
+				})
+			}
+			break
+		}
 		if s.status != "running" {
 			s.status = "running"
 		}
@@ -184,6 +201,17 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		}
 
 	case "user":
+		if parent := parentToolUseID(ev); parent != "" {
+			if sub := s.markSubagentActiveLocked(parent); sub != nil {
+				extraEvents = append(extraEvents, map[string]any{
+					"type":      "agent.provider_subagents.update",
+					"kind":      "upsert",
+					"subagent":  *sub,
+					"updatedAt": time.Now().UTC().Format(time.RFC3339Nano),
+				})
+			}
+			break
+		}
 		if msg, ok := ev["message"].(map[string]any); ok {
 			if content, ok := msg["content"].([]any); ok {
 				for _, rawBlock := range content {
@@ -667,4 +695,48 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 		}
 	}
 	return entries, cwd, title
+}
+
+// parentToolUseID returns the subagent a message came from, or "".
+//
+// Claude's stream-json marks every message produced inside a subagent with the id of the Task
+// call that spawned it. The node implementation routes those through a sidechain tracker for
+// exactly this reason: without the marker they look like ordinary turns and the user sees a
+// delegated task as the parent agent doing unrelated work.
+func parentToolUseID(ev map[string]any) string {
+	if raw, ok := ev["parent_tool_use_id"]; ok {
+		if parent, isString := raw.(string); isString {
+			return strings.TrimSpace(parent)
+		}
+	}
+	// The field also appears inside the message body depending on the CLI version.
+	if msg, ok := ev["message"].(map[string]any); ok {
+		if parent, isString := msg["parent_tool_use_id"].(string); isString {
+			return strings.TrimSpace(parent)
+		}
+	}
+	return ""
+}
+
+// markSubagentActiveLocked keeps a subagent's status current without touching the main
+// timeline. The caller holds s.mu.
+//
+// The Subagents panel needs to know the delegated task is still working; the conversation needs
+// to not show it.
+func (s *ClaudeSession) markSubagentActiveLocked(parentToolUseID string) *sdk.SubagentDescriptor {
+	sub, exists := s.subagents[parentToolUseID]
+	if !exists {
+		// A subagent whose Task call we never saw start: record it so its activity is not lost,
+		// with a placeholder title until something better arrives.
+		title := "Subagent"
+		sub = sdk.SubagentDescriptor{
+			ID: parentToolUseID, Provider: "claude", Status: "running", Title: &title,
+		}
+	}
+	if sub.Status != "running" {
+		sub.Status = "running"
+	}
+	s.subagents[parentToolUseID] = sub
+	descriptor := sub
+	return &descriptor
 }
