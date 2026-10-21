@@ -825,21 +825,17 @@ func (s *ClaudeSession) materializeImageBlockLocked(block map[string]any) string
 	source, _ := block["source"].(map[string]any)
 	data, _ := source["data"].(string)
 	mimeType, _ := source["media_type"].(string)
-	if data == "" {
+	// The renderer is shared with the other providers so the markdown escaping and the disk materialization
+	// cannot drift between them — this code used to hand-roll both.
+	markdown, ok := imageout.RenderAsMarkdown(imageout.ProviderImage{
+		Data:     data,
+		MimeType: mimeType,
+		AltText:  imageAltText(mimeType),
+	}, s.homeDir)
+	if !ok {
 		return ""
 	}
-	if strings.TrimSpace(s.homeDir) == "" {
-		return ""
-	}
-	path, err := imageout.Materialize(s.homeDir, data, mimeType)
-	if err != nil {
-		return ""
-	}
-	alt := "Generated image"
-	if mimeType != "" {
-		alt = "Generated " + strings.TrimPrefix(mimeType, "image/") + " image"
-	}
-	return "![" + alt + "](" + path + ")"
+	return markdown
 }
 
 // toArgMap reads a tool input as a map.
@@ -973,4 +969,15 @@ func (s *ClaudeSession) subagentCardEventsLocked(parentToolUseID, log string) []
 			"timestamp": s.timeline[idx].Timestamp,
 		},
 	}}
+}
+
+// imageAltText names an image for its alt text.
+//
+// The media type makes the alt useful to a screen reader and to a client that cannot load the image: "Generated png
+// image" says more than "Generated image".
+func imageAltText(mimeType string) string {
+	if trimmed := strings.TrimSpace(strings.TrimPrefix(mimeType, "image/")); trimmed != "" && trimmed != mimeType {
+		return "Generated " + trimmed + " image"
+	}
+	return "Generated image"
 }
