@@ -24,4 +24,4 @@ superseded-by: ""
 
 讨论见 `../talks/006-pi-subagent-first-class-adaptation.md`。Owner（2026-10-06）：「之后派将会是一等公民，会优先给派做适配。这些以ByteTrue开头的是我自己做的这些扩展，这些扩展也将会是一等公民扩展，我们只按照这些来适配。」「Pi 排第一，其余 provider 维护降级为 best-effort。」「非白名单扩展，就现在这样就好了。现在怎么样就怎么样，我们不特意去搞它。」
 
-首个落地：`../epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md`。
+首个落地：`../epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md`。

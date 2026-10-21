@@ -65,7 +65,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 ## 演化地图
 
 - `byissue/epics/003-d-orca-terminal-agent-experience/spec.md`：已放弃。Owner 于 2026-10-14 决定 drop，不再推进 terminal agent 体验的 orca 吸收。
-- `byissue/epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md`：建设中。Pi 升为一等公民 provider 后的首批交付：pi-subagent 的 subagents track 与时间线适配。
+- `byissue/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md`：已交付并关闭。Pi 升为一等公民 provider 后的首批交付：pi-subagent 的 subagents track 与时间线适配。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
 - `byissue/talks/001-terminal-native-hard-fork.md`：一次关于"要不要转向 terminal-native 并独立 fork"的完整讨论，结论是撤回。想知道为什么两条路共存、为什么不以 orca 为底、为什么继续同步上游，读它。
@@ -79,4 +79,4 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 - **吸收：** 从 orca 借鉴交互做法，在 BySpace 自己的架构和设计系统里重做。
 - 想理解方向怎么来的 → `byissue/talks/001-terminal-native-hard-fork.md`
 - 想知道现在能做什么 → `byissue/spec/index.md`
-- 想摘开发切片 → `byissue/epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md` 与根 `issues/`
+- 想摘开发切片 → `byissue/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md` 与根 `issues/`
