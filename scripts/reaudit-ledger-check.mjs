@@ -14,7 +14,7 @@ const ROOTS = [
   ["archive/packages/cli/src", "cli"],
   ["packages/relay/src", "relay"],
 ];
-const VERDICTS = ["待审", "MATCH", "FIXED", "N/A", "DROPPED", "已实现未接线"];
+const VERDICTS = ["待审", "MATCH", "FIXED", "N/A", "DROPPED", "已实现未接线", "MISSING"];
 
 const text = fs.readFileSync(LEDGER, "utf8");
 
@@ -44,7 +44,10 @@ for (const line of text.split("\n")) {
   // 只认文件表：第 2 列是行数、第 3 列是结论词。总览表也带反引号和数字，靠结论词排除——
   // 它的第 3 列是另一个数字。
   if (!cells[1].startsWith("`") || !/^\d+$/.test(cells[2])) continue;
-  const verdict = (cells[3] ?? "").replace(/\*/g, "");
+  let verdict = (cells[3] ?? "").replace(/\*/g, "");
+  // 「未实现」不是 VERDICTS 里的词：发现能力缺口时本该写 MISSING，但 spec 禁止最终出现 MISSING。
+  // 两者都属于「有结论且未修」，统一归到 MISSING 名下，好让计数口径唯一。
+  if (verdict.startsWith("未实现")) verdict = "MISSING";
   if (!VERDICTS.some((v) => verdict.startsWith(v))) continue;
   const file = cells[1].replace(/^`|`$/g, "");
   const note = cells[4] ?? "";

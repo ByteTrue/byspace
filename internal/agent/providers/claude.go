@@ -14,6 +14,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/imageout"
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
+	"github.com/ByteTrue/byspace/internal/agent/replaytime"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
@@ -605,6 +606,18 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]sdk.I
 	if _, err := os.Stat(projectsDir); err != nil {
 		return []sdk.ImportableSession{}, nil
 	}
+
+	// A cwd filter can be answered by reading exactly one project directory: the SDK names it after the
+	// path, and ClaudeProjectDir reproduces that encoding. Falling back to the walk when the directory
+	// is absent keeps a filter from hiding sessions whose project dir was named by an older SDK.
+	searchRoots := []string{projectsDir}
+	if strings.TrimSpace(cwdFilter) != "" {
+		if encoded := ClaudeProjectDir(cwdFilter, root); encoded != projectsDir {
+			if _, statErr := os.Stat(encoded); statErr == nil {
+				searchRoots = []string{encoded}
+			}
+		}
+	}
 	if limit <= 0 {
 		limit = 50
 	}
@@ -614,15 +627,17 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]sdk.I
 		mtime time.Time
 	}
 	var files []cand
-	_ = filepath.WalkDir(projectsDir, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
+	for _, searchRoot := range searchRoots {
+		_ = filepath.WalkDir(searchRoot, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
+				return nil
+			}
+			if info, statErr := d.Info(); statErr == nil && info.Size() > 0 {
+				files = append(files, cand{path: p, mtime: info.ModTime()})
+			}
 			return nil
-		}
-		if info, statErr := d.Info(); statErr == nil && info.Size() > 0 {
-			files = append(files, cand{path: p, mtime: info.ModTime()})
-		}
-		return nil
-	})
+		})
+	}
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].mtime.After(files[j].mtime)
 	})
@@ -680,7 +695,10 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 		if c, ok := row["cwd"].(string); ok && c != "" && cwd == "" {
 			cwd = c
 		}
-		ts, _ := row["timestamp"].(string)
+		// The timestamp is not always a string: some transcripts carry an epoch number, and an
+		// unparseable one used to be dropped silently — every message then got the same fallback time
+		// and the imported transcript had no ordering.
+		ts := replaytime.Normalize(row["timestamp"])
 		if ts == "" {
 			ts = fallbackTime.UTC().Format(time.RFC3339Nano)
 		}
