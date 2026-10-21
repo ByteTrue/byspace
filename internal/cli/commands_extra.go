@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	duration "github.com/ByteTrue/byspace/internal/cadence"
 	"github.com/ByteTrue/byspace/internal/server"
 )
 
@@ -26,7 +27,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		fs := flag.NewFlagSet("heartbeat create", flag.ContinueOnError)
 		addr := fs.String("addr", defaultListenAddr(), "daemon address")
 		cronExpr := fs.String("cron", "", "cron expression (e.g. */10 * * * *)")
-		everyMs := fs.Int64("every", 60000, "interval in ms when --cron is not set")
+		every := fs.String("every", "1m", "interval: 90s / 15m / 2h / 1d, or a bare number of minutes")
 		tz := fs.String("timezone", "UTC", "cron timezone")
 		name := fs.String("name", "", "schedule name")
 		maxRuns := fs.Int("max-runs", 0, "optional maximum number of runs")
@@ -49,9 +50,19 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 				"timezone":   *tz,
 			}
 		} else {
+			// `--every` takes a human duration. Converting through the shared cadence parser means
+			// a value five-field cron cannot express is refused here rather than becoming a
+			// schedule that fires at the wrong times.
+			interval, intervalErr := duration.ParseDuration(*every)
+			if intervalErr != nil {
+				return intervalErr
+			}
+			if _, cronErr := duration.EveryMsToFiveFieldCron(interval.Milliseconds()); cronErr != nil {
+				return fmt.Errorf("%s: %w; use --cron for calendar schedules", *every, cronErr)
+			}
 			cadence = map[string]any{
 				"type":    "every",
-				"everyMs": *everyMs,
+				"everyMs": interval.Milliseconds(),
 			}
 		}
 
@@ -190,7 +201,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		fs := flag.NewFlagSet("schedule update", flag.ContinueOnError)
 		addr := fs.String("addr", defaultListenAddr(), "daemon address")
 		cronExpr := fs.String("cron", "", "cron expression")
-		everyMs := fs.Int64("every", 0, "interval in ms when --cron is not set")
+		every := fs.String("every", "", "interval: 90s / 15m / 2h / 1d, or a bare number of minutes")
 		name := fs.String("name", "", "schedule name")
 		maxRuns := fs.Int("max-runs", 0, "maximum number of runs (0 = unlimited)")
 		asJSON := fs.Bool("json", false, "output JSON")
@@ -207,8 +218,17 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		}
 		if *cronExpr != "" {
 			payload["cadence"] = map[string]any{"type": "cron", "expression": *cronExpr}
-		} else if *everyMs > 0 {
-			payload["cadence"] = map[string]any{"type": "every", "everyMs": *everyMs}
+		} else if strings.TrimSpace(*every) != "" {
+			// The same conversion `heartbeat create` uses, so the two commands disagree about
+			// nothing.
+			interval, intervalErr := duration.ParseDuration(*every)
+			if intervalErr != nil {
+				return intervalErr
+			}
+			if _, cronErr := duration.EveryMsToFiveFieldCron(interval.Milliseconds()); cronErr != nil {
+				return fmt.Errorf("%s: %w; use --cron for calendar schedules", *every, cronErr)
+			}
+			payload["cadence"] = map[string]any{"type": "every", "everyMs": interval.Milliseconds()}
 		}
 		if *name != "" {
 			payload["name"] = *name
