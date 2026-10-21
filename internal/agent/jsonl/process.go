@@ -375,13 +375,33 @@ func (p *Process) Close() error {
 	p.closed = true
 	p.mu.Unlock()
 
+	// Three-stage close, following tree-kill.ts.
+	//
+	// Closing stdin is the graceful signal for these CLIs: they finish the current write and
+	// exit. If that does not happen the process gets SIGTERM, which still lets it flush; only
+	// after that is it worth risking SIGKILL. A truncated provider session file is not
+	// recoverable — the transcript is the user's history.
 	_ = p.stdin.Close()
 	select {
 	case <-p.done:
 		return nil
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(gracefulCloseTimeout):
+	}
+
+	terminateProcessTree(p.cmd)
+	select {
+	case <-p.done:
+		return nil
+	case <-time.After(forceCloseTimeout):
 		killProcessTree(p.cmd)
 		<-p.done
 		return nil
 	}
 }
+
+// Close timeouts: long enough for a provider to finish writing, short enough that a stuck
+// process does not hold the daemon.
+const (
+	gracefulCloseTimeout = 2 * time.Second
+	forceCloseTimeout    = 2 * time.Second
+)
