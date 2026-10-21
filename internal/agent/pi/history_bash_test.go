@@ -66,3 +66,52 @@ func TestHistoryImportSkipsCustomMessages(t *testing.T) {
 		}
 	}
 }
+
+// A repository that pins its own session directory did so on purpose; without reading the setting the
+// daemon lists the default directory and shows no sessions to the user who moved them.
+func TestResolveSessionsDirHonoursSettings(t *testing.T) {
+	home := t.TempDir()
+	agentDir := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configured := filepath.Join(home, "moved-sessions")
+	if err := os.WriteFile(filepath.Join(agentDir, "settings.json"),
+		[]byte(`{"sessionDir":"`+configured+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PI_CODING_AGENT_DIR", agentDir)
+	t.Setenv("PI_CODING_AGENT_SESSION_DIR", "")
+
+	if got := ResolveSessionsDir(""); got != configured {
+		t.Fatalf("sessions dir = %q, want the configured one %q", got, configured)
+	}
+
+	// An explicit argument still wins over everything.
+	if got := ResolveSessionsDir("/explicit"); got != "/explicit" {
+		t.Fatalf("explicit = %q", got)
+	}
+}
+
+// A malformed settings file falls back to the default rather than failing.
+func TestReadConfiguredSessionDirToleratesJunk(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"broken.json": "{not json",
+		"array.json":  `[]`,
+		"no-key.json": `{"other":1}`,
+		"empty.json":  `{"sessionDir":"   "}`,
+		"nonstr.json": `{"sessionDir":42}`,
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := readConfiguredSessionDir(path); got != "" {
+			t.Fatalf("%s = %q, want empty", name, got)
+		}
+	}
+	if got := readConfiguredSessionDir(filepath.Join(dir, "missing.json")); got != "" {
+		t.Fatalf("missing = %q", got)
+	}
+}

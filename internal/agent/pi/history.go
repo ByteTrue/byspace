@@ -42,14 +42,52 @@ func ResolveSessionsDir(explicit string) string {
 	if v := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_SESSION_DIR")); v != "" {
 		return v
 	}
-	if v := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR")); v != "" {
-		return filepath.Join(v, "sessions")
+
+	agentDir := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR"))
+	if agentDir == "" {
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			agentDir = filepath.Join(homeDir, ".pi", "agent")
+		}
 	}
-	homeDir, err := os.UserHomeDir()
+
+	// A configured sessionDir wins over the default location. The project-local `.pi/settings.json`
+	// is checked first and outranks the global one: a repository that pins its own session directory
+	// did so on purpose. Without this the daemon listed the default directory and showed no sessions
+	// to a user who had moved them.
+	if agentDir != "" {
+		if configured := readConfiguredSessionDir(filepath.Join(agentDir, "settings.json")); configured != "" {
+			return configured
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if configured := readConfiguredSessionDir(filepath.Join(cwd, ".pi", "settings.json")); configured != "" {
+			return configured
+		}
+	}
+
+	if agentDir != "" {
+		return filepath.Join(agentDir, "sessions")
+	}
+	return ""
+}
+
+// readConfiguredSessionDir reads `sessionDir` out of a pi settings file.
+//
+// Returns "" for a missing file, a malformed one, or a value that is not a non-empty string: the
+// daemon must fall back to the default rather than fail to start because a settings file is odd.
+func readConfiguredSessionDir(settingsPath string) string {
+	raw, err := os.ReadFile(settingsPath)
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(homeDir, ".pi", "agent", "sessions")
+	var parsed map[string]any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return ""
+	}
+	if value, ok := parsed["sessionDir"].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 // ListImportableSessions scans the Pi sessions directory for .jsonl session files.
