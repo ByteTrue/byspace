@@ -944,6 +944,18 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 端到端验证两个方向：没有改动时返回 `message_required`（不再挂起）；有一处新增函数时自动提交，`git log -1 --format=%s` 得到 `Add subtract function to math helpers`。
 
+### server/session/workspace-provisioning/workspace-provisioning-service.ts | 465 行 | **PARTIAL → 已补取消归档**
+
+`ensureWorkspaceRecordUnarchived` 的语义是：**打开一个已归档的工作区就是把它恢复**。Go 的 `EnsureWorkspaceForCwd` 只匹配 `ArchivedAt == nil` 的工作区，于是打开归档工作区时落到「创建一个新的」那条路——归档条目原地留着，同一个目录多出**第二个**工作区。用户在侧边栏每重开一次就多一行重复。
+
+现在会找到该路径下已归档的工作区并恢复它。如果**所属项目**也归档了，项目一并恢复：侧边栏不渲染归档项目，只恢复项目里的工作区会让它不可见。
+
+项目已丢失的孤儿工作区记录仍然走新建路径——没有东西可以恢复。
+
+端到端验证两个方向：单个工作区归档后重开，`WorkspaceID` 不变且 `ArchivedAt == nil`，该路径下仍只有 1 个工作区；项目与工作区都归档后重开，两者都恢复。
+
+`WorkspaceProvisioningError` 的 `unknown_project` / `archived_project` 两个错误码在 Go 侧没有对应物——本项目不做「报错让调用方处理」，而是直接恢复。这是有意的行为差异，不是遗漏。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
