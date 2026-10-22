@@ -189,6 +189,13 @@ func (s *Server) handleProjectRename(ctx context.Context, sink frameSink, raw js
 			p.CustomName = next
 			p.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			_ = s.store.UpsertProject(p)
+			// The response only answers the caller. Without the broadcast the sidebar keeps the old name until a
+			// full refetch, so renaming a project looked like it did nothing.
+			renamed := buildProjectDescriptor(p)
+			s.broadcastSessionMsg("project.update", map[string]any{
+				"kind":    "upsert",
+				"project": renamed,
+			})
 			_ = sendSessionMsg(ctx, sink, "project.rename.response", map[string]any{
 				"requestId":  req.RequestID,
 				"projectId":  req.ProjectID,
@@ -276,6 +283,19 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			})
 		} else {
 			_ = s.store.SaveProjectIcon(req.ProjectID, nil)
+		}
+		// The icon shows in the sidebar and the project header; without the broadcast it changes only after a
+		// reload, which reads as the upload having failed.
+		if projects, listErr := s.store.ListProjects(); listErr == nil {
+			for _, project := range projects {
+				if project.ProjectID == req.ProjectID {
+					s.broadcastSessionMsg("project.update", map[string]any{
+						"kind":    "upsert",
+						"project": buildProjectDescriptor(project),
+					})
+					break
+				}
+			}
 		}
 		_ = sendSessionMsg(ctx, sink, "project.icon.set.response", map[string]any{
 			"requestId": req.RequestID,

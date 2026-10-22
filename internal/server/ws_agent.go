@@ -385,6 +385,8 @@ func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json
 	}
 	s.mu.Unlock()
 
+	// The response answers the caller; other clients keep the old title until a refetch without this.
+	s.broadcastAgentUpdate(*rec)
 	_ = sendSessionMsg(ctx, sink, "update_agent_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
