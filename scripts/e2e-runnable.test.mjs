@@ -67,3 +67,23 @@ test("real specs and external CLIs are named separately", () => {
 test("a pi-only spec is runnable", () => {
   assert.equal(classifyForTest("x.spec.ts", `provider: "pi"`), "RUNNABLE");
 });
+
+test("load-test mode names the mock provider without naming it", () => {
+  // directory-bootstrap.spec.ts imports a scenario helper that sets modeId: "load-test"; the provider literal is another
+  // hop away, so the mode id is the evidence.
+  const helper = [
+    { name: "scenario.ts", path: "/dev/null", text: `provider: "mock", modeId: "load-test"` },
+  ];
+  assert.equal(classifyForTest("x.spec.ts", "", helper), "MOCK_PROVIDER");
+});
+
+test("a test id naming the provider is evidence too", () => {
+  // import-session-manual.spec.ts clicks `import-session-manual-provider-mock`; no provider literal appears anywhere.
+  assert.equal(
+    classifyForTest(
+      "x.spec.ts",
+      `await page.getByTestId("import-session-manual-provider-mock").click();`,
+    ),
+    "MOCK_PROVIDER",
+  );
+});

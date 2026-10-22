@@ -119,6 +119,16 @@ function classify(file, source, imports = []) {
   if (/provider:\s*["']mock["']/.test(source)) {
     return "MOCK_PROVIDER";
   }
+  // `modeId: "load-test"` only exists on the mock provider, so code naming it depends on mock even when the file that
+  // declares the provider is one hop further away than `directImports` reaches.
+  if (/modeId:\s*["']load-test["']/.test(`${source}\n${helperCode}`)) {
+    return "MOCK_PROVIDER";
+  }
+  // A test id that names the provider: `import-session-manual-provider-mock`. No provider literal appears anywhere, so
+  // this is the only evidence the test needs the mock provider at all.
+  if (/-provider-mock\b/.test(source)) {
+    return "MOCK_PROVIDER";
+  }
   const modelHit = MOCK_MODELS.find((model) => source.includes(model));
   if (modelHit) {
     return `MOCK_PROVIDER(${modelHit})`;
