@@ -965,7 +965,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		var req struct {
 			RequestID string `json:"requestId"`
 			AgentID   string `json:"agentId"`
-			Mode      string `json:"mode"` // "conversation" | "code" | "both"
+			Mode      string `json:"mode"` // "conversation" | "files" | "both"
 			MessageID string `json:"messageId"`
 			Seq       int    `json:"seq"`
 		}
@@ -974,10 +974,13 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		if mp, err := s.ensureAgentLoaded(req.AgentID); err != nil {
 			rewindErr = err
 		} else {
-			// Code rewind restores the working tree; conversation rewind moves the provider's
+			// Files rewind restores the working tree; conversation rewind moves the provider's
 			// own conversation branch. Truncating only the in-memory timeline (the previous
 			// behaviour) changes nothing in the provider and is lost on the next hydration.
-			if req.Mode == "code" || req.Mode == "both" {
+			// The wire mode is "files", matching AgentRewindModeSchema; checking a "code" value
+			// the protocol never sends made a files-only rewind a silent no-op that still
+			// reported ok.
+			if req.Mode == "files" || req.Mode == "both" {
 				if err := workspace.DiscardChanges(ctx, mp.record.Cwd); err != nil {
 					rewindErr = err
 				}
