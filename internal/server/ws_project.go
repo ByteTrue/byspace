@@ -745,6 +745,20 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 		if req.Assigned && req.Label.Name != "" {
 			s.pushLabelUpdate(req.Label.Name, req.Label, "upsert")
 		}
+		// The workspace now carries a different label set. Emitting the workspace is what makes the picker's
+		// checkbox and the sidebar's label chips change: the response only answers this caller, and the picker
+		// re-derives its checked state from the workspace record.
+		if workspaces, listErr := s.store.ListWorkspaces(); listErr == nil {
+			for _, workspace := range workspaces {
+				if workspace.WorkspaceID != req.WorkspaceID {
+					continue
+				}
+				if prj, ok := s.projectForWorkspace(workspace.ProjectID); ok {
+					s.broadcastWorkspaceUpsert(workspace, prj)
+				}
+				break
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.label.assignment.set.response", map[string]any{
 			"requestId":       req.RequestID,
 			"label":           req.Label,
