@@ -168,20 +168,19 @@ func MockModels() []sdk.CatalogModel {
 	return out
 }
 
-// ResolveMockModel finds a model by id or alias, falling back to the default.
+// ResolveMockModel finds a model by id, falling back to the default.
 //
-// The fallback is the contract: an unknown id must still produce a working stream, because several specs
-// create agents without naming a model.
+// Matched by id only, like node: `legacy-five-minute-stream` is both its own model and an alias of the default, and
+// resolving the alias first would hand that spec the wrong entry (an offered model instead of the retired one it
+// deliberately selects). Aliases are metadata for the client's picker, not an input to resolution.
+//
+// The fallback is the contract: an unknown id must still produce a working stream, because several specs create agents
+// without naming a model.
 func ResolveMockModel(modelID string) MockModel {
 	requested := modelID
 	for _, model := range MockModelList() {
 		if model.ID == requested {
 			return model
-		}
-		for _, alias := range model.Aliases {
-			if alias == requested {
-				return model
-			}
 		}
 	}
 	return MockModelList()[0]

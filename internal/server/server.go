@@ -2913,6 +2913,53 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				})
 			}
 
+		case "byspace_turn_failed":
+			// A provider-reported failure ends the turn the same way a completion does, minus the success:
+			// the client needs the status to leave running or the row spins forever.
+			mp.stopUsagePolling()
+			s.mu.Lock()
+			mp.record.LastStatus = "idle"
+			if message, ok := ev["error"].(string); ok && message != "" {
+				mp.record.LastError = &message
+			}
+			mp.record.UpdatedAt = nowStr
+			recFailedCopy := mp.record
+			s.mu.Unlock()
+			s.broadcastSessionMsg("agent_stream", map[string]any{
+				"agentId":   rec.ID,
+				"provider":  rec.Provider,
+				"timestamp": nowStr,
+				"event": map[string]any{
+					"type":   "turn_failed",
+					"error":  mp.record.LastError,
+					"turnId": ev["turnId"],
+				},
+			})
+			s.broadcastAgentUpdate(recFailedCopy)
+
+		case "permission_requested":
+			// A provider reporting a permission request in its own vocabulary (the scripted provider does this;
+			// pi reports through extension_ui_request). Both messages are needed for the same reason: the
+			// timeline renders an inline card from agent_stream, and the modal listens for the dedicated
+			// agent_permission_request. Handling only pi's shape left every other provider's modal empty.
+			request, _ := ev["request"].(map[string]any)
+			if request != nil {
+				s.broadcastSessionMsg("agent_stream", map[string]any{
+					"agentId":   rec.ID,
+					"provider":  rec.Provider,
+					"timestamp": nowStr,
+					"event": map[string]any{
+						"type":     "permission_requested",
+						"provider": rec.Provider,
+						"request":  request,
+					},
+				})
+				s.broadcastSessionMsg("agent_permission_request", map[string]any{
+					"agentId": rec.ID,
+					"request": request,
+				})
+			}
+
 		case "byspace_turn_completed":
 			turnID, _ := ev["turnId"].(string)
 			// Drop a completion from an older turn. Pi emits one completion per turn, but a

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -499,6 +500,25 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	s.nextClientMessageID = ""
 	s.mu.Unlock()
 
+	// A prompt that asks for a failed turn fails before anything else is emitted: the client's whole
+	// failure path (error banner, retry affordance, idle recovery) depends on there being no assistant text.
+	if directives := ParseMockDirectives(message); directives.TurnFailure {
+		s.mu.Lock()
+		s.activeTurnID = ""
+		s.activeTurnAssistantMsg = ""
+		s.status = "idle"
+		s.lastError = "Requested mock turn failure"
+		s.cancel = nil
+		s.mu.Unlock()
+		s.emit(map[string]any{
+			"type":   "byspace_turn_failed",
+			"turnId": turnID,
+			"error":  "Requested mock turn failure",
+		})
+		close(finished)
+		return errors.New("Requested mock turn failure")
+	}
+
 	// The prompt is recorded as a user message with the client's own id, so the optimistic bubble the
 	// composer already rendered is merged rather than duplicated.
 	userItem := sdk.TimelineItem{
@@ -552,6 +572,35 @@ func (s *MockSession) runScriptedTurn(
 		if !mockSleep(ctx, interval) {
 			return
 		}
+	}
+
+	directives := ParseMockDirectives(message)
+	if directives.PlanApproval {
+		s.emitPlanApprovalRequest(turnID)
+		s.completeTurn(turnID, assistantMsgID, "")
+		return
+	}
+	if directives.Questions {
+		s.emitQuestionsRequest(turnID)
+		s.completeTurn(turnID, assistantMsgID, "")
+		return
+	}
+	if directives.StreamUpdates > 0 {
+		// Emitting a fixed count lets the client's coalescer be measured: the spec asserts how many frames
+		// survive the window rather than inferring it from timing.
+		for index := 0; index < directives.StreamUpdates; index++ {
+			if !mockSleep(ctx, interval) {
+				return
+			}
+			s.emitTextDelta("chunk "+strconv.Itoa(index+1)+" ", assistantMsgID)
+		}
+		s.completeTurn(turnID, assistantMsgID, "streamed "+strconv.Itoa(directives.StreamUpdates)+" updates")
+		return
+	}
+	if directives.ImageMarkdown != "" {
+		s.emitTextDelta(directives.ImageMarkdown, assistantMsgID)
+		s.completeTurn(turnID, assistantMsgID, directives.ImageMarkdown)
+		return
 	}
 
 	// A prompt naming the slash command is answered by the provider itself.
@@ -663,4 +712,86 @@ func firstLine(text string) string {
 		}
 	}
 	return ""
+}
+
+// emitPlanApprovalRequest asks the client to review a plan.
+//
+// The plan body is deliberately awkward — `(c)`, a quoted flag, `---` — because three markdown typographer rules
+// fire on it. A spec asserts all three render verbatim, which is the only guard against the plan card losing its
+// parser configuration.
+func (s *MockSession) emitPlanApprovalRequest(turnID string) {
+	requestID := "mock-plan-" + turnID
+	request := map[string]any{
+		"id":          requestID,
+		"provider":    MockProviderID,
+		"name":        "MockPlanApproval",
+		"kind":        "plan",
+		"title":       "Plan",
+		"description": "Review the proposed plan before implementation starts.",
+		"input": map[string]any{
+			"plan": "1. Add the (c) README note.\n2. Run --name=\"my repo\".\n3. Verify ---buzz in the diff.",
+		},
+		"actions": []map[string]any{
+			{"id": "implement", "label": "Implement", "behavior": "allow", "variant": "primary", "intent": "implement"},
+			{"id": "dismiss", "label": "Dismiss", "behavior": "deny", "variant": "secondary", "intent": "dismiss"},
+		},
+		"metadata": map[string]any{"source": "mock_plan_approval"},
+	}
+	s.mu.Lock()
+	s.pendingPermissions = append(s.pendingPermissions, request)
+	s.mu.Unlock()
+	s.emit(map[string]any{
+		"type":     "permission_requested",
+		"provider": MockProviderID,
+		"request":  request,
+		"turnId":   turnID,
+	})
+}
+
+// emitQuestionsRequest asks the user a structured question.
+//
+// Two questions with options: the client renders them as a picker, and the spec drives it by option label.
+func (s *MockSession) emitQuestionsRequest(turnID string) {
+	requestID := "mock-questions-" + turnID
+	request := map[string]any{
+		"id":          requestID,
+		"provider":    MockProviderID,
+		"name":        "MockQuestions",
+		"kind":        "question",
+		"title":       "Questions",
+		"description": "The agent needs two answers before continuing.",
+		"input": map[string]any{
+			"questions": []map[string]any{
+				{
+					"question": "Which environment?",
+					"header":   "Environment",
+					"options": []map[string]any{
+						{"label": "Staging", "description": "Use the staging deployment"},
+						{"label": "Production", "description": "Use production"},
+					},
+					"multiSelect": false,
+				},
+				{
+					"question": "Which checks should run?",
+					"header":   "Checks",
+					"options": []map[string]any{
+						{"label": "Unit", "description": "Unit tests only"},
+						{"label": "E2E", "description": "End-to-end only"},
+					},
+					"multiSelect": true,
+				},
+			},
+		},
+		"actions":  []map[string]any{{"id": "submit", "label": "Submit", "behavior": "allow", "variant": "primary"}},
+		"metadata": map[string]any{"source": "mock_questions"},
+	}
+	s.mu.Lock()
+	s.pendingPermissions = append(s.pendingPermissions, request)
+	s.mu.Unlock()
+	s.emit(map[string]any{
+		"type":     "permission_requested",
+		"provider": MockProviderID,
+		"request":  request,
+		"turnId":   turnID,
+	})
 }
