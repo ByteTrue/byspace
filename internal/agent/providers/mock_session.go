@@ -1340,3 +1340,67 @@ func structuredBranchName(message string) string {
 	}
 	return string(encoded)
 }
+
+// RewindConversation truncates the scripted history back to its first echoed prompt.
+//
+// Node's mock does exactly this (keepFirstUserMessageHistory): a conversation rewind drops every
+// entry except the first user_message, which is what the ui-contract spec asserts — one user row
+// left, the assistant content gone. A configured mockRewindError fails first, exercising the
+// client's error path without touching the timeline.
+func (s *MockSession) RewindConversation(_ context.Context, messageID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rewindError != "" {
+		return errors.New(s.rewindError)
+	}
+	if err := s.validateRewindTargetLocked(messageID); err != nil {
+		return err
+	}
+	// A rewind interrupts whatever turn is running; clear it so the client leaves the running state.
+	if s.activeTurnID != "" {
+		s.activeTurnID = ""
+		s.activeTurnAssistantMsg = ""
+		s.turnStartedAt = ""
+		s.status = "idle"
+		s.turnStarted = false
+		if s.cancel != nil {
+			s.cancel()
+			s.cancel = nil
+		}
+	}
+	kept := make([]sdk.TimelineEntry, 0, 1)
+	for _, entry := range s.timeline {
+		if entry.Item.Type == "user_message" {
+			kept = append(kept, entry)
+			break
+		}
+	}
+	s.timeline = kept
+	return nil
+}
+
+// validateRewindTargetLocked rejects a rewind to a message this session never echoed. The client
+// sends the provider message id; an older client that sends a cursor reaches the daemon as the
+// message text, so both are accepted.
+func (s *MockSession) validateRewindTargetLocked(messageID string) error {
+	target := strings.TrimSpace(messageID)
+	if target == "" {
+		return errors.New("mock rewind needs a message id")
+	}
+	for _, entry := range s.timeline {
+		if entry.Item.Type != "user_message" {
+			continue
+		}
+		if entry.Item.MessageID == target || entry.Item.Text == target {
+			return nil
+		}
+	}
+	return fmt.Errorf("Mock rewind target %s was not found in session history", target)
+}
+
+// TreeEntryForMessage is pi's text→tree-entry mapping. The mock keys its timeline by the message id
+// the client already holds, so there is nothing to resolve: reporting not-found makes the daemon use
+// the target verbatim.
+func (s *MockSession) TreeEntryForMessage(string) (string, bool) {
+	return "", false
+}

@@ -31,6 +31,10 @@ func RewindCapabilitiesFor(provider string) RewindCapabilities {
 		// The transcript is forked at the file level. Files are not restored: the SDK's `rewindFiles` reads checkpoints
 		// that only its own query object can reach.
 		return RewindCapabilities{Conversation: true}
+	case "mock":
+		// The scripted provider runs in-process, so both halves are real: conversation rewind truncates
+		// its own timeline, and files rewind is the daemon's git discard against the agent's cwd.
+		return RewindCapabilities{Conversation: true, Files: true}
 	default:
 		// Everything else: no rewind. Claiming it is worse than not offering it.
 		return RewindCapabilities{}
