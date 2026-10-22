@@ -2495,24 +2495,31 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 	if req.Cursor != nil {
 		cursorSeq = req.Cursor.Seq
 	}
-	page := selectTimelinePage(allTL, direction, cursorSeq, limit, winMin, winMax)
+	page := selectTimelinePage(projectTimelineRows(allTL, projection), direction, cursorSeq, limit, winMin, winMax)
 
 	entries := make([]map[string]any, 0, len(page.entries))
 	for _, e := range page.entries {
-		startSeq := timelineSeqStartOf(e)
-		endSeq := timelineSeqEndOf(e)
-		entries = append(entries, map[string]any{
-			"provider":  mp.record.Provider,
-			"item":      e.Item,
-			"timestamp": e.Timestamp,
-			"seqStart":  startSeq,
-			"seqEnd":    endSeq,
-			"sourceSeqRanges": []map[string]any{
-				{"startSeq": startSeq, "endSeq": endSeq},
-			},
-			"turnId":    e.TurnID,
-			"collapsed": []string{},
-		})
+		collapsed := e.Collapsed
+		if collapsed == nil {
+			collapsed = []string{}
+		}
+		ranges := make([]map[string]any, 0, len(e.SourceSeqRanges))
+		for _, r := range e.SourceSeqRanges {
+			ranges = append(ranges, map[string]any{"startSeq": r.StartSeq, "endSeq": r.EndSeq})
+		}
+		entry := map[string]any{
+			"provider":        mp.record.Provider,
+			"item":            e.Item,
+			"timestamp":       e.Timestamp,
+			"seqStart":        e.SeqStart,
+			"seqEnd":          e.SeqEnd,
+			"sourceSeqRanges": ranges,
+			"collapsed":       collapsed,
+		}
+		if e.TurnID != "" {
+			entry["turnId"] = e.TurnID
+		}
+		entries = append(entries, entry)
 	}
 
 	// The cursors describe the page that was returned, not the whole timeline: the client records
@@ -2520,8 +2527,8 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 	// believe it has history it does not.
 	var startCursor, endCursor any
 	if len(page.entries) > 0 {
-		startCursor = map[string]any{"epoch": s.epoch, "seq": timelineSeqStartOf(page.entries[0])}
-		endCursor = map[string]any{"epoch": s.epoch, "seq": timelineSeqEndOf(page.entries[len(page.entries)-1])}
+		startCursor = map[string]any{"epoch": s.epoch, "seq": page.entries[0].SeqStart}
+		endCursor = map[string]any{"epoch": s.epoch, "seq": page.entries[len(page.entries)-1].SeqEnd}
 	}
 	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
 		"requestId":   req.RequestID,
@@ -2569,29 +2576,28 @@ func timelineSeqEndOf(e pi.TimelineEntry) int {
 
 // timelinePage is one fetch's selection plus the coverage flags the client pages on.
 type timelinePage struct {
-	entries  []pi.TimelineEntry
+	entries  []projectedEntry
 	hasOlder bool
 	hasNewer bool
 }
 
-// selectTimelinePage picks the entries for one fetch direction and reports what remains beyond the
-// page. It walks seq ranges rather than entry indices, so a page never cuts through a streamed
-// message that spans several seqs, and hasOlder/hasNewer are measured against the whole timeline's
-// bounds (winMin/winMax) — the same bounds the response's window carries.
+// selectTimelinePage picks the projected rows for one fetch direction and reports what remains
+// beyond the page. It pages projected rows, not raw deltas: the limit the client sends counts
+// messages and tool cards, and a raw page of 40 would be 40 fragments of a single assistant
+// message. A limit of 0 means "no limit".
 //
-// `tail` and `before` keep the newest `limit` entries; `after` keeps the oldest, so a client that
-// reconnects and pages forward walks history in order instead of jumping to the end. A limit of 0
-// means "no limit".
-func selectTimelinePage(all []pi.TimelineEntry, direction string, cursorSeq, limit, winMin, winMax int) timelinePage {
+// `tail` and `before` keep the newest `limit` rows; `after` keeps the oldest, so a client that
+// reconnects and pages forward walks history in order instead of jumping to the end.
+func selectTimelinePage(all []projectedEntry, direction string, cursorSeq, limit, winMin, winMax int) timelinePage {
 	if len(all) == 0 {
 		// No bounds to page against: nothing older, nothing newer, in every direction.
 		return timelinePage{}
 	}
 	switch direction {
 	case "after":
-		selected := make([]pi.TimelineEntry, 0, len(all))
+		selected := make([]projectedEntry, 0, len(all))
 		for _, e := range all {
-			if timelineSeqEndOf(e) > cursorSeq {
+			if e.SeqEnd > cursorSeq {
 				selected = append(selected, e)
 			}
 		}
@@ -2602,7 +2608,7 @@ func selectTimelinePage(all []pi.TimelineEntry, direction string, cursorSeq, lim
 		if winMin > startSeq {
 			startSeq = winMin
 		}
-		hasNewer := len(selected) > 0 && timelineSeqEndOf(selected[len(selected)-1]) < winMax
+		hasNewer := len(selected) > 0 && selected[len(selected)-1].SeqEnd < winMax
 		return timelinePage{entries: selected, hasOlder: startSeq > winMin, hasNewer: hasNewer}
 	case "before":
 		endSeq := cursorSeq - 1
@@ -2610,12 +2616,12 @@ func selectTimelinePage(all []pi.TimelineEntry, direction string, cursorSeq, lim
 			endSeq = winMax
 		}
 		hasNewer := endSeq < winMax
-		if len(all) == 0 || endSeq < winMin {
+		if endSeq < winMin {
 			return timelinePage{entries: nil, hasNewer: hasNewer}
 		}
-		eligible := make([]pi.TimelineEntry, 0, len(all))
+		eligible := make([]projectedEntry, 0, len(all))
 		for _, e := range all {
-			if timelineSeqStartOf(e) <= endSeq {
+			if e.SeqStart <= endSeq {
 				eligible = append(eligible, e)
 			}
 		}
@@ -2629,7 +2635,7 @@ func selectTimelinePage(all []pi.TimelineEntry, direction string, cursorSeq, lim
 		if limit > 0 && len(all) > limit {
 			selected = all[len(all)-limit:]
 		}
-		hasOlder := len(selected) > 0 && timelineSeqStartOf(selected[0]) > winMin
+		hasOlder := len(selected) > 0 && selected[0].SeqStart > winMin
 		return timelinePage{entries: selected, hasOlder: hasOlder, hasNewer: false}
 	}
 }
