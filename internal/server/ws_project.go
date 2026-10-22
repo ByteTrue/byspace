@@ -817,15 +817,15 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 	if msgType == "read_project_config_request" {
 		b, err := os.ReadFile(cfgPath)
 		if err != nil {
-			_ = sendSessionMsg(ctx, sink, "read_project_config_response", map[string]any{
+			missing := map[string]any{
 				"requestId": req.RequestID,
 				"repoRoot":  req.RepoRoot,
 				"ok":        true,
 				"config":    nil,
 				"revision":  nil,
-				// Optional, not nullable: sending null fails the schema, so it is set only when true.
-				"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
-			})
+			}
+			addUncommittedSetupFlag(missing, ctx, req.RepoRoot)
+			_ = sendSessionMsg(ctx, sink, "read_project_config_response", missing)
 			return
 		}
 		var parsed map[string]any
@@ -835,7 +835,7 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 		if info != nil {
 			mtimeMs = info.ModTime().UnixMilli()
 		}
-		_ = sendSessionMsg(ctx, sink, "read_project_config_response", map[string]any{
+		present := map[string]any{
 			"requestId": req.RequestID,
 			"repoRoot":  req.RepoRoot,
 			"ok":        true,
@@ -844,8 +844,9 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 				"mtimeMs": mtimeMs,
 				"size":    len(b),
 			},
-			"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
-		})
+		}
+		addUncommittedSetupFlag(present, ctx, req.RepoRoot)
+		_ = sendSessionMsg(ctx, sink, "read_project_config_response", present)
 		return
 	}
 
@@ -917,7 +918,7 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 		mtimeMs = time.Now().UnixMilli()
 		size = len(b) + 1
 	}
-	_ = sendSessionMsg(ctx, sink, "write_project_config_response", map[string]any{
+	written := map[string]any{
 		"requestId": req.RequestID,
 		"repoRoot":  req.RepoRoot,
 		"ok":        true,
@@ -926,10 +927,10 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 			"mtimeMs": mtimeMs,
 			"size":    size,
 		},
-		// Reported after the write, so the warning clears the moment the user commits rather than needing a
-		// reload.
-		"hasUncommittedWorktreeSetupChanges": setupChangesFlag(ctx, req.RepoRoot),
-	})
+	}
+	// Reported after the write, so the warning clears the moment the user commits rather than needing a reload.
+	addUncommittedSetupFlag(written, ctx, req.RepoRoot)
+	_ = sendSessionMsg(ctx, sink, "write_project_config_response", written)
 }
 
 func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
@@ -1617,16 +1618,17 @@ func resolveClientMessageID(raw, fallback string) string {
 	return fallback
 }
 
-// setupChangesFlag reports whether the project's worktree setup differs from what is committed.
+// addUncommittedSetupFlag sets `hasUncommittedWorktreeSetupChanges` only when it is true.
 //
-// Returns nil rather than false when there is nothing to say, because the field is optional and sending `false`
-// asserts "the setup is committed" — which the daemon has not checked when the config file is absent.
-func setupChangesFlag(ctx context.Context, repoRoot string) any {
+// The field is optional but NOT nullable, so writing `nil` into the payload makes the whole response fail validation —
+// the client then discards it and the project config panel shows nothing at all. A key that is absent means "not
+// checked", which is the honest answer when there is no config file to compare against; `false` would assert the setup
+// is committed, which the daemon has not established.
+func addUncommittedSetupFlag(payload map[string]any, ctx context.Context, repoRoot string) {
 	if strings.TrimSpace(repoRoot) == "" {
-		return nil
+		return
 	}
-	if !workspace.HasUncommittedSetupChanges(ctx, repoRoot) {
-		return nil
+	if workspace.HasUncommittedSetupChanges(ctx, repoRoot) {
+		payload["hasUncommittedWorktreeSetupChanges"] = true
 	}
-	return true
 }

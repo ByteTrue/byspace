@@ -5874,9 +5874,13 @@ export class DaemonClient {
           ? parsedJson.type
           : "unknown";
       const msgType = responseIdentity?.responseType ?? envelopeType;
+      // The identity goes into the message text, not only into the structured argument. Console sinks (bsk capture,
+      // devtools' log panel, a bug report's pasted console) render an object argument as "Object", which is why a report
+      // of this warning named nothing: "Message validation failed Object". The structured fields stay for loggers that
+      // do serialize them.
       this.logger.warn(
         { msgType, envelopeType, error: parsed.error.message },
-        "Message validation failed",
+        `Message validation failed: ${msgType} (envelope ${envelopeType})`,
       );
       if (responseIdentity) {
         this.rejectWaitersForRequestId(
