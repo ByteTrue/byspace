@@ -17,12 +17,13 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 
 ## 四个检查，各挡一类
 
-| 命令                      | 查什么                 | 失败意味着                                 |
-| ------------------------- | ---------------------- | ------------------------------------------ |
-| `npm run test:go`         | 单测                   | 代码本身有问题                             |
-| `npm run audit:go-parity` | 入站字段 Go 有没有接住 | 点了没反应                                 |
-| `npm run audit:emit`      | 出站字段 Go 有没有发全 | 界面上那块数据永远空着或显示旧值           |
-| `npm run audit:browser`   | 真实 Chrome 里能不能用 | 页面报错、菜单缺项、状态不对、操作序列后果 |
+| 命令                            | 查什么                        | 失败意味着                                 |
+| ------------------------------- | ----------------------------- | ------------------------------------------ |
+| `npm run test:go`               | 单测                          | 代码本身有问题                             |
+| `npm run audit:go-parity`       | 入站字段 Go 有没有接住        | 点了没反应                                 |
+| `npm run audit:emit`            | 出站字段 Go 有没有发全        | 界面上那块数据永远空着或显示旧值           |
+| `node scripts/e2e-runnable.mjs` | 哪些 spec 能对 Go daemon 说话 | 拿错清单会造出成片假失败                   |
+| `npm run audit:browser`         | 真实 Chrome 里能不能用        | 页面报错、菜单缺项、状态不对、操作序列后果 |
 
 `audit:browser` 需要 daemon 在跑（`./bin/byspace daemon restart --addr 127.0.0.1:6778 --home .dev/byspace-home`）。
 
@@ -96,3 +97,12 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 试过在静态检查里加「协议必填 + Go 带 omitempty」这一条，首跑 145 条命中，绝大多数是不同结构体里同名的
 `error`/`id`/`label`——判据不精确。噪声会让整个审计失去可信度（入站审计从 48 条误报收敛到 0 花了两轮），
 所以没留它，改为写在这里。
+
+## Playwright 套件是这一层的验收面
+
+`packages/app/e2e/browser/` 下的 spec 断言的是「一串操作之后界面该是什么」。这类缺陷字段对账结构上看不见：归档
+workspace 时 `kind: "remove"` 确实发了、字段都在，错在缺一个双方约定好的 `emptyProject`，缺了客户端就多删一个项目组。
+
+185 个 spec 里只有 92 个能对 Go daemon 说话，其余依赖 Node 的 mock provider（61）、真实凭据或外部 CLI（32）。
+手工筛这份清单错了两次，每次错都产生约 26 条看起来和真缺陷一样的失败 —— 用 `node scripts/e2e-runnable.mjs`，
+判据是 import 链上的**文件名**与**代码里**（去注释）的 provider 字面量，不看散文。
