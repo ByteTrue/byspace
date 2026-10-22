@@ -2458,30 +2458,35 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 	}
 
 	allTL := mp.session.Timeline()
-	filteredTL := allTL
-	if direction == "after" && req.Cursor != nil {
-		filteredTL = make([]pi.TimelineEntry, 0, len(allTL))
-		for _, e := range allTL {
-			end := e.SeqEnd
-			if end < e.Seq {
-				end = e.Seq
-			}
-			if end > req.Cursor.Seq {
-				filteredTL = append(filteredTL, e)
-			}
+
+	streamMax := mp.session.StreamSeq()
+	// The window describes the whole timeline, not the page: minSeq/maxSeq are its bounds and
+	// nextSeq is where the next live event lands. Pagination reads the same bounds so hasOlder and
+	// hasNewer agree with what the window claims.
+	winMin, winMax := 0, 0
+	if len(allTL) > 0 {
+		winMin = 1
+		if streamMax > 0 {
+			winMax = streamMax
+		} else {
+			winMax = timelineSeqEndOf(allTL[len(allTL)-1])
 		}
 	}
 
-	entries := make([]map[string]any, 0, len(filteredTL))
-	for _, e := range filteredTL {
-		startSeq := e.Seq
-		if startSeq <= 0 {
-			startSeq = 1
-		}
-		endSeq := e.SeqEnd
-		if endSeq < startSeq {
-			endSeq = startSeq
-		}
+	limit := req.Limit
+	if limit < 0 {
+		limit = 0
+	}
+	cursorSeq := 0
+	if req.Cursor != nil {
+		cursorSeq = req.Cursor.Seq
+	}
+	page := selectTimelinePage(allTL, direction, cursorSeq, limit, winMin, winMax)
+
+	entries := make([]map[string]any, 0, len(page.entries))
+	for _, e := range page.entries {
+		startSeq := timelineSeqStartOf(e)
+		endSeq := timelineSeqEndOf(e)
 		entries = append(entries, map[string]any{
 			"provider":  mp.record.Provider,
 			"item":      e.Item,
@@ -2496,35 +2501,13 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		})
 	}
 
+	// The cursors describe the page that was returned, not the whole timeline: the client records
+	// them as the range it now holds, so a cursor spanning entries it never received would make it
+	// believe it has history it does not.
 	var startCursor, endCursor any
-	if len(filteredTL) > 0 {
-		firstStart := filteredTL[0].Seq
-		if firstStart <= 0 {
-			firstStart = 1
-		}
-		lastEnd := filteredTL[len(filteredTL)-1].SeqEnd
-		if lastEnd < filteredTL[len(filteredTL)-1].Seq {
-			lastEnd = filteredTL[len(filteredTL)-1].Seq
-		}
-		startCursor = map[string]any{"epoch": s.epoch, "seq": firstStart}
-		endCursor = map[string]any{"epoch": s.epoch, "seq": lastEnd}
-	}
-	streamMax := mp.session.StreamSeq()
-	minSeq := 0
-	maxSeq := 0
-	if len(allTL) > 0 {
-		minSeq = 1
-		if streamMax > 0 {
-			maxSeq = streamMax
-		} else {
-			maxSeq = len(allTL)
-		}
-	}
-
-	// A windowed request asks for at most `limit` entries. Ignoring it made a client
-	// that pages through a long conversation receive the whole history every time.
-	if req.Limit > 0 && len(entries) > req.Limit {
-		entries = entries[len(entries)-req.Limit:]
+	if len(page.entries) > 0 {
+		startCursor = map[string]any{"epoch": s.epoch, "seq": timelineSeqStartOf(page.entries[0])}
+		endCursor = map[string]any{"epoch": s.epoch, "seq": timelineSeqEndOf(page.entries[len(page.entries)-1])}
 	}
 	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
 		"requestId":   req.RequestID,
@@ -2537,18 +2520,104 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		"staleCursor": false,
 		"gap":         false,
 		"window": map[string]any{
-			"minSeq":  minSeq,
-			"maxSeq":  maxSeq,
+			"minSeq":  winMin,
+			"maxSeq":  winMax,
 			"nextSeq": streamMax + 1,
 		},
 		"startCursor": startCursor,
 		"endCursor":   endCursor,
-		"hasOlder":    false,
-		"hasNewer":    false,
+		"hasOlder":    page.hasOlder,
+		"hasNewer":    page.hasNewer,
 		"mergeWindow": req.MergeWindow,
 		"entries":     entries,
 		"error":       nil,
 	})
+}
+
+// timelineSeqStartOf is the first source seq an entry occupies.
+func timelineSeqStartOf(e pi.TimelineEntry) int {
+	start := e.Seq
+	if start <= 0 {
+		start = 1
+	}
+	return start
+}
+
+// timelineSeqEndOf is the last source seq an entry occupies. A streamed message spans seq..seqEnd;
+// a discrete item has seqEnd == seq (or an unset seqEnd, which means the same seq).
+func timelineSeqEndOf(e pi.TimelineEntry) int {
+	end := e.SeqEnd
+	if start := timelineSeqStartOf(e); end < start {
+		end = start
+	}
+	return end
+}
+
+// timelinePage is one fetch's selection plus the coverage flags the client pages on.
+type timelinePage struct {
+	entries  []pi.TimelineEntry
+	hasOlder bool
+	hasNewer bool
+}
+
+// selectTimelinePage picks the entries for one fetch direction and reports what remains beyond the
+// page. It walks seq ranges rather than entry indices, so a page never cuts through a streamed
+// message that spans several seqs, and hasOlder/hasNewer are measured against the whole timeline's
+// bounds (winMin/winMax) — the same bounds the response's window carries.
+//
+// `tail` and `before` keep the newest `limit` entries; `after` keeps the oldest, so a client that
+// reconnects and pages forward walks history in order instead of jumping to the end. A limit of 0
+// means "no limit".
+func selectTimelinePage(all []pi.TimelineEntry, direction string, cursorSeq, limit, winMin, winMax int) timelinePage {
+	if len(all) == 0 {
+		// No bounds to page against: nothing older, nothing newer, in every direction.
+		return timelinePage{}
+	}
+	switch direction {
+	case "after":
+		selected := make([]pi.TimelineEntry, 0, len(all))
+		for _, e := range all {
+			if timelineSeqEndOf(e) > cursorSeq {
+				selected = append(selected, e)
+			}
+		}
+		if limit > 0 && len(selected) > limit {
+			selected = selected[:limit]
+		}
+		startSeq := cursorSeq + 1
+		if winMin > startSeq {
+			startSeq = winMin
+		}
+		hasNewer := len(selected) > 0 && timelineSeqEndOf(selected[len(selected)-1]) < winMax
+		return timelinePage{entries: selected, hasOlder: startSeq > winMin, hasNewer: hasNewer}
+	case "before":
+		endSeq := cursorSeq - 1
+		if winMax < endSeq {
+			endSeq = winMax
+		}
+		hasNewer := endSeq < winMax
+		if len(all) == 0 || endSeq < winMin {
+			return timelinePage{entries: nil, hasNewer: hasNewer}
+		}
+		eligible := make([]pi.TimelineEntry, 0, len(all))
+		for _, e := range all {
+			if timelineSeqStartOf(e) <= endSeq {
+				eligible = append(eligible, e)
+			}
+		}
+		selected := eligible
+		if limit > 0 && len(eligible) > limit {
+			selected = eligible[len(eligible)-limit:]
+		}
+		return timelinePage{entries: selected, hasOlder: len(selected) < len(eligible), hasNewer: hasNewer}
+	default: // tail
+		selected := all
+		if limit > 0 && len(all) > limit {
+			selected = all[len(all)-limit:]
+		}
+		hasOlder := len(selected) > 0 && timelineSeqStartOf(selected[0]) > winMin
+		return timelinePage{entries: selected, hasOlder: hasOlder, hasNewer: false}
+	}
 }
 
 func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw json.RawMessage) {
