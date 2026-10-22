@@ -109,6 +109,55 @@ fixture 时序**。我先后把根因归到 `Abort`、中断时序、fixture 竞
 
 教训：靠 e2e 的错误信息倒推根因，比手工复现低效且容易错。手工五分钟看清的事，我从错误信息猜了几十分钟。
 
+## 后续轮次补记（分步诊断 + mock 移植：26 条失败的真正根因）
+
+前三次误判的共同点是**只跑完整 spec，从错误信息倒推**。改成写一个分步诊断 spec，每步把耗时与 WS 帧落盘，
+一轮就拿到了硬证据：
+
+| 步骤                             | 结果                                     |
+| -------------------------------- | ---------------------------------------- |
+| goto → tabs → 菜单 → composer    | 全通（composer 4ms、selectModel 126ms）  |
+| fill + Enter + 点 Stop           | **全通**（Stop 点击成功 88ms）           |
+| 等 `turn-working-indicator` 消失 | **30 秒不消失**（65 次采样全部 visible） |
+
+26 条失败不在「进不去 composer」，在「中断后 running 状态不清除」。WS 帧给出三条决定性事实：
+`turn_completed` 之后又来 `agent_update status:"running"`（状态倒退）、选中 `one-minute-stream` 却在 170ms 内完成、
+点 Stop 后没有任何 `turn_canceled`。八处修复：
+
+| 缺陷                                                     | 后果                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| mock 先发终态事件、后清 turn 状态（Node 与 pi 都相反）   | daemon 快照读到仍在跑的 turn，客户端据此**重开已关闭的 turn**，spinner 永挂                                            |
+| 空时间线的 `window.minSeq/maxSeq` 发 `null`              | 整条 `fetch_agent_timeline_response` 校验失败被丢弃 → **agent 面板连同 composer 一起不渲染**（绝大多数失败的真正根因） |
+| `turn_canceled`/`turn_failed` 的 event 内层缺 `provider` | 判别联合每分支必填，事件被丢弃 → 中断后 spinner 不消失                                                                 |
+| mock 默认 turn 只回显一句就完成（忽略 `durationMs`）     | 永远拿不到可中断的长 turn，Stop 按钮来不及出现                                                                         |
+| `config.featureValues` 从未接线                          | mock 的所有旋钮（脚本化拒绝、steer 失败、强制回复）静默失效                                                            |
+| `hasOlder`/`hasNewer` 硬编码 false、`before` 方向不过滤  | 长对话**永远翻不到第二页**                                                                                             |
+| files-only rewind 比对 `"code"` 而协议是 `"files"`       | 两个分支都不触发却回 `ok:true` —— 静默空操作，影响所有 provider                                                        |
+| 时间线不做 projection，分页按原始 delta 计数             | 一个 turn 1894 条原始条目，tail-40 页全是同一条消息的碎片                                                              |
+
+最后一条最贵，也最隐蔽：`projection` 参数被原样回显、从未应用。用不走浏览器的 WS probe
+（`scripts/probe-timeline-page.mjs`）直接量化：
+
+```
+移植前  tail limit=40: entries=40  {assistant_message:40}  promptRow=false
+        tail limit=0:  entries=1894 = {assistant_message:1636, reasoning:216, tool_call:40, user_message:2}
+移植后  tail limit=40: entries=34  {user_message:2, assistant_message:8, reasoning:4, tool_call:20}  promptRow=true
+```
+
+客户端要的 `TIMELINE_FETCH_PAGE_SIZE=40` 计的是**合并后的行数**，Go 给的是 40 条原始 delta，于是 user_message 与
+`(end of synthetic stream)` 被挤出页窗口。已移植 `timeline-projection.ts`：按 call id 折叠工具生命周期、合并相邻
+assistant / reasoning delta，每行带上它覆盖的 source seq 区间，分页改成在 projected 行上做。
+
+### 又两次误判，同样被实测推翻
+
+- **「缺 durable timeline store」**：WS 诊断显示 reload 后 daemon 返回 `tail n=40`、首条就是带 clientMessageId 的
+  user_message，DOM 里 `aria-busy=false`。时间线根本没丢。
+- **「5 个失败都是产品缺陷」**：逐个单跑，`keeps one canonical prompt...` **单跑通过** —— 是共享 daemon 的状态残留，
+  与已记录的 `agent-tab-image-stability`、`empty-project-persists` 同一现象。只有 4 个是真缺陷。
+
+教训与前三次相同，但这次有了可复用的手段：**先用分步诊断或 WS probe 复现那一步，再改代码**。probe 不起浏览器、
+不抢 Metro，一次就能把「daemon 发了什么」和「客户端怎么用」分开。
+
 ## 未解决
 
 - `new-workspace-model-memory` / `new-workspace-model-recovery` / `provider-removal`：provider 目录加上 scope 隔离后
@@ -122,8 +171,14 @@ fixture 时序**。我先后把根因归到 `Abort`、中断时序、fixture 竞
 
 ## 机器检查
 
-`scripts/e2e-runnable.mjs` + 6 个测试（分类器）。`browser-conformance.mjs` 增加两条**操作序列**断言
+`scripts/e2e-runnable.mjs` + 8 个测试（分类器）。`browser-conformance.mjs` 增加两条**操作序列**断言
 （归档最后工作区后项目仍在、移除项目后侧栏消失），并用 `ab9f16418` 验证它们在修复前会红。
+
+`scripts/probe-timeline-page.mjs`：不起浏览器的 WS probe，一个临时 daemon + 一个 mock agent，直接问
+`fetch_agent_timeline_response` 里有什么。分页与 projection 的两次定位都靠它，比 e2e 快一个量级。
+
+mock 移植后 `scripts/e2e-runnable.mjs` 的可跑清单从 90 涨到 166：daemon 现在自带 mock provider，
+「依赖 mock」是描述而非跳过的理由。
 
 ## 验证状态
 
