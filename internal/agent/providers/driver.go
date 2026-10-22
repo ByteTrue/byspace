@@ -295,6 +295,31 @@ func IsBinaryAvailable(spec ProviderSpec, piCommandOverride string) bool {
 	return execres.IsCommandAvailable(context.Background(), spec.Binary)
 }
 
+// customProviderBinary is the executable a custom provider will actually launch.
+//
+// `command` is where the config says so — it may be an array (`[path, args...]`) or a string — and it is what the test
+// fixtures rely on: a provider pointed at `provider-node` in a temp directory is unavailable exactly when that file is
+// gone. Falling back to the spec's default binary would probe a name the config never mentioned.
+func customProviderBinary(cfg map[string]any, spec ProviderSpec) string {
+	switch command := cfg["command"].(type) {
+	case []any:
+		if len(command) > 0 {
+			if text, ok := command[0].(string); ok && strings.TrimSpace(text) != "" {
+				return strings.TrimSpace(text)
+			}
+		}
+	case []string:
+		if len(command) > 0 && strings.TrimSpace(command[0]) != "" {
+			return strings.TrimSpace(command[0])
+		}
+	case string:
+		if trimmed := strings.TrimSpace(command); trimmed != "" {
+			return trimmed
+		}
+	}
+	return spec.Binary
+}
+
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
 // including the 6 built-in providers plus any custom/derived providers configured in config.json.
 func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
@@ -364,7 +389,7 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		status := "ready"
 		if !enabled {
 			status = "unavailable"
-		} else if spec.Binary != "" && !execres.IsCommandAvailable(context.Background(), spec.Binary) {
+		} else if binary := customProviderBinary(cfgMap, spec); binary != "" && !execres.IsCommandAvailable(context.Background(), binary) {
 			status = "unavailable"
 		}
 		entries = append(entries, map[string]any{
