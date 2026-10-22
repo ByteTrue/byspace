@@ -2060,6 +2060,11 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			// effort, a model provider, sandbox flags). It was absent from this struct, so every
 			// value the user set in the provider sheet was silently dropped at create time.
 			ProviderOptions map[string]any `json:"providerOptions"`
+			// FeatureValues are the provider's own toggles and knobs (mock's scripted-failure counters,
+			// a forced assistant response). They live beside providerOptions in the protocol, not inside
+			// it, and were absent here: every featureValues the specs set at create time was dropped, so
+			// mockPromptRejections, mockSteerAmbiguousFailures and the rest silently did nothing.
+			FeatureValues map[string]any `json:"featureValues"`
 			// ToolPolicy carries the BySpace tools the user pre-approved. Codex does not inherit an
 			// allow-list from us — each MCP server declares its own — so without this a pre-approved
 			// tool still prompts, and a sub-agent with nobody watching hangs on that prompt.
@@ -2232,6 +2237,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			Role:             req.Config.Role,
 			SystemPrompt:     req.Config.SystemPrompt,
 			ProviderOptions:  req.Config.ProviderOptions,
+			FeatureValues:    req.Config.FeatureValues,
 			PreapprovedTools: storePreapprovedTools(req.Config.ToolPolicy),
 		},
 	}
@@ -2715,6 +2721,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		SessionHandle:    sessionPath,
 		Env:              providerEnv,
 		ProviderOptions:  providerOptionsOf(rec),
+		FeatureValues:    featureValuesOf(rec),
 		PreapprovedTools: mcpToolRefs(preapprovedToolsOf(rec)),
 		// Injected through the extension: pi has no launch flag for MCP, and without this the
 		// agent never sees the daemon's orchestration tools.
@@ -4224,6 +4231,14 @@ func providerOptionsOf(rec store.AgentRecord) map[string]any {
 		return nil
 	}
 	return rec.Config.ProviderOptions
+}
+
+// featureValuesOf reads the provider feature toggles a client set at create time.
+func featureValuesOf(rec store.AgentRecord) map[string]any {
+	if rec.Config == nil || len(rec.Config.FeatureValues) == 0 {
+		return nil
+	}
+	return rec.Config.FeatureValues
 }
 
 // renderAttachment turns one composer attachment into the text the model reads.

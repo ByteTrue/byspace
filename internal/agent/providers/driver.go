@@ -457,6 +457,9 @@ type LaunchConfig struct {
 	// (codex's sandbox_mode / approval_policy, opencode's model provider). Passed through to the
 	// adapter; it is not environment variables.
 	ProviderOptions map[string]any
+	// FeatureValues are the provider's own feature toggles, set by the client at create time. They
+	// are a separate protocol field from ProviderOptions, not a key inside it.
+	FeatureValues map[string]any
 	// PreapprovedTools are the BySpace MCP tools the user allowed without a prompt. Codex needs them
 	// written into its own server config; a provider that inherits our allow-list ignores this.
 	PreapprovedTools []McpToolRef
@@ -559,7 +562,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 			ModeID:        cfg.ModeID,
 			ThinkingID:    cfg.ThinkingOptionID,
 			SessionID:     cfg.SessionHandle,
-			FeatureValues: mockFeatureValues(cfg.ProviderOptions),
+			FeatureValues: cfg.FeatureValues,
 		}), nil
 	case "opencode-http":
 		return StartOpenCodeSession(cfg, cmd)

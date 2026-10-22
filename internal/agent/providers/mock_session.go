@@ -278,15 +278,20 @@ func (s *MockSession) Prompt(ctx context.Context, message string, images []sdk.I
 		s.mu.Unlock()
 		return errors.New("Requested mock prompt rejection")
 	}
-	clientMessageID := s.nextClientMessageID
-	s.nextClientMessageID = ""
-	s.mu.Unlock()
-
 	// A command the provider answers itself is out-of-band: it produces a reply without opening a
 	// turn, so it neither cancels a running one nor shows the running affordance. Node routes this
 	// through tryHandleOutOfBand; the prompt has to match exactly, or a sentence quoting the command
-	// would be swallowed.
-	if message == MockHandledCommand {
+	// would be swallowed. The client message id is consumed here only on this path — startTurn reads
+	// it for every turn it opens, so it must stay set on the main path.
+	handled := message == MockHandledCommand
+	clientMessageID := ""
+	if handled {
+		clientMessageID = s.nextClientMessageID
+		s.nextClientMessageID = ""
+	}
+	s.mu.Unlock()
+
+	if handled {
 		s.appendItem(sdk.TimelineItem{
 			Type:            "user_message",
 			MessageID:       newMockID("msg"),
@@ -665,11 +670,14 @@ func (s *MockSession) startTurn(ctx context.Context, message string) error {
 		})
 	}
 
-	// A withheld prompt is never acknowledged: the turn stays open and produces nothing until
-	// something cancels it. That window is what "interrupt before the first turn" exercises. The
-	// user's row survives because the daemon records submitted prompts itself, independently of
-	// whatever the provider echoes.
+	// A withheld prompt never runs a turn body: the session holds it open until something cancels
+	// it, which is the window "interrupt before the first turn" exercises. The user's row still has
+	// to land, carrying the client's own id: that echo is what retires the optimistic bubble's
+	// pending state, and without it the row stays aria-busy and the tab keeps spinning after the
+	// interrupt. Node supplies this from the daemon's recordSubmittedPrompt; Go's providers each
+	// echo their own user message, so the mock does it here.
 	if directives.WithholdUserMessage {
+		s.appendItem(userItem)
 		go func() {
 			defer func() {
 				s.endTurn(turnID)

@@ -155,11 +155,13 @@ func TestMockCycleNestsItsCodemodeCalls(t *testing.T) {
 	}
 }
 
-// A withheld prompt is never echoed: the turn stays open until something cancels it, and the
-// cancellation still has to reach the client as turn_canceled.
-func TestMockWithholdsTheUserMessageUntilInterrupted(t *testing.T) {
+// A withheld prompt lands its user message — carrying the client's own id, which is what retires
+// the optimistic bubble's pending state — but never runs a turn body. The turn stays open until
+// something cancels it, and the cancellation still has to reach the client as turn_canceled.
+func TestMockWithholdsTheTurnBodyUntilInterrupted(t *testing.T) {
 	session, events := newTestMockSession(t, "one-minute-stream")
 	ctx := context.Background()
+	session.SetNextClientMessageID("client-withhold-1")
 	if err := session.Prompt(ctx, "Withhold synthetic user message until interrupted.", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -167,8 +169,19 @@ func TestMockWithholdsTheUserMessageUntilInterrupted(t *testing.T) {
 	if got := session.Status(); got != "running" {
 		t.Fatalf("status = %q, want running while the prompt is withheld", got)
 	}
-	if contains(timelineTypes(session), "user_message") {
-		t.Fatalf("the withheld prompt was echoed: %v", timelineTypes(session))
+	// The echo has to carry the client's id, or the optimistic row never leaves aria-busy.
+	var echoed bool
+	for _, entry := range session.Timeline() {
+		if entry.Item.Type == "user_message" && entry.Item.ClientMessageID == "client-withhold-1" {
+			echoed = true
+		}
+	}
+	if !echoed {
+		t.Fatalf("the withheld prompt never landed its user message: %v", timelineTypes(session))
+	}
+	// Withholding means no turn body: no assistant output streamed before the interrupt.
+	if contains(timelineTypes(session), "assistant_message") {
+		t.Fatalf("the withheld turn produced assistant output: %v", timelineTypes(session))
 	}
 	if err := session.Abort(ctx); err != nil {
 		t.Fatal(err)
@@ -178,9 +191,6 @@ func TestMockWithholdsTheUserMessageUntilInterrupted(t *testing.T) {
 	}
 	if got := session.Status(); got != "idle" {
 		t.Fatalf("status = %q, want idle after the interrupt", got)
-	}
-	if contains(timelineTypes(session), "user_message") {
-		t.Fatalf("the cancelled turn echoed its prompt afterwards: %v", timelineTypes(session))
 	}
 }
 

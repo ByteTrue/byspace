@@ -164,7 +164,14 @@ if (!invokedDirectly) {
     groups.get(key).push({ name, verdict });
   }
 
-  const runnable = (groups.get("RUNNABLE") ?? []).map((entry) => entry.name);
+  // The daemon now ships the mock provider, so a spec that needs it can run against Go: `MOCK_PROVIDER`
+  // marks why it is what it is, not a reason to skip it. What still cannot run here is a `.real.` spec
+  // (credentials, network, a real provider) and one that needs a CLI this machine does not have.
+  const RUNNABLE_KINDS = new Set(["RUNNABLE", "MOCK_PROVIDER"]);
+  const runnable = [...groups.entries()]
+    .filter(([kind]) => RUNNABLE_KINDS.has(kind))
+    .flatMap(([, entries]) => entries.map((entry) => entry.name))
+    .sort();
 
   if (process.argv.includes("--files")) {
     for (const name of runnable) console.log(path.join(SPEC_DIR, name));
@@ -173,7 +180,7 @@ if (!invokedDirectly) {
 
   console.log(`可跑 ${runnable.length} / ${specs.length} 个 spec\n`);
   for (const [kind, entries] of [...groups].sort((a, b) => b[1].length - a[1].length)) {
-    if (kind === "RUNNABLE") continue;
+    if (RUNNABLE_KINDS.has(kind)) continue;
     const reasons = new Map();
     for (const entry of entries) reasons.set(entry.verdict, (reasons.get(entry.verdict) ?? 0) + 1);
     const breakdown = [...reasons]

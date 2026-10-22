@@ -199,20 +199,6 @@ func ResolveMockModel(modelID string) MockModel {
 	return MockModelList()[0]
 }
 
-// mockFeatureValues finds the `featureValues` block the specs pass at agent creation.
-//
-// The daemon stores provider options verbatim, and the mock's knobs arrive inside it. Reading them here keeps
-// the mapping from request shape to session behaviour in one place.
-func mockFeatureValues(providerOptions map[string]any) map[string]any {
-	if providerOptions == nil {
-		return nil
-	}
-	if raw, ok := providerOptions["featureValues"].(map[string]any); ok {
-		return raw
-	}
-	return nil
-}
-
 // TestProviders are addressable providers that are not part of the product's six built-ins.
 //
 // Node registers `mock` and `mock-slow` unconditionally in provider-registry.ts, so an agent can be created
