@@ -26,6 +26,8 @@ import path from "node:path";
 /** Resolved from this repo so the probe subprocess can require the same client the app uses. */
 const WS_MODULE = createRequire(import.meta.url).resolve("ws");
 
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+
 const BASE = (() => {
   const idx = process.argv.indexOf("--base");
   return idx >= 0 ? process.argv[idx + 1] : "http://127.0.0.1:6778";

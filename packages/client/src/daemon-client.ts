@@ -5874,7 +5874,10 @@ export class DaemonClient {
           ? parsedJson.type
           : "unknown";
       const msgType = responseIdentity?.responseType ?? envelopeType;
-      this.logger.warn({ msgType, error: parsed.error.message }, "Message validation failed");
+      this.logger.warn(
+        { msgType, envelopeType, error: parsed.error.message },
+        "Message validation failed",
+      );
       if (responseIdentity) {
         this.rejectWaitersForRequestId(
           responseIdentity.requestId,
