@@ -2504,7 +2504,8 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		endCursor = map[string]any{"epoch": s.epoch, "seq": lastEnd}
 	}
 	streamMax := mp.session.StreamSeq()
-	var minSeq, maxSeq any
+	minSeq := 0
+	maxSeq := 0
 	if len(allTL) > 0 {
 		minSeq = 1
 		if streamMax > 0 {
@@ -2931,9 +2932,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				"provider":  rec.Provider,
 				"timestamp": nowStr,
 				"event": map[string]any{
-					"type":   "turn_canceled",
-					"turnId": ev["turnId"],
-					"reason": ev["reason"],
+					"type":     "turn_canceled",
+					"provider": rec.Provider,
+					"turnId":   ev["turnId"],
+					"reason":   ev["reason"],
 				},
 			})
 			s.broadcastAgentUpdate(recCanceledCopy)
@@ -2955,9 +2957,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				"provider":  rec.Provider,
 				"timestamp": nowStr,
 				"event": map[string]any{
-					"type":   "turn_failed",
-					"error":  mp.record.LastError,
-					"turnId": ev["turnId"],
+					"type":     "turn_failed",
+					"provider": rec.Provider,
+					"error":    mp.record.LastError,
+					"turnId":   ev["turnId"],
 				},
 			})
 			s.broadcastAgentUpdate(recFailedCopy)
