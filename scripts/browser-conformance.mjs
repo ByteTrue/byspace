@@ -17,7 +17,14 @@
  * 已知不覆盖：滚动是否卡顿、动画是否流畅、真实拖拽手势——这些只能人眼看。
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+/** Resolved from this repo so the probe subprocess can require the same client the app uses. */
+const WS_MODULE = createRequire(import.meta.url).resolve("ws");
 
 const BASE = (() => {
   const idx = process.argv.indexOf("--base");
@@ -124,10 +131,131 @@ function ensureSidebarVisible() {
   return observe();
 }
 
+/**
+ * Drives the two state transitions against the live daemon and reports what the client would be told.
+ *
+ * Runs over a WebSocket rather than the UI: the claim being checked is "which updates does the daemon emit", and
+ * recreating that from clicks would test the sidebar's rendering on top of it. The two defects this guards were both
+ * in the emitted updates, and both were invisible to the field audit.
+ */
+function runWorkspaceStateTransitions() {
+  const result = {
+    archivedKeptProject: false,
+    archivedDetail: "",
+    removedProject: false,
+    removedDetail: "",
+  };
+
+  // A throwaway repo so the transition does not touch the user's real projects.
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-seq-"));
+  const repoPath = path.join(root, "repo");
+  mkdirSync(repoPath, { recursive: true });
+  const git = (args) => spawnSync("git", args, { cwd: repoPath, encoding: "utf8" });
+  git(["init", "-q", "-b", "main"]);
+  git(["config", "user.email", "e2e@example.com"]);
+  git(["config", "user.name", "e2e"]);
+  writeFileSync(path.join(repoPath, "README.md"), "seed\n");
+  git(["add", "-A"]);
+  git(["commit", "-qm", "seed"]);
+
+  const script = `
+const WebSocket = require(${JSON.stringify(WS_MODULE)});
+const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
+const repoPath = ${JSON.stringify(repoPath)};
+const out = { updates: [], archived: null, removed: null };
+const send = (message) => ws.send(JSON.stringify({ type: "session", message }));
+ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "seq-probe", protocolVersion: 1 })));
+ws.on("message", (raw) => {
+  const env = JSON.parse(raw.toString());
+  const payload = env?.message?.payload;
+  if (payload?.status === "server_info") {
+    send({ type: "project.add.request", requestId: "p", cwd: repoPath });
+    return;
+  }
+  if (env?.message?.type === "project.add.response") {
+    send({ type: "workspace.create.request", requestId: "w", cwd: repoPath, source: { kind: "path", path: repoPath } });
+    return;
+  }
+  if (env?.message?.type === "workspace.create.response") {
+    const wsId = payload?.workspace?.id;
+    globalThis.__wsId = wsId;
+    send({ type: "archive_workspace_request", requestId: "a", workspaceId: wsId });
+    return;
+  }
+  if (env?.message?.type === "workspace_update") out.updates.push(payload);
+  if (env?.message?.type === "archive_workspace_response") {
+    out.archived = { workspaceId: payload.workspaceId, error: payload.error };
+    send({ type: "project.remove.request", requestId: "r", projectId: payload.projectId ?? (out.updates.at(-1)?.projectId) });
+    return;
+  }
+  if (env?.message?.type === "project.remove.response") {
+    out.removed = { accepted: payload.accepted, removedWorkspaceIds: payload.removedWorkspaceIds };
+    console.log(JSON.stringify(out));
+    process.exit(0);
+  }
+});
+ws.on("error", (error) => { console.error(error.message); process.exit(2); });
+setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); process.exit(1); }, 45000);
+`;
+  const probePath = path.join(root, "probe.cjs");
+  writeFileSync(probePath, script);
+
+  try {
+    const run = spawnSync(process.execPath, [probePath], { encoding: "utf8", timeout: 60000 });
+    const line = (run.stdout ?? "").trim().split("\n").filter(Boolean).at(-1) ?? "";
+    if (!line) {
+      result.archivedDetail = `probe produced no output: ${(run.stderr ?? "").slice(0, 300)}`;
+      result.removedDetail = result.archivedDetail;
+      return result;
+    }
+    const observed = JSON.parse(line);
+    const archiveUpdate = (observed.updates ?? []).find(
+      (u) => u.kind === "remove" && u.id === observed.archived?.workspaceId,
+    );
+    // The project row survives only if the client is told the project still exists; without this field it deletes the
+    // group along with its last workspace.
+    result.archivedKeptProject =
+      Boolean(archiveUpdate) &&
+      Boolean(archiveUpdate.emptyProject) &&
+      archiveUpdate.emptyProject.projectId === archiveUpdate.projectId;
+    result.archivedDetail = archiveUpdate
+      ? `archive update: ${JSON.stringify(archiveUpdate).slice(0, 220)}`
+      : `no remove update for the archived workspace; updates=${JSON.stringify(observed.updates ?? []).slice(0, 220)}`;
+
+    // The removal is announced on the workspace channel; a response alone leaves the sidebar showing what the daemon
+    // already archived.
+    const removalUpdate = (observed.updates ?? []).find(
+      (u) => u.removedProjectId && u.removedProjectId === archiveUpdate?.projectId,
+    );
+    result.removedProject = Boolean(removalUpdate) && observed.removed?.accepted === true;
+    result.removedDetail = removalUpdate
+      ? `removal update: ${JSON.stringify(removalUpdate).slice(0, 220)}`
+      : `no update carried removedProjectId; response=${JSON.stringify(observed.removed)}`;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  return result;
+}
+
 function failFast(name, message) {
   record(name, false, message);
   throw new Error(`${name}: ${message}`);
 }
+
+// ------------------------------------------------- 归档与项目移除的状态转移
+//
+// 这两条不是"字段有没有发"，而是"一串操作之后侧栏该看到什么"。它们各自的组成都正确
+// （归档清理了 agent 与终端、移除归档了项目和它的工作区），错在中间那条广播：归档时没带
+// `emptyProject`，前端删掉最后一个工作区就顺手删掉了项目组；移除项目时根本没有广播，侧栏
+// 一直显示已经归档的项目。静态字段对账看不见这类缺陷，因为 workspace_update 的 payload 是
+// 判别联合，被当作 opaque 跳过了。
+const seq = runWorkspaceStateTransitions();
+record(
+  "Archiving the last workspace keeps its project",
+  seq.archivedKeptProject,
+  seq.archivedDetail,
+);
+record("Removing a project clears it from the directory", seq.removedProject, seq.removedDetail);
 
 try {
   bsk(["debug", "start", "--session", session, "--name", "browser-conformance"], {
