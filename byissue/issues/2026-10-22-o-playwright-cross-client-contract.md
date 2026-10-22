@@ -77,6 +77,27 @@ created: 2026-10-22
 **这条修复让 3 个 spec 从「断言失败」变成新的失败形态**（超时、count 不符），说明它改变了行为而前端读取路径
 还没有对应分支 —— 见下方未解决清单。
 
+## 手工复现推翻了 e2e 的失败归因
+
+`agent-message-submission` 26 条失败，我连续两轮把根因归到 turn 时序（先是 `Abort` 不发事件，再是延迟窗口内中断缺
+`turn_started` 配对）。**两次都错。** 用 bsk 手工走同一路径，每一步都成功：
+
+| 步骤                                | 手工                                        | e2e        |
+| ----------------------------------- | ------------------------------------------- | ---------- |
+| 深链 `/h/<serverId>/workspace/<id>` | 侧栏、tab bar 正常                          | 正常       |
+| composer 渲染                       | `textbox "Message agent..."`                | 元素不存在 |
+| 可访问名与 `composerInput()` 的期望 | 完全一致                                    | —          |
+| `fetch_workspaces_response`         | 2 条、`WSOutboundMessageSchema` VALID       | —          |
+| `workspace-new-tab-button` testid   | 存在于 `workspace-desktop-tabs-row.tsx:238` | —          |
+
+同一路径、同一 daemon、同一前端产物，手工每次进得去、e2e 每次进不去。差别只在 fixture：`page.addInitScript`
+注入 localStorage 的 daemon registry 与 `page.goto()` 之间存在时序窗口。
+
+**这是测试基础设施问题，不是 Go parity 缺口。** 同一现象此前也出现过：`empty-project-persists` 单跑通过、全量
+失败，我当时把它判成「环境噪声」带过，没有追到底。
+
+教训：靠 e2e 的错误信息倒推根因，比手工复现低效且容易错。手工五分钟看清的事，我从错误信息猜了几十分钟。
+
 ## 未解决
 
 - `new-workspace-model-memory` / `new-workspace-model-recovery` / `provider-removal`：provider 目录加上 scope 隔离后
