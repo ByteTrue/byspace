@@ -273,20 +273,18 @@ func (s *MockSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
 	cancel := s.cancel
 	turnID := s.activeTurnID
-	finished := s.finished
 	started := s.turnStarted
+	s.mu.Unlock()
 	if turnID == "" {
-		s.mu.Unlock()
 		return nil
 	}
-	s.activeTurnID = ""
-	s.activeTurnAssistantMsg = ""
-	s.status = "idle"
-	s.cancel = nil
-	s.mu.Unlock()
-
 	if cancel != nil {
 		cancel()
+	}
+	// State goes before the event: the daemon snapshots Status() and ActiveTurn() into the agent_update
+	// it broadcasts beside turn_canceled, and a snapshot that still names a turn re-opens it on the client.
+	if !s.endTurn(turnID) {
+		return nil
 	}
 	// A turn cancelled inside the delay window never emitted turn_started. The client still ends the run on
 	// turn_canceled, but it needs the pair to leave the row clean, and emitting only the cancel left the running
@@ -302,9 +300,6 @@ func (s *MockSession) Abort(ctx context.Context) error {
 		"turnId": turnID,
 		"reason": "Interrupted",
 	})
-	// The emitter's deferred close also fires; guarding on a nil channel keeps a double close from panicking when
-	// the turn was cancelled before the goroutine was scheduled.
-	_ = finished
 	return nil
 }
 
@@ -530,6 +525,9 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	s.activeTurnAssistantMsg = assistantMsgID
 	s.status = "running"
 	s.lastError = ""
+	// Per-turn, not per-session: a stale true from the previous turn makes an abort inside this
+	// turn's delay window skip the turn_started it still owes the client.
+	s.turnStarted = false
 	finished := make(chan struct{})
 	s.finished = finished
 	turnCtx, cancel := context.WithCancel(ctx)
@@ -542,12 +540,9 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	// failure path (error banner, retry affordance, idle recovery) depends on there being no assistant text.
 	if directives := ParseMockDirectives(message); directives.TurnFailure {
 		s.mu.Lock()
-		s.activeTurnID = ""
-		s.activeTurnAssistantMsg = ""
-		s.status = "idle"
 		s.lastError = "Requested mock turn failure"
-		s.cancel = nil
 		s.mu.Unlock()
+		s.endTurn(turnID)
 		s.emit(map[string]any{
 			"type":   "byspace_turn_failed",
 			"turnId": turnID,
@@ -609,14 +604,9 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 
 	go func() {
 		defer func() {
-			s.mu.Lock()
-			if s.activeTurnID == turnID {
-				s.activeTurnID = ""
-				s.activeTurnAssistantMsg = ""
-				s.status = "idle"
-				s.cancel = nil
-			}
-			s.mu.Unlock()
+			// A backstop for the paths that leave the turn standing (a cancelled sleep, an early return).
+			// completeTurn and Abort already cleared it; endTurn reports false and this only closes finished.
+			s.endTurn(turnID)
 			close(finished)
 		}()
 		if directives.UserMessageDelayMs > 0 {
@@ -794,10 +784,31 @@ func (s *MockSession) completeTurn(turnID, assistantMsgID, fullText string) {
 		MessageID: assistantMsgID,
 		Status:    "completed",
 	})
+	s.endTurn(turnID)
 	s.emit(map[string]any{
 		"type":   "byspace_turn_completed",
 		"turnId": turnID,
 	})
+}
+
+// endTurn clears the session's turn state, reporting whether it owned this turn.
+//
+// It runs before the terminal event is emitted, the way pi does it. The daemon builds the agent
+// snapshot it broadcasts alongside turn_completed out of Status() and ActiveTurn(), and the client
+// re-opens a closed turn from a snapshot that still names one — emitting first left the spinner up
+// after every completed turn.
+func (s *MockSession) endTurn(turnID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeTurnID != turnID {
+		return false
+	}
+	s.activeTurnID = ""
+	s.activeTurnAssistantMsg = ""
+	s.status = "idle"
+	s.turnStarted = false
+	s.cancel = nil
+	return true
 }
 
 // mockSleep waits, reporting false when the turn was cancelled first.
