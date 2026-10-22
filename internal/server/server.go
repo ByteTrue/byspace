@@ -3699,13 +3699,11 @@ func (s *Server) directorySyncMetadataWithReason(mode, reason string) map[string
 // only changes on a full fetch, so an archived or newly created workspace lingers until reload.
 func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.ProjectRecord) {
 	if ws.ArchivedAt != nil {
-		s.broadcastSessionMsg("workspace_update", map[string]any{
-			"kind":        "remove",
-			"id":          ws.WorkspaceID,
-			"projectId":   ws.ProjectID,
-			"archivedAt":  ws.ArchivedAt,
-			"projectRoot": prj.RootPath,
-		})
+		archivedAt := ""
+		if ws.ArchivedAt != nil {
+			archivedAt = *ws.ArchivedAt
+		}
+		s.broadcastSessionMsg("workspace_update", s.archiveRemovePayload(ws.WorkspaceID, ws.ProjectID, archivedAt))
 		return
 	}
 	catalog := s.store.LoadLabelCatalog()

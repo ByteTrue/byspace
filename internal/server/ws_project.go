@@ -235,6 +235,20 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 			removedWS = append(removedWS, w.WorkspaceID)
 		}
 	}
+	// The response alone is not enough: a removal the client is not told about leaves the sidebar showing a project the
+	// daemon has archived, which reads as the click doing nothing.
+	for _, wsID := range removedWS {
+		s.broadcastSessionMsg("workspace_update", map[string]any{
+			"kind":             "remove",
+			"id":               wsID,
+			"projectId":        req.ProjectID,
+			"removedProjectId": req.ProjectID,
+		})
+	}
+	if len(removedWS) == 0 {
+		s.broadcastProjectRemoved(req.ProjectID, nil)
+	}
+
 	_ = sendSessionMsg(ctx, sink, "project.remove.response", map[string]any{
 		"requestId":           req.RequestID,
 		"projectId":           req.ProjectID,
