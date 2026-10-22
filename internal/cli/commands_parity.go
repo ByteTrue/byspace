@@ -88,7 +88,7 @@ func runAgentGroupCmd(args []string, stdout io.Writer) error {
 
 func runAgentSend(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	wait := fs.Bool("wait", false, "wait for turn completion")
 	// The flags the node CLI has. Without --image a message could only be text, so a user whose
 	// workflow is "send the screenshot to the agent" had to use the app.
@@ -155,7 +155,7 @@ func runAgentSend(args []string, stdout io.Writer) error {
 
 func runAgentStop(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("stop", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func runAgentStop(args []string, stdout io.Writer) error {
 
 func runAgentArchive(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("archive", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	// Archiving a running agent interrupts its turn. That is destructive enough that it has to be
 	// asked for explicitly — silently killing a run the user forgot about loses work they paid for.
 	force := fs.Bool("force", false, "interrupt a running agent before archiving")
@@ -252,7 +252,7 @@ func runAgentArchive(args []string, stdout io.Writer) error {
 
 func runAgentDelete(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("delete", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func runAgentDelete(args []string, stdout io.Writer) error {
 
 func runAgentInspect(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -315,7 +315,7 @@ func runAgentInspect(args []string, stdout io.Writer) error {
 
 func runAgentDetach(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("detach", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func runAgentDetach(args []string, stdout io.Writer) error {
 
 func runAgentUpdate(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	name := fs.String("name", "", "agent title")
 	model := fs.String("model", "", "model id")
 	thinking := fs.String("thinking", "", "thinking level")
@@ -395,7 +395,7 @@ func runAgentUpdate(args []string, stdout io.Writer) error {
 
 func runAgentImport(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	cwd := fs.String("cwd", "", "working directory")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -432,7 +432,7 @@ func runAgentImport(args []string, stdout io.Writer) error {
 
 func runAgentReload(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("reload", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -468,7 +468,7 @@ func runProjectGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("project "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	resetName := fs.Bool("reset", false, "rename: clear the custom name and use the directory name")
 	asJSON := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(rest); err != nil {
@@ -570,7 +570,7 @@ func runWorkspaceGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("workspace "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	asJSON := fs.Bool("json", false, "output JSON")
 	// `workspace create` flags. --path defaults to the positional argument (or the current
 	// directory), --project attaches the workspace to an existing project instead of creating one,
@@ -703,7 +703,7 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("terminal "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	cwd := fs.String("cwd", "", "working directory")
 	workspaceID := fs.String("workspace", "", "workspace to open the terminal in")
 	name := fs.String("name", "Terminal", "terminal name")
@@ -853,7 +853,7 @@ func runProviderGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("provider "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
@@ -909,7 +909,7 @@ func runScriptGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("script "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	wsID := fs.String("workspace", "", "workspace ID")
 	if err := fs.Parse(rest); err != nil {
 		return err
@@ -1000,7 +1000,7 @@ func runPermitGroupCmd(args []string, stdout io.Writer) error {
 		rest = args[1:]
 	}
 	fs := flag.NewFlagSet("permit "+sub, flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	agentID := fs.String("agent", "", "agent ID")
 	// `--input` replaces the tool call's parameters before it runs, which is how a user narrows an
 	// over-broad command instead of denying it outright. `--interrupt` stops the agent after a
@@ -1097,7 +1097,7 @@ func runPermitGroupCmd(args []string, stdout io.Writer) error {
 
 func runCloneCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("clone", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1135,7 +1135,7 @@ func runCloneCmd(args []string, stdout io.Writer) error {
 
 func runOpenCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("open", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1170,7 +1170,7 @@ func runOpenCmd(args []string, stdout io.Writer) error {
 // ("https://agentclientprotocol.com/protocol/session-modes#plan"), not something a user guesses.
 func runAgentMode(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("agent mode", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	asJSON := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1261,7 +1261,7 @@ func runAgentMode(args []string, stdout io.Writer) error {
 // what the daemon reports, so a caller that already knows the host does not have to pass it.
 func runAgentOpen(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("agent open", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	serverFlag := fs.String("server", "", "server id (defaults to the local daemon)")
 	asJSON := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {

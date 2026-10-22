@@ -29,9 +29,11 @@ func daemonHostCandidates(explicit string) []string {
 	trimmedExplicit := strings.TrimSpace(explicit)
 	candidates := make([]string, 0, 3)
 
-	// An explicit address is the only candidate: the user said where to look, and silently falling
-	// through to another daemon would talk to the wrong one.
-	if trimmedExplicit != "" && trimmedExplicit != defaultListenAddr() {
+	// An explicit address is the only candidate: the user said where to look, and silently falling through to
+	// another daemon would talk the wrong one — which is exactly what happened while this compared the value
+	// against the default instead of asking whether it was set: passing `--addr 127.0.0.1:6778` in this repo
+	// matched the dev default, was treated as absent, and the CLI went on to the production daemon on 6777.
+	if trimmedExplicit != "" {
 		return []string{trimmedExplicit}
 	}
 	if host := strings.TrimSpace(os.Getenv("BYSPACE_HOST")); host != "" {

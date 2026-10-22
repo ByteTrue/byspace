@@ -1,47 +1,48 @@
 package cli
 
-import (
-	"testing"
-)
+import "testing"
 
-// An explicit address is the only candidate: the user said where to look, and silently falling
-// through to another daemon would talk to the wrong one.
-func TestDaemonHostCandidatesHonoursExplicit(t *testing.T) {
-	got := daemonHostCandidates("127.0.0.1:9999")
-	if len(got) != 1 || got[0] != "127.0.0.1:9999" {
-		t.Fatalf("candidates = %v", got)
+// An explicit address is the only candidate. Comparing its VALUE against the dev default instead of asking whether it
+// was set made `--addr 127.0.0.1:6778` indistinguishable from "not passed", so the CLI fell through to the recorded
+// address and then to the production daemon on 6777 — reporting "Invalid hello" from a daemon the user never named.
+func TestDaemonHostCandidates(t *testing.T) {
+	explicit := daemonHostCandidates("127.0.0.1:6778")
+	if len(explicit) != 1 || explicit[0] != "127.0.0.1:6778" {
+		t.Fatalf("explicit = %v", explicit)
+	}
+
+	// The dev default must not be special-cased into oblivion.
+	if got := daemonHostCandidates(DefaultDevAddr); len(got) != 1 || got[0] != DefaultDevAddr {
+		t.Fatalf("dev default = %v", got)
 	}
 }
 
-// BYSPACE_HOST is explicit too, for the same reason.
-func TestDaemonHostCandidatesHonoursEnv(t *testing.T) {
-	t.Setenv("BYSPACE_HOST", "127.0.0.1:8888")
-	got := daemonHostCandidates("")
-	if len(got) != 1 || got[0] != "127.0.0.1:8888" {
-		t.Fatalf("candidates = %v", got)
-	}
-}
-
-// Without an explicit address the default TCP address is always a candidate, and the list is
-// deduplicated because a daemon recording the default would otherwise appear twice.
-func TestDaemonHostCandidatesAlwaysIncludesDefault(t *testing.T) {
+// Without an explicit address the list starts with whatever the daemon recorded, then the production default.
+func TestDaemonHostCandidatesWithoutExplicit(t *testing.T) {
 	t.Setenv("BYSPACE_HOST", "")
-	got := daemonHostCandidates("")
-	found := false
-	for _, candidate := range got {
-		if candidate == DefaultTCPListen {
-			found = true
-		}
+	candidates := daemonHostCandidates("")
+	if len(candidates) == 0 {
+		t.Fatal("no candidates")
 	}
-	if !found {
-		t.Fatalf("the default address is missing: %v", got)
+	last := candidates[len(candidates)-1]
+	if last != DefaultTCPListen {
+		t.Fatalf("last candidate = %q, want %q", last, DefaultTCPListen)
 	}
-
-	seen := make(map[string]bool, len(got))
-	for _, candidate := range got {
+	// Deduplicated: the recorded address is often the default one.
+	seen := map[string]bool{}
+	for _, candidate := range candidates {
 		if seen[candidate] {
-			t.Fatalf("duplicate candidate %q in %v", candidate, got)
+			t.Fatalf("duplicate candidate %q in %v", candidate, candidates)
 		}
 		seen[candidate] = true
+	}
+}
+
+// BYSPACE_HOST overrides the recorded and default addresses.
+func TestDaemonHostCandidatesHonoursEnv(t *testing.T) {
+	t.Setenv("BYSPACE_HOST", "10.0.0.5:6778")
+	got := daemonHostCandidates("")
+	if len(got) != 1 || got[0] != "10.0.0.5:6778" {
+		t.Fatalf("got %v", got)
 	}
 }

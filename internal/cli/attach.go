@@ -37,7 +37,7 @@ type attachOptions struct {
 func parseAttachArgs(args []string) (attachOptions, error) {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	opts := attachOptions{}
-	fs.StringVar(&opts.addr, "addr", defaultListenAddr(), "daemon address")
+	fs.StringVar(&opts.addr, "addr", "", "daemon address (default "+defaultListenAddr()+")")
 	fs.BoolVar(&opts.noFollow, "no-follow", false, "print history and exit")
 	if err := fs.Parse(args); err != nil {
 		return opts, err

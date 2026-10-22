@@ -25,7 +25,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 	switch sub {
 	case "create":
 		fs := flag.NewFlagSet("heartbeat create", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		cronExpr := fs.String("cron", "", "cron expression (e.g. */10 * * * *)")
 		every := fs.String("every", "1m", "interval: 90s / 15m / 2h / 1d, or a bare number of minutes")
 		tz := fs.String("timezone", "UTC", "cron timezone")
@@ -154,7 +154,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 
 	case "list", "ls":
 		fs := flag.NewFlagSet("heartbeat list", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		asJSON := fs.Bool("json", false, "output JSON")
 		if err := fs.Parse(rest); err != nil {
 			return err
@@ -192,7 +192,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 
 	case "delete", "rm":
 		fs := flag.NewFlagSet("heartbeat delete", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
@@ -227,7 +227,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		// Without this a schedule's prompt or cadence could only be changed by deleting and
 		// recreating it, which loses its run history.
 		fs := flag.NewFlagSet("schedule update", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		cronExpr := fs.String("cron", "", "cron expression")
 		every := fs.String("every", "", "interval: 90s / 15m / 2h / 1d, or a bare number of minutes")
 		name := fs.String("name", "", "schedule name")
@@ -307,7 +307,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 
 	case "inspect", "logs", "pause", "resume", "run-once":
 		fs := flag.NewFlagSet("schedule "+sub, flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
@@ -356,7 +356,7 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 	switch sub {
 	case "create":
 		fs := flag.NewFlagSet("worktree create", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		cwd := fs.String("cwd", "", "repository directory")
 		mode := fs.String("mode", "", "branch-off | checkout-branch | checkout-pr")
 		newBranch := fs.String("new-branch", "", "branch to create (branch-off)")
@@ -413,7 +413,7 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 
 	case "list", "ls":
 		fs := flag.NewFlagSet("worktree list", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		cwd := fs.String("cwd", "", "repository directory")
 		if err := fs.Parse(rest); err != nil {
 			return err

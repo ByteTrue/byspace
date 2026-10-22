@@ -527,7 +527,7 @@ func runList(args []string, stdout io.Writer) error {
 
 func runAgentPrompt(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	cwd := fs.String("cwd", "", "working directory")
 	model := fs.String("model", "", "model identifier")
 	thinking := fs.String("thinking", "", "thinking level")
@@ -809,7 +809,7 @@ func lastAssistantTextFromTimeline(ctx context.Context, ws *websocket.Conn, agen
 
 func runLogs(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	// The four flags the node CLI has. Without them `logs` could only dump everything once, which
 	// is the least useful form: the common case is watching a running agent or looking at the tail
 	// of a long one.
@@ -992,7 +992,7 @@ func followTimeline(ctx context.Context, ws *websocket.Conn, agentID string, cur
 
 func runWait(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("wait", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 	timeoutMs := fs.Int("timeout", 30000, "timeout in milliseconds")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1078,7 +1078,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 	switch sub {
 	case "status":
 		fs := flag.NewFlagSet("daemon status", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
 		homeDir := fs.String("home", "", "byspace home directory")
 		if err := fs.Parse(rest); err != nil {
 			return err
