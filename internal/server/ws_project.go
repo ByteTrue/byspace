@@ -863,7 +863,22 @@ func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgTyp
 			return
 		}
 		var parsed map[string]any
-		_ = json.Unmarshal(b, &parsed)
+		if unmarshalErr := json.Unmarshal(b, &parsed); unmarshalErr != nil {
+			// A broken byspace.json is a state the editor has to show, not one to paper over: answering `ok: true` with
+			// a null config told the client the project simply had no config, so the form opened empty and the user's
+			// next save overwrote the file they were trying to fix. The error union is keyed on `code`, and
+			// `invalid_project_config` is what renders the read-error callout.
+			_ = sendSessionMsg(ctx, sink, "read_project_config_response", map[string]any{
+				"requestId": req.RequestID,
+				"repoRoot":  req.RepoRoot,
+				"ok":        false,
+				"error": map[string]any{
+					"code":    "invalid_project_config",
+					"message": unmarshalErr.Error(),
+				},
+			})
+			return
+		}
 		info, _ := os.Stat(cfgPath)
 		var mtimeMs int64
 		if info != nil {
