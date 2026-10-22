@@ -1666,3 +1666,111 @@ func addUncommittedSetupFlag(payload map[string]any, ctx context.Context, repoRo
 		payload["hasUncommittedWorktreeSetupChanges"] = true
 	}
 }
+
+// projectRootByID returns a project's root path, or "" when the id is unknown.
+func (s *Server) projectRootByID(projectID string) string {
+	trimmed := strings.TrimSpace(projectID)
+	if trimmed == "" {
+		return ""
+	}
+	projects, err := s.store.ListProjects()
+	if err != nil {
+		return ""
+	}
+	for _, project := range projects {
+		if project.ProjectID == trimmed {
+			return project.RootPath
+		}
+	}
+	return ""
+}
+
+// handleWorkspaceCreateFromWorktree creates a workspace whose source is a worktree.
+//
+// The worktree source names a project and a branch, not a directory — the directory is what this call produces. It reuses
+// the worktree creation path so a workspace created from the command center gets a real git worktree, the same
+// untrusted-source guard for a change request checkout, and the same setup scheduling, instead of a second
+// implementation that would drift.
+//
+// The worktree handler answers on `create_byspace_worktree_response`; the caller here asked for a workspace, so the
+// result is translated into that response rather than making the client listen on two channels for one operation.
+func (s *Server) handleWorkspaceCreateFromWorktree(
+	ctx context.Context,
+	sink frameSink,
+	requestID string,
+	projectRoot string,
+	title *string,
+	action string,
+	baseBranch string,
+	branchName string,
+	worktreeSlug string,
+) {
+	intent := workspace.WorktreeIntent{Kind: workspace.IntentBranchOff}
+	if strings.TrimSpace(action) == "checkout" {
+		intent = workspace.WorktreeIntent{Kind: workspace.IntentCheckoutBranch}
+	}
+	if strings.TrimSpace(branchName) != "" {
+		intent.BranchName = strings.TrimSpace(branchName)
+	}
+	if strings.TrimSpace(baseBranch) != "" {
+		intent.BaseBranch = strings.TrimSpace(baseBranch)
+	}
+
+	wtBase := filepath.Join(s.homeDir, "worktrees")
+	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, worktreeSlug)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+			"requestId":       requestID,
+			"workspace":       nil,
+			"setupTerminalId": nil,
+			"error":           err.Error(),
+		})
+		return
+	}
+
+	prj, _, err := s.store.EnsureWorkspaceForCwd(projectRoot)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+			"requestId":       requestID,
+			"workspace":       nil,
+			"setupTerminalId": nil,
+			"error":           err.Error(),
+		})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	repoRoot := prj.RootPath
+	displayName := branch
+	if title != nil && strings.TrimSpace(*title) != "" {
+		displayName = strings.TrimSpace(*title)
+	}
+	wsRec := store.WorkspaceRecord{
+		WorkspaceID:            store.NewWorkspaceID(),
+		ProjectID:              prj.ProjectID,
+		Cwd:                    wtPath,
+		Kind:                   "worktree",
+		DisplayName:            displayName,
+		Branch:                 &branch,
+		WorktreeRoot:           &wtPath,
+		MainRepoRoot:           &repoRoot,
+		IsBySpaceOwnedWorktree: true,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	_ = s.store.UpsertWorkspace(wsRec)
+	s.broadcastWorkspaceUpsert(wsRec, prj)
+
+	// Setup runs before the response is considered complete by the client, but it must not block the response: a
+	// worktree whose setup is slow is still openable, and the timeline carries the progress.
+	var setupTerminalID any
+	if setupCommands := workspace.ReadSetupCommands(wtPath); len(setupCommands) > 0 {
+		go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+		"requestId":       requestID,
+		"workspace":       buildWorkspaceDescriptor(wsRec, prj),
+		"setupTerminalId": setupTerminalID,
+		"error":           nil,
+	})
+}

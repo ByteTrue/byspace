@@ -1765,9 +1765,34 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		Source            struct {
 			Kind string `json:"kind"`
 			Path string `json:"path"`
+			// A worktree source names a project and a branch instead of a directory: the directory does not exist
+			// yet, it is what this call creates. Requiring a path for every kind made every worktree-source
+			// request fail with "needs a directory".
+			ProjectID    string `json:"projectId"`
+			BaseBranch   string `json:"baseBranch"`
+			BranchName   string `json:"branchName"`
+			WorktreeSlug string `json:"worktreeSlug"`
+			Action       string `json:"action"`
 		} `json:"source"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	// A worktree source resolves its cwd from the project, because the directory it names is the one being created.
+	if strings.TrimSpace(req.Source.Kind) == "worktree" {
+		projectRoot := s.projectRootByID(req.Source.ProjectID)
+		if projectRoot == "" {
+			_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+				"requestId":       req.RequestID,
+				"workspace":       nil,
+				"setupTerminalId": nil,
+				"error":           "workspace.create with a worktree source needs a known project",
+			})
+			return
+		}
+		s.handleWorkspaceCreateFromWorktree(ctx, sink, req.RequestID, projectRoot, req.Title, req.Source.Action,
+			req.Source.BaseBranch, req.Source.BranchName, req.Source.WorktreeSlug)
+		return
+	}
 
 	cwd := firstNonEmptyTrimmed(req.Source.Path, req.Cwd, req.Path)
 	if cwd == "" {
