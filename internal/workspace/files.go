@@ -164,7 +164,9 @@ func ReadFile(root, relPath string) (*FileContent, error) {
 		return nil, err
 	}
 	if info.IsDir() {
-		return nil, errors.New("cannot read directory as file")
+		// The message is user-visible: the file pane shows it verbatim when a tab's path became a directory. It is
+		// worded for that reader, not for a log.
+		return nil, errors.New("Requested path is not a file")
 	}
 
 	raw, err := os.ReadFile(absTarget)
@@ -233,6 +235,11 @@ func StatFileVersion(root, relPath string) FileVersion {
 			return FileVersion{Status: "missing", Cwd: root, Path: normalizedRel}
 		}
 		return FileVersion{Status: "error", Cwd: root, Path: normalizedRel, Error: err.Error()}
+	}
+	if info.IsDir() {
+		// A directory where a file used to be is a state the pane has to report, not one it should paper over as
+		// "ready" with a zero size.
+		return FileVersion{Status: "error", Cwd: root, Path: normalizedRel, Error: "Requested path is not a file"}
 	}
 	return FileVersion{
 		Status:     "ready",

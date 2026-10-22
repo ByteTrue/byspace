@@ -244,6 +244,22 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 		full := filepath.Join(fs.cwd, fs.path)
 		info, statErr := os.Stat(full)
 		if statErr != nil {
+			// The file is gone or unreadable. Skipping here is what made a deletion silent: the pane kept showing
+			// the document and the next save recreated the file without ever telling the user it had vanished.
+			// Only report once per transition, which the stamp comparison covers.
+			if fs.stamp == "" {
+				continue
+			}
+			s.mu.Lock()
+			if cur, ok := s.fileSubs[fs.id]; ok {
+				cur.stamp = ""
+				s.fileSubs[fs.id] = cur
+			}
+			s.mu.Unlock()
+			_ = sendSessionMsg(ctx, fs.sink, "fs.file.update", map[string]any{
+				"subscriptionId": fs.id,
+				"version":        workspace.StatFileVersion(fs.cwd, fs.path),
+			})
 			continue
 		}
 		stamp := fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
@@ -252,7 +268,28 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 			continue
 		}
 		fc, err := workspace.ReadFile(fs.cwd, fs.path)
-		if err != nil || fc.Revision == fs.lastVersion {
+		if err != nil {
+			// The file was deleted, became a directory, or lost its permissions. The pane still needs to know:
+			// without an update it keeps showing a document that no longer exists, and the user's next save
+			// silently recreates it instead of being told what happened.
+			version := workspace.StatFileVersion(fs.cwd, fs.path)
+			if version.Revision == fs.lastVersion && version.Status != "missing" {
+				continue
+			}
+			s.mu.Lock()
+			if cur, ok := s.fileSubs[fs.id]; ok {
+				cur.lastVersion = version.Revision
+				cur.stamp = stamp
+				s.fileSubs[fs.id] = cur
+			}
+			s.mu.Unlock()
+			_ = sendSessionMsg(ctx, fs.sink, "fs.file.update", map[string]any{
+				"subscriptionId": fs.id,
+				"version":        version,
+			})
+			continue
+		}
+		if fc.Revision == fs.lastVersion {
 			// Same revision despite a new stamp (a touched file, or a write that was undone):
 			// remember the stamp so the next poll does not read it again.
 			s.mu.Lock()
@@ -270,9 +307,19 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 			s.fileSubs[fs.id] = cur
 		}
 		s.mu.Unlock()
+		// `version` is the FileVersion union (status/cwd/path/size/modifiedAt), not a bare revision string. Sending
+		// the string made every update fail validation, so no file pane ever learned that its file had changed on
+		// disk — the "changed on disk" callout and its reload/overwrite actions were unreachable.
 		_ = sendSessionMsg(ctx, fs.sink, "fs.file.update", map[string]any{
 			"subscriptionId": fs.id,
-			"version":        fc.Revision,
+			"version": workspace.FileVersion{
+				Status:     "ready",
+				Cwd:        fs.cwd,
+				Path:       fs.path,
+				Size:       fc.Size,
+				ModifiedAt: fc.ModifiedAt,
+				Revision:   fc.Revision,
+			},
 		})
 	}
 
