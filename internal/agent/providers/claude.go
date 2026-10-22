@@ -878,30 +878,31 @@ func toArgMap(value any) map[string]any {
 // A snapshot replaces the previous one rather than appending: the panel shows one list, and a run of
 // TodoWrite calls would otherwise leave a stack of stale lists in the transcript.
 func (s *ClaudeSession) todoTimelineEvent(snapshot *taskstate.Snapshot) []map[string]any {
-	items := make([]any, 0, len(snapshot.Items))
+	items := make([]sdk.TaskItem, 0, len(snapshot.Items))
 	for _, item := range snapshot.Items {
-		items = append(items, map[string]any{
-			"id":         item.ID,
-			"text":       item.Text,
-			"status":     item.Status,
-			"completed":  item.Completed,
-			"activeForm": item.ActiveForm,
+		items = append(items, sdk.TaskItem{
+			Text:       item.Text,
+			Completed:  item.Completed,
+			ID:         item.ID,
+			Status:     item.Status,
+			ActiveForm: item.ActiveForm,
 		})
 	}
-	detail := map[string]any{"type": "todo", "items": items}
 
 	index := len(s.timeline) - 1
 	if index < 0 || s.timeline[index].Item.Type != "todo" {
-		index = s.appendItemLocked(sdk.TimelineItem{Type: "todo", Detail: detail})
+		index = s.appendItemLocked(sdk.TimelineItem{Type: "todo", Items: items})
 	} else {
-		s.timeline[index].Item.Detail = detail
+		s.timeline[index].Item.Items = items
 	}
 	entry := s.timeline[index]
 	return []map[string]any{{
 		"type": "timeline",
+		// The protocol's todo branch carries `items`, not a nested `detail`. Sending detail made the
+		// item fail validation, which drops the whole timeline response rather than just this row.
 		"item": map[string]any{
 			"type":      "todo",
-			"detail":    detail,
+			"items":     items,
 			"seq":       entry.Seq,
 			"turnId":    entry.TurnID,
 			"timestamp": entry.Timestamp,
