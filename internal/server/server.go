@@ -2590,7 +2590,10 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 	finalText := mp.session.LastAssistantText()
 	_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
 		"requestId": req.RequestID,
-		"status":    "completed",
+		// The schema's enum is idle | error | permission | timeout: a finished turn is "idle", not
+		// "completed". Sending an invented value made the client reject the response and reject its promise,
+		// so `byspace run` and every wait-for-finish path failed even though the turn had succeeded.
+		"status": "idle",
 		// `final` is the full agent snapshot, not an ad-hoc summary: clients merge it into
 		// their agent map, and `lastMessage` is what `byspace wait` prints.
 		"final":       s.buildAgentSnapshotPayload(mp.record),

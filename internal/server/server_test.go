@@ -170,7 +170,7 @@ func TestServerDirectWebSocketAndPiAgentLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitResp := readUntilSessionType(t, ctx, ws, "wait_for_finish_response", "")
-	if waitResp["status"] != "completed" {
+	if waitResp["status"] != "idle" {
 		t.Fatalf("expected completed wait_for_finish_response, got %+v", waitResp)
 	}
 	// WaitForFinishResponseSchema: `final` is the agent snapshot, `lastMessage` the text.
