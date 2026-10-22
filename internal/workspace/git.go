@@ -30,7 +30,9 @@ type CheckoutStatus struct {
 	RemoteURL              *string `json:"remoteUrl"`
 	IsBySpaceOwnedWorktree bool    `json:"isBySpaceOwnedWorktree"`
 	Error                  any     `json:"error"`
-	RequestID              string  `json:"requestId,omitempty"`
+	// No omitempty: the protocol requires requestId as a string, and an omitted key is undefined.
+	// A broadcast has no request to name, so it carries the empty string — which the schema accepts.
+	RequestID string `json:"requestId"`
 }
 
 type CommitFile struct {

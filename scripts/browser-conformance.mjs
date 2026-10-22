@@ -263,6 +263,18 @@ try {
   });
   bsk(["navigate", BASE, "--session", session]);
   sleep(2500);
+  // The app restores the last route. When that route names a workspace the daemon no longer has — an archived one,
+  // or a temp workspace a previous run created — the app shows "Workspace unavailable" and the composer never
+  // appears, so every check downstream fails for a reason unrelated to what it measures. Back out and land on the
+  // shell instead of reporting those failures.
+  for (let guard = 0; guard < 3; guard += 1) {
+    const current = observe();
+    if (!current.includes("Workspace unavailable")) break;
+    const back = refFor(current, /button "Back"/);
+    if (!back) break;
+    click(back);
+    sleep(1500);
+  }
 
   // ---------------------------------------------------------------- 侧边栏结构
   let snap = ensureSidebarVisible();
@@ -332,6 +344,16 @@ try {
   for (let attempt = 0; attempt < 3 && !thinkingRef; attempt += 1) {
     bsk(["navigate", BASE, "--session", session], { allowFailure: true });
     sleep(2200);
+    // Navigating back re-enters the restored route, so the unavailable-workspace screen can return on every attempt.
+    // Clear it here rather than only once at the top, or all three attempts fail the same way.
+    for (let guard = 0; guard < 3; guard += 1) {
+      const current = observe();
+      if (!current.includes("Workspace unavailable")) break;
+      const back = refFor(current, /button "Back"/);
+      if (!back) break;
+      click(back);
+      sleep(1500);
+    }
     let s2 = ensureSidebarVisible();
     // 侧栏打开后 composer 才没有被盖住。上一步把它打开，这里要把它关掉才能看到 composer。
     for (let guard = 0; guard < 3; guard += 1) {
@@ -368,9 +390,12 @@ try {
     snap = s2;
   }
   if (!thinkingRef) {
+    const reachable = bsk(["observe", "--session", session], { allowFailure: true });
     failFast(
       "Open thinking menu",
-      `no 'Select thinking option' button after 3 attempts\n--- snapshot ---\n${snap.slice(0, 700)}`,
+      `no 'Select thinking option' button after 3 attempts\n` +
+        `unavailable screen: ${reachable.includes("Workspace unavailable")}\n` +
+        `--- snapshot ---\n${snap.slice(0, 900)}`,
     );
   }
   snap = observe();
