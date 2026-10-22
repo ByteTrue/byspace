@@ -197,22 +197,76 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 }
 
 // ListCommits returns the recent git commit history for cwd.
-func ListCommits(ctx context.Context, cwd string, limit int) (string, []Commit, error) {
+// ListCommits lists the commits the panel shows: the branch's own work first, then the base's recent history.
+//
+// Ported from listCheckoutCommits. Two things matter and neither is "just run git log":
+//
+//   - When the branch being viewed IS the comparison base, there is nothing ahead of it. Node still lists the base's
+//     recent commits, marked `isOnBase`, so the panel shows history instead of an empty box. `baseRef` is null in that
+//     case — the client renders "no commits ahead" from it, and naming a base that is the current branch would be wrong.
+//   - Otherwise the branch's commits come from `<merge-base>..HEAD`, so commits the base gained after this branch
+//     started are not counted as work done here.
+func ListCommits(ctx context.Context, cwd string, limit int) (*string, []Commit, error) {
 	if limit <= 0 {
 		limit = 30
 	}
-	format := "%H%x1f%h%x1f%s%x1f%an%x1f%aI"
-	out, err := runGit(ctx, cwd, "log", "-n", strconv.Itoa(limit), "--format="+format)
-	if err != nil {
-		return "", []Commit{}, err
-	}
-	if out == "" {
-		return "main", []Commit{}, nil
+	currentBranch, err := runGit(ctx, cwd, "rev-parse", "--abbrev-ref", "HEAD")
+	branch := strings.TrimSpace(currentBranch)
+	if err != nil || branch == "" || branch == "HEAD" {
+		// Detached HEAD or not a repository: there is no branch to compare, and saying so is the honest answer.
+		return nil, []Commit{}, nil
 	}
 
-	lines := strings.Split(out, "\n")
-	commits := make([]Commit, 0, len(lines))
-	for _, line := range lines {
+	base := ResolveDiffBaseRef(ctx, cwd)
+	baseName := strings.TrimPrefix(base, "origin/")
+	unpushed := unpushedCommitShas(ctx, cwd)
+
+	ahead := make([]Commit, 0, 32)
+	var comparisonBase *string
+	if base != "" && baseName != branch {
+		if ancestor, mergeErr := runGit(ctx, cwd, "merge-base", base, "HEAD"); mergeErr == nil {
+			if trimmed := strings.TrimSpace(ancestor); trimmed != "" {
+				out, logErr := runGit(ctx, cwd, "log", "-n", strconv.Itoa(limit),
+					"--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", trimmed+"..HEAD")
+				if logErr != nil {
+					return nil, []Commit{}, logErr
+				}
+				ahead = parseCommits(out, unpushed, false)
+				resolved := base
+				comparisonBase = &resolved
+			}
+		}
+	}
+
+	// The base's recent history, marked `isOnBase`. Without it a branch with no commits of its own shows nothing at
+	// all, which reads as a failure rather than as "this branch has nothing on top of its base".
+	baseRevision := "HEAD"
+	if comparisonBase != nil {
+		if ancestor, mergeErr := runGit(ctx, cwd, "merge-base", *comparisonBase, "HEAD"); mergeErr == nil {
+			if trimmed := strings.TrimSpace(ancestor); trimmed != "" {
+				baseRevision = trimmed
+			}
+		}
+	}
+	baseOut, baseErr := runGit(ctx, cwd, "log", "-n", strconv.Itoa(limit),
+		"--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", baseRevision)
+	if baseErr != nil {
+		return comparisonBase, ahead, nil
+	}
+	commits := append(ahead, parseCommits(baseOut, unpushed, true)...)
+	return comparisonBase, commits, nil
+}
+
+// parseCommits reads the log format used by ListCommits.
+//
+// isOnBase says whether the commits came from the base's history: the panel groups them separately, and a commit that is
+// both here and on the base would otherwise be presented as this branch's work.
+func parseCommits(out string, unpushed map[string]bool, isOnBase bool) []Commit {
+	commits := make([]Commit, 0, 32)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
 		parts := strings.Split(line, "\x1f")
 		if len(parts) < 5 {
 			continue
@@ -223,12 +277,30 @@ func ListCommits(ctx context.Context, cwd string, limit int) (string, []Commit, 
 			Subject:    parts[2],
 			AuthorName: parts[3],
 			AuthorDate: parts[4],
-			IsOnRemote: true,
-			IsOnBase:   false,
+			IsOnRemote: !unpushed[parts[0]],
+			IsOnBase:   isOnBase,
 			Files:      []CommitFile{},
 		})
 	}
-	return "main", commits, nil
+	return commits
+}
+
+// unpushedCommitShas is the set of commits on HEAD that no remote ref contains.
+//
+// Empty when there is no remote: nothing is known to be pushed, so every commit reports as local-only instead of
+// claiming to be on a remote that does not exist.
+func unpushedCommitShas(ctx context.Context, cwd string) map[string]bool {
+	out, err := runGit(ctx, cwd, "rev-list", "HEAD", "--not", "--remotes")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return map[string]bool{}
+	}
+	shas := make(map[string]bool, 32)
+	for _, line := range strings.Split(out, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			shas[trimmed] = true
+		}
+	}
+	return shas
 }
 
 // CreateWorktree creates a new git worktree with branch `slug` under worktreesBaseDir.
