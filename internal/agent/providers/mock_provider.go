@@ -41,6 +41,10 @@ var MockProvider = ProviderSpec{
 		{ID: MockModeID, Label: "Load test", Description: "Scripted streaming output"},
 	},
 	Models: MockModels(),
+	// Features must be non-nil: the agent snapshot sends it straight through, and the protocol requires an
+	// array. A nil slice marshals to null, which fails validation and makes the client drop the whole
+	// agent_update — including the status change that ends a turn.
+	Features: []FeatureDefinition{},
 }
 
 // MockModel is one selectable model with the timing profile that shapes its stream.
