@@ -93,8 +93,19 @@ created: 2026-10-22
 同一路径、同一 daemon、同一前端产物，手工每次进得去、e2e 每次进不去。差别只在 fixture：`page.addInitScript`
 注入 localStorage 的 daemon registry 与 `page.goto()` 之间存在时序窗口。
 
-**这是测试基础设施问题，不是 Go parity 缺口。** 同一现象此前也出现过：`empty-project-persists` 单跑通过、全量
-失败，我当时把它判成「环境噪声」带过，没有追到底。
+**这也不是测试基础设施的时序问题。** 我在 Playwright 里用临时 spec 逐段验证了 `openWorkspaceDraft` 的每一步：
+
+| 检查                                       | 结果                                                   |
+| ------------------------------------------ | ------------------------------------------------------ |
+| `workspace-tabs-row` 存在且可见            | 2 个节点 / 1 个可见                                    |
+| `workspace-new-tab-button` 可见            | 是                                                     |
+| 点击后 `workspace-new-tab-menu-agent` 出现 | 是（菜单含 agent/terminal/diff/4 个 provider profile） |
+| 连跑 3 个 test 共享同一 worker daemon      | 3 次都 `clicked=true`                                  |
+| `fetch_workspaces_response`                | 2 条、VALID                                            |
+| 页面文本                                   | 含 "New Agent"、composer、"Ten second stream"          |
+
+所以在 Playwright 里这条路径也是通的。26 条失败的原因落在 spec 内部的某个具体交互上，**既不是 Go 实现，也不是
+fixture 时序**。我先后把根因归到 `Abort`、中断时序、fixture 竞态，三次都错。
 
 教训：靠 e2e 的错误信息倒推根因，比手工复现低效且容易错。手工五分钟看清的事，我从错误信息猜了几十分钟。
 
