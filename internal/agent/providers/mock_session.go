@@ -332,9 +332,11 @@ func (s *MockSession) PendingPermissions() []map[string]any {
 func (s *MockSession) RespondToPermission(requestID string, resp map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	remaining := s.pendingPermissions[:0]
+	// Matched on `id`, which is what the request carries and what the client answers with. Comparing
+	// `requestId` (the RPC envelope's field) removed nothing, so a dismissed modal stayed pending.
+	remaining := make([]map[string]any, 0, len(s.pendingPermissions))
 	for _, request := range s.pendingPermissions {
-		if id, _ := request["requestId"].(string); id == requestID {
+		if id, _ := request["id"].(string); id == requestID {
 			continue
 		}
 		remaining = append(remaining, request)
@@ -529,12 +531,33 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	if clientMessageID != "" {
 		userItem.ClientMessageID = clientMessageID
 	}
-	s.appendItem(userItem)
 
-	s.emit(map[string]any{
-		"type":   "byspace_turn_started",
-		"turnId": turnID,
-	})
+	// Ordering is a contract the client is written against. By default the turn starts first and the echoed
+	// user message follows; a prompt asking for the echo first exercises the opposite case, which is where the
+	// duplicate-bubble bugs live. Both go through the same emit path so the client cannot tell them apart
+	// except by sequence.
+	directives := ParseMockDirectives(message)
+	startedFirst := !directives.UserMessageFirst
+	if startedFirst {
+		s.emit(map[string]any{
+			"type":   "byspace_turn_started",
+			"turnId": turnID,
+		})
+	}
+
+	// Assistant text before the echoed user message: the client has to attach it to the turn without a
+	// preceding user message to anchor on.
+	for index := 0; index < directives.AssistantBeforeUser; index++ {
+		s.emitTextDelta("early "+strconv.Itoa(index+1)+" ", assistantMsgID)
+	}
+
+	s.appendItem(userItem)
+	if !startedFirst {
+		s.emit(map[string]any{
+			"type":   "byspace_turn_started",
+			"turnId": turnID,
+		})
+	}
 
 	go func() {
 		defer func() {
@@ -548,7 +571,7 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 			s.mu.Unlock()
 			close(finished)
 		}()
-		s.runScriptedTurn(turnCtx, turnID, assistantMsgID, message, hasImages, profile)
+		s.runScriptedTurn(turnCtx, turnID, assistantMsgID, message, hasImages, profile, directives)
 	}()
 	return nil
 }
@@ -561,6 +584,7 @@ func (s *MockSession) runScriptedTurn(
 	message string,
 	hasImages bool,
 	profile MockModel,
+	directives MockDirectives,
 ) {
 	interval := time.Duration(profile.IntervalMs) * time.Millisecond
 
@@ -574,7 +598,6 @@ func (s *MockSession) runScriptedTurn(
 		}
 	}
 
-	directives := ParseMockDirectives(message)
 	if directives.PlanApproval {
 		s.emitPlanApprovalRequest(turnID)
 		s.completeTurn(turnID, assistantMsgID, "")
@@ -595,6 +618,48 @@ func (s *MockSession) runScriptedTurn(
 			s.emitTextDelta("chunk "+strconv.Itoa(index+1)+" ", assistantMsgID)
 		}
 		s.completeTurn(turnID, assistantMsgID, "streamed "+strconv.Itoa(directives.StreamUpdates)+" updates")
+		return
+	}
+	if directives.Notification {
+		s.appendItem(sdk.TimelineItem{
+			Type:    "notification",
+			Level:   "info",
+			Message: "## Historian recovery\n\nHistorian previously failed 3 time(s), so Magic Context is retrying history compartmentalising immediately after restart.",
+		})
+		s.completeTurn(turnID, assistantMsgID, "Synthetic notification emitted")
+		return
+	}
+	if directives.CustomMessage {
+		// A custom message is the harness reporting something about itself. It renders as a distinct card,
+		// which is why it cannot be folded into an assistant message.
+		s.appendItem(sdk.TimelineItem{
+			Type: "custom_message",
+			Text: "[background-exit] 2 background tasks finished:\n" +
+				"[bg_2bc2494e69199b6a] npm run dev:server exited with code 0.\n" +
+				"[bg_eb37efed6b1968a8] npm run dev:app exited with code 0.",
+		})
+		s.completeTurn(turnID, assistantMsgID, "Synthetic custom message emitted")
+		return
+	}
+	if directives.ToolCallTodo {
+		// A todo card whose items come from the tool result, not the arguments: the panel reads the list out
+		// of `detail`, and an empty list renders as a card with no rows.
+		s.appendItem(sdk.TimelineItem{
+			Type:   "tool_call",
+			CallID: "mock-todo-" + turnID,
+			Name:   "todowrite",
+			Status: "completed",
+			Detail: map[string]any{
+				"type": "unknown",
+				"todos": []map[string]any{
+					{"content": "Setup scaffold", "status": "completed"},
+					{"content": "Implement tool call parser", "status": "completed"},
+					{"content": "Verify Tasks track button in browser", "status": "in_progress"},
+					{"content": "Submit PR", "status": "pending"},
+				},
+			},
+		})
+		s.completeTurn(turnID, assistantMsgID, "Synthetic todo emitted")
 		return
 	}
 	if directives.ImageMarkdown != "" {
