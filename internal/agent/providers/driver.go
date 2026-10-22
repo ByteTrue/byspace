@@ -358,8 +358,13 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		if en, hasEn := cfgMap["enabled"].(bool); hasEn {
 			enabled = en
 		}
+		// Both conditions matter: a configured provider whose binary is gone is unavailable, not ready. Reporting
+		// only `enabled` made a provider whose CLI had been removed look usable until the first message failed —
+		// and the picker offered it as a choice.
 		status := "ready"
 		if !enabled {
+			status = "unavailable"
+		} else if spec.Binary != "" && !execres.IsCommandAvailable(context.Background(), spec.Binary) {
 			status = "unavailable"
 		}
 		entries = append(entries, map[string]any{
