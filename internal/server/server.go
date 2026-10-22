@@ -2369,6 +2369,20 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			promptErr = mp.session.Prompt(ctx, text, images)
 		}
 	} else {
+		// Interrupt semantics: the client sends "interrupt" for an ordinary send and relies on the
+		// daemon to cancel any running turn before starting the new one — node does this through
+		// replaceAgentRun, and the composer's own comment says the server interrupts atomically. A
+		// provider is free to reject a prompt that arrives mid-turn (the scripted one does), so
+		// cancelling here is what turns "send while running" into a replacement instead of a failure.
+		if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+			_ = mp.session.Abort(ctx)
+			// Let the cancelled turn settle before opening the next one, so the provider is not asked
+			// to start a turn while it is still tearing the previous one down. Bounded: a provider that
+			// never reports its finish must not wedge the send.
+			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
+			_ = mp.session.WaitForFinish(waitCtx)
+			waitCancel()
+		}
 		promptErr = mp.session.Prompt(ctx, text, images)
 	}
 	if promptErr != nil {
