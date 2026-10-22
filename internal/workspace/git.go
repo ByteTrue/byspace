@@ -537,20 +537,230 @@ func ValidateBranch(ctx context.Context, cwd, refName string) (bool, string, boo
 
 // ListBranches returns local branch names for cwd.
 func ListBranches(ctx context.Context, cwd string) []string {
-	out, err := runGit(ctx, cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads")
-	if err != nil || out == "" {
-		return []string{}
+	branches := make([]string, 0, 32)
+	for name := range localBranchOIDs(ctx, cwd) {
+		branches = append(branches, name)
 	}
-	var branches []string
-	for _, b := range strings.Split(out, "\n") {
-		if trimmed := strings.TrimSpace(b); trimmed != "" {
-			branches = append(branches, trimmed)
+	// Remote-only branches belong in the list: a picker that hides them cannot check out a branch a
+	// teammate pushed, which is the main reason to open it on a fresh clone.
+	for name := range remoteBranchOIDs(ctx, cwd) {
+		if _, hasLocal := localBranchOIDs(ctx, cwd)[name]; hasLocal {
+			continue
+		}
+		branches = append(branches, name)
+	}
+	sort.Strings(branches)
+	return branches
+}
+
+// gitRef is one ref with the date the picker sorts by.
+type gitRef struct {
+	Name          string
+	CommitterDate int64
+	OID           string
+}
+
+// listGitRefs reads name/committerdate/oid for a ref prefix.
+//
+// Sorted by author date in git's own order? No: sorted here by committer date descending, which is what makes the
+// picker show recently used branches first. `--sort=-committerdate` would do it in git, but the same three fields are
+// read twice (local and remote) and mixing sorted output with map insertion would be harder to reason about.
+func listGitRefs(ctx context.Context, cwd, prefix string) []gitRef {
+	out, err := runGit(ctx, cwd, "for-each-ref", "--format=%(refname)\t%(committerdate:unix)\t%(objectname)", prefix)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return nil
+	}
+	refs := make([]gitRef, 0, 32)
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Split(strings.TrimSpace(line), "\t")
+		if len(fields) != 3 || fields[0] == "" || fields[2] == "" {
+			continue
+		}
+		date := int64(0)
+		if parsed, convErr := strconv.ParseInt(fields[1], 10, 64); convErr == nil {
+			date = parsed
+		}
+		refs = append(refs, gitRef{Name: fields[0], CommitterDate: date, OID: fields[2]})
+	}
+	return refs
+}
+
+// localBranchOIDs maps a short local branch name to its oid.
+func localBranchOIDs(ctx context.Context, cwd string) map[string]string {
+	out := make(map[string]string, 16)
+	for _, ref := range listGitRefs(ctx, cwd, "refs/heads") {
+		if name := normalizeBranchSuggestionName(ref.Name); name != "" {
+			out[name] = ref.OID
 		}
 	}
-	if branches == nil {
-		branches = []string{}
+	return out
+}
+
+// remoteBranchOIDs maps a short branch name to its origin oid.
+//
+// Only `origin`: a second remote would produce two entries for the same name with no way to tell them apart in the
+// picker, and origin is the one BySpace pushes to.
+func remoteBranchOIDs(ctx context.Context, cwd string) map[string]string {
+	out := make(map[string]string, 16)
+	for _, ref := range listGitRefs(ctx, cwd, "refs/remotes/origin") {
+		if name := normalizeBranchSuggestionName(ref.Name); name != "" {
+			out[name] = ref.OID
+		}
 	}
-	return branches
+	return out
+}
+
+// normalizeBranchSuggestionName strips the ref prefixes a picker does not show.
+//
+// Returns "" for entries that are not branch names: `HEAD` and a bare `origin` are ref bookkeeping, and listing them
+// as branches offers a checkout that would fail.
+func normalizeBranchSuggestionName(raw string) string {
+	name := strings.TrimSpace(raw)
+	name = strings.TrimPrefix(name, "refs/heads/")
+	name = strings.TrimPrefix(name, "refs/remotes/")
+	name = strings.TrimPrefix(name, "origin/")
+	if name == "" || name == "HEAD" || name == "origin" {
+		return ""
+	}
+	return name
+}
+
+// BranchSuggestion is one row in the branch picker.
+type BranchSuggestion struct {
+	Name          string `json:"name"`
+	HasLocal      bool   `json:"hasLocal"`
+	HasRemote     bool   `json:"hasRemote"`
+	CommitterDate int64  `json:"committerDate"`
+	LocalAhead    *int   `json:"localAhead,omitempty"`
+	LocalBehind   *int   `json:"localBehind,omitempty"`
+}
+
+// ListBranchSuggestions lists branches with where they exist and how far apart the two sides are.
+//
+// Ported from listBranchSuggestions. The picker labels a row "Local", "Remote" or "Local • Remote" from
+// hasLocal/hasRemote; Go sent neither, so every row looked local-only and a branch that existed only on origin could
+// not be seen at all — it was not in the list.
+func ListBranchSuggestions(ctx context.Context, cwd, query string, limit int) []BranchSuggestion {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
+
+	local := localBranchOIDs(ctx, cwd)
+	remote := remoteBranchOIDs(ctx, cwd)
+
+	names := make([]string, 0, len(local)+len(remote))
+	seen := make(map[string]bool, len(local)+len(remote))
+	for name := range local {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	for name := range remote {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+
+	if normalizedQuery != "" {
+		filtered := names[:0]
+		for _, name := range names {
+			if strings.Contains(strings.ToLower(name), normalizedQuery) {
+				filtered = append(filtered, name)
+			}
+		}
+		names = filtered
+	}
+
+	// Prefix matches first, then most recent committer date, then name — the order a person scanning a list expects.
+	dates := make(map[string]int64, len(names))
+	for _, ref := range listGitRefs(ctx, cwd, "refs/heads") {
+		if name := normalizeBranchSuggestionName(ref.Name); name != "" {
+			dates[name] = maxInt64(dates[name], ref.CommitterDate)
+		}
+	}
+	for _, ref := range listGitRefs(ctx, cwd, "refs/remotes/origin") {
+		if name := normalizeBranchSuggestionName(ref.Name); name != "" {
+			dates[name] = maxInt64(dates[name], ref.CommitterDate)
+		}
+	}
+	sort.SliceStable(names, func(i, j int) bool {
+		left, right := names[i], names[j]
+		if normalizedQuery != "" {
+			leftPrefix := strings.HasPrefix(strings.ToLower(left), normalizedQuery)
+			rightPrefix := strings.HasPrefix(strings.ToLower(right), normalizedQuery)
+			if leftPrefix != rightPrefix {
+				return leftPrefix
+			}
+		}
+		if dates[left] != dates[right] {
+			return dates[left] > dates[right]
+		}
+		return left < right
+	})
+	if len(names) > limit {
+		names = names[:limit]
+	}
+
+	suggestions := make([]BranchSuggestion, 0, len(names))
+	for _, name := range names {
+		localOID, hasLocal := local[name]
+		remoteOID, hasRemote := remote[name]
+		suggestion := BranchSuggestion{
+			Name:      name,
+			HasLocal:  hasLocal,
+			HasRemote: hasRemote,
+		}
+		suggestion.CommitterDate = dates[name]
+		// Ahead/behind only means something when both sides exist. Identical oids are 0/0 without asking git.
+		if hasLocal && hasRemote {
+			if localOID == remoteOID {
+				zero := 0
+				suggestion.LocalAhead = &zero
+				zeroAgain := 0
+				suggestion.LocalBehind = &zeroAgain
+			} else if ahead, behind, ok := branchAheadBehind(ctx, cwd, name); ok {
+				suggestion.LocalAhead = &ahead
+				suggestion.LocalBehind = &behind
+			}
+		}
+		suggestions = append(suggestions, suggestion)
+	}
+	return suggestions
+}
+
+// branchAheadBehind counts the commits the two sides differ by.
+//
+// Reported as unknown on failure rather than 0/0: a divergence the daemon could not measure must not read as "in sync".
+func branchAheadBehind(ctx context.Context, cwd, name string) (int, int, bool) {
+	out, err := runGit(ctx, cwd, "rev-list", "--left-right", "--count",
+		"refs/heads/"+name+"...refs/remotes/origin/"+name)
+	if err != nil {
+		return 0, 0, false
+	}
+	fields := strings.Fields(out)
+	if len(fields) != 2 {
+		return 0, 0, false
+	}
+	ahead, aheadErr := strconv.Atoi(fields[0])
+	behind, behindErr := strconv.Atoi(fields[1])
+	if aheadErr != nil || behindErr != nil {
+		return 0, 0, false
+	}
+	return ahead, behind, true
+}
+
+// maxInt64 returns the larger value.
+func maxInt64(left, right int64) int64 {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 // Push runs `git push`.

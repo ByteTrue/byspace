@@ -140,13 +140,17 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		if strings.TrimSpace(suggestCwd) == "" {
 			suggestCwd = base.Cwd
 		}
-		branches := workspace.ListBranches(ctx, suggestCwd)
-		branches = filterBranches(branches, suggestReq.Query, suggestReq.Limit)
+		suggestions := workspace.ListBranchSuggestions(ctx, suggestCwd, suggestReq.Query, suggestReq.Limit)
+		branches := make([]string, 0, len(suggestions))
+		for _, suggestion := range suggestions {
+			branches = append(branches, suggestion.Name)
+		}
 		_ = sendSessionMsg(ctx, sink, "branch_suggestions_response", map[string]any{
 			"branches": branches,
-			// The picker annotates each row with ahead/behind and last-commit info; without
-			// branchDetails those annotations silently disappear.
-			"branchDetails": []any{},
+			// The picker labels each row "Local", "Remote" or "Local • Remote" from these two flags, and shows how
+			// far the two sides have diverged. Sending an empty list dropped every annotation and, worse, hid any
+			// branch that existed only on origin — it was not in `branches` either.
+			"branchDetails": suggestions,
 			"error":         nil,
 			"requestId":     base.RequestID,
 		})
