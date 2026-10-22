@@ -1208,6 +1208,10 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
 			Targets   []string       `json:"targets"`
+			// ConfirmedRemovals is what the user agreed to delete. A save that would remove managed
+			// directories the request did not name is refused with the list, so the question and the
+			// deletion cannot drift apart.
+			ConfirmedRemovals []string `json:"confirmedRemovals"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		sel := req.Selection
@@ -1218,18 +1222,49 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if len(targets) == 0 {
 			targets = []string{"agents", "claude"}
 		}
+		sourceDir := resolveSkillsSourceDir()
+		userHome, _ := os.UserHomeDir()
+
+		// Narrowing the install targets deletes the copies in the dropped homes. Ask first: the directories can
+		// contain files the user put there, and the client can only show the question if the daemon names the
+		// skills. Answering with a plan means nothing is deleted yet.
+		pending := getSkillsStatus(sourceDir, userHome, sel, targets)
+		if removals := unconfirmedRemovals(pending.Ops, req.ConfirmedRemovals); len(removals) > 0 {
+			_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
+				"requestId":            req.RequestID,
+				"state":                pending.State,
+				"ops":                  pending.Ops,
+				"available":            pending.Available,
+				"installed":            pending.Installed,
+				"selection":            sel,
+				"targets":              pending.Targets,
+				"selectionSaved":       true,
+				"confirmationRequired": map[string]any{"removals": removals},
+				"error":                nil,
+			})
+			return
+		}
+
+		// Copy first, record second. A failure after the record was written would leave the daemon advertising a
+		// selection it never installed — and the client renders that record back as the current choice.
+		if err := applySkillsStatus(sourceDir, userHome, pending); err != nil {
+			// The save failed, so the request failed. A response carrying an `error` field would look like
+			// success to the client — it resolves on the response type and never reads the field, so the
+			// failure would surface as a silently unchanged selection. `rpc_error` is what makes the caller's
+			// promise reject, which is how node's HTTP failure reaches the UI.
+			_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+				"requestId":   req.RequestID,
+				"requestType": "agent.skills.save_selection.request",
+				"error":       err.Error(),
+				"code":        "skills_save_failed",
+			})
+			return
+		}
 		_ = s.store.SaveDaemonConfig(map[string]any{
 			"skillsSelection": sel,
 			"skillTargets":    targets,
 		})
-		sourceDir := resolveSkillsSourceDir()
-		userHome, _ := os.UserHomeDir()
 		status := getSkillsStatus(sourceDir, userHome, sel, targets)
-		var saveErr any
-		if err := applySkillsStatus(sourceDir, userHome, status); err != nil {
-			saveErr = err.Error()
-		}
-		status = getSkillsStatus(sourceDir, userHome, sel, targets)
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
 			"requestId":            req.RequestID,
 			"state":                status.State,
@@ -1238,15 +1273,18 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"installed":            status.Installed,
 			"selection":            sel,
 			"targets":              status.Targets,
-			"selectionSaved":       saveErr == nil,
+			"selectionSaved":       true,
 			"confirmationRequired": nil,
-			"error":                saveErr,
 		})
 
 	case "agent.skills.import_legacy_selection.request":
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
+			// Targets absent means "keep the current ones", so an app that predates target selection cannot
+			// silently narrow an install. Present means the user changed where copies go.
+			Targets           *[]string `json:"targets"`
+			ConfirmedRemovals []string  `json:"confirmedRemovals"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		sel := req.Selection

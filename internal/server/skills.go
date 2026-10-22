@@ -491,3 +491,66 @@ func (s *Server) autoUpdateInstalledSkills() {
 	}
 	fmt.Fprintf(os.Stderr, "skills auto-updated (%d operation(s))\n", len(repair.Ops))
 }
+
+// unconfirmedRemovals lists the managed skills a save would delete without the user having agreed to it.
+//
+// Ported from the controller's confirmation loop. Narrowing the install targets drops the copies in the homes that
+// were removed, and those directories can hold files the user put there — so the daemon names what it would destroy
+// and waits. Answering with `confirmedRemovals` is the caller saying yes to exactly this list.
+//
+// Returns the names in a stable order: the client shows them in the question, and a shifting order across two saves
+// reads as a different question.
+func unconfirmedRemovals(ops []skillOp, confirmed []string) []string {
+	if len(ops) == 0 {
+		return nil
+	}
+	agreed := make(map[string]bool, len(confirmed))
+	for _, name := range confirmed {
+		agreed[name] = true
+	}
+	removals := make([]string, 0, len(ops))
+	for _, op := range ops {
+		if op.Kind != "delete" {
+			continue
+		}
+		if agreed[op.Name] {
+			continue
+		}
+		removals = append(removals, op.Name)
+	}
+	sort.Strings(removals)
+	return removals
+}
+
+// savedSkillsState is the selection and targets the daemon has committed.
+//
+// Split out because a save that fails must not change it: the persisted record is what the next status read reports, so
+// writing it before the copy succeeds leaves the daemon claiming a selection it never installed. The client shows exactly
+// that recording back, which turns a failed save into "the selection changed and nothing happened".
+func savedSkillsState(config map[string]any) (map[string]any, []string) {
+	selection := map[string]any{"mode": "all"}
+	if config != nil {
+		if raw, ok := config["skillsSelection"].(map[string]any); ok && len(raw) > 0 {
+			selection = raw
+		}
+	}
+	return selection, readSkillTargets(config)
+}
+
+// readSkillTargets reads the saved install targets, defaulting to every target the daemon can write.
+func readSkillTargets(config map[string]any) []string {
+	if config != nil {
+		if raw, ok := config["skillTargets"].([]any); ok && len(raw) > 0 {
+			out := make([]string, 0, len(raw))
+			for _, entry := range raw {
+				if text, ok := entry.(string); ok && text != "" {
+					out = append(out, text)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return append([]string(nil), SkillTargetIDs...)
+}
