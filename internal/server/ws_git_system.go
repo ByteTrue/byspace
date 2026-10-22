@@ -1341,6 +1341,9 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			return
 		}
 		updated := s.store.SaveDaemonConfig(req.Config)
+		// Adding or removing a provider changes the catalog in every scope, so a cached one is now wrong. Without this
+		// a newly configured provider stayed invisible until something else happened to trigger a refresh.
+		s.providerStatuses.invalidate("")
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 			"requestId": req.RequestID,
 			"config":    updated,
