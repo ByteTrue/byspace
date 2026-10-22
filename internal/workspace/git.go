@@ -1246,3 +1246,54 @@ func clampPromptDiff(diff string, limit int) string {
 	}
 	return diff[:cut] + "\n… (diff truncated)"
 }
+
+// ResolveDiffBaseRef finds the commit a branch should be compared against.
+//
+// Ported from resolveRepositoryDefaultBranch. `refs/remotes/origin/HEAD` is the clone's own answer and wins; without a
+// remote the conventional names are tried. Returns "" when nothing resolves, which means "there is no base to compare
+// against" rather than "compare against everything" — the caller must show the working diff instead.
+func ResolveDiffBaseRef(ctx context.Context, cwd string) string {
+	if out, err := runGit(ctx, cwd, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"); err == nil {
+		if ref := strings.TrimSpace(out); ref != "" {
+			ref = strings.TrimPrefix(ref, "refs/remotes/")
+			if ref != "" {
+				return ref
+			}
+		}
+	}
+	for _, candidate := range []string{"origin/main", "origin/master", "main", "master"} {
+		if _, err := runGit(ctx, cwd, "rev-parse", "--verify", "--quiet", candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// GetBaseDiff lists the changes a branch carries relative to its base.
+//
+// This is the "Committed" comparison: `git diff <base>...HEAD`. Without it the picker's committed mode showed nothing,
+// because GetWorkingDiff answers "what is not committed yet" and a clean checkout has no such changes — the user saw an
+// empty Changes pane on a branch full of commits.
+//
+// Untracked files are deliberately excluded: they are not part of any commit, so including them would make the
+// committed view disagree with what the branch actually contains.
+func GetBaseDiff(ctx context.Context, cwd, baseRef string) ([]ParsedDiffFile, error) {
+	base := strings.TrimSpace(baseRef)
+	if base == "" {
+		base = ResolveDiffBaseRef(ctx, cwd)
+	}
+	if base == "" {
+		// No base to compare against: report nothing rather than diffing against the empty tree, which would
+		// present the whole repository as this branch's work.
+		return []ParsedDiffFile{}, nil
+	}
+	patch, err := runGit(ctx, cwd, "diff", "--no-color", base+"...HEAD")
+	if err != nil {
+		return nil, err
+	}
+	files := ParseUnifiedDiff(patch)
+	if files == nil {
+		files = []ParsedDiffFile{}
+	}
+	return files, nil
+}

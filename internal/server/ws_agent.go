@@ -652,11 +652,11 @@ func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink
 		Compare        map[string]any `json:"compare"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	files, _ := workspace.GetWorkingDiff(ctx, req.Cwd)
 	cmp := req.Compare
 	if cmp == nil {
-		cmp = map[string]any{"mode": "working"}
+		cmp = map[string]any{"mode": "uncommitted"}
 	}
+	files := s.checkoutDiffFiles(ctx, req.Cwd, cmp)
 	s.RegisterDiffSubscription(req.SubscriptionID, sink, req.Cwd, cmp, files)
 	_ = sendSessionMsg(ctx, sink, "subscribe_checkout_diff_response", map[string]any{
 		"subscriptionId": req.SubscriptionID,
@@ -665,6 +665,29 @@ func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink
 		"error":          nil,
 		"requestId":      req.RequestID,
 	})
+}
+
+// checkoutDiffFiles computes the files for one comparison mode.
+//
+// The mode is the whole point of the picker: "Uncommitted" answers what is not committed yet, "Committed" answers what
+// the branch carries over its base. Go ignored the field and always returned the working diff, so a clean checkout showed
+// an empty Changes pane no matter which mode was selected — and a branch full of commits looked like it had no changes.
+func (s *Server) checkoutDiffFiles(ctx context.Context, cwd string, compare map[string]any) []workspace.ParsedDiffFile {
+	mode, _ := compare["mode"].(string)
+	if strings.TrimSpace(mode) == "base" {
+		baseRef, _ := compare["baseRef"].(string)
+		files, err := workspace.GetBaseDiff(ctx, cwd, baseRef)
+		if err == nil {
+			return files
+		}
+		// A failed base diff falls back to the working diff rather than an empty pane: showing the uncommitted
+		// changes is closer to the truth than showing nothing at all.
+	}
+	files, _ := workspace.GetWorkingDiff(ctx, cwd)
+	if files == nil {
+		return []workspace.ParsedDiffFile{}
+	}
+	return files
 }
 
 func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw json.RawMessage) {

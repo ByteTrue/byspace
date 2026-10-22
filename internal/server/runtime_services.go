@@ -277,8 +277,10 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 	}
 
 	for _, ds := range dSubs {
-		files, err := workspace.GetWorkingDiff(ctx, ds.cwd)
-		if err != nil {
+		// The poll must recompute the same comparison the subscription asked for; recomputing the working diff for
+		// every mode made the "Committed" view refresh with the wrong data as soon as anything changed on disk.
+		files := s.checkoutDiffFiles(ctx, ds.cwd, ds.compare)
+		if files == nil {
 			continue
 		}
 		b, _ := json.Marshal(files)
