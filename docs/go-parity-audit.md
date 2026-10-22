@@ -76,3 +76,23 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 
 **仍未覆盖**：`packages/app/e2e` 下的 150+ 个 Playwright spec 覆盖的交互面远大于这两条。它们才是跨端契约的
 完整验收面，跑它们比再加断言更值得。
+
+## 它看不见什么
+
+字段对账读的是 Go **源码**里的 key，所以两种情况它必然漏：
+
+**struct tag 让字段在序列化时消失。** `RequestID: requestID` 在源码里存在，检查全绿；但 tag 上的 `omitempty`
+让空值把整个键去掉，而协议写的是 `requestId: z.string()`——missing 不是 undefined，是「不是 string」，
+整条消息被判为 invalid union 丢弃。结果是每一个 `checkout_status_update` 都被前端扔掉，Changes 面板永远空着。
+判据上必须区分「可选」（允许省略）和「必填但为空」（必须发 `""`）。
+
+**一串操作之后界面该是什么样。** 归档 workspace 时 daemon 确实发了 `kind: "remove"`，但没带 `emptyProject`；
+前端删掉工作区、发现项目下没有子节点，就把整个项目组删了。字段全对、消息也发了，错在「这条消息缺了一个
+双方约定好的字段，而缺了它客户端会做出不同的事」。
+
+这两类都只有真浏览器跑真交互才看得见。所以 `packages/app/e2e` 下的 Playwright spec 是这一层的验收面，
+`npm run audit:browser` 只覆盖其中挑出来的十几条。
+
+试过在静态检查里加「协议必填 + Go 带 omitempty」这一条，首跑 145 条命中，绝大多数是不同结构体里同名的
+`error`/`id`/`label`——判据不精确。噪声会让整个审计失去可信度（入站审计从 48 条误报收敛到 0 花了两轮），
+所以没留它，改为写在这里。
