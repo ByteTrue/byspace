@@ -221,9 +221,7 @@ type Server struct {
 	// cachedPiModelsCwd records which directory the cached model list was probed in: a different
 	// project can expose different models, so the cache must not outlive its context.
 	cachedPiModelsCwd string
-	// providerStatuses keeps each probe scope's availability apart from the others.
-	providerStatuses providerCatalogByScope
-	cachedPiCommands []pi.SlashCommand
+	cachedPiCommands  []pi.SlashCommand
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -1129,7 +1127,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		_ = json.Unmarshal(raw, &req)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		if req.IfNoneMatch != "" && req.IfNoneMatch == s.providerSnapshotTag(req.Cwd) {
+		if req.IfNoneMatch != "" && req.IfNoneMatch == s.providerSnapshotTag() {
 			_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
 				"requestId":   base.RequestID,
 				"generatedAt": now,
@@ -1138,11 +1136,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			})
 			return
 		}
-		// Read from what this scope already established; probe only when it has never been read.
-		entries := s.providerStatuses.catalog(req.Cwd)
-		if entries == nil {
-			entries = s.buildSnapshotForScope(ctx, req.Cwd)
-		}
+		models := s.probeOrCachedPiModels(ctx)
+		cfg := s.store.LoadDaemonConfig()
+		customProvs, _ := cfg["providers"].(map[string]any)
+		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
 		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
@@ -1178,10 +1175,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			s.cachedPiModelsCwd = refreshReq.Cwd
 		}
 		s.mu.Unlock()
-		// Only this scope is re-probed and re-recorded. Invalidating everything is what let a project refresh reset the
-		// host's view of a provider whose binary had gone missing.
-		s.providerStatuses.invalidate(refreshReq.Cwd)
-		entries := s.buildSnapshotForScope(ctx, refreshReq.Cwd)
+		models := s.probePiModelsInCwd(ctx, refreshReq.Cwd)
+		cfg := s.store.LoadDaemonConfig()
+		customProvs, _ := cfg["providers"].(map[string]any)
+		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
 		if len(refreshReq.Providers) > 0 {
 			entries = filterSnapshotEntries(entries, refreshReq.Providers)
 		}

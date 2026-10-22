@@ -533,24 +533,12 @@ func agentSortValue(key string) func(store.AgentRecord) any {
 
 // providerSnapshotTag returns a stable ETag-style tag for the current provider snapshot,
 // so clients can skip re-downloading an unchanged catalog via `ifNoneMatch`.
-// providerSnapshotTag is the ETag the client sends back as `ifNoneMatch`.
-//
-// It must answer "is this scope's catalog different from what you already have" — so it hashes the scope's entries. The
-// previous version hashed serverId + model count + version, which changes when the daemon restarts but not when a
-// provider's availability changes. A client that had cached "all available" was told `notModified` forever after the
-// binaries went away, and one that had cached the host catalog was told `notModified` when asking about a project.
-func (s *Server) providerSnapshotTag(scope string) string {
-	entries := s.providerStatuses.catalog(scope)
-	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s", s.serverID, providerScopeKey(scope))
-	for _, entry := range entries {
-		id, _ := entry["provider"].(string)
-		status, _ := entry["status"].(string)
-		models, _ := entry["models"].([]any)
-		label, _ := entry["label"].(string)
-		fmt.Fprintf(h, "|%s:%s:%d:%s", id, status, len(models), label)
-	}
-	return "wp_" + hex.EncodeToString(h.Sum(nil)[:8])
+func (s *Server) providerSnapshotTag() string {
+	s.mu.Lock()
+	models := len(s.cachedPiModels)
+	s.mu.Unlock()
+	h := sha256.Sum256([]byte(s.serverID + "|" + fmt.Sprint(models) + "|" + s.version))
+	return "wp_" + hex.EncodeToString(h[:8])
 }
 
 // subscriptionPollInterval is how often file and git-diff subscriptions are re-checked.
