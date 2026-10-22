@@ -49,7 +49,8 @@ func TestMockDirectivesProduceTheirShapes(t *testing.T) {
 		{"emit synthetic notification", "notification", "notification card"},
 		{"emit synthetic custom message", "custom_message", "custom message card"},
 		{"emit synthetic todowrite", "tool_call", "todo tool card"},
-		{"emit 5 agent stream updates", "assistant_message", "streamed updates"},
+		{"emit 5 agent stream updates", "todo", "uncoalesced updates as todo items"},
+		{"emit 5 coalesced agent stream updates", "assistant_message", "coalesced updates as assistant text"},
 		{"emit settled assistant image markdown: ![a](./a.png)", "assistant_message", "image message"},
 	}
 	for _, testCase := range cases {
@@ -67,18 +68,31 @@ func TestMockDirectivesProduceTheirShapes(t *testing.T) {
 	}
 }
 
-// A turn failure has to leave the session idle with the error recorded: a provider that fails and stays "running"
-// spins the UI forever.
+// A scripted failure is a turn outcome, not a rejected prompt: the run is accepted, the failure
+// arrives as turn_failed, and the session has to be idle afterwards. A provider that fails and
+// stays "running" spins the UI forever, and a client told accepted=false never learns the turn ran.
 func TestMockTurnFailure(t *testing.T) {
-	session, _ := newTestMockSession(t, "e2e-fast-stream")
-	if err := session.Prompt(context.Background(), "emit synthetic turn failure", nil); err == nil {
-		t.Fatal("a failing turn reported success")
+	session, events := newTestMockSession(t, "e2e-fast-stream")
+	if err := session.Prompt(context.Background(), "emit synthetic turn failure", nil); err != nil {
+		t.Fatalf("a scripted turn failure rejected the prompt: %v", err)
 	}
+	waitCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_ = session.WaitForFinish(waitCtx)
+	cancel()
 	if got := session.Status(); got != "idle" {
 		t.Fatalf("status = %q, want idle", got)
 	}
-	if got := session.LastError(); got == "" {
-		t.Fatal("the failure left no error message")
+	if got := session.LastError(); got != mockProviderFailureMessage {
+		t.Fatalf("lastError = %q, want %q", got, mockProviderFailureMessage)
+	}
+	var failed bool
+	for _, event := range *events {
+		if typ, _ := event["type"].(string); typ == "byspace_turn_failed" {
+			failed = true
+		}
+	}
+	if !failed {
+		t.Fatalf("no turn_failed event: %+v", *events)
 	}
 }
 

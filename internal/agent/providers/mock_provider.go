@@ -26,6 +26,15 @@ const (
 
 	mockDurationMs = 5 * 60 * 1000
 	mockIntervalMs = 40
+
+	// The window the cycle stream reports against. Node hardcodes 128_000 in every synthetic
+	// usage block, so the meter's percentage matches what the specs measured against.
+	mockContextWindowMaxTokens = 128_000
+
+	// Strings the specs assert verbatim. Node's wording, not ours: assistant-fork-menu.spec.ts
+	// waits on "[System Error] Requested mock provider failure".
+	mockProviderFailureMessage = "Requested mock provider failure"
+	mockHandledCommandReply    = "Mock command handled"
 )
 
 // MockProvider is the provider spec. It has no binary: `Native` marks a provider the daemon runs

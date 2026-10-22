@@ -23,34 +23,96 @@ type TimelineItem struct {
 	Error           any    `json:"error,omitempty"`
 	// Level and Message are the notification item's fields. The protocol's notification schema requires both, and
 	// a notification without them fails validation — which drops the whole timeline response, not just that item.
+	// Message doubles as the `error` item's text.
 	Level   string `json:"level,omitempty"`
 	Message string `json:"message,omitempty"`
+	// Metadata is a tool_call's side channel: nested codemode rows read parentToolCallId and
+	// nestedSummary out of it to fold their calls under the parent.
+	Metadata map[string]any `json:"-"`
+	// The custom_message item's fields. Display is required even when false, so MarshalJSON
+	// emits it unconditionally rather than relying on a struct tag.
+	CustomType string `json:"customType,omitempty"`
+	Display    bool   `json:"-"`
+	Content    string `json:"content,omitempty"`
+	Details    any    `json:"-"`
+	// Items is the todo item's task list.
+	Items []TaskItem `json:"-"`
 }
 
-// MarshalJSON keeps tool_call items emitting `"error": null` when there is no error, which
-// ToolCallRunningPayloadSchema / ToolCallCompletedPayloadSchema in @bytetrue/protocol require.
+// TaskItem is one row of a todo item. Mirrors AgentTaskItem in packages/protocol.
+type TaskItem struct {
+	Text       string `json:"text"`
+	Completed  bool   `json:"completed"`
+	ID         string `json:"id,omitempty"`
+	Status     string `json:"status,omitempty"`
+	ActiveForm string `json:"activeForm,omitempty"`
+}
+
+// MarshalJSON emits exactly the fields the protocol's timeline union requires, per item type.
+//
+// One shape does not serve every branch: tool_call needs `"error": null` when there is no error
+// (ToolCallRunningPayloadSchema / ToolCallCompletedPayloadSchema require it), notification needs
+// level and message and no text, custom_message needs `display` even when false, todo needs its
+// item list. Emitting a superset dropped the required keys of every non-text branch, and an item
+// that fails validation takes the whole timeline response with it rather than being skipped.
 func (i TimelineItem) MarshalJSON() ([]byte, error) {
-	if i.Type == "tool_call" {
-		return json.Marshal(map[string]any{
+	switch i.Type {
+	case "tool_call":
+		item := map[string]any{
 			"type":   i.Type,
 			"callId": i.CallID,
 			"name":   i.Name,
 			"status": i.Status,
 			"detail": i.Detail,
 			"error":  i.Error,
+		}
+		if i.Metadata != nil {
+			item["metadata"] = i.Metadata
+		}
+		return json.Marshal(item)
+	case "notification":
+		return json.Marshal(map[string]any{
+			"type":    i.Type,
+			"level":   i.Level,
+			"message": i.Message,
+		})
+	case "custom_message":
+		item := map[string]any{
+			"type":       i.Type,
+			"customType": i.CustomType,
+			"display":    i.Display,
+			"content":    i.Content,
+		}
+		if i.Details != nil {
+			item["details"] = i.Details
+		}
+		return json.Marshal(item)
+	case "todo":
+		items := i.Items
+		if items == nil {
+			items = []TaskItem{}
+		}
+		return json.Marshal(map[string]any{
+			"type":  i.Type,
+			"items": items,
+		})
+	case "error":
+		return json.Marshal(map[string]any{
+			"type":    i.Type,
+			"message": i.Message,
 		})
 	}
-	m := map[string]any{
+	item := map[string]any{
 		"type": i.Type,
 		"text": i.Text,
 	}
 	if i.MessageID != "" {
-		m["messageId"] = i.MessageID
+		item["messageId"] = i.MessageID
 	}
 	if i.ClientMessageID != "" {
-		m["clientMessageId"] = i.ClientMessageID
+		item["clientMessageId"] = i.ClientMessageID
 	}
-	return json.Marshal(m)
+	return json.Marshal(item)
 }
 
 // TimelineEntry pairs a TimelineItem with the sequence range it occupies.

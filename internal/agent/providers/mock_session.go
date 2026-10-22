@@ -2,14 +2,28 @@ package providers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+)
+
+// mockOnePixelPNG is the image the large-payload directive pads.
+const mockOnePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl4Kj8AAAAASUVORK5CYII="
+
+var (
+	mockUserPromptTag    = regexp.MustCompile(`(?s)<user-prompt>\n(.*?)\n</user-prompt>`)
+	mockAttachmentsTag   = regexp.MustCompile(`(?s)<attachments>\n(.*?)\n</attachments>`)
+	mockTitleQuotes      = regexp.MustCompile(`^["'` + "`" + `]+|["'` + "`" + `]+$`)
+	mockBranchDisallowed = regexp.MustCompile(`[^a-z0-9]+`)
+	mockBranchEdgeDashes = regexp.MustCompile(`^-+|-+$`)
 )
 
 // MockSession is the scripted agent behind the `mock` provider.
@@ -36,6 +50,9 @@ type MockSession struct {
 	turnToken              string
 	activeTurnID           string
 	activeTurnAssistantMsg string
+	// turnStartedAt is the second value of ActiveTurn(): a timestamp, not the assistant message id.
+	// The daemon puts it straight into the snapshot's activeTurn.startedAt.
+	turnStartedAt string
 	// turnStarted tracks whether turn_started went out, so an abort inside the delay window can still emit the
 	// pair the client needs to clear its running state.
 	turnStarted bool
@@ -53,6 +70,11 @@ type MockSession struct {
 	cancel context.CancelFunc
 	// finished is closed when the active turn ends, so WaitForFinish can block on it.
 	finished chan struct{}
+
+	// Usage the cycle stream reports. Node emits usage_updated per cycle; that event is not in the
+	// outbound schema, so the daemon reads it through Usage() on its own poll instead.
+	usageCycle  int
+	usageTokens int
 
 	// Scripted state.
 	assistantResponse         string
@@ -172,19 +194,34 @@ func (s *MockSession) StreamSeq() int {
 
 // Usage reports context consumption.
 //
-// The mock has no real context, but the specs assert that the meter fills during a turn, so it reports the
-// number of characters emitted against a fixed window.
+// The cycle stream reports Node's formula — cycle * 32 input, one output token per emitted token.
+// Paths that never run a cycle (a settled response, a stress turn) fall back to the size of the
+// timeline, so the meter still has something to render.
 func (s *MockSession) Usage(ctx context.Context) *sdk.AgentUsage {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	cycle := s.usageCycle
+	tokens := s.usageTokens
 	used := 0
-	for _, entry := range s.timeline {
-		used += len(entry.Item.Text)
+	if cycle == 0 {
+		for _, entry := range s.timeline {
+			used += len(entry.Item.Text)
+		}
+	}
+	s.mu.Unlock()
+	if cycle > 0 {
+		max := mockContextWindowMaxTokens
+		windowUsed := tokens * 2
+		return &sdk.AgentUsage{
+			InputTokens:             cycle * 32,
+			OutputTokens:            tokens,
+			ContextWindowMaxTokens:  &max,
+			ContextWindowUsedTokens: &windowUsed,
+		}
 	}
 	if used == 0 {
 		return nil
 	}
-	total := 200000
+	total := mockContextWindowMaxTokens
 	return &sdk.AgentUsage{
 		InputTokens:             used,
 		OutputTokens:            used,
@@ -208,7 +245,10 @@ func (s *MockSession) LastError() string {
 func (s *MockSession) ActiveTurn() (string, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.activeTurnID, s.activeTurnAssistantMsg
+	if s.status != "running" || s.activeTurnID == "" {
+		return "", ""
+	}
+	return s.activeTurnID, s.turnStartedAt
 }
 
 func (s *MockSession) LastAssistantText() string {
@@ -238,8 +278,33 @@ func (s *MockSession) Prompt(ctx context.Context, message string, images []sdk.I
 		s.mu.Unlock()
 		return errors.New("Requested mock prompt rejection")
 	}
+	clientMessageID := s.nextClientMessageID
+	s.nextClientMessageID = ""
 	s.mu.Unlock()
-	return s.startTurn(ctx, message, len(images) > 0)
+
+	// A command the provider answers itself is out-of-band: it produces a reply without opening a
+	// turn, so it neither cancels a running one nor shows the running affordance. Node routes this
+	// through tryHandleOutOfBand; the prompt has to match exactly, or a sentence quoting the command
+	// would be swallowed.
+	if message == MockHandledCommand {
+		s.appendItem(sdk.TimelineItem{
+			Type:            "user_message",
+			MessageID:       newMockID("msg"),
+			ClientMessageID: clientMessageID,
+			Text:            message,
+		})
+		s.appendItem(sdk.TimelineItem{
+			Type:      "assistant_message",
+			MessageID: newMockID("msg"),
+			Text:      mockHandledCommandReply,
+		})
+		s.mu.Lock()
+		s.lastAssistantText = mockHandledCommandReply
+		s.mu.Unlock()
+		return nil
+	}
+
+	return s.startTurn(ctx, message)
 }
 
 // Steer appends to the running turn.
@@ -248,19 +313,26 @@ func (s *MockSession) Steer(ctx context.Context, message string, images []sdk.Im
 	if s.remainingSteerFailures > 0 {
 		s.remainingSteerFailures--
 		s.mu.Unlock()
-		return errors.New("Ambiguous mock steer target")
+		// The spec asserts this exact message.
+		return errors.New("Requested mock steer transport failure")
 	}
 	active := s.activeTurnID != ""
+	clientMessageID := s.nextClientMessageID
+	s.nextClientMessageID = ""
 	s.mu.Unlock()
 	if !active {
 		// No turn to join: the caller's message becomes its own turn, which is what the daemon does when
 		// steer has nothing to attach to.
+		s.mu.Lock()
+		s.nextClientMessageID = clientMessageID
+		s.mu.Unlock()
 		return s.Prompt(ctx, message, images)
 	}
 	s.appendItem(sdk.TimelineItem{
-		Type:      "user_message",
-		MessageID: newMockID("msg"),
-		Text:      message,
+		Type:            "user_message",
+		MessageID:       newMockID("msg"),
+		ClientMessageID: clientMessageID,
+		Text:            message,
 	})
 	return nil
 }
@@ -281,6 +353,9 @@ func (s *MockSession) Abort(ctx context.Context) error {
 	if cancel != nil {
 		cancel()
 	}
+	s.mu.Lock()
+	s.pendingPermissions = nil
+	s.mu.Unlock()
 	// State goes before the event: the daemon snapshots Status() and ActiveTurn() into the agent_update
 	// it broadcasts beside turn_canceled, and a snapshot that still names a turn re-opens it on the client.
 	if !s.endTurn(turnID) {
@@ -362,17 +437,33 @@ func (s *MockSession) PendingPermissions() []map[string]any {
 
 func (s *MockSession) RespondToPermission(requestID string, resp map[string]any) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	// Matched on `id`, which is what the request carries and what the client answers with. Comparing
 	// `requestId` (the RPC envelope's field) removed nothing, so a dismissed modal stayed pending.
+	var answered map[string]any
 	remaining := make([]map[string]any, 0, len(s.pendingPermissions))
 	for _, request := range s.pendingPermissions {
 		if id, _ := request["id"].(string); id == requestID {
+			answered = request
 			continue
 		}
 		remaining = append(remaining, request)
 	}
 	s.pendingPermissions = remaining
+	turnID := s.activeTurnID
+	s.mu.Unlock()
+
+	if answered == nil || turnID == "" {
+		return nil
+	}
+	// The request owned the turn: a plan approval or a question set parks it until answered, so
+	// answering is what ends it. Leaving the turn open kept the running affordance up after the
+	// modal closed.
+	kind, _ := answered["kind"].(string)
+	reply := "Synthetic plan approval resolved"
+	if kind == "question" {
+		reply = "Synthetic questions resolved"
+	}
+	s.completeTurn(turnID, reply, nil)
 	return nil
 }
 
@@ -514,7 +605,7 @@ func toTimelineItem(item map[string]any) sdk.TimelineItem {
 // Order matters and mirrors node: user message, then turn_started, then reasoning and text deltas, then
 // completion. The client merges its optimistic bubble on the user message's clientMessageId, and treats
 // turn_started as the moment the run is legitimately in progress.
-func (s *MockSession) startTurn(ctx context.Context, message string, hasImages bool) error {
+func (s *MockSession) startTurn(ctx context.Context, message string) error {
 	profile := ResolveMockModel(s.modelID)
 
 	s.mu.Lock()
@@ -523,6 +614,7 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	s.turnToken = turnID
 	s.activeTurnID = turnID
 	s.activeTurnAssistantMsg = assistantMsgID
+	s.turnStartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	s.status = "running"
 	s.lastError = ""
 	// Per-turn, not per-session: a stale true from the previous turn makes an abort inside this
@@ -535,22 +627,6 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	clientMessageID := s.nextClientMessageID
 	s.nextClientMessageID = ""
 	s.mu.Unlock()
-
-	// A prompt that asks for a failed turn fails before anything else is emitted: the client's whole
-	// failure path (error banner, retry affordance, idle recovery) depends on there being no assistant text.
-	if directives := ParseMockDirectives(message); directives.TurnFailure {
-		s.mu.Lock()
-		s.lastError = "Requested mock turn failure"
-		s.mu.Unlock()
-		s.endTurn(turnID)
-		s.emit(map[string]any{
-			"type":   "byspace_turn_failed",
-			"turnId": turnID,
-			"error":  "Requested mock turn failure",
-		})
-		close(finished)
-		return errors.New("Requested mock turn failure")
-	}
 
 	// The prompt is recorded as a user message with the client's own id, so the optimistic bubble the
 	// composer already rendered is merged rather than duplicated.
@@ -582,7 +658,26 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 	// Assistant text before the echoed user message: the client has to attach it to the turn without a
 	// preceding user message to anchor on.
 	for index := 0; index < directives.AssistantBeforeUser; index++ {
-		s.emitTextDelta("early "+strconv.Itoa(index+1)+" ", assistantMsgID)
+		s.appendItem(sdk.TimelineItem{
+			Type:      "assistant_message",
+			Text:      "Synthetic pre-echo message " + strconv.Itoa(index+1),
+			MessageID: fmt.Sprintf("%s-%d", assistantMsgID, index+1),
+		})
+	}
+
+	// A withheld prompt is never acknowledged: the turn stays open and produces nothing until
+	// something cancels it. That window is what "interrupt before the first turn" exercises. The
+	// user's row survives because the daemon records submitted prompts itself, independently of
+	// whatever the provider echoes.
+	if directives.WithholdUserMessage {
+		go func() {
+			defer func() {
+				s.endTurn(turnID)
+				close(finished)
+			}()
+			<-turnCtx.Done()
+		}()
+		return nil
 	}
 
 	// A delayed echo holds the whole turn back, not just the message: node only schedules the body after the echo
@@ -630,165 +725,394 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 				s.mu.Unlock()
 			}
 		}
-		s.runScriptedTurn(turnCtx, turnID, assistantMsgID, message, hasImages, profile, directives)
+		s.runScriptedTurn(turnCtx, turnID, assistantMsgID, message, profile, directives)
 	}()
 	return nil
 }
 
 // runScriptedTurn emits the turn's content on the model's cadence.
+//
+// Branch order mirrors node's scheduleTurn: each phrase a spec can send selects one shape, and the
+// default is the cycle stream that runs until the model's duration elapses.
 func (s *MockSession) runScriptedTurn(
 	ctx context.Context,
 	turnID string,
 	assistantMsgID string,
 	message string,
-	hasImages bool,
 	profile MockModel,
 	directives MockDirectives,
 ) {
 	interval := time.Duration(profile.IntervalMs) * time.Millisecond
 
-	// Reasoning first: the client renders a collapsible Thinking block, and several specs assert it
-	// appears before any assistant text.
-	reasoning := "Considering the request."
-	s.emitReasoningDelta(reasoning, assistantMsgID)
-	if interval > 0 {
-		if !mockSleep(ctx, interval) {
+	if directives.SteeringReplay != "" {
+		s.runSteeringReplayTurn(ctx, turnID, assistantMsgID, directives.SteeringReplay)
+		return
+	}
+	if directives.TurnFailure {
+		// The failure is a turn outcome, not a rejected prompt: the client surfaces it as a system-error
+		// card and keeps the run's idle-recovery path intact.
+		s.failTurn(turnID)
+		return
+	}
+	if s.streamingResponse != "" {
+		s.runStreamingAssistantTurn(ctx, turnID, assistantMsgID, s.streamingResponse)
+		return
+	}
+	if s.assistantResponse != "" {
+		s.emitSettledAssistantTurn(turnID, assistantMsgID, s.assistantResponse)
+		return
+	}
+	if directives.StructuredBranch {
+		if branch := structuredBranchName(message); branch != "" {
+			s.emitSettledAssistantTurn(turnID, assistantMsgID, branch)
 			return
 		}
 	}
-
+	if directives.ImageMarkdown != "" {
+		s.emitSettledAssistantTurn(turnID, assistantMsgID, directives.ImageMarkdown)
+		return
+	}
 	if directives.PlanApproval {
+		// The turn stays open until the request is answered; RespondToPermission closes it.
 		s.emitPlanApprovalRequest(turnID)
-		s.completeTurn(turnID, assistantMsgID, "")
 		return
 	}
-	if directives.Questions {
-		s.emitQuestionsRequest(turnID)
-		s.completeTurn(turnID, assistantMsgID, "")
-		return
-	}
-	if directives.StreamUpdates > 0 {
-		// Emitting a fixed count lets the client's coalescer be measured: the spec asserts how many frames
-		// survive the window rather than inferring it from timing.
-		for index := 0; index < directives.StreamUpdates; index++ {
-			if !mockSleep(ctx, interval) {
-				return
-			}
-			s.emitTextDelta("chunk "+strconv.Itoa(index+1)+" ", assistantMsgID)
-		}
-		s.completeTurn(turnID, assistantMsgID, "streamed "+strconv.Itoa(directives.StreamUpdates)+" updates")
+	if directives.CustomMessage {
+		s.appendItem(sdk.TimelineItem{
+			Type:       "custom_message",
+			CustomType: "background-exit",
+			Display:    true,
+			Content:    buildSyntheticCustomMessageContent(),
+		})
+		s.completeTurn(turnID, "Synthetic custom message emitted", nil)
 		return
 	}
 	if directives.Notification {
 		s.appendItem(sdk.TimelineItem{
 			Type:    "notification",
 			Level:   "info",
-			Message: "## Historian recovery\n\nHistorian previously failed 3 time(s), so Magic Context is retrying history compartmentalising immediately after restart.",
+			Message: "## Historian recovery\n\nHistorian previously failed 3 time(s), so Magic Context is retrying history comparting immediately after restart.",
 		})
-		s.completeTurn(turnID, assistantMsgID, "Synthetic notification emitted")
-		return
-	}
-	if directives.CustomMessage {
-		// A custom message is the harness reporting something about itself. It renders as a distinct card,
-		// which is why it cannot be folded into an assistant message.
-		s.appendItem(sdk.TimelineItem{
-			Type: "custom_message",
-			Text: "[background-exit] 2 background tasks finished:\n" +
-				"[bg_2bc2494e69199b6a] npm run dev:server exited with code 0.\n" +
-				"[bg_eb37efed6b1968a8] npm run dev:app exited with code 0.",
-		})
-		s.completeTurn(turnID, assistantMsgID, "Synthetic custom message emitted")
+		s.completeTurn(turnID, "Synthetic notification emitted", nil)
 		return
 	}
 	if directives.ToolCallTodo {
-		// A todo card whose items come from the tool result, not the arguments: the panel reads the list out
-		// of `detail`, and an empty list renders as a card with no rows.
+		// One running row and one completed row under the same call id: the panel reads the todo list
+		// out of the completion's detail, and an empty list renders as a card with no rows.
+		todos := []map[string]any{
+			{"content": "Setup scaffold", "status": "completed"},
+			{"content": "Implement tool call parser", "status": "completed"},
+			{"content": "Verify Tasks track button in browser", "status": "in_progress"},
+			{"content": "Submit PR", "status": "pending"},
+		}
+		callID := "mock-todowrite-" + turnID
 		s.appendItem(sdk.TimelineItem{
-			Type:   "tool_call",
-			CallID: "mock-todo-" + turnID,
-			Name:   "todowrite",
-			Status: "completed",
-			Detail: map[string]any{
-				"type": "unknown",
-				"todos": []map[string]any{
-					{"content": "Setup scaffold", "status": "completed"},
-					{"content": "Implement tool call parser", "status": "completed"},
-					{"content": "Verify Tasks track button in browser", "status": "in_progress"},
-					{"content": "Submit PR", "status": "pending"},
-				},
-			},
+			Type: "tool_call", CallID: callID, Name: "todowrite", Status: "running",
+			Detail: map[string]any{"type": "unknown", "input": map[string]any{"todos": todos}, "output": nil},
 		})
-		s.completeTurn(turnID, assistantMsgID, "Synthetic todo emitted")
+		s.appendItem(sdk.TimelineItem{
+			Type: "tool_call", CallID: callID, Name: "todowrite", Status: "completed",
+			Detail: map[string]any{"type": "unknown", "input": map[string]any{"todos": todos}, "output": nil},
+		})
+		s.completeTurn(turnID, "Synthetic todowrite tool call emitted", nil)
 		return
 	}
-	if directives.ImageMarkdown != "" {
-		s.emitTextDelta(directives.ImageMarkdown, assistantMsgID)
-		s.completeTurn(turnID, assistantMsgID, directives.ImageMarkdown)
+	if directives.Questions {
+		s.emitQuestionsRequest(turnID, directives.QuestionFreeWrite)
+		return
+	}
+	if directives.LargePayloadKind != "" {
+		s.emitLargePayloadTurn(turnID, assistantMsgID, directives.LargePayloadKind, directives.LargePayloadBytes)
+		return
+	}
+	if directives.StreamUpdates > 0 {
+		s.emitStressTurn(turnID, assistantMsgID, directives.StreamUpdates, directives.StreamCoalesced)
 		return
 	}
 
-	// A prompt naming the slash command is answered by the provider itself.
-	if strings.Contains(strings.ToLower(message), strings.ToLower(MockHandledCommand)) {
-		s.emitTextDelta("Handled by the mock provider.", assistantMsgID)
-		s.completeTurn(turnID, assistantMsgID, "Handled by the mock provider.")
-		return
+	s.runCycleStream(ctx, turnID, assistantMsgID, profile, interval)
+}
+
+// failTurn ends the turn with a failure. Node's scripted failure resolves the run normally; the
+// failure reaches the client as a turn_failed event, which the daemon turns into a system-error
+// timeline entry.
+func (s *MockSession) failTurn(turnID string) {
+	s.mu.Lock()
+	s.lastError = mockProviderFailureMessage
+	s.mu.Unlock()
+	s.endTurn(turnID)
+	s.emit(map[string]any{
+		"type":   "byspace_turn_failed",
+		"turnId": turnID,
+		"error":  mockProviderFailureMessage,
+	})
+}
+
+// runCycleStream is the default turn: cycles of scripted content until the model's duration
+// elapses, closed by the end-of-stream marker.
+//
+// The duration is the point. A turn that answers once and ends cannot be interrupted, and most of
+// the specs using this provider exist to exercise a turn that is still running.
+func (s *MockSession) runCycleStream(
+	ctx context.Context,
+	turnID string,
+	assistantMsgID string,
+	profile MockModel,
+	interval time.Duration,
+) {
+	started := time.Now()
+	duration := time.Duration(profile.DurationMs) * time.Millisecond
+	var queue []mockCycleEvent
+	cycle := 0
+	burstIndex := 0
+	emitted := 0
+
+	for {
+		if time.Since(started) >= duration {
+			break
+		}
+		events := 1
+		gap := interval
+		if profile.Burst != nil {
+			events = nextMockBurstSize(profile.Burst, burstIndex)
+			burstIndex++
+			gap = time.Duration(profile.Burst.GapMs) * time.Millisecond
+		}
+		for count := 0; count < events; count++ {
+			if len(queue) == 0 {
+				cycle++
+				s.mu.Lock()
+				s.usageCycle = cycle
+				repeat := s.reasoningRepeat
+				s.mu.Unlock()
+				if profile.Burst != nil {
+					queue = buildMockBurstyQueue(cycle)
+				} else {
+					queue = buildMockCycleQueue(turnID, cycle, repeat)
+				}
+			}
+			event := queue[0]
+			queue = queue[1:]
+			if !s.dispatchCycleEvent(turnID, assistantMsgID, event) {
+				return
+			}
+			emitted++
+		}
+		s.mu.Lock()
+		s.usageTokens = emitted
+		s.mu.Unlock()
+		if gap > 0 && !mockSleep(ctx, gap) {
+			return
+		}
 	}
 
-	body := s.assistantResponse
-	if body == "" {
-		body = "Acknowledged: " + firstLine(message)
-	}
-	if hasImages {
-		body += "\n\nI can see the attached image."
-	}
+	s.appendItem(sdk.TimelineItem{
+		Type:      "assistant_message",
+		Text:      mockSyntheticStreamEnd,
+		MessageID: assistantMsgID,
+	})
+	s.completeTurn(turnID, "Synthetic load test complete", mockCycleUsage(cycle, emitted))
+}
 
-	// Stream in token-sized pieces rather than one blob: the paced reveal and the coalescing window are
-	// both invisible if the text arrives whole.
-	for _, token := range splitMockTokens(body) {
+// dispatchCycleEvent emits one cycle step, reporting false when the turn ended underneath it.
+func (s *MockSession) dispatchCycleEvent(turnID, assistantMsgID string, event mockCycleEvent) bool {
+	switch event.Kind {
+	case "assistant_token":
+		s.appendItem(sdk.TimelineItem{
+			Type:      "assistant_message",
+			Text:      event.Text,
+			MessageID: assistantMsgID,
+		})
+	case "reasoning_token":
+		// No messageId: the protocol's reasoning branch carries only type and text, and the client
+		// appends to the open thought instead of looking the item up.
+		s.appendItem(sdk.TimelineItem{Type: "reasoning", Text: event.Text})
+	case "tool_running":
+		s.appendItem(mockToolCallItem(event, "running"))
+	case "tool_completed":
+		s.appendItem(mockToolCallItem(event, "completed"))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.activeTurnID == turnID
+}
+
+// runStreamingAssistantTurn streams a configured response token by token on its own interval.
+func (s *MockSession) runStreamingAssistantTurn(
+	ctx context.Context,
+	turnID string,
+	assistantMsgID string,
+	finalText string,
+) {
+	interval := time.Duration(s.streamingIntervalMs) * time.Millisecond
+	for _, token := range mockTokenize(finalText) {
+		s.appendItem(sdk.TimelineItem{
+			Type:      "assistant_message",
+			Text:      token,
+			MessageID: assistantMsgID,
+		})
 		if !mockSleep(ctx, interval) {
 			return
 		}
-		s.emitTextDelta(token, assistantMsgID)
 	}
-	s.completeTurn(turnID, assistantMsgID, body)
+	s.completeTurn(turnID, finalText, nil)
 }
 
-// emitReasoningDelta streams one reasoning chunk.
-func (s *MockSession) emitReasoningDelta(text, assistantMsgID string) {
-	s.appendItem(sdk.TimelineItem{
-		Type:      "reasoning",
-		Text:      text,
-		MessageID: assistantMsgID,
-		Status:    "running",
-	})
-}
-
-// emitTextDelta streams one assistant text chunk.
-func (s *MockSession) emitTextDelta(text, assistantMsgID string) {
+// emitSettledAssistantTurn delivers a response whole, in one item.
+func (s *MockSession) emitSettledAssistantTurn(turnID, assistantMsgID, finalText string) {
 	s.appendItem(sdk.TimelineItem{
 		Type:      "assistant_message",
-		Text:      text,
+		Text:      finalText,
 		MessageID: assistantMsgID,
-		Status:    "running",
 	})
+	s.completeTurn(turnID, finalText, nil)
 }
 
-// completeTurn closes the assistant message and ends the turn.
-func (s *MockSession) completeTurn(turnID, assistantMsgID, fullText string) {
+// emitStressTurn produces a fixed number of updates in one burst.
+//
+// The shape differs by directive: coalesced updates arrive as assistant messages, the rest as todo
+// items. Specs count arrival frames, so both shapes land unpaced rather than one per interval.
+func (s *MockSession) emitStressTurn(turnID, assistantMsgID string, count int, coalesced bool) {
+	for index := 0; index < count; index++ {
+		if coalesced {
+			s.appendItem(sdk.TimelineItem{
+				Type:      "assistant_message",
+				Text:      "stress-update-" + strconv.Itoa(index),
+				MessageID: assistantMsgID,
+			})
+			continue
+		}
+		s.appendItem(sdk.TimelineItem{
+			Type: "todo",
+			Items: []sdk.TaskItem{{
+				Text:      "stress-update-" + strconv.Itoa(index),
+				Completed: index%2 == 0,
+			}},
+		})
+	}
+	s.completeTurn(turnID, "Synthetic agent stream stress complete", mockFixedUsage(1, count))
+}
+
+// emitLargePayloadTurn produces one oversized item of the requested kind.
+func (s *MockSession) emitLargePayloadTurn(turnID, assistantMsgID, kind string, bytes int) {
+	payload := buildMockRepeatedPayload(bytes, kind)
+	switch kind {
+	case "diff":
+		s.appendItem(sdk.TimelineItem{
+			Type: "tool_call", CallID: turnID + ":edit:large", Name: "edit", Status: "completed",
+			Detail: map[string]any{
+				"type": "edit", "filePath": "src/large-diff.ts",
+				"unifiedDiff": "diff --git a/src/large-diff.ts b/src/large-diff.ts\n" + payload,
+			},
+		})
+	case "file":
+		s.appendItem(sdk.TimelineItem{
+			Type: "tool_call", CallID: turnID + ":read:large", Name: "read", Status: "completed",
+			Detail: map[string]any{
+				"type": "read", "filePath": "src/large-file.txt", "content": payload,
+			},
+		})
+	default:
+		image := make([]byte, 0, max(bytes, len(mockOnePixelPNG)))
+		image = append(image, mockOnePixelPNG...)
+		for len(image) < bytes {
+			image = append(image, 0)
+		}
+		s.appendItem(sdk.TimelineItem{
+			Type: "assistant_message", MessageID: assistantMsgID,
+			Text: "![Synthetic image](data:image/png;base64," + base64.StdEncoding.EncodeToString(image) + ")",
+		})
+	}
+	s.completeTurn(turnID, "Synthetic large payload complete", mockFixedUsage(1, bytes))
+}
+
+// runSteeringReplayTurn replays a provider-shaped foreground shell call: a long-running bash whose
+// completion arrives after the steering window, which is what the steering specs watch.
+func (s *MockSession) runSteeringReplayTurn(ctx context.Context, turnID, assistantMsgID, shape string) {
+	if shape == "codex" {
+		s.appendItem(sdk.TimelineItem{
+			Type: "assistant_message", MessageID: assistantMsgID,
+			Text: "Running the foreground command.",
+		})
+	}
+	callID := turnID + ":steering-replay-shell"
+	detail := map[string]any{"type": "shell", "command": "sleep 5", "cwd": "/tmp/byspace-mock-load"}
+	s.appendItem(sdk.TimelineItem{
+		Type: "tool_call", CallID: callID, Name: "bash", Status: "running", Detail: detail,
+	})
+	if !mockSleep(ctx, 5*time.Second) {
+		return
+	}
+	s.appendItem(sdk.TimelineItem{
+		Type: "tool_call", CallID: callID, Name: "bash", Status: "completed",
+		Detail: mergeMockDetail(detail, map[string]any{"output": "", "exitCode": 0}),
+	})
+	s.appendItem(sdk.TimelineItem{
+		Type: "assistant_message", MessageID: assistantMsgID,
+		Text: "Foreground command completed after steering.",
+	})
+	s.completeTurn(turnID, "Foreground command completed after steering.", nil)
+}
+
+// mockFixedUsage is the usage the stress and large-payload turns report.
+func mockFixedUsage(input, output int) *sdk.AgentUsage {
+	maxTokens := mockContextWindowMaxTokens
+	used := output
+	return &sdk.AgentUsage{
+		InputTokens:             input,
+		OutputTokens:            output,
+		ContextWindowUsedTokens: &used,
+		ContextWindowMaxTokens:  &maxTokens,
+	}
+}
+
+// mockCycleUsage is the usage the cycle stream reports, matching node's per-cycle formula.
+func mockCycleUsage(cycle, emitted int) *sdk.AgentUsage {
+	return mockFixedUsage(cycle*32, emitted)
+}
+
+// buildMockRepeatedPayload fills a byte budget with recognizable lines.
+func buildMockRepeatedPayload(bytes int, prefix string) string {
+	line := prefix + " " + strings.Repeat("x", 96) + "\n"
+	var out strings.Builder
+	for out.Len() < bytes {
+		out.WriteString(line)
+	}
+	text := out.String()
+	if len(text) > bytes {
+		text = text[:bytes]
+	}
+	return text
+}
+
+// buildSyntheticCustomMessageContent mirrors a real extension-injected custom_message: a summary
+// line plus one entry per finished task, long enough to exercise the collapsed preview.
+func buildSyntheticCustomMessageContent() string {
+	return strings.Join([]string{
+		"2 background tasks finished:",
+		`[bg_2bc2494e69199b6a] cd /Users/example/workspace/project && npm run dev:server > /tmp/dev-server.log 2>&1 & echo "server pid: $!" exited with code 0. Last line: server pid: 43229 Output: /tmp/pi-background-terminal/bg_2bc2494e69199b6a.log`,
+		"[bg_eb37efed6b1968a8] cd /Users/example/workspace/project && npm run dev:app -- --port 8081 exited with code 0. Last line: app pid: 44822 Output: /tmp/pi-background-terminal/bg_eb37efed6b1968a8.log",
+	}, "\n")
+}
+
+// completeTurn ends the turn and reports it, carrying the usage the turn accumulated.
+func (s *MockSession) completeTurn(turnID, fullText string, usage *sdk.AgentUsage) {
 	s.mu.Lock()
+	token := s.turnToken
 	s.lastAssistantText = fullText
 	s.mu.Unlock()
-	s.appendItem(sdk.TimelineItem{
-		Type:      "assistant_message",
-		Text:      "",
-		MessageID: assistantMsgID,
-		Status:    "completed",
-	})
 	s.endTurn(turnID)
-	s.emit(map[string]any{
+	event := map[string]any{
 		"type":   "byspace_turn_completed",
 		"turnId": turnID,
-	})
+		// The daemon drops a completion whose token belongs to an older turn, so a slow cycle
+		// stream cannot end the turn that replaced it.
+		"turnToken": token,
+	}
+	if usage != nil {
+		event["usage"] = usage
+	}
+	s.emit(event)
 }
 
 // endTurn clears the session's turn state, reporting whether it owned this turn.
@@ -805,6 +1129,7 @@ func (s *MockSession) endTurn(turnID string) bool {
 	}
 	s.activeTurnID = ""
 	s.activeTurnAssistantMsg = ""
+	s.turnStartedAt = ""
 	s.status = "idle"
 	s.turnStarted = false
 	s.cancel = nil
@@ -896,38 +1221,17 @@ func (s *MockSession) emitPlanApprovalRequest(turnID string) {
 // emitQuestionsRequest asks the user a structured question.
 //
 // Two questions with options: the client renders them as a picker, and the spec drives it by option label.
-func (s *MockSession) emitQuestionsRequest(turnID string) {
+func (s *MockSession) emitQuestionsRequest(turnID string, freeWrite bool) {
 	requestID := "mock-questions-" + turnID
 	request := map[string]any{
-		"id":          requestID,
-		"provider":    MockProviderID,
-		"name":        "MockQuestions",
-		"kind":        "question",
-		"title":       "Questions",
-		"description": "The agent needs two answers before continuing.",
+		"id":       requestID,
+		"provider": MockProviderID,
+		"name":     "MockQuestions",
+		"kind":     "question",
+		"title":    "Questions",
 		"input": map[string]any{
-			"questions": []map[string]any{
-				{
-					"question": "Which environment?",
-					"header":   "Environment",
-					"options": []map[string]any{
-						{"label": "Staging", "description": "Use the staging deployment"},
-						{"label": "Production", "description": "Use production"},
-					},
-					"multiSelect": false,
-				},
-				{
-					"question": "Which checks should run?",
-					"header":   "Checks",
-					"options": []map[string]any{
-						{"label": "Unit", "description": "Unit tests only"},
-						{"label": "E2E", "description": "End-to-end only"},
-					},
-					"multiSelect": true,
-				},
-			},
+			"questions": mockQuestions(freeWrite),
 		},
-		"actions":  []map[string]any{{"id": "submit", "label": "Submit", "behavior": "allow", "variant": "primary"}},
 		"metadata": map[string]any{"source": "mock_questions"},
 	}
 	s.mu.Lock()
@@ -939,4 +1243,92 @@ func (s *MockSession) emitQuestionsRequest(turnID string) {
 		"request":  request,
 		"turnId":   turnID,
 	})
+}
+
+// mockQuestions is the question set the prompt asks for. The two shapes are what
+// question-prompt-pagination.spec.ts drives: three selectable questions by default, two free-write
+// ones when the prompt names them.
+func mockQuestions(freeWrite bool) []map[string]any {
+	if freeWrite {
+		return []map[string]any{
+			{
+				"question":    "What is the GitHub private repo URL to push to?",
+				"header":      "repoUrl",
+				"options":     []map[string]any{},
+				"multiSelect": false,
+				"placeholder": "git@github.com:user/repo.git",
+			},
+			{
+				"question":    "What should the first commit message be?",
+				"header":      "commitMessage",
+				"options":     []map[string]any{},
+				"multiSelect": false,
+				"placeholder": "Initial commit",
+			},
+		}
+	}
+	return []map[string]any{
+		{
+			"question":    "Which surface should this apply to?",
+			"header":      "surface",
+			"options":     []map[string]any{{"label": "App"}, {"label": "Desktop"}},
+			"multiSelect": false,
+		},
+		{
+			"question":    "Which rollout should we use?",
+			"header":      "rollout",
+			"options":     []map[string]any{{"label": "Immediately"}, {"label": "Behind feature flag"}},
+			"multiSelect": false,
+		},
+		{
+			"question":    "What success criteria should we use?",
+			"header":      "success",
+			"options":     []map[string]any{},
+			"multiSelect": false,
+			"placeholder": "Describe success...",
+		},
+	}
+}
+
+// structuredBranchName answers the workspace auto-name request, which asks for JSON and nothing
+// else: the daemon derives a title and a branch slug from the prompt.
+func structuredBranchName(message string) string {
+	seed := ""
+	if match := mockUserPromptTag.FindStringSubmatch(message); match != nil {
+		seed = strings.TrimSpace(match[1])
+	} else if match := mockAttachmentsTag.FindStringSubmatch(message); match != nil {
+		seed = strings.TrimSpace(match[1])
+	}
+	first := ""
+	for _, line := range strings.Split(seed, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			first = trimmed
+			break
+		}
+	}
+	if first == "" {
+		first = "Mock task"
+	}
+	title := strings.TrimSpace(mockTitleQuotes.ReplaceAllString(first, ""))
+	title = strings.Join(strings.Fields(title), " ")
+	if len(title) > 80 {
+		title = strings.TrimSpace(title[:80])
+	}
+	if title == "" {
+		title = "Mock task"
+	}
+	branch := strings.ToLower(title)
+	branch = mockBranchDisallowed.ReplaceAllString(branch, "-")
+	branch = mockBranchEdgeDashes.ReplaceAllString(branch, "")
+	if len(branch) > 100 {
+		branch = branch[:100]
+	}
+	if branch == "" {
+		branch = "mock-task"
+	}
+	encoded, err := json.Marshal(map[string]string{"title": title, "branch": branch})
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
