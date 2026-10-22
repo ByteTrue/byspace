@@ -60,8 +60,27 @@ created: 2026-10-22
 `"Object"`，报告里写的是 `Message validation failed Object`，**什么都没说**。把标识写进消息文本后，一次就看到了
 `read_project_config_response`。这类「optional 发 null」已经是第三次（`projectIconRevision`、`runtimeInfo`、这次）。
 
+## 后续轮次补记（provider 快照的 scope 与 ETag）
+
+`new-workspace-model-memory` 的失败把我引到一处结构性缺陷。Node 的 `ProviderSnapshotManager` 有
+`catalogs: Map<scopeKey, Map<provider, catalog>>`，Go 只有一份全局状态：
+
+- **刷新不带 scope 隔离**：`refreshProvidersSnapshot({cwd})` 与不带 cwd 的刷新是同一个缓存。项目刷新会把
+  host 的观测覆盖掉 —— 二进制被移除后 host 报 `unavailable`，任意项目刷新一次又变回 `ready`。
+- **`ifNoneMatch` 的 tag 与目录内容无关**：它 hash 的是 `serverId | 模型数 | 版本`，三个都不会因
+  provider 可用性变化而变，也都与 scope 无关。客户端问「这个目录还是最新的吗」，在目录刚变过之后得到
+  `notModified: true` + 空 entries。
+
+已修（`88ae048f8`）：per-scope 缓存 + tag 按 scope 的 entries 计算。直接验证：park 二进制并刷新后，
+带旧 `ifNoneMatch` 的读取返回 `notModified: false`、`status: unavailable`。
+
+**这条修复让 3 个 spec 从「断言失败」变成新的失败形态**（超时、count 不符），说明它改变了行为而前端读取路径
+还没有对应分支 —— 见下方未解决清单。
+
 ## 未解决
 
+- `new-workspace-model-memory` / `new-workspace-model-recovery` / `provider-removal`：provider 目录加上 scope 隔离后
+  仍有 4 条失败。Go 侧读、写、ETag 都已单独验证正确，剩余差异在**前端使用哪个 scope** 上，属产品行为取舍。
 - `workspace-labels.spec.ts` 的 `creates, multi-assigns, filters, groups, and edits` 仍在 toggle 的第二轮
   click 超时。加了工作区广播后另外两条通过、这一条仍失败；而 Node 侧 assignment 后**不发** `workspace_update`，
   说明前端本应从响应更新状态。这是前端与 Go 之间尚未定位的一处缺口，不猜测修法。
