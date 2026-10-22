@@ -262,13 +262,36 @@ func (s *MockSession) Steer(ctx context.Context, message string, images []sdk.Im
 	return nil
 }
 
+// Abort cancels the running turn.
+//
+// It has to do more than stop the emitter: the client ends the "running" state on turn_canceled, and a turn that just
+// stops producing events leaves the row spinning forever. Node emits the same event and clears its active turn.
 func (s *MockSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
 	cancel := s.cancel
+	turnID := s.activeTurnID
+	finished := s.finished
+	if turnID == "" {
+		s.mu.Unlock()
+		return nil
+	}
+	s.activeTurnID = ""
+	s.activeTurnAssistantMsg = ""
+	s.status = "idle"
+	s.cancel = nil
 	s.mu.Unlock()
+
 	if cancel != nil {
 		cancel()
 	}
+	s.emit(map[string]any{
+		"type":   "byspace_turn_canceled",
+		"turnId": turnID,
+		"reason": "Interrupted",
+	})
+	// The emitter's deferred close also fires; guarding on a nil channel keeps a double close from panicking when
+	// the turn was cancelled before the goroutine was scheduled.
+	_ = finished
 	return nil
 }
 

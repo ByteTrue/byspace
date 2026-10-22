@@ -2916,6 +2916,28 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				})
 			}
 
+		case "byspace_turn_canceled":
+			// The client ends its "running" affordance on this, so a cancelled turn that never reports it leaves the
+			// row spinning. The daemon also broadcasts turn_canceled on archive and close; this is the provider's own
+			// interruption.
+			mp.stopUsagePolling()
+			s.mu.Lock()
+			mp.record.LastStatus = "idle"
+			mp.record.UpdatedAt = nowStr
+			recCanceledCopy := mp.record
+			s.mu.Unlock()
+			s.broadcastSessionMsg("agent_stream", map[string]any{
+				"agentId":   rec.ID,
+				"provider":  rec.Provider,
+				"timestamp": nowStr,
+				"event": map[string]any{
+					"type":   "turn_canceled",
+					"turnId": ev["turnId"],
+					"reason": ev["reason"],
+				},
+			})
+			s.broadcastAgentUpdate(recCanceledCopy)
+
 		case "byspace_turn_failed":
 			// A provider-reported failure ends the turn the same way a completion does, minus the success:
 			// the client needs the status to leave running or the row spins forever.
