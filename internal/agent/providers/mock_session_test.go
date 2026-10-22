@@ -123,3 +123,46 @@ func TestMockPromptRejectionIsOneShot(t *testing.T) {
 	_ = session.WaitForFinish(waitCtx)
 	cancel()
 }
+
+// A delayed echo leaves the turn started but the user message not yet landed; that window is what the
+// "interrupt before the first turn" specs exercise.
+func TestMockDelayedUserMessage(t *testing.T) {
+	session, _ := newTestMockSession(t, "e2e-fast-stream")
+	ctx := context.Background()
+	if err := session.Prompt(ctx, "Delay synthetic user message by 300ms.", nil); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing echoed yet.
+	if contains(timelineTypes(session), "user_message") {
+		t.Fatal("the user message landed before its delay elapsed")
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	_ = session.WaitForFinish(waitCtx)
+	cancel()
+	if !contains(timelineTypes(session), "user_message") {
+		t.Fatalf("the delayed user message never landed: %v", timelineTypes(session))
+	}
+}
+
+// Aborting inside the delay window has to leave the client with nothing running. The turn never emitted
+// turn_started, so the abort emits the pair rather than a lone cancel.
+func TestMockAbortInsideDelayWindow(t *testing.T) {
+	session, _ := newTestMockSession(t, "two-minute-does-not-exist")
+	if err := session.Prompt(context.Background(), "Delay synthetic user message by 1500ms.", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Abort(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := session.Status(); got != "idle" {
+		t.Fatalf("status = %q, want idle", got)
+	}
+	if turnID, _ := session.ActiveTurn(); turnID != "" {
+		t.Fatalf("the cancelled turn is still active: %q", turnID)
+	}
+	// The cancelled turn must not echo its user message afterwards.
+	time.Sleep(1800 * time.Millisecond)
+	if contains(timelineTypes(session), "user_message") {
+		t.Fatalf("the cancelled turn still echoed its prompt: %v", timelineTypes(session))
+	}
+}

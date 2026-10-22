@@ -24,6 +24,9 @@ var (
 	mockUserMsgBeforeTurn    = regexp.MustCompile(`(?i)emit\s+synthetic\s+user\s+message\s+before\s+accepting\s+turn`)
 	mockAssistantBeforeUser  = regexp.MustCompile(`(?i)emit\s+(\d+)\s+assistant\s+messages\s+before\s+synthetic\s+user\s+message`)
 	mockImageMarkdown        = regexp.MustCompile(`(?i)^emit settled assistant image markdown:\s*(!\[[^\]\r\n]*\]\(.+\))\s*$`)
+	// mockUserDelayPattern delays the echoed user message. The delay matters beyond pacing: while it is
+	// running the turn has not started, which is the window where "interrupt before the first turn" lives.
+	mockUserDelayPattern = regexp.MustCompile(`(?i)delay\s+synthetic\s+user\s+message\s+by\s+(\d+)\s*ms`)
 )
 
 // MockDirectives is what a prompt asks the scripted provider to do.
@@ -40,6 +43,8 @@ type MockDirectives struct {
 	StreamUpdates int
 	// ImageMarkdown is a settled assistant message carrying an image.
 	ImageMarkdown string
+	// UserMessageDelayMs delays the echoed user message, capped so a spec cannot park a turn for minutes.
+	UserMessageDelayMs int
 }
 
 // ParseMockDirectives reads the phrases a prompt uses to steer the scripted provider.
@@ -67,6 +72,14 @@ func ParseMockDirectives(prompt string) MockDirectives {
 	if match := mockImageMarkdown.FindStringSubmatch(text); match != nil {
 		directives.ImageMarkdown = match[1]
 	}
+	if match := mockUserDelayPattern.FindStringSubmatch(text); match != nil {
+		if delay, err := strconv.Atoi(match[1]); err == nil && delay > 0 {
+			if delay > 2000 {
+				delay = 2000
+			}
+			directives.UserMessageDelayMs = delay
+		}
+	}
 	return directives
 }
 
@@ -74,5 +87,5 @@ func ParseMockDirectives(prompt string) MockDirectives {
 func (d MockDirectives) hasAny() bool {
 	return d.PlanApproval || d.TurnFailure || d.CustomMessage || d.Notification || d.ToolCallTodo ||
 		d.Questions || d.UserMessageFirst || d.AssistantBeforeUser > 0 || d.StreamUpdates > 0 ||
-		d.ImageMarkdown != ""
+		d.ImageMarkdown != "" || d.UserMessageDelayMs > 0
 }

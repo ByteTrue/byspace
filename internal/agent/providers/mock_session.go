@@ -36,6 +36,9 @@ type MockSession struct {
 	turnToken              string
 	activeTurnID           string
 	activeTurnAssistantMsg string
+	// turnStarted tracks whether turn_started went out, so an abort inside the delay window can still emit the
+	// pair the client needs to clear its running state.
+	turnStarted bool
 
 	nextClientMessageID string
 	lastAssistantText   string
@@ -271,6 +274,7 @@ func (s *MockSession) Abort(ctx context.Context) error {
 	cancel := s.cancel
 	turnID := s.activeTurnID
 	finished := s.finished
+	started := s.turnStarted
 	if turnID == "" {
 		s.mu.Unlock()
 		return nil
@@ -283,6 +287,15 @@ func (s *MockSession) Abort(ctx context.Context) error {
 
 	if cancel != nil {
 		cancel()
+	}
+	// A turn cancelled inside the delay window never emitted turn_started. The client still ends the run on
+	// turn_canceled, but it needs the pair to leave the row clean, and emitting only the cancel left the running
+	// affordance up in the "interrupt before the first turn" case.
+	if !started {
+		s.emit(map[string]any{
+			"type":   "byspace_turn_started",
+			"turnId": turnID,
+		})
 	}
 	s.emit(map[string]any{
 		"type":   "byspace_turn_canceled",
@@ -566,6 +579,9 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 			"type":   "byspace_turn_started",
 			"turnId": turnID,
 		})
+		s.mu.Lock()
+		s.turnStarted = true
+		s.mu.Unlock()
 	}
 
 	// Assistant text before the echoed user message: the client has to attach it to the turn without a
@@ -574,12 +590,21 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 		s.emitTextDelta("early "+strconv.Itoa(index+1)+" ", assistantMsgID)
 	}
 
-	s.appendItem(userItem)
-	if !startedFirst {
-		s.emit(map[string]any{
-			"type":   "byspace_turn_started",
-			"turnId": turnID,
-		})
+	// A delayed echo holds the whole turn back, not just the message: node only schedules the body after the echo
+	// lands, so the stream cannot outrun its own prompt. The window before it is what the "interrupt before the
+	// first turn" specs exercise — the session is running, nothing has been echoed, and an abort has to leave
+	// nothing behind.
+	if directives.UserMessageDelayMs == 0 {
+		s.appendItem(userItem)
+		if !startedFirst {
+			s.emit(map[string]any{
+				"type":   "byspace_turn_started",
+				"turnId": turnID,
+			})
+			s.mu.Lock()
+			s.turnStarted = true
+			s.mu.Unlock()
+		}
 	}
 
 	go func() {
@@ -594,6 +619,27 @@ func (s *MockSession) startTurn(ctx context.Context, message string, hasImages b
 			s.mu.Unlock()
 			close(finished)
 		}()
+		if directives.UserMessageDelayMs > 0 {
+			if !mockSleep(turnCtx, time.Duration(directives.UserMessageDelayMs)*time.Millisecond) {
+				return
+			}
+			s.mu.Lock()
+			if s.activeTurnID != turnID {
+				s.mu.Unlock()
+				return
+			}
+			s.mu.Unlock()
+			s.appendItem(userItem)
+			if !startedFirst {
+				s.emit(map[string]any{
+					"type":   "byspace_turn_started",
+					"turnId": turnID,
+				})
+				s.mu.Lock()
+				s.turnStarted = true
+				s.mu.Unlock()
+			}
+		}
 		s.runScriptedTurn(turnCtx, turnID, assistantMsgID, message, hasImages, profile, directives)
 	}()
 	return nil
