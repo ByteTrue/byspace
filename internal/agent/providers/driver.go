@@ -265,6 +265,12 @@ func GetProviderSpec(providerID string) ProviderSpec {
 	if preset, ok := ACPPresets[id]; ok {
 		return preset
 	}
+	// The scripted providers are addressable by id but are not part of the product's built-in list.
+	for _, spec := range TestProviders {
+		if spec.ID == id {
+			return spec
+		}
+	}
 	return ProviderSpec{
 		ID:          id,
 		Label:       id,
@@ -358,6 +364,22 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 			"models":        models,
 			"modes":         spec.Modes,
 			"description":   spec.Description,
+		})
+	}
+
+	// The scripted providers follow the built-ins, matching node's registry which lists every registered
+	// provider. Their models have to be in the catalog for the model picker to offer them.
+	for _, spec := range TestProviders {
+		entries = append(entries, map[string]any{
+			"provider":    spec.ID,
+			"label":       spec.Label,
+			"status":      "ready",
+			"enabled":     true,
+			"source":      "builtin",
+			"fetchedAt":   now,
+			"models":      spec.Models,
+			"modes":       spec.Modes,
+			"description": spec.Description,
 		})
 	}
 
@@ -528,6 +550,17 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		return StartClaudeSession(cfg, cmd)
 	case "codex-rpc":
 		return StartCodexSession(cfg, cmd)
+	case "mock-native":
+		// Scripted provider: no subprocess, no binary. It exists so the end-to-end specs have something that
+		// streams deterministically without a model.
+		return StartMockSession(MockLaunchOptions{
+			Cwd:           cfg.Cwd,
+			Model:         cfg.Model,
+			ModeID:        cfg.ModeID,
+			ThinkingID:    cfg.ThinkingOptionID,
+			SessionID:     cfg.SessionHandle,
+			FeatureValues: mockFeatureValues(cfg.ProviderOptions),
+		}), nil
 	case "opencode-http":
 		return StartOpenCodeSession(cfg, cmd)
 	default:

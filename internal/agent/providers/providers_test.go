@@ -20,14 +20,29 @@ func TestBuiltinProvidersCatalog(t *testing.T) {
 		t.Fatalf("expected 6 core built-in providers, got %d", len(BuiltinProviders))
 	}
 	snaps := BuildSnapshotEntries(nil, "/bin/sh", nil)
-	if len(snaps) != 6 {
-		t.Fatalf("expected 6 default snapshot entries, got %d", len(snaps))
+	// The six product providers come first and in order; the scripted providers follow, matching node's
+	// registry which lists every registered provider. Asserting the product list by name rather than by a
+	// bare length keeps "the product ships six" true while allowing the test-only providers to exist.
+	wantOrder := []string{"claude", "codex", "copilot", "opencode", "pi", "omp"}
+	for index, want := range wantOrder {
+		if got, _ := snaps[index]["provider"].(string); got != want {
+			t.Fatalf("snapshot[%d] = %q, want %q", index, got, want)
+		}
+	}
+	var scripted int
+	for _, entry := range snaps {
+		if id, _ := entry["provider"].(string); id == MockProviderID {
+			scripted++
+		}
+	}
+	if scripted != 1 {
+		t.Fatalf("expected the scripted provider in the snapshot, got %d entries", scripted)
 	}
 	snapsWithCustom := BuildSnapshotEntries(nil, "/bin/sh", map[string]any{
 		"cursor": map[string]any{"extends": "acp", "label": "Cursor", "enabled": true},
 	})
-	if len(snapsWithCustom) != 7 {
-		t.Fatalf("expected 7 snapshot entries with opt-in custom provider, got %d", len(snapsWithCustom))
+	if len(snapsWithCustom) != len(snaps)+1 {
+		t.Fatalf("expected one more entry with an opt-in custom provider, got %d", len(snapsWithCustom))
 	}
 	avail := BuildAvailableProviders("/bin/sh")
 	if len(avail) != 6 {
