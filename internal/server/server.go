@@ -163,7 +163,10 @@ type Server struct {
 	downloadTokens    map[string]downloadTokenEntry
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
-	clients           map[frameSink]bool
+	// checkoutStatusFingerprints remembers the last pushed dirty/branch state per checkout so the
+	// poller does not re-broadcast an unchanged status every second.
+	checkoutStatusFingerprints map[string]string
+	clients                    map[frameSink]bool
 	// timelineViews holds each socket's viewed-agent set from
 	// agent.timeline.set_subscription.request, and selectiveTimeline records which sockets
 	// declared selective_agent_timeline. Together they scope agent_stream to the chats a

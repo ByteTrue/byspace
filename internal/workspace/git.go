@@ -76,7 +76,10 @@ type DiffHunk struct {
 }
 
 type ParsedDiffFile struct {
-	Path      string     `json:"path"`
+	Path string `json:"path"`
+	// OldPath is set only for renames and copies, and is what the client needs to revert one:
+	// `git checkout -- <new>` alone leaves the old path deleted.
+	OldPath   string     `json:"oldPath,omitempty"`
 	IsNew     bool       `json:"isNew"`
 	IsDeleted bool       `json:"isDeleted"`
 	Additions int        `json:"additions"`
@@ -176,6 +179,31 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 	porcelain, _ := runGit(ctx, absCwd, "status", "--porcelain")
 	dirty := porcelain != ""
 
+	// The diff pane decides which comparison to show from this pair: `ahead > 0` on a clean tree is
+	// what makes the "See committed changes" link appear, and its absence left the uncommitted view
+	// stuck on "No changes to display" with no way out. Measured against the base branch the panel
+	// compares with, not against the upstream, which is a different question.
+	var baseRefPtr *string
+	var aheadBehind any
+	if dirty {
+		// A dirty tree has uncommitted work, so the uncommitted view is never empty and the
+		// comparison stays put until the user asks otherwise; no base comparison is needed.
+		aheadBehind = nil
+	} else if base := ResolveDiffBaseRef(ctx, absCwd); base != "" {
+		baseRefPtr = &base
+		if branch != "" && base != branch {
+			if out, behindErr := runGit(ctx, absCwd, "rev-list", "--left-right", "--count", base+"..."+branch); behindErr == nil {
+				if fields := strings.Fields(out); len(fields) == 2 {
+					behind, behindErr := strconv.Atoi(fields[0])
+					ahead, aheadErr := strconv.Atoi(fields[1])
+					if behindErr == nil && aheadErr == nil {
+						aheadBehind = map[string]int{"ahead": ahead, "behind": behind}
+					}
+				}
+			}
+		}
+	}
+
 	remoteURL, err := runGit(ctx, absCwd, "remote", "get-url", "origin")
 	hasRemote := err == nil && remoteURL != ""
 	var remotePtr *string
@@ -189,6 +217,8 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		RepoRoot:               &topLevel,
 		CurrentBranch:          branchPtr,
 		IsDirty:                &dirty,
+		BaseRef:                baseRefPtr,
+		AheadBehind:            aheadBehind,
 		HasRemote:              hasRemote,
 		RemoteURL:              remotePtr,
 		IsBySpaceOwnedWorktree: false,
@@ -371,6 +401,11 @@ func ListWorktrees(ctx context.Context, repoCwd string) ([]WorktreeEntry, error)
 var hunkHeaderRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 // ParseUnifiedDiff parses a git unified diff output into structured ParsedDiffFile entries with hunks and lines.
+//
+// A rename is reported by git as a header-only section (`rename from` / `rename to`) with no hunks, and
+// `extractDiffFilePath` returns the NEW path. That is why the caller gets `OldPath` filled in: without it
+// the client cannot revert the rename, and the header counted 0 added lines for a file that is entirely
+// new content under its new name.
 func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
 	if strings.TrimSpace(diffText) == "" {
 		return []ParsedDiffFile{}
@@ -386,6 +421,7 @@ func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
 		isNew := strings.Contains(sec, "\nnew file mode") || strings.Contains(sec, "\n--- /dev/null")
 		isDeleted := strings.Contains(sec, "\ndeleted file mode") || strings.Contains(sec, "\n+++ /dev/null")
 		filePath := extractDiffFilePath(lines)
+		oldPath := extractRenameSource(lines)
 
 		hunks := make([]DiffHunk, 0)
 		var curHunk *DiffHunk
@@ -444,6 +480,7 @@ func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
 
 		files = append(files, ParsedDiffFile{
 			Path:      filePath,
+			OldPath:   oldPath,
 			IsNew:     isNew,
 			IsDeleted: isDeleted,
 			Additions: additions,
@@ -453,6 +490,22 @@ func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
 		})
 	}
 	return files
+}
+
+// extractRenameSource reads the source path out of a `rename from` / `copy from` header line.
+//
+// Git reports a rename as a header-only section with no hunks, so a caller that only looks at the
+// patch body sees an empty file and reports zero changed lines.
+func extractRenameSource(lines []string) string {
+	for _, line := range lines {
+		if after, ok := strings.CutPrefix(line, "rename from "); ok {
+			return strings.TrimSpace(after)
+		}
+		if after, ok := strings.CutPrefix(line, "copy from "); ok {
+			return strings.TrimSpace(after)
+		}
+	}
+	return ""
 }
 
 func extractDiffFilePath(lines []string) string {
@@ -482,9 +535,33 @@ func GetWorkingDiff(ctx context.Context, cwd string) ([]ParsedDiffFile, error) {
 		patch, _ = runGit(ctx, cwd, "diff", "--no-color")
 	}
 	files := ParseUnifiedDiff(patch)
+
+	// A rename arrives as a header-only section, so the patch body is empty and the counted lines are
+	// zero. Diffing the new path on its own makes git report it as a new file, which is what the node
+	// daemon showed: the file's whole content as added lines, plus the source path to revert it.
+	for i := range files {
+		if files[i].OldPath == "" || len(files[i].Hunks) > 0 {
+			continue
+		}
+		perPath, perPathErr := runGit(ctx, cwd, "diff", "--no-color", "HEAD", "--", files[i].Path)
+		if perPathErr != nil {
+			continue
+		}
+		parsed := ParseUnifiedDiff(perPath)
+		if len(parsed) == 0 {
+			continue
+		}
+		files[i].Additions = parsed[0].Additions
+		files[i].Deletions = parsed[0].Deletions
+		files[i].Hunks = parsed[0].Hunks
+	}
+
 	seen := make(map[string]bool, len(files))
 	for _, f := range files {
 		seen[f.Path] = true
+		if f.OldPath != "" {
+			seen[f.OldPath] = true
+		}
 	}
 
 	untrackedOut, err := runGit(ctx, cwd, "ls-files", "--others", "--exclude-standard")
@@ -915,17 +992,82 @@ func StashPopIndex(ctx context.Context, cwd string, index int) error {
 }
 
 // DiscardPaths reverts the given tracked paths and removes them if they were untracked.
+//
+// The order matters: a path can be staged, modified and untracked at the same time, and each
+// state needs a different command. Unstaging first makes every remaining difference a worktree
+// difference, so the follow-up classification only has to decide between "restore from the index"
+// and "delete the file".
+//
+// Ported from `discardChanges` in archive/packages/server/src/utils/checkout-git.ts:3449. The
+// earlier version ran `checkout -- <paths>` on everything, which left untracked files in place
+// (`clean` never ran because `checkout` failed on a path git does not know) and left a staged
+// rename fully staged, so "revert" appeared to do nothing.
 func DiscardPaths(ctx context.Context, cwd string, paths []string) error {
 	if len(paths) == 0 {
 		return DiscardChanges(ctx, cwd)
 	}
-	args := append([]string{"checkout", "--"}, paths...)
-	if _, err := runGit(ctx, cwd, args...); err != nil {
+
+	resetArgs := append([]string{"--literal-pathspecs", "reset", "-q", "HEAD", "--"}, paths...)
+	if _, err := runGit(ctx, cwd, resetArgs...); err != nil {
+		// An unborn HEAD has no commit to reset to, so drop the paths from the index directly.
+		rmArgs := append([]string{"--literal-pathspecs", "rm", "--cached", "-r", "-q", "--ignore-unmatch", "--"}, paths...)
+		if _, rmErr := runGit(ctx, cwd, rmArgs...); rmErr != nil {
+			return err
+		}
+	}
+
+	statusArgs := append([]string{"--literal-pathspecs", "status", "--porcelain=v1", "-z", "--"}, paths...)
+	status, err := runGit(ctx, cwd, statusArgs...)
+	if err != nil {
 		return err
 	}
-	cleanArgs := append([]string{"clean", "-fd", "--"}, paths...)
-	_, err := runGit(ctx, cwd, cleanArgs...)
-	return err
+	tracked, untracked := classifyDiscardPaths(status)
+	if len(tracked) > 0 {
+		args := append([]string{"--literal-pathspecs", "checkout", "-q", "--"}, tracked...)
+		if _, err := runGit(ctx, cwd, args...); err != nil {
+			return err
+		}
+	}
+	if len(untracked) > 0 {
+		args := append([]string{"--literal-pathspecs", "clean", "-fd", "-q", "--"}, untracked...)
+		if _, err := runGit(ctx, cwd, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// classifyDiscardPaths splits `git status --porcelain=v1 -z` output into tracked and untracked
+// paths. Rename and copy entries carry their source path as the next NUL token, which has to be
+// skipped or the source is treated as a second, bogus path.
+//
+// The status text arrives trimmed, so a leading " D" entry lost its leading space and read as "D ".
+// Only the single separator space after the two status characters is stripped, never whitespace that
+// belongs to the path itself.
+func classifyDiscardPaths(status string) (tracked []string, untracked []string) {
+	tokens := strings.Split(status, "\x00")
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
+		if len(token) < 3 {
+			continue
+		}
+		state := token[:2]
+		path := strings.TrimPrefix(token[2:], " ")
+		if path == "" {
+			continue
+		}
+		if state[0] == 'R' || state[0] == 'C' {
+			// The source path follows in its own NUL token; the caller's pathspec already covers it.
+			i++
+			continue
+		}
+		if strings.TrimSpace(state) == "??" {
+			untracked = append(untracked, path)
+			continue
+		}
+		tracked = append(tracked, path)
+	}
+	return tracked, untracked
 }
 
 // CommitWithOptions commits staged changes, optionally staging everything first.

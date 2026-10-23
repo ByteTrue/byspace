@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -352,25 +353,104 @@ func DeleteEntry(root, relPath string) error {
 	return os.RemoveAll(absTarget)
 }
 
-// DuplicateEntry copies a file within the same parent directory with a "-copy" suffix.
+// DuplicateEntry copies a file or directory next to itself with a " copy" suffix.
+//
+// The name is not a detail: the app offers the duplicate under the suffixed name and the folder case has to
+// recurse, so `DuplicateEntry` cannot be the single-file shortcut it used to be. Numbered suffixes exist
+// because duplicating twice in a row is normal, and overwriting the first copy silently loses work.
 func DuplicateEntry(root, relPath string) (string, error) {
 	absSrc, normSrc, err := resolveScopedPath(root, relPath)
 	if err != nil {
 		return "", err
 	}
-	raw, err := os.ReadFile(absSrc)
-	if err != nil {
-		return "", err
+	absRoot, _ := filepath.Abs(root)
+	if samePath(absSrc, absRoot) {
+		return "", errors.New("Cannot duplicate the workspace root")
 	}
-	ext := filepath.Ext(normSrc)
-	stem := strings.TrimSuffix(normSrc, ext)
-	dstRel := stem + "-copy" + ext
-	absDst, normDst, err := resolveScopedPath(root, dstRel)
+	info, err := os.Lstat(absSrc)
 	if err != nil {
-		return "", err
+		return "", errors.New("File or folder no longer exists")
 	}
-	if err := os.WriteFile(absDst, raw, 0o644); err != nil {
+
+	ext := ""
+	if !info.IsDir() {
+		ext = filepath.Ext(absSrc)
+	}
+	base := strings.TrimSuffix(filepath.Base(normSrc), ext)
+	relDir := path.Dir(normSrc)
+	var absDst, normDst string
+	for copyNumber := 1; ; copyNumber++ {
+		suffix := " copy"
+		if copyNumber > 1 {
+			suffix = fmt.Sprintf(" copy %d", copyNumber)
+		}
+		dstRel := path.Join(relDir, base+suffix+ext)
+		absDst, normDst, err = resolveScopedPath(root, dstRel)
+		if err != nil {
+			return "", err
+		}
+		if _, statErr := os.Lstat(absDst); statErr != nil {
+			if os.IsNotExist(statErr) {
+				break
+			}
+			return "", statErr
+		}
+	}
+
+	if err := copyEntryTree(absSrc, absDst, info); err != nil {
 		return "", err
 	}
 	return normDst, nil
+}
+
+// copyEntryTree copies a file, symlink, or directory tree, preserving modes and timestamps.
+func copyEntryTree(src, dst string, info os.FileInfo) error {
+	switch {
+	case info.Mode()&os.ModeSymlink != 0:
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dst)
+	case info.IsDir():
+		if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			childInfo, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if err := copyEntryTree(filepath.Join(src, entry.Name()), filepath.Join(dst, entry.Name()), childInfo); err != nil {
+				return err
+			}
+		}
+		return os.Chtimes(dst, info.ModTime(), info.ModTime())
+	default:
+		raw, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(dst, raw, info.Mode().Perm()); err != nil {
+			return err
+		}
+		return os.Chtimes(dst, info.ModTime(), info.ModTime())
+	}
+}
+
+// samePath reports whether two paths name the same location, resolving symlinks on both sides.
+func samePath(left, right string) bool {
+	leftReal, leftErr := filepath.EvalSymlinks(left)
+	if leftErr != nil {
+		leftReal = left
+	}
+	rightReal, rightErr := filepath.EvalSymlinks(right)
+	if rightErr != nil {
+		rightReal = right
+	}
+	return leftReal == rightReal
 }

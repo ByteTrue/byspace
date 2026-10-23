@@ -222,6 +222,8 @@ func (s *Server) UnregisterDiffSubscription(subID string) {
 
 // PollSubscriptionsOnce checks active file and git diff subscriptions and pushes updates when changed.
 func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
+	// Checkouts to refresh dirtiness for, deduped: several diff subscriptions can share a cwd.
+	statuses := make(map[string]struct{}, len(s.diffSubs))
 	s.mu.Lock()
 	fSubs := make([]fileSubscription, 0, len(s.fileSubs))
 	for _, fs := range s.fileSubs {
@@ -327,6 +329,12 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 	for _, ds := range dSubs {
 		// The poll must recompute the same comparison the subscription asked for; recomputing the working diff for
 		// every mode made the "Committed" view refresh with the wrong data as soon as anything changed on disk.
+		//
+		// Dirtiness travels on its own channel, and the app caches it as push-only: it never
+		// polls checkout_status. Without a push, committing from a terminal leaves the Changes pane
+		// believing the checkout is still dirty — the manual comparison never expires and the "See
+		// uncommitted changes" link keeps pointing at an empty diff.
+		statuses[ds.cwd] = struct{}{}
 		files := s.checkoutDiffFiles(ctx, ds.cwd, ds.compare)
 		if files == nil {
 			continue
@@ -351,6 +359,39 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 			"error":          nil,
 		})
 	}
+
+	// One status push per checkout, after the diff loop: several diff subscriptions can share a
+	// cwd, and recomputing git status per subscription would cost a `git status` each.
+	for cwd := range statuses {
+		s.broadcastCheckoutStatusIfChanged(ctx, cwd)
+	}
+}
+
+// broadcastCheckoutStatusIfChanged pushes checkout status when its dirty/branch facts move.
+//
+// Called from the subscription poller, so it only runs for checkouts a diff pane is watching.
+// The alternative — a push for every live workspace on a timer — costs one `git status` per
+// workspace per tick, which is exactly what the node daemon avoids by using filesystem watchers.
+func (s *Server) broadcastCheckoutStatusIfChanged(ctx context.Context, cwd string) {
+	st := workspace.GetCheckoutStatus(ctx, cwd, "")
+	dirty := st.IsDirty != nil && *st.IsDirty
+	branch := ""
+	if st.CurrentBranch != nil {
+		branch = *st.CurrentBranch
+	}
+	fingerprint := branch + "|" + fmt.Sprint(dirty) + "|" + fmt.Sprint(st.IsGit)
+
+	s.mu.Lock()
+	if s.checkoutStatusFingerprints == nil {
+		s.checkoutStatusFingerprints = make(map[string]string)
+	}
+	previous, seen := s.checkoutStatusFingerprints[cwd]
+	s.checkoutStatusFingerprints[cwd] = fingerprint
+	s.mu.Unlock()
+	if seen && previous == fingerprint {
+		return
+	}
+	s.broadcastSessionMsg("checkout_status_update", st)
 }
 
 // RenderASCIIQRCode renders a scannable QR code as UTF-8 half blocks, mirroring
