@@ -326,7 +326,9 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		HomeDir: *homeDir,
 		Version: version,
 		WebDir:  *webDir,
-		// The MCP bridge injected into agents must call back to this daemon's address.
+		// The MCP bridge injected into agents must call back to this daemon's address, and so must a
+		// terminal's activity hook; both need the address the daemon actually binds, which for a
+		// unix socket or a wildcard bind is not what was passed on the command line.
 		ListenAddr:          *addr,
 		DisableWebUI:        *noWebUI && !*webUI,
 		DisableMCPInjection: *noInjectMCP,

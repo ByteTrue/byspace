@@ -1173,6 +1173,18 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		})
 
 	case "client_heartbeat":
+		// The heartbeat carries which terminal the user is looking at. Node clears that
+		// terminal's attention here, and that is what makes the tab's badge disappear once it is
+		// on screen; ignoring the message left a focused terminal flagged forever.
+		var beat struct {
+			AppVisible        bool    `json:"appVisible"`
+			FocusedTerminalID *string `json:"focusedTerminalId"`
+		}
+		if err := json.Unmarshal(raw, &beat); err == nil && beat.AppVisible && beat.FocusedTerminalID != nil {
+			if id := strings.TrimSpace(*beat.FocusedTerminalID); id != "" {
+				s.clearTerminalAttention(id)
+			}
+		}
 		return
 
 	case "session.events.set_subscription.request":

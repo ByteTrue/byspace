@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -608,6 +609,7 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 		Args:        req.Args,
 		Rows:        rows,
 		Cols:        cols,
+		ActivityURL: s.terminalActivityURL(),
 		// Without this the running indicator never moves: the state was tracked but nothing
 		// broadcast it, so the sidebar showed every terminal as idle forever.
 		//
@@ -643,7 +645,7 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 			"name":        sess.Name,
 			"cwd":         sess.Cwd,
 			"workspaceId": sess.WorkspaceID,
-			"activity":    map[string]any{"state": sess.Activity(), "changedAt": nowMs},
+			"activity":    terminalActivityPayload(sess, nowMs),
 		},
 		"error":     nil,
 		"requestId": req.RequestID,
@@ -672,13 +674,19 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 		if !s.terminalInScope(t, req.Cwd, req.WorkspaceID) {
 			continue
 		}
-		list = append(list, map[string]any{
+		entry := map[string]any{
 			"id":          t.ID,
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
-			"activity":    map[string]any{"state": t.Activity(), "changedAt": nowMs},
-		})
+			"activity":    terminalActivityPayload(t, nowMs),
+		}
+		// `title` is the rename the user typed; `name` stays the shell. The tab label reads the
+		// title, so omitting it left a renamed terminal looking unrenamed after a reload.
+		if title := t.TitleValue(); title != "" {
+			entry["title"] = title
+		}
+		list = append(list, entry)
 	}
 
 	payload := map[string]any{
@@ -1111,4 +1119,58 @@ func providerOrDefault(provider string) string {
 		return trimmed
 	}
 	return "pi"
+}
+
+// clearTerminalAttention drops a terminal's attention marker and tells every client.
+//
+// The terminal keeps running and its activity state is untouched: only the "look at me" flag
+// clears, which is what the user has just done by focusing the tab.
+func (s *Server) clearTerminalAttention(terminalID string) {
+	s.mu.Lock()
+	slot, ok := s.terminalSlotsByID[terminalID]
+	session := s.terminals[slot]
+	if !ok || session == nil || session.AttentionReason() == "" {
+		s.mu.Unlock()
+		return
+	}
+	session.ClearAttention()
+	cwd, workspaceID := session.Cwd, session.WorkspaceID
+	s.mu.Unlock()
+	s.broadcastTerminalsChanged(cwd, workspaceID)
+}
+
+// terminalActivityURL is where a terminal's shell hook posts activity.
+//
+// The hook reads BYSPACE_TERMINAL_ACTIVITY_URL from its environment, so a terminal started without
+// it can never report running or idle — the tab shows idle forever. Loopback only: the report is
+// authenticated by a per-terminal token but it is not meant to leave the machine.
+func (s *Server) terminalActivityURL() string {
+	addr := strings.TrimSpace(s.listenAddr)
+	if addr == "" {
+		// Nothing was configured, so fall back to the port the dev daemon uses. A hook with no URL
+		// at all is the worse outcome: it reports nothing and every tab looks idle.
+		addr = ":6777"
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		return ""
+	}
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/api/terminal-activity"
+}
+
+// terminalActivityPayload is the activity triple every terminal listing carries.
+//
+// The reason is part of the fact, not decoration: "idle" alone cannot say whether an agent just
+// finished (worth a badge) or was never running (worth nothing). Leaving it out of the response
+// made a polling client see idle with no reason forever.
+func terminalActivityPayload(session *terminal.Session, nowMs int64) map[string]any {
+	return map[string]any{
+		"state":           session.Activity(),
+		"attentionReason": nullableReason(session.AttentionReason()),
+		"changedAt":       nowMs,
+	}
 }

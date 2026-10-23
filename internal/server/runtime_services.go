@@ -96,8 +96,11 @@ func (s *Server) handleHTTPTerminalActivity(w http.ResponseWriter, r *http.Reque
 	}
 
 	normState := "idle"
-	if body.State == "running" || body.State == "working" {
+	switch body.State {
+	case "running", "working":
 		normState = "working"
+	case "attention", "needs-input":
+		normState = "attention"
 	}
 	if sess.SetActivity(normState) {
 		s.broadcastTerminalsChanged(sess.Cwd, sess.WorkspaceID)
@@ -138,19 +141,19 @@ func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 		if workspaceID != "" && t.WorkspaceID != "" && t.WorkspaceID != workspaceID {
 			continue
 		}
-		list = append(list, map[string]any{
+		entry := map[string]any{
 			"id":          t.ID,
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
 			// attentionReason distinguishes "just finished" from "idle all along", which is what
 			// the sidebar's rollup shows. Nullable: absent means nothing to show.
-			"activity": map[string]any{
-				"state":           t.Activity(),
-				"attentionReason": nullableReason(t.AttentionReason()),
-				"changedAt":       nowMs,
-			},
-		})
+			"activity": terminalActivityPayload(t, nowMs),
+		}
+		if t.Title != "" {
+			entry["title"] = t.Title
+		}
+		list = append(list, entry)
 	}
 	s.mu.Unlock()
 

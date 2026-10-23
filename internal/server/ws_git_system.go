@@ -850,20 +850,38 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 			Title      string `json:"title"`
 		}
 		_ = json.Unmarshal(raw, &renameReq)
-		if name := strings.TrimSpace(renameReq.Title); name != "" {
+		name := strings.TrimSpace(renameReq.Title)
+		found := false
+		cwd, workspaceID := "", ""
+		if name != "" {
 			s.mu.Lock()
 			if slot, ok := s.terminalSlotsByID[renameReq.TerminalID]; ok {
 				if session := s.terminals[slot]; session != nil {
-					session.Name = name
+					// The title, not the name: `name` is the shell the terminal runs, and the
+					// picker still needs it after a rename.
+					session.SetTitle(name)
+					found = true
+					cwd, workspaceID = session.Cwd, session.WorkspaceID
 				}
 			}
 			s.mu.Unlock()
 		}
-		_ = sendSessionMsg(ctx, sink, "terminal.rename.response", map[string]any{
+		status := map[string]any{
 			"requestId": base.RequestID,
-			"success":   true,
+			"success":   found,
 			"error":     nil,
-		})
+		}
+		if name == "" {
+			status["error"] = "Title is required"
+		} else if !found {
+			status["error"] = "Terminal not found"
+		}
+		// Every client renders the tab label from the title, so the rename has to be broadcast
+		// rather than only answered — the caller is not necessarily the one showing the tab.
+		if found {
+			s.broadcastTerminalsChanged(cwd, workspaceID)
+		}
+		_ = sendSessionMsg(ctx, sink, "terminal.rename.response", status)
 	}
 }
 
@@ -977,11 +995,16 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "agent.detach.request":
-		rec, _ := s.store.GetAgent(base.AgentID)
-		if rec != nil {
+		// Detaching is a label write, not a field write: the client derives a child's parent from
+		// `byspace.parent-agent-id`, so clearing the record field alone left the row in the track.
+		// The open-tab markers go too — they exist to keep a child out of its parent's archive
+		// cascade, and a detached agent has no parent to be cascaded from.
+		if rec, _ := s.store.GetAgent(base.AgentID); rec != nil {
 			rec.ParentAgentID = nil
+			rec.Labels = mergeLabelPatch(rec.Labels, detachedLabelPatch(rec.Labels))
 			rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			_ = s.store.UpsertAgent(*rec)
+			s.broadcastAgentUpdate(*rec)
 		}
 		_ = sendSessionMsg(ctx, sink, "agent.detach.response", map[string]any{
 			"requestId": base.RequestID,

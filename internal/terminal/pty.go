@@ -7,6 +7,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/home"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,8 +21,11 @@ type OutputEvent struct {
 
 // Session manages a live PTY process, its output backlog, and active subscribers.
 type Session struct {
-	ID            string
-	Name          string
+	ID   string
+	Name string
+	// Title is the user's rename. It is separate from Name because Name is what the rename
+	// replaces and Title is what the client shows in the tab label.
+	Title         string
 	Cwd           string
 	WorkspaceID   string
 	ActivityToken string
@@ -52,11 +56,18 @@ type Session struct {
 }
 
 type StartOptions struct {
-	ID               string
-	Name             string
-	Cwd              string
-	WorkspaceID      string
-	ActivityToken    string
+	ID            string
+	Name          string
+	Cwd           string
+	WorkspaceID   string
+	ActivityToken string
+	// Title is the name the user gave the terminal. It stays separate from Name, which is the
+	// generated "Terminal 1" label: renaming one does not change what the tab is, and the client
+	// reads the two fields independently.
+	Title string
+	// ActivityURL is where a shell hook posts activity. Without it the hook has no destination and
+	// every terminal reports idle forever.
+	ActivityURL      string
 	OnActivityChange func(state, attentionReason string)
 	Command          string
 	Args             []string
@@ -102,7 +113,16 @@ func StartSession(opts StartOptions) (*Session, error) {
 	if opts.ID != "" {
 		cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ID="+opts.ID)
 	}
-	cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ACTIVITY_TOKEN="+actToken)
+	// Both names: the daemon's own hook reads BYSPACE_ACTIVITY_TOKEN, while the terminal docs and
+	// third-party reporters use the longer one. Sending only the long form left every hook that
+	// followed the documented contract failing auth with a 403.
+	cmd.Env = append(cmd.Env,
+		"BYSPACE_ACTIVITY_TOKEN="+actToken,
+		"BYSPACE_TERMINAL_ACTIVITY_TOKEN="+actToken,
+	)
+	if activityURL := strings.TrimSpace(opts.ActivityURL); activityURL != "" {
+		cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ACTIVITY_URL="+activityURL)
+	}
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
 		Rows: rows,
@@ -118,6 +138,7 @@ func StartSession(opts StartOptions) (*Session, error) {
 		Cwd:              opts.Cwd,
 		WorkspaceID:      opts.WorkspaceID,
 		ActivityToken:    actToken,
+		Title:            strings.TrimSpace(opts.Title),
 		cmd:              cmd,
 		ptmx:             ptmx,
 		activityState:    "idle",
@@ -311,32 +332,44 @@ func (s *Session) Activity() string {
 	return s.activityState
 }
 
+// SetActivity records what the agent inside the terminal is doing.
+//
+// The three inputs are not three states: "attention" means the agent is waiting for the user, which
+// is idle plus a reason. "idle" right after "working" likewise means the work finished, and a
+// repeated "idle" must not wipe that marker — the tab still has something to show.
 func (s *Session) SetActivity(state string) bool {
-	if state != "idle" && state != "working" {
+	if state != "idle" && state != "working" && state != "attention" {
 		return false
 	}
 	s.mu.Lock()
-	if s.activityState == state {
+	// attention maps to idle plus a reason, so the state machine below sees two states and one
+	// reason rather than three states.
+	nextState, nextReason := state, ""
+	if state == "attention" {
+		nextState, nextReason = "idle", "needs_input"
+	} else if state == "idle" {
+		switch {
+		case s.activityState == "working":
+			nextReason = "finished"
+		case s.attentionReason == "finished":
+			// Already recorded; a second idle report is the same fact.
+			s.mu.Unlock()
+			return false
+		}
+	}
+	// An unchanged pair is not a change: broadcasting it would re-render every client's tab for
+	// nothing, and the tests count those.
+	if s.activityState == nextState && s.attentionReason == nextReason {
 		s.mu.Unlock()
 		return false
 	}
-	previous := s.activityState
-	s.activityState = state
-
-	// working → idle means the agent finished. Distinguishing it from "was always idle" is the
-	// whole point of the reason: only the former deserves a marker.
-	switch {
-	case state == "idle" && previous == "working":
-		s.attentionReason = "finished"
-	case state == "working":
-		s.attentionReason = ""
-	}
+	s.activityState = nextState
+	s.attentionReason = nextReason
 	reason := s.attentionReason
-
 	cb := s.onActivityChange
 	s.mu.Unlock()
 	if cb != nil {
-		cb(state, reason)
+		cb(nextState, reason)
 	}
 	return true
 }
@@ -367,6 +400,29 @@ func (s *Session) AttentionReason() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.attentionReason
+}
+
+// SetTitle records the user's rename. The name stays as it was: the two fields answer different
+// questions and the client renders both.
+func (s *Session) SetTitle(title string) bool {
+	trimmed := strings.TrimSpace(title)
+	if s == nil || trimmed == "" {
+		return false
+	}
+	s.mu.Lock()
+	s.Title = trimmed
+	s.mu.Unlock()
+	return true
+}
+
+// TitleValue is the user's rename, or "" when nobody renamed the terminal.
+func (s *Session) TitleValue() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Title
 }
 
 // ClearAttention drops the attention marker once the user has seen it.
