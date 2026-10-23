@@ -292,9 +292,12 @@ func (s *MockSession) Prompt(ctx context.Context, message string, images []sdk.I
 	s.mu.Unlock()
 
 	if handled {
+		// No provider message id on this row. Node records a daemon-handled command through
+		// recordSubmittedPrompt with only the client id, and the client renders the rewind trigger on
+		// `capabilities && messageId` — so a message the provider never took ownership of has nothing
+		// to rewind to and must not offer one.
 		s.appendItem(sdk.TimelineItem{
 			Type:            "user_message",
-			MessageID:       newMockID("msg"),
 			ClientMessageID: clientMessageID,
 			Text:            message,
 		})
