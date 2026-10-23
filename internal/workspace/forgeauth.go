@@ -75,8 +75,8 @@ func ProbeForgeAuth(cwd string, forge string) ForgeAuthState {
 		return ForgeAuthNoRemote
 	}
 	// The remote is what a forge would be authenticated against; without one the feature does not apply.
-	remoteURL, remoteErr := runGit(context.Background(), cwd, "remote", "get-url", "origin")
-	hasRemote := remoteErr == nil && strings.TrimSpace(remoteURL) != ""
+	remoteURL := OriginRemoteURL(context.Background(), cwd)
+	hasRemote := remoteURL != ""
 	path, err := exec.LookPath(binary)
 	if err != nil {
 		path = ""

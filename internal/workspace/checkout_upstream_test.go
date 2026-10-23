@@ -3,7 +3,9 @@ package workspace
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -79,4 +81,35 @@ func TestGetCheckoutStatusReportsForkUpstreamRef(t *testing.T) {
 	if got := *status.UpstreamRef; got != "refs/remotes/upstream/main" {
 		t.Fatalf("upstreamRef = %q, want refs/remotes/upstream/main", got)
 	}
+}
+
+// TestGetCheckoutStatusReportsConfiguredRemoteURL covers a repository that redirects a hosted forge
+// to a local mirror: `remote get-url` answers with the mirror path, but everything that names the
+// host (the client's pasted-URL matching, forge detection) needs the configured URL.
+func TestGetCheckoutStatusReportsConfiguredRemoteURL(t *testing.T) {
+	dir := t.TempDir()
+	runGitTest(t, dir, "init", "-q", "-b", "main")
+	const hosted = "https://github.com/byspace-e2e/local-fixture.git"
+	mirror := filepath.Join(t.TempDir(), "mirror.git")
+	runGitTest(t, dir, "remote", "add", "origin", hosted)
+	runGitTest(t, dir, "config", "url."+mirror+".insteadOf", hosted)
+	if got := strings.TrimSpace(gitOutput(t, dir, "remote", "get-url", "origin")); got != mirror {
+		t.Fatalf("precondition: get-url = %q, want %q", got, mirror)
+	}
+
+	status := GetCheckoutStatus(context.Background(), dir, "req")
+	if status.RemoteURL == nil || *status.RemoteURL != hosted {
+		t.Fatalf("remoteUrl = %v, want %q", status.RemoteURL, hosted)
+	}
+}
+
+func gitOutput(t *testing.T, cwd string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return string(out)
 }

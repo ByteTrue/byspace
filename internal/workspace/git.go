@@ -213,8 +213,8 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		}
 	}
 
-	remoteURL, err := runGit(ctx, absCwd, "remote", "get-url", "origin")
-	hasRemote := err == nil && remoteURL != ""
+	remoteURL := OriginRemoteURL(ctx, absCwd)
+	hasRemote := remoteURL != ""
 	var remotePtr *string
 	if hasRemote {
 		remotePtr = &remoteURL

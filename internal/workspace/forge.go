@@ -34,10 +34,30 @@ func runGH(ctx context.Context, cwd string, args ...string) (string, error) {
 	return runForgeCLI(ctx, "gh", cwd, args...)
 }
 
+// OriginRemoteURL returns the URL the user configured for origin.
+//
+// `git remote get-url` is deliberately not used: it applies `url.<base>.insteadOf` rewriting, so a
+// repository that redirects a hosted forge to a local mirror answers with the mirror's path. That
+// value is right for fetching and wrong for everything that has to name the host — forge detection,
+// the client's pasted-URL matching, and the remote URL the checkout status reports — which is why
+// the Node server reads `config remote.origin.url` too.
+func OriginRemoteURL(ctx context.Context, cwd string) string {
+	if out, err := runGit(ctx, cwd, "config", "--get", "remote.origin.url"); err == nil {
+		if trimmed := strings.TrimSpace(out); trimmed != "" {
+			return trimmed
+		}
+	}
+	out, err := runGit(ctx, cwd, "remote", "get-url", "origin")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
 // DetectForge inspects the origin remote URL to classify the git forge ("github", "gitlab", or "gitea").
 func DetectForge(ctx context.Context, cwd string) string {
-	remote, err := runGit(ctx, cwd, "remote", "get-url", "origin")
-	if err != nil || remote == "" {
+	remote := OriginRemoteURL(ctx, cwd)
+	if remote == "" {
 		return "github"
 	}
 	return ForgeForRemote(remote)
