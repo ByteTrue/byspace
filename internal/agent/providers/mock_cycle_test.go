@@ -604,3 +604,60 @@ func TestMockBurstyStreamProducesCycles(t *testing.T) {
 	}
 	t.Fatalf("the bursty model never streamed its first cycle: %v", timelineTypes(session))
 }
+
+// "Emit N assistant messages before synthetic user message" is its own turn shape: N pre-echo
+// messages, then the user message, then the turn finishes immediately. It must NOT fall through to
+// the cycle stream — on one-minute-stream that would leave the turn running for 60s after a shape
+// node completes at once, and the agent would never go idle.
+func TestMockAssistantBeforeUserCompletesImmediately(t *testing.T) {
+	session, events := newTestMockSession(t, "one-minute-stream")
+	start := time.Now()
+	if err := session.Prompt(context.Background(), "Emit 205 assistant messages before synthetic user message.", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_ = session.WaitForFinish(waitCtx)
+	cancel()
+
+	// The model's duration is 60s; this shape finishes in well under a second.
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("the pre-echo turn took %v; it should complete immediately, not run the cycle stream", elapsed)
+	}
+	if got := session.Status(); got != "idle" {
+		t.Fatalf("status = %q, want idle after the pre-echo turn", got)
+	}
+	if !hasEvent(*events, "byspace_turn_completed") {
+		t.Fatalf("no turn_completed: %v", eventTypes(*events))
+	}
+
+	types := timelineTypes(session)
+	// 205 pre-echo assistant messages, then exactly one user message, and nothing after it.
+	var assistant, user int
+	lastUser := -1
+	for i, typ := range types {
+		switch typ {
+		case "assistant_message":
+			assistant++
+		case "user_message":
+			user++
+			lastUser = i
+		}
+	}
+	if assistant != 205 {
+		t.Fatalf("pre-echo assistant messages = %d, want 205", assistant)
+	}
+	if user != 1 {
+		t.Fatalf("user messages = %d, want exactly 1", user)
+	}
+	// The user message is the last row: node emits the pre-echo messages, then the echo, then finishes.
+	if lastUser != len(types)-1 {
+		t.Fatalf("the user message is at index %d of %d, want it last", lastUser, len(types))
+	}
+	// No cycle-stream tool calls: this shape produces prose only.
+	if contains(types, "tool_call") {
+		t.Fatalf("the pre-echo turn ran the cycle stream: %v", types)
+	}
+	if got := session.LastAssistantText(); got != "Synthetic pre-echo stream complete" {
+		t.Fatalf("lastAssistantText = %q, want the pre-echo completion text", got)
+	}
+}

@@ -671,6 +671,38 @@ func (s *MockSession) startTurn(ctx context.Context, message string) error {
 	// duplicate-bubble bugs live. Both go through the same emit path so the client cannot tell them apart
 	// except by sequence.
 	directives := ParseMockDirectives(message)
+
+	// "Emit N assistant messages before synthetic user message" is its own turn shape in node, not a
+	// prefix on the default one: it streams N pre-echo messages, then the user message, then finishes
+	// right away with no cycle stream. Falling through to the cycle left the turn running for the whole
+	// model duration (60s on one-minute-stream) after a shape that node completes immediately, so the
+	// agent never went idle and expectVisibleAgentSurfacesIdle watched a spinner that never stopped.
+	if directives.AssistantBeforeUser > 0 {
+		go func() {
+			defer func() {
+				s.endTurn(turnID)
+				close(finished)
+			}()
+			s.emit(map[string]any{
+				"type":   "byspace_turn_started",
+				"turnId": turnID,
+			})
+			s.mu.Lock()
+			s.turnStarted = true
+			s.mu.Unlock()
+			for index := 0; index < directives.AssistantBeforeUser; index++ {
+				s.appendItem(sdk.TimelineItem{
+					Type:      "assistant_message",
+					Text:      "Synthetic pre-echo message " + strconv.Itoa(index+1),
+					MessageID: fmt.Sprintf("%s-%d", assistantMsgID, index+1),
+				})
+			}
+			s.appendItem(userItem)
+			s.completeTurn(turnID, "Synthetic pre-echo stream complete", nil)
+		}()
+		return nil
+	}
+
 	startedFirst := !directives.UserMessageFirst
 	if startedFirst {
 		s.emit(map[string]any{
@@ -680,16 +712,6 @@ func (s *MockSession) startTurn(ctx context.Context, message string) error {
 		s.mu.Lock()
 		s.turnStarted = true
 		s.mu.Unlock()
-	}
-
-	// Assistant text before the echoed user message: the client has to attach it to the turn without a
-	// preceding user message to anchor on.
-	for index := 0; index < directives.AssistantBeforeUser; index++ {
-		s.appendItem(sdk.TimelineItem{
-			Type:      "assistant_message",
-			Text:      "Synthetic pre-echo message " + strconv.Itoa(index+1),
-			MessageID: fmt.Sprintf("%s-%d", assistantMsgID, index+1),
-		})
 	}
 
 	// A withheld prompt never runs a turn body: the session holds it open until something cancels
