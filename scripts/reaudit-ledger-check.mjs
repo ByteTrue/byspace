@@ -20,17 +20,13 @@ const text = fs.readFileSync(LEDGER, "utf8");
 
 // 期望的条目集合，从磁盘上的真实文件列表算出来。
 const expected = new Set();
-for (const [root, prefix] of ROOTS) {
+for (const [root] of ROOTS) {
   const walk = (dir) =>
-    fs
-      .readdirSync(dir, { withFileTypes: true })
-      .flatMap((e) =>
-        e.isDirectory()
-          ? walk(path.join(dir, e.name))
-          : e.name.endsWith(".ts") && !e.name.endsWith(".test.ts")
-            ? [path.join(dir, e.name)]
-            : [],
-      );
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      if (e.isDirectory()) return walk(path.join(dir, e.name));
+      if (e.name.endsWith(".ts") && !e.name.endsWith(".test.ts")) return [path.join(dir, e.name)];
+      return [];
+    });
   for (const file of walk(root)) {
     expected.add(file.slice(root.length + 1));
   }
@@ -62,11 +58,9 @@ const problems = [];
 // 比对时把前缀也算一种相对路径，而不是要求两者字面相同。
 const resolve = (file) => {
   if (expected.has(file)) return file;
-  for (const [root, prefix] of ROOTS) {
-    if (file.startsWith(`${prefix}/`)) {
-      const rest = file.slice(prefix.length + 1);
-      if (expected.has(rest)) return rest;
-    }
+  for (const [, prefix] of ROOTS) {
+    const rest = file.slice(prefix.length + 1);
+    if (file.startsWith(`${prefix}/`) && expected.has(rest)) return rest;
   }
   return null;
 };

@@ -522,7 +522,6 @@ func runList(args []string, stdout io.Writer) error {
 		rows = append(rows, []string{a.ID, a.Provider, a.LastStatus, title, a.Cwd})
 	}
 	return renderTable(stdout, []string{"ID", "PROVIDER", "STATUS", "TITLE", "CWD"}, rows)
-	return nil
 }
 
 func runAgentPrompt(args []string, stdout io.Writer) error {

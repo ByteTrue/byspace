@@ -14,10 +14,14 @@ const PORT = 6795;
 const home = mkdtempSync(path.join(tmpdir(), "probe-home-"));
 const repoPath = path.join(home, "repo");
 
-const daemon = spawn(path.join(REPO, "bin", "byspace"), ["serve", "--addr", `127.0.0.1:${PORT}`, "--home", home], {
-  env: { ...process.env, BYSPACE_HOME: home },
-  stdio: ["ignore", "pipe", "pipe"],
-});
+const daemon = spawn(
+  path.join(REPO, "bin", "byspace"),
+  ["serve", "--addr", `127.0.0.1:${PORT}`, "--home", home],
+  {
+    env: { ...process.env, BYSPACE_HOME: home },
+    stdio: ["ignore", "pipe", "pipe"],
+  },
+);
 let daemonLog = "";
 daemon.stdout.on("data", (c) => (daemonLog += c.toString()));
 daemon.stderr.on("data", (c) => (daemonLog += c.toString()));
@@ -28,7 +32,9 @@ async function waitForDaemon() {
   for (let i = 0; i < 100; i++) {
     if (daemon.exitCode !== null) throw new Error(`daemon exited early: ${daemonLog.slice(-300)}`);
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/health`, { signal: AbortSignal.timeout(500) });
+      const res = await fetch(`http://127.0.0.1:${PORT}/health`, {
+        signal: AbortSignal.timeout(500),
+      });
       if (res.ok) return;
     } catch {}
     await new Promise((r) => setTimeout(r, 50));
@@ -47,7 +53,10 @@ function send(message) {
 }
 function request(message, timeoutMs = 40_000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timeout waiting for ${message.type}`)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error(`timeout waiting for ${message.type}`)),
+      timeoutMs,
+    );
     pending.set(message.requestId, { resolve, reject, timer });
     send(message);
   });
@@ -80,8 +89,12 @@ const git = (args) => {
 
 const finish = (code, lines) => {
   console.log(lines.join("\n"));
-  try { ws.close(); } catch {}
-  try { daemon.kill("SIGKILL"); } catch {}
+  try {
+    ws.close();
+  } catch {}
+  try {
+    daemon.kill("SIGKILL");
+  } catch {}
   rmSync(home, { recursive: true, force: true });
   process.exit(code);
 };
@@ -96,7 +109,9 @@ ws.on("open", async () => {
   ws.send(JSON.stringify({ type: "hello", clientId: "probe-timeline", protocolVersion: 1 }));
   const out = [];
   try {
-    while (!serverReady) await new Promise((r) => setTimeout(r, 50));
+    // oxlint-disable-next-line no-unmodified-loop-condition -- serverReady is set by the message handler.
+    for (let i = 0; i < 200 && !serverReady; i++) await new Promise((r) => setTimeout(r, 50));
+    if (!serverReady) throw new Error("no server_info after hello");
     const { mkdirSync, writeFileSync } = require("node:fs");
     mkdirSync(repoPath, { recursive: true });
     git(["init", "-q", "-b", "main"]);
@@ -137,10 +152,21 @@ ws.on("open", async () => {
 
     // Let it stream, then interrupt the way the queued-send does.
     await new Promise((r) => setTimeout(r, 1500));
-    await request({ type: "send_agent_message_request", requestId: "s2", agentId, text: "Keep this prompt before its response.", activeTurnBehavior: "interrupt" });
+    await request({
+      type: "send_agent_message_request",
+      requestId: "s2",
+      agentId,
+      text: "Keep this prompt before its response.",
+      activeTurnBehavior: "interrupt",
+    });
     out.push("sent interrupting prompt");
 
-    const wait = await request({ type: "wait_for_finish_request", requestId: "f1", agentId, timeoutMs: 30_000 });
+    const wait = await request({
+      type: "wait_for_finish_request",
+      requestId: "f1",
+      agentId,
+      timeoutMs: 30_000,
+    });
     out.push(`wait_for_finish: status=${wait?.status}`);
 
     for (const limit of [40, 0]) {
@@ -160,7 +186,9 @@ ws.on("open", async () => {
       );
       out.push(`  endMarkerPresent=${texts.includes("(end of synthetic stream)")}`);
       out.push(`  promptRowPresent=${texts.includes("Keep this prompt before its response.")}`);
-      out.push(`  typeCounts=${JSON.stringify(types.reduce((acc, t) => ((acc[t] = (acc[t] ?? 0) + 1), acc), {}))}`);
+      out.push(
+        `  typeCounts=${JSON.stringify(types.reduce((acc, t) => ((acc[t] = (acc[t] ?? 0) + 1), acc), {}))}`,
+      );
       out.push(`  lastTypes=${JSON.stringify(types.slice(-6))}`);
     }
     finish(0, out);

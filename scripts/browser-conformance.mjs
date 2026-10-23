@@ -26,8 +26,6 @@ import path from "node:path";
 /** Resolved from this repo so the probe subprocess can require the same client the app uses. */
 const WS_MODULE = createRequire(import.meta.url).resolve("ws");
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-
 const BASE = (() => {
   const idx = process.argv.indexOf("--base");
   return idx >= 0 ? process.argv[idx + 1] : "http://127.0.0.1:6778";
@@ -204,7 +202,7 @@ setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); proce
 
   try {
     const run = spawnSync(process.execPath, [probePath], { encoding: "utf8", timeout: 60000 });
-    const line = (run.stdout ?? "").trim().split("\n").filter(Boolean).at(-1) ?? "";
+    const line = (run.stdout ?? "").trim().split("\n").findLast(Boolean) ?? "";
     if (!line) {
       result.archivedDetail = `probe produced no output: ${(run.stderr ?? "").slice(0, 300)}`;
       result.removedDetail = result.archivedDetail;
