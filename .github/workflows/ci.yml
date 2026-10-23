@@ -285,7 +285,9 @@ jobs:
         run: npx playwright install chromium
 
       - name: Build workspace packages
-        run: npm run build:app-deps
+        # The e2e harness imports @bytetrue/client, which imports @bytetrue/relay's E2EE module, so
+        # relay has to be built too. build:app-deps covers only highlight and client.
+        run: npm run build:app-deps && npm run build:relay
 
       - name: Build the daemon binary the e2e harness runs
         run: make build
