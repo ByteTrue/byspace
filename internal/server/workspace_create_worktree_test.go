@@ -76,7 +76,11 @@ func TestWorktreeSourceIntentInputLegacyPrNumber(t *testing.T) {
 		context.Background(),
 		worktreeSourceIntentInput("checkout", "pr-head", "", "", "wt-pr", nil, &number),
 		"",
-		workspace.WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultBranchRef},
+		workspace.WorktreeIntentDeps{
+			Forge:               "github",
+			DefaultBranch:       defaultBranchRef,
+			ChangeRequestTarget: stubChangeRequestTarget{head: "pr-head", base: "main"}.resolve,
+		},
 	)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -90,12 +94,19 @@ func TestWorktreeSourceIntentInputLegacyPrNumber(t *testing.T) {
 }
 
 // checkoutSource takes precedence over a bare refName for change-request checkouts.
+//
+// The head ref comes from a stub: the real resolver shells out to `gh`, which CI does not have.
+// This test is about how the structure field becomes an intent, not about PR lookup.
 func TestWorktreeSourceIntentInputCheckoutSource(t *testing.T) {
 	intent, err := workspace.ResolveWorktreeIntent(
 		context.Background(),
 		worktreeSourceIntentInput("checkout", "", "", "", "wt-pr", &sourceCheckoutSource{Number: 7, Forge: "github"}, nil),
 		"",
-		workspace.WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultBranchRef},
+		workspace.WorktreeIntentDeps{
+			Forge:               "github",
+			DefaultBranch:       defaultBranchRef,
+			ChangeRequestTarget: stubChangeRequestTarget{head: "pr-7-head", base: "main"}.resolve,
+		},
 	)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -103,6 +114,16 @@ func TestWorktreeSourceIntentInputCheckoutSource(t *testing.T) {
 	if intent.Kind != workspace.IntentCheckoutChangeRequest || intent.ChangeRequestNumber != 7 {
 		t.Fatalf("intent = %+v, want checkout of PR 7", intent)
 	}
+	if intent.HeadRef != "pr-7-head" {
+		t.Fatalf("head = %q, want the resolved PR head", intent.HeadRef)
+	}
+}
+
+// stubChangeRequestTarget stands in for the forge CLI.
+type stubChangeRequestTarget struct{ head, base string }
+
+func (s stubChangeRequestTarget) resolve(context.Context, string, string, int) (workspace.ChangeRequestCheckoutTarget, error) {
+	return workspace.ChangeRequestCheckoutTarget{HeadRef: s.head, BaseRefName: s.base}, nil
 }
 
 func defaultBranchRef(context.Context, string) (string, error) { return "main", nil }

@@ -106,6 +106,10 @@ func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw js
 	recCopy := mp.record
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
+	// The response only reaches the caller. Every other client — including this one's replicas on
+	// other devices — keeps the old model until an agent_update says otherwise, which is what the
+	// composer renders from.
+	s.broadcastAgentUpdate(recCopy)
 
 	_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
 		"requestId": req.RequestID,
@@ -159,6 +163,8 @@ func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
 
+	s.broadcastAgentUpdate(recCopy)
+
 	var notice *agentnotices.Notice
 	if midTurn {
 		notice = &agentnotices.ThinkingAppliesNextTurn
@@ -207,6 +213,8 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	midTurn := mp.record.LastStatus == "running"
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
+
+	s.broadcastAgentUpdate(recCopy)
 
 	var notice *agentnotices.Notice
 	if midTurn {
@@ -270,6 +278,9 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 	recCopy := mp.record
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
+	// A bundle changes several fields at once; the composer and the picker both read them from the
+	// agent snapshot, so the update has to be pushed rather than left to the response.
+	s.broadcastAgentUpdate(recCopy)
 
 	_ = sendSessionMsg(ctx, sink, "agent.config.apply.response", map[string]any{
 		"requestId": req.RequestID,

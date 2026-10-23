@@ -1379,7 +1379,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		// rebuilt snapshot from its config-apply listeners; without it the removed provider stays
 		// on screen until the next manual refresh.
 		if patchTouchesProviders(req.Config) {
-			s.pushProviderSnapshot(ctx, updated, nil)
+			s.pushProviderSnapshot(ctx, updated, nil, "")
 		}
 
 	case "daemon.config.reload.request":

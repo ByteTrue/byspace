@@ -774,22 +774,28 @@ func (s *Server) runPlacementTick() {
 //
 // The rebuilt catalog also replaces the cached one, so a sheet that reconnects right after gets the
 // same entries the push carried instead of re-probing every provider CLI.
-func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string) {
-	catalog := s.buildProviderCatalog(ctx, cfg)
-	s.storeProviderCatalog(catalog)
+func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string, cwd string) {
+	catalog := s.buildProviderCatalog(ctx, cfg, cwd)
+	s.storeProviderCatalog(cwd, catalog)
 	entries := catalog.entries
 	if len(only) > 0 {
 		entries = filterSnapshotEntries(entries, only)
 	}
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
-	s.broadcastSessionMsg("providers_snapshot_update", map[string]any{
-		// `cwd` is optional, not nullable: a null makes the client drop the whole update.
+	payload := map[string]any{
 		"generatedAt":     nowStr,
 		"entries":         entries,
 		"snapshotHash":    providerSnapshotHash(entries),
 		"fetchedAt":       providerFetchedAt(entries, nowStr),
 		"compactSnapshot": providers.BuildCompactSnapshot(entries),
-	})
+	}
+	// `cwd` scopes the push: the client keys its cached snapshot by scope, and a narrowed refresh
+	// in one workspace must not overwrite the host catalog. It is optional, not nullable — a null
+	// makes the client drop the whole update.
+	if key := providerCatalogKey(cwd); key != "" {
+		payload["cwd"] = key
+	}
+	s.broadcastSessionMsg("providers_snapshot_update", payload)
 }
 
 // patchTouchesProviders reports whether a config patch can change the provider catalog. A removal

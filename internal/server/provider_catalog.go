@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,11 +22,28 @@ type providerCatalog struct {
 	compact     map[string]any
 }
 
-// buildProviderCatalog probes and assembles a fresh catalog.
+// providerCatalogKey normalizes the scope a catalog belongs to.
+//
+// An empty scope is the host-wide catalog. Anything else is a workspace: Node keys its snapshot
+// manager the same way, because the same provider can expose different models (and a different
+// availability answer) in different checkouts.
+func providerCatalogKey(cwd string) string {
+	trimmed := strings.TrimSpace(cwd)
+	if trimmed == "" {
+		return ""
+	}
+	absolute, err := filepath.Abs(trimmed)
+	if err != nil {
+		return filepath.Clean(trimmed)
+	}
+	return absolute
+}
+
+// buildProviderCatalog probes and assembles a fresh catalog for one scope.
 //
 // This is the expensive path; do not call it from a request handler that has nothing cached.
-func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any) *providerCatalog {
-	models := s.probeOrCachedPiModels(ctx)
+func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) *providerCatalog {
+	models := s.probePiModelsInCwd(ctx, cwd)
 	entries := providers.BuildSnapshotEntries(models, s.piCommand, providersFromConfig(cfg))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &providerCatalog{
@@ -37,16 +55,36 @@ func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any) *
 	}
 }
 
-func (s *Server) cachedProviderCatalog() *providerCatalog {
-	s.providerCatalogMu.Lock()
-	defer s.providerCatalogMu.Unlock()
-	return s.providerCatalogValue
+// providerConfigFor returns the daemon-config entry for one provider, or nil.
+//
+// The saved entry decides `extends` and the launch argv, and a provider the user added exists only
+// here — `GetProviderSpec` cannot know about it.
+func (s *Server) providerConfigFor(providerID string) map[string]any {
+	providersCfg := providersFromConfig(s.store.LoadDaemonConfig())
+	if providersCfg == nil {
+		return nil
+	}
+	entry, _ := providersCfg[providerID].(map[string]any)
+	return entry
 }
 
-func (s *Server) storeProviderCatalog(catalog *providerCatalog) {
+func (s *Server) cachedProviderCatalog(cwd string) *providerCatalog {
 	s.providerCatalogMu.Lock()
-	s.providerCatalogValue = catalog
-	s.providerCatalogMu.Unlock()
+	defer s.providerCatalogMu.Unlock()
+	return s.providerCatalogs[providerCatalogKey(cwd)]
+}
+
+// storeProviderCatalog caches a catalog for one scope. A nil catalog drops the scope, which is how
+// a refresh asks for a fresh probe instead of the cached answer.
+func (s *Server) storeProviderCatalog(cwd string, catalog *providerCatalog) {
+	key := providerCatalogKey(cwd)
+	s.providerCatalogMu.Lock()
+	defer s.providerCatalogMu.Unlock()
+	if catalog == nil {
+		delete(s.providerCatalogs, key)
+		return
+	}
+	s.providerCatalogs[key] = catalog
 }
 
 // providerCatalogOrBuild returns the cached catalog, building one only when nothing is cached.
@@ -54,12 +92,19 @@ func (s *Server) storeProviderCatalog(catalog *providerCatalog) {
 // Serving the request synchronously from a fresh probe made the first catalog arrive about a
 // second late and every later one about 190ms late, which is long enough for a client to submit a
 // form before it knows which provider is selected.
-func (s *Server) providerCatalogOrBuild(ctx context.Context) *providerCatalog {
-	if catalog := s.cachedProviderCatalog(); catalog != nil {
+func (s *Server) providerCatalogOrBuild(ctx context.Context, cwd string) *providerCatalog {
+	if catalog := s.cachedProviderCatalog(cwd); catalog != nil {
 		return catalog
 	}
-	catalog := s.buildProviderCatalog(ctx, s.store.LoadDaemonConfig())
-	s.storeProviderCatalog(catalog)
+	// A workspace without its own catalog reads the host one rather than paying a probe: the two
+	// differ only when a refresh narrowed a scope, and the client keeps its per-cwd cache anyway.
+	if cwd != "" {
+		if catalog := s.cachedProviderCatalog(""); catalog != nil {
+			return catalog
+		}
+	}
+	catalog := s.buildProviderCatalog(ctx, s.store.LoadDaemonConfig(), cwd)
+	s.storeProviderCatalog(cwd, catalog)
 	return catalog
 }
 

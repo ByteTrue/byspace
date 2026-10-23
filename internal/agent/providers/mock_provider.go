@@ -21,8 +21,11 @@ const (
 	MockDefaultModelID = "five-minute-stream"
 	// MockHandledCommand is the slash command the provider answers itself.
 	MockHandledCommand = "/mock handled-command"
-	// MockModeID is the single mode; the specs pass it explicitly.
+	// MockModeID is the default mode; the specs pass it explicitly.
 	MockModeID = "load-test"
+	// MockApprovalModeID is the second mode. It exists only so a profile can switch the mock
+	// provider to a safe mode and watch the composer follow; the stream ignores it.
+	MockApprovalModeID = "approval-test"
 
 	mockDurationMs = 5 * 60 * 1000
 	mockIntervalMs = 40
@@ -40,14 +43,30 @@ const (
 // MockProvider is the provider spec. It has no binary: `Native` marks a provider the daemon runs
 // in-process, so availability never depends on PATH.
 var MockProvider = ProviderSpec{
-	ID:            MockProviderID,
-	Label:         "Mock",
-	Description:   "Scripted agent for end-to-end tests (streams realistic output without a model).",
+	ID: MockProviderID,
+	// The label is a contract: specs read it back off the model picker row
+	// (`Mock Load Test · One minute stream · Approval test`), and the protocol's dev-provider
+	// manifest declares the same string.
+	Label:         "Mock Load Test",
+	Description:   "Development-only provider that emits synthetic agent traffic for performance tests",
 	Binary:        "",
 	Protocol:      "mock-native",
 	DefaultModeID: MockModeID,
 	Modes: []ModeDefinition{
-		{ID: MockModeID, Label: "Load test", Description: "Scripted streaming output"},
+		{
+			ID:          MockModeID,
+			Label:       "Load Test",
+			Description: "Streams repeated markdown, reasoning, and tool calls for app stress testing",
+			Icon:        "ShieldOff",
+			ColorTier:   "dangerous",
+		},
+		{
+			ID:          MockApprovalModeID,
+			Label:       "Approval Test",
+			Description: "Alternate development-only permission mode for preference tests",
+			Icon:        "ShieldCheck",
+			ColorTier:   "safe",
+		},
 	},
 	Models: MockModels(),
 	// Features must be non-nil: the agent snapshot sends it straight through, and the protocol requires an

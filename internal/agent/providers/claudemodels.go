@@ -224,17 +224,24 @@ func isAllDigits(value string) bool {
 // support it lets the user turn on something the provider then rejects at launch, which reads as the
 // provider being broken. A provider with no model-specific features returns its list unchanged.
 func ProviderFeaturesFor(provider, modelID string) []FeatureDefinition {
-	spec := GetProviderSpec(provider)
+	return ProviderFeaturesForSpec(GetProviderSpec(provider), provider, modelID)
+}
+
+// ProviderFeaturesForSpec is ProviderFeaturesFor for a spec that did not come from the built-in
+// table — a configured provider inherits its base's features, and `GetProviderSpec` cannot see it.
+func ProviderFeaturesForSpec(spec ProviderSpec, provider, modelID string) []FeatureDefinition {
 	if len(spec.Features) == 0 {
 		return spec.Features
 	}
 	// Two providers gate fast mode on the model. The gate is named here rather than as a flag on the
 	// definition so the definition table stays a description of the provider, not of the client.
+	// A configured provider that extends one of them inherits the gate: match on the spec's protocol
+	// and id, not the raw provider id, so `my-claude` behaves like `claude`.
 	fastModeAvailable := false
-	switch provider {
-	case "claude":
+	switch {
+	case provider == "claude" || spec.ID == "claude" || spec.Protocol == "claude-stream":
 		fastModeAvailable = ClaudeModelSupportsFastMode(modelID)
-	case "codex":
+	case provider == "codex" || spec.ID == "codex" || spec.Protocol == "codex-rpc":
 		fastModeAvailable = CodexModelSupportsFastMode(modelID)
 	default:
 		return spec.Features

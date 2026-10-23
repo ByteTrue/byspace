@@ -397,7 +397,14 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		if !ok {
 			continue
 		}
-		spec := GetProviderSpec(id)
+		spec := ResolveProviderSpecWithConfig(id, cfgMap)
+		// The config's own model list wins: `models` replaces the catalog and `additionalModels` is merged on top.
+		// Ignoring them offered only the generic "<id> Default" row, so the picker could not select the model the
+		// config named. A pi-derived provider merges onto pi's probed catalog rather than the placeholder spec.
+		runtimeModels := spec.Models
+		if spec.Protocol == "pi-rpc" && len(piModels) > 0 {
+			runtimeModels = piModels
+		}
 		label, _ := cfgMap["label"].(string)
 		if label == "" {
 			label = spec.Label
@@ -426,7 +433,7 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 			"enabled":     enabled,
 			"source":      "custom",
 			"fetchedAt":   now,
-			"models":      spec.Models,
+			"models":      MergeProviderModels(id, cfgMap, runtimeModels),
 			"modes":       spec.Modes,
 			"description": desc,
 		})
@@ -475,15 +482,28 @@ type LaunchConfig struct {
 	// HomeDir is where materialised provider images land. Empty disables image output rather
 	// than writing somewhere arbitrary.
 	HomeDir string
+	// ProviderConfig is this provider's entry from the daemon config, if any. It decides `extends`
+	// (which runtime the provider inherits: protocol, binary, modes) and the launch argv, which a
+	// profile may set to `[interpreter, script]`.
+	ProviderConfig map[string]any
 }
 
 // StartProviderSession launches the appropriate host session for any built-in or custom provider.
 func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
-	spec := GetProviderSpec(cfg.Provider)
+	spec, argv := ProviderSpecForLaunch(cfg.Provider, cfg.ProviderConfig)
 	cmd := strings.TrimSpace(cfg.CommandOverride)
 	if cmd == "" {
 		envKey := strings.ToUpper(strings.ReplaceAll(spec.ID, "-", "_")) + "_COMMAND"
 		cmd = strings.TrimSpace(os.Getenv(envKey))
+	}
+	if cmd == "" && len(argv) > 0 {
+		cmd = argv[0]
+	}
+	// A profile's command may name an interpreter plus the script to run. Dropping the tail started
+	// the interpreter with the provider's flags instead of the program the user configured.
+	var providerArgs []string
+	if len(argv) > 1 {
+		providerArgs = argv[1:]
 	}
 
 	switch spec.Protocol {
@@ -512,6 +532,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 			)
 			sess, err := pi.StartSession(pi.LaunchOptions{
 				Command:            cmd,
+				Args:               providerArgs,
 				Cwd:                cfg.Cwd,
 				Env:                cfg.Env,
 				Model:              cfg.Model,
@@ -541,6 +562,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		}
 		sess, err := pi.StartSession(pi.LaunchOptions{
 			Command:          cmd,
+			Args:             providerArgs,
 			Cwd:              cfg.Cwd,
 			Env:              cfg.Env,
 			Model:            cfg.Model,

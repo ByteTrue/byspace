@@ -243,8 +243,8 @@ type Server struct {
 	// providerCatalogMu guards providerCatalogValue, which is the provider snapshot served to
 	// clients. It has its own lock: building one shells out to every provider CLI, and holding s.mu
 	// for that would stall every other request.
-	providerCatalogMu    sync.Mutex
-	providerCatalogValue *providerCatalog
+	providerCatalogMu sync.Mutex
+	providerCatalogs  map[string]*providerCatalog
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -308,6 +308,7 @@ func New(opts Options) (*Server, error) {
 	}
 
 	srv := &Server{
+		providerCatalogs:      make(map[string]*providerCatalog),
 		shutdownRequested:     make(chan string, 1),
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,
@@ -354,7 +355,7 @@ func New(opts Options) (*Server, error) {
 		// Build the catalog before anyone asks for it. Proving which providers are installed runs
 		// each CLI, and a client that asks first would otherwise wait for that probe — long enough
 		// for the app to submit a form while it still thinks no provider is selected.
-		srv.storeProviderCatalog(srv.buildProviderCatalog(pctx, srv.store.LoadDaemonConfig()))
+		srv.storeProviderCatalog("", srv.buildProviderCatalog(pctx, srv.store.LoadDaemonConfig(), ""))
 	}()
 
 	// Nothing else drives file and git-diff subscriptions. Without this loop they are
@@ -1229,7 +1230,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// Serve from the in-memory catalog. Building one runs every provider CLI to learn whether it
 		// is available, which took long enough that the app could submit a form before it knew the
 		// selected provider — the snapshot has to be a read, not a probe.
-		catalog := s.providerCatalogOrBuild(ctx)
+		catalog := s.providerCatalogOrBuild(ctx, req.Cwd)
 		// The hash covers the entries alone. Comparing `ifNoneMatch` against a tag built from the
 		// daemon identity reported "not modified" after a providers edit, so a removed provider
 		// stayed visible in the sheet until something else invalidated it.
@@ -1256,10 +1257,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		_ = s.probePiModelsInCwd(ctx, refreshReq.Cwd)
 		// A refresh means the user asked for a fresh probe, so drop the cached catalog rather than
 		// letting it answer the rebuild.
-		s.storeProviderCatalog(nil)
+		s.storeProviderCatalog(refreshReq.Cwd, nil)
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
-		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers)
+		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers, refreshReq.Cwd)
 		_ = sendSessionMsg(ctx, sink, "refresh_providers_snapshot_response", map[string]any{
 			"requestId":    base.RequestID,
 			"acknowledged": true,
@@ -1288,13 +1289,19 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			}
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		// The draft wins over the saved entry: the "add provider" form loads models for a provider that is
+		// not in config yet, and while editing one the models list must match what is on screen.
+		providerCfg := mergeProviderConfig(s.providerConfigFor(prov), req.DraftConfig)
 		var models []pi.CatalogModel
-		if prov == "pi" {
+		if prov == "pi" || providers.ResolveProviderSpecWithConfig(prov, providerCfg).Protocol == "pi-rpc" {
 			// cwd scopes the probe; empty means "whatever is cached".
 			models = s.probePiModelsInCwd(ctx, req.Cwd)
 		} else {
 			models = providers.GetProviderSpec(prov).Models
 		}
+		// `models` in a provider override replaces the catalog; ignoring it listed only the generic
+		// "<id> Default" row, so a profile with a fixed model list could not be selected at all.
+		models = providers.MergeProviderModels(prov, providerCfg, models)
 		_ = sendSessionMsg(ctx, sink, "list_provider_models_response", map[string]any{
 			"requestId": base.RequestID,
 			"provider":  prov,
@@ -1316,10 +1323,13 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			prov = "pi"
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		// A configured provider inherits its base's modes: `GetProviderSpec` only knows the six
+		// built-ins, so a profile extending claude would otherwise expose the generic ACP mode set.
+		spec := providers.ResolveProviderSpecWithConfig(prov, s.providerConfigFor(prov))
 		_ = sendSessionMsg(ctx, sink, "list_provider_modes_response", map[string]any{
 			"requestId": base.RequestID,
 			"provider":  prov,
-			"modes":     providers.GetProviderSpec(prov).Modes,
+			"modes":     spec.Modes,
 			"error":     nil,
 			"fetchedAt": now,
 		})
@@ -1333,18 +1343,30 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			DraftConfig map[string]any `json:"draftConfig"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		// The provider comes from the draft as often as from the top level: the composer asks for the
+		// features of whatever provider the form currently shows, and that draft need not be saved yet.
 		prov := strings.TrimSpace(req.Provider)
+		if draftProvider, ok := req.DraftConfig["provider"].(string); ok && strings.TrimSpace(draftProvider) != "" {
+			prov = strings.TrimSpace(draftProvider)
+		}
 		if prov == "" {
 			prov = "pi"
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		// A configured provider inherits its base's features, so resolve the spec through the config:
+		// `GetProviderSpec` only knows the six built-ins and would report an empty list, which makes
+		// the client drop every featureValue a profile carried.
+		// The saved entry supplies `extends`, which decides which base the features come from; the
+		// draft only names the selection on screen and must not erase it.
+		providerCfg := mergeProviderConfig(s.providerConfigFor(prov), req.DraftConfig)
+		spec := providers.ResolveProviderSpecWithConfig(prov, providerCfg)
 		_ = sendSessionMsg(ctx, sink, "list_provider_features_response", map[string]any{
 			"requestId": base.RequestID,
 			"provider":  prov,
 			// The model comes from the draft: the provider sheet asks for features while the user is
 			// still choosing, and a model-gated feature (fast mode) must not appear before a model that
 			// supports it is picked.
-			"features":  providers.ProviderFeaturesFor(prov, draftModelFromConfig(req.DraftConfig)),
+			"features":  providers.ProviderFeaturesForSpec(spec, prov, draftModelFromConfig(req.DraftConfig)),
 			"error":     nil,
 			"fetchedAt": now,
 		})
@@ -2872,8 +2894,10 @@ func (s *Server) loadAgent(agentID string) (*managedPi, error) {
 		return nil, fmt.Errorf("agent is archived: %s", agentID)
 	}
 	// A record pointing at a provider this build does not register cannot be resumed; say so
-	// instead of spawning a command that does not exist.
-	if !providers.IsKnownProvider(rec.Provider) {
+	// instead of spawning a command that does not exist. A provider the user added exists only in
+	// config, so the config counts as a registration — otherwise an agent created from a profile
+	// could be created but never resumed.
+	if !providers.IsKnownProvider(rec.Provider) && !providers.IsConfiguredProvider(s.store.LoadDaemonConfig(), rec.Provider) {
 		return nil, fmt.Errorf("agent %s references unavailable provider %q", agentID, rec.Provider)
 	}
 	return s.startOrGetPiAgent(*rec)
@@ -2920,6 +2944,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	var providerEnv []string
 	sess, err := providers.StartProviderSession(providers.LaunchConfig{
 		Provider:         rec.Provider,
+		ProviderConfig:   s.providerConfigFor(rec.Provider),
 		CommandOverride:  cmdOverride,
 		Cwd:              rec.Cwd,
 		Model:            model,
@@ -4735,4 +4760,21 @@ func firstNonEmptyTrimmed(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// mergeProviderConfig layers a draft over the saved provider entry. The draft carries the live
+// selection (provider, cwd, mode, model) and sometimes an unsaved `extends`; the saved entry carries
+// everything the draft omits, and the draft wins wherever both are present.
+func mergeProviderConfig(saved, draft map[string]any) map[string]any {
+	if len(saved) == 0 && len(draft) == 0 {
+		return nil
+	}
+	merged := make(map[string]any, len(saved)+len(draft))
+	for key, value := range saved {
+		merged[key] = value
+	}
+	for key, value := range draft {
+		merged[key] = value
+	}
+	return merged
 }

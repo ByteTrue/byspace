@@ -93,6 +93,18 @@ type WorktreeIntentDeps struct {
 	Forge string
 	// DefaultBranch resolves the repository's default branch.
 	DefaultBranch func(ctx context.Context, repoRoot string) (string, error)
+	// ChangeRequestTarget resolves a PR/MR head. nil uses the real forge CLI; a test that asserts
+	// how a structure field turns into an intent passes a stub instead of depending on `gh` being
+	// installed and authenticated.
+	ChangeRequestTarget func(ctx context.Context, forge, repoCwd string, number int) (ChangeRequestCheckoutTarget, error)
+}
+
+// changeRequestTarget applies the injected resolver, defaulting to the forge CLI.
+func (deps WorktreeIntentDeps) changeRequestTarget(ctx context.Context, repoRoot string, number int) (ChangeRequestCheckoutTarget, error) {
+	if deps.ChangeRequestTarget != nil {
+		return deps.ChangeRequestTarget(ctx, deps.Forge, repoRoot, number)
+	}
+	return ResolveChangeRequestCheckoutTarget(ctx, deps.Forge, repoRoot, number)
 }
 
 // ResolveWorktreeIntent turns the request fields into one intent.
@@ -175,7 +187,7 @@ func resolveChangeRequestIntent(ctx context.Context, refName string, source Chec
 	isCrossRepository := false
 	headRepository := ""
 	if headRef == "" {
-		target, err := ResolveChangeRequestCheckoutTarget(ctx, deps.Forge, repoRoot, source.Number)
+		target, err := deps.changeRequestTarget(ctx, repoRoot, source.Number)
 		if err != nil {
 			return WorktreeIntent{}, err
 		}
@@ -185,7 +197,7 @@ func resolveChangeRequestIntent(ctx context.Context, refName string, source Chec
 	}
 
 	baseRefName := ""
-	if target, err := ResolveChangeRequestCheckoutTarget(ctx, deps.Forge, repoRoot, source.Number); err == nil {
+	if target, err := deps.changeRequestTarget(ctx, repoRoot, source.Number); err == nil {
 		baseRefName = target.BaseRefName
 	}
 	if baseRefName == "" {
