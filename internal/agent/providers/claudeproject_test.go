@@ -2,6 +2,7 @@ package providers
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -12,8 +13,13 @@ func TestClaudeProjectDirEncoding(t *testing.T) {
 	// The leading slash becomes a dash, which is why real Claude project directories are named
 	// `-Users-name-project`. The assertion is on the real shape: getting this "prettier" breaks the
 	// match with what the SDK wrote.
-	dir := ClaudeProjectDir("/Users/me/work/BySpace", "/cfg")
-	if got, want := filepath.Base(dir), "-Users-me-work-BySpace"; got != want {
+	root, wantBase := "/Users/me/work/BySpace", "-Users-me-work-BySpace"
+	if runtime.GOOS == "windows" {
+		// Same rule, different absolute root: the drive letter and both separators become dashes.
+		root, wantBase = `C:\Users\me\work\BySpace`, "C--Users-me-work-BySpace"
+	}
+	dir := ClaudeProjectDir(root, "/cfg")
+	if got, want := filepath.Base(dir), wantBase; got != want {
 		t.Fatalf("encoded = %q, want %q", got, want)
 	}
 	if filepath.Dir(dir) != filepath.Join("/cfg", "projects") {

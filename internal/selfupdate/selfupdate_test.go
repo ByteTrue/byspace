@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -52,7 +53,8 @@ func TestUpdateReplacesBinaryAndReportsPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o111 == 0 {
+	// Windows has no execute bit; "executable" there means a recognizable extension, not a mode.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("the new binary is not executable: %v", info.Mode().Perm())
 	}
 
@@ -140,6 +142,9 @@ func TestUpdateRefusesEmptyPayload(t *testing.T) {
 
 // A read-only directory is refused before downloading, with a reason the user can act on.
 func TestUpdateRefusesReadOnlyDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 0555 does not make a directory read-only on Windows")
+	}
 	dir := t.TempDir()
 	executable := filepath.Join(dir, "byspace")
 	if err := os.WriteFile(executable, []byte("old"), 0o755); err != nil {

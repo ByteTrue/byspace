@@ -3,6 +3,7 @@ package providers
 import (
 	"encoding/base64"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -117,7 +118,7 @@ func TestClaudeImageBlockIsMaterialized(t *testing.T) {
 	}
 	start := strings.Index(text, "](") + 2
 	path := text[start : len(text)-1]
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
 		t.Fatalf("image was not written to %q: %v", path, err)
 	}
 	body, _ := os.ReadFile(path)

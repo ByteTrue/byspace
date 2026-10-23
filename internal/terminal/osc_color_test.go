@@ -24,6 +24,33 @@ func pipePair(t *testing.T) (writer, reader *os.File) {
 	return writer, reader
 }
 
+// readWithin reads once and gives up after timeout, reporting whether anything arrived.
+//
+// A goroutine and a timer rather than SetReadDeadline: read deadlines on an os.Pipe are not honoured on
+// Windows, where the read blocks forever and the test hangs instead of failing.
+func readWithin(t *testing.T, reader *os.File, size int, timeout time.Duration) (string, bool) {
+	t.Helper()
+	type result struct {
+		text string
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		buf := make([]byte, size)
+		n, err := reader.Read(buf)
+		done <- result{text: string(buf[:n]), err: err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("read: %v", got.err)
+		}
+		return got.text, true
+	case <-time.After(timeout):
+		return "", false
+	}
+}
+
 // A TUI that adapts to the terminal's light/dark mode sends OSC 10/11/12 and reads the reply; with no reply it
 // falls back to its own default, which may be a light theme inside this app's dark one.
 func TestAnswerOSCColorQueriesWritesReplies(t *testing.T) {
@@ -31,13 +58,11 @@ func TestAnswerOSCColorQueriesWritesReplies(t *testing.T) {
 	session := &Session{ptmx: writer}
 	session.answerOSCColorQueries([]byte("\x1b]11;?\x1b\\"))
 
-	_ = reader.SetReadDeadline(time.Now().Add(2 * time.Second))
-	buf := make([]byte, 64)
-	n, err := reader.Read(buf)
-	if err != nil {
-		t.Fatalf("no reply: %v", err)
+	got, ok := readWithin(t, reader, 64, 2*time.Second)
+	if !ok {
+		t.Fatal("no reply")
 	}
-	if got := string(buf[:n]); got != "\x1b]11;rgb:0b0b/0b0b/0b0b\x1b\\" {
+	if got != "\x1b]11;rgb:0b0b/0b0b/0b0b\x1b\\" {
 		t.Fatalf("reply = %q", got)
 	}
 }
@@ -48,13 +73,10 @@ func TestAnswerOSCColorQueriesAnswersEach(t *testing.T) {
 	session := &Session{ptmx: writer}
 	session.answerOSCColorQueries([]byte("\x1b]10;?\x1b]11;?\x1b]12;?"))
 
-	_ = reader.SetReadDeadline(time.Now().Add(2 * time.Second))
-	buf := make([]byte, 256)
-	n, err := reader.Read(buf)
-	if err != nil {
-		t.Fatalf("no reply: %v", err)
+	got, ok := readWithin(t, reader, 256, 2*time.Second)
+	if !ok {
+		t.Fatal("no reply")
 	}
-	got := string(buf[:n])
 	for _, want := range []string{"\x1b]10;rgb:", "\x1b]11;rgb:", "\x1b]12;rgb:"} {
 		if !contains(got, want) {
 			t.Fatalf("reply %q lacks %q", got, want)
@@ -68,9 +90,8 @@ func TestAnswerOSCColorQueriesIgnoresOtherOutput(t *testing.T) {
 	session := &Session{ptmx: writer}
 	session.answerOSCColorQueries([]byte("ordinary output\r\n"))
 
-	_ = reader.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	if _, err := reader.Read(make([]byte, 8)); err == nil {
-		t.Fatal("something was written for ordinary output")
+	if got, wrote := readWithin(t, reader, 8, 200*time.Millisecond); wrote {
+		t.Fatalf("something was written for ordinary output: %q", got)
 	}
 }
 

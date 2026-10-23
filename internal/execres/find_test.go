@@ -160,6 +160,9 @@ func TestVersionReportsFailureDistinctly(t *testing.T) {
 // false only for ENOENT/EACCES/ENOEXEC. Reporting a provider as "not installed" because its
 // --version happens to exit non-zero (or is slow) makes a working install invisible.
 func TestProbeAcceptsNonZeroExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns a /bin/sh script")
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "exits-nonzero")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 3\n"), 0o755); err != nil {
@@ -171,6 +174,9 @@ func TestProbeAcceptsNonZeroExit(t *testing.T) {
 }
 
 func TestProbeAcceptsSlowBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns a /bin/sh script")
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "slow")
 	// Comfortably past ProbeTimeout, then exits 0.

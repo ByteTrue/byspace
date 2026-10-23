@@ -65,6 +65,8 @@ func TestStoreProjectWorkspaceAndAgentRoundTrip(t *testing.T) {
 func TestResolveWorkspaceIDForPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	// os.UserHomeDir reads USERPROFILE on Windows and HOME elsewhere; both must point at the fake home.
+	t.Setenv("USERPROFILE", home)
 	s := New(t.TempDir())
 
 	mk := func(id, cwd string) {

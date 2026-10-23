@@ -55,19 +55,21 @@ func TestAllocateFromRangeExhausted(t *testing.T) {
 
 // The script's output is untrusted and becomes a bind port.
 func TestAllocatePortFromScriptValidates(t *testing.T) {
-	if p, err := AllocatePortFromScript(t.Context(), "echo 4321", "/tmp", "web", "w1", "main"); err != nil || p != 4321 {
+	// The cwd must be a real directory: /tmp does not exist on Windows.
+	scratch := t.TempDir()
+	if p, err := AllocatePortFromScript(t.Context(), "echo 4321", scratch, "web", "w1", "main"); err != nil || p != 4321 {
 		t.Fatalf("got %d %v", p, err)
 	}
 	// Out of range.
-	if _, err := AllocatePortFromScript(t.Context(), "echo 99999", "/tmp", "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), "echo 99999", scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("out-of-range port must be rejected")
 	}
 	// Not a number.
-	if _, err := AllocatePortFromScript(t.Context(), "echo hello", "/tmp", "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), "echo hello", scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("non-numeric output must be rejected")
 	}
 	// Failing script.
-	if _, err := AllocatePortFromScript(t.Context(), "exit 3", "/tmp", "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), "exit 3", scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("a failing script must be reported")
 	}
 }

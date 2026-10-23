@@ -1,6 +1,9 @@
 package providers
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 // A configured provider whose executable is gone must report unavailable. Reporting only `enabled` made a provider whose
 // CLI had been removed look usable until the first message failed.
@@ -15,9 +18,14 @@ func TestCustomProviderStatusProbesItsConfiguredCommand(t *testing.T) {
 		t.Fatalf("missing binary reported %q", got)
 	}
 
+	// A binary that certainly exists on the host: /bin/sh is a Unix path and Windows has no /bin.
+	existing := "/bin/sh"
+	if runtime.GOOS == "windows" {
+		existing = "cmd.exe"
+	}
 	present := BuildSnapshotEntries(nil, "", map[string]any{
 		"diag": map[string]any{
-			"command": []any{"/bin/sh", "/tmp/fake.mjs"},
+			"command": []any{existing, "/tmp/fake.mjs"},
 			"enabled": true,
 		},
 	})
@@ -27,7 +35,7 @@ func TestCustomProviderStatusProbesItsConfiguredCommand(t *testing.T) {
 
 	// An explicitly disabled provider stays unavailable regardless of the binary.
 	disabled := BuildSnapshotEntries(nil, "", map[string]any{
-		"diag": map[string]any{"command": []any{"/bin/sh"}, "enabled": false},
+		"diag": map[string]any{"command": []any{existing}, "enabled": false},
 	})
 	if got := entryStatus(t, disabled, "diag"); got != "unavailable" {
 		t.Fatalf("disabled provider reported %q", got)

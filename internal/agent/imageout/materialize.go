@@ -201,7 +201,8 @@ func escapeMarkdownAlt(value string) string {
 // escapeMarkdownSource percent-encodes a path segment by segment.
 //
 // Segment by segment rather than the whole string: encoding the slashes too would produce a URL the client cannot
-// resolve against the file route.
+// resolve against the file route. Windows paths are separators-first: their backslashes become slashes and would
+// otherwise be percent-encoded into one opaque segment no client can resolve.
 func escapeMarkdownSource(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if isDataImageSource(trimmed) {
@@ -211,7 +212,7 @@ func escapeMarkdownSource(value string) string {
 	if strings.Contains(trimmed, "://") {
 		return trimmed
 	}
-	segments := strings.Split(trimmed, "/")
+	segments := strings.Split(filepath.ToSlash(trimmed), "/")
 	for index, segment := range segments {
 		segments[index] = url.PathEscape(segment)
 	}

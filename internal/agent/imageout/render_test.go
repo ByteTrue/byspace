@@ -2,6 +2,7 @@ package imageout
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,7 +46,7 @@ func TestRenderAsMarkdownMaterializesRawBase64(t *testing.T) {
 	start := strings.Index(got, "(")
 	end := strings.LastIndex(got, ")")
 	path := got[start+1 : end]
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
 		t.Fatalf("the referenced file does not exist: %v", err)
 	}
 	if !strings.HasSuffix(path, ".png") {

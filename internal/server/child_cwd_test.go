@@ -2,6 +2,7 @@ package server
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ByteTrue/byspace/internal/store"
@@ -19,7 +20,12 @@ func TestResolveChildCwd(t *testing.T) {
 		t.Fatalf("relative = %q", got)
 	}
 	// An absolute path is left alone: filepath.Join would clean away the leading slash.
-	if got := resolveChildCwd(parent, "/tmp/scratch"); got != "/tmp/scratch" {
+	// The literal has to be absolute for the platform under test, which is what this asserts.
+	absolute := "/tmp/scratch"
+	if runtime.GOOS == "windows" {
+		absolute = `C:\scratch`
+	}
+	if got := resolveChildCwd(parent, absolute); got != absolute {
 		t.Fatalf("absolute = %q", got)
 	}
 	// ".." resolves inside the parent rather than escaping to the daemon's cwd.

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,11 +29,14 @@ func TestMaterializeWritesDecodableFile(t *testing.T) {
 		t.Fatalf("bytes differ: %q", got)
 	}
 	// The directory and file are private: generated images can contain anything the model saw.
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != fileMode {
-		t.Fatalf("file mode = %v", info.Mode().Perm())
-	}
-	if info, err := os.Stat(filepath.Dir(path)); err != nil || info.Mode().Perm() != privateDirMode {
-		t.Fatalf("dir mode = %v", info.Mode().Perm())
+	// Windows has no POSIX permission bits; the assertion only means something where it does.
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != fileMode {
+			t.Fatalf("file mode = %v", info.Mode().Perm())
+		}
+		if info, err := os.Stat(filepath.Dir(path)); err != nil || info.Mode().Perm() != privateDirMode {
+			t.Fatalf("dir mode = %v", info.Mode().Perm())
+		}
 	}
 }
 

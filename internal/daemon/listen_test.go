@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,7 +59,11 @@ func TestListenTargetAddress(t *testing.T) {
 // A socket file left by a crashed daemon must not block the next start.
 func TestSocketListenReplacesStaleFile(t *testing.T) {
 	// A short path: t.TempDir() on macOS is already longer than the 104-byte socket limit.
-	dir, err := os.MkdirTemp("/tmp", "bys")
+	shortRoot := "/tmp"
+	if runtime.GOOS == "windows" {
+		shortRoot = os.TempDir()
+	}
+	dir, err := os.MkdirTemp(shortRoot, "bys")
 	if err != nil {
 		t.Fatal(err)
 	}

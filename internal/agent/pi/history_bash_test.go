@@ -1,6 +1,7 @@
 package pi
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,8 +77,12 @@ func TestResolveSessionsDirHonoursSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	configured := filepath.Join(home, "moved-sessions")
-	if err := os.WriteFile(filepath.Join(agentDir, "settings.json"),
-		[]byte(`{"sessionDir":"`+configured+`"}`), 0o600); err != nil {
+	// Marshalled rather than concatenated: a Windows path is full of backslashes, which are JSON escapes.
+	settings, err := json.Marshal(map[string]string{"sessionDir": configured})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "settings.json"), settings, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PI_CODING_AGENT_DIR", agentDir)

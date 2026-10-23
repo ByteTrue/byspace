@@ -2,6 +2,7 @@ package pi
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -127,8 +128,13 @@ func TestListImportableSessionsAndLoadTimelineFromJSONL(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessFile := filepath.Join(tmp, "session-1.jsonl")
+	// Marshalled rather than concatenated: a Windows path is full of backslashes, which are JSON escapes.
+	encodedCwd, err := json.Marshal(workCwd)
+	if err != nil {
+		t.Fatal(err)
+	}
 	jsonlContent := strings.Join([]string{
-		`{"type":"session","id":"sess_abc","cwd":"` + workCwd + `","timestamp":"2026-04-20T01:00:00.000Z"}`,
+		`{"type":"session","id":"sess_abc","cwd":` + string(encodedCwd) + `,"timestamp":"2026-04-20T01:00:00.000Z"}`,
 		`{"type":"session_info","name":"Refactor Go Session"}`,
 		`{"type":"model_change","provider":"anthropic","modelId":"claude-sonnet-4-5"}`,
 		`{"type":"thinking_level_change","thinkingLevel":"high"}`,
