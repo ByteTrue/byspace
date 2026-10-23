@@ -164,6 +164,12 @@ type Server struct {
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
+	// timelineViews holds each socket's viewed-agent set from
+	// agent.timeline.set_subscription.request, and selectiveTimeline records which sockets
+	// declared selective_agent_timeline. Together they scope agent_stream to the chats a
+	// client is actually showing; without them every socket receives every agent's tokens.
+	timelineViews     map[frameSink]map[string]bool
+	selectiveTimeline map[frameSink]bool
 	pollStop          chan struct{}
 	allowedHostnames  []string
 	// agentLoads deduplicates concurrent cold-start attempts for one agent.
@@ -319,6 +325,8 @@ func New(opts Options) (*Server, error) {
 		fileSubs:              make(map[string]fileSubscription),
 		diffSubs:              make(map[string]diffSubscription),
 		clients:               make(map[frameSink]bool),
+		timelineViews:         make(map[frameSink]map[string]bool),
+		selectiveTimeline:     make(map[frameSink]bool),
 		pollStop:              make(chan struct{}),
 	}
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
@@ -745,6 +753,8 @@ func (s *Server) serveSessionOnSink(
 	defer func() {
 		s.mu.Lock()
 		delete(s.clients, sink)
+		delete(s.timelineViews, sink)
+		delete(s.selectiveTimeline, sink)
 		s.mu.Unlock()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
@@ -877,6 +887,7 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		ClientID        string          `json:"clientId"`
 		ProtocolVersion int             `json:"protocolVersion"`
 		AppVersion      string          `json:"appVersion"`
+		Capabilities    json.RawMessage `json:"capabilities"`
 		Message         json.RawMessage `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
@@ -899,6 +910,9 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		}
 		s.mu.Lock()
 		s.clients[sink] = true
+		// An empty capabilities object is how a client says "I speak the current protocol";
+		// only an absent selective_agent_timeline means "send me every agent's timeline".
+		s.selectiveTimeline[sink] = helloDeclaresSelectiveTimeline(envelope.Capabilities)
 		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "status", s.buildServerInfoPayload())
 	case "session":
@@ -947,6 +961,22 @@ func sessionMessageNeedsOrder(raw json.RawMessage) bool {
 		return true
 	}
 	return false
+}
+
+// helloDeclaresSelectiveTimeline reports whether the client asked for view-scoped agent_stream
+// delivery. A missing capabilities object means a client predating the flag, which keeps the
+// unconditional firehose.
+func helloDeclaresSelectiveTimeline(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var caps struct {
+		SelectiveAgentTimeline bool `json:"selective_agent_timeline"`
+	}
+	if err := json.Unmarshal(raw, &caps); err != nil {
+		return false
+	}
+	return caps.SelectiveAgentTimeline
 }
 
 func (s *Server) buildServerInfoPayload() map[string]any {
@@ -1127,6 +1157,13 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		if ids == nil {
 			ids = []string{}
 		}
+		view := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			view[id] = true
+		}
+		s.mu.Lock()
+		s.timelineViews[sink] = view
+		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "agent.timeline.set_subscription.response", map[string]any{
 			"requestId": base.RequestID,
 			"agentIds":  ids,
@@ -3294,12 +3331,27 @@ func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
 }
 
 func (s *Server) broadcastSessionMsg(msgType string, payload any) {
+	// agent_stream is the only per-agent firehose: every turn's tokens, tool rows and status
+	// transitions for every agent. A client that declared selective_agent_timeline gets the
+	// streams for the chats it is showing and nothing else, which is what Node's
+	// forwardAgentStream does per source. Other message types stay unconditional.
+	var agentID string
+	if msgType == "agent_stream" {
+		if fields, ok := payload.(map[string]any); ok {
+			agentID, _ = fields["agentId"].(string)
+		}
+	}
+
 	s.mu.Lock()
 	sinks := make([]frameSink, 0, len(s.clients))
 	for sink, handshaked := range s.clients {
-		if handshaked {
-			sinks = append(sinks, sink)
+		if !handshaked {
+			continue
 		}
+		if agentID != "" && s.selectiveTimeline[sink] && !s.timelineViews[sink][agentID] {
+			continue
+		}
+		sinks = append(sinks, sink)
 	}
 	s.mu.Unlock()
 
