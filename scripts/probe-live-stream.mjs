@@ -191,6 +191,13 @@ ws.on("open", async () => {
     out.push(`tail(all): entries=${types.length} typeCounts=${JSON.stringify(types.reduce((a, t) => ((a[t] = (a[t] ?? 0) + 1), a), {}))}`);
     const users = (tail?.entries ?? []).filter((e) => e?.item?.type === "user_message");
     out.push(`user_message rows: ${users.length}`);
+
+    // The chat outline rail accepts the prompt index only when its epoch equals the epoch the
+    // client already holds from fetch_agent_timeline. Two different values here mean the client
+    // drops the index as stale and the rail never renders.
+    out.push(
+      `EPOCH fetch_agent_timeline=${JSON.stringify(tail?.epoch)} list_prompts=${JSON.stringify(prompts?.epoch)} MATCH=${tail?.epoch === prompts?.epoch}`,
+    );
     for (const u of users) out.push(`  USER ${JSON.stringify({ messageId: u.item.messageId ?? null, clientMessageId: u.item.clientMessageId ?? null, text: (u.item.text ?? "").slice(0, 40) })}`);
 
     // Let the last frames land.
