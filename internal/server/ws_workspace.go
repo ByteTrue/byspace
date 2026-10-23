@@ -14,6 +14,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -302,15 +303,24 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	// A provider filter is honoured before listing: asking for claude sessions and getting pi
-	// ones is worse than getting nothing.
-	if len(req.Providers) > 0 && !containsString(req.Providers, "pi") {
-		_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
-			"requestId": req.RequestID,
-			"entries":   []any{},
-			"error":     nil,
+	// A provider filter selects which providers are listed. It used to read "the request names
+	// providers and pi is not among them, so return nothing", which answered every claude-only
+	// request with an empty list: the import sheet asks per provider, so the claude rows never
+	// appeared at all.
+	includePi := len(req.Providers) == 0 || containsString(req.Providers, "pi")
+	includeClaude := len(req.Providers) == 0 || containsString(req.Providers, "claude")
+	// The sheet asks once per provider, so a provider this daemon cannot read sessions from has to
+	// answer as a failure rather than an empty list: an empty list reads as "you have no history"
+	// and the inline retry row never appears.
+	providerErrors := make([]map[string]any, 0, len(req.Providers))
+	for _, provider := range req.Providers {
+		if provider == "pi" || provider == "claude" {
+			continue
+		}
+		providerErrors = append(providerErrors, map[string]any{
+			"provider": provider,
+			"message":  fmt.Sprintf("%s sessions cannot be listed by this host", provider),
 		})
-		return
 	}
 
 	// A search scans deeper than the page it returns: filtering happens after listing, so scanning
@@ -321,13 +331,17 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	if strings.TrimSpace(req.Query) != "" && listLimit < importSessionSearchScanLimit {
 		listLimit = importSessionSearchScanLimit
 	}
-	sessions, _ := pi.ListImportableSessions(pi.HistoryOptions{
-		SessionDir: s.piSessionDir,
-		Cwd:        req.Cwd,
-		Limit:      listLimit,
-		Since:      req.Since,
-	})
-	if query := strings.ToLower(strings.TrimSpace(req.Query)); query != "" {
+	var sessions []pi.ImportableSession
+	if includePi {
+		sessions, _ = pi.ListImportableSessions(pi.HistoryOptions{
+			SessionDir: s.piSessionDir,
+			Cwd:        req.Cwd,
+			Limit:      listLimit,
+			Since:      req.Since,
+		})
+	}
+	query := strings.ToLower(strings.TrimSpace(req.Query))
+	if query != "" {
 		filtered := sessions[:0]
 		for _, session := range sessions {
 			if matchesSessionQuery(session, query) {
@@ -365,23 +379,28 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		})
 	}
 
-	if claudeSessions, err := providers.ListClaudeSessions("", req.Cwd, req.Limit); err == nil {
-		for _, cs := range claudeSessions {
-			if importedHandles["claude:"+cs.ProviderHandleID] {
-				filteredCount++
-				continue
+	if includeClaude {
+		if claudeSessions, err := providers.ListClaudeSessions("", req.Cwd, req.Limit); err == nil {
+			for _, cs := range claudeSessions {
+				if query != "" && !matchesSessionPreview(cs.Title, cs.FirstPromptPreview, cs.LastPromptPreview, query) {
+					continue
+				}
+				if importedHandles["claude:"+cs.ProviderHandleID] {
+					filteredCount++
+					continue
+				}
+				entries = append(entries, map[string]any{
+					"providerId":         "claude",
+					"provider":           "claude",
+					"providerLabel":      "Claude Code",
+					"providerHandleId":   cs.ProviderHandleID,
+					"cwd":                cs.Cwd,
+					"title":              cs.Title,
+					"firstPromptPreview": cs.FirstPromptPreview,
+					"lastPromptPreview":  cs.LastPromptPreview,
+					"lastActivityAt":     cs.LastActivityAt,
+				})
 			}
-			entries = append(entries, map[string]any{
-				"providerId":         "claude",
-				"provider":           "claude",
-				"providerLabel":      "Claude Code",
-				"providerHandleId":   cs.ProviderHandleID,
-				"cwd":                cs.Cwd,
-				"title":              cs.Title,
-				"firstPromptPreview": cs.FirstPromptPreview,
-				"lastPromptPreview":  cs.LastPromptPreview,
-				"lastActivityAt":     cs.LastActivityAt,
-			})
 		}
 	}
 
@@ -391,7 +410,7 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		// The import picker shows "N already imported" beside the list; it was hardcoded to 0 and
 		// nothing was filtered, so every previously imported session was offered again.
 		"filteredAlreadyImportedCount": filteredCount,
-		"providerErrors":               []any{},
+		"providerErrors":               providerErrors,
 		"error":                        nil,
 	})
 }
@@ -427,74 +446,98 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 	if strings.TrimSpace(req.ProviderHandleID) == "" {
 		req.ProviderHandleID = req.SessionID
 	}
-	sessionFile := strings.TrimSpace(req.ProviderHandleID)
-	desc, err := pi.ParseSessionFile(sessionFile, time.Now())
-	if err != nil || desc == nil {
+	failImport := func(message string) {
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 			"status":    "agent_create_failed",
 			"requestId": req.RequestID,
-			"error":     "invalid or missing Pi session file",
+			"error":     message,
 		})
+	}
+
+	if s.providerSessionAlreadyImported(providerOrDefault(req.Provider), strings.TrimSpace(req.ProviderHandleID)) {
+		failImport(fmt.Sprintf("Provider session is already imported: %s", strings.TrimSpace(req.ProviderHandleID)))
 		return
 	}
 
-	cwd := strings.TrimSpace(req.Cwd)
-	if cwd == "" {
-		cwd = desc.Cwd
-	}
-	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
-	if err != nil {
-		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-			"status":    "agent_create_failed",
-			"requestId": req.RequestID,
-			"error":     err.Error(),
-		})
-		return
+	provider := providerOrDefault(req.Provider)
+
+	var rec store.AgentRecord
+	var history []sdk.TimelineEntry
+	if provider == "pi" {
+		sessionFile := strings.TrimSpace(req.ProviderHandleID)
+		desc, err := pi.ParseSessionFile(sessionFile, time.Now())
+		if err != nil || desc == nil {
+			failImport("invalid or missing Pi session file")
+			return
+		}
+		cwd := strings.TrimSpace(req.Cwd)
+		if cwd == "" {
+			cwd = desc.Cwd
+		}
+		_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+		if err != nil {
+			failImport(err.Error())
+			return
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		rec = store.AgentRecord{
+			ID:          newAgentID(),
+			Provider:    "pi",
+			Cwd:         cwd,
+			WorkspaceID: ws.WorkspaceID,
+			CreatedAt:   now,
+			UpdatedAt:   desc.LastActivityAt,
+			Title:       desc.Title,
+			Labels:      importLabels(req.Labels),
+			LastStatus:  "idle",
+			Config: &store.AgentConfig{
+				Model:            desc.Model,
+				ThinkingOptionID: desc.ThinkingOptionID,
+			},
+			Persistence: &store.AgentPersistenceHandle{
+				Provider:     "pi",
+				SessionID:    sessionFile,
+				NativeHandle: sessionFile,
+			},
+		}
+		if entries, loadErr := pi.LoadTimelineFromJSONL(sessionFile); loadErr == nil {
+			history = entries
+		}
+	} else {
+		imported, err := s.importProviderTranscript(provider, strings.TrimSpace(req.ProviderHandleID), strings.TrimSpace(req.Cwd))
+		if err != nil {
+			failImport(err.Error())
+			return
+		}
+		rec = imported.record
+		rec.Labels = importLabels(req.Labels)
+		history = imported.history
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	agentID := newAgentID()
-	rec := store.AgentRecord{
-		ID:          agentID,
-		Provider:    "pi",
-		Cwd:         cwd,
-		WorkspaceID: ws.WorkspaceID,
-		CreatedAt:   now,
-		UpdatedAt:   desc.LastActivityAt,
-		Title:       desc.Title,
-		Labels:      importLabels(req.Labels),
-		LastStatus:  "idle",
-		Config: &store.AgentConfig{
-			Model:            desc.Model,
-			ThinkingOptionID: desc.ThinkingOptionID,
-		},
-		Persistence: &store.AgentPersistenceHandle{
-			Provider:     "pi",
-			SessionID:    sessionFile,
-			NativeHandle: sessionFile,
-		},
+	if strings.TrimSpace(req.WorkspaceID) != "" {
+		rec.WorkspaceID = strings.TrimSpace(req.WorkspaceID)
 	}
-
 	mp, err := s.startOrGetPiAgent(rec)
 	if err != nil {
-		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-			"status":    "agent_create_failed",
-			"requestId": req.RequestID,
-			"error":     err.Error(),
-		})
+		failImport(err.Error())
 		return
 	}
-
-	if historyEntries, err := pi.LoadTimelineFromJSONL(sessionFile); err == nil && len(historyEntries) > 0 {
-		mp.session.SeedTimeline(historyEntries)
+	if len(history) > 0 {
+		mp.session.SeedTimeline(history)
 	}
 	_ = s.store.UpsertAgent(mp.record)
-
+	// The importing client learns about the agent from the response, but every other socket — and
+	// this one's directory store, which the agent panel reads titles and status from — needs the
+	// same upsert Node emits when it registers the imported session.
+	s.broadcastAgentUpdate(mp.record)
+	// The client waits for `agent_resumed`: that is the status its import request selects on, and
+	// answering with `agent_created` left the import sheet open forever.
 	_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-		"status":    "agent_created",
-		"agentId":   agentID,
-		"requestId": req.RequestID,
-		"agent":     s.buildAgentSnapshotPayload(mp.record),
+		"status":       "agent_resumed",
+		"agentId":      mp.record.ID,
+		"requestId":    req.RequestID,
+		"timelineSize": mp.session.StreamSeq(),
+		"agent":        s.buildAgentSnapshotPayload(mp.record),
 	})
 }
 
@@ -1009,8 +1052,17 @@ func (s *Server) releaseTerminalSubscriptionsForScope(sink frameSink, workspaceI
 // The title and both prompt previews are checked: a user searching for a session remembers either
 // what they called it or what they asked in it, and checking only the title misses the second.
 func matchesSessionQuery(session pi.ImportableSession, query string) bool {
-	candidates := []*string{session.Title, session.FirstPromptPreview, session.LastPromptPreview}
-	for _, candidate := range candidates {
+	title := ""
+	if session.Title != nil {
+		title = *session.Title
+	}
+	return matchesSessionPreview(title, session.FirstPromptPreview, session.LastPromptPreview, query)
+}
+
+// matchesSessionPreview is the provider-neutral form of the same filter: every provider's rows are
+// matched on the three fields the import sheet shows, so a search behaves the same for all of them.
+func matchesSessionPreview(title string, first, last *string, query string) bool {
+	for _, candidate := range []*string{&title, first, last} {
 		if candidate != nil && strings.Contains(strings.ToLower(*candidate), query) {
 			return true
 		}
@@ -1053,3 +1105,10 @@ func (s *Server) importedProviderHandles() (map[string]bool, error) {
 //
 // Ported from IMPORT_SESSION_SEARCH_SCAN_LIMIT.
 const importSessionSearchScanLimit = 500
+
+func providerOrDefault(provider string) string {
+	if trimmed := strings.TrimSpace(provider); trimmed != "" {
+		return trimmed
+	}
+	return "pi"
+}

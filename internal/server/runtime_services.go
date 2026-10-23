@@ -392,6 +392,9 @@ func (s *Server) broadcastCheckoutStatusIfChanged(ctx context.Context, cwd strin
 	previous, seen := s.checkoutStatusFingerprints[cwd]
 	s.checkoutStatusFingerprints[cwd] = fingerprint
 	s.mu.Unlock()
+	// The workspace descriptor carries the same facts, and the app reads the command center's branch
+	// from it. Refreshing the cache here keeps one git read feeding both pushes.
+	s.storeCheckoutGitRuntimeFromStatus(cwd, st)
 	if seen && previous == fingerprint {
 		return
 	}

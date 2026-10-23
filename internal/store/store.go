@@ -797,19 +797,22 @@ func (s *Store) SetWorkspaceLabelAssignment(workspaceID string, lbl LabelDefinit
 	if lbl.Color == "" {
 		lbl.Color = "blue"
 	}
-	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
+	// The catalog file and the catalog object share a path, so every writer has to use the catalog
+	// shape. Reading it as a bare array returned nothing once anything else had written the
+	// generation, and the rewrite that followed dropped every label the array had not carried.
+	catalog := s.loadLabelCatalogLocked()
 	found := false
-	for i := range labels {
-		if labels[i].Name == lbl.Name {
-			labels[i].Color = lbl.Color
+	for i := range catalog.Labels {
+		if catalog.Labels[i].Name == lbl.Name {
+			catalog.Labels[i].Color = lbl.Color
 			found = true
 			break
 		}
 	}
 	if !found && lbl.Name != "" {
-		labels = append(labels, lbl)
+		catalog.Labels = append(catalog.Labels, lbl)
 	}
-	_ = writeJSONArray(s.labelsPath(), labels)
+	s.saveLabelCatalogLocked(catalog)
 
 	workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
 	if err != nil {
@@ -860,7 +863,8 @@ func (s *Store) UpdateLabel(name, newName, color string) (LabelDefinition, int, 
 		targetColor = "blue"
 	}
 
-	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
+	catalog := s.loadLabelCatalogLocked()
+	labels := catalog.Labels
 	updatedDef := LabelDefinition{Name: targetName, Color: targetColor}
 	found := false
 	for i := range labels {
@@ -876,7 +880,8 @@ func (s *Store) UpdateLabel(name, newName, color string) (LabelDefinition, int, 
 	if !found {
 		labels = append(labels, updatedDef)
 	}
-	_ = writeJSONArray(s.labelsPath(), labels)
+	catalog.Labels = labels
+	s.saveLabelCatalogLocked(catalog)
 
 	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
 	affected := 0
@@ -985,6 +990,10 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 			cfg[k] = v
 		}
 	}
+	liftAgentSettings(cfg, disk["agents"])
+	if daemon, ok := disk["daemon"].(map[string]any); ok {
+		liftAgentSettings(cfg, daemon["agents"])
+	}
 	// `passwordSet` is derived, not stored: the hash is the truth, and a stored boolean could
 	// drift from it (a hand-edited config, a failed write) leaving the settings page claiming a
 	// password exists when it does not — or worse, the reverse.
@@ -996,6 +1005,44 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 		cfg["auth"] = map[string]any{"passwordSet": strings.TrimSpace(hash) != ""}
 	}
 	return cfg
+}
+
+// liftAgentSettings flattens the `agents` block onto the settings map.
+//
+// Two on-disk shapes exist. This daemon writes provider overrides under `daemon.providers`, while
+// config files written by hand or by a newer harness nest them under `agents.providers` — the same
+// nesting the wire uses. Reading only the flat copy meant an override was silently ignored, which
+// looks exactly like the setting having no effect.
+func liftAgentSettings(cfg map[string]any, agentsRaw any) {
+	agents, ok := agentsRaw.(map[string]any)
+	if !ok {
+		return
+	}
+	for _, key := range []string{"providers", "metadataGeneration", "skills", "skillTargets", "catalogRefreshTimeoutMs"} {
+		value, present := agents[key]
+		if !present {
+			continue
+		}
+		if current, exists := cfg[key]; exists && !isEmptySetting(current) {
+			// A flat value already answered; the nested copy only fills what is missing.
+			continue
+		}
+		cfg[key] = value
+	}
+}
+
+// isEmptySetting reports whether a setting carries nothing. The defaults seed `providers` with an
+// empty map, so "key exists" is not the same as "the user configured it".
+func isEmptySetting(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case map[string]any:
+		return len(typed) == 0
+	case []any:
+		return len(typed) == 0
+	}
+	return false
 }
 
 func daemonConfigDefaults() map[string]any {

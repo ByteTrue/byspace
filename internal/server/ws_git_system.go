@@ -1018,7 +1018,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 				target := strings.TrimSpace(req.MessageID)
 				if target == "" && req.Seq > 0 {
 					// Older clients send a cursor; map it to the message at that position.
-					tl := mp.session.Timeline()
+					tl := dedupeSubmittedPrompts(mp.session.Timeline())
 					for i := len(tl) - 1; i >= 0; i-- {
 						if tl[i].Seq <= req.Seq && tl[i].Item.Type == "user_message" {
 							target = tl[i].Item.Text
@@ -1028,6 +1028,11 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 				}
 				if target == "" {
 					rewindErr = fmt.Errorf("rewind needs a message id")
+				} else if s.isUnacknowledgedSubmittedPrompt(mp.session, mp.record.ID, target) {
+					// The daemon wrote this row when the prompt was submitted; the provider has not
+					// echoed it back, so it has no checkpoint for the turn. Node refuses with this exact
+					// wording, and the client shows it as-is.
+					rewindErr = fmt.Errorf("Cannot rewind before the provider acknowledges the submitted prompt")
 				} else if err := s.rewindConversation(ctx, mp, target); err != nil {
 					rewindErr = err
 				}
@@ -1115,7 +1120,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			})
 			return
 		}
-		tl := mp.session.Timeline()
+		tl := dedupeSubmittedPrompts(mp.session.Timeline())
 		prompts := make([]map[string]any, 0)
 		for _, e := range tl {
 			if e.Item.Type == "user_message" {
@@ -1205,6 +1210,8 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "agent.skills.get_status.request", "agent.skills.reconcile.request", "agent.skills.uninstall.request":
+		s.skillsMu.Lock()
+		defer s.skillsMu.Unlock()
 		cfg := s.store.LoadDaemonConfig()
 		sel, ok := cfg["skillsSelection"].(map[string]any)
 		if !ok || sel == nil {
@@ -1248,6 +1255,8 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "agent.skills.save_selection.request":
+		s.skillsMu.Lock()
+		defer s.skillsMu.Unlock()
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
@@ -1322,6 +1331,8 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "agent.skills.import_legacy_selection.request":
+		s.skillsMu.Lock()
+		defer s.skillsMu.Unlock()
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
@@ -1384,6 +1395,15 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 			"requestId": req.RequestID,
 			"config":    updated,
+		})
+		// Every other open client has to learn about the edit: Node broadcasts a
+		// `status: daemon_config_changed` frame from its config-apply path. Without it a page
+		// that was loaded before the write keeps rendering the settings it read once — the
+		// new-workspace launch menu kept offering a terminal profile another client had just
+		// deleted, and the settings sheet showed edits that never happened.
+		s.broadcastSessionMsg("status", map[string]any{
+			"status": "daemon_config_changed",
+			"config": updated,
 		})
 		// A providers edit changes the catalog every open settings sheet renders. Node pushes the
 		// rebuilt snapshot from its config-apply listeners; without it the removed provider stays

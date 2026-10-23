@@ -336,7 +336,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		}
 		return map[string]any{
 			"agentId": agentID,
-			"entries": mp.session.Timeline(),
+			"entries": dedupeSubmittedPrompts(mp.session.Timeline()),
 		}, false
 
 	case "create_agent":

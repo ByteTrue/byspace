@@ -170,6 +170,21 @@ type Server struct {
 	// descriptor carries it for the composer's diff pill, and a descriptor is built on every
 	// listing, so recomputing git there would be several processes per response.
 	checkoutDiffStats map[string]*workspace.CheckoutDiffStat
+	// checkoutGitRuntimes caches each checkout's branch, dirtiness and remote for the descriptor's
+	// gitRuntime field. Built from the same checkout status the poller already reads, so a listing
+	// never runs git per row and a branch switch still reaches the client.
+	checkoutGitRuntimes map[string]map[string]any
+	// submittedPromptSeqs remembers which timeline row this daemon wrote for each submitted prompt,
+	// keyed by agent then clientMessageId. The provider echoes the prompt as a second row carrying
+	// the same client id, and some providers reuse it as their own message id, so the seq is the
+	// only thing that tells the two apart.
+	submittedPromptMu   sync.Mutex
+	submittedPromptSeqs map[string]map[string]int
+	// skillsMu serializes the skills commands. Each one takes a snapshot of the skills on disk,
+	// decides a plan from it, and then copies and deletes to match; two of them interleaved apply
+	// plans computed from each other's half-finished state, and the loser's skills stay installed.
+	// Node runs every skills command through one queue for the same reason.
+	skillsMu sync.Mutex
 	// workspaceStatusBuckets caches each workspace's aggregated state bucket. The descriptor
 	// carries it, and a listing builds one descriptor per row, so aggregating every agent per
 	// row would turn one response into N record scans. Refreshed wherever an agent or a
@@ -2413,7 +2428,8 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
-		mp.session.SetNextClientMessageID(normalizeClientMessageID(req.ClientMessageID))
+		initialClientMessageID := normalizeClientMessageID(req.ClientMessageID)
+		mp.session.SetNextClientMessageID(initialClientMessageID)
 		createdImages := make([]pi.ImageContent, 0, len(req.Images))
 		for _, img := range req.Images {
 			if img.Data == "" {
@@ -2423,6 +2439,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 		createdText := appendAttachmentHints(*req.InitialPrompt, req.Attachments)
 		_ = mp.session.Prompt(ctx, createdText, createdImages)
+		s.appendSubmittedPromptRow(mp.record, mp.session, initialClientMessageID, createdText)
 		s.mu.Lock()
 		mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -2508,6 +2525,11 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(mp.record)
 
+	// The row goes in after the prompt is accepted but before the turn can be observed: the provider
+	// may echo it late or not at all, and the client that just sent it must be able to see it (and
+	// rewind to it) either way. Writing it after Prompt also covers the commands the provider
+	// answers itself — those come back with a row already, and storeSubmittedPromptRow leaves it
+	// alone, which is what keeps a rewind trigger off a message the provider never took ownership of.
 	mp.session.SetNextClientMessageID(clientMsgID)
 	// Node's steerOrReplaceActiveTurn returns {status:"inactive"} when the agent has no
 	// active turn, and the caller then starts a normal turn. Steering unconditionally
@@ -2556,6 +2578,13 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 		})
 		return
 	}
+
+	// The row goes in once the prompt is accepted but before the turn is observed: the provider may
+	// echo it late (the mock's "Delay synthetic user message by" directive) or never, and the client
+	// that just sent it has to be able to fetch the timeline and find it. A command the provider
+	// answers itself already wrote its own row inside Prompt, and storeSubmittedPromptRow leaves that
+	// one alone — which is what keeps a rewind trigger off a message the provider never owned.
+	s.appendSubmittedPromptRow(mp.record, mp.session, clientMsgID, text)
 
 	// A provider can accept the prompt and never start the turn. Without this wait the client shows
 	// "working" with no way to tell it apart from a hung agent, and the message appears to vanish.
@@ -3118,6 +3147,17 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		case "byspace_stream_timeline":
 			seq, _ := ev["seq"].(int)
 			turnID, _ := ev["turnId"].(string)
+			// The provider's echo of a submitted prompt is the row the daemon already wrote, so it is
+			// not a new transcript entry: node reconciles the echo onto the submitted row at ingestion
+			// and dispatches the row once. Broadcasting it again would render the same message twice
+			// (the stream conformance test counts these) and move the client's copy from the row it
+			// submitted onto a second one. Timeline fetches pick the echo up through dedupe, so the
+			// client still ends up with the provider's message id.
+			if item, ok := ev["item"].(sdk.TimelineItem); ok && item.Type == "user_message" && item.ClientMessageID != "" {
+				if own := s.submittedPromptSeq(rec.ID, item.ClientMessageID); own != 0 && own != seq {
+					break
+				}
+			}
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
@@ -4186,6 +4226,7 @@ func (s *Server) broadcastCheckoutStatusUpdate(ctx context.Context, cwd string) 
 		return
 	}
 	st := workspace.GetCheckoutStatus(ctx, cwd, "")
+	s.storeCheckoutGitRuntimeFromStatus(cwd, st)
 	s.broadcastSessionMsg("checkout_status_update", st)
 }
 

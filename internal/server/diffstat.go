@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/ByteTrue/byspace/internal/store"
@@ -90,4 +91,93 @@ func (s *Server) broadcastWorkspaceForCwd(cwd string) {
 		s.broadcastWorkspaceUpsert(*match, project)
 		return
 	}
+}
+
+// checkoutGitRuntime reads the last observed git runtime for a checkout.
+//
+// Same tradeoff as checkoutDiffStat: the descriptor is built per row on every listing, so asking
+// git here would run several processes per response. The subscription poller and the explicit
+// refresh write this, and both are already reading the checkout status for their own pushes.
+func (s *Server) checkoutGitRuntime(cwd string) map[string]any {
+	key := strings.TrimSpace(cwd)
+	if key == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.checkoutGitRuntimes[key]
+}
+
+// buildGitRuntime shapes the descriptor's gitRuntime field from a checkout status.
+func buildGitRuntime(status workspace.CheckoutStatus) map[string]any {
+	if !status.IsGit {
+		return nil
+	}
+	branch := any("")
+	if status.CurrentBranch != nil {
+		branch = *status.CurrentBranch
+	}
+	runtime := map[string]any{
+		"currentBranch": branch,
+		"remoteUrl":     nil,
+		"isDirty":       false,
+	}
+	if status.RemoteURL != nil && *status.RemoteURL != "" {
+		runtime["remoteUrl"] = *status.RemoteURL
+	}
+	if status.IsDirty != nil {
+		runtime["isDirty"] = *status.IsDirty
+	}
+	if status.AheadBehind != nil {
+		runtime["aheadBehind"] = status.AheadBehind
+	}
+	if status.AheadOfOrigin != nil {
+		runtime["aheadOfOrigin"] = *status.AheadOfOrigin
+	}
+	if status.BehindOfOrigin != nil {
+		runtime["behindOfOrigin"] = *status.BehindOfOrigin
+	}
+	return runtime
+}
+
+// sameGitRuntime compares two runtimes by their observable fields. Building a fresh map on every
+// poll means pointer comparison would always differ and every poll would push.
+func sameGitRuntime(left, right map[string]any) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	return string(leftJSON) == string(rightJSON)
+}
+
+// storeCheckoutGitRuntimeFromStatus records one checkout's git runtime and re-broadcasts the
+// workspace when it changed.
+//
+// The app derives the command center's branch, the dirty dot and the ahead/behind counts from
+// gitRuntime, and it only learns new values from pushes. A workspace record's branch is fixed at
+// creation, so without this a checkout that switched branches keeps naming the old one. Takes an
+// already-read status so callers that read git themselves do not pay for a second process.
+func (s *Server) storeCheckoutGitRuntimeFromStatus(cwd string, status workspace.CheckoutStatus) {
+	key := strings.TrimSpace(cwd)
+	if key == "" {
+		return
+	}
+	runtime := buildGitRuntime(status)
+
+	s.mu.Lock()
+	if s.checkoutGitRuntimes == nil {
+		s.checkoutGitRuntimes = make(map[string]map[string]any)
+	}
+	previous := s.checkoutGitRuntimes[key]
+	s.checkoutGitRuntimes[key] = runtime
+	s.mu.Unlock()
+
+	if sameGitRuntime(previous, runtime) {
+		return
+	}
+	s.broadcastWorkspaceForCwd(key)
 }

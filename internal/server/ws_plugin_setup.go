@@ -739,6 +739,12 @@ func (s *Server) workspaceDescriptor(ws store.WorkspaceRecord, prj store.Project
 	if stat := s.checkoutDiffStat(ws.Cwd); stat != nil {
 		out["diffStat"] = stat
 	}
+	// A checkout's branch, dirtiness and remote are only known from git, and the stored record's
+	// branch is set at creation and never tracks a later checkout. The composer's command center
+	// reads gitRuntime.currentBranch, so a stale value names a branch the user left.
+	if runtime := s.checkoutGitRuntime(ws.Cwd); runtime != nil {
+		out["gitRuntime"] = runtime
+	}
 	return out
 }
 

@@ -385,7 +385,7 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 		},
 	})
 	_ = ws.Write(ctx, websocket.MessageText, impReq)
-	impCreated := readUntilSessionType(t, ctx, ws, "status", "agent_created")
+	impCreated := readUntilSessionType(t, ctx, ws, "status", "agent_resumed")
 	impAgentID, _ := impCreated["agentId"].(string)
 
 	tlReq, _ := json.Marshal(map[string]any{

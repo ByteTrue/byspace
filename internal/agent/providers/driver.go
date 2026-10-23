@@ -341,7 +341,11 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 	for _, spec := range BuiltinProviders {
 		builtinSet[spec.ID] = true
 		avail := IsBinaryAvailable(spec, piCommandOverride)
-		enabled := avail && spec.ID != "omp"
+		// `enabled` is the user's switch, not a verdict on the CLI: the app filters its provider
+		// lists by it, so deriving it from availability hid every provider whose binary was not on
+		// PATH — the import sheet asked only the survivors and read the silence as "no history".
+		// Availability belongs in `status`, which is what the UI renders as "not installed".
+		enabled := true
 		if override, ok := customProviders[spec.ID].(map[string]any); ok {
 			if en, hasEn := override["enabled"].(bool); hasEn {
 				enabled = en

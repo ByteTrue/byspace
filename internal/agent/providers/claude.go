@@ -721,22 +721,25 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]sdk.I
 		if len(out) >= limit {
 			break
 		}
-		entries, cwd, title := parseClaudeJSONLMeta(f.path, f.mtime)
-		if len(entries) == 0 {
+		meta := parseClaudeSessionMeta(f.path, f.mtime)
+		if len(meta.entries) == 0 {
 			continue
 		}
-		if cwdFilter != "" && cwd != "" && cwd != cwdFilter {
+		if cwdFilter != "" && meta.cwd != "" && meta.cwd != cwdFilter {
 			continue
 		}
-		if title == "" {
-			title = "Claude Session"
+		// The handle is the session id the transcript records, which is what importing and
+		// deduplicating an already-imported session key off. The file path was both unstable (the
+		// encoded project directory moves with CLAUDE_CONFIG_DIR) and meaningless to the client.
+		if meta.handle == "" {
+			continue
 		}
-		titleCopy := title
+		titleCopy := meta.displayTitle()
 		out = append(out, sdk.ImportableSession{
 			Provider:         "claude",
 			ProviderLabel:    "Claude Code",
-			ProviderHandleID: f.path,
-			Cwd:              cwd,
+			ProviderHandleID: meta.handle,
+			Cwd:              meta.cwd,
 			Title:            titleCopy,
 			LastActivityAt:   f.mtime.UTC().Format(time.RFC3339Nano),
 		})
@@ -750,15 +753,66 @@ func LoadClaudeTimelineFromJSONL(filePath string) ([]sdk.TimelineEntry, error) {
 	return entries, nil
 }
 
+// LoadClaudeTranscript returns the replayable entries plus the cwd and title the transcript recorded.
+//
+// Importing needs all three at once: the entries seed the timeline, the cwd decides which workspace
+// the agent belongs to, and the title is what the sidebar shows before the first turn.
+func LoadClaudeTranscript(filePath string) ([]sdk.TimelineEntry, string, string, error) {
+	entries, cwd, title := parseClaudeJSONLMeta(filePath, time.Now())
+	return entries, cwd, title, nil
+}
+
+// claudeSessionMeta is everything the import sheet shows for one transcript.
+//
+// The handle is the session id, not the file path: the file lives under an encoded directory the
+// client never sees, and importing by path made the picker row ids depend on where Claude happened
+// to write the transcript.
+type claudeSessionMeta struct {
+	entries []sdk.TimelineEntry
+	cwd     string
+	// handle is the sessionId the transcript records. Empty when the file never carried one.
+	handle string
+	title  string
+	// customTitle and aiTitle are the names Claude itself assigned; they win over the first prompt.
+	customTitle string
+	aiTitle     string
+	firstPrompt string
+}
+
 func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.TimelineEntry, string, string) {
+	meta := parseClaudeSessionMeta(filePath, fallbackTime)
+	return meta.entries, meta.cwd, meta.displayTitle()
+}
+
+// displayTitle is the name the import sheet shows: Claude's own title when the transcript has one,
+// the first prompt otherwise. The file-reading pass finds the prompt first, so preferring the real
+// title has to happen here rather than at the moment each line is read.
+func (m claudeSessionMeta) displayTitle() string {
+	for _, candidate := range []string{m.customTitle, m.aiTitle, m.firstPrompt} {
+		if trimmed := strings.TrimSpace(candidate); trimmed != "" {
+			return trimmed
+		}
+	}
+	if m.handle != "" {
+		short := m.handle
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		return "Claude session " + short
+	}
+	return "Claude Session"
+}
+
+// parseClaudeSessionMeta reads one transcript into both the replayable entries and the descriptor
+// the import sheet needs.
+func parseClaudeSessionMeta(filePath string, fallbackTime time.Time) claudeSessionMeta {
+	var meta claudeSessionMeta
 	f, err := os.Open(filePath)
 	if err != nil {
-		return nil, "", ""
+		return meta
 	}
 	defer f.Close()
 
-	var entries []sdk.TimelineEntry
-	var cwd, title string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
@@ -766,8 +820,26 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 		if json.Unmarshal(sc.Bytes(), &row) != nil {
 			continue
 		}
-		if c, ok := row["cwd"].(string); ok && c != "" && cwd == "" {
-			cwd = c
+		if c, ok := row["cwd"].(string); ok && c != "" && meta.cwd == "" {
+			meta.cwd = c
+		}
+		if id, ok := row["sessionId"].(string); ok && id != "" && meta.handle == "" {
+			meta.handle = id
+		}
+		rType, _ := row["type"].(string)
+		// Two record kinds carry a name and no message: they are how Claude stores the title the
+		// user or the model gave the session.
+		switch rType {
+		case "custom-title":
+			if t, ok := row["customTitle"].(string); ok && strings.TrimSpace(t) != "" {
+				meta.customTitle = strings.TrimSpace(t)
+			}
+			continue
+		case "ai-title":
+			if t, ok := row["aiTitle"].(string); ok && strings.TrimSpace(t) != "" {
+				meta.aiTitle = strings.TrimSpace(t)
+			}
+			continue
 		}
 		// The timestamp is not always a string: some transcripts carry an epoch number, and an
 		// unparseable one used to be dropped silently — every message then got the same fallback time
@@ -776,7 +848,6 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 		if ts == "" {
 			ts = fallbackTime.UTC().Format(time.RFC3339Nano)
 		}
-		rType, _ := row["type"].(string)
 		msg, _ := row["message"].(map[string]any)
 		if msg == nil {
 			continue
@@ -784,11 +855,11 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 		switch rType {
 		case "user":
 			if txt, ok := msg["content"].(string); ok && txt != "" {
-				if title == "" {
-					title = txt
+				if meta.firstPrompt == "" {
+					meta.firstPrompt = txt
 				}
-				entries = append(entries, sdk.TimelineEntry{
-					Seq:       len(entries) + 1,
+				meta.entries = append(meta.entries, sdk.TimelineEntry{
+					Seq:       len(meta.entries) + 1,
 					Timestamp: ts,
 					Item:      sdk.TimelineItem{Type: "user_message", Text: txt},
 				})
@@ -802,8 +873,8 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 					}
 					if b["type"] == "text" {
 						if t, _ := b["text"].(string); t != "" {
-							entries = append(entries, sdk.TimelineEntry{
-								Seq:       len(entries) + 1,
+							meta.entries = append(meta.entries, sdk.TimelineEntry{
+								Seq:       len(meta.entries) + 1,
 								Timestamp: ts,
 								Item:      sdk.TimelineItem{Type: "assistant_message", Text: t},
 							})
@@ -813,7 +884,7 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.Timeli
 			}
 		}
 	}
-	return entries, cwd, title
+	return meta
 }
 
 // parentToolUseID returns the subagent a message came from, or "".
