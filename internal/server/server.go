@@ -1866,7 +1866,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		}
 		s.handleWorkspaceCreateFromWorktree(ctx, sink, req.RequestID, projectRoot, req.Title, worktreeSourceIntentInput(req.Source.Action, req.Source.RefName,
 			req.Source.BaseBranch, req.Source.BranchName, req.Source.WorktreeSlug,
-			req.Source.CheckoutSource, req.Source.GithubPRNumber))
+			req.Source.CheckoutSource, req.Source.GithubPRNumber), req.FirstAgentContext)
 		return
 	}
 
@@ -1911,7 +1911,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 	if setupSkippedReason != nil {
 		respPayload["setupSkippedReason"] = setupSkippedReason
 	}
-	s.broadcastWorkspaceUpsert(ws, prj)
+	s.broadcastWorkspaceUpsertStatus(ws, prj, createdWorkspaceStatusOverride(req.FirstAgentContext))
 	s.broadcastCheckoutStatusUpdate(ctx, ws.Cwd)
 	if req.FirstAgentContext != nil {
 		respPayload["firstAgentContext"] = req.FirstAgentContext
@@ -4048,6 +4048,17 @@ func (s *Server) directorySyncMetadataWithReason(mode, reason string) map[string
 // The app maintains a directory replica and applies these deltas; without them the sidebar
 // only changes on a full fetch, so an archived or newly created workspace lingers until reload.
 func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.ProjectRecord) {
+	s.broadcastWorkspaceUpsertStatus(ws, prj, "")
+}
+
+// broadcastWorkspaceUpsertStatus is broadcastWorkspaceUpsert with the status overridden.
+//
+// The override exists for one case: a workspace created together with its first agent. The
+// stored record has no status of its own, and its first agent does not exist yet, so the honest
+// descriptor is `done` — but only for the few hundred milliseconds until the agent is created,
+// and the sidebar would flash the new workspace in the Done group and then move it to Running.
+// Node emits the create update with `status: "running"` for the same reason.
+func (s *Server) broadcastWorkspaceUpsertStatus(ws store.WorkspaceRecord, prj store.ProjectRecord, status string) {
 	if ws.ArchivedAt != nil {
 		archivedAt := ""
 		if ws.ArchivedAt != nil {
@@ -4056,13 +4067,30 @@ func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.Pr
 		s.broadcastSessionMsg("workspace_update", s.archiveRemovePayload(ws.WorkspaceID, ws.ProjectID, archivedAt))
 		return
 	}
+	descriptor := s.workspaceDescriptor(ws, prj)
+	if status != "" {
+		descriptor["status"] = status
+	}
 	catalog := s.store.LoadLabelCatalog()
 	s.broadcastSessionMsg("workspace_update", map[string]any{
 		"kind":       "upsert",
-		"workspace":  s.workspaceDescriptor(ws, prj),
+		"workspace":  descriptor,
 		"generation": catalog.Generation,
 		"seq":        catalog.HeadSeq + 1,
 	})
+}
+
+// createdWorkspaceStatusOverride returns the status a synchronously created workspace announces.
+//
+// A create request carrying a first agent is a single user action that produces two records, and
+// only the workspace exists when the update goes out. Announcing `done` there is what made the
+// sidebar group a brand-new, still-initialising workspace under Done. Empty means "use the stored
+// status".
+func createdWorkspaceStatusOverride(firstAgentContext any) string {
+	if firstAgentContext == nil {
+		return ""
+	}
+	return "running"
 }
 
 // broadcastCheckoutStatusUpdate pushes a fresh git status for one checkout.

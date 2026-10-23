@@ -1766,6 +1766,7 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	projectRoot string,
 	title *string,
 	intentInput workspace.WorktreeIntentInput,
+	firstAgentContext any,
 ) {
 	// Resolve through the same resolver the worktree RPCs use: the client speaks action + refName +
 	// checkoutSource, and reading only some of those fields silently dropped the branch the user
@@ -1828,7 +1829,7 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 		UpdatedAt:              now,
 	}
 	_ = s.store.UpsertWorkspace(wsRec)
-	s.broadcastWorkspaceUpsert(wsRec, prj)
+	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(firstAgentContext))
 
 	// Record what the worktree was cut from, inside the worktree. Both create paths must write it:
 	// the client reads it back to show the base, and the daemon uses it to pick the diff base

@@ -566,7 +566,7 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		}
 	}
 	_ = s.store.UpsertWorkspace(wsRec)
-	s.broadcastWorkspaceUpsert(wsRec, prj)
+	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(req.FirstAgentContext))
 	s.writeCreatedWorktreeMetadata(wtPath, intent, branch)
 	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)
 
