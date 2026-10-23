@@ -58,11 +58,13 @@ func TestListenTargetAddress(t *testing.T) {
 
 // A socket file left by a crashed daemon must not block the next start.
 func TestSocketListenReplacesStaleFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// A socket path is refused on Windows: the platform listens on named pipes, and a drive
+		// path is the very input ParseListenTarget rejects as "a Windows path is not a socket".
+		t.Skip("unix socket paths are not a Windows listen target")
+	}
 	// A short path: t.TempDir() on macOS is already longer than the 104-byte socket limit.
 	shortRoot := "/tmp"
-	if runtime.GOOS == "windows" {
-		shortRoot = os.TempDir()
-	}
 	dir, err := os.MkdirTemp(shortRoot, "bys")
 	if err != nil {
 		t.Fatal(err)

@@ -27,8 +27,14 @@ func TestClaudeProjectDirEncoding(t *testing.T) {
 	}
 
 	// Every character outside [a-zA-Z0-9] becomes one dash, including a literal dash.
-	if got := filepath.Base(ClaudeProjectDir("/a-b/c.d e", "/cfg")); got != "-a-b-c-d-e" {
-		t.Fatalf("got %q", got)
+	dashed, wantDashed := "/a-b/c.d e", "-a-b-c-d-e"
+	if runtime.GOOS == "windows" {
+		// The literal has to be absolute for the platform under test: a bare "/a-b/..." is
+		// resolved against the current drive first, and the drive letter is encoded too.
+		dashed, wantDashed = `C:\a-b\c.d e`, "C--a-b-c-d-e"
+	}
+	if got := filepath.Base(ClaudeProjectDir(dashed, "/cfg")); got != wantDashed {
+		t.Fatalf("got %q, want %q", got, wantDashed)
 	}
 }
 

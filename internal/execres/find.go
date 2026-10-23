@@ -134,9 +134,33 @@ func resolveWindowsCandidate(base string) string {
 	return ""
 }
 
-// isExecutable reports whether a file has an executable bit.
+// isExecutable reports whether a file is a program.
+//
+// Windows has no executable bit: every regular file reports mode 0666 (or 0444 when read-only), so a
+// permission check finds nothing and every provider CLI looks uninstalled. There the extension is the
+// executable bit, and PATHEXT is what defines it.
 func isExecutable(info os.FileInfo) bool {
+	if runtime.GOOS == "windows" {
+		return isWindowsExecutableExtension(filepath.Ext(info.Name()))
+	}
 	return info.Mode()&0o111 != 0
+}
+
+// isWindowsExecutableExtension reports whether ext is one of PATHEXT's entries.
+func isWindowsExecutableExtension(ext string) bool {
+	if ext == "" {
+		return false
+	}
+	pathext := os.Getenv("PATHEXT")
+	if pathext == "" {
+		pathext = ".COM;.EXE;.BAT;.CMD"
+	}
+	for _, candidate := range strings.Split(pathext, ";") {
+		if strings.EqualFold(strings.TrimSpace(candidate), ext) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsCommandAvailable reports whether a working binary exists for a command.

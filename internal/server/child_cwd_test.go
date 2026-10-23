@@ -29,7 +29,7 @@ func TestResolveChildCwd(t *testing.T) {
 		t.Fatalf("absolute = %q", got)
 	}
 	// ".." resolves inside the parent rather than escaping to the daemon's cwd.
-	if got := resolveChildCwd(parent, "../other"); got != "/repo/worktrees/other" {
+	if got, want := resolveChildCwd(parent, "../other"), filepath.Join(parent, "..", "other"); got != want {
 		t.Fatalf("parent-relative = %q", got)
 	}
 }
