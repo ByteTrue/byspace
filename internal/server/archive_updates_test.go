@@ -37,9 +37,16 @@ func TestArchiveRemovePayloadCarriesEmptyProject(t *testing.T) {
 		t.Fatal("a project whose only workspace is archived reported active")
 	}
 
-	payload := srv.archiveRemovePayload("ws_1", "prj_1", archivedAt)
+	payload := srv.archiveRemovePayload("ws_1", "prj_1")
 	if payload["kind"] != "remove" || payload["id"] != "ws_1" {
 		t.Fatalf("payload = %+v", payload)
+	}
+	// A `projectId` next to `kind:"remove"` makes the client take its project-removal branch, which deletes the
+	// project and every workspace under it — exactly the bug this payload exists to avoid.
+	for _, forbidden := range []string{"projectId", "projectRoot", "archivedAt"} {
+		if _, has := payload[forbidden]; has {
+			t.Fatalf("remove payload must not carry %q: %+v", forbidden, payload)
+		}
 	}
 	empty, ok := payload["emptyProject"].(map[string]any)
 	if !ok {
@@ -71,7 +78,7 @@ func TestArchiveRemovePayloadOmitsEmptyProjectWhenSiblingActive(t *testing.T) {
 	if _, err := srv.store.ArchiveWorkspace("ws_1", "2026-01-02T00:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	payload := srv.archiveRemovePayload("ws_1", "prj_1", "2026-01-02T00:00:00Z")
+	payload := srv.archiveRemovePayload("ws_1", "prj_1")
 	if _, has := payload["emptyProject"]; has {
 		t.Fatalf("emptyProject claimed while a sibling is active: %+v", payload)
 	}

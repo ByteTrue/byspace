@@ -4148,11 +4148,7 @@ func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.Pr
 // Node emits the create update with `status: "running"` for the same reason.
 func (s *Server) broadcastWorkspaceUpsertStatus(ws store.WorkspaceRecord, prj store.ProjectRecord, status string) {
 	if ws.ArchivedAt != nil {
-		archivedAt := ""
-		if ws.ArchivedAt != nil {
-			archivedAt = *ws.ArchivedAt
-		}
-		s.broadcastSessionMsg("workspace_update", s.archiveRemovePayload(ws.WorkspaceID, ws.ProjectID, archivedAt))
+		s.broadcastSessionMsg("workspace_update", s.archiveRemovePayload(ws.WorkspaceID, ws.ProjectID))
 		return
 	}
 	descriptor := s.workspaceDescriptor(ws, prj)

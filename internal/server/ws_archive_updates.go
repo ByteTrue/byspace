@@ -6,15 +6,17 @@ package server
 // message; when that workspace was its project's last active one, the project is left with no children and the
 // sidebar removes it too — which is why archiving a workspace looked like deleting its project. `emptyProject` tells
 // the client the project still exists, so it stays visible.
-func (s *Server) archiveRemovePayload(wsID, projectID, archivedAt string) map[string]any {
+//
+// Only the fields the wire schema declares. The client routes a delta containing `projectId` (or `project`) to its
+// project handler before it looks at `kind`, and that handler reads `kind:"remove"` as "the project is gone" — so a
+// stray `projectId` here deletes the project and every workspace under it. Node sends nothing but these three fields
+// for the same reason.
+func (s *Server) archiveRemovePayload(wsID, projectID string) map[string]any {
 	payload := map[string]any{
-		"kind":       "remove",
-		"id":         wsID,
-		"projectId":  projectID,
-		"archivedAt": archivedAt,
+		"kind": "remove",
+		"id":   wsID,
 	}
 	if prj, ok := s.projectForWorkspace(projectID); ok {
-		payload["projectRoot"] = prj.RootPath
 		if s.projectHasNoActiveWorkspaces(projectID) {
 			payload["emptyProject"] = buildProjectDescriptor(prj)
 		}
@@ -55,11 +57,12 @@ func (s *Server) broadcastProjectRemoved(projectID string, removedWorkspaceIDs [
 	if len(targets) == 0 {
 		targets = []string{projectID}
 	}
+	// No `projectId` alongside `removedProjectId`: the client dispatches on `projectId` first and would take the
+	// project-removal branch, which never clears the archived-agent bookkeeping the workspace branch does.
 	for _, target := range targets {
 		s.broadcastSessionMsg("workspace_update", map[string]any{
 			"kind":             "remove",
 			"id":               target,
-			"projectId":        projectID,
 			"removedProjectId": projectID,
 		})
 	}

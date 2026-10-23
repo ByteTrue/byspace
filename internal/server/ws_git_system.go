@@ -78,8 +78,11 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 
 	case "checkout.refresh.request":
 		// Recompute what the caller can see, then answer. Node's refresh invalidates the forge
-		// service and forces a snapshot re-read for the same reason: a client asking for a refresh
-		// is asking for current facts, not ack of the request.
+		// service and re-reads the workspace snapshot with force: the client asking for a
+		// refresh is asking for current facts, not an ack of the request. Re-reading the snapshot
+		// is what picks up a branch the user switched in a terminal — without it the record keeps
+		// the branch it was created on and every list shows a stale name.
+		s.refreshWorkspacePlacementAtCwd(ctx, base.Cwd)
 		s.broadcastCheckoutStatusUpdate(ctx, base.Cwd)
 		s.refreshCheckoutDiffStat(ctx, base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "checkout.refresh.response", map[string]any{
