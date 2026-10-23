@@ -349,12 +349,18 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 		// by hand is what left an archived agent with a permanent unread dot.
 		archived := store.BuildArchivedAgentRecord(*rec, now)
 		_ = s.store.UpsertAgent(archived)
+		// The archive has to reach every socket, not just the caller: the directory store on each
+		// client decides which workspace tabs to keep from the archived flag, so a silent write
+		// leaves the archived conversation open everywhere else.
+		s.broadcastAgentUpdate(archived)
 	}
 	// Archiving a conversation must not leave its subagents running: they would keep spending
 	// tokens and holding provider processes for a conversation the user removed.
 	s.cascadeArchiveChildren(req.AgentID)
 
-	_ = sendSessionMsg(ctx, sink, "agent_archived", map[string]any{
+	// Broadcast rather than reply: the client that asked waits for `agent_archived` with its own
+	// requestId, and every other socket needs the same fact to prune the tab.
+	s.broadcastSessionMsg("agent_archived", map[string]any{
 		"agentId":    req.AgentID,
 		"archivedAt": now,
 		"requestId":  req.RequestID,

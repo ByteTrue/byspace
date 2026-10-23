@@ -3312,6 +3312,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			if shouldBadge {
 				s.markAgentAttention(mp.record.ID, AttentionReasonFinished, nowStr)
 			}
+			// recCopy predates the attention flag, and the snapshot below is the last word the
+			// client hears about this turn: sending the stale copy retracted the badge that
+			// markAgentAttention just published, leaving the row with nothing to clear.
+			s.mu.Lock()
+			recCopy = mp.record
+			s.mu.Unlock()
 			go s.syncPiPersistence(mp)
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
@@ -3414,9 +3420,9 @@ func (s *Server) syncPiPersistence(mp *managedPi) {
 
 func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
 	// The sidebar groups workspaces by an aggregate of their agents' buckets, and the descriptor
-	// only carries that aggregate. Refreshing here keeps it honest for the workspace pushes that
-	// follow, and this is the one funnel every agent state change goes through.
-	s.refreshWorkspaceStatusBuckets()
+	// only carries that aggregate. Publishing after the agent snapshot keeps the two consistent for
+	// whoever listens to both, and this is the one funnel every agent state change goes through.
+	s.publishWorkspaceStatusChanges()
 	s.broadcastSessionMsg("agent_update", map[string]any{
 		"kind":    "upsert",
 		"agent":   s.buildAgentSnapshotPayload(rec),

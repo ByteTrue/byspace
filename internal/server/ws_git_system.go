@@ -949,9 +949,11 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		for _, id := range req.AgentIDs {
 			rec, _ := s.store.GetAgent(id)
 			if rec != nil {
-				rec.ArchivedAt = &now
-				rec.UpdatedAt = now
-				_ = s.store.UpsertAgent(*rec)
+				archived := store.BuildArchivedAgentRecord(*rec, now)
+				_ = s.store.UpsertAgent(archived)
+				// Closing a tab is an archive: other clients prune the same tab from this update, and a
+				// silent store write left the conversation open on every socket but the one that asked.
+				s.broadcastAgentUpdate(archived)
 				agentResults = append(agentResults, map[string]any{
 					"agentId":    id,
 					"archivedAt": now,

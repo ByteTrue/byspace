@@ -129,16 +129,52 @@ func (s *Server) overlayLoadedAgentRecords(active map[string]store.AgentRecord) 
 	return counts
 }
 
-// refreshWorkspaceStatusBuckets recomputes the cache that workspaceDescriptor reads.
+// refreshWorkspaceStatusBuckets recomputes the cache that workspaceDescriptor reads and returns
+// the workspaces whose bucket changed.
 //
 // Called wherever an agent record or a pending permission can change. Kept as a cache rather than
 // computed per descriptor because a workspace list builds one descriptor per row, and re-reading
 // every agent record per row would turn one response into N directory scans.
-func (s *Server) refreshWorkspaceStatusBuckets() {
+func (s *Server) refreshWorkspaceStatusBuckets() map[string]string {
 	buckets := s.computeWorkspaceStatusBuckets()
+	changed := make(map[string]string)
 	s.mu.Lock()
+	for workspaceID, bucket := range buckets {
+		if previous, ok := s.workspaceStatusBuckets[workspaceID]; !ok || previous != bucket {
+			changed[workspaceID] = bucket
+		}
+	}
 	s.workspaceStatusBuckets = buckets
 	s.mu.Unlock()
+	return changed
+}
+
+// publishWorkspaceStatusChanges pushes an upsert for every workspace whose bucket moved.
+//
+// The sidebar indicator reads the derived status the client computes from agent snapshots, but the
+// workspace menu decides whether to offer "Mark as read" from `workspace.status` on the descriptor
+// it already holds. Recomputing the cache without telling anyone left those two views disagreeing:
+// the row showed attention while the menu still believed the workspace was done.
+func (s *Server) publishWorkspaceStatusChanges() {
+	changed := s.refreshWorkspaceStatusBuckets()
+	if len(changed) == 0 {
+		return
+	}
+	namespaces, err := s.store.ListWorkspaces()
+	if err != nil {
+		return
+	}
+	projects, _ := s.store.ListProjects()
+	projectsByID := make(map[string]store.ProjectRecord, len(projects))
+	for _, prj := range projects {
+		projectsByID[prj.ProjectID] = prj
+	}
+	for _, ws := range namespaces {
+		if _, ok := changed[ws.WorkspaceID]; !ok {
+			continue
+		}
+		s.broadcastWorkspaceUpsert(ws, projectsByID[ws.ProjectID])
+	}
 }
 
 // workspaceStatus returns the cached bucket for a workspace, defaulting to done.

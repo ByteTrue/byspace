@@ -34,6 +34,8 @@ var selfLockingMethods = map[string]bool{
 	"servicePeers":                  true,
 	"projectForWorkspace":           true,
 	"refreshWorkspaceStatusBuckets": true,
+	"publishWorkspaceStatusChanges": true,
+	"broadcastWorkspaceUpsert":      true,
 	"workspaceStatus":               true,
 }
 
