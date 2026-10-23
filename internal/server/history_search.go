@@ -92,6 +92,68 @@ func scoreAgentHistoryCandidate(query string, rec store.AgentRecord, placement m
 	return total, true
 }
 
+// agentSearchFieldNames is match field order, and the wire names the client keys spans by.
+var agentSearchFieldNames = []string{"workspace", "title", "branch", "project"}
+
+// describeAgentHistoryMatches reports where the query landed in each field of a row that the
+// ranker kept. Only the rows that get rendered need this, so it re-derives rather than making
+// ranking carry ranges it never uses.
+func describeAgentHistoryMatches(query string, rec store.AgentRecord, placement map[string]any) []any {
+	fields := agentSearchFields(rec, placement)
+	tokens := match.TokenizeQuery(query)
+	if len(tokens) == 0 {
+		return []any{}
+	}
+	byField := make(map[string][]match.Range)
+	order := make([]string, 0, len(agentSearchFieldNames))
+	for _, token := range tokens {
+		fieldRank := -1
+		var best *match.Score
+		for rank, field := range fields {
+			if strings.TrimSpace(field) == "" {
+				continue
+			}
+			score := match.Match(token, field, match.PolicyForToken(token))
+			if score == nil {
+				continue
+			}
+			if best == nil || match.CompareScore(score, best) < 0 {
+				best, fieldRank = score, rank
+			}
+		}
+		if best == nil || fieldRank < 0 || fieldRank >= len(agentSearchFieldNames) {
+			continue
+		}
+		name := agentSearchFieldNames[fieldRank]
+		if _, seen := byField[name]; !seen {
+			order = append(order, name)
+		}
+		byField[name] = append(byField[name], match.Ranges(token, fields[fieldRank], best)...)
+	}
+
+	matches := make([]any, 0, len(order))
+	for _, name := range order {
+		merged := make([]match.Range, 0, len(byField[name]))
+		ranges := byField[name]
+		sort.Slice(ranges, func(i, j int) bool { return ranges[i].Start < ranges[j].Start })
+		for _, r := range ranges {
+			if last := len(merged) - 1; last >= 0 && r.Start <= merged[last].Start+merged[last].Length {
+				if end := r.Start + r.Length; end > merged[last].Start+merged[last].Length {
+					merged[last].Length = end - merged[last].Start
+				}
+				continue
+			}
+			merged = append(merged, r)
+		}
+		spanList := make([]any, 0, len(merged))
+		for _, r := range merged {
+			spanList = append(spanList, map[string]any{"start": r.Start, "length": r.Length})
+		}
+		matches = append(matches, map[string]any{"field": name, "ranges": spanList})
+	}
+	return matches
+}
+
 // rankAgentsBySearch returns the records matching query, best first.
 //
 // Records whose score ties keep their incoming order (stable sort), so the caller's own

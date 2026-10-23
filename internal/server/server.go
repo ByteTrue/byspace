@@ -1209,28 +1209,37 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		_ = json.Unmarshal(raw, &req)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		if req.IfNoneMatch != "" && req.IfNoneMatch == s.providerSnapshotTag() {
-			_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
-				"requestId":   base.RequestID,
-				"generatedAt": now,
-				"notModified": true,
-				"entries":     []any{},
-			})
-			return
-		}
 		models := s.probeOrCachedPiModels(ctx)
 		cfg := s.store.LoadDaemonConfig()
 		customProvs, _ := cfg["providers"].(map[string]any)
 		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
+		// The hash covers the entries alone. Comparing `ifNoneMatch` against a tag built from the
+		// daemon identity reported "not modified" after a providers edit, so a removed provider
+		// stayed visible in the sheet until something else invalidated it.
+		snapshotHash := providerSnapshotHash(entries)
+		fetchedAt := providerFetchedAt(entries, now)
+		if req.IfNoneMatch != "" && req.IfNoneMatch == snapshotHash {
+			// The envelope still identifies the catalog: the client reuses the cached body and
+			// needs the hash to know which one, so a bare notModified would drop the update.
+			_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
+				"requestId":    base.RequestID,
+				"generatedAt":  now,
+				"notModified":  true,
+				"entries":      []any{},
+				"snapshotHash": snapshotHash,
+				"fetchedAt":    fetchedAt,
+			})
+			return
+		}
 		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
 			"entries":     entries,
 			// snapshotHash lets the client skip re-applying an identical catalog and is what
 			// `ifNoneMatch` compares against on the next call.
-			"snapshotHash": providerSnapshotHash(entries),
+			"snapshotHash": snapshotHash,
 			// fetchedAt drives the "last refreshed" line in the providers sheet.
-			"fetchedAt": providerFetchedAt(entries, now),
+			"fetchedAt": fetchedAt,
 			// compactSnapshot is the same catalog with thinking option lists deduped; the
 			// app's provider cache reads it to avoid re-downloading identical option sets.
 			"compactSnapshot": providers.BuildCompactSnapshot(entries),
@@ -1257,24 +1266,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			s.cachedPiModelsCwd = refreshReq.Cwd
 		}
 		s.mu.Unlock()
-		models := s.probePiModelsInCwd(ctx, refreshReq.Cwd)
-		cfg := s.store.LoadDaemonConfig()
-		customProvs, _ := cfg["providers"].(map[string]any)
-		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
-		if len(refreshReq.Providers) > 0 {
-			entries = filterSnapshotEntries(entries, refreshReq.Providers)
-		}
-		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+		_ = s.probePiModelsInCwd(ctx, refreshReq.Cwd)
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
-		s.broadcastSessionMsg("providers_snapshot_update", map[string]any{
-			// `cwd` is optional, not nullable: a null makes the client drop the whole update.
-			"generatedAt":     nowStr,
-			"entries":         entries,
-			"snapshotHash":    providerSnapshotHash(entries),
-			"fetchedAt":       providerFetchedAt(entries, nowStr),
-			"compactSnapshot": providers.BuildCompactSnapshot(entries),
-		})
+		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers)
 		_ = sendSessionMsg(ctx, sink, "refresh_providers_snapshot_response", map[string]any{
 			"requestId":    base.RequestID,
 			"acknowledged": true,
@@ -1996,8 +1991,11 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	}
 	scope := strings.ToLower(strings.TrimSpace(req.Scope))
 	if scope == "" {
+		// History pages over the whole directory: Node defaults it to includeArchived, so both
+		// archived and live agents belong in the result. Defaulting to "archived" hid every
+		// session that had not been archived yet.
 		if reqType == "fetch_agent_history_request" {
-			scope = "archived"
+			scope = "all"
 		} else {
 			scope = "active"
 		}
@@ -2069,8 +2067,10 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 		// searchScore / searchMatches let the client highlight the matched span; syncSeq is the
 		// per-entry cursor the directory replica advances on change.
 		if searchQuery != "" {
-			entry["searchScore"] = 0
-			entry["searchMatches"] = []any{}
+			if score, ok := scoreAgentHistoryCandidate(searchQuery, rec, s.buildProjectPlacementForRecord(rec)); ok {
+				entry["searchScore"] = score
+			}
+			entry["searchMatches"] = describeAgentHistoryMatches(searchQuery, rec, s.buildProjectPlacementForRecord(rec))
 		}
 		entry["syncSeq"] = directorySyncSeq(rec.UpdatedAt)
 		entries = append(entries, entry)

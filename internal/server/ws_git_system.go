@@ -1356,6 +1356,12 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"requestId": req.RequestID,
 			"config":    updated,
 		})
+		// A providers edit changes the catalog every open settings sheet renders. Node pushes the
+		// rebuilt snapshot from its config-apply listeners; without it the removed provider stays
+		// on screen until the next manual refresh.
+		if patchTouchesProviders(req.Config) {
+			s.pushProviderSnapshot(ctx, updated, nil)
+		}
 
 	case "daemon.config.reload.request":
 		// Report what actually took effect. Three empty lists told the settings page nothing:

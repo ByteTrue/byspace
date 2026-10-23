@@ -963,6 +963,7 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	for k, v := range patch {
 		cur[k] = v
 	}
+	cur = dropRemovedProviders(cur)
 
 	cfgPath := filepath.Join(s.homeDir, "config.json")
 	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
@@ -982,11 +983,43 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	for k, v := range patch {
 		daemon[k] = v
 	}
+	// The removals produced this providers map; persisting the instruction too would replay it
+	// against whatever the user adds back later. The disk map is a separate graph from `cur`, so
+	// the edit has to happen here as well.
+	dropRemovedProviders(daemon)
 	disk["daemon"] = daemon
 
 	b, _ := json.MarshalIndent(disk, "", "  ")
 	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)
 	return cur
+}
+
+// dropRemovedProviders applies the `removeProviders` instruction to a merged config. It is an
+// instruction, not state: Node applies it to the merged providers map and never stores it, so a
+// later `providers` patch does not resurrect an entry the user deleted.
+func dropRemovedProviders(config map[string]any) map[string]any {
+	raw, ok := config["removeProviders"]
+	if !ok {
+		return config
+	}
+	delete(config, "removeProviders")
+	providers, _ := config["providers"].(map[string]any)
+	if providers == nil {
+		return config
+	}
+	switch ids := raw.(type) {
+	case []any:
+		for _, id := range ids {
+			if name, ok := id.(string); ok {
+				delete(providers, name)
+			}
+		}
+	case []string:
+		for _, name := range ids {
+			delete(providers, name)
+		}
+	}
+	return config
 }
 
 // CORSAllowedOrigins resolves the origins the daemon should answer cross-origin for:

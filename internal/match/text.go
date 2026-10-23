@@ -209,7 +209,7 @@ func scoreFuzzy(query, text string, policy *Policy) *Score {
 				continue
 			}
 			score := &Score{Tier: TierFuzzy, Offset: start, Spread: distance}
-			if best == nil || compareScore(score, best) < 0 {
+			if best == nil || CompareScore(score, best) < 0 {
 				best = score
 			}
 		}
@@ -217,7 +217,8 @@ func scoreFuzzy(query, text string, policy *Policy) *Score {
 	return best
 }
 
-func compareScore(left, right *Score) int {
+// CompareScore orders two scores best-first.
+func CompareScore(left, right *Score) int {
 	switch {
 	case left.Tier != right.Tier:
 		return left.Tier - right.Tier
@@ -285,6 +286,55 @@ func MatchPath(query, path string) *Score {
 		compactScore.Offset = compactPath.offsets[compactScore.Offset]
 	}
 	return compactScore
+}
+
+// Range is one marked span in a matched field.
+type Range struct {
+	Start  int
+	Length int
+}
+
+// Ranges derives where a score's match landed, so the client can mark the same glyphs the
+// ranker scored. The tier decides the shape: a substring hit is one span, a subsequence hit is
+// the scattered characters it walked, and a typo hit marks the whole word because the characters
+// the user got wrong are not in the text to point at.
+func Ranges(query, text string, score *Score) []Range {
+	if query == "" || score == nil {
+		return nil
+	}
+	q := strings.ToLower(query)
+	t := strings.ToLower(text)
+	switch score.Tier {
+	case TierExact:
+		return []Range{{Start: 0, Length: len(text)}}
+	case TierFuzzy:
+		end := score.Offset
+		for end < len(t) && !isWordBoundary(t[end]) {
+			end++
+		}
+		return []Range{{Start: score.Offset, Length: max(end-score.Offset, 1)}}
+	case TierSubsequence:
+		indices := make([]int, 0, len(q))
+		queryIndex := 0
+		for textIndex := 0; textIndex < len(t) && queryIndex < len(q); textIndex++ {
+			if t[textIndex] != q[queryIndex] {
+				continue
+			}
+			indices = append(indices, textIndex)
+			queryIndex++
+		}
+		ranges := make([]Range, 0, len(indices))
+		for _, index := range indices {
+			if last := len(ranges) - 1; last >= 0 && ranges[last].Start+ranges[last].Length == index {
+				ranges[last].Length++
+				continue
+			}
+			ranges = append(ranges, Range{Start: index, Length: 1})
+		}
+		return ranges
+	default:
+		return []Range{{Start: score.Offset, Length: len(q)}}
+	}
 }
 
 func abs(v int) int {

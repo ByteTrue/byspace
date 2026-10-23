@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/skip2/go-qrcode"
 
@@ -724,4 +725,38 @@ func (s *Server) runPlacementTick() {
 		s.runAutoArchivePass(actx)
 		acancel()
 	}
+}
+
+// pushProviderSnapshot broadcasts a rebuilt provider catalog. Every open settings sheet renders
+// from it, so a catalog change has to reach them without a manual refresh; `only` narrows the push
+// to the cards a caller touched. The push omits requestId because it answers no request.
+func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string) {
+	entries := providers.BuildSnapshotEntries(s.probeOrCachedPiModels(ctx), s.piCommand, providersFromConfig(cfg))
+	if len(only) > 0 {
+		entries = filterSnapshotEntries(entries, only)
+	}
+	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+	s.broadcastSessionMsg("providers_snapshot_update", map[string]any{
+		// `cwd` is optional, not nullable: a null makes the client drop the whole update.
+		"generatedAt":     nowStr,
+		"entries":         entries,
+		"snapshotHash":    providerSnapshotHash(entries),
+		"fetchedAt":       providerFetchedAt(entries, nowStr),
+		"compactSnapshot": providers.BuildCompactSnapshot(entries),
+	})
+}
+
+// patchTouchesProviders reports whether a config patch can change the provider catalog. A removal
+// counts even when the patch carries no providers map, which is the shape the settings page sends
+// when the user deletes a provider.
+func patchTouchesProviders(patch map[string]any) bool {
+	_, hasProviders := patch["providers"]
+	_, hasRemovals := patch["removeProviders"]
+	_, hasGeneration := patch["metadataGeneration"]
+	return hasProviders || hasRemovals || hasGeneration
+}
+
+func providersFromConfig(cfg map[string]any) map[string]any {
+	providers, _ := cfg["providers"].(map[string]any)
+	return providers
 }
