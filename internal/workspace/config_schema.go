@@ -84,10 +84,13 @@ func validateScriptEntry(name string, entry any) error {
 		if cmd, isString := command.(string); !isString || strings.TrimSpace(cmd) == "" {
 			return fmt.Errorf("scripts.%s.command: must be a non-empty string", name)
 		}
+		// Any string is a valid type: the daemon only special-cases "service" and the editor
+		// round-trips whatever it found, so policing the vocabulary would reject configs the
+		// app itself can produce. A non-string is still an error, because ReadScriptConfigs
+		// unmarshals the field into a string and would drop the whole entry.
 		if rawType, ok := value["type"]; ok && rawType != nil {
-			typeName, isString := rawType.(string)
-			if !isString || (typeName != "script" && typeName != "service") {
-				return fmt.Errorf("scripts.%s.type: must be \"script\" or \"service\"", name)
+			if _, isString := rawType.(string); !isString {
+				return fmt.Errorf("scripts.%s.type: must be a string", name)
 			}
 		}
 		return nil

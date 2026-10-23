@@ -170,7 +170,12 @@ type Server struct {
 	// descriptor carries it for the composer's diff pill, and a descriptor is built on every
 	// listing, so recomputing git there would be several processes per response.
 	checkoutDiffStats map[string]*workspace.CheckoutDiffStat
-	clients           map[frameSink]bool
+	// workspaceStatusBuckets caches each workspace's aggregated state bucket. The descriptor
+	// carries it, and a listing builds one descriptor per row, so aggregating every agent per
+	// row would turn one response into N record scans. Refreshed wherever an agent or a
+	// pending permission changes.
+	workspaceStatusBuckets map[string]string
+	clients                map[frameSink]bool
 	// timelineViews holds each socket's viewed-agent set from
 	// agent.timeline.set_subscription.request, and selectiveTimeline records which sockets
 	// declared selective_agent_timeline. Together they scope agent_stream to the chats a
@@ -1796,6 +1801,10 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 	}
 	_ = json.Unmarshal(raw, &req)
 
+	// The aggregate is derived from agent records that outlive any single broadcast, so a
+	// listing cannot rely on the last agent_update having refreshed it.
+	s.refreshWorkspaceStatusBuckets()
+
 	projects, _ := s.store.ListProjects()
 	workspaces, _ := s.store.ListWorkspaces()
 
@@ -2168,16 +2177,19 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
 		Attachments []promptAttachment `json:"attachments"`
-		Config      struct {
-			Provider         string            `json:"provider"`
-			Cwd              string            `json:"cwd"`
-			Title            *string           `json:"title"`
-			Model            *string           `json:"model"`
-			ThinkingOptionID *string           `json:"thinkingOptionId"`
-			ModeID           *string           `json:"modeId"`
-			Role             *string           `json:"role"`
-			SystemPrompt     *string           `json:"systemPrompt"`
-			Labels           map[string]string `json:"labels"`
+		// Labels sit at the top level of create_agent_request, not inside config: reading only
+		// config.labels dropped every label the client sent, including the parent link that groups a
+		// delegated agent under its caller.
+		Labels map[string]string `json:"labels"`
+		Config struct {
+			Provider         string  `json:"provider"`
+			Cwd              string  `json:"cwd"`
+			Title            *string `json:"title"`
+			Model            *string `json:"model"`
+			ThinkingOptionID *string `json:"thinkingOptionId"`
+			ModeID           *string `json:"modeId"`
+			Role             *string `json:"role"`
+			SystemPrompt     *string `json:"systemPrompt"`
 			// ProviderOptions carries provider-specific settings the client configured (reasoning
 			// effort, a model provider, sandbox flags). It was absent from this struct, so every
 			// value the user set in the provider sheet was silently dropped at create time.
@@ -2303,10 +2315,16 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 
 	// A client must not be able to label its agent as one of the daemon's own roles: the label
 	// carries Chief's prompt and privileges, so forging it would grant them.
-	agentLabels := agentroles.StripReserved(req.Config.Labels)
+	agentLabels := agentroles.StripReserved(req.Labels)
 	for key := range agentLabels {
+		// Two byspace.* families are the client's to set: the parent link (the client groups a child
+		// under its parent by reading it, so dropping it made every delegated agent look unrelated)
+		// and the open-tab markers. The rest stay daemon-owned, which is what keeps a forged
+		// auto-archive label from outliving the request.
+		if key == ParentAgentIDLabel || strings.HasPrefix(key, OpenAgentTabLabelPrefix) {
+			continue
+		}
 		if strings.HasPrefix(key, "byspace.") {
-			// Other byspace.* keys are daemon-owned for the same reason.
 			delete(agentLabels, key)
 		}
 	}
@@ -2315,6 +2333,11 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 	if autoArchive, ok := req.AutoArchive.(bool); ok {
 		agentLabels["byspace.auto-archive"] = map[bool]string{true: "true", false: "false"}[autoArchive]
+	}
+	if raw, ok := agentLabels[ParentAgentIDLabel]; ok && strings.TrimSpace(raw) == "" {
+		// An empty parent is not a parent. The client reads a blank string as a real label and
+		// would try to group under an id that cannot exist.
+		delete(agentLabels, ParentAgentIDLabel)
 	}
 	var callerPtr *string
 	if strings.TrimSpace(req.CallerAgentID) != "" {
@@ -2832,13 +2855,18 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 	// derives the status from the daemon's own lifecycle, and reporting idle for a failure left the
 	// caller with no way to tell the run apart from a clean one.
 	//
-	// "permission" is not derived here. Node reaches it through a shortcut in waitForAgentEvent that
-	// resolves before the turn settles; this daemon's WaitForFinish blocks on the session going idle
-	// and has no such shortcut, and inventing a stand-in (a non-empty pending list at the moment the
-	// turn ends) would report a state no test or client expects.
+	// "permission" is the third state a caller can be parked in: a provider that raised a permission
+	// request keeps the turn open until it is answered, so the session is not busy but the run is not
+	// finished either. node reports it from `waitForAgentEvent`'s permission shortcut, and callers
+	// (the CLI's `byspace wait`, the sidebar and the e2e permission specs) read it to know the turn
+	// is waiting on a human rather than done. Deriving it from the still-pending list is the same
+	// fact by a different route.
 	finalStatus := "idle"
-	if mp.record.LastStatus == "error" {
+	switch {
+	case mp.record.LastStatus == "error":
 		finalStatus = "error"
+	case len(mp.session.PendingPermissions()) > 0:
+		finalStatus = "permission"
 	}
 	// The error text mirrors node's resolveWaitForFinishError: the recorded failure, or a fallback.
 	var waitErr any
@@ -3385,6 +3413,10 @@ func (s *Server) syncPiPersistence(mp *managedPi) {
 }
 
 func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
+	// The sidebar groups workspaces by an aggregate of their agents' buckets, and the descriptor
+	// only carries that aggregate. Refreshing here keeps it honest for the workspace pushes that
+	// follow, and this is the one funnel every agent state change goes through.
+	s.refreshWorkspaceStatusBuckets()
 	s.broadcastSessionMsg("agent_update", map[string]any{
 		"kind":    "upsert",
 		"agent":   s.buildAgentSnapshotPayload(rec),
@@ -3695,13 +3727,15 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"labels":                    labels,
 		"pinnedAt":                  ws.PinnedAt,
 		"archivingAt":               nil,
-		"status":                    "done",
-		"statusEnteredAt":           nil,
-		"activityAt":                nil,
-		"diffStat":                  nil,
-		"scripts":                   []any{},
-		"gitRuntime":                gitRuntime,
-		"githubRuntime":             nil,
+		// Overwritten by workspaceDescriptor with the aggregate of this workspace's agents; a
+		// bare descriptor (one that no agent lookup has run for) is correctly idle.
+		"status":          "done",
+		"statusEnteredAt": nil,
+		"activityAt":      nil,
+		"diffStat":        nil,
+		"scripts":         []any{},
+		"gitRuntime":      gitRuntime,
+		"githubRuntime":   nil,
 		"project": map[string]any{
 			"projectKey":    projectIdentityKey(prj),
 			"projectName":   projectDisplayName,

@@ -1,8 +1,6 @@
 package providers
 
 import (
-	"strings"
-
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
@@ -176,8 +174,10 @@ func MockModelList() []MockModel {
 
 // MockModels renders the catalog in the shape the provider spec carries.
 //
-// Aliases are folded into metadata rather than a field of their own: `CatalogModel` has no aliases, and
-// the specs resolve aliases through the same fallback that handles unknown ids.
+// Aliases travel as the protocol's `aliases` field, not folded into metadata: the client resolves a
+// remembered model id through `findModelByReference`, which reads `model.aliases`. Hiding them in
+// metadata left a stored `legacy-five-minute-stream` preference unresolved, so the composer fell
+// back to an empty selection instead of the default model that owns that alias.
 func MockModels() []sdk.CatalogModel {
 	list := MockModelList()
 	out := make([]sdk.CatalogModel, 0, len(list))
@@ -187,13 +187,11 @@ func MockModels() []sdk.CatalogModel {
 			ID:                      model.ID,
 			Label:                   model.Label,
 			Description:             model.Description,
+			Aliases:                 model.Aliases,
 			IsDefault:               model.IsDefault,
 			IsSelectable:            model.IsSelectable,
 			ThinkingOptions:         model.ThinkingOption,
 			DefaultThinkingOptionID: model.DefaultThink,
-		}
-		if len(model.Aliases) > 0 {
-			entry.Metadata = map[string]string{"aliases": strings.Join(model.Aliases, ",")}
 		}
 		out = append(out, entry)
 	}

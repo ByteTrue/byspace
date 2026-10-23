@@ -734,6 +734,7 @@ func (s *Server) workspaceScriptsPayload(workspaceID, cwd string) []map[string]a
 // any of them.
 func (s *Server) workspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord) map[string]any {
 	out := buildWorkspaceDescriptor(ws, prj)
+	out["status"] = s.workspaceStatus(ws.WorkspaceID)
 	out["scripts"] = s.workspaceScriptsPayload(ws.WorkspaceID, ws.Cwd)
 	if stat := s.checkoutDiffStat(ws.Cwd); stat != nil {
 		out["diffStat"] = stat

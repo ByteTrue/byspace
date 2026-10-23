@@ -25,14 +25,16 @@ var selfLockingMethods = map[string]bool{
 	"broadcastAgentUpdate": true,
 	"broadcastSessionMsg":  true,
 	// appendSystemErrorRow broadcasts, so it self-locks through broadcastSessionMsg.
-	"appendSystemErrorRow":         true,
-	"buildAgentSnapshotPayload":    true,
-	"applyRelayConfig":             true,
-	"ApplyRelayConfig":             true,
-	"releaseTerminalSubscriptions": true,
-	"registerTerminalSubscription": true,
-	"servicePeers":                 true,
-	"projectForWorkspace":          true,
+	"appendSystemErrorRow":          true,
+	"buildAgentSnapshotPayload":     true,
+	"applyRelayConfig":              true,
+	"ApplyRelayConfig":              true,
+	"releaseTerminalSubscriptions":  true,
+	"registerTerminalSubscription":  true,
+	"servicePeers":                  true,
+	"projectForWorkspace":           true,
+	"refreshWorkspaceStatusBuckets": true,
+	"workspaceStatus":               true,
 }
 
 // TestNoReentrantServerLocks parses every non-test file in this package and reports a call to a

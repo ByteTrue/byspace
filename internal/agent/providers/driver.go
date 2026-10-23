@@ -709,6 +709,11 @@ func BuildCompactSnapshot(entries []map[string]any) map[string]any {
 					"isSelectable": model.IsSelectable,
 					"isDefault":    model.IsDefault,
 				}
+				// Aliases are how the client resolves a remembered model id (findModelByReference), so
+				// dropping them here lost the mapping for every client that read the compact snapshot.
+				if len(model.Aliases) > 0 {
+					m["aliases"] = model.Aliases
+				}
 				if model.Description != "" {
 					m["description"] = model.Description
 				}

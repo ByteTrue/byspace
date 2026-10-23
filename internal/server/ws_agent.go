@@ -361,6 +361,27 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 	})
 }
 
+// mergeLabelPatch applies a label write on top of the agent's current labels.
+//
+// A label write is a patch, not a replacement. Clients post one key at a time — an open-tab marker,
+// a parent link — and they expect the rest to survive. Assigning the map dropped every other label
+// on the agent, including the parent link the subagent track groups by. An empty value deletes,
+// matching the shape the archive cascade sends.
+func mergeLabelPatch(current, patch map[string]string) map[string]string {
+	merged := make(map[string]string, len(current)+len(patch))
+	for key, value := range current {
+		merged[key] = value
+	}
+	for key, value := range patch {
+		if strings.TrimSpace(value) == "" {
+			delete(merged, key)
+			continue
+		}
+		merged[key] = value
+	}
+	return merged
+}
+
 func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string            `json:"requestId"`
@@ -385,7 +406,7 @@ func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json
 		rec.Title = req.Name
 	}
 	if req.Labels != nil {
-		rec.Labels = req.Labels
+		rec.Labels = mergeLabelPatch(rec.Labels, req.Labels)
 	}
 	rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	_ = s.store.UpsertAgent(*rec)

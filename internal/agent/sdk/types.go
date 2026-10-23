@@ -213,6 +213,7 @@ type SlashCommand struct {
 type CatalogModel struct {
 	ID                      string            `json:"id"`
 	Label                   string            `json:"label"`
+	Aliases                 []string          `json:"aliases,omitempty"`
 	Description             string            `json:"description,omitempty"`
 	Provider                string            `json:"provider"`
 	Metadata                map[string]string `json:"metadata,omitempty"`
