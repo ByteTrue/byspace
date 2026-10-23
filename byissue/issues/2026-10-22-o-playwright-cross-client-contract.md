@@ -238,25 +238,45 @@ Metro stopped: 0 · ERR_CONNECTION_REFUSED: 0
 | 10       | `exec: "opencode"/"codex": not found in $PATH`    | 环境缺外部 CLI，与本轮无关                                                                                                                                                                               |
 | 6        | `Open chat history attachment` / `[System Error]` | fork_context 与 turn_failed 的 daemon 缺口，见下                                                                                                                                                         |
 
-### 本轮已修（17 个提交）
+### 本轮已修（20 个提交）
 
 `agent-message-submission.spec.ts` 从 **1 passed / 26 failed → 25 passed / 2 failed**（零 Metro 崩溃）；
 `agent-timeline-pagination`、`viewed-agent-timelines`、`rewind-menu.ui-contract` 从大面积失败转为基本全绿。
 
-最后两个提交修的是两处**对 pi（真实 provider）而非 mock 才成立**的缺陷，都是把 node 的实现照抄过来
-时漏掉的前提差异：
+其中四个提交修的是**对 pi（真实 provider）而非 mock 才成立**、或**跨 provider 的 daemon 行为**，都是把 node
+的实现照抄过来时漏掉的前提差异：
 
 - `74b619e6f` projection 的 `makeCanonicalEntries` 把每个 entry 的 seq 区间压成单点。node 的 rows 是一条
   delta 一行、从不跨 seq，所以它只读 `row.seq` 是对的；但 **pi 把流式 delta 折叠进同一个 entry 并让
   `SeqEnd` 随文本增长**，一条 assistant 行可以合法地跨 seq 2..500。压成 `2..2` 之后，cursor 落在区间内的
   `after` 页会漏掉整条行（客户端丢一整条消息），而 `sourceSeqRanges` 谎报只覆盖一个 seq，这正是防止页边界
   切进合并消息的依据。mock 每个 delta 一条 entry，所以 probe 照不出这个问题——**只有 pi 的形状能暴露它**。
-- `6f8c129a2` turn_failed 现在追加 `[System Error]` 时间线条目（上文缺口 2，已修）。`ManagedSession` 新增
+- `6f8c129a2` turn_failed 现在追加 `[System Error]` 时间线条目。`ManagedSession` 新增
   `AppendTimelineItem`：只存不广播，由 daemon 自己发事件，避免 provider 重入自己的事件循环；6 个 provider
   各自实现（pi/mock 用 `streamSeq`，其余用 `len+1`）。连续重复行去重，紧跟真实输出之后的失败仍然记录。
   新方法登记进 `selfLockingMethods`，AST 守卫反向验证过（注入持锁调用后确实变红）。
   验证：`assistant-fork-menu.spec.ts` 的失败点从 line 54（`[System Error]` 断言）推进到 line 105（fork
   attachment），该行不再出现在失败签名里。
+- `9e81bca77` turn_failed 后 agent status 报 `idle` 而非 `error`（原未修清单第 2 项，note #15，已修）。
+  根因有两层：`case "byspace_turn_failed"` 写 `LastStatus = "idle"`；且 `buildAgentSnapshotPayload`、
+  `getAgentPayload`、`handleWaitForFinish` 三处用 `mp.session.Status()` **无条件覆盖** `LastStatus`，而
+  provider session 拆掉失败 turn 后返回 idle。`"error"` 是 **daemon 拥有的生命周期状态**，没有 provider session
+  会返回它，所以新增 `resolveAgentStatus(last, session)`：last==error 且 session 为 idle/空时保留 error，
+  session 转 running（新 turn 已开始，顺带清除 error）或 closed（进程已死）时让位。四个覆盖点 + 快照构造
+  统一走它。`wait_for_finish` 顶层 status 从硬编码 `idle` 改为按 daemon 记录派生（error 时带 lastError，
+  对齐 node 的 `resolveWaitForFinishError`）；**permission 态刻意不派生**——node 靠 `waitForAgentEvent` 里一个
+  在 turn settle 前就 resolve 的短路到达它，本 daemon 的 `WaitForFinish` 没有该短路，硬造一个替身会报出
+  没有测试或客户端预期的状态。process_exit 路径不动（它 `delete(s.agents)`，之后快照走 `rec.LastStatus`，
+  无 session 可覆盖）。验证：`workspace-hover-card-agents.spec.ts:43` 的 `errorSnapshot.status==="error"`
+  断言转绿。消费端已逐个核对与 node 一致（`canMarkUnread` 判 idle、`session.ts:6861` 过滤 idle||closed，
+  error 态在两处都正确地被排除在「已完成」之外）。
+- `feec17498` "Emit N assistant messages before synthetic user message" 在 node 里是**独立快速完成分支**
+  （N 条 pre-echo → user message → 立即 finish），我在 mock cycle 移植时把它当成默认 turn 的前缀，emit 完
+  pre-echo 后 fall through 到 cycle stream，于是在 one-minute-stream 上这个 turn 跑满 60 秒才结束。提交该
+  prompt 后等 idle 的 spec（`agent-message-submission.spec.ts:928`）超时在一个永不停止的 spinner 上。
+  full166c 里它「通过」是长跑侥幸（60s cycle 碰巧没超 30s 断言窗口），行为本身与 node 背离。提成独立分支
+  带独立完成，单测用 spec 实际的 model 断言「远快于 model duration 完成、205 条 assistant + 1 条 user 且
+  user 在末位、无 tool_call」。
 
 ### 未修，已定位并记录的 daemon 缺口（都不是本轮回归，影响所有 provider）
 
@@ -264,16 +284,14 @@ Metro stopped: 0 · ERR_CONNECTION_REFUSED: 0
    Node 在 send 时就建 canonical 行（`messageId = clientMessageId`，故 rewind trigger 立即渲染），
    provider echo 到达时补 `providerMessageId`；rewind 守卫判 `!providerMessageId` 才拒绝。
    Go 的行只在 echo 后存在，守卫无从触发 → `agent-message-rewind.spec.ts:91` 失败。
-2. **turn_failed 后 agent status 应为 `error`，两处都吞掉了它**（note #15）：Node 的 daemon 拥有独立的
-   `lifecycle`（turn_failed → `"error"`），投影读它；Go 的 `case "byspace_turn_failed"` 写
-   `LastStatus = "idle"`，而且 `buildAgentSnapshotPayload` 里 `status = mp.session.Status()` **无条件覆盖**
-   `LastStatus`，provider session 在 turn 结束后返回 `idle` —— 所以 daemon 的 `error` 从两个方向都到不了
-   客户端 → `workspace-hover-card-agents.spec.ts:43` 失败。要区分「daemon 拥有的 lifecycle」与「provider
-   session 的 status」，blast radius 是 `LastStatus` 的 20 处读写，改之前要逐个过。顺带：provider `Status()`
-   实际返回过 `failed`/`unavailable`/`ready` 等**不在协议枚举里**的值，值得一并核对。
-3. **agent.fork_context 把 boundary seq 当数组索引**（note #14）：`cut := BoundaryCursor.Seq;
+2. **agent.fork_context 把 boundary seq 当数组索引**（note #14）：`cut := BoundaryCursor.Seq;
 if cut < len(tl)` 量纲不符，条件几乎恒 false，边界被静默忽略；`boundaryMessageId` 分支在 Go 里
    完全没实现；也没有 Node 的 `<chat-history-summary>` 包装与 entry 筛选 →
-   `assistant-fork-menu` 的 3 例 attachment 断言失败，另加 draft tab 未选中、URL 未跳到 `/new?draftId=`。
+   `assistant-fork-menu` 的 6 例失败全部死在这里（fork attachment、draft tab 未选中、URL 未跳到
+   `/new?draftId=`）。
+3. **turn_failed 不标 attention badge**（`9e81bca77` 的相邻缺口，本轮发现）：`markAgentAttention` 只被
+   `AttentionReasonFinished` 调用，turn_failed 从不 badge；而 `AttentionReasonError` 常量已定义、
+   `pushTitleFor` 也已支持 "Agent failed"，只是没人调用。node 对 error 有独立 attention。不影响 #15
+   的 status 语义（那是两件事），但失败 agent 不会像完成 agent 那样在侧栏点亮。
 
 这三项都是独立工作项，应各自开 issue，不要塞进本轮。
