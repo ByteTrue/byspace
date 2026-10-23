@@ -2477,14 +2477,16 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 	// The window describes the whole timeline, not the page: minSeq/maxSeq are its bounds and
 	// nextSeq is where the next live event lands. Pagination reads the same bounds so hasOlder and
 	// hasNewer agree with what the window claims.
+	//
+	// maxSeq is the last row's real end, never the session's stream counter. The counter is
+	// monotonic and does not roll back when a rewind truncates the timeline, so reading it here
+	// reported a window far wider than the rows actually present — and the client treats a response
+	// whose maxSeq equals its own cursor as one carrying nothing new and discards it whole, which
+	// left the rewound-away messages on screen.
 	winMin, winMax := 0, 0
 	if len(allTL) > 0 {
-		winMin = 1
-		if streamMax > 0 {
-			winMax = streamMax
-		} else {
-			winMax = timelineSeqEndOf(allTL[len(allTL)-1])
-		}
+		winMin = timelineSeqStartOf(allTL[0])
+		winMax = timelineSeqEndOf(allTL[len(allTL)-1])
 	}
 
 	limit := req.Limit
