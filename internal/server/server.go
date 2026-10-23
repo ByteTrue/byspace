@@ -2472,6 +2472,15 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 		return
 	}
 
+	// Stamped before the prompt: the provider's turn_started event can fire while Prompt is still
+	// blocked, and the agent_update it triggers must already carry the new message time.
+	stampedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	s.mu.Lock()
+	mp.record.UpdatedAt = stampedAt
+	mp.record.LastUserMessageAt = &stampedAt
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(mp.record)
+
 	mp.session.SetNextClientMessageID(clientMsgID)
 	// Node's steerOrReplaceActiveTurn returns {status:"inactive"} when the agent has no
 	// active turn, and the caller then starts a normal turn. Steering unconditionally
@@ -2479,9 +2488,17 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	// queued message that never becomes a turn, so the user's second message silently
 	// disappears and the spinner never resolves.
 	var promptErr error
+	// joinRunningTurn records whether this send joined a turn that was already running. Only that
+	// case needs the agent_update below: every other path starts a turn, and the provider event loop
+	// broadcasts the running snapshot itself. Broadcasting twice would not just be redundant — the
+	// duplicate arrives after the client has opened the turn optimistically and re-describes it with
+	// a startedAt, which is the stamp the activity-continuity check reads as "the timer was running
+	// before the turn was authoritative".
+	joinRunningTurn := false
 	wantSteer := strings.EqualFold(strings.TrimSpace(req.ActiveTurnBehavior), "steer")
 	if wantSteer {
 		if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+			joinRunningTurn = true
 			promptErr = mp.session.Steer(ctx, text, images)
 		} else {
 			promptErr = mp.session.Prompt(ctx, text, images)
@@ -2528,12 +2545,14 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 		}
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	mp.record.UpdatedAt = now
-	mp.record.LastUserMessageAt = &now
 	mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 	_ = s.store.UpsertAgent(mp.record)
-	s.broadcastAgentUpdate(mp.record)
+
+	// A steer into a running turn produces no provider turn event, so nothing else would tell the
+	// clients that this agent has a new message time.
+	if joinRunningTurn {
+		s.broadcastAgentUpdate(mp.record)
+	}
 
 	_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
 		"requestId": req.RequestID,
