@@ -27,22 +27,23 @@ import (
 type ClaudeSession struct {
 	proc *jsonl.Process
 
-	mu                 sync.Mutex
-	status             string
-	sessionID          string
-	sessionFile        string
-	model              string
-	modeID             string
-	thinking           string
-	turnCounter        int
-	activeTurnID       string
-	timeline           []sdk.TimelineEntry
-	toolIndexByID      map[string]int
-	toolArgsByID       map[string]any
-	pendingPermissions map[string]map[string]any
-	subagents          map[string]sdk.SubagentDescriptor
-	finishWaiters      []chan error
-	eventSubscribers   map[int]func(map[string]any)
+	mu                  sync.Mutex
+	status              string
+	sessionID           string
+	sessionFile         string
+	model               string
+	modeID              string
+	thinking            string
+	turnCounter         int
+	nextClientMessageID string
+	activeTurnID        string
+	timeline            []sdk.TimelineEntry
+	toolIndexByID       map[string]int
+	toolArgsByID        map[string]any
+	pendingPermissions  map[string]map[string]any
+	subagents           map[string]sdk.SubagentDescriptor
+	finishWaiters       []chan error
+	eventSubscribers    map[int]func(map[string]any)
 	// taskState accumulates Claude's task-list tools into the plan panel's todo item. Kept per session
 	// because the Task* family addresses tasks by id across turns.
 	taskState *taskstate.State
@@ -461,7 +462,11 @@ func (s *ClaudeSession) LastAssistantText() string {
 	return s.lastAssistantTextLocked()
 }
 
-func (s *ClaudeSession) SetNextClientMessageID(_ string) {}
+func (s *ClaudeSession) SetNextClientMessageID(id string) {
+	s.mu.Lock()
+	s.nextClientMessageID = id
+	s.mu.Unlock()
+}
 
 func (s *ClaudeSession) LastError() string {
 	return ""
@@ -496,10 +501,10 @@ func (s *ClaudeSession) Prompt(_ context.Context, message string, images []sdk.I
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
-	s.appendItemLocked(sdk.TimelineItem{
-		Type: "user_message",
-		Text: message,
-	})
+	// The client's own id comes back on this row so it can reconcile the bubble it rendered
+	// optimistically instead of leaving a duplicate, and can settle the pending submission.
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	s.appendItemLocked(userMessage(message, clientMsgID))
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)

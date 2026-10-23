@@ -31,15 +31,16 @@ type CodexSession struct {
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
 
-	mu           sync.Mutex
-	pending      map[int64]chan map[string]any
-	status       string
-	threadID     string
-	cwd          string
-	model        string
-	thinking     string
-	turnCounter  int
-	activeTurnID string
+	mu                  sync.Mutex
+	pending             map[int64]chan map[string]any
+	status              string
+	threadID            string
+	cwd                 string
+	model               string
+	thinking            string
+	turnCounter         int
+	nextClientMessageID string
+	activeTurnID        string
 	// turnIDs is every turn the thread has run, in order. Rewind works in turns rather than messages, so
 	// resolving a message to a turn needs this list.
 	turnIDs []string
@@ -512,7 +513,11 @@ func (s *CodexSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
-func (s *CodexSession) SetNextClientMessageID(_ string) {}
+func (s *CodexSession) SetNextClientMessageID(id string) {
+	s.mu.Lock()
+	s.nextClientMessageID = id
+	s.mu.Unlock()
+}
 
 func (s *CodexSession) LastError() string {
 	return ""
@@ -569,10 +574,10 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	s.status = "running"
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
-	s.appendItemLocked(sdk.TimelineItem{
-		Type: "user_message",
-		Text: message,
-	})
+	// The client's own id comes back on this row so it can reconcile the bubble it rendered
+	// optimistically instead of leaving a duplicate, and can settle the pending submission.
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	s.appendItemLocked(userMessage(message, clientMsgID))
 	tid := s.threadID
 	s.mu.Unlock()
 
@@ -597,17 +602,17 @@ func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.I
 	expectedTurnID := s.nativeTurnID
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
-	s.appendItemLocked(sdk.TimelineItem{
-		Type: "user_message",
-		Text: message,
-	})
-	s.mu.Unlock()
-
+	// Only consume the id once we know this is a steer: the fallback below goes through Prompt,
+	// which takes the id itself.
 	if !running || expectedTurnID == "" {
+		s.mu.Unlock()
 		// Nothing to steer: the caller's behavior was "steer", but there is no active turn, so
 		// this is an ordinary prompt. Without this the RPC would be rejected and the message lost.
 		return s.Prompt(ctx, message, images)
 	}
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	s.appendItemLocked(userMessage(message, clientMsgID))
+	s.mu.Unlock()
 
 	input := []map[string]any{{"type": "text", "text": message}}
 	input = append(input, imageBlocksForCodex(images)...)

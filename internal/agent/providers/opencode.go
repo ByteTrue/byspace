@@ -26,19 +26,20 @@ type OpenCodeSession struct {
 	cmd        *exec.Cmd
 	acpFallbk  *ACPSession
 
-	mu               sync.Mutex
-	status           string
-	sessionID        string
-	cwd              string
-	model            string
-	modeID           string
-	thinking         string
-	turnCounter      int
-	activeTurnID     string
-	timeline         []sdk.TimelineEntry
-	finishWaiters    []chan error
-	eventSubscribers map[int]func(map[string]any)
-	nextSubID        int
+	mu                  sync.Mutex
+	status              string
+	sessionID           string
+	cwd                 string
+	model               string
+	modeID              string
+	thinking            string
+	turnCounter         int
+	nextClientMessageID string
+	activeTurnID        string
+	timeline            []sdk.TimelineEntry
+	finishWaiters       []chan error
+	eventSubscribers    map[int]func(map[string]any)
+	nextSubID           int
 }
 
 // StartOpenCodeSession starts or attaches to an OpenCode agent session.
@@ -128,7 +129,11 @@ func (s *OpenCodeSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
-func (s *OpenCodeSession) SetNextClientMessageID(_ string) {}
+func (s *OpenCodeSession) SetNextClientMessageID(id string) {
+	s.mu.Lock()
+	s.nextClientMessageID = id
+	s.mu.Unlock()
+}
 
 func (s *OpenCodeSession) LastError() string {
 	return ""
@@ -192,14 +197,14 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
+	// The client's own id comes back on this row so it can reconcile the bubble it rendered
+	// optimistically instead of leaving a duplicate, and can settle the pending submission.
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
 	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       len(s.timeline) + 1,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item: sdk.TimelineItem{
-			Type: "user_message",
-			Text: message,
-		},
+		Item:      userMessage(message, clientMsgID),
 	})
 	sid := s.sessionID
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))

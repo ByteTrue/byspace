@@ -31,27 +31,28 @@ type ACPSession struct {
 	acpTerminals   map[string]*acpTerminal
 	acpTerminalsMu sync.Mutex
 
-	mu                 sync.Mutex
-	pending            map[int64]chan map[string]any
-	status             string
-	sessionID          string
-	cwd                string
-	model              string
-	modeID             string
-	thinking           string
-	turnCounter        int
-	activeTurnID       string
-	activeTextIdx      int
-	activeThinkIdx     int
-	timeline           []sdk.TimelineEntry
-	toolIndexByID      map[string]int
-	commands           []sdk.SlashCommand
-	pendingPermissions map[string]map[string]any
-	permissionRPCIDs   map[string]any
-	finishWaiters      []chan error
-	eventSubscribers   map[int]func(map[string]any)
-	nextSubID          int
-	closed             bool
+	mu                  sync.Mutex
+	pending             map[int64]chan map[string]any
+	status              string
+	sessionID           string
+	cwd                 string
+	model               string
+	modeID              string
+	thinking            string
+	turnCounter         int
+	nextClientMessageID string
+	activeTurnID        string
+	activeTextIdx       int
+	activeThinkIdx      int
+	timeline            []sdk.TimelineEntry
+	toolIndexByID       map[string]int
+	commands            []sdk.SlashCommand
+	pendingPermissions  map[string]map[string]any
+	permissionRPCIDs    map[string]any
+	finishWaiters       []chan error
+	eventSubscribers    map[int]func(map[string]any)
+	nextSubID           int
+	closed              bool
 }
 
 // StartACPSession spawns an ACP agent process and completes `initialize` + `session/new` (or `session/load`).
@@ -563,7 +564,11 @@ func (s *ACPSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
-func (s *ACPSession) SetNextClientMessageID(_ string) {}
+func (s *ACPSession) SetNextClientMessageID(id string) {
+	s.mu.Lock()
+	s.nextClientMessageID = id
+	s.mu.Unlock()
+}
 
 func (s *ACPSession) LastError() string {
 	return ""
@@ -611,10 +616,10 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 	s.status = "running"
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
-	s.appendItemLocked(sdk.TimelineItem{
-		Type: "user_message",
-		Text: message,
-	})
+	// The client's own id comes back on this row so it can reconcile the bubble it rendered
+	// optimistically instead of leaving a duplicate, and can settle the pending submission.
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	s.appendItemLocked(userMessage(message, clientMsgID))
 	sid := s.sessionID
 	subs := s.copySubscribersLocked()
 	s.mu.Unlock()
