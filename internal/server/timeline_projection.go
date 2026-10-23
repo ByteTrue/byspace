@@ -50,20 +50,24 @@ func timelineItemIdentity(item pi.TimelineItem) string {
 
 // makeCanonicalEntries turns raw timeline rows into one projected entry each, unmerged. This is the
 // "canonical" projection: every delta stays its own row.
+//
+// A row's span is its own seq range, not a single seq. pi folds each streaming delta into one entry
+// and grows its SeqEnd as the text accumulates, so an assistant row can legitimately span
+// seq 2..500; node's rows are one delta each and never span, which is why its equivalent only reads
+// `row.seq`. Collapsing the span here would drop that row from an `after` page whose cursor sits
+// inside it, and would report sourceSeqRanges covering one seq while the row covers hundreds.
 func makeCanonicalEntries(rows []pi.TimelineEntry) []projectedEntry {
 	out := make([]projectedEntry, 0, len(rows))
 	for _, row := range rows {
-		seq := row.Seq
-		if seq <= 0 {
-			seq = 1
-		}
+		start := timelineSeqStartOf(row)
+		end := timelineSeqEndOf(row)
 		out = append(out, projectedEntry{
 			Item:            row.Item,
 			TurnID:          row.TurnID,
 			Timestamp:       row.Timestamp,
-			SeqStart:        seq,
-			SeqEnd:          seq,
-			SourceSeqRanges: []timelineSeqRange{{StartSeq: seq, EndSeq: seq}},
+			SeqStart:        start,
+			SeqEnd:          end,
+			SourceSeqRanges: []timelineSeqRange{{StartSeq: start, EndSeq: end}},
 			Collapsed:       nil,
 		})
 	}

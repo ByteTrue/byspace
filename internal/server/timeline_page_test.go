@@ -288,3 +288,38 @@ func TestMergeStopsAtTurnBoundary(t *testing.T) {
 		t.Fatalf("rows = %d, want 2: a turn boundary splits them", got)
 	}
 }
+
+// pi folds a streaming delta into one entry and grows its SeqEnd as text accumulates, so a single
+// assistant row spans many seqs. The projection has to carry that span through, or an `after` page
+// whose cursor lands inside the span drops the row and the client loses a whole message.
+func TestProjectTimelineRowsKeepsPiSpannedEntry(t *testing.T) {
+	rows := []pi.TimelineEntry{
+		{Seq: 1, SeqEnd: 1, TurnID: "t1", Item: pi.TimelineItem{Type: "user_message", Text: "hi", MessageID: "u1"}},
+		// One assistant row spanning seq 2..500, the way pi stores a streamed message.
+		{Seq: 2, SeqEnd: 500, TurnID: "t1", Item: pi.TimelineItem{Type: "assistant_message", Text: "long answer", MessageID: "a1"}},
+	}
+	projected := projectTimelineRows(rows, "projected")
+	if len(projected) != 2 {
+		t.Fatalf("rows = %d, want 2 (a spanned entry stays one row)", len(projected))
+	}
+	entry := projected[1]
+	if entry.SeqStart != 2 || entry.SeqEnd != 500 {
+		t.Fatalf("spanned entry range = %d..%d, want 2..500", entry.SeqStart, entry.SeqEnd)
+	}
+	if len(entry.SourceSeqRanges) != 1 || entry.SourceSeqRanges[0].StartSeq != 2 || entry.SourceSeqRanges[0].EndSeq != 500 {
+		t.Fatalf("sourceSeqRanges = %+v, want one range 2..500", entry.SourceSeqRanges)
+	}
+
+	// An `after` page from a cursor inside the span must still return the entry: it is the newest
+	// thing the client does not yet have, and dropping it strands the whole message.
+	page := selectTimelinePage(projected, "after", 100, 40, 1, 500)
+	var found bool
+	for _, e := range page.entries {
+		if e.SeqStart == 2 && e.SeqEnd == 500 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("an after page from seq 100 dropped the spanned entry: %+v", page.entries)
+	}
+}
