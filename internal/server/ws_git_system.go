@@ -1389,6 +1389,9 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		// rebuilt snapshot from its config-apply listeners; without it the removed provider stays
 		// on screen until the next manual refresh.
 		if patchTouchesProviders(req.Config) {
+			// A providers edit invalidates every scope, not just the host catalog: the same entry
+			// decides availability in each workspace catalog too, and those carry their own cache.
+			s.invalidateProviderCatalogs()
 			s.pushProviderSnapshot(ctx, updated, nil, "")
 		}
 

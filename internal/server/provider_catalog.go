@@ -87,6 +87,18 @@ func (s *Server) storeProviderCatalog(cwd string, catalog *providerCatalog) {
 	s.providerCatalogs[key] = catalog
 }
 
+// invalidateProviderCatalogs drops every scope.
+//
+// A providers-config edit is global: the same entry decides availability, models and modes in the
+// host catalog and in every workspace-scoped one. Rebuilding only the host scope left the
+// workspace catalogs serving the provider exactly as it was before the edit, so a client that had
+// already read the scoped catalog kept seeing a provider the user had just disabled.
+func (s *Server) invalidateProviderCatalogs() {
+	s.providerCatalogMu.Lock()
+	defer s.providerCatalogMu.Unlock()
+	s.providerCatalogs = make(map[string]*providerCatalog)
+}
+
 // providerCatalogOrBuild returns the cached catalog, building one only when nothing is cached.
 //
 // Serving the request synchronously from a fresh probe made the first catalog arrive about a

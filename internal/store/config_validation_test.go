@@ -20,6 +20,10 @@ func TestValidateDaemonConfigAcceptsValid(t *testing.T) {
 			"zai":    map[string]any{"command": "/usr/local/bin/zai"},
 			"cursor": map[string]any{"extends": "acp"},
 			"custom": map[string]any{"baseUrl": "https://api.example"},
+			// The app writes `command` as an argv list, which is what the wire schema declares
+			// (`z.array(z.string().min(1)).min(1)`). Reading only the string form rejected every
+			// provider edit that set a command.
+			"argv": map[string]any{"command": []any{"node", "./agent.mjs"}},
 		}},
 		{"network": map[string]any{"tcpPort": float64(6778), "allowLanAccess": false}},
 		{"relay": map[string]any{"enabled": true, "endpoint": "relay.example.com:443"}},

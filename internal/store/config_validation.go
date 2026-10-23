@@ -105,14 +105,39 @@ func validateProviders(raw any) error {
 		}
 		// A provider with neither a binary nor a base ACP agent cannot be launched; catching it
 		// here means the providers page says so instead of the agent failing to start.
-		command, _ := config["command"].(string)
+		// `command` is an argv list on the wire (`z.array(z.string().min(1)).min(1)`), so reading it
+		// as a plain string rejected every edit that only set a command — the app sent
+		// `command: ["node", "./agent.mjs"]` and the daemon answered "needs one of command,
+		// extends or baseUrl". A bare string is still accepted for configs written by hand.
+		command := commandValue(config["command"])
 		extends, _ := config["extends"].(string)
 		baseURL, _ := config["baseUrl"].(string)
-		if strings.TrimSpace(command) == "" && strings.TrimSpace(extends) == "" && strings.TrimSpace(baseURL) == "" {
+		if command == "" && strings.TrimSpace(extends) == "" && strings.TrimSpace(baseURL) == "" {
 			return fmt.Errorf("providers.%s: needs one of command, extends or baseUrl", id)
 		}
 	}
 	return nil
+}
+
+// commandValue extracts the executable from a provider `command` field, which the wire schema
+// declares as a non-empty argv list but which hand-written configs may still express as a string.
+func commandValue(raw any) string {
+	switch value := raw.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case []any:
+		if len(value) == 0 {
+			return ""
+		}
+		first, _ := value[0].(string)
+		return strings.TrimSpace(first)
+	case []string:
+		if len(value) == 0 {
+			return ""
+		}
+		return strings.TrimSpace(value[0])
+	}
+	return ""
 }
 
 func validateNetwork(raw any) error {
