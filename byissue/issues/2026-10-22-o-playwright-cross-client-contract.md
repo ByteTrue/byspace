@@ -183,7 +183,80 @@ mock 移植后 `scripts/e2e-runnable.mjs` 的可跑清单从 90 涨到 166：dae
 ## 验证状态
 
 ```
-npm run audit 五项全绿
-浏览器验证 12/12
-单跑：agent-skills-settings 12/12 · projects-settings 15/15 · branch-switcher 2/2 · changes-pane 36/41
+npm run audit --no-browser 四项全绿（Go 测试 / 入站字段 / 出站字段 / 重审账本）
+go test ./internal/... 全绿
+
+typecheck 全绿（lefthook pre-commit 每次提交都跑）
 ```
+
+### 浏览器验证的真实边界（更正）
+
+上文「浏览器验证 12/12」这一条**不能用来证明本轮改动**，实测后更正：`scripts/browser-conformance.mjs`
+的 UI 检查走 `bsk observe` 读**用户浏览器当前页面**，provider 检查里 `queryProviderSnapshot()`
+**硬编码连 6778**（本仓库 dev daemon 的旧进程），只有两条 WS 层操作序列检查（归档最后工作区、
+移除项目）用 `--base` 指向临时 daemon。起一个临时 daemon（`serve --addr 127.0.0.1:6791 --home <tmp>`，
+绝不 `daemon start`，绝不碰 6777）指向新二进制后：那两条 WS 检查 PASS，其余检查测的是旧进程或
+用户浏览器，与本轮代码无关。要让这一项真正覆盖 Go 改动，需要把 provider 检查的 6778 换成 `BASE`，
+并让 UI 检查在临时 daemon 的 Agent Window 里跑。
+
+### 全量 e2e（权威数据）
+
+`node scripts/e2e-runnable.mjs --files` 得到 166 个可跑 spec（原 90，mock 实现后 +76），
+展开 628 个用例：
+
+```
+455 passed · 158 failed · 1 flaky · 13 skipped · 3 did not run   (1.1h, workers=2)
+Metro stopped: 0 · ERR_CONNECTION_REFUSED: 0
+```
+
+失败按可跑清单来源分成两类，两类都要看：
+
+| 分组                                   | 失败用例 | spec | 基线对照                                 |
+| -------------------------------------- | -------- | ---- | ---------------------------------------- |
+| 改动前就可跑（90 个）                  | 65       | 34   | **63 → 65**，逐 spec 逐用例名对照，见下  |
+| 本轮新启用（76 个 MOCK_PROVIDER spec） | 92       | 38   | 无基线：改动前 mock 不可用，这些从未跑过 |
+
+**无回归，用同批 spec 换二进制证明。** 用 `git worktree add /tmp/baseline-wt 1ce7be1e4`（改动前）
+
+- 复用当前 `internal/webui/dist`（本轮未改前端）build 出基线二进制，同一批 90 spec、同前端、
+  只换 daemon（`BYSPACE_E2E_DAEMON_BINARY`，就是 `isolated-host-daemon.ts:17` 为此留的开关）跑一遍：
+
+* 31/34 spec 失败数逐字节相同；
+* 3 个 spec 在长跑批次里各多 1 例，单独 workers=1 复核后全部排除：
+  - `branch-switcher` 2 passed / 0 failed，长跑里它本来就被标 `1 flaky`；
+  - `workspace-setup-streaming` baseline 与 HEAD 是**完全相同的 7 个测试名**，差集为空；
+  - `pr-pane` HEAD 比 baseline **少**一例失败。
+* 长跑批次的失败计数会虚高：共享 Metro/daemon 的状态残留让个别用例在全量批里失败、单跑通过。
+  本轮已知的三个：`agent-message-submission` 的 871、`agent-tab-image-stability`、`empty-project-persists`。
+  所以判定回归只能按测试名做差集，不能比数字。
+
+本轮新启用的 92 例失败，按签名归到已定位的独立缺口（都记在本 issue 与 note 里，都不是回归）：
+
+| 失败例数 | 签名                                              | 归属                                                                                                                                                                                                     |
+| -------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 11       | `chat-outline-rail` 不渲染                        | probe 证明 daemon 的 `list_prompts` 返回 3 条正确 prompt（含 seq/timestamp），`agentTimelinePromptIndex: true` 也已声明；rail 需 `prompts.length >= 2`，数据满足，故在客户端首帧时序。**未改前端，未修** |
+| 10       | `exec: "opencode"/"codex": not found in $PATH`    | 环境缺外部 CLI，与本轮无关                                                                                                                                                                               |
+| 6        | `Open chat history attachment` / `[System Error]` | fork_context 与 turn_failed 的 daemon 缺口，见下                                                                                                                                                         |
+
+### 本轮已修（15 个提交）
+
+`agent-message-submission.spec.ts` 从 **1 passed / 26 failed → 25 passed / 2 failed**（零 Metro 崩溃）；
+`agent-timeline-pagination`、`viewed-agent-timelines`、`rewind-menu.ui-contract` 从大面积失败转为基本全绿。
+
+### 未修，已定位并记录的 daemon 缺口（都不是本轮回归，影响所有 provider）
+
+1. **submitted-prompt 注册表缺失**（note #13）：Go 声明 `canonicalSubmittedPrompts: true` 却没有实现。
+   Node 在 send 时就建 canonical 行（`messageId = clientMessageId`，故 rewind trigger 立即渲染），
+   provider echo 到达时补 `providerMessageId`；rewind 守卫判 `!providerMessageId` 才拒绝。
+   Go 的行只在 echo 后存在，守卫无从触发 → `agent-message-rewind.spec.ts:91` 失败。
+2. **turn_failed 不追加 `[System Error]` 时间线条目**（note #12）：Node 的 daemon 对任何 provider 的
+   turn_failed 都追加一条 `[System Error] ${...}` 的 assistant_message，Go 只广播事件 →
+   `assistant-fork-menu.spec.ts:54` 失败。实现面要给 `ManagedSession` 加追加+广播方法并在 6 个
+   provider 实现，涉及各自的锁语义（`internal/server/lock_hygiene_test.go` 的 AST 守卫会查），
+   不在收口前仓促做。
+3. **agent.fork_context 把 boundary seq 当数组索引**（note #14）：`cut := BoundaryCursor.Seq;
+if cut < len(tl)` 量纲不符，条件几乎恒 false，边界被静默忽略；`boundaryMessageId` 分支在 Go 里
+   完全没实现；也没有 Node 的 `<chat-history-summary>` 包装与 entry 筛选 →
+   `assistant-fork-menu` 的 3 例 attachment 断言失败。
+
+这三项都是独立工作项，应各自开 issue，不要塞进本轮。
