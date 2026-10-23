@@ -567,23 +567,7 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	}
 	_ = s.store.UpsertWorkspace(wsRec)
 	s.broadcastWorkspaceUpsert(wsRec, prj)
-	// Record what the worktree was cut from, inside the worktree: it survives the registry being
-	// lost or rebuilt, and it is how the daemon knows which base to diff against without asking
-	// the forge on every request.
-	meta := workspace.WorktreeMetadata{
-		Version:     2,
-		BaseRefName: intent.BaseBranch,
-		BaseRef:     intent.BaseRef,
-	}
-	if intent.Kind == workspace.IntentCheckoutChangeRequest {
-		meta.ChangeRequestLookupTarget = &workspace.ChangeRequestLookupTarget{
-			HeadRef:             intent.HeadRef,
-			HeadRepositoryOwner: intent.HeadRepository,
-			ChangeRequestNumber: intent.ChangeRequestNumber,
-			LocalBranchName:     branch,
-		}
-	}
-	_ = workspace.WriteWorktreeMetadata(wtPath, meta)
+	s.writeCreatedWorktreeMetadata(wtPath, intent, branch)
 	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)
 
 	// A fresh worktree has no node_modules and no .env, so setup has to run before the

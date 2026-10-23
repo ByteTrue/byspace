@@ -1830,6 +1830,11 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	_ = s.store.UpsertWorkspace(wsRec)
 	s.broadcastWorkspaceUpsert(wsRec, prj)
 
+	// Record what the worktree was cut from, inside the worktree. Both create paths must write it:
+	// the client reads it back to show the base, and the daemon uses it to pick the diff base
+	// without asking the forge on every request.
+	s.writeCreatedWorktreeMetadata(wtPath, intent, branch)
+
 	// Setup runs before the response is considered complete by the client, but it must not block the response: a
 	// worktree whose setup is slow is still openable, and the timeline carries the progress.
 	//
@@ -1844,4 +1849,37 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 		"setupTerminalId": setupTerminalID,
 		"error":           nil,
 	})
+}
+
+// writeCreatedWorktreeMetadata records what a fresh worktree was cut from.
+//
+// Both create paths (workspace.create and create_byspace_worktree) have to write it. It lives
+// inside the worktree, so it survives the registry being lost or rebuilt, and it is how the
+// client shows the base and the daemon picks a diff base without asking the forge on every
+// request.
+//
+// A checkout-branch worktree has no distinct base — Node records null there — so only the
+// change-request hint is written.
+func (s *Server) writeCreatedWorktreeMetadata(worktreePath string, intent workspace.WorktreeIntent, branch string) {
+	baseRefName := workspace.NormalizeBaseRefName(intent.BaseBranch)
+	if intent.Kind == workspace.IntentCheckoutBranch {
+		baseRefName = workspace.NormalizeBaseRefName(intent.BranchName)
+	}
+	if baseRefName == "" {
+		return
+	}
+	meta := workspace.WorktreeMetadata{
+		Version:     2,
+		BaseRefName: baseRefName,
+		BaseRef:     intent.BaseRef,
+	}
+	if intent.Kind == workspace.IntentCheckoutChangeRequest {
+		meta.ChangeRequestLookupTarget = &workspace.ChangeRequestLookupTarget{
+			HeadRef:             intent.HeadRef,
+			HeadRepositoryOwner: intent.HeadRepository,
+			ChangeRequestNumber: intent.ChangeRequestNumber,
+			LocalBranchName:     branch,
+		}
+	}
+	_ = workspace.WriteWorktreeMetadata(worktreePath, meta)
 }

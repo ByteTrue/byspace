@@ -50,6 +50,29 @@ type BranchAutoName struct {
 	BranchName            string `json:"branchName,omitempty"`
 }
 
+// BranchNameFromRef turns a full ref into the branch name a user reads.
+//
+// ported from branchNameFromRef: the short "origin/x" form can only be handled for origin, because
+// without the remote list "feature/x" is indistinguishable from "<remote>/x".
+func BranchNameFromRef(ref string) string {
+	trimmed := strings.TrimSpace(ref)
+	if name, ok := strings.CutPrefix(trimmed, "refs/heads/"); ok {
+		return name
+	}
+	if remainder, ok := strings.CutPrefix(trimmed, "refs/remotes/"); ok {
+		if separator := strings.Index(remainder, "/"); separator >= 0 {
+			return remainder[separator+1:]
+		}
+		return remainder
+	}
+	return strings.TrimPrefix(trimmed, "origin/")
+}
+
+// NormalizeBaseRefName is the display name recorded for a worktree's base.
+func NormalizeBaseRefName(input string) string {
+	return BranchNameFromRef(strings.TrimSpace(input))
+}
+
 // WorktreeMetadataPath is where the metadata lives for a worktree.
 //
 // It goes under the git directory, not the working tree: a file in the working tree would show up

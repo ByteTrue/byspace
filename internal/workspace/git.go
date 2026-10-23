@@ -17,12 +17,21 @@ import (
 )
 
 type CheckoutStatus struct {
-	Cwd                    string  `json:"cwd"`
-	IsGit                  bool    `json:"isGit"`
-	RepoRoot               *string `json:"repoRoot"`
-	CurrentBranch          *string `json:"currentBranch"`
-	IsDirty                *bool   `json:"isDirty"`
-	BaseRef                *string `json:"baseRef"`
+	Cwd           string  `json:"cwd"`
+	IsGit         bool    `json:"isGit"`
+	RepoRoot      *string `json:"repoRoot"`
+	CurrentBranch *string `json:"currentBranch"`
+	IsDirty       *bool   `json:"isDirty"`
+	BaseRef       *string `json:"baseRef"`
+	// UpstreamRef is the full ref currentBranch tracks, as git reports it for `<branch>@{upstream}`:
+	// "refs/remotes/origin/main", "refs/remotes/upstream/main" on a fork, or a "refs/heads/..." ref
+	// for a branch tracking a local branch. Null when there is no upstream.
+	//
+	// The new-workspace picker uses it verbatim to decide where a fresh worktree starts. Composing
+	// the ref from "origin/" + branch is wrong twice over: the remote is not always origin, and the
+	// upstream branch can be named differently. Without it the picker fell back to the local ref and
+	// carried unpushed commits into every new worktree.
+	UpstreamRef            *string `json:"upstreamRef"`
 	AheadBehind            any     `json:"aheadBehind"`
 	AheadOfOrigin          *int    `json:"aheadOfOrigin"`
 	BehindOfOrigin         *int    `json:"behindOfOrigin"`
@@ -211,6 +220,17 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		remotePtr = &remoteURL
 	}
 
+	// The upstream is read from git rather than composed: on a fork the remote is "upstream", and
+	// the tracking branch is not always named after the local one.
+	var upstreamRefPtr *string
+	if branch != "" {
+		if upstream, upstreamErr := runGit(ctx, absCwd, "for-each-ref", "--format=%(upstream)", "refs/heads/"+branch); upstreamErr == nil {
+			if trimmed := strings.TrimSpace(upstream); trimmed != "" {
+				upstreamRefPtr = &trimmed
+			}
+		}
+	}
+
 	return CheckoutStatus{
 		Cwd:                    cwd,
 		IsGit:                  true,
@@ -218,6 +238,7 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		CurrentBranch:          branchPtr,
 		IsDirty:                &dirty,
 		BaseRef:                baseRefPtr,
+		UpstreamRef:            upstreamRefPtr,
 		AheadBehind:            aheadBehind,
 		HasRemote:              hasRemote,
 		RemoteURL:              remotePtr,
