@@ -240,6 +240,11 @@ type Server struct {
 	// project can expose different models, so the cache must not outlive its context.
 	cachedPiModelsCwd string
 	cachedPiCommands  []pi.SlashCommand
+	// providerCatalogMu guards providerCatalogValue, which is the provider snapshot served to
+	// clients. It has its own lock: building one shells out to every provider CLI, and holding s.mu
+	// for that would stall every other request.
+	providerCatalogMu    sync.Mutex
+	providerCatalogValue *providerCatalog
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -343,9 +348,13 @@ func New(opts Options) (*Server, error) {
 	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
 	go func() {
-		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		pctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_ = srv.probeOrCachedPiModels(pctx)
+		// Build the catalog before anyone asks for it. Proving which providers are installed runs
+		// each CLI, and a client that asks first would otherwise wait for that probe — long enough
+		// for the app to submit a form while it still thinks no provider is selected.
+		srv.storeProviderCatalog(srv.buildProviderCatalog(pctx, srv.store.LoadDaemonConfig()))
 	}()
 
 	// Nothing else drives file and git-diff subscriptions. Without this loop they are
@@ -1217,46 +1226,15 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			IfNoneMatch string `json:"ifNoneMatch"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		models := s.probeOrCachedPiModels(ctx)
-		cfg := s.store.LoadDaemonConfig()
-		customProvs, _ := cfg["providers"].(map[string]any)
-		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
+		// Serve from the in-memory catalog. Building one runs every provider CLI to learn whether it
+		// is available, which took long enough that the app could submit a form before it knew the
+		// selected provider — the snapshot has to be a read, not a probe.
+		catalog := s.providerCatalogOrBuild(ctx)
 		// The hash covers the entries alone. Comparing `ifNoneMatch` against a tag built from the
 		// daemon identity reported "not modified" after a providers edit, so a removed provider
 		// stayed visible in the sheet until something else invalidated it.
-		snapshotHash := providerSnapshotHash(entries)
-		fetchedAt := providerFetchedAt(entries, now)
-		if req.IfNoneMatch != "" && req.IfNoneMatch == snapshotHash {
-			// The envelope still identifies the catalog: the client reuses the cached body and
-			// needs the hash to know which one, so a bare notModified would drop the update.
-			_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
-				"requestId":    base.RequestID,
-				"generatedAt":  now,
-				"notModified":  true,
-				"entries":      []any{},
-				"snapshotHash": snapshotHash,
-				"fetchedAt":    fetchedAt,
-			})
-			return
-		}
-		respPayload := map[string]any{
-			"requestId":   base.RequestID,
-			"generatedAt": now,
-			"entries":     entries,
-			// snapshotHash lets the client skip re-applying an identical catalog and is what
-			// `ifNoneMatch` compares against on the next call.
-			"snapshotHash": snapshotHash,
-			// fetchedAt drives the "last refreshed" line in the providers sheet.
-			"fetchedAt": fetchedAt,
-			// compactSnapshot is the same catalog with thinking option lists deduped; the
-			// app's provider cache reads it to avoid re-downloading identical option sets.
-			"compactSnapshot": providers.BuildCompactSnapshot(entries),
-		}
-		if strings.TrimSpace(req.Cwd) != "" {
-			respPayload["cwd"] = req.Cwd
-		}
-		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", respPayload)
+		notModified := req.IfNoneMatch != "" && req.IfNoneMatch == catalog.hash
+		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", catalog.payload(base.RequestID, req.Cwd, notModified))
 
 	case "refresh_providers_snapshot_request":
 		// `cwd` scopes the probe — a provider's model list can depend on the project — and
@@ -1276,6 +1254,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		s.mu.Unlock()
 		_ = s.probePiModelsInCwd(ctx, refreshReq.Cwd)
+		// A refresh means the user asked for a fresh probe, so drop the cached catalog rather than
+		// letting it answer the rebuild.
+		s.storeProviderCatalog(nil)
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
 		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers)

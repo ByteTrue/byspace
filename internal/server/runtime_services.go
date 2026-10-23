@@ -768,11 +768,16 @@ func (s *Server) runPlacementTick() {
 	}
 }
 
-// pushProviderSnapshot broadcasts a rebuilt provider catalog. Every open settings sheet renders
-// from it, so a catalog change has to reach them without a manual refresh; `only` narrows the push
-// to the cards a caller touched. The push omits requestId because it answers no request.
+// pushProviderSnapshot rebuilds the provider catalog and broadcasts it. Every open settings sheet
+// renders from it, so a catalog change has to reach them without a manual refresh; `only` narrows
+// the push to the cards a caller touched. The push omits requestId because it answers no request.
+//
+// The rebuilt catalog also replaces the cached one, so a sheet that reconnects right after gets the
+// same entries the push carried instead of re-probing every provider CLI.
 func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string) {
-	entries := providers.BuildSnapshotEntries(s.probeOrCachedPiModels(ctx), s.piCommand, providersFromConfig(cfg))
+	catalog := s.buildProviderCatalog(ctx, cfg)
+	s.storeProviderCatalog(catalog)
+	entries := catalog.entries
 	if len(only) > 0 {
 		entries = filterSnapshotEntries(entries, only)
 	}
