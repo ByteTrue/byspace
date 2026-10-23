@@ -5,11 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 )
 
 func TestProcessRequestEventsAndV2ChunkReassembly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	// Small sh script that reads a JSON line and emits an event, a chunked event, and a response.
 	payload := `{"type":"big_event","value":"hello-from-reassembled-chunks"}`
 	half := len(payload) / 2

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -35,6 +36,9 @@ func TestBuildLaunchArgs(t *testing.T) {
 }
 
 func TestPiSessionPromptStreamingToolCallsAndWaitForFinish(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	fakePi := filepath.Join(tmp, "fake-pi.sh")
 	script := `#!/bin/sh
@@ -224,6 +228,9 @@ func TestStructuredToolDetailsPermissionsAndSubagents(t *testing.T) {
 }
 
 func TestPromptForwardsImageBlocksToPi(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	fakePi := filepath.Join(tmp, "fake-pi-echo-images.sh")
 	// Echo back the raw prompt command line so the test can assert image blocks survived.

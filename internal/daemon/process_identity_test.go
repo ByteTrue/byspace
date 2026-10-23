@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,9 @@ func TestProcessMatchesRejectsRecycledPid(t *testing.T) {
 // A real child whose command line carries the identity words must match, so the check is not
 // simply always false.
 func TestProcessMatchesAcceptsRealProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	cmd := exec.Command("/bin/sh", "-c", "exec -a 'byspace serve' sleep 5")
 	if err := cmd.Start(); err != nil {
 		t.Skip("cannot spawn a named process here:", err)

@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,9 @@ import (
 // Advertising `terminal: true` without implementing the methods leaves every such request
 // unanswered: the agent waits for a terminal id that never arrives and the turn stalls.
 func TestACPTerminalLifecycle(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	// A real writer for the RPC responses; a nil stdin would panic in sendJSON.
 	var out strings.Builder
 	sess := &ACPSession{
@@ -55,6 +59,9 @@ func TestACPTerminalLifecycle(t *testing.T) {
 // The byte limit keeps the TAIL: a build's last lines are what matters, and the beginning is what
 // a long log buries.
 func TestACPTerminalOutputByteLimitKeepsTail(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	terminal := &acpTerminal{byteLimit: 10}
 	terminal.appendOutput("first-chunk-")
 	terminal.appendOutput("last-chunk")
@@ -79,6 +86,9 @@ func (n nopWriteCloser) Close() error                { return nil }
 // These are our children: when the ACP process dies the requests stop coming, and a build left
 // behind becomes an orphan that keeps writing to stdout and holding a port.
 func TestACPTerminalsAreKilledWhenSessionEnds(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	var out strings.Builder
 	sess := &ACPSession{
 		stdin:        nopWriteCloser{&out},

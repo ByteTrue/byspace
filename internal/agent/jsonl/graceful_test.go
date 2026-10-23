@@ -5,6 +5,7 @@ package jsonl
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -12,6 +13,9 @@ import (
 // A provider killed with SIGKILL can lose its session file — the transcript is the user's
 // history, so the close path gives it a chance to flush before escalating.
 func TestCloseAllowsGracefulFlush(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "flushed")
 	// The "provider" traps SIGTERM, writes its state, then exits — exactly what pi does when it
@@ -42,6 +46,9 @@ func TestCloseAllowsGracefulFlush(t *testing.T) {
 
 // A process that ignores SIGTERM must still be reaped, or the daemon hangs on a stuck child.
 func TestCloseEscalatesWhenGracefulIsIgnored(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	proc, err := Start(LaunchConfig{Command: "/bin/sh", Args: []string{"-c", `trap '' TERM; while true; do sleep 0.05; done`}})
 	if err != nil {
 		t.Skip("cannot spawn:", err)

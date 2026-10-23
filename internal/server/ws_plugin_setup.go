@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/store"
@@ -475,7 +474,7 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
 		// Own process group: a build script spawns children, and signalling only the shell
 		// leaves them running. Killing the group takes the whole tree.
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		setupProcessGroup(cmd)
 		if port > 0 {
 			cmd.Env = append(cmd.Env,
 				fmt.Sprintf("PORT=%d", port),
@@ -554,12 +553,12 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 		// `npm run dev`) is a child of the shell, and signalling only the shell leaves the
 		// actual work running with its port held.
 		pid := cmd.Process.Pid
-		_ = syscall.Kill(-pid, syscall.SIGTERM)
+		terminateProcessGroup(pid)
 		go func() {
 			// Escalate if the group has not exited. A build ignoring SIGTERM must not keep its
 			// port for the rest of the session.
 			time.Sleep(3 * time.Second)
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			killProcessGroup(pid)
 		}()
 	}
 }

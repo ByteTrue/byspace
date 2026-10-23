@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,9 @@ import (
 
 func writeFakePiScript(t *testing.T, dir string) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	scriptPath := filepath.Join(dir, "fake-pi.sh")
 	script := `#!/bin/sh
 while read line; do

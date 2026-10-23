@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
@@ -211,7 +210,7 @@ func ReadPIDLock(homeDir string) (PIDLockInfo, bool) {
 // lock is stale too — unless the daemon is on a different host, where liveness cannot be
 // checked and only the heartbeat signals.
 func IsStale(homeDir string, info PIDLockInfo) bool {
-	alive := info.PID > 0 && syscall.Kill(info.PID, 0) == nil
+	alive := processAlive(info.PID)
 	if !alive {
 		return true
 	}
@@ -246,7 +245,7 @@ func ReadPID(homeDir string) (int, bool) {
 	if !ok {
 		return 0, false
 	}
-	if err := syscall.Kill(info.PID, 0); err != nil {
+	if !processAlive(info.PID) {
 		return info.PID, false
 	}
 	return info.PID, true
@@ -280,7 +279,7 @@ func StopRunningWithTimeout(homeDir string, grace time.Duration) (int, bool, err
 		RemovePID(homeDir, 0)
 		return pid, false, nil
 	}
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+	if err := terminateProcess(pid); err != nil {
 		return pid, false, err
 	}
 	if grace <= 0 {
@@ -288,13 +287,13 @@ func StopRunningWithTimeout(homeDir string, grace time.Duration) (int, bool, err
 	}
 	deadline := time.Now().Add(grace)
 	for time.Now().Before(deadline) {
-		if err := syscall.Kill(pid, 0); err != nil {
+		if !processAlive(pid) {
 			RemovePID(homeDir, pid)
 			return pid, true, nil
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
+	_ = killProcess(pid)
 	RemovePID(homeDir, pid)
 	return pid, true, nil
 }
@@ -407,5 +406,5 @@ func ProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	return syscall.Kill(pid, 0) == nil
+	return processAlive(pid)
 }

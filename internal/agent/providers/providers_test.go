@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,9 @@ func TestBuiltinProvidersCatalog(t *testing.T) {
 }
 
 func TestClaudeStreamJSONSessionAndSubagentTracking(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	fakeClaude := filepath.Join(tmp, "fake-claude.sh")
 	script := `#!/bin/sh
@@ -100,6 +104,9 @@ done
 }
 
 func TestCodexAppServerSession(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	fakeCodex := filepath.Join(tmp, "fake-codex.sh")
 	script := `#!/bin/sh
@@ -161,6 +168,9 @@ done
 }
 
 func TestACPProviderSessionAndReverseFSRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	sampleFile := filepath.Join(tmp, "note.txt")
 	if err := os.WriteFile(sampleFile, []byte("secret-note"), 0o644); err != nil {
@@ -215,6 +225,9 @@ done
 }
 
 func TestOpenCodeHTTPSession(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/session", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "oc_http_1"})
@@ -258,6 +271,9 @@ const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42
 // every provider host must forward composer images, not just pi — this is the regression guard
 // for "images silently dropped for non-pi providers".
 func TestEveryProviderForwardsImageBlocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	// Each provider has its own wire shape: anthropic uses image+source, codex a data URL,
 	// ACP image+data, and OpenCode a `file` part (its API models attachments as file parts).
 	cases := []struct {

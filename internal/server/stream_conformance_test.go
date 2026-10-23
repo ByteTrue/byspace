@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,9 @@ done
 
 func writeFaithfulFakePi(t *testing.T) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "faithful-pi.sh")
 	if err := os.WriteFile(path, []byte(faithfulFakePiScript), 0o755); err != nil {
@@ -280,6 +284,9 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 // so the client stops waiting, and (b) drop the dead runtime so the next send
 // rebuilds it from persistence instead of writing into a closed pipe.
 func TestProcessExitFailsTurnAndReleasesRuntime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	dying := filepath.Join(tmp, "dying-pi.sh")
 	// First prompt accepted, then the process exits without any turn events.
@@ -393,6 +400,9 @@ esac
 // normal turn; steering unconditionally sends `steer` to a provider with no live turn, which
 // pi accepts as a queued message that never becomes a turn, so the prompt vanishes.
 func TestSecondMessageAfterTurnCompleted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	tmp := t.TempDir()
 	// Echo provider: replies to every prompt with a message_end, using the real pi event order.
 	echoPi := filepath.Join(tmp, "echo-pi.sh")

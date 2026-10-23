@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"bytes"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,9 @@ func TestFramesAndBacklog(t *testing.T) {
 }
 
 func TestPTYSessionEcho(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	sess, err := StartSession(StartOptions{
 		ID:      "term_1",
 		Name:    "test",

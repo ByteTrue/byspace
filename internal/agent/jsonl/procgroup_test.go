@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,9 @@ import (
 // Killing a provider must reach its children: a CLI spawns MCP bridges and language servers, and
 // killing only the parent leaves them running with no owner.
 func TestCloseKillsProcessTree(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
 	pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
 	// The "provider" starts a grandchild, records its pid, then waits forever.
 	script := `sleep 300 & echo $! > "` + pidFile + `"; wait`
