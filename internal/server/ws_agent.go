@@ -1245,6 +1245,21 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 	return strings.TrimRight(baseURL, "/") + "/#offer=" + encoded
 }
 
+// storedAppBaseURL reads the app base URL from the daemon config. The daemon stores it flat
+// (`appBaseUrl`), while the wire and the node daemon speak `app.baseUrl`; the config snapshot
+// maps between them, so both spellings are accepted here.
+func storedAppBaseURL(cfg map[string]any) string {
+	if v, ok := cfg["appBaseUrl"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	if app, ok := cfg["app"].(map[string]any); ok {
+		if v, ok := app["baseUrl"].(string); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
 func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string `json:"requestId"`
@@ -1266,7 +1281,7 @@ func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw 
 		return
 	}
 
-	offerURL := s.BuildPairingOfferURL("", relayCfg.UseTLS, relayCfg.Endpoint)
+	offerURL := s.BuildPairingOfferURL(relayCfg.ClientRelayEndpoint(), relayCfg.ClientRelayUseTLS(), storedAppBaseURL(s.store.LoadDaemonConfig()))
 	var qrText any
 	if qr, qrErr := RenderASCIIQRCode(offerURL); qrErr == nil {
 		qrText = qr

@@ -111,8 +111,6 @@ const daemonTest = metroTest.extend<
 const test = daemonTest.extend<{
   byspaceE2ESetup: void;
   outdatedDaemon: OutdatedDaemon;
-  desktopManagedOutdatedDaemon: OutdatedDaemon;
-  relayConfigOutdatedDaemon: OutdatedDaemon;
   projectPickerFixture: TrackedProjectPickerFixture;
   withWorkspace: WithWorkspace;
 }>({
@@ -210,19 +208,6 @@ const test = daemonTest.extend<{
   ],
   outdatedDaemon: async ({}, provide) => {
     const daemon = await startOutdatedDaemon();
-    await provide(daemon);
-    await daemon.close();
-  },
-  desktopManagedOutdatedDaemon: async ({}, provide) => {
-    const daemon = await startOutdatedDaemon({ desktopManaged: true });
-    await provide(daemon);
-    await daemon.close();
-  },
-  relayConfigOutdatedDaemon: async ({}, provide) => {
-    const daemon = await startOutdatedDaemon({
-      daemonStatusRpcCapability: false,
-      relayConfigCapability: false,
-    });
     await provide(daemon);
     await daemon.close();
   },

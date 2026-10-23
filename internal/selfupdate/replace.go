@@ -223,7 +223,19 @@ func ReplaceBinary(executable string, payload []byte) error {
 }
 
 // ReleaseBaseURL is where release archives live.
+//
+// BYSPACE_RELEASE_BASE_URL points it at a mirror: air-gapped and self-hosted installs fetch from
+// somewhere other than GitHub, and the e2e suite uses it to exercise a failing download without
+// reaching the network.
 var ReleaseBaseURL = "https://github.com/ByteTrue/byspace/releases/download"
+
+// releaseBaseURL resolves the download root, honouring the mirror override.
+func releaseBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("BYSPACE_RELEASE_BASE_URL")); v != "" {
+		return strings.TrimSuffix(v, "/")
+	}
+	return ReleaseBaseURL
+}
 
 // Download fetches the release archive for this platform.
 func Download(ctx context.Context, version string) ([]byte, error) {
@@ -237,7 +249,7 @@ func Download(ctx context.Context, version string) ([]byte, error) {
 	if runtime.GOOS == "windows" {
 		asset += ".exe"
 	}
-	url := ReleaseBaseURL + "/" + tag + "/" + asset
+	url := releaseBaseURL() + "/" + tag + "/" + asset
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

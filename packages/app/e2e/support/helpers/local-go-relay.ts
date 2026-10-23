@@ -1,18 +1,33 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { killProcessTree } from "./spawn-node";
 
-export interface LocalNodeRelay {
+export interface LocalGoRelay {
   port: number;
   endpoint: string;
   close(): Promise<void>;
 }
 
-// Mirrors local-wrangler-relay, but runs the Node relay that ships in the release artifacts
-// (packages/relay/dist/node-main.js) instead of the Cloudflare worker under `wrangler dev`.
-// CI builds it with `npm run build:server` before the Playwright shards, so the dist entry is
-// always present; src/ is not spawned because packages/relay has no tsx dependency.
+// Runs a real relay for the pairing spec. The relay used to be a Node entrypoint
+// (packages/relay/dist/node-main.js) that the release artifacts shipped; it moved to
+// internal/relay and now ships inside the Go binary (`byspace relay`), so this starts that
+// instead. Mirrors local-wrangler-relay, which runs the Cloudflare worker variant.
+const REPO_ROOT = path.resolve(__dirname, "../../../../..");
+const GO_DAEMON_BINARY = path.join(REPO_ROOT, "bin", "byspace");
+
+function resolveGoDaemonBinary(): string {
+  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
+  if (!existsSync(GO_DAEMON_BINARY)) {
+    throw new Error(
+      `Go daemon binary not found at ${GO_DAEMON_BINARY}. Run \`make build\` first ` +
+        `(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).`,
+    );
+  }
+  return GO_DAEMON_BINARY;
+}
+
 async function getAvailablePort(): Promise<number> {
   const server = net.createServer();
   await new Promise<void>((resolve, reject) => {
@@ -47,18 +62,12 @@ async function probeHealth(port: number): Promise<boolean> {
   });
 }
 
-export async function startLocalNodeRelay(): Promise<LocalNodeRelay> {
+export async function startLocalGoRelay(): Promise<LocalGoRelay> {
   const port = await getAvailablePort();
-  const relayDir = path.resolve(__dirname, "../../../../relay");
-  const entrypoint = path.join(relayDir, "dist", "node-main.js");
   const logs: string[] = [];
-  const child = spawn(process.execPath, [entrypoint], {
-    cwd: relayDir,
-    env: {
-      ...process.env,
-      BYSPACE_RELAY_HOST: "127.0.0.1",
-      BYSPACE_RELAY_PORT: String(port),
-    },
+  const child = spawn(resolveGoDaemonBinary(), ["relay", "--addr", `127.0.0.1:${port}`], {
+    cwd: REPO_ROOT,
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const record = (chunk: Buffer) => {
@@ -78,7 +87,7 @@ export async function startLocalNodeRelay(): Promise<LocalNodeRelay> {
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       await close();
-      throw new Error("Local Node relay exited before readiness: " + logs.join(""));
+      throw new Error("Local relay exited before readiness: " + logs.join(""));
     }
     if (await probeHealth(port)) {
       return { port, endpoint: "127.0.0.1:" + port, close };
@@ -86,5 +95,5 @@ export async function startLocalNodeRelay(): Promise<LocalNodeRelay> {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   await close();
-  throw new Error("Local Node relay did not become ready on port " + port + ": " + logs.join(""));
+  throw new Error("Local relay did not become ready on port " + port + ": " + logs.join(""));
 }

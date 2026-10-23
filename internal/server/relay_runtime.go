@@ -15,10 +15,17 @@ import (
 // `daemon.config.reload` claimed the change was applied.
 
 // RelayConfig is the relay's runtime configuration.
+//
+// PublicEndpoint/PublicUseTLS are what clients are told to dial. They differ from the internal
+// pair when the daemon reaches the relay at a private address (a container, a tunnel) while the
+// app must use the public one, so anything handed to a client — the pairing offer — reads the
+// public pair.
 type RelayConfig struct {
-	Enabled  bool   `json:"enabled"`
-	Endpoint string `json:"endpoint"`
-	UseTLS   bool   `json:"useTls"`
+	Enabled        bool   `json:"enabled"`
+	Endpoint       string `json:"endpoint"`
+	UseTLS         bool   `json:"useTls"`
+	PublicEndpoint string `json:"publicEndpoint"`
+	PublicUseTLS   bool   `json:"publicUseTls"`
 }
 
 // relayRuntime owns the relay connection's lifecycle.
@@ -128,7 +135,49 @@ func relayConfigFromStore(cfg map[string]any) RelayConfig {
 	if useTLS, ok := relay["useTls"].(bool); ok {
 		out.UseTLS = useTLS
 	}
+	if endpoint, ok := relay["publicEndpoint"].(string); ok {
+		out.PublicEndpoint = strings.TrimSpace(endpoint)
+	}
+	if useTLS, ok := relay["publicUseTls"].(bool); ok {
+		out.PublicUseTLS = useTLS
+	}
 	return out
+}
+
+// ClientRelayEndpoint is the endpoint a client should dial, preferring the public one.
+func (c RelayConfig) ClientRelayEndpoint() string {
+	if c.PublicEndpoint != "" {
+		return c.PublicEndpoint
+	}
+	return c.Endpoint
+}
+
+// ClientRelayUseTLS mirrors ClientRelayEndpoint for the scheme flag.
+func (c RelayConfig) ClientRelayUseTLS() bool {
+	if c.PublicEndpoint != "" {
+		return c.PublicUseTLS
+	}
+	return c.UseTLS
+}
+
+// relayWebSocketURL turns a relay endpoint into a dialable WebSocket URL.
+//
+// The stored endpoint is host:port (`relay.byspace.cc.cd:443`), the same shape the pairing offer
+// carries and the client parses; it is not a URL. Passing it to url.Parse either failed outright
+// (`127.0.0.1:6778`: "first path segment in URL cannot contain colon") or parsed as a scheme
+// (`relay.byspace.cc.cd:443`), so the daemon never connected to any relay configured this way.
+// A `--relay ws://…` override is already a URL and is kept as one.
+func relayWebSocketURL(endpoint string, useTLS bool) string {
+	ep := strings.TrimSpace(endpoint)
+	if strings.HasPrefix(ep, "ws://") || strings.HasPrefix(ep, "wss://") {
+		return ep
+	}
+	scheme := "ws"
+	if useTLS {
+		scheme = "wss"
+	}
+	// A bare host without a port is left to the scheme's default port.
+	return scheme + "://" + ep + "/ws"
 }
 
 // ApplyRelayConfig reconciles the relay connection with the stored config.
@@ -147,7 +196,9 @@ func (s *Server) ApplyRelayConfig(ctx context.Context) {
 		cfg.Enabled = true
 		cfg.Endpoint = override
 	}
-	s.relay.Apply(ctx, cfg, s.ConnectRelay)
+	s.relay.Apply(ctx, cfg, func(ctx context.Context, endpoint string) error {
+		return s.ConnectRelay(ctx, relayWebSocketURL(endpoint, cfg.UseTLS))
+	})
 }
 
 // SetRelayOverride pins the relay endpoint from a CLI flag.

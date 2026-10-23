@@ -71,3 +71,47 @@ func TestRelayRuntimeReconnectsOnEndpointChange(t *testing.T) {
 		t.Fatal("endpoint change did not reconnect")
 	}
 }
+
+// The stored endpoint is host:port, so it needs a scheme before it can be dialled. Getting this
+// wrong meant the daemon silently never connected: url.Parse treated the host as a scheme and the
+// dial failed, and the supervisor discarded the error.
+func TestRelayWebSocketURLFromStoredEndpoint(t *testing.T) {
+	cases := []struct {
+		endpoint string
+		useTLS   bool
+		want     string
+	}{
+		{"relay.byspace.cc.cd:443", true, "wss://relay.byspace.cc.cd:443/ws"},
+		{"127.0.0.1:6778", false, "ws://127.0.0.1:6778/ws"},
+		{"wss://relay.example.com/ws", true, "wss://relay.example.com/ws"},
+		{"ws://127.0.0.1:5000/ws", false, "ws://127.0.0.1:5000/ws"},
+		{"relay.example.com", true, "wss://relay.example.com/ws"},
+	}
+	for _, tc := range cases {
+		if got := relayWebSocketURL(tc.endpoint, tc.useTLS); got != tc.want {
+			t.Errorf("relayWebSocketURL(%q, %v) = %q, want %q", tc.endpoint, tc.useTLS, got, tc.want)
+		}
+	}
+}
+
+// A public endpoint exists for daemons the relay reaches on a private address; the pairing offer
+// has to carry the address a phone can dial, not the one the daemon dials.
+func TestRelayConfigClientEndpointPrefersPublic(t *testing.T) {
+	private := RelayConfig{Enabled: true, Endpoint: "127.0.0.1:6778"}
+	if got := private.ClientRelayEndpoint(); got != "127.0.0.1:6778" {
+		t.Errorf("without a public endpoint got %q", got)
+	}
+	both := RelayConfig{
+		Enabled:        true,
+		Endpoint:       "10.0.0.5:6778",
+		UseTLS:         false,
+		PublicEndpoint: "relay.byspace.cc.cd:443",
+		PublicUseTLS:   true,
+	}
+	if got := both.ClientRelayEndpoint(); got != "relay.byspace.cc.cd:443" {
+		t.Errorf("public endpoint not preferred: %q", got)
+	}
+	if !both.ClientRelayUseTLS() {
+		t.Error("public TLS flag not preferred")
+	}
+}

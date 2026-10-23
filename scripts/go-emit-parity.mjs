@@ -66,6 +66,10 @@ const CONDITIONALLY_OMITTED = new Map([
   ["tunnel.remove.response", new Set(["error"])],
   ["hub.management.daemon.disconnect.response", new Set(["warning"])],
   ["providers_snapshot_update", new Set(["cwd"])], // 仅请求带 cwd 时
+  // Go 的 ProviderSpec 没有图标字段：内置与脚本 provider 的图标由客户端
+  // `packages/app/src/data/acp-provider-catalog.ts` 自带，插件式 provider 注册（唯一会
+  // 提供 SVG 的来源）在 Go 分支不存在。因此快照条目不携带 iconSvg，客户端回退到目录图标。
+  ["get_providers_snapshot_response", new Set(["entries.iconSvg"])],
 ]);
 
 /** 这些出站消息由客户端或中继产生，daemon 不发。 */
@@ -108,7 +112,6 @@ const DEFERRED_TYPES = new Map([
   ["activity_log", "唯一消费者是语音中止失败的 toast，语音功能本身未实现"],
   ["terminal_stream_exit", "PTY 退出走二进制帧 OpcodeExit，未额外发文本消息"],
   ["agent.timeline.replacement", "epoch 变化时客户端在重连时全量拉取，未单独广播（见 Issue）"],
-  ["daemon.update.progress", "daemon 自更新未实现"],
 ]);
 
 function walk(dir, ext, out = []) {
@@ -676,12 +679,18 @@ export function runAudit({ schemas, members, emits, structTags }) {
       if (optionalGap.length) optionalGaps.push({ type, fields: optionalGap });
       // 嵌套：payload 里的对象字段（agent/workspace/…）各自还有一层字段。
       for (const [field, innerFields] of nestedObjectFields(schemas, schema)) {
-        const sitesWithField = sites.filter((x) => x.keys.has(field));
-        if (sitesWithField.length === 0) continue;
+        // 同一个类型的响应可能在多处发出：`"entries": []any{}` 的空数组分支和真正构造
+        // 列表的分支并存。空数组里没有元素字段可查，把它当成缺口是假阳性，所以优先挑
+        // 那个真正带内容的分支。全为空数组时退回 UNVERIFIED，不报缺口。
+        const allSites = sites.filter((x) => x.keys.has(field));
+        if (allSites.length === 0) continue;
+        const emptyArray = new RegExp(`"${field}":\\s*\\[\\]`);
+        const filled = allSites.filter((x) => !emptyArray.test(x.payloadText ?? ""));
         {
-          const site = sitesWithField[0];
+          const site = filled[0] ?? allSites[0];
+          const sitesWithField = filled.length > 0 ? filled : allSites;
           const innerGap = innerFields.filter(
-            (f) => !ALWAYS_PRESENT.has(f) && !site.allKeys.has(f),
+            (f) => !ALWAYS_PRESENT.has(f) && !omitted.has(`${field}.${f}`) && !site.allKeys.has(f),
           );
           if (innerGap.length) {
             // 该字段的值如果是变量（`"agent": agentPayload`），字段内容不在本函数里，

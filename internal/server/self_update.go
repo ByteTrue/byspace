@@ -3,8 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
 
 	"github.com/ByteTrue/byspace/internal/selfupdate"
 )
@@ -29,11 +27,14 @@ func (s *Server) handleDaemonUpdate(ctx context.Context, sink frameSink, raw jso
 	updater := &selfupdate.Updater{
 		CurrentVersion: s.version,
 		TargetVersion:  req.Version,
-		// The protocol has no progress message for updates (only the four-phase vocabulary the
-		// updater reports), so phases are logged rather than invented as a wire message. A daemon
-		// that sends a type the client does not know would be worse than a quiet update.
+		// The client shows the four phases as the button label while the request is in flight, so
+		// they travel as `daemon.update.progress` rather than only landing in the log. Without
+		// them the button sits on "Preparing update..." until the response arrives.
 		OnProgress: func(phase selfupdate.Phase) {
-			fmt.Fprintf(os.Stderr, "daemon update: %s\n", phase)
+			_ = sendSessionMsg(ctx, sink, "daemon.update.progress", map[string]any{
+				"requestId": req.RequestID,
+				"phase":     string(phase),
+			})
 		},
 	}
 
