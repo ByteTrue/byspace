@@ -166,7 +166,11 @@ type Server struct {
 	// checkoutStatusFingerprints remembers the last pushed dirty/branch state per checkout so the
 	// poller does not re-broadcast an unchanged status every second.
 	checkoutStatusFingerprints map[string]string
-	clients                    map[frameSink]bool
+	// checkoutDiffStats caches each checkout's additions/deletions summary. The workspace
+	// descriptor carries it for the composer's diff pill, and a descriptor is built on every
+	// listing, so recomputing git there would be several processes per response.
+	checkoutDiffStats map[string]*workspace.CheckoutDiffStat
+	clients           map[frameSink]bool
 	// timelineViews holds each socket's viewed-agent set from
 	// agent.timeline.set_subscription.request, and selectiveTimeline records which sockets
 	// declared selective_agent_timeline. Together they scope agent_stream to the chats a

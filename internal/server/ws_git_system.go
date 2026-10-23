@@ -77,6 +77,11 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		return
 
 	case "checkout.refresh.request":
+		// Recompute what the caller can see, then answer. Node's refresh invalidates the forge
+		// service and forces a snapshot re-read for the same reason: a client asking for a refresh
+		// is asking for current facts, not ack of the request.
+		s.broadcastCheckoutStatusUpdate(ctx, base.Cwd)
+		s.refreshCheckoutDiffStat(ctx, base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "checkout.refresh.response", map[string]any{
 			"cwd":       base.Cwd,
 			"success":   true,

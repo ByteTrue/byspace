@@ -364,6 +364,10 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 	// cwd, and recomputing git status per subscription would cost a `git status` each.
 	for cwd := range statuses {
 		s.broadcastCheckoutStatusIfChanged(ctx, cwd)
+		// The composer's diff pill reads the workspace descriptor, and the descriptor is only
+		// pushed when something re-sends the workspace. Watching the checkout is exactly the
+		// moment the user is editing files, so it is where the stat has to be kept honest.
+		s.refreshCheckoutDiffStat(ctx, cwd)
 	}
 }
 
