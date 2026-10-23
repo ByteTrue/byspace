@@ -40,6 +40,11 @@ type ManagedSession interface {
 	ListSubagents(parentAgentID string) []sdk.SubagentDescriptor
 	GetSubagent(parentAgentID, subagentID string) (sdk.SubagentDescriptor, bool)
 	OnEvent(fn func(map[string]any)) func()
+	// AppendTimelineItem stores one item in the session's own timeline and returns the entry, without
+	// broadcasting it. The daemon emits the timeline event itself, so this cannot re-enter the event
+	// loop. The entry carries no turn id: the daemon uses it for rows that belong to no turn, such as
+	// the system-error row a failed turn leaves behind.
+	AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry
 	Close() error
 }
 

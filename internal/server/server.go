@@ -3061,6 +3061,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"turnId":   ev["turnId"],
 				},
 			})
+			s.appendSystemErrorRow(rec, mp.session, ev)
 			s.broadcastAgentUpdate(recFailedCopy)
 
 		case "permission_requested":
@@ -3168,6 +3169,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 							"error":    reason,
 						},
 					})
+					// The process is gone but its timeline is still in memory, and this row is what a
+					// reader sees after a reload: the failure itself is otherwise only a state change.
+					s.appendSystemErrorRow(rec, mp.session, map[string]any{"error": reason})
 				}
 				if evType == "agent_end" {
 					go s.syncPiPersistence(mp)

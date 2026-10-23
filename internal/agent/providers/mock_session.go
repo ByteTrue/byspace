@@ -174,6 +174,25 @@ func (s *MockSession) Timeline() []sdk.TimelineEntry {
 	return out
 }
 
+// AppendTimelineItem stores one item in the session's own timeline and returns the entry.
+//
+// It does not broadcast: the daemon emits the timeline event itself, so a provider cannot re-enter
+// its own event loop. The entry deliberately carries no turn id — the daemon uses this for rows that
+// belong to no turn, such as the system-error row a failed turn leaves behind.
+func (s *MockSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.streamSeq++
+	entry := sdk.TimelineEntry{
+		Seq:       s.streamSeq,
+		SeqEnd:    s.streamSeq,
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		Item:      sdk.LimitTimelineItemContent(item),
+	}
+	s.timeline = append(s.timeline, entry)
+	return entry
+}
+
 func (s *MockSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

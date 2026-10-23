@@ -17,13 +17,15 @@ import (
 // This exact bug shipped twice: handleEntryCaptureNotification and handleCommandResultNotification
 // (notes/013), then attentionIsFocused. A comment was not enough, so it is checked mechanically.
 var selfLockingMethods = map[string]bool{
-	"attentionIsFocused":           true,
-	"markAgentAttention":           true,
-	"clearAgentAttention":          true,
-	"canMarkUnread":                true,
-	"firstMarkableAgent":           true,
-	"broadcastAgentUpdate":         true,
-	"broadcastSessionMsg":          true,
+	"attentionIsFocused":   true,
+	"markAgentAttention":   true,
+	"clearAgentAttention":  true,
+	"canMarkUnread":        true,
+	"firstMarkableAgent":   true,
+	"broadcastAgentUpdate": true,
+	"broadcastSessionMsg":  true,
+	// appendSystemErrorRow broadcasts, so it self-locks through broadcastSessionMsg.
+	"appendSystemErrorRow":         true,
 	"buildAgentSnapshotPayload":    true,
 	"applyRelayConfig":             true,
 	"ApplyRelayConfig":             true,

@@ -169,6 +169,24 @@ func (s *OpenCodeSession) LastAssistantText() string {
 	return ""
 }
 
+// AppendTimelineItem stores one item in the session's own timeline and returns the entry.
+//
+// It does not broadcast: the daemon emits the timeline event itself, so a provider cannot re-enter
+// its own event loop. The entry deliberately carries no turn id — the daemon uses this for rows that
+// belong to no turn, such as the system-error row a failed turn leaves behind.
+func (s *OpenCodeSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry := sdk.TimelineEntry{
+		Seq:       len(s.timeline) + 1,
+		SeqEnd:    len(s.timeline) + 1,
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		Item:      sdk.LimitTimelineItemContent(item),
+	}
+	s.timeline = append(s.timeline, entry)
+	return entry
+}
+
 func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
