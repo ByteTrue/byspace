@@ -427,92 +427,327 @@ func SearchGitHubRepos(ctx context.Context, query string, limit int) ([]map[stri
 	return out, true
 }
 
-// SearchIssuesAndPullRequests searches issues and PRs in the repository's forge.
+// ForgeSearchItem is one row of `forge.search.response`.
 //
-// `forge.search.request` is what the checkout panel's search box calls; it answered with an
-// empty list unconditionally, so search looked broken rather than unimplemented. Each forge has
-// its own CLI, and they disagree on flags, so each branch is explicit.
-func SearchIssuesAndPullRequests(ctx context.Context, cwd, query string, limit int) ([]map[string]any, error) {
+// The shape is the wire contract (GitHubSearchItemSchema extended with the neutral kinds), not a
+// convenience: a field the client requires but the daemon omits makes the client reject the whole
+// response, so search silently looked empty.
+type ForgeSearchItem struct {
+	Kind        string   `json:"kind"` // "issue" | "change_request"
+	Number      int      `json:"number"`
+	Title       string   `json:"title"`
+	URL         string   `json:"url"`
+	State       string   `json:"state"`
+	Body        *string  `json:"body"`
+	Labels      []string `json:"labels"`
+	BaseRefName *string  `json:"baseRefName"`
+	HeadRefName *string  `json:"headRefName"`
+	UpdatedAt   string   `json:"updatedAt,omitempty"`
+	Forge       string   `json:"forge,omitempty"`
+}
+
+// SearchIssuesAndPullRequests searches change requests and issues in the repository's forge.
+//
+// `forge.search.request` is what the starting-ref picker calls; it answered with an empty list
+// unconditionally, and the rows it did return carried `kind: "pull_request"` — a value the wire
+// enum does not contain — so the client discarded the response.
+func SearchIssuesAndPullRequests(ctx context.Context, cwd, query string, limit int, kinds []string) ([]ForgeSearchItem, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
+	}
+	wantIssues, wantChangeRequests := normalizeForgeSearchKinds(kinds)
+	if !wantIssues && !wantChangeRequests {
+		return []ForgeSearchItem{}, nil
 	}
 	forge := DetectForge(ctx, cwd)
 	limitArg := strconv.Itoa(limit)
 
+	var (
+		items []ForgeSearchItem
+		err   error
+	)
 	switch forge {
 	case "gitlab":
-		if _, err := exec.LookPath("glab"); err != nil {
-			return []map[string]any{}, fmt.Errorf("glab is not installed")
-		}
-		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
-			fmt.Sprintf("projects/:id/search?scope=issues&search=%s&per_page=%s", url.QueryEscape(query), limitArg))
-		if err != nil {
-			return []map[string]any{}, err
-		}
-		return decodeForgeItems(raw, "title", "web_url")
+		items, err = searchGitLabIssues(ctx, cwd, query, limitArg, wantIssues, wantChangeRequests)
 	case "gitea":
-		if _, err := exec.LookPath("tea"); err != nil {
-			return []map[string]any{}, fmt.Errorf("tea is not installed")
-		}
-		raw, err := runForgeCLI(ctx, "tea", cwd, "issues", "list", "--search", query, "--limit", limitArg, "--output", "json")
-		if err != nil {
-			return []map[string]any{}, err
-		}
-		return decodeForgeItems(raw, "title", "html_url")
+		items, err = searchGiteaIssues(ctx, cwd, query, limitArg, wantIssues, wantChangeRequests)
 	default:
-		if _, err := exec.LookPath("gh"); err != nil {
-			return []map[string]any{}, fmt.Errorf("gh is not installed")
+		items, err = searchGitHubItems(ctx, cwd, query, limitArg, wantIssues, wantChangeRequests)
+	}
+	if err != nil {
+		return []ForgeSearchItem{}, err
+	}
+	for index := range items {
+		items[index].Forge = forge
+	}
+	// Newest first: the picker lists rows in the order the daemon sent them, and the row a user
+	// wants is almost always the change request they just opened.
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt > items[j].UpdatedAt
+	})
+	return items, nil
+}
+
+// normalizeForgeSearchKinds maps the legacy GitHub kind aliases onto the neutral pair.
+//
+// COMPAT(githubSearchKind): the aliases shipped with the legacy github_search_request RPC; remove
+// together with it after 2027-01-17.
+func normalizeForgeSearchKinds(kinds []string) (issues, changeRequests bool) {
+	if len(kinds) == 0 {
+		return true, true
+	}
+	for _, kind := range kinds {
+		switch strings.ToLower(strings.TrimSpace(kind)) {
+		case "issue", "github-issue":
+			issues = true
+		case "change_request", "github-pr", "pr", "pull_request":
+			changeRequests = true
 		}
-		args := []string{"search", "prs", "--limit", limitArg,
-			"--json", "number,title,state,url,isPullRequest,updatedAt,author"}
-		if strings.TrimSpace(query) != "" {
-			args = append(args, query)
+	}
+	return issues, changeRequests
+}
+
+func searchGitHubItems(ctx context.Context, cwd, query, limitArg string, wantIssues, wantChangeRequests bool) ([]ForgeSearchItem, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return nil, fmt.Errorf("gh is not installed")
+	}
+	var items []ForgeSearchItem
+	if wantChangeRequests {
+		args := []string{"pr", "list", "--limit", limitArg,
+			"--json", "number,title,url,state,body,labels,baseRefName,headRefName,updatedAt"}
+		if trimmed := strings.TrimSpace(query); trimmed != "" {
+			args = append(args, "--search", trimmed)
 		}
 		raw, err := runGH(ctx, cwd, args...)
 		if err != nil {
-			return []map[string]any{}, err
+			return nil, err
 		}
-		return decodeForgeItems(raw, "title", "url")
+		decoded, err := decodeGitHubItems(raw, "change_request", true)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, decoded...)
 	}
+	if wantIssues {
+		args := []string{"issue", "list", "--limit", limitArg,
+			"--json", "number,title,url,state,body,labels,updatedAt"}
+		if trimmed := strings.TrimSpace(query); trimmed != "" {
+			args = append(args, "--search", trimmed)
+		}
+		raw, err := runGH(ctx, cwd, args...)
+		if err != nil {
+			// An issue search failing must not hide the change requests that did resolve, which
+			// are the rows the starting-ref picker actually shows.
+			if len(items) == 0 {
+				return nil, err
+			}
+			return items, nil
+		}
+		decoded, err := decodeGitHubItems(raw, "issue", false)
+		if err != nil {
+			if len(items) == 0 {
+				return nil, err
+			}
+			return items, nil
+		}
+		items = append(items, decoded...)
+	}
+	return items, nil
 }
 
-// decodeForgeItems normalizes the three CLIs' JSON into one item shape.
-func decodeForgeItems(raw, titleKey, urlKey string) ([]map[string]any, error) {
+func decodeGitHubItems(raw, kind string, withRefs bool) ([]ForgeSearchItem, error) {
 	if strings.TrimSpace(raw) == "" {
-		return []map[string]any{}, nil
+		return []ForgeSearchItem{}, nil
 	}
-	var items []map[string]any
-	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return []map[string]any{}, err
+	var rows []struct {
+		Number      int    `json:"number"`
+		Title       string `json:"title"`
+		URL         string `json:"url"`
+		State       string `json:"state"`
+		Body        string `json:"body"`
+		UpdatedAt   string `json:"updatedAt"`
+		BaseRefName string `json:"baseRefName"`
+		HeadRefName string `json:"headRefName"`
+		Labels      []struct {
+			Name string `json:"name"`
+		} `json:"labels"`
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, it := range items {
-		title, _ := it[titleKey].(string)
-		url, _ := it[urlKey].(string)
-		if title == "" && url == "" {
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		return []ForgeSearchItem{}, err
+	}
+	out := make([]ForgeSearchItem, 0, len(rows))
+	for _, row := range rows {
+		if row.Title == "" && row.URL == "" {
 			continue
 		}
-		state, _ := it["state"].(string)
-		number := 0
-		switch n := it["number"].(type) {
-		case float64:
-			number = int(n)
-		case int:
-			number = n
+		item := ForgeSearchItem{
+			Kind:      kind,
+			Number:    row.Number,
+			Title:     row.Title,
+			URL:       row.URL,
+			State:     row.State,
+			Body:      emptyToNil(row.Body),
+			Labels:    labelNames(row.Labels),
+			UpdatedAt: row.UpdatedAt,
 		}
-		kind := "issue"
-		if isPR, ok := it["isPullRequest"].(bool); ok && isPR {
-			kind = "pull_request"
+		if withRefs {
+			item.BaseRefName = emptyToNil(row.BaseRefName)
+			item.HeadRefName = emptyToNil(row.HeadRefName)
 		}
-		out = append(out, map[string]any{
-			"title":  title,
-			"url":    url,
-			"state":  state,
-			"number": number,
-			"kind":   kind,
-		})
+		out = append(out, item)
 	}
 	return out, nil
+}
+
+func searchGitLabIssues(ctx context.Context, cwd, query, limitArg string, wantIssues, wantChangeRequests bool) ([]ForgeSearchItem, error) {
+	if _, err := exec.LookPath("glab"); err != nil {
+		return nil, fmt.Errorf("glab is not installed")
+	}
+	var items []ForgeSearchItem
+	if wantIssues {
+		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+			fmt.Sprintf("projects/:id/issues?search=%s&per_page=%s", url.QueryEscape(query), limitArg))
+		if err != nil && len(items) == 0 && !wantChangeRequests {
+			return nil, err
+		}
+		if err == nil {
+			decoded, decodeErr := decodeForgeItems(raw, "issue", "web_url", false)
+			if decodeErr != nil && !wantChangeRequests {
+				return nil, decodeErr
+			}
+			items = append(items, decoded...)
+		}
+	}
+	if wantChangeRequests {
+		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+			fmt.Sprintf("projects/:id/merge_requests?search=%s&per_page=%s", url.QueryEscape(query), limitArg))
+		if err != nil {
+			if len(items) == 0 {
+				return nil, err
+			}
+			return items, nil
+		}
+		decoded, decodeErr := decodeForgeItems(raw, "change_request", "web_url", true)
+		if decodeErr != nil {
+			if len(items) == 0 {
+				return nil, decodeErr
+			}
+			return items, nil
+		}
+		items = append(items, decoded...)
+	}
+	return items, nil
+}
+
+func searchGiteaIssues(ctx context.Context, cwd, query, limitArg string, wantIssues, wantChangeRequests bool) ([]ForgeSearchItem, error) {
+	if _, err := exec.LookPath("tea"); err != nil {
+		return nil, fmt.Errorf("tea is not installed")
+	}
+	var items []ForgeSearchItem
+	if wantIssues {
+		raw, err := runForgeCLI(ctx, "tea", cwd, "issues", "list", "--search", query, "--limit", limitArg, "--output", "json")
+		if err != nil && !wantChangeRequests {
+			return nil, err
+		}
+		if err == nil {
+			decoded, decodeErr := decodeForgeItems(raw, "issue", "html_url", false)
+			if decodeErr != nil && !wantChangeRequests {
+				return nil, decodeErr
+			}
+			items = append(items, decoded...)
+		}
+	}
+	if wantChangeRequests {
+		raw, err := runForgeCLI(ctx, "tea", cwd, "pulls", "list", "--search", query, "--limit", limitArg, "--output", "json")
+		if err != nil {
+			if len(items) == 0 {
+				return nil, err
+			}
+			return items, nil
+		}
+		decoded, decodeErr := decodeForgeItems(raw, "change_request", "html_url", true)
+		if decodeErr != nil {
+			if len(items) == 0 {
+				return nil, decodeErr
+			}
+			return items, nil
+		}
+		items = append(items, decoded...)
+	}
+	return items, nil
+}
+
+// decodeForgeItems normalizes glab's and tea's JSON into the wire item shape.
+func decodeForgeItems(raw, kind, urlKey string, withRefs bool) ([]ForgeSearchItem, error) {
+	if strings.TrimSpace(raw) == "" {
+		return []ForgeSearchItem{}, nil
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		return []ForgeSearchItem{}, err
+	}
+	out := make([]ForgeSearchItem, 0, len(rows))
+	for _, row := range rows {
+		title, _ := row["title"].(string)
+		link, _ := row[urlKey].(string)
+		if title == "" && link == "" {
+			continue
+		}
+		item := ForgeSearchItem{
+			Kind:      kind,
+			Title:     title,
+			URL:       link,
+			State:     stringField(row, "state"),
+			Body:      emptyToNil(stringField(row, "description")),
+			Labels:    []string{},
+			UpdatedAt: firstStringField(row, "updated_at", "updatedAt"),
+		}
+		if raw, ok := row["number"].(float64); ok {
+			item.Number = int(raw)
+		}
+		if withRefs {
+			item.HeadRefName = emptyToNil(stringField(row, "source_branch"))
+			item.BaseRefName = emptyToNil(stringField(row, "target_branch"))
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func stringField(row map[string]any, key string) string {
+	value, _ := row[key].(string)
+	return value
+}
+
+func firstStringField(row map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := row[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// emptyToNil keeps an empty value as an explicit null: the wire schema declares these fields
+// nullable, and omitting `body` makes the client's parse fail on a required key.
+func emptyToNil(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	trimmed := value
+	return &trimmed
+}
+
+func labelNames(labels []struct {
+	Name string `json:"name"`
+}) []string {
+	names := make([]string, 0, len(labels))
+	for _, label := range labels {
+		if label.Name != "" {
+			names = append(names, label.Name)
+		}
+	}
+	return names
 }
 
 // ResolveChangeRequestCheckoutTarget asks the forge for a PR/MR's head and base refs.

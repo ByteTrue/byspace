@@ -590,11 +590,12 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		}
 		// The panel's search box calls this; answering with a fixed empty list made search look
 		// broken. Query the repository's forge and report failures instead of hiding them.
-		items, searchErr := workspace.SearchIssuesAndPullRequests(ctx, forgeSearchReq.Cwd, forgeSearchReq.Query, forgeSearchReq.Limit)
+		items, searchErr := workspace.SearchIssuesAndPullRequests(
+			ctx, forgeSearchReq.Cwd, forgeSearchReq.Query, forgeSearchReq.Limit, forgeSearchReq.Kinds)
 		var searchErrText any
 		if searchErr != nil {
 			searchErrText = searchErr.Error()
-			items = []map[string]any{}
+			items = []workspace.ForgeSearchItem{}
 		}
 		searchAuthState := workspace.ProbeForgeAuth(forgeSearchReq.Cwd, workspace.DetectForge(ctx, forgeSearchReq.Cwd))
 		searchPayload := map[string]any{

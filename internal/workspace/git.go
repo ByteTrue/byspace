@@ -1292,35 +1292,78 @@ func checkoutExistingBranch(ctx context.Context, repoCwd, worktreesBaseDir, slug
 //
 // Ported from the `checkout-change-request` branch of worktree-session.ts. `gh pr checkout` is
 // not used because it mutates the current worktree; the daemon needs an independent one.
+//
+// The local branch is named after the request's head branch, not after the worktree slug: the slug
+// is a generated directory name, so naming the branch after it produced `flaky-stingray` where the
+// user asked for the PR's own branch. A `-1`/`-2` suffix keeps it unique when the branch already
+// exists locally.
 func checkoutChangeRequest(ctx context.Context, repoCwd, worktreesBaseDir, slug string, intent WorktreeIntent) (string, string, error) {
 	if err := AssertSafeGitRef(intent.HeadRef, "change request head ref"); err != nil {
 		return "", "", err
 	}
-	topLevel, wtPath, cleanSlug, err := worktreeLayout(ctx, repoCwd, worktreesBaseDir, slug)
+	topLevel, wtPath, _, err := worktreeLayout(ctx, repoCwd, worktreesBaseDir, slug)
+	if err != nil {
+		return "", "", err
+	}
+
+	candidate := strings.TrimSpace(intent.HeadRef)
+	if candidate == "" {
+		candidate = strings.TrimSpace(slug)
+	}
+	branchName, err := resolveUniqueLocalBranchName(ctx, topLevel, candidate)
 	if err != nil {
 		return "", "", err
 	}
 
 	// GitHub publishes every PR head at refs/pull/<n>/head, including cross-repository ones,
-	// which is the one ref that works without knowing the fork's URL.
-	fetchRef := fmt.Sprintf("refs/pull/%d/head", intent.ChangeRequestNumber)
+	// which is the one ref that works without knowing the fork's URL. Other forges expose the
+	// head branch under its own name.
+	remoteRef := fmt.Sprintf("refs/pull/%d/head", intent.ChangeRequestNumber)
 	if intent.Forge != "" && intent.Forge != "github" {
-		// Other forges expose the head branch under the same name as the source branch.
-		fetchRef = intent.HeadRef
+		remoteRef = intent.HeadRef
 	}
-	if _, err := runGit(ctx, topLevel, "fetch", "origin", fetchRef); err != nil {
+	// Fetch straight into the local branch: `worktree add` then has something to check out even
+	// when the head branch was never fetched, which is the whole point of this path.
+	if _, err := runGit(ctx, topLevel, "fetch", "origin",
+		"+"+remoteRef+":refs/heads/"+branchName, "--force"); err != nil {
 		return "", "", err
 	}
 
-	if _, err := runGit(ctx, topLevel, "worktree", "add", "-b", cleanSlug, wtPath, "FETCH_HEAD"); err != nil {
+	if _, err := runGit(ctx, topLevel, "worktree", "add", wtPath, branchName); err != nil {
 		return "", "", err
 	}
 	// Track the origin branch when the head lives in this repository, so a later push goes to
 	// the right place. A cross-repository head has no matching origin branch.
 	if !intent.IsCrossRepository {
-		_, _ = runGit(ctx, wtPath, "branch", "--set-upstream-to=origin/"+intent.HeadRef, cleanSlug)
+		_, _ = runGit(ctx, wtPath, "branch", "--set-upstream-to=origin/"+intent.HeadRef, branchName)
 	}
-	return wtPath, cleanSlug, nil
+	return wtPath, branchName, nil
+}
+
+// resolveUniqueLocalBranchName appends -1, -2, ... until the name is free, matching
+// resolveUniqueLocalBranchName in the Node server.
+func resolveUniqueLocalBranchName(ctx context.Context, cwd, candidate string) (string, error) {
+	name := candidate
+	for suffix := 1; suffix < 100; suffix++ {
+		exists, err := localBranchExists(ctx, cwd, name)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return name, nil
+		}
+		name = fmt.Sprintf("%s-%d", candidate, suffix)
+	}
+	return "", fmt.Errorf("could not find a free branch name for %s", candidate)
+}
+
+func localBranchExists(ctx context.Context, cwd, branch string) (bool, error) {
+	if _, err := runGit(ctx, cwd, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
+		// show-ref exits non-zero for a missing ref; anything else is a real failure, but the
+		// caller only needs the boolean and a second git call per candidate is not worth it.
+		return false, nil
+	}
+	return true, nil
 }
 
 // ResolveDefaultBranch reports the repository's default branch.
