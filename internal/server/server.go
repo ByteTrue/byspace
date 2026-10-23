@@ -2279,7 +2279,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		createdText := appendAttachmentHints(*req.InitialPrompt, req.Attachments)
 		_ = mp.session.Prompt(ctx, createdText, createdImages)
 		s.mu.Lock()
-		mp.record.LastStatus = mp.session.Status()
+		mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		s.mu.Unlock()
 		_ = s.store.UpsertAgent(mp.record)
@@ -2413,7 +2413,7 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	mp.record.UpdatedAt = now
 	mp.record.LastUserMessageAt = &now
-	mp.record.LastStatus = mp.session.Status()
+	mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 	_ = s.store.UpsertAgent(mp.record)
 	s.broadcastAgentUpdate(mp.record)
 
@@ -2681,21 +2681,41 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 		return
 	}
 
-	mp.record.LastStatus = mp.session.Status()
+	mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	_ = s.store.UpsertAgent(mp.record)
 
+	// The schema's enum is idle | error | permission | timeout. A finished turn is "idle", not
+	// "completed" — an invented value made the client reject the response and reject its promise, so
+	// `byspace run` failed even though the turn had succeeded. A turn that failed is "error": node
+	// derives the status from the daemon's own lifecycle, and reporting idle for a failure left the
+	// caller with no way to tell the run apart from a clean one.
+	//
+	// "permission" is not derived here. Node reaches it through a shortcut in waitForAgentEvent that
+	// resolves before the turn settles; this daemon's WaitForFinish blocks on the session going idle
+	// and has no such shortcut, and inventing a stand-in (a non-empty pending list at the moment the
+	// turn ends) would report a state no test or client expects.
+	finalStatus := "idle"
+	if mp.record.LastStatus == "error" {
+		finalStatus = "error"
+	}
+	// The error text mirrors node's resolveWaitForFinishError: the recorded failure, or a fallback.
+	var waitErr any
+	if finalStatus == "error" {
+		message := "Agent failed"
+		if mp.record.LastError != nil && strings.TrimSpace(*mp.record.LastError) != "" {
+			message = *mp.record.LastError
+		}
+		waitErr = message
+	}
 	finalText := mp.session.LastAssistantText()
 	_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
 		"requestId": req.RequestID,
-		// The schema's enum is idle | error | permission | timeout: a finished turn is "idle", not
-		// "completed". Sending an invented value made the client reject the response and reject its promise,
-		// so `byspace run` and every wait-for-finish path failed even though the turn had succeeded.
-		"status": "idle",
+		"status":    finalStatus,
 		// `final` is the full agent snapshot, not an ad-hoc summary: clients merge it into
 		// their agent map, and `lastMessage` is what `byspace wait` prints.
 		"final":       s.buildAgentSnapshotPayload(mp.record),
-		"error":       nil,
+		"error":       waitErr,
 		"lastMessage": finalText,
 	})
 }
@@ -3040,10 +3060,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 		case "byspace_turn_failed":
 			// A provider-reported failure ends the turn the same way a completion does, minus the success:
-			// the client needs the status to leave running or the row spins forever.
+			// the client needs the status to leave running or the row spins forever. But it leaves running
+			// into "error", not "idle" — a failed turn is not a finished one, and the sidebar, the hover
+			// card and wait_for_finish all read that difference.
 			mp.stopUsagePolling()
 			s.mu.Lock()
-			mp.record.LastStatus = "idle"
+			mp.record.LastStatus = "error"
 			if message, ok := ev["error"].(string); ok && message != "" {
 				mp.record.LastError = &message
 			}
@@ -3247,7 +3269,7 @@ func (s *Server) getAgentPayload(agentID string) any {
 	mp, ok := s.agents[agentID]
 	s.mu.Unlock()
 	if ok {
-		mp.record.LastStatus = mp.session.Status()
+		mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
 		return s.buildAgentSnapshotPayload(mp.record)
 	}
 	rec, err := s.store.GetAgent(agentID)
@@ -3257,13 +3279,28 @@ func (s *Server) getAgentPayload(agentID string) any {
 	return s.buildAgentSnapshotPayload(*rec)
 }
 
+// resolveAgentStatus picks the status to report for an agent, given the daemon's own record and the
+// provider session's live state.
+//
+// "error" is daemon-owned: it says the last turn failed and nothing has run since. No provider
+// session models it — a session tears the failed turn down and reports "idle" — so reading the
+// session alone erases the failure and the agent looks merely finished. The daemon's error therefore
+// outranks a session that has gone idle, and stands until the next turn starts: turn_started writes
+// "running" over it, and a session that is itself running (a new turn already underway) wins outright.
+func resolveAgentStatus(lastStatus, sessionStatus string) string {
+	if lastStatus == "error" && (sessionStatus == "idle" || sessionStatus == "") {
+		return "error"
+	}
+	return sessionStatus
+}
+
 func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any {
 	status := rec.LastStatus
 	pendingPerms := []map[string]any{}
 	var activeTurn any
 	s.mu.Lock()
 	if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
-		status = mp.session.Status()
+		status = resolveAgentStatus(rec.LastStatus, mp.session.Status())
 		pendingPerms = mp.session.PendingPermissions()
 		if tid, startedAt := mp.session.ActiveTurn(); tid != "" && status == "running" {
 			var sa any
