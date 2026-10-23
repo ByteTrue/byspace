@@ -1018,9 +1018,10 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 
 	case "agent.fork_context.request":
 		var forkReq struct {
-			RequestID      string `json:"requestId"`
-			AgentID        string `json:"agentId"`
-			BoundaryCursor *struct {
+			RequestID         string `json:"requestId"`
+			AgentID           string `json:"agentId"`
+			BoundaryMessageID string `json:"boundaryMessageId"`
+			BoundaryCursor    *struct {
 				Epoch string `json:"epoch"`
 				Seq   int    `json:"seq"`
 			} `json:"boundaryCursor"`
@@ -1039,30 +1040,37 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			})
 			return
 		}
-		tl := mp.session.Timeline()
-		if forkReq.BoundaryCursor != nil && forkReq.BoundaryCursor.Seq > 0 {
-			cut := forkReq.BoundaryCursor.Seq
-			if cut < len(tl) {
-				tl = tl[:cut]
-			}
+		// The boundary the client sends came from fetch_agent_timeline_response, which stamps cursors
+		// with s.epoch — not currentTimelineEpoch(), a separate field with a different value. Validating
+		// against the wrong one would reject every boundary as stale.
+		agentTitle := ""
+		if mp.record.Title != nil {
+			agentTitle = *mp.record.Title
 		}
-		var sb strings.Builder
-		for _, e := range tl {
-			if e.Item.Text != "" {
-				sb.WriteString("[" + e.Item.Type + "]\n" + e.Item.Text + "\n\n")
-			}
+		var cursor *forkCursorBoundary
+		if forkReq.BoundaryCursor != nil {
+			cursor = &forkCursorBoundary{Epoch: forkReq.BoundaryCursor.Epoch, Seq: forkReq.BoundaryCursor.Seq}
+		}
+		result, forkErr := buildForkContextAttachment(mp.session.Timeline(), cursor, forkReq.BoundaryMessageID, s.epoch, agentTitle, mp.record.Cwd)
+		if forkErr != nil {
+			_ = sendSessionMsg(ctx, sink, "agent.fork_context.response", map[string]any{
+				"requestId":         base.RequestID,
+				"agentId":           base.AgentID,
+				"attachment":        nil,
+				"itemCount":         0,
+				"boundaryMessageId": nil,
+				"boundaryCursor":    nil,
+				"error":             forkErr.Error(),
+			})
+			return
 		}
 		_ = sendSessionMsg(ctx, sink, "agent.fork_context.response", map[string]any{
-			"requestId": base.RequestID,
-			"agentId":   base.AgentID,
-			"attachment": map[string]any{
-				"type":     "text",
-				"name":     "fork-context.md",
-				"mimeType": "text/markdown",
-				"text":     sb.String(),
-			},
-			"itemCount":         len(tl),
-			"boundaryMessageId": nil,
+			"requestId":         base.RequestID,
+			"agentId":           base.AgentID,
+			"attachment":        result.Attachment,
+			"itemCount":         result.ItemCount,
+			"boundaryMessageId": result.BoundaryMessageID,
+			"boundaryCursor":    result.BoundaryCursor,
 			"error":             nil,
 		})
 
