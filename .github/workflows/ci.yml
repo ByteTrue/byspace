@@ -284,6 +284,11 @@ jobs:
         timeout-minutes: 10
         run: npx playwright install chromium
 
+      - name: Install agent CLIs for provider tests
+        # Several specs start agents through a real provider CLI; without it the daemon cannot
+        # spawn the agent and the spec fails deep in the UI assertions.
+        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
+
       - name: Build workspace packages
         # The e2e harness imports @bytetrue/client, which imports @bytetrue/relay's E2EE module, so
         # relay has to be built too. build:app-deps covers only highlight and client.
