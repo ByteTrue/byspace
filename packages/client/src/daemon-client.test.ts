@@ -5792,7 +5792,9 @@ test("rejects and logs a correlated response that violates the protocol schema",
     requestId: "req-invalid",
     message: expect.stringMatching(/validation/i),
   });
-  expect(warnings).toEqual(["Message validation failed"]);
+  expect(warnings).toEqual([
+    "Message validation failed: fetch_agent_timeline_response (envelope session)",
+  ]);
 });
 
 test("does not reject a request for an invalid correlated progress event", async () => {

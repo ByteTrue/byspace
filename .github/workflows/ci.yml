@@ -213,6 +213,12 @@ jobs:
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
 
+      # The app's vitest suite has a browser project (@vitest/browser-playwright),
+      # so the unit run needs the chromium build even though e2e is separate.
+      - name: Install Playwright browsers
+        timeout-minutes: 10
+        run: npx playwright install chromium
+
       - name: Build app dependencies
         run: npm run build:app-deps
 
@@ -277,6 +283,9 @@ jobs:
       - name: Install Playwright browsers
         timeout-minutes: 10
         run: npx playwright install chromium
+
+      - name: Build workspace packages
+        run: npm run build:app-deps
 
       - name: Build the daemon binary the e2e harness runs
         run: make build

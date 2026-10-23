@@ -40,6 +40,8 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
                                   serve the web workbench in a browser alongside the daemon
   byspace relay [--addr host:port] [--web-dir <dir>]
                                   run the high-performance E2EE WebSocket relay (default 0.0.0.0:8787)
+  byspace healthcheck [--url http://host:port]
+                                  exit 0 when /health answers (used by container health checks)
   byspace attach <agent-id>          stream a running agent's output
   byspace ls [--home <dir>] [--json|--yaml|-q]
                                   list agents from $BYSPACE_HOME
@@ -109,6 +111,12 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 	case "relay":
 		if err := runRelay(rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace relay:", err)
+			return 1
+		}
+		return 0
+	case "healthcheck":
+		if err := runHealthcheck(rest); err != nil {
+			fmt.Fprintln(stderr, "byspace healthcheck:", err)
 			return 1
 		}
 		return 0
@@ -457,6 +465,23 @@ func runRelay(args []string, stdout io.Writer) error {
 		return nil
 	}
 	return err
+}
+
+func runHealthcheck(args []string) error {
+	fs := flag.NewFlagSet("healthcheck", flag.ContinueOnError)
+	url := fs.String("url", "http://127.0.0.1:8080", "base URL serving /health")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Get(strings.TrimRight(*url, "/") + "/health")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func runList(args []string, stdout io.Writer) error {
