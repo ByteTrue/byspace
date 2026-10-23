@@ -1085,7 +1085,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 				prompts = append(prompts, map[string]any{
 					"seq":       e.Seq,
 					"timestamp": e.Timestamp,
-					"preview":   e.Item.Text,
+					"preview":   promptPreview(e.Item.Text),
 				})
 			}
 		}
@@ -1673,4 +1673,20 @@ func filterBranches(branches []string, query string, limit int) []string {
 		}
 	}
 	return out
+}
+
+// promptPreviewMaxLen mirrors node's PROMPT_PREVIEW_MAX_LENGTH.
+const promptPreviewMaxLen = 120
+
+// promptPreview collapses a prompt to one line for the chat outline rail, matching node's
+// timeline-prompt-index: whitespace runs fold to a single space, the result trims, and anything over
+// 120 characters is cut to 119 with an ellipsis. Counting runes rather than bytes keeps a multibyte
+// character from being sliced in half at the boundary.
+func promptPreview(text string) string {
+	collapsed := strings.Join(strings.Fields(text), " ")
+	runes := []rune(collapsed)
+	if len(runes) <= promptPreviewMaxLen {
+		return collapsed
+	}
+	return string(runes[:promptPreviewMaxLen-1]) + "…"
 }
