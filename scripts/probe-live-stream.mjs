@@ -152,6 +152,47 @@ ws.on("open", async () => {
     });
     out.push(`wait_for_finish: status=${wait?.status}`);
 
+    // Two more turns, the stress shape the pagination and outline specs seed with.
+    for (const index of [1, 2]) {
+      await request({
+        type: "send_agent_message_request",
+        requestId: `s${index + 1}`,
+        agentId,
+        text: `timeline-pagination-turn-${index}: emit 1 coalesced agent stream updates`,
+        activeTurnBehavior: "interrupt",
+      });
+      await request({
+        type: "wait_for_finish_request",
+        requestId: `f${index + 1}`,
+        agentId,
+        timeoutMs: 30_000,
+      });
+    }
+
+    // What the chat outline rail renders from. It returns null below two prompts, which is the
+    // failure shape the outline specs report.
+    const prompts = await request({
+      type: "agent.timeline.list_prompts.request",
+      requestId: "lp1",
+      agentId,
+    });
+    out.push(`list_prompts: error=${JSON.stringify(prompts?.error)} count=${prompts?.prompts?.length}`);
+    for (const p of (prompts?.prompts ?? []).slice(0, 5)) out.push(`  PROMPT ${JSON.stringify(p).slice(0, 160)}`);
+
+    const tail = await request({
+      type: "fetch_agent_timeline_request",
+      requestId: "t0",
+      agentId,
+      direction: "tail",
+      projection: "projected",
+      limit: 0,
+    });
+    const types = (tail?.entries ?? []).map((e) => e?.item?.type);
+    out.push(`tail(all): entries=${types.length} typeCounts=${JSON.stringify(types.reduce((a, t) => ((a[t] = (a[t] ?? 0) + 1), a), {}))}`);
+    const users = (tail?.entries ?? []).filter((e) => e?.item?.type === "user_message");
+    out.push(`user_message rows: ${users.length}`);
+    for (const u of users) out.push(`  USER ${JSON.stringify({ messageId: u.item.messageId ?? null, clientMessageId: u.item.clientMessageId ?? null, text: (u.item.text ?? "").slice(0, 40) })}`);
+
     // Let the last frames land.
     await new Promise((r) => setTimeout(r, 500));
 
