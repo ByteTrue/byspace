@@ -3672,7 +3672,11 @@ func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[strin
 			branch = *ws.Branch
 		}
 		if prj, ok := prjByID[ws.ProjectID]; ok {
-			projKey = projectIdentityKey(prj)
+			// The agent placement carries the project id, not the cross-host grouping key. The two
+			// are different things under the same wire name: the sidebar joins on projectKey from
+			// the workspace descriptor, while the fork flow reads this field back as a project id
+			// to open a new workspace against it, and a grouping key is not an id.
+			projKey = prj.ProjectID
 			projName = prj.DisplayName
 		}
 	}
@@ -3873,6 +3877,15 @@ func appendAttachmentHints(text string, attachments []promptAttachment) string {
 	otherLines := make([]string, 0, len(attachments))
 	for _, att := range attachments {
 		isHistory := strings.TrimSpace(att.ContextKind) == "chat_history"
+		if isHistory {
+			// The forked history is submitted as one text block whose body already carries the
+			// transcript. Wrapping it in an attachment hint would put a "[Chat history]" line in
+			// front of the prompt, and the panel looks for the history title on the user row.
+			if history := strings.TrimSpace(att.Text); history != "" {
+				historyLines = append(historyLines, history)
+				continue
+			}
+		}
 		name := strings.TrimSpace(att.FileName)
 		if name == "" {
 			name = filepath.Base(att.Path)

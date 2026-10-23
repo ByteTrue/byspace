@@ -115,9 +115,6 @@ func ListDirectory(root, relPath string) (*DirectoryListing, error) {
 	entries := make([]Entry, 0, len(dirEntries))
 	for _, de := range dirEntries {
 		name := de.Name()
-		if name == ".git" {
-			continue
-		}
 		fi, err := de.Info()
 		if err != nil {
 			continue
@@ -286,6 +283,19 @@ func WriteFile(root, relPath, content, expectedModifiedAt, expectedRevision stri
 	}
 }
 
+// errEntryExists means the target name is taken. Callers turn it into the message the app shows,
+// so it has to be distinguishable from any other filesystem failure.
+var errEntryExists = errors.New("entry already exists")
+
+// ErrEntryExists reports a name collision so the daemon can name the entry in its reply.
+//
+// The app matches on the message ("README.md" already exists), and only the caller knows the name
+// the user typed, so the sentinel has to travel instead of a formatted string.
+func ErrEntryExists(err error) bool { return errors.Is(err, errEntryExists) }
+
+// ErrEntryMissing reports a source that is gone.
+func ErrEntryMissing(err error) bool { return errors.Is(err, errEntryMissing) }
+
 // CreateEntry creates a new file or directory inside parentPath.
 func CreateEntry(root, parentPath, name, kind string) (string, error) {
 	if strings.TrimSpace(name) == "" || strings.ContainsAny(name, `/\`) {
@@ -300,7 +310,7 @@ func CreateEntry(root, parentPath, name, kind string) (string, error) {
 		return "", err
 	}
 	if _, err := os.Stat(absTarget); err == nil {
-		return "", errors.New("entry already exists")
+		return "", errEntryExists
 	}
 	if kind == "directory" {
 		if err := os.MkdirAll(absTarget, 0o755); err != nil {
@@ -317,23 +327,42 @@ func CreateEntry(root, parentPath, name, kind string) (string, error) {
 	return normalizedRel, nil
 }
 
+// errEntryMissing means the source disappeared under the editor.
+var errEntryMissing = errors.New("file or folder no longer exists")
+
 // RenameEntry renames a file or directory within the same parent directory.
+//
+// A taken name has to be reported before the rename: os.Rename replaces the target on POSIX, so
+// without the check renaming onto an existing file silently destroys it.
 func RenameEntry(root, relPath, newName string) (string, error) {
-	if strings.TrimSpace(newName) == "" || strings.ContainsAny(newName, `/\`) {
-		return "", errors.New("invalid new name")
+	trimmed := strings.TrimSpace(newName)
+	if trimmed == "" || trimmed == "." || trimmed == ".." {
+		return "", errors.New("invalid name")
+	}
+	if strings.ContainsAny(trimmed, `/\\`) {
+		return "", errors.New("name cannot contain path separators")
 	}
 	absSrc, normSrc, err := resolveScopedPath(root, relPath)
 	if err != nil {
 		return "", err
 	}
+	if _, err := os.Lstat(absSrc); err != nil {
+		return "", errEntryMissing
+	}
 	parentRel := filepath.ToSlash(filepath.Dir(normSrc))
-	dstRel := newName
+	dstRel := trimmed
 	if parentRel != "." && parentRel != "" {
-		dstRel = parentRel + "/" + newName
+		dstRel = parentRel + "/" + trimmed
 	}
 	absDst, normDst, err := resolveScopedPath(root, dstRel)
 	if err != nil {
 		return "", err
+	}
+	if normSrc == normDst {
+		return normDst, nil
+	}
+	if _, err := os.Lstat(absDst); err == nil {
+		return "", errEntryExists
 	}
 	if err := os.Rename(absSrc, absDst); err != nil {
 		return "", err

@@ -78,13 +78,15 @@ func (s *Server) handleFileExplorer(ctx context.Context, sink frameSink, raw jso
 
 	if req.MaxBytes > 0 {
 		if info, statErr := os.Stat(filepath.Join(cwd, relPath)); statErr == nil && info.Size() > int64(req.MaxBytes) {
+			// The app branches on this sentence to show its "too large to display" pane instead of a
+			// generic error, so the wording is part of the contract.
 			_ = sendSessionMsg(ctx, sink, "file_explorer_response", map[string]any{
 				"cwd":       cwd,
 				"path":      relPath,
 				"mode":      req.Mode,
 				"directory": nil,
 				"file":      nil,
-				"error":     "file exceeds maxBytes",
+				"error":     "File is too large to display",
 				"errorCode": "file_too_large",
 				"requestId": req.RequestID,
 			})
@@ -184,7 +186,7 @@ func (s *Server) handleFileEntryCreate(ctx context.Context, sink frameSink, raw 
 			"parentPath": req.ParentPath,
 			"path":       nil,
 			"success":    false,
-			"error":      err.Error(),
+			"error":      entryErrorMessage(err, req.Name),
 			"requestId":  req.RequestID,
 		})
 		return
@@ -214,7 +216,7 @@ func (s *Server) handleFileEntryRename(ctx context.Context, sink frameSink, raw 
 			"path":        req.Path,
 			"renamedPath": nil,
 			"success":     false,
-			"error":       err.Error(),
+			"error":       entryErrorMessage(err, req.Name),
 			"requestId":   req.RequestID,
 		})
 		return
@@ -1173,4 +1175,19 @@ func terminalActivityPayload(session *terminal.Session, nowMs int64) map[string]
 		"attentionReason": nullableReason(session.AttentionReason()),
 		"changedAt":       nowMs,
 	}
+}
+
+// entryErrorMessage turns a filesystem sentinel into the sentence the explorer shows.
+//
+// The app asserts on the exact wording, and the wording names the entry: a bare "entry already
+// exists" leaves the user guessing which of two identically-labelled rows they just collided with.
+func entryErrorMessage(err error, name string) string {
+	trimmed := strings.TrimSpace(name)
+	switch {
+	case workspace.ErrEntryExists(err):
+		return fmt.Sprintf("%q already exists", trimmed)
+	case workspace.ErrEntryMissing(err):
+		return "File or folder no longer exists"
+	}
+	return err.Error()
 }

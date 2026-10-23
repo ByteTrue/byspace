@@ -247,16 +247,29 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 	}
 }
 
-// ListCommits returns the recent git commit history for cwd.
+// commitLogFormat is the record format ListCommits asks git for.
+//
+// The record separator and the field separator have to be characters git will never print in a
+// subject, or a commit message containing a tab would shift every later field.
+const (
+	commitLogFormat     = "%x1e%H%x00%h%x00%an%x00%aI%x00%s"
+	commitBaseLogLimit  = 10
+	commitFieldSep      = "\x00"
+	commitRecordSep     = "\x1e"
+	commitRawStatusMark = ":"
+)
+
 // ListCommits lists the commits the panel shows: the branch's own work first, then the base's recent history.
 //
-// Ported from listCheckoutCommits. Two things matter and neither is "just run git log":
+// Ported from listCheckoutCommits. Three things matter and none is "just run git log":
 //
 //   - When the branch being viewed IS the comparison base, there is nothing ahead of it. Node still lists the base's
 //     recent commits, marked `isOnBase`, so the panel shows history instead of an empty box. `baseRef` is null in that
 //     case — the client renders "no commits ahead" from it, and naming a base that is the current branch would be wrong.
 //   - Otherwise the branch's commits come from `<merge-base>..HEAD`, so commits the base gained after this branch
 //     started are not counted as work done here.
+//   - Every commit carries its file list. The panel fetches one file diff per entry, so a commit with no files renders
+//     an empty diff view — which looks like a broken panel rather than a commit that touched nothing.
 func ListCommits(ctx context.Context, cwd string, limit int) (*string, []Commit, error) {
 	if limit <= 0 {
 		limit = 30
@@ -278,7 +291,8 @@ func ListCommits(ctx context.Context, cwd string, limit int) (*string, []Commit,
 		if ancestor, mergeErr := runGit(ctx, cwd, "merge-base", base, "HEAD"); mergeErr == nil {
 			if trimmed := strings.TrimSpace(ancestor); trimmed != "" {
 				out, logErr := runGit(ctx, cwd, "log", "-n", strconv.Itoa(limit),
-					"--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", trimmed+"..HEAD")
+					"--diff-merges=first-parent", "--format="+commitLogFormat, "--raw", "--numstat", "-M",
+					trimmed+"..HEAD")
 				if logErr != nil {
 					return nil, []Commit{}, logErr
 				}
@@ -299,8 +313,8 @@ func ListCommits(ctx context.Context, cwd string, limit int) (*string, []Commit,
 			}
 		}
 	}
-	baseOut, baseErr := runGit(ctx, cwd, "log", "-n", strconv.Itoa(limit),
-		"--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", baseRevision)
+	baseOut, baseErr := runGit(ctx, cwd, "log", "-n", strconv.Itoa(commitBaseLogLimit),
+		"--diff-merges=first-parent", "--format="+commitLogFormat, "--raw", "--numstat", "-M", baseRevision)
 	if baseErr != nil {
 		return comparisonBase, ahead, nil
 	}
@@ -308,32 +322,149 @@ func ListCommits(ctx context.Context, cwd string, limit int) (*string, []Commit,
 	return comparisonBase, commits, nil
 }
 
-// parseCommits reads the log format used by ListCommits.
+// parseCommits reads the `git log --raw --numstat -M` stream used by ListCommits.
 //
 // isOnBase says whether the commits came from the base's history: the panel groups them separately, and a commit that is
 // both here and on the base would otherwise be presented as this branch's work.
 func parseCommits(out string, unpushed map[string]bool, isOnBase bool) []Commit {
 	commits := make([]Commit, 0, 32)
-	for _, line := range strings.Split(out, "\n") {
-		if strings.TrimSpace(line) == "" {
+	for _, record := range strings.Split(out, commitRecordSep) {
+		if strings.TrimSpace(record) == "" {
 			continue
 		}
-		parts := strings.Split(line, "\x1f")
-		if len(parts) < 5 {
+		lines := strings.Split(record, "\n")
+		fields := strings.Split(lines[0], commitFieldSep)
+		if len(fields) < 5 {
+			continue
+		}
+		sha := strings.TrimSpace(fields[0])
+		if sha == "" {
 			continue
 		}
 		commits = append(commits, Commit{
-			Sha:        parts[0],
-			ShortSha:   parts[1],
-			Subject:    parts[2],
-			AuthorName: parts[3],
-			AuthorDate: parts[4],
-			IsOnRemote: !unpushed[parts[0]],
+			Sha:        sha,
+			ShortSha:   strings.TrimSpace(fields[1]),
+			AuthorName: fields[2],
+			AuthorDate: strings.TrimSpace(fields[3]),
+			Subject:    fields[4],
+			IsOnRemote: !unpushed[sha],
 			IsOnBase:   isOnBase,
-			Files:      []CommitFile{},
+			Files:      parseCommitFiles(lines[1:]),
 		})
 	}
 	return commits
+}
+
+// parseCommitFiles merges the `--raw` status lines and `--numstat` counts of one commit.
+//
+// git prints both blocks for the same paths, so the statuses are keyed first and the counts are
+// attached per path; a file that only appears in one block still has to survive.
+func parseCommitFiles(lines []string) []CommitFile {
+	statuses := make(map[string]string)
+	order := make([]string, 0, len(lines))
+	files := make(map[string]*CommitFile)
+	upsert := func(path string) *CommitFile {
+		if existing, ok := files[path]; ok {
+			return existing
+		}
+		entry := &CommitFile{Path: path}
+		files[path] = entry
+		order = append(order, path)
+		return entry
+	}
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, commitRawStatusMark) {
+			if path, status := parseRawStatusLine(line); path != "" {
+				statuses[path] = status
+				upsert(path)
+			}
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 3 {
+			continue
+		}
+		path := normalizeNumstatPath(strings.Join(parts[2:], "\t"))
+		if path == "" {
+			continue
+		}
+		entry := upsert(path)
+		// "-" marks a binary file: git cannot count lines in it, and 0/0 is the same thing the
+		// client renders for a binary placeholder.
+		if parts[0] == "-" || parts[1] == "-" {
+			continue
+		}
+		if additions, err := strconv.Atoi(parts[0]); err == nil {
+			entry.Additions = additions
+		}
+		if deletions, err := strconv.Atoi(parts[1]); err == nil {
+			entry.Deletions = deletions
+		}
+	}
+	result := make([]CommitFile, 0, len(order))
+	for _, path := range order {
+		entry := files[path]
+		entry.Status = statuses[path]
+		result = append(result, *entry)
+	}
+	return result
+}
+
+// parseRawStatusLine reads one `--raw` line: `:<mode> <mode> <sha> <sha> <STATUS>\t<path>`.
+//
+// A rename or copy adds a second tab-separated path, and it is the destination the client opens,
+// so that is the one this reports.
+func parseRawStatusLine(line string) (path, status string) {
+	tabParts := strings.Split(line, "\t")
+	meta := tabParts[0]
+	statusToken := meta[strings.LastIndex(meta, " ")+1:]
+	letter := statusToken[:1]
+	switch letter {
+	case "A", "C":
+		status = "added"
+	case "M", "T":
+		status = "modified"
+	case "D":
+		status = "deleted"
+	case "R":
+		status = "renamed"
+	default:
+		return "", ""
+	}
+	if letter == "R" || letter == "C" {
+		return tabParts[len(tabParts)-1], status
+	}
+	if len(tabParts) < 2 {
+		return "", ""
+	}
+	return tabParts[1], status
+}
+
+// normalizeNumstatPath resolves the `--numstat` path field, which abbreviates renames as
+// `dir/{old => new}.txt` or `old => new`.
+//
+// Without this the file list carries a path that does not exist, and the panel's per-file diff
+// request comes back empty.
+func normalizeNumstatPath(pathField string) string {
+	if start := strings.Index(pathField, "{"); start >= 0 {
+		if end := strings.Index(pathField[start:], "}"); end >= 0 {
+			end += start
+			inner := pathField[start+1 : end]
+			if arrow := strings.Index(inner, " => "); arrow >= 0 {
+				prefix := pathField[:start]
+				renamed := inner[arrow+4:]
+				suffix := pathField[end+1:]
+				return prefix + renamed + suffix
+			}
+		}
+	}
+	if arrow := strings.Index(pathField, " => "); arrow >= 0 {
+		return pathField[arrow+4:]
+	}
+	return pathField
 }
 
 // unpushedCommitShas is the set of commits on HEAD that no remote ref contains.
