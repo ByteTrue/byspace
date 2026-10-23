@@ -17,6 +17,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/dirstream"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/pathutil"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -372,7 +373,7 @@ func (s *Server) handleOpenProject(ctx context.Context, sink frameSink, raw json
 	}
 	_ = sendSessionMsg(ctx, sink, "open_project_response", map[string]any{
 		"requestId": req.RequestID,
-		"workspace": buildWorkspaceDescriptor(ws, prj),
+		"workspace": s.workspaceDescriptor(ws, prj),
 		"error":     nil,
 	})
 }
@@ -468,32 +469,30 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			// moved. Without them a stale path archives nothing and the response still says ok.
 			RepoRoot   string `json:"repoRoot"`
 			BranchName string `json:"branchName"`
+			// WorkspaceID names one record exactly. A directory can back several workspaces, so
+			// resolving by cwd alone picks an arbitrary one of them.
+			WorkspaceID string `json:"workspaceId"`
 		}
 		_ = json.Unmarshal(raw, &req)
 
-		workspaces, _ := s.store.ListWorkspaces()
-		// A caller may pass a subdirectory of the worktree, so the path is resolved to its owning
-		// workspace first.
-		resolvedID := ""
-		if strings.TrimSpace(req.WorktreePath) != "" {
-			resolvedID = s.store.ResolveWorkspaceIDForPath(req.WorktreePath)
-		}
-		for _, w := range workspaces {
-			if !worktreeMatches(w, req.WorktreePath, resolvedID, req.RepoRoot, req.BranchName) {
-				continue
-			}
-			s.teardownArchivedWorkspace(w.WorkspaceID, now)
-			_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
-		}
-		if req.DeleteWorktreeFromDisk && strings.TrimSpace(req.WorktreePath) != "" {
-			_ = workspace.RemoveWorktreeFromDisk(ctx, req.WorktreePath)
-		}
+		// The scope decides what the caller is archiving, and the directory delete is derived from
+		// the records rather than from the request: a client cannot see the sibling workspace on
+		// the same checkout. Node's worktree RPC used to ignore scope entirely, so "worktree"
+		// behaves as "every active workspace on this directory" and "workspace" as one record.
+		targets := s.worktreeArchiveTargets(req.WorktreePath, req.RepoRoot, req.BranchName, req.WorkspaceID, req.Scope)
+		directoryError := s.archiveWorkspaces(ctx, targets, now)
 		_ = sendSessionMsg(ctx, sink, "byspace_worktree_archive_response", map[string]any{
 			"requestId":     req.RequestID,
 			"success":       true,
 			"removedAgents": []string{},
 			"error":         nil,
 		})
+		// The client reports a directory that survived separately from a hard error, the same
+		// way archive_workspace_response carries directoryError. The worktree response schema has
+		// no field for it yet, so the fact goes to the daemon log rather than being dropped.
+		if directoryError != nil {
+			fmt.Fprintf(os.Stderr, "byspace_worktree_archive: worktree left on disk: %s\n", *directoryError)
+		}
 		return
 	}
 
@@ -502,41 +501,25 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 		WorkspaceID string `json:"workspaceId"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	// Capture the record before archiving so the removal delta can name its project.
-	var archived store.WorkspaceRecord
-	hasArchived := false
-	if list, _ := s.store.ListWorkspaces(); true {
-		for _, w := range list {
-			if w.WorkspaceID == req.WorkspaceID {
-				archived, hasArchived = w, true
-				break
-			}
-		}
-	}
-	if _, err := s.store.ArchiveWorkspace(req.WorkspaceID, now); err != nil {
+	// Archiving one workspace removes its worktree only when nothing else references it, which is
+	// what keeps a sibling workspace on the same checkout alive.
+	directoryError := s.archiveWorkspaces(ctx, []string{req.WorkspaceID}, now)
+	_, found := s.workspaceRecord(req.WorkspaceID)
+	if !found {
 		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
-			"requestId":   req.RequestID,
-			"workspaceId": req.WorkspaceID,
-			"archivedAt":  nil,
-			// Archiving can succeed at the registry level while the directory delete fails;
-			// the client reports that separately from a hard error.
+			"requestId":      req.RequestID,
+			"workspaceId":    req.WorkspaceID,
+			"archivedAt":     nil,
 			"directoryError": nil,
-			"error":          err.Error(),
+			"error":          "Workspace not found: " + req.WorkspaceID,
 		})
 		return
-	}
-	if hasArchived {
-		archived.ArchivedAt = &now
-		s.archiveWorkspaceContents(ctx, req.WorkspaceID, now)
-		if prj, ok := s.projectForWorkspace(archived.ProjectID); ok {
-			s.broadcastWorkspaceUpsert(archived, prj)
-		}
 	}
 	_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
 		"requestId":      req.RequestID,
 		"workspaceId":    req.WorkspaceID,
 		"archivedAt":     now,
-		"directoryError": nil,
+		"directoryError": directoryError,
 		"error":          nil,
 	})
 }
@@ -812,24 +795,31 @@ func (s *Server) handleWorkspaceRecovery(ctx context.Context, sink frameSink, ms
 	}
 	_ = json.Unmarshal(raw, &req)
 	if msgType == "workspace.recovery.inspect.request" {
-		_ = sendSessionMsg(ctx, sink, "workspace.recovery.inspect.response", map[string]any{
-			"requestId": req.RequestID,
-			"state": map[string]any{
-				"kind":          "recoverable",
-				"workspaceId":   req.WorkspaceID,
-				"workspaceName": req.WorkspaceID,
-				"action":        "recreate_directory",
-				"branch":        nil,
-			},
-		})
+		payload := map[string]any{"requestId": req.RequestID}
+		if state, refusal := s.resolveWorkspaceRecovery(req.WorkspaceID); refusal != nil {
+			payload["state"] = map[string]any{
+				"kind":        "unavailable",
+				"workspaceId": req.WorkspaceID,
+				"reason":      refusal.Reason,
+				"message":     refusal.Message,
+			}
+		} else {
+			payload["state"] = state
+		}
+		_ = sendSessionMsg(ctx, sink, "workspace.recovery.inspect.response", payload)
 		return
 	}
-	_ = sendSessionMsg(ctx, sink, "workspace.recovery.restore.response", map[string]any{
+	resp := map[string]any{
 		"requestId":   req.RequestID,
 		"workspaceId": req.WorkspaceID,
 		"accepted":    true,
 		"error":       nil,
-	})
+	}
+	if err := s.restoreWorkspace(ctx, req.WorkspaceID); err != nil {
+		resp["accepted"] = false
+		resp["error"] = err.Error()
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.recovery.restore.response", resp)
 }
 
 func (s *Server) handleProjectConfig(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
@@ -1000,38 +990,7 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 	}
 
 	readScripts := func() []map[string]any {
-		if wsCwd == "" {
-			return []map[string]any{}
-		}
-		b, err := os.ReadFile(filepath.Join(wsCwd, "byspace.json"))
-		if err != nil {
-			return []map[string]any{}
-		}
-		var cfg struct {
-			Scripts map[string]any `json:"scripts"`
-		}
-		if json.Unmarshal(b, &cfg) != nil || cfg.Scripts == nil {
-			return []map[string]any{}
-		}
-		out := make([]map[string]any, 0, len(cfg.Scripts))
-		for name, val := range cfg.Scripts {
-			cmdStr := ""
-			switch v := val.(type) {
-			case string:
-				cmdStr = v
-			case map[string]any:
-				cmdStr, _ = v["command"].(string)
-			}
-			if cmdStr == "" {
-				continue
-			}
-			out = append(out, map[string]any{
-				"name":    name,
-				"command": cmdStr,
-				"status":  "stopped",
-			})
-		}
-		return out
+		return s.workspaceScriptsPayload(req.WorkspaceID, wsCwd)
 	}
 
 	switch msgType {
@@ -1533,11 +1492,60 @@ func (s *Server) labelSubscriberCount() int {
 // Three ways to name one, tried in order of specificity: an exact path, a path this workspace
 // encloses, or a (repo root, branch) pair. The last one exists because the sidebar addresses a
 // worktree by branch, and matching only on path left the request archiving nothing.
+// worktreeArchiveTargets resolves which workspace records a byspace_worktree_archive_request
+// names.
+//
+// scope "worktree" takes every active workspace checked out at the target directory, because the
+// caller is closing the worktree rather than one row. scope "workspace" (the default, and what an
+// old client sends) takes exactly one record: the named workspaceId, otherwise the record that
+// resolves from the path, preferring the worktree-kind record on a cwd tie.
+func (s *Server) worktreeArchiveTargets(worktreePath, repoRoot, branchName, workspaceID, scope string) []string {
+	trimmedPath := strings.TrimSpace(worktreePath)
+	if strings.TrimSpace(workspaceID) != "" {
+		return []string{strings.TrimSpace(workspaceID)}
+	}
+	resolvedID := ""
+	if trimmedPath != "" {
+		// A caller may pass a subdirectory of the worktree, so the path is resolved to its owning
+		// workspace first.
+		resolvedID = s.store.ResolveWorkspaceIDForPath(trimmedPath)
+	}
+	workspaces, _ := s.store.ListWorkspaces()
+
+	matches := make([]store.WorkspaceRecord, 0, 1)
+	for _, w := range workspaces {
+		if w.ArchivedAt != nil {
+			continue
+		}
+		if worktreeMatches(w, trimmedPath, resolvedID, repoRoot, branchName) {
+			matches = append(matches, w)
+		}
+	}
+	if len(matches) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(scope) == "worktree" {
+		ids := make([]string, 0, len(matches))
+		for _, w := range matches {
+			ids = append(ids, w.WorkspaceID)
+		}
+		return ids
+	}
+	preferred := matches[0]
+	for _, w := range matches {
+		if w.Kind == "worktree" {
+			preferred = w
+			break
+		}
+	}
+	return []string{preferred.WorkspaceID}
+}
+
 func worktreeMatches(record store.WorkspaceRecord, worktreePath, resolvedID, repoRoot, branchName string) bool {
 	if strings.TrimSpace(worktreePath) != "" {
 		// Exact match first, then the workspace that encloses the given path — a caller may pass
 		// a subdirectory of the worktree.
-		if record.Cwd == worktreePath || (resolvedID != "" && record.WorkspaceID == resolvedID) {
+		if pathutil.AreEquivalent(record.Cwd, worktreePath) || (resolvedID != "" && record.WorkspaceID == resolvedID) {
 			return true
 		}
 	}
@@ -1638,8 +1646,11 @@ func (s *Server) stopWorkspaceSetup(workspaceID string) {
 	}
 	snap.mu.Lock()
 	if snap.Status == "running" {
+		// "stopped" is not on the wire: WorkspaceSetupSnapshotSchema accepts only
+		// running/completed/failed/blocked, and an unknown status makes the client drop the whole
+		// message — leaving the setup tab claiming it is still running.
 		reason := "workspace archived"
-		snap.Status = "stopped"
+		snap.Status = "failed"
 		snap.Error = &reason
 	}
 	snap.mu.Unlock()
@@ -1778,13 +1789,15 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 
 	// Setup runs before the response is considered complete by the client, but it must not block the response: a
 	// worktree whose setup is slow is still openable, and the timeline carries the progress.
+	//
+	// Run even when there is nothing to run: a project with no setup still needs a "completed"
+	// snapshot, otherwise a client waiting for progress waits forever. Node emits the empty
+	// completed progress for exactly this case.
 	var setupTerminalID any
-	if setupCommands := workspace.ReadSetupCommands(wtPath); len(setupCommands) > 0 {
-		go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
-	}
+	go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, workspace.ReadSetupCommands(wtPath))
 	_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
 		"requestId":       requestID,
-		"workspace":       buildWorkspaceDescriptor(wsRec, prj),
+		"workspace":       s.workspaceDescriptor(wsRec, prj),
 		"setupTerminalId": setupTerminalID,
 		"error":           nil,
 	})

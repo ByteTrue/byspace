@@ -8,40 +8,30 @@ import (
 )
 
 // ReadSetupCommands extracts the `setup` command list from <cwd>/byspace.json.
-// Both `"setup": "npm install"` and `"setup": ["a", "b"]` shapes are accepted, matching the
-// service-proxy/workspace-script config forms already used elsewhere in byspace.json.
+//
+// The commands live under `worktree.setup` — not at the top level — and accept a string, an array
+// of strings, or an array of objects with a `command` key. Reading the wrong key silently yields no
+// commands, which looks identical to a project that configured none: no setup run, no progress
+// stream, no setup tab.
 func ReadSetupCommands(cwd string) []string {
-	if strings.TrimSpace(cwd) == "" {
+	config, ok := readWorkingConfig(cwd)
+	if !ok {
 		return nil
 	}
-	raw, err := os.ReadFile(filepath.Join(cwd, "byspace.json"))
-	if err != nil {
+	return setupCommands(config)
+}
+
+// ReadTeardownCommands extracts `worktree.teardown` with the same normalization as setup.
+func ReadTeardownCommands(cwd string) []string {
+	config, ok := readWorkingConfig(cwd)
+	if !ok {
 		return nil
 	}
-	var cfg struct {
-		Setup json.RawMessage `json:"setup"`
-	}
-	if json.Unmarshal(raw, &cfg) != nil || len(cfg.Setup) == 0 {
+	worktree, ok := config["worktree"].(map[string]any)
+	if !ok {
 		return nil
 	}
-	var single string
-	if json.Unmarshal(cfg.Setup, &single) == nil {
-		if strings.TrimSpace(single) == "" {
-			return nil
-		}
-		return []string{single}
-	}
-	var many []string
-	if json.Unmarshal(cfg.Setup, &many) == nil {
-		out := make([]string, 0, len(many))
-		for _, cmd := range many {
-			if strings.TrimSpace(cmd) != "" {
-				out = append(out, cmd)
-			}
-		}
-		return out
-	}
-	return nil
+	return normalizeSetupValue(worktree["teardown"])
 }
 
 // ScriptConfig is one entry from byspace.json's `scripts` map.

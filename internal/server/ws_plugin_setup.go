@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
@@ -47,10 +50,17 @@ func (s *Server) handleWorkspaceSetupProject(ctx context.Context, sink frameSink
 		s.mu.Lock()
 		snap := s.setupSnapshots[req.WorkspaceID]
 		s.mu.Unlock()
+		// The wire shape, not the struct: marshalling the snapshot directly sends the Go field
+		// names ("Status", "Log" as `{}`) and the client's schema rejects the whole message, which
+		// leaves it with no snapshot at all — no setup entry in the header menu, no banner.
+		var snapshot any
+		if snap != nil {
+			snapshot = s.setupSnapshotPayload(snap)["snapshot"]
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace_setup_status_response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
-			"snapshot":    snap,
+			"snapshot":    snapshot,
 		})
 		return
 	}
@@ -166,11 +176,20 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		s.broadcastSetupProgress(snap)
 	}
 
-	for _, command := range commands {
-		started := time.Now().UTC().Format(time.RFC3339Nano)
+	for index, command := range commands {
+		startedAt := time.Now()
 		snap.mu.Lock()
 		snap.Log.WriteString("$ " + command + "\n")
+		snap.Commands = append(snap.Commands, map[string]any{
+			"index":    index + 1,
+			"command":  command,
+			"cwd":      cwd,
+			"log":      "",
+			"status":   "running",
+			"exitCode": nil,
+		})
 		snap.mu.Unlock()
+		s.broadcastSetupProgress(snap)
 
 		// bash -c, not -lc: a project-authored command must not depend on the user's login
 		// shell files, which can change PATH or cd elsewhere.
@@ -187,12 +206,21 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		if err != nil {
 			exitCode = 1
 		}
-		snap.Commands = append(snap.Commands, map[string]any{
+		status := "completed"
+		if err != nil {
+			status = "failed"
+		}
+		// The running entry written above is replaced in place so the client sees one row per
+		// command whose status flips, not a duplicate pair.
+		snap.Commands[index] = map[string]any{
+			"index":      index + 1,
 			"command":    command,
+			"cwd":        cwd,
+			"log":        string(out),
+			"status":     status,
 			"exitCode":   exitCode,
-			"startedAt":  started,
-			"finishedAt": time.Now().UTC().Format(time.RFC3339Nano),
-		})
+			"durationMs": time.Since(startedAt).Milliseconds(),
+		}
 		snap.mu.Unlock()
 
 		s.broadcastSetupProgress(snap)
@@ -215,22 +243,23 @@ func (s *Server) setupSnapshotPayload(snap *setupSnapshot) map[string]any {
 	if len(logText) > maxLog {
 		logText = logText[len(logText)-maxLog:]
 	}
-	payload := map[string]any{
-		"workspaceId": snap.WorkspaceID,
-		"snapshot": map[string]any{
-			"status": snap.Status,
-			"detail": map[string]any{
-				"type":         "worktree_setup",
-				"worktreePath": snap.WorktreePath,
-				"branchName":   snap.BranchName,
-				"log":          logText,
-				"commands":     snap.Commands,
-			},
-			"error": snap.Error,
+	snapshot := map[string]any{
+		"status": snap.Status,
+		"detail": map[string]any{
+			"type":         "worktree_setup",
+			"worktreePath": snap.WorktreePath,
+			"branchName":   snap.BranchName,
+			"log":          logText,
+			"commands":     commandsPayload(snap.Commands),
 		},
+		"error": snap.Error,
 	}
 	snap.mu.Unlock()
-	return payload
+	// Optional and not nullable, so it is omitted rather than sent as null.
+	if source := blockedSourcePayload(snap.BlockedSource); source != nil {
+		snapshot["blockedSource"] = source
+	}
+	return map[string]any{"workspaceId": snap.WorkspaceID, "snapshot": snapshot}
 }
 
 // handlePluginProject serves the plugin.* RPCs. The Go daemon has no plugin runtime yet, so the
@@ -334,15 +363,18 @@ func (s *Server) broadcastSetupProgress(snap *setupSnapshot) {
 			"worktreePath": snap.WorktreePath,
 			"branchName":   snap.BranchName,
 			"log":          logText,
-			"commands":     snap.Commands,
+			"commands":     commandsPayload(snap.Commands),
 			"truncated":    len(snap.Log.String()) > maxLog,
 		},
 		"error": snap.Error,
-		// Set only when a change-request gate stopped the run, so the banner can name the PR the
-		// user has to trust instead of showing a bare failure.
-		"blockedSource": blockedSourcePayload(snap.BlockedSource),
 	}
 	snap.mu.Unlock()
+	// Set only when a change-request gate stopped the run, so the banner can name the PR the user
+	// has to trust instead of showing a bare failure. The field is optional and NOT nullable: an
+	// explicit null fails the client's schema and it drops the whole message.
+	if source := blockedSourcePayload(snap.BlockedSource); source != nil {
+		payload["blockedSource"] = source
+	}
 	s.broadcastSessionMsg("workspace_setup_progress", payload)
 }
 
@@ -362,9 +394,13 @@ type workspaceScript struct {
 	StartedAt      string
 	FinishedAt     *string
 	ExitCode       *int
-	// cmd is the running process. Kept so stop can actually terminate it: flipping the status
-	// alone leaves the script running and its port held, and the UI then reports it as stopped.
-	cmd *exec.Cmd
+	// terminalID is the terminal the script runs in. The client attaches to this id to show
+	// the script's output, and WorkspaceScriptPayloadSchema carries it as `terminalId`.
+	terminalID string
+	// sess is the running PTY session. Kept so stop can terminate the whole process group and
+	// read the exit code: flipping the status alone leaves the script running and its port held.
+	sess          *terminal.Session
+	stopRequested bool
 }
 
 func (s *Server) scriptKey(workspaceID, name string) string {
@@ -463,51 +499,86 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		s.mu.Unlock()
 	}
 
-	go func() {
-		// bash -c, not -lc: a project-authored command must not depend on the user's login
-		// shell files, which can change PATH or cd elsewhere.
-		invocation := workspace.BuildShellInvocation(command)
-		cmd := exec.Command(invocation.Shell, invocation.Args...)
-		cmd.Dir = cwd
-		// Sanitized: BASH_ENV would make bash source an arbitrary file before the script runs,
-		// and ExternalProcessEnv keeps the daemon's own identity out of the child.
-		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
-		// Own process group: a build script spawns children, and signalling only the shell
-		// leaves them running. Killing the group takes the whole tree.
-		setupProcessGroup(cmd)
-		if port > 0 {
-			cmd.Env = append(cmd.Env,
-				fmt.Sprintf("PORT=%d", port),
-				fmt.Sprintf("WORKSPACE_SCRIPT_PORT=%d", port),
-			)
-			// Sibling ports, so one script can find another. Collisions are rejected before
-			// spawn: two scripts mapping to the same env name would shadow each other.
-			if env, envErr := workspace.BuildServiceEnv(name, s.listenAddr, s.servicePeers(workspaceID)); envErr == nil {
-				for key, value := range env {
-					cmd.Env = append(cmd.Env, key+"="+value)
-				}
+	// The session is started synchronously: the start response carries `terminalId` and the
+	// caller attaches to that terminal by id, so returning before the terminal exists gives
+	// the client nothing to attach to.
+	//
+	// bash -c, not -lc: a project-authored command must not depend on the user's login shell
+	// files, which can change PATH or cd elsewhere.
+	invocation := workspace.BuildShellInvocation(command)
+	// Sanitized: BASH_ENV would make bash source an arbitrary file before the script runs, and
+	// ExternalProcessEnv keeps the daemon's own identity out of the child.
+	env := workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
+	if port > 0 {
+		env = append(env,
+			fmt.Sprintf("PORT=%d", port),
+			fmt.Sprintf("WORKSPACE_SCRIPT_PORT=%d", port),
+		)
+		// Sibling ports, so one script can find another. Collisions are rejected before spawn:
+		// two scripts mapping to the same env name would shadow each other.
+		if serviceEnv, envErr := workspace.BuildServiceEnv(name, s.listenAddr, s.servicePeers(workspaceID)); envErr == nil {
+			for key, value := range serviceEnv {
+				env = append(env, key+"="+value)
 			}
 		}
+	}
+
+	var idBytes [6]byte
+	_, _ = rand.Read(idBytes[:])
+	termID := "term_" + hex.EncodeToString(idBytes[:])
+	// A real PTY, not a bare exec.Cmd: the client shows the script's output in a terminal tab
+	// and attaches by terminalId, and a script the user cannot watch is a script they cannot
+	// debug. The tab also survives the script exiting, so a failure is still readable afterwards.
+	sess, startErr := terminal.StartSession(terminal.StartOptions{
+		ID:          termID,
+		Name:        name,
+		Cwd:         cwd,
+		WorkspaceID: workspaceID,
+		Command:     invocation.Shell,
+		Args:        invocation.Args,
+		Env:         env,
+		// Activity travels inside terminals_changed, the payload the client already replaces
+		// its terminal list from.
+		OnActivityChange: func(_, _ string) {
+			s.broadcastTerminalsChanged(cwd, workspaceID)
+		},
+	})
+	if startErr != nil {
 		s.mu.Lock()
-		entry.cmd = cmd
+		entry.Status = "failed"
+		finished := time.Now().UTC().Format(time.RFC3339Nano)
+		entry.FinishedAt = &finished
+		delete(s.workspaceScripts, s.scriptKey(workspaceID, name))
 		s.mu.Unlock()
+		s.broadcastScriptStatus(workspaceID)
+		return nil, startErr
+	}
 
-		err := cmd.Run()
+	s.mu.Lock()
+	slot := uint8(len(s.terminals))
+	s.terminals[slot] = sess
+	s.terminalSlotsByID[termID] = slot
+	entry.sess = sess
+	entry.terminalID = termID
+	s.mu.Unlock()
+	s.broadcastTerminalsChanged(cwd, workspaceID)
 
+	go func() {
+		<-sess.Exited()
+
+		code := sess.ExitCode()
 		finished := time.Now().UTC().Format(time.RFC3339Nano)
 		s.mu.Lock()
 		entry.FinishedAt = &finished
-		if err != nil {
-			entry.Status = "failed"
-			code := 1
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				code = exitErr.ExitCode()
+		entry.ExitCode = code
+		// A stop the user asked for is not a failure. Everything else that exits non-zero is,
+		// and reporting it as "stopped" hides a broken script.
+		if !entry.stopRequested {
+			if code != nil && *code != 0 {
+				entry.Status = "failed"
+			} else {
+				entry.Status = "stopped"
 			}
-			entry.ExitCode = &code
-		} else {
-			entry.Status = "stopped"
-			zero := 0
-			entry.ExitCode = &zero
 		}
 		s.mu.Unlock()
 		s.broadcastScriptStatus(workspaceID)
@@ -516,8 +587,6 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	return s.workspaceScriptSnapshot(workspaceID, name), nil
 }
 
-// stopWorkspaceScript marks a script stopped. The child is a detached shell, so this records
-// intent rather than killing it; a long-running dev server keeps serving until the daemon exits.
 // stopWorkspaceScript terminates a running script.
 //
 // The process must actually be killed: flipping the status alone leaves it running and holding
@@ -530,10 +599,11 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 		s.mu.Unlock()
 		return
 	}
-	cmd := entry.cmd
+	sess := entry.sess
 	wasRunning := entry.Status == "running"
 	if wasRunning {
 		entry.Status = "stopped"
+		entry.stopRequested = true
 		finished := time.Now().UTC().Format(time.RFC3339Nano)
 		entry.FinishedAt = &finished
 		// The route must go with the process: a stale route forwards to a port that may now
@@ -548,18 +618,19 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 		s.unregisterServiceRoute(workspaceID, name)
 	}
 
-	if cmd != nil && cmd.Process != nil && wasRunning {
+	if sess != nil && wasRunning {
 		// Signal the whole process group, not just the shell: `sleep 60` (or `vite`, or
 		// `npm run dev`) is a child of the shell, and signalling only the shell leaves the
 		// actual work running with its port held.
-		pid := cmd.Process.Pid
-		terminateProcessGroup(pid)
-		go func() {
-			// Escalate if the group has not exited. A build ignoring SIGTERM must not keep its
-			// port for the rest of the session.
-			time.Sleep(3 * time.Second)
-			killProcessGroup(pid)
-		}()
+		if pid := sess.Pid(); pid > 0 {
+			terminateProcessGroup(pid)
+			go func() {
+				// Escalate if the group has not exited. A build ignoring SIGTERM must not keep
+				// its port for the rest of the session.
+				time.Sleep(3 * time.Second)
+				killProcessGroup(pid)
+			}()
+		}
 	}
 }
 
@@ -601,6 +672,12 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 			health = "unhealthy"
 		}
 	}
+	// Nullable, not absent: the schema declares terminalId as a nullable optional, and an
+	// empty string would be a terminal id that does not exist.
+	var terminalID any
+	if entry.terminalID != "" {
+		terminalID = entry.terminalID
+	}
 	return map[string]any{
 		"scriptName": entry.Name,
 		"type":       scriptType,
@@ -615,8 +692,50 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 		"lifecycle":      lifecycle,
 		"health":         health,
 		"exitCode":       entry.ExitCode,
-		"terminalId":     nil,
+		"terminalId":     terminalID,
 	}
+}
+
+// workspaceScriptsPayload renders every script the workspace's byspace.json defines, running
+// or not. A configured script that has never been started still belongs in the list: the
+// client renders its start menu from this, so hiding it until it runs would hide the only way
+// to run it.
+func (s *Server) workspaceScriptsPayload(workspaceID, cwd string) []map[string]any {
+	defined := workspace.ReadScriptConfigs(cwd)
+
+	s.mu.Lock()
+	scripts := make([]map[string]any, 0, len(defined))
+	for name, cfg := range defined {
+		entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
+		row := workspaceScriptPayload(&workspaceScript{
+			WorkspaceID: workspaceID,
+			Name:        name,
+			Command:     cfg.Command,
+			Status:      "stopped",
+			IsService:   cfg.IsService(),
+		})
+		if ok {
+			row = workspaceScriptPayload(entry)
+		}
+		scripts = append(scripts, row)
+	}
+	s.mu.Unlock()
+
+	// Sort by the wire field name: the payload carries `scriptName`, so sorting on `name`
+	// compared nil values and left the list in map order.
+	sort.Slice(scripts, func(i, j int) bool {
+		return fmt.Sprint(scripts[i]["scriptName"]) < fmt.Sprint(scripts[j]["scriptName"])
+	})
+	return scripts
+}
+
+// workspaceDescriptor is buildWorkspaceDescriptor plus the script list. The descriptor is where
+// the client looks for the scripts menu, so a descriptor without scripts has no entry point for
+// any of them.
+func (s *Server) workspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord) map[string]any {
+	out := buildWorkspaceDescriptor(ws, prj)
+	out["scripts"] = s.workspaceScriptsPayload(ws.WorkspaceID, ws.Cwd)
+	return out
 }
 
 // broadcastScriptStatus publishes the whole script list for a workspace, which is what
@@ -630,28 +749,7 @@ func (s *Server) broadcastScriptStatus(workspaceID string) {
 			break
 		}
 	}
-	defined := workspace.ReadScripts(cwd)
-
-	s.mu.Lock()
-	scripts := make([]map[string]any, 0, len(defined))
-	for name, command := range defined {
-		entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
-		row := workspaceScriptPayload(&workspaceScript{
-			WorkspaceID: workspaceID,
-			Name:        name,
-			Command:     command,
-			Status:      "stopped",
-		})
-		if ok {
-			row = workspaceScriptPayload(entry)
-		}
-		scripts = append(scripts, row)
-	}
-	s.mu.Unlock()
-
-	sort.Slice(scripts, func(i, j int) bool {
-		return fmt.Sprint(scripts[i]["name"]) < fmt.Sprint(scripts[j]["name"])
-	})
+	scripts := s.workspaceScriptsPayload(workspaceID, cwd)
 	s.broadcastSessionMsg("script_status_update", map[string]any{
 		"workspaceId": workspaceID,
 		"scripts":     scripts,
@@ -725,6 +823,17 @@ func (s *Server) untrustedSourceFor(workspaceID string) *store.UntrustedSource {
 //
 // Optional (not nullable) in the schema, so an absent gate must omit the key rather than send
 // null — a null there fails validation and the client shows no banner at all.
+// commandsPayload renders the finished-command list.
+//
+// A nil slice marshals to null, and the field is a required array: the client rejects the whole
+// progress message, so a setup that has not finished its first command streams nothing at all.
+func commandsPayload(commands []map[string]any) []map[string]any {
+	if commands == nil {
+		return []map[string]any{}
+	}
+	return commands
+}
+
 func blockedSourcePayload(source *store.UntrustedSource) any {
 	if source == nil {
 		return nil

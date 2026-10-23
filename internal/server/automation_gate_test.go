@@ -16,7 +16,7 @@ func TestSetupBlockedForUntrustedWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(work, "setup-ran")
-	if err := os.WriteFile(filepath.Join(work, "byspace.json"), []byte(`{"setup":"echo x > setup-ran"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(work, "byspace.json"), []byte(`{"worktree":{"setup":"echo x > setup-ran"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

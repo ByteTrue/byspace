@@ -181,6 +181,7 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 			"error":     nil,
 			"requestId": req.RequestID,
 		})
+		s.refreshWorkspacePlacementAtCwd(ctx, req.Cwd)
 
 	case "checkout.rename_branch.request":
 		var req struct {
@@ -902,15 +903,32 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "refresh_agent_request":
+		// Refreshing is the client's "reload this agent from disk" call. Two things the Node daemon
+		// did here and this port dropped, both of which the restore flow depends on:
+		//
+		//   - An archived agent is unarchived first. Restore calls refresh after recreating the
+		//     workspace, and the agent was archived together with it; without this the record stays
+		//     archived and the row the user just restored is still history.
+		//   - Failures are reported. The old code returned silently, so a client waiting for
+		//     agent_refreshed hung until its own timeout and the cause never reached the log.
+		if unarchived, archiveErr := s.store.UnarchiveAgent(base.AgentID); archiveErr == nil && unarchived != nil {
+			s.broadcastAgentUpdate(*unarchived)
+		}
 		mp, err := s.ensureAgentLoaded(base.AgentID)
 		if err != nil {
+			_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+				"requestId":   base.RequestID,
+				"requestType": "refresh_agent_request",
+				"error":       err.Error(),
+				"code":        "agent_refresh_failed",
+			})
 			return
 		}
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-			"status":    "agent_updated",
-			"agentId":   base.AgentID,
-			"requestId": base.RequestID,
-			"agent":     s.buildAgentSnapshotPayload(mp.record),
+			"status":       "agent_refreshed",
+			"agentId":      base.AgentID,
+			"requestId":    base.RequestID,
+			"timelineSize": len(mp.session.Timeline()),
 		})
 
 	case "close_items_request":

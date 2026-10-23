@@ -457,6 +457,78 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 	return *matchedProject, newWS, nil
 }
 
+// CreateWorkspaceForDirectory always mints a new workspace for an existing directory.
+//
+// Ported from createWorkspaceForDirectory in workspace-provisioning-service.ts. It is a
+// different operation from EnsureWorkspaceForCwd: opening a directory dedupes onto the
+// workspace the user already has, while creating one must not. Node's `workspace.create`
+// goes through this path, which is why two workspaces can share a checkout and stay
+// independently selectable. Deduping here collapsed every second create onto the first
+// workspace, so the new row never appeared and the returned id matched the previous one.
+//
+// The project is reused when projectID names an active one; otherwise the project owning
+// cwd is found or created, which keeps "add project" from silently producing a workspace.
+func (s *Store) CreateWorkspaceForDirectory(cwd, title, projectID string) (ProjectRecord, WorkspaceRecord, error) {
+	absCwd, err := filepath.Abs(cwd)
+	if err != nil {
+		absCwd = cwd
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	var project ProjectRecord
+	if projectID != "" {
+		projects, listErr := s.ListProjects()
+		if listErr != nil {
+			return ProjectRecord{}, WorkspaceRecord{}, listErr
+		}
+		found := false
+		for _, candidate := range projects {
+			if candidate.ProjectID == projectID {
+				if candidate.ArchivedAt != nil {
+					return ProjectRecord{}, WorkspaceRecord{}, fmt.Errorf("archived project: %s", projectID)
+				}
+				project = candidate
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ProjectRecord{}, WorkspaceRecord{}, fmt.Errorf("unknown project: %s", projectID)
+		}
+	} else {
+		project, err = s.FindOrCreateProjectForDirectory(absCwd)
+		if err != nil {
+			return ProjectRecord{}, WorkspaceRecord{}, err
+		}
+	}
+
+	// Placement facts come from the checkout, not from the project: a checkout of someone
+	// else's repository and a plain directory under a git project are both possible.
+	wsKind := "directory"
+	if gitRepoRoot(absCwd) != "" {
+		wsKind = "local_checkout"
+	}
+	rootCopy := absCwd
+	record := WorkspaceRecord{
+		WorkspaceID:  NewWorkspaceID(),
+		ProjectID:    project.ProjectID,
+		Cwd:          absCwd,
+		Kind:         wsKind,
+		DisplayName:  DeriveWorkspaceDisplayName(absCwd),
+		WorktreeRoot: &rootCopy,
+		MainRepoRoot: &rootCopy,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if trimmed := strings.TrimSpace(title); trimmed != "" {
+		record.Title = &trimmed
+	}
+	if err := s.UpsertWorkspace(record); err != nil {
+		return ProjectRecord{}, WorkspaceRecord{}, err
+	}
+	return project, record, nil
+}
+
 // FindOrCreateProjectForDirectory returns the project that owns cwd, creating only the project.
 //
 // This is the split Node makes: `findOrCreateProjectForDirectory` adds a project, and a

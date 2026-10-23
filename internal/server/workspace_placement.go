@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/pathutil"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
@@ -59,6 +60,37 @@ func reconcileWorkspacePlacement(ctx context.Context, rec store.WorkspaceRecord)
 		next.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 	return next, changed
+}
+
+// refreshWorkspacePlacementAtCwd re-reads the git facts for every active workspace on a checkout
+// and broadcasts the ones that changed.
+//
+// Called right after an action the daemon itself performed (switching or renaming a branch), where
+// waiting for the five-minute rescan is wrong: the user just watched the branch change, and the
+// workspace name is derived from that branch, so the header would keep showing the old one.
+func (s *Server) refreshWorkspacePlacementAtCwd(ctx context.Context, cwd string) {
+	if strings.TrimSpace(cwd) == "" {
+		return
+	}
+	records, err := s.store.ListWorkspaces()
+	if err != nil {
+		return
+	}
+	for _, rec := range records {
+		if rec.ArchivedAt != nil || !pathutil.AreEquivalent(rec.Cwd, cwd) {
+			continue
+		}
+		next, changed := reconcileWorkspacePlacement(ctx, rec)
+		if !changed {
+			continue
+		}
+		if err := s.store.UpsertWorkspace(next); err != nil {
+			continue
+		}
+		if prj, ok := s.projectForWorkspace(next.ProjectID); ok {
+			s.broadcastWorkspaceUpsert(next, prj)
+		}
+	}
 }
 
 func ptrEqual(a, b *string) bool {

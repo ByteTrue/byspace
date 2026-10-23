@@ -44,6 +44,11 @@ type Session struct {
 	nextSubID        int
 	closed           bool
 	done             chan struct{}
+	// exited closes when the child process itself has exited, which is earlier than done when
+	// the process leaves children behind on the pty. Callers that start work in a terminal (the
+	// workspace scripts) need the exit code, and only Wait can produce it.
+	exited   chan struct{}
+	exitCode *int
 }
 
 type StartOptions struct {
@@ -121,10 +126,49 @@ func StartSession(opts StartOptions) (*Session, error) {
 		backlog:          NewBacklog(MaxBacklogChars),
 		subscribers:      make(map[int]func(OutputEvent)),
 		done:             make(chan struct{}),
+		exited:           make(chan struct{}),
 	}
 
 	go s.readLoop()
+	// Reap the child in its own goroutine: without Wait the exit code is lost and a finished
+	// process stays a zombie until the session is closed.
+	go s.waitForExit()
 	return s, nil
+}
+
+func (s *Session) waitForExit() {
+	code := 0
+	if err := s.cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code = exitErr.ExitCode()
+		} else {
+			code = -1
+		}
+	}
+	s.mu.Lock()
+	s.exitCode = &code
+	s.mu.Unlock()
+	close(s.exited)
+}
+
+// Exited closes when the child process has exited; ExitCode reports why. Both matter to
+// callers that render a terminal-backed task's result.
+func (s *Session) Exited() <-chan struct{} { return s.exited }
+
+func (s *Session) ExitCode() *int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exitCode
+}
+
+// Pid reports the child's process id, or 0 once it is gone.
+func (s *Session) Pid() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cmd == nil || s.cmd.Process == nil {
+		return 0
+	}
+	return s.cmd.Process.Pid
 }
 
 // outputCoalesceWindow bounds how long a burst of PTY reads waits before being sent.
@@ -313,7 +357,6 @@ func (s *Session) Close() error {
 	}
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
 	}
 	<-s.done
 	return nil

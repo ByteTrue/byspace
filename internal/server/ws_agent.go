@@ -591,15 +591,17 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	// worktree_setup timeline item; without it a new worktree looks ready but every command
 	// inside it fails.
 	setupCommands := workspace.ReadSetupCommands(wtPath)
-	setupSkippedReason := any(nil)
+	// Run even when there is nothing to run: a project with no setup still needs a "completed"
+	// snapshot, otherwise a client waiting for progress waits forever. Node emits the empty
+	// completed progress for exactly this case.
+	var setupSkippedReason any
 	if len(setupCommands) == 0 {
 		setupSkippedReason = "no setup commands configured"
-	} else {
-		go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
 	}
+	go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
 
 	setupErrCode := ""
-	desc := buildWorkspaceDescriptor(wsRec, prj)
+	desc := s.workspaceDescriptor(wsRec, prj)
 	respPayload := map[string]any{
 		"workspace":       desc,
 		"error":           nil,

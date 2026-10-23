@@ -177,7 +177,11 @@ type Server struct {
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
 	// subscribe leaked a permanent callback.
 	terminalUnsubscribers map[frameSink]map[string][]func()
-	listenAddr            string
+	// terminalDelivered is how far each socket has caught up on a terminal's output. It outlives
+	// the subscription so a re-subscribe with `restore.resume` can replay the gap instead of
+	// resetting a grid the client still holds.
+	terminalDelivered map[frameSink]map[string]int64
+	listenAddr        string
 	// capabilityToken authorizes an agent's own MCP bridge to /mcp/agents without the user's
 	// password, which the agent does not have.
 	capabilityToken string
@@ -321,6 +325,7 @@ func New(opts Options) (*Server, error) {
 		scriptPorts:           newServicePortAllocator(),
 		agentLoads:            make(map[string]*agentLoad),
 		terminalUnsubscribers: make(map[frameSink]map[string][]func()),
+		terminalDelivered:     make(map[frameSink]map[string]int64),
 		idempotentAgents:      make(map[string]string),
 		fileSubs:              make(map[string]fileSubscription),
 		diffSubs:              make(map[string]diffSubscription),
@@ -755,6 +760,7 @@ func (s *Server) serveSessionOnSink(
 		delete(s.clients, sink)
 		delete(s.timelineViews, sink)
 		delete(s.selectiveTimeline, sink)
+		delete(s.terminalDelivered, sink)
 		s.mu.Unlock()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
@@ -1799,7 +1805,7 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 			continue
 		}
 		wsCountByPrj[ws.ProjectID]++
-		entries = append(entries, buildWorkspaceDescriptor(ws, prj))
+		entries = append(entries, s.workspaceDescriptor(ws, prj))
 	}
 
 	entries = filterSortPageWorkspaces(entries, req.Filter, req.Sort, req.Page)
@@ -1881,7 +1887,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		})
 		return
 	}
-	prj, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	prj, ws, err := s.store.CreateWorkspaceForDirectory(cwd, workspaceCreateTitle(req.Title, req.FirstAgentContext), req.Source.ProjectID)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
 			"requestId":       req.RequestID,
@@ -1891,10 +1897,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		})
 		return
 	}
-	if req.Title != nil && strings.TrimSpace(*req.Title) != "" {
-		ws.Title = req.Title
-		_ = s.store.UpsertWorkspace(ws)
-	}
+	s.adoptWorktreePlacement(ctx, &ws)
 	// Same reason as the worktree path: opening a workspace that has never been set up
 	// must run its setup commands, otherwise the first command the user types fails.
 	setupCommands := workspace.ReadSetupCommands(ws.Cwd)
@@ -1907,7 +1910,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 
 	respPayload := map[string]any{
 		"requestId":       req.RequestID,
-		"workspace":       buildWorkspaceDescriptor(ws, prj),
+		"workspace":       s.workspaceDescriptor(ws, prj),
 		"setupTerminalId": nil,
 		"error":           nil,
 	}
@@ -1921,6 +1924,24 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		respPayload["firstAgentContext"] = req.FirstAgentContext
 	}
 	_ = sendSessionMsg(ctx, sink, "workspace.create.response", respPayload)
+}
+
+// workspaceCreateTitle picks the workspace's initial title.
+//
+// Ported from createWorkspaceForDirectory's title argument, which the request fills from
+// `resolveFirstAgentPromptTitle`: an explicit request title wins, otherwise the first line of the
+// first agent's prompt becomes a provisional title so the created workspace is named after what
+// the user asked for rather than after its directory. The auto-name pass replaces it later, and
+// recognizes it as derived because it equals firstPromptLine(prompt).
+func workspaceCreateTitle(explicit *string, firstAgentContext any) string {
+	if explicit != nil && strings.TrimSpace(*explicit) != "" {
+		return strings.TrimSpace(*explicit)
+	}
+	ctxMap, ok := firstAgentContext.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return firstPromptLine(firstAgentContextSeed(ctxMap))
 }
 
 func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType string, raw json.RawMessage) {
@@ -4045,7 +4066,7 @@ func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.Pr
 	catalog := s.store.LoadLabelCatalog()
 	s.broadcastSessionMsg("workspace_update", map[string]any{
 		"kind":       "upsert",
-		"workspace":  buildWorkspaceDescriptor(ws, prj),
+		"workspace":  s.workspaceDescriptor(ws, prj),
 		"generation": catalog.Generation,
 		"seq":        catalog.HeadSeq + 1,
 	})

@@ -975,6 +975,66 @@ func RemoveWorktreeFromDisk(ctx context.Context, worktreePath string) error {
 	return os.RemoveAll(worktreePath)
 }
 
+// DeleteOwnedWorktree removes a BySpace-owned worktree directory from disk.
+//
+// The repository is named explicitly rather than discovered by walking up from the worktree: a
+// BySpace worktree lives at <home>/worktrees/<repo-hash>/<slug>, so nothing above it holds a
+// `.git`, and walking up would fall through to a plain RemoveAll that leaves the repository's
+// worktree admin directory behind. `worktree prune` then forgets the entry, so a later
+// `create` can reuse the branch.
+//
+// A directory that is already gone counts as success: the caller asked for it to be absent.
+func DeleteOwnedWorktree(ctx context.Context, repoRoot, worktreePath string) error {
+	if strings.TrimSpace(worktreePath) == "" {
+		return nil
+	}
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		return nil
+	}
+	if strings.TrimSpace(repoRoot) != "" {
+		if _, err := runGit(ctx, repoRoot, "worktree", "remove", "--force", "--force", worktreePath); err == nil {
+			_, _ = runGit(ctx, repoRoot, "worktree", "prune")
+			return nil
+		}
+	}
+	return os.RemoveAll(worktreePath)
+}
+
+// PruneWorktrees drops worktree admin entries whose directory no longer exists.
+//
+// An interrupted archive (or a directory the user deleted by hand) leaves `git worktree`
+// believing the path is still checked out, which makes the next `worktree add` for that branch
+// or path fail. Pruning is idempotent and harmless when there is nothing stale.
+func PruneWorktrees(ctx context.Context, repoRoot string) error {
+	if strings.TrimSpace(repoRoot) == "" {
+		return nil
+	}
+	_, err := runGit(ctx, repoRoot, "worktree", "prune")
+	return err
+}
+
+// WorktreeMainRepoRoot reports the repository a worktree was checked out from, or "" when it
+// cannot be determined. Best-effort on purpose: a half-archived worktree has no admin directory
+// left to read, and the caller only uses this to name the repository for cleanup.
+func WorktreeMainRepoRoot(ctx context.Context, worktreePath string) string {
+	commonDir, err := runGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return ""
+	}
+	commonDir = strings.TrimSpace(commonDir)
+	if commonDir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(worktreePath, commonDir)
+	}
+	commonDir = filepath.Clean(commonDir)
+	if filepath.Base(commonDir) == ".git" {
+		return filepath.Dir(commonDir)
+	}
+	return commonDir
+}
+
 // safeGitRefPattern is the same allow-list the node daemon applies before interpolating a
 // user-supplied ref into a git argument list.
 var safeGitRefPattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
@@ -615,10 +616,17 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 	_ = json.Unmarshal(raw, &req)
 
 	nowMs := time.Now().UnixMilli()
+	// Snapshot the list under the lock, then filter outside it: the scope check reads the store.
 	s.mu.Lock()
-	list := make([]map[string]any, 0, len(s.terminals))
+	all := make([]*terminal.Session, 0, len(s.terminals))
 	for _, t := range s.terminals {
-		if req.WorkspaceID != "" && t.WorkspaceID != "" && t.WorkspaceID != req.WorkspaceID {
+		all = append(all, t)
+	}
+	s.mu.Unlock()
+
+	list := make([]map[string]any, 0, len(all))
+	for _, t := range all {
+		if !s.terminalInScope(t, req.Cwd, req.WorkspaceID) {
 			continue
 		}
 		list = append(list, map[string]any{
@@ -629,7 +637,6 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 			"activity":    map[string]any{"state": t.Activity(), "changedAt": nowMs},
 		})
 	}
-	s.mu.Unlock()
 
 	payload := map[string]any{
 		"terminals": list,
@@ -639,6 +646,47 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 		payload["cwd"] = req.Cwd
 	}
 	_ = sendSessionMsg(ctx, sink, "list_terminals_response", payload)
+}
+
+// terminalInScope reports whether a terminal belongs to the workspace the caller asked about.
+//
+// Filtering on workspaceId alone is not enough: unscoped terminals, and ones an older client
+// created under a plain cwd, would leak into every list. A workspace owns the terminals whose cwd
+// sits at or below its root, and the terminal's own workspaceId must agree when both sides know it.
+func (s *Server) terminalInScope(t *terminal.Session, cwd, workspaceID string) bool {
+	if workspaceID != "" && t.WorkspaceID != "" && t.WorkspaceID != workspaceID {
+		return false
+	}
+	root := cwd
+	if workspaceID != "" {
+		if workspaces, err := s.store.ListWorkspaces(); err == nil {
+			for _, ws := range workspaces {
+				if ws.WorkspaceID == workspaceID {
+					root = ws.Cwd
+					break
+				}
+			}
+		}
+	}
+	if root == "" {
+		return true
+	}
+	return pathWithinRoot(root, t.Cwd)
+}
+
+// pathWithinRoot reports whether candidate is root or lives below it.
+//
+// A plain prefix test would treat a repository and the worktree checked out under it as the same
+// root, and each would list the other's terminals.
+func pathWithinRoot(root, candidate string) bool {
+	if root == "" || candidate == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -686,6 +734,23 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 
 	// Restore mode decides what the client receives; see restorePlan below.
 	plan := planTerminalRestore(req.Restore)
+
+	// A client that says it still holds the grid only wants the bytes it missed. Answering with a
+	// snapshot would reset the terminal it was trying to keep, which is what `resume` exists to
+	// avoid: the client prepends a reset when it renders a snapshot, so a resume that ships one
+	// looks identical to a fresh mount.
+	if restoreResumes(req.Restore) {
+		if delivered, ok := s.terminalDeliveredRevision(sink, req.TerminalID); ok {
+			if res := sess.ResumeSince(delivered); res != nil {
+				if res.Data != "" {
+					_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(res.Data)))
+				}
+				s.markTerminalDelivered(sink, req.TerminalID, res.Revision)
+				plan = terminalRestorePlan{}
+			}
+		}
+	}
+
 	if plan.sendSnapshot && sess.VT() != nil {
 		if plan.scrollbackLines > 0 {
 			_, snapFrame := sess.VT().SnapshotWithScrollback(slot, plan.scrollbackLines)
@@ -719,11 +784,44 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 	// Subscribe returns an unsubscribe func; dropping it is why unsubscribe requests did
 	// nothing: every subscribe added another permanent callback, so reopening a terminal
 	// doubled its output and a closed one kept receiving frames forever.
-	unsubscribe, _ := sess.Subscribe(func(ev terminal.OutputEvent) {
-		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
-		_ = sink.SendBinary(context.Background(), outFrame)
+	//
+	// Output is buffered until the restore frames above have been written by the single sender
+	// below: the session's publishers run on their own goroutines, so writing straight from the
+	// callback lets a live chunk overtake the backlog it follows.
+	var bufMu sync.Mutex
+	var buffered []terminal.OutputEvent
+	signal := make(chan struct{}, 1)
+	unsubscribe, currentRevision := sess.Subscribe(func(ev terminal.OutputEvent) {
+		bufMu.Lock()
+		buffered = append(buffered, ev)
+		bufMu.Unlock()
+		select {
+		case signal <- struct{}{}:
+		default:
+		}
 	})
-	s.registerTerminalSubscription(sink, req.TerminalID, unsubscribe)
+	s.markTerminalDelivered(sink, req.TerminalID, currentRevision)
+	go func() {
+		for range signal {
+			for {
+				bufMu.Lock()
+				batch := buffered
+				buffered = nil
+				bufMu.Unlock()
+				if len(batch) == 0 {
+					break
+				}
+				for _, ev := range batch {
+					_ = sink.SendBinary(context.Background(), terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data))
+					s.markTerminalDelivered(sink, req.TerminalID, ev.Revision)
+				}
+			}
+		}
+	}()
+	s.registerTerminalSubscription(sink, req.TerminalID, func() {
+		unsubscribe()
+		close(signal)
+	})
 }
 
 // registerTerminalSubscription records how to detach a sink from a terminal's output.
@@ -767,6 +865,45 @@ func (s *Server) releaseTerminalSubscriptions(sink frameSink, terminalID string)
 	for _, fn := range toRun {
 		fn()
 	}
+}
+
+// restoreResumes reports whether the client asked to keep its grid and take only new bytes.
+func restoreResumes(restore *struct {
+	Mode            string `json:"mode"`
+	Resume          *bool  `json:"resume"`
+	ScrollbackLines *int   `json:"scrollbackLines"`
+	Size            *struct {
+		Rows int `json:"rows"`
+		Cols int `json:"cols"`
+	} `json:"size"`
+}) bool {
+	return restore != nil && restore.Resume != nil && *restore.Resume
+}
+
+// terminalDeliveredRevision reports the last output revision this socket has been sent.
+func (s *Server) terminalDeliveredRevision(sink frameSink, terminalID string) (int64, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	revision, ok := s.terminalDelivered[sink][terminalID]
+	return revision, ok && revision > 0
+}
+
+// markTerminalDelivered records how far this socket has caught up on a terminal.
+//
+// The cursor outlives the subscription so a reconnect can resume instead of resetting: the
+// client keeps its grid across a workspace switch, and a snapshot would clear it.
+func (s *Server) markTerminalDelivered(sink frameSink, terminalID string, revision int64) {
+	s.mu.Lock()
+	if s.terminalDelivered == nil {
+		s.terminalDelivered = make(map[frameSink]map[string]int64)
+	}
+	byTerminal := s.terminalDelivered[sink]
+	if byTerminal == nil {
+		byTerminal = make(map[string]int64)
+		s.terminalDelivered[sink] = byTerminal
+	}
+	byTerminal[terminalID] = revision
+	s.mu.Unlock()
 }
 
 // terminalRestorePlan is what a subscribe should deliver.

@@ -235,7 +235,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		if err != nil {
 			return map[string]any{"error": err.Error()}, true
 		}
-		return map[string]any{"workspace": buildWorkspaceDescriptor(ws, prj)}, false
+		return map[string]any{"workspace": s.workspaceDescriptor(ws, prj)}, false
 
 	case "list_workspaces":
 		projectID, _ := args["projectId"].(string)
@@ -254,7 +254,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 				continue
 			}
 			if p, ok := prjByID[w.ProjectID]; ok {
-				out = append(out, buildWorkspaceDescriptor(w, p))
+				out = append(out, s.workspaceDescriptor(w, p))
 			}
 		}
 		return map[string]any{"workspaces": out}, false

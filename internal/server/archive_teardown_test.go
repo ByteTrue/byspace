@@ -54,7 +54,11 @@ func TestTeardownArchivedWorkspaceArchivesAgents(t *testing.T) {
 }
 
 // A setup run still writing into a worktree outlives the archive unless it is stopped.
-func TestStopWorkspaceSetupMarksStopped(t *testing.T) {
+
+// The status must stay inside the wire enum (running/completed/failed/blocked). "stopped" is not
+// on the wire, and a client that receives it drops the whole progress message — the setup tab then
+// claims it is still running forever.
+func TestStopWorkspaceSetupMarksFailed(t *testing.T) {
 	srv := newTunnelTestServer(t, nil)
 	snap := &setupSnapshot{WorkspaceID: "ws_1", Status: "running"}
 	srv.mu.Lock()
@@ -71,7 +75,7 @@ func TestStopWorkspaceSetupMarksStopped(t *testing.T) {
 	status := snap.Status
 	errText := snap.Error
 	snap.mu.Unlock()
-	if status != "stopped" {
+	if status != "failed" {
 		t.Fatalf("status = %q", status)
 	}
 	if errText == nil || *errText != "workspace archived" {

@@ -646,7 +646,7 @@ func TestWorkspaceCreateRunsSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(workDir, "setup-ran.txt")
-	manifest := `{"setup":"echo ready > setup-ran.txt"}`
+	manifest := `{"worktree":{"setup":"echo ready > setup-ran.txt"}}`
 	if err := os.WriteFile(filepath.Join(workDir, "byspace.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
