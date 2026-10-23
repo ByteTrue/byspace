@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -901,8 +902,51 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "status", s.buildServerInfoPayload())
 	case "session":
-		s.handleSessionMessage(ctx, sink, envelope.Message)
+		// Node dispatches a session message without awaiting the handler (`void
+		// this.dispatchSessionMessage(...)`), so one slow read never delays the frames queued
+		// behind it. Handling them inline here made a send_agent_message wait ~950ms behind an
+		// unrelated checkout_pr_status plus two provider snapshots, and the composer spends
+		// that whole window with submit disabled.
+		if sessionMessageNeedsOrder(envelope.Message) {
+			// Node still registers these before the next frame is read (its handler runs
+			// synchronously up to the first await). Binary transfer frames depend on it: an
+			// upload's metadata frame must land before its first chunk.
+			s.handleSessionMessage(ctx, sink, envelope.Message)
+			return
+		}
+		go func(ctx context.Context, raw json.RawMessage) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					fmt.Fprintf(os.Stderr, "session handler panicked: %v\n%s\n", recovered, debug.Stack())
+				}
+			}()
+			// A disconnect must not abort a handler the client already committed to; Node keeps
+			// running them too.
+			s.handleSessionMessage(context.WithoutCancel(ctx), sink, raw)
+		}(ctx, envelope.Message)
 	}
+}
+
+// sessionMessageNeedsOrder lists the messages that register socket-scoped state a following
+// binary frame or subscription event depends on. They run inline; everything else is dispatched
+// concurrently.
+func sessionMessageNeedsOrder(raw json.RawMessage) bool {
+	var head struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(raw, &head)
+	switch head.Type {
+	case "file.upload.request",
+		"create_terminal_request",
+		"subscribe_terminal_request",
+		"subscribe_terminals_request",
+		"fs.file.subscribe.request",
+		"subscribe_checkout_diff_request",
+		"session.events.set_subscription.request",
+		"agent.timeline.set_subscription.request":
+		return true
+	}
+	return false
 }
 
 func (s *Server) buildServerInfoPayload() map[string]any {
