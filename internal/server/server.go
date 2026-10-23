@@ -1840,6 +1840,14 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 			BranchName   string `json:"branchName"`
 			WorktreeSlug string `json:"worktreeSlug"`
 			Action       string `json:"action"`
+			// RefName is the branch the user picked in the starting-ref picker: the base for
+			// `branch-off`, or the branch to check out for `checkout`. Dropping it sent every worktree
+			// creation to the default branch, so picking "dev" produced a worktree off "main".
+			RefName string `json:"refName"`
+			// CheckoutSource names a change request to check out; GithubPrNumber is the legacy field
+			// the protocol still accepts for the same thing.
+			CheckoutSource *sourceCheckoutSource `json:"checkoutSource"`
+			GithubPRNumber *int                  `json:"githubPrNumber"`
 		} `json:"source"`
 	}
 	_ = json.Unmarshal(raw, &req)
@@ -1856,8 +1864,9 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 			})
 			return
 		}
-		s.handleWorkspaceCreateFromWorktree(ctx, sink, req.RequestID, projectRoot, req.Title, req.Source.Action,
-			req.Source.BaseBranch, req.Source.BranchName, req.Source.WorktreeSlug)
+		s.handleWorkspaceCreateFromWorktree(ctx, sink, req.RequestID, projectRoot, req.Title, worktreeSourceIntentInput(req.Source.Action, req.Source.RefName,
+			req.Source.BaseBranch, req.Source.BranchName, req.Source.WorktreeSlug,
+			req.Source.CheckoutSource, req.Source.GithubPRNumber))
 		return
 	}
 

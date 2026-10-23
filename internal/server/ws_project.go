@@ -1711,6 +1711,45 @@ func (s *Server) projectRootByID(projectID string) string {
 	return ""
 }
 
+// sourceCheckoutSource is the wire shape of `source.checkoutSource` on workspace.create.
+type sourceCheckoutSource struct {
+	Number      int    `json:"number"`
+	Forge       string `json:"forge"`
+	ProjectPath string `json:"projectPath"`
+}
+
+// worktreeSourceIntentInput maps a workspace.create worktree source onto the shared resolver input.
+//
+// baseBranch is the client's override for the repository's default branch: the resolver asks
+// DefaultBranch only when no ref was named, and workspace.create carries the resolved base
+// separately from the picked ref.
+func worktreeSourceIntentInput(
+	action, refName, baseBranch, branchName, worktreeSlug string,
+	checkoutSource *sourceCheckoutSource,
+	githubPRNumber *int,
+) workspace.WorktreeIntentInput {
+	input := workspace.WorktreeIntentInput{
+		WorktreeSlug:   strings.TrimSpace(worktreeSlug),
+		BranchName:     strings.TrimSpace(branchName),
+		RefName:        strings.TrimSpace(refName),
+		Action:         strings.TrimSpace(action),
+		GithubPRNumber: githubPRNumber,
+	}
+	// A branch-off with no explicit ref starts from the base the client resolved; without this the
+	// resolver would ask git for the default branch and ignore a base the user had already pinned.
+	if input.RefName == "" && input.Action == "branch-off" {
+		input.RefName = strings.TrimSpace(baseBranch)
+	}
+	if checkoutSource != nil {
+		input.CheckoutSource = &workspace.CheckoutSource{
+			Number:      checkoutSource.Number,
+			Forge:       checkoutSource.Forge,
+			ProjectPath: checkoutSource.ProjectPath,
+		}
+	}
+	return input
+}
+
 // handleWorkspaceCreateFromWorktree creates a workspace whose source is a worktree.
 //
 // The worktree source names a project and a branch, not a directory — the directory is what this call produces. It reuses
@@ -1726,21 +1765,25 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	requestID string,
 	projectRoot string,
 	title *string,
-	action string,
-	baseBranch string,
-	branchName string,
-	worktreeSlug string,
+	intentInput workspace.WorktreeIntentInput,
 ) {
-	intent := workspace.WorktreeIntent{Kind: workspace.IntentBranchOff}
-	if strings.TrimSpace(action) == "checkout" {
-		intent = workspace.WorktreeIntent{Kind: workspace.IntentCheckoutBranch}
+	// Resolve through the same resolver the worktree RPCs use: the client speaks action + refName +
+	// checkoutSource, and reading only some of those fields silently dropped the branch the user
+	// picked in the starting-ref picker.
+	intent, intentErr := workspace.ResolveWorktreeIntent(ctx, intentInput, projectRoot, workspace.WorktreeIntentDeps{
+		Forge:         workspace.DetectForge(ctx, projectRoot),
+		DefaultBranch: workspace.ResolveDefaultBranch,
+	})
+	if intentErr != nil {
+		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+			"requestId":       requestID,
+			"workspace":       nil,
+			"setupTerminalId": nil,
+			"error":           intentErr.Error(),
+		})
+		return
 	}
-	if strings.TrimSpace(branchName) != "" {
-		intent.BranchName = strings.TrimSpace(branchName)
-	}
-	if strings.TrimSpace(baseBranch) != "" {
-		intent.BaseBranch = strings.TrimSpace(baseBranch)
-	}
+	worktreeSlug := intentInput.WorktreeSlug
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
 	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, worktreeSlug)
