@@ -132,9 +132,16 @@ func (w *wsSink) Close(code websocket.StatusCode, reason string) error {
 
 // Server is the unified BySpace HTTP + WebSocket daemon server.
 type Server struct {
-	homeDir      string
-	serverID     string
-	version      string
+	homeDir  string
+	serverID string
+	version  string
+	// epoch is the process-level timeline epoch. It changes on every daemon start, so a client can
+	// tell its cached sequence numbers are stale and must discard positions from the previous run.
+	//
+	// Every response and event that carries a cursor or a sequence has to stamp this one value.
+	// There used to be a second field with the same meaning and a different format, and the two
+	// disagreed: the client compares the epoch on a prompt index against the epoch it already holds
+	// from the timeline cursor, so the chat outline saw every index as stale and never rendered.
 	epoch        string
 	keyPair      e2ee.KeyPair
 	pubKeyB64    string
@@ -206,9 +213,6 @@ type Server struct {
 	// setupRuns guards against two concurrent setup runs for one workspace.
 	setupRunsMu sync.Mutex
 	setupRuns   map[string]bool
-	// timelineEpoch changes on every daemon start, so a client can tell its cached sequences are
-	// stale.
-	timelineEpoch string
 	// shutdownRequested receives a reason when a client asks the daemon to restart or stop. The
 	// process owner (the CLI's `serve` loop) listens: a server cannot restart itself.
 	shutdownRequested chan string
@@ -285,9 +289,6 @@ func New(opts Options) (*Server, error) {
 	}
 
 	srv := &Server{
-		// A fresh epoch per process: sequence numbers restart, so a client must discard cached
-		// positions from the previous run rather than apply new items against an old cursor.
-		timelineEpoch:         fmt.Sprintf("ep_%d", time.Now().UnixNano()),
 		shutdownRequested:     make(chan string, 1),
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,

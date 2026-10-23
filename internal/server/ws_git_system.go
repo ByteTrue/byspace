@@ -1634,11 +1634,11 @@ func listLocalBranches(ctx context.Context, cwd string) []string {
 // currentTimelineEpoch returns the process-level timeline epoch.
 //
 // The epoch changes on every daemon start, which is how a client knows its cached sequence numbers
-// are stale: sequences restart at zero with the process.
+// are stale: sequences restart at zero with the process. It is set once at construction and never
+// mutated, so reading it needs no lock — which also makes this safe to call from a handler that
+// already holds s.mu.
 func (s *Server) currentTimelineEpoch() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.timelineEpoch
+	return s.epoch
 }
 
 // timelineHeadSeq reports the next sequence a timeline would assign.
