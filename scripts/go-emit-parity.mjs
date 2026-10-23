@@ -65,10 +65,11 @@ const CONDITIONALLY_OMITTED = new Map([
   ["tunnel.create.response", new Set(["error"])], // 仅失败时
   ["tunnel.remove.response", new Set(["error"])],
   ["hub.management.daemon.disconnect.response", new Set(["warning"])],
-  ["providers_snapshot_update", new Set(["cwd"])], // 仅请求带 cwd 时
+  ["providers_snapshot_update", new Set(["cwd", "entries.iconSvg"])], // cwd：仅请求带 cwd 时
   // Go 的 ProviderSpec 没有图标字段：内置与脚本 provider 的图标由客户端
   // `packages/app/src/data/acp-provider-catalog.ts` 自带，插件式 provider 注册（唯一会
   // 提供 SVG 的来源）在 Go 分支不存在。因此快照条目不携带 iconSvg，客户端回退到目录图标。
+  // 响应与推送用的是同一份 entries，所以两处都要登记。
   ["get_providers_snapshot_response", new Set(["entries.iconSvg"])],
 ]);
 
