@@ -24,20 +24,72 @@ type Cadence struct {
 }
 
 type TargetConfig struct {
-	Provider         string  `json:"provider"`
-	Cwd              string  `json:"cwd"`
-	ModeID           string  `json:"modeId,omitempty"`
-	Model            string  `json:"model,omitempty"`
-	ThinkingOptionID string  `json:"thinkingOptionId,omitempty"`
-	ArchiveOnFinish  bool    `json:"archiveOnFinish,omitempty"`
-	Isolation        string  `json:"isolation,omitempty"`
-	Title            *string `json:"title,omitempty"`
+	Provider         string `json:"provider"`
+	Cwd              string `json:"cwd"`
+	ModeID           string `json:"modeId,omitempty"`
+	Model            string `json:"model,omitempty"`
+	ThinkingOptionID string `json:"thinkingOptionId,omitempty"`
+	// ArchiveOnFinish is a pointer because the field is tri-state: absent means "archive" (the
+	// default the runner applies), false means the user turned it off. A plain bool with omitempty
+	// dropped every explicit false, so the form read the knob back as "not set".
+	ArchiveOnFinish *bool   `json:"archiveOnFinish,omitempty"`
+	Isolation       string  `json:"isolation,omitempty"`
+	Title           *string `json:"title,omitempty"`
 }
 
 type Target struct {
 	Type    string        `json:"type"` // "agent" | "new-agent"
 	AgentID string        `json:"agentId,omitempty"`
 	Config  *TargetConfig `json:"config,omitempty"`
+}
+
+// TargetConfigPatch is the writable half of a new-agent target's config.
+//
+// Every field is a pointer because `schedule/update` patches rather than replaces: nil means "leave
+// it alone", a pointer to an empty string or a null-ish value means "clear it". A plain value could
+// not tell those apart, so the edit form would silently reset knobs the user never touched.
+type TargetConfigPatch struct {
+	Provider         *string
+	Model            *string
+	ModeID           *string
+	ThinkingOptionID *string
+	ArchiveOnFinish  *bool
+	Isolation        *string
+	Cwd              *string
+}
+
+// applyTargetConfigPatch merges a patch into a new-agent target.
+func applyTargetConfigPatch(target Target, patch *TargetConfigPatch) Target {
+	if patch == nil || target.Type != "new-agent" {
+		return target
+	}
+	config := TargetConfig{}
+	if target.Config != nil {
+		config = *target.Config
+	}
+	setString := func(field *string, target *string) {
+		if field == nil {
+			return
+		}
+		if trimmed := strings.TrimSpace(*field); trimmed != "" {
+			*target = trimmed
+			return
+		}
+		*target = ""
+	}
+	setString(patch.Provider, &config.Provider)
+	setString(patch.Model, &config.Model)
+	setString(patch.ModeID, &config.ModeID)
+	setString(patch.ThinkingOptionID, &config.ThinkingOptionID)
+	setString(patch.Cwd, &config.Cwd)
+	if patch.ArchiveOnFinish != nil {
+		config.ArchiveOnFinish = patch.ArchiveOnFinish
+	}
+	if patch.Isolation != nil {
+		config.Isolation = strings.TrimSpace(*patch.Isolation)
+	}
+	target.Config = &config
+	return target
 }
 
 type Run struct {
@@ -121,6 +173,9 @@ type UpdateInput struct {
 	Cadence   *Cadence
 	MaxRuns   *int
 	ExpiresAt *string
+	// Config patches the new-agent target's config. Nil values inside it mean "leave alone"; the
+	// pointer-to-pointer shape of PatchTargetConfig carries that distinction.
+	Config *TargetConfigPatch
 }
 
 type ExecutionResult struct {
@@ -373,6 +428,7 @@ func (s *Service) Update(in UpdateInput) (*StoredSchedule, error) {
 	if in.ExpiresAt != nil {
 		sched.ExpiresAt = in.ExpiresAt
 	}
+	sched.Target = applyTargetConfigPatch(sched.Target, in.Config)
 	sched.UpdatedAt = now.Format(time.RFC3339Nano)
 	if err := s.writeLocked(*sched); err != nil {
 		return nil, err

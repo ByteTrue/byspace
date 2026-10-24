@@ -939,19 +939,62 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 		}
 		_ = sendSessionMsg(ctx, sink, "schedule/run-once/response", map[string]any{
 			"requestId": base.RequestID,
-			"schedule":  sched.ToSummary(),
+			"schedule":  sched,
 			"error":     nil,
 		})
 
 	case "schedule/update":
-		sched, err := s.schedules.Inspect(schedID)
+		var req struct {
+			ScheduleID     string            `json:"scheduleId"`
+			Name           *string           `json:"name"`
+			Prompt         *string           `json:"prompt"`
+			Cadence        *schedule.Cadence `json:"cadence"`
+			NewAgentConfig *struct {
+				Provider         *string `json:"provider"`
+				Model            *string `json:"model"`
+				ModeID           *string `json:"modeId"`
+				ThinkingOptionID *string `json:"thinkingOptionId"`
+				ArchiveOnFinish  *bool   `json:"archiveOnFinish"`
+				Isolation        *string `json:"isolation"`
+				Cwd              *string `json:"cwd"`
+			} `json:"newAgentConfig"`
+			MaxRuns   *int    `json:"maxRuns"`
+			ExpiresAt *string `json:"expiresAt"`
+		}
+		if err := json.Unmarshal(raw, &req); err != nil {
+			emitErr(err)
+			return
+		}
+		update := schedule.UpdateInput{
+			ID:        firstNonEmptyTrimmed(req.ScheduleID, schedID),
+			Name:      req.Name,
+			HasName:   req.Name != nil,
+			Prompt:    req.Prompt,
+			Cadence:   req.Cadence,
+			MaxRuns:   req.MaxRuns,
+			ExpiresAt: req.ExpiresAt,
+		}
+		// The patch is only meaningful for a new-agent target; a schedule bound to an existing agent
+		// has no config to edit, and applying one would invent knobs the run never reads.
+		if cfg := req.NewAgentConfig; cfg != nil {
+			update.Config = &schedule.TargetConfigPatch{
+				Provider:         cfg.Provider,
+				Model:            cfg.Model,
+				ModeID:           cfg.ModeID,
+				ThinkingOptionID: cfg.ThinkingOptionID,
+				ArchiveOnFinish:  cfg.ArchiveOnFinish,
+				Isolation:        cfg.Isolation,
+				Cwd:              cfg.Cwd,
+			}
+		}
+		sched, err := s.schedules.Update(update)
 		if err != nil {
 			emitErr(err)
 			return
 		}
 		_ = sendSessionMsg(ctx, sink, "schedule/update/response", map[string]any{
 			"requestId": base.RequestID,
-			"schedule":  sched.ToSummary(),
+			"schedule":  sched,
 			"error":     nil,
 		})
 	}
@@ -1026,6 +1069,12 @@ func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.Store
 	_ = mp.session.WaitForFinish(ctx)
 	out := mp.session.LastAssistantText()
 	wsID := ws.WorkspaceID
+	// A schedule that leaves the run's workspace open asks for inspection; anything else keeps the
+	// sidebar clean. Absent means archive, which is also what the runner does for a run with no
+	// agent of its own.
+	if sched.Target.Config == nil || sched.Target.Config.ArchiveOnFinish == nil || *sched.Target.Config.ArchiveOnFinish {
+		s.archiveWorkspaces(ctx, []string{wsID}, time.Now().UTC().Format(time.RFC3339Nano))
+	}
 	return schedule.ExecutionResult{
 		AgentID:     &agentID,
 		WorkspaceID: &wsID,
