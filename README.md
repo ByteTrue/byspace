@@ -72,11 +72,11 @@ For full setup and configuration, see:
 
 - [Development and setup](docs/development.md)
 - [Architecture](docs/architecture.md)
-- [Server and CLI reference](packages/server/README.md)
+- [Server and CLI reference](archive/packages/server/README.md)
 
 ### Self-hosting with Docker
 
-Self-host the web UI and relay with the official container. The daemon is not in it — it runs on your own machine, installed via npm:
+Self-host the web UI and relay with the official container. The daemon is not in it — it runs on your own machine:
 
 ```bash
 curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/compose.yml
@@ -102,7 +102,7 @@ byspace send abc123 "also add tests" # follow-up task
 byspace run --host workstation.local:6777 --cwd /workspace "run the full test suite"
 ```
 
-See the [CLI reference](packages/server/README.md) for more.
+See the [CLI reference](archive/packages/server/README.md) for more.
 
 ## Skills
 

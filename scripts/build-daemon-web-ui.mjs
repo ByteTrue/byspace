@@ -10,7 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 const APP_DIR = path.join(REPO_ROOT, "packages", "app");
 const SOURCE_DIST = path.join(APP_DIR, "dist");
-const TARGET_DIST = path.join(REPO_ROOT, "packages", "server", "dist", "server", "web-ui");
+// The Node daemon used to serve this bundle from packages/server/dist. That package is now
+// archived; the Go binary embeds the bundle directly via //go:embed internal/webui/dist.
+const TARGET_DIST = path.join(REPO_ROOT, "internal", "webui", "dist");
 const COMPRESS_EXTENSIONS = new Set([".html", ".js", ".css", ".json", ".svg", ".map"]);
 
 function fmtMiB(bytes) {

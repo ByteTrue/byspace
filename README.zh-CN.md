@@ -74,7 +74,7 @@ BySpace 默认在 `127.0.0.1:6777` 启动。终端会询问是否启用端到端
 
 - [开发与安装](docs/development.md)
 - [架构](docs/architecture.md)
-- [Server 与 CLI 参考](packages/server/README.md)
+- [Server 与 CLI 参考](archive/packages/server/README.md)
 
 ## CLI
 
@@ -92,7 +92,7 @@ byspace send abc123 "also add tests" # 发送后续任务
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-更多内容见 [Server 与 CLI 参考](packages/server/README.md)。
+更多内容见 [Server 与 CLI 参考](archive/packages/server/README.md)。
 
 ## Skills
 

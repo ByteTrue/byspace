@@ -7,6 +7,11 @@ on:
       - "docker/**"
       - ".dockerignore"
       - ".github/workflows/docker.yml"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
       - "package.json"
       - "package-lock.json"
       - "patches/**"
@@ -14,12 +19,10 @@ on:
       - "tsconfig.json"
       - "tsconfig.base.json"
       - "packages/app/**"
-      - "packages/cli/**"
       - "packages/client/**"
       - "packages/highlight/**"
       - "packages/protocol/**"
       - "packages/relay/**"
-      - "packages/server/**"
   push:
     branches: [main]
     tags:

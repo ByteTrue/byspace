@@ -19,6 +19,7 @@ workspace:
 ci:
   - ".github/actions/**"
   - ".github/workflows/ci.yml"
+  - "Makefile"
 
 format:
   - ".agents/**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
@@ -28,8 +29,12 @@ format:
 quality:
   - "**/*.{cjs,js,json,jsx,mjs,ts,tsx}"
 
-server:
-  - "packages/server/**"
+go:
+  - "cmd/**"
+  - "internal/**"
+  - "go.mod"
+  - "go.sum"
+  - "Makefile"
 
 app:
   - "packages/app/**"
@@ -40,15 +45,10 @@ sdk:
   - "packages/protocol/**"
 
 browser:
-  - "packages/server/src/server/agent/provider-snapshot-manager.ts"
-  - "packages/server/src/server/session/provider/provider-catalog-session.ts"
+  - "cmd/**"
+  - "internal/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
   - "packages/protocol/src/client-capabilities.ts"
-  - "packages/server/src/server/agent/provider-registry.ts"
-  - "packages/server/src/server/agent/agent-sdk-types.ts"
-  - "packages/server/src/server/agent/providers/codex-app-server-agent.ts"
-  - "packages/server/src/server/agent/providers/claude/agent.ts"
-  - "packages/server/src/executable-resolution/**"
   - "packages/app/src/**"
   - "packages/app/e2e/browser/**"
   - "packages/app/e2e/support/**"
@@ -60,6 +60,3 @@ browser:
 
 relay:
   - "packages/relay/**"
-
-cli:
-  - "packages/cli/**"

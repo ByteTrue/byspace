@@ -1,35 +1,27 @@
-import { spawn, execFileSync, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { withDisabledE2ESpeechEnv } from "./speech-env";
-import { killProcessTree, spawnTsx } from "./spawn-node";
+import { killProcessTree } from "./spawn-node";
 
-function resolvePublishedServerDir(publishedPackageRoot: string): string {
-  // The published daemon ships as one aggregate package with the server in
-  // bundledDependencies. npm keeps bundled deps nested, but hoists them when
-  // installing from a registry, so check both layouts.
-  const candidates = [
-    path.join(
-      publishedPackageRoot,
-      "node_modules",
-      "@bytetrue",
-      "byspace",
-      "node_modules",
-      "@bytetrue",
-      "server",
-    ),
-    path.join(publishedPackageRoot, "node_modules", "@bytetrue", "server"),
-  ];
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (!found) {
+// The daemon under test is the Go single binary (internal/, cmd/byspace). The Node daemon
+// lived in packages/server and is archived; specs, routes and the wire protocol are
+// unchanged, so this file is the only place that needed to know which language hosts it.
+const REPO_ROOT = path.resolve(__dirname, "../../../../..");
+const GO_DAEMON_BINARY = path.join(REPO_ROOT, "bin", "byspace");
+
+function resolveGoDaemonBinary(): string {
+  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
+  if (!existsSync(GO_DAEMON_BINARY)) {
     throw new Error(
-      `Could not find the bundled daemon under ${publishedPackageRoot}. Looked in: ${candidates.join(", ")}`,
+      `Go daemon binary not found at ${GO_DAEMON_BINARY}. Run \`make build-full\` first ` +
+        `(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).`,
     );
   }
-  return found;
+  return GO_DAEMON_BINARY;
 }
 
 export interface IsolatedHostDaemon {
@@ -51,7 +43,12 @@ export interface IsolatedHostDaemonOptions {
   daemonConfig?: Record<string, unknown>;
   byspaceHome?: string;
   preserveHome?: boolean;
-  publishedVersion?: string;
+  /**
+   * Test a daemon binary other than bin/byspace — used to exercise a released or
+   * otherwise prebuilt binary. Replaces the old `publishedVersion` npm install path,
+   * which only existed because the daemon used to ship as an npm package.
+   */
+  daemonBinary?: string;
 }
 
 async function writeIsolatedDaemonConfig(
@@ -148,64 +145,24 @@ export async function startIsolatedHostDaemon(
 
   const byspaceHome =
     options.byspaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-")));
-  let publishedPackageRoot: string | null = null;
-  if (options.publishedVersion) {
-    publishedPackageRoot = await mkdtemp(path.join(tmpdir(), "byspace-e2e-published-server-"));
-    await writeFile(
-      path.join(publishedPackageRoot, "package.json"),
-      `${JSON.stringify({ private: true })}\n`,
-    );
-    try {
-      const npmCli = process.env.npm_execpath;
-      if (!npmCli || path.basename(npmCli).toLowerCase() !== "npm-cli.js") {
-        throw new Error(
-          "Published-version E2E requires npm_execpath from npm. Start it through `npm run test:e2e`.",
-        );
-      }
-      // Any daemon published after the identity migration ships as the single
-      // aggregate package, with the server bundled under node_modules. The pin
-      // names a version that exists; the scope and layout are fixed here.
-      execFileSync(
-        process.execPath,
-        [
-          npmCli,
-          "install",
-          "--no-audit",
-          "--no-fund",
-          "--no-package-lock",
-          `@bytetrue/byspace@${options.publishedVersion}`,
-        ],
-        { cwd: publishedPackageRoot, stdio: "ignore" },
-      );
-    } catch (error) {
-      if (!options.preserveHome) {
-        await rm(byspaceHome, { recursive: true, force: true });
-      }
-      await rm(publishedPackageRoot, { recursive: true, force: true });
-      throw error;
-    }
-  }
   await writeIsolatedDaemonConfig(byspaceHome, options);
-  const serverDir = publishedPackageRoot
-    ? resolvePublishedServerDir(publishedPackageRoot)
-    : path.resolve(__dirname, "../../../../server");
+
   const spawnDaemon = async (): Promise<ChildProcess> => {
     // Every daemon this helper can start now speaks the current protocol: the
     // in-repo one, and any published version new enough to parse this app's
     // wire names. Both read the BYSPACE_* variables only.
-    const daemonEnv = {
+    const daemonEnv: Record<string, string | undefined> = {
       BYSPACE_HOME: byspaceHome,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_SERVER_ID: serverId,
-      BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
-      BYSPACE_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
-      BYSPACE_NODE_ENV: "development",
-      // Specs assume exact workspace counts; the daemon-owned Home workspace
+      // The web app runs on the Metro origin during E2E, which is cross-origin to the daemon.
+      BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort},http://127.0.0.1:${metroPort}`,
+      // Specs assert exact workspace counts; the daemon-owned Chief workspace
       // would shift them by one.
       BYSPACE_DISABLE_HOME_WORKSPACE: "1",
     };
     const spawnOptions: SpawnOptions = {
-      cwd: serverDir,
+      cwd: REPO_ROOT,
       env: withDisabledE2ESpeechEnv({
         ...process.env,
         ...options.environment,
@@ -215,9 +172,9 @@ export async function startIsolatedHostDaemon(
       stdio: ["ignore", "ignore", "pipe"],
       detached: false,
     };
-    const child = publishedPackageRoot
-      ? spawn(process.execPath, ["dist/scripts/supervisor-entrypoint.js"], spawnOptions)
-      : spawnTsx("scripts/supervisor-entrypoint.ts", ["--dev"], spawnOptions);
+    // `byspace serve` reads BYSPACE_HOME / BYSPACE_LISTEN / BYSPACE_SERVER_ID from the
+    // environment, matching how the Node supervisor was configured.
+    const child = spawn(options.daemonBinary ?? resolveGoDaemonBinary(), ["serve"], spawnOptions);
 
     let stderr = "";
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -244,9 +201,6 @@ export async function startIsolatedHostDaemon(
     if (!options.preserveHome) {
       await rm(byspaceHome, { recursive: true, force: true });
     }
-    if (publishedPackageRoot) {
-      await rm(publishedPackageRoot, { recursive: true, force: true });
-    }
     throw error;
   }
   let closed = false;
@@ -267,9 +221,6 @@ export async function startIsolatedHostDaemon(
       await killProcessTree(child);
       if (!options.preserveHome) {
         await rm(byspaceHome, { recursive: true, force: true });
-      }
-      if (publishedPackageRoot) {
-        await rm(publishedPackageRoot, { recursive: true, force: true });
       }
     },
   };

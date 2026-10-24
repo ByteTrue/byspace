@@ -9,7 +9,7 @@ created: 2026-09-10
 
 ## 范围与决策状态
 
-**执行状态（2026-09-12）：** 除批次 7（provider 收缩，Owner 指示暂缓）外全部执行完毕。**关闭（2026-10-10）：批次 7（C11 provider 收缩）迁出为 [075](075-o-agent-provider-contraction.md)；D6 的自托管形态已由 [061](061-x-self-hosted-web-relay-containers.md) 执行、[073](073-x-web-into-relay-worker.md) 完成托管侧统一。本 issue 作为架构去留的决策档案关闭。**——Web UI 默认开启（399d5a210c）、原生移动端退出（da626db362）、Electron 退出（b1c37223af）、Hub 移除（446bc38a3d）、插件系统移除（a5c6bb6588）、语音移除（8d96875115）、Nix 与营销站移除（e61194ccd1）。归档 ref：archive/pre-{mobile,electron,hub,plugin,voice,nix-website}-removal。
+**执行状态（2026-09-12）：** 除批次 7（provider 收缩，Owner 指示暂缓）外全部执行完毕。**关闭（2026-10-10）：批次 7（C11 provider 收缩）迁出为 [075](075-d-agent-provider-contraction.md)；D6 的自托管形态已由 [061](061-x-self-hosted-web-relay-containers.md) 执行、[073](073-x-web-into-relay-worker.md) 完成托管侧统一。本 issue 作为架构去留的决策档案关闭。**——Web UI 默认开启（399d5a210c）、原生移动端退出（da626db362）、Electron 退出（b1c37223af）、Hub 移除（446bc38a3d）、插件系统移除（a5c6bb6588）、语音移除（8d96875115）、Nix 与营销站移除（e61194ccd1）。归档 ref：archive/pre-{mobile,electron,hub,plugin,voice,nix-website}-removal。
 
 Owner 于 2026-09-11 确认 Web/PWA + daemon 路线：移动原生与 Electron 退出，现有网页技术暂不更换；内嵌浏览器不保留，SSH 移除（同日修订，见 A5），Hub 移除，Docker 保留（**2026-09-30 修订为 daemon 镜像退役、双容器自托管，见 D6**）。本 Issue 记录已确认方向、待决项与执行门槛；不代表已经取得精确删除批次、数据迁移或停部署的执行授权。
 
@@ -121,7 +121,7 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 当前打包器还明确记录了一处 ACP 版本折叠限制：server 使用 `@agentclientprotocol/sdk ^0.17.1`，plugin 使用 `^1.4.0`，单一 npm 产物以 daemon 版本为准。依赖新 ACP API 的插件不保证与 repo/desktop 安装行为一致。本轮只确认声明与打包逻辑，没有运行第三方插件复现。若保留插件支持，这是一项实际兼容风险；不是仅凭包名就能删除或合包的理由。
 
-证据：`packages/server/package.json`、`packages/plugin/package.json`；`scripts/package-bytetrue-baseline.mjs:95`；`packages/server/src/server/bootstrap.ts:587`、`:641`、`:1265`；`packages/server/src/server/plugins/index.ts:135`；[SDK 边界](../../docs/plugins.md#sdk-import-boundaries)、[Hub](../../docs/hub.md)、[Service Proxy](../../docs/service-proxy.md)、[Agent 生命周期](../../docs/agent-lifecycle.md)、[权限](../../docs/permissions.md)、[协议兼容](../../docs/protocol-compatibility.md)、[Terminal 契约](../spec/terminal.md)。
+证据：`packages/server/package.json`、`packages/plugin/package.json`；`scripts/package-bytetrue-baseline.mjs:95`；`packages/server/src/server/bootstrap.ts:587`、`:641`、`:1265`；`packages/server/src/server/plugins/index.ts:135`；SDK 边界（`docs/plugins.md`，已随本 issue 删除）、Hub（`docs/hub.md`，已随本 issue 删除）、[Service Proxy](../../docs/service-proxy.md)、[Agent 生命周期](../../docs/agent-lifecycle.md)、[权限](../../docs/permissions.md)、[协议兼容](../../docs/protocol-compatibility.md)、[Terminal 契约](../spec/terminal.md)。
 
 ## D · 发布、依赖与维护承诺
 

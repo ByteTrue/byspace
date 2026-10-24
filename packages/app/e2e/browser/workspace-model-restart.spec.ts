@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
@@ -22,7 +22,8 @@ import {
   submitNewWorkspaceEmpty,
 } from "../support/helpers/new-workspace";
 import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
-import { killProcessTree, spawnTsx } from "../support/helpers/spawn-node";
+import { killProcessTree } from "../support/helpers/spawn-node";
+import { spawn } from "node:child_process";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { getVisibleWorkspaceAgentTabIds } from "../support/helpers/workspace-tabs";
 
@@ -228,6 +229,19 @@ async function waitForServer(port: number, child: ChildProcess): Promise<void> {
   );
 }
 
+const RESTART_DAEMON_BINARY = path.resolve(__dirname, "../../../../bin/byspace");
+
+function resolveRestartDaemonBinary(): string {
+  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
+  if (!existsSync(RESTART_DAEMON_BINARY)) {
+    throw new Error(
+      `Go daemon binary not found at ${RESTART_DAEMON_BINARY}. Run \`make build\` first ` +
+        "(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).",
+    );
+  }
+  return RESTART_DAEMON_BINARY;
+}
+
 async function startRestartDaemon(input: {
   byspaceHome: string;
   origin: string;
@@ -237,9 +251,10 @@ async function startRestartDaemon(input: {
     return startRestartDaemon(input);
   }
 
-  const serverDir = path.resolve(__dirname, "../../../server");
-  const child = spawnTsx("scripts/supervisor-entrypoint.ts", ["--dev"], {
-    cwd: serverDir,
+  // The daemon under test is the Go binary, like every other e2e fixture: the Node supervisor this
+  // used to spawn lives in `archive/`, so the process could not start at all — and the failure looked
+  // like a missing node binary rather than a retired fixture.
+  const child = spawn(resolveRestartDaemonBinary(), ["serve"], {
     env: withDisabledE2ESpeechEnv({
       ...process.env,
       BYSPACE_HOME: input.byspaceHome,
@@ -247,7 +262,7 @@ async function startRestartDaemon(input: {
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_CORS_ORIGINS: input.origin,
       BYSPACE_RELAY_ENABLED: "0",
-      BYSPACE_NODE_ENV: "development",
+      BYSPACE_DISABLE_HOME_WORKSPACE: "1",
       NODE_ENV: "development",
     }),
     stdio: ["ignore", "ignore", "pipe"],
