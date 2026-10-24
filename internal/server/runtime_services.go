@@ -169,6 +169,19 @@ func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 	s.persistTerminalSessions()
 }
 
+// fileStamp returns the poll key for a path, or "" when the path is not a file.
+//
+// The subscription starts from this value rather than from empty: the poll reports a deletion only
+// when the previous stamp was non-empty, so an empty start made the first disappearance look like
+// "already reported" and closed panes never learned the file had gone.
+func fileStamp(cwd, relPath string) string {
+	info, err := os.Stat(filepath.Join(cwd, relPath))
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+}
+
 // RegisterFileSubscription registers a live file watcher subscription for fs.file.update notifications.
 func (s *Server) RegisterFileSubscription(subID string, sink frameSink, cwd, relPath, initialVersion string) {
 	if subID == "" {
@@ -184,6 +197,7 @@ func (s *Server) RegisterFileSubscription(subID string, sink frameSink, cwd, rel
 		cwd:         cwd,
 		path:        relPath,
 		lastVersion: initialVersion,
+		stamp:       fileStamp(cwd, relPath),
 	}
 	s.mu.Unlock()
 }
