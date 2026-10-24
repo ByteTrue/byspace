@@ -181,10 +181,23 @@ func AllocatePortFromScript(ctx context.Context, command, cwd, scriptName, works
 	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	invocation := workspace.BuildShellInvocation(command)
+	// The script gets its four arguments positionally, and again in the environment. Both are part of
+	// the contract: docs/worktrees.html tells authors the BYSPACE_* variables are set, while a script
+	// that reads "$1" (or a language runtime's argv) must keep working too.
+	//
+	// The positional form is expressed inside the shell command rather than as extra exec arguments.
+	// `bash -c "<cmd>" a b` binds `a` to $0 of the *shell*, and a script the command line invokes
+	// does not inherit them — `node port.js` would start with an empty argv either way.
+	invocation := workspace.PortScriptInvocation(command, []string{scriptName, workspaceID, branchName, cwd})
 	cmd := exec.CommandContext(sctx, invocation.Shell, invocation.Args...)
 	cmd.Dir = cwd
 	cmd.Env = home.ExternalProcessEnv(os.Environ())
+	cmd.Env = append(cmd.Env,
+		"BYSPACE_SCRIPTNAME="+scriptName,
+		"BYSPACE_WORKSPACE_ID="+workspaceID,
+		"BYSPACE_BRANCH_NAME="+branchName,
+		"BYSPACE_WORKTREE_PATH="+cwd,
+	)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = io.Discard

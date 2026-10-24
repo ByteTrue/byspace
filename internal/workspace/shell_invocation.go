@@ -58,3 +58,24 @@ func SanitizedShellEnv(base []string) []string {
 
 // ShellEnvOverlay names the variables to remove, for callers that merge environments.
 func ShellEnvOverlay() []string { return []string{"BASH_ENV", "ENV"} }
+
+// PortScriptInvocation builds a shell command line that runs `command` with `args` appended.
+//
+// The arguments are spliced into the command string, not passed as exec arguments: `bash -c "<cmd>"
+// a b` binds `a` to the shell's $0 and a binary the command line starts never sees them, so a port
+// script written in Node or Python would read an empty argv.
+func PortScriptInvocation(command string, args []string) ShellInvocation {
+	if runtime.GOOS == "windows" {
+		quoted := make([]string, 0, len(args))
+		for _, arg := range args {
+			quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "''")+"'")
+		}
+		return BuildShellInvocation(strings.TrimSpace(command + " " + strings.Join(quoted, " ")))
+	}
+	// "$@" expands to the arguments bound after the command string, each passed as its own word — no
+	// quoting decisions on our side, so a path with spaces survives.
+	invocation := BuildShellInvocation(command + ` "$@"`)
+	invocation.Args = append(invocation.Args, "byspace-port-script")
+	invocation.Args = append(invocation.Args, args...)
+	return invocation
+}

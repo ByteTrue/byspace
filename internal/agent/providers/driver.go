@@ -379,11 +379,20 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 	// The scripted providers follow the built-ins, matching node's registry which lists every registered
 	// provider. Their models have to be in the catalog for the model picker to offer them.
 	for _, spec := range TestProviders {
+		// The slow provider is registered so its id resolves, but it advertises itself as
+		// unavailable unless the development switch is on: node's isAvailable() does the same, and a
+		// provider that never answers must not look like a working one in the picker.
+		status := "ready"
+		enabled := true
+		if spec.ID == MockSlowProviderID && !mockSlowEnabled() {
+			status = "unavailable"
+			enabled = false
+		}
 		entries = append(entries, map[string]any{
 			"provider":    spec.ID,
 			"label":       spec.Label,
-			"status":      "ready",
-			"enabled":     true,
+			"status":      status,
+			"enabled":     enabled,
 			"source":      "builtin",
 			"fetchedAt":   now,
 			"models":      spec.Models,

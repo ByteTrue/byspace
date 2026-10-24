@@ -443,7 +443,10 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		// port, a constrained window, then any free port.
 		switch {
 		case strings.TrimSpace(scriptCfg.PortScript) != "":
-			allocated, allocErr := AllocatePortFromScript(ctx, scriptCfg.PortScript, cwd, name, workspaceID, "")
+			// The branch is part of the published contract (a port script may want to keep a
+			// per-branch port). Ask the checkout rather than leaving the argument empty.
+			branch, _ := workspace.BranchName(ctx, cwd)
+			allocated, allocErr := AllocatePortFromScript(ctx, scriptCfg.PortScript, cwd, name, workspaceID, branch)
 			if allocErr != nil {
 				return nil, allocErr
 			}

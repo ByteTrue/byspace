@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/ByteTrue/byspace/internal/home"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/creack/pty"
+
+	"github.com/ByteTrue/byspace/internal/home"
 )
 
 type OutputEvent struct {
@@ -122,6 +125,13 @@ func StartSession(opts StartOptions) (*Session, error) {
 	)
 	if activityURL := strings.TrimSpace(opts.ActivityURL); activityURL != "" {
 		cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ACTIVITY_URL="+activityURL)
+	}
+	// Agent hooks call "$BYSPACE_HOOK_CLI hooks ...". Point it at the daemon's own binary and put
+	// that directory on PATH: the hook runs inside the user's shell, where a repo checkout's CLI is
+	// not installed, so the default `byspace` lookup finds nothing and the hook dies quietly.
+	if cli := byspaceCLIPath(); cli != "" {
+		cmd.Env = append(cmd.Env, "BYSPACE_HOOK_CLI="+cli)
+		cmd.Env = prependDirToPath(cmd.Env, filepath.Dir(cli))
 	}
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
@@ -463,4 +473,57 @@ func (s *Session) answerOSCColorQueries(chunk []byte) {
 		response := "\x1b]" + state + ";" + terminalColorQueryResponses[state] + "\x1b\\"
 		_, _ = s.ptmx.Write([]byte(response))
 	}
+}
+
+// byspaceCLIPath returns the path to the CLI a terminal should hand to agent hooks.
+//
+// Hooks run `"${BYSPACE_HOOK_CLI:-byspace}" hooks ...`, so without this the terminal falls back to
+// whatever `byspace` happens to be on PATH — which in a repo checkout is nothing at all, and the
+// hook then fails silently inside a shell the user cannot see. BYSPACE_CLI overrides it, matching
+// the node daemon, for the case where the CLI lives somewhere the daemon cannot guess.
+func byspaceCLIPath() string {
+	if override := strings.TrimSpace(os.Getenv("BYSPACE_CLI")); override != "" {
+		return override
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(exe); resolveErr == nil {
+		exe = resolved
+	}
+	return exe
+}
+
+// prependDirToPath puts dir in front of PATH.
+//
+// Prepending rather than appending matters: a stale globally installed byspace would otherwise win,
+// and a hook that talks to the wrong daemon reports nothing.
+func prependDirToPath(env []string, dir string) []string {
+	if dir == "" {
+		return env
+	}
+	key := "PATH"
+	for _, entry := range env {
+		if name, _, ok := strings.Cut(entry, "="); ok && strings.EqualFold(name, "PATH") {
+			key = name
+			break
+		}
+	}
+	var current string
+	for _, entry := range env {
+		if name, value, ok := strings.Cut(entry, "="); ok && strings.EqualFold(name, "PATH") {
+			current = value
+			break
+		}
+	}
+	separator := ":"
+	if runtime.GOOS == "windows" {
+		separator = ";"
+	}
+	joined := dir
+	if current != "" {
+		joined += separator + current
+	}
+	return home.ExternalProcessEnv(env, map[string]string{key: joined})
 }

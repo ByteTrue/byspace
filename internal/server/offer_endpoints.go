@@ -2,6 +2,7 @@ package server
 
 import (
 	"net"
+	"os"
 	"strings"
 )
 
@@ -58,6 +59,12 @@ func IsLoopbackHost(host string) bool {
 // reachable without a scope id. Returns "" when there is no such address — a machine with no network still serves
 // localhost, and inventing an address would produce an endpoint that cannot connect.
 func primaryLANIP() string {
+	// The override exists because "the primary LAN address" is a guess: a machine with a VPN, a
+	// container bridge or several NICs can enumerate them in an order where the right one is not
+	// first, and the pairing offer is useless when it names an address the phone cannot reach.
+	if override := strings.TrimSpace(os.Getenv("BYSPACE_PRIMARY_LAN_IP")); override != "" {
+		return override
+	}
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""

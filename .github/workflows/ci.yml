@@ -60,6 +60,7 @@ jobs:
           scripts/go-emit-parity.test.mjs
           scripts/seed-worktree-dev-state.test.mjs
           scripts/cli-surface.test.mjs
+          scripts/parity-surface.test.mjs
 
   format:
     name: format

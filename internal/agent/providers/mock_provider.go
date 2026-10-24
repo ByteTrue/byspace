@@ -2,6 +2,7 @@ package providers
 
 import (
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"os"
 )
 
 // The mock provider is Node's `mock-load-test-agent`: a scripted agent that streams realistic output
@@ -221,4 +222,28 @@ func ResolveMockModel(modelID string) MockModel {
 // Node registers `mock` and `mock-slow` unconditionally in provider-registry.ts, so an agent can be created
 // with either id. Keeping them out of BuiltinProviders preserves "the product ships six providers" while
 // still letting the end-to-end specs create agents with `provider: "mock"`.
-var TestProviders = []ProviderSpec{MockProvider}
+var TestProviders = []ProviderSpec{MockProvider, MockSlowProvider}
+
+// MockSlowProviderID is a development-only provider whose catalog never resolves.
+//
+// It exists to exercise the snapshot manager's timeout path: without a provider that genuinely hangs,
+// "the catalog refresh timed out" can only be tested by mocking the clock. The node daemon gates it
+// behind BYSPACE_ENABLE_MOCK_SLOW so a normal build never shows it to a user.
+const MockSlowProviderID = "mock-slow"
+
+// MockSlowProvider is registered but unavailable unless BYSPACE_ENABLE_MOCK_SLOW=true.
+var MockSlowProvider = ProviderSpec{
+	ID:          MockSlowProviderID,
+	Label:       "Mock Slow",
+	Description: "Development-only provider whose catalog never resolves, for exercising snapshot timeouts",
+	Binary:      MockSlowProviderID,
+	Protocol:    "acp",
+	Models: []sdk.CatalogModel{
+		{Provider: MockSlowProviderID, ID: "mock-slow-default", Label: "Mock Slow Default", IsDefault: true, IsSelectable: true},
+	},
+}
+
+// mockSlowEnabled reports whether the development-only slow provider is switched on.
+func mockSlowEnabled() bool {
+	return os.Getenv("BYSPACE_ENABLE_MOCK_SLOW") == "true"
+}

@@ -3,6 +3,7 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -155,11 +157,53 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	startedAt := time.Now()
+	err := cmd.Run()
+	traceGitCommand(cwd, args, startedAt, time.Since(startedAt), out.String(), err)
+	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(out.String()), nil
 }
+
+// traceGitCommand appends one JSON line per git invocation when BYSPACE_GIT_TRACE_FILE is set.
+//
+// The daemon runs git on a timer, several at a time, and a workspace that feels slow gives no clue
+// which of them is responsible. This is the same escape hatch the node daemon has, so a support
+// session that already knows how to read the trace keeps working.
+//
+// Failures here are swallowed on purpose: tracing must never change what the command returns.
+func traceGitCommand(cwd string, args []string, startedAt time.Time, elapsed time.Duration, stdout string, err error) {
+	path := strings.TrimSpace(os.Getenv("BYSPACE_GIT_TRACE_FILE"))
+	if path == "" {
+		return
+	}
+	entry := map[string]any{
+		"cwd":         cwd,
+		"args":        args,
+		"startedAtMs": startedAt.UnixMilli(),
+		"durationMs":  elapsed.Milliseconds(),
+		"ok":          err == nil,
+		"stdoutBytes": len(stdout),
+	}
+	if err != nil {
+		entry["error"] = err.Error()
+	}
+	line, marshalErr := json.Marshal(entry)
+	if marshalErr != nil {
+		return
+	}
+	traceMu.Lock()
+	defer traceMu.Unlock()
+	f, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if openErr != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(append(line, '\n'))
+}
+
+var traceMu sync.Mutex
 
 // GetCheckoutStatus inspects the git repository at cwd and builds a CheckoutStatus payload.
 func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatus {
@@ -1845,4 +1889,20 @@ func GetBaseDiff(ctx context.Context, cwd, baseRef string) ([]ParsedDiffFile, er
 		files = []ParsedDiffFile{}
 	}
 	return files, nil
+}
+
+// BranchName returns the checked-out branch at cwd, or "" when it is not a git checkout.
+//
+// "HEAD" is what `symbolic-ref` prints for a detached checkout; it is not a branch name and callers
+// that put it in a prompt or a port-script argument would be quoting a lie.
+func BranchName(ctx context.Context, cwd string) (string, error) {
+	branch, err := runGit(ctx, cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" || branch == "HEAD" {
+		return "", nil
+	}
+	return branch, nil
 }
