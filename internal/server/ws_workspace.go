@@ -785,6 +785,15 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		"requestId":  req.RequestID,
 	})
 
+	// A subscribing client that reports its own size is claiming the terminal, exactly as Node does
+	// in handleSubscribeTerminalRequest. The subscribe frame is the first thing a remounting pane
+	// sends, and it carries the size it is about to render at; without applying it the pty keeps the
+	// size of whatever pane was focused before, and the client never sends a resize frame because it
+	// records this size as already sent.
+	if req.Restore != nil && req.Restore.Size != nil {
+		terminal.ApplySize(sess, sinkOwnerToken(sink), uint16(req.Restore.Size.Rows), uint16(req.Restore.Size.Cols), terminal.IntentClaim)
+	}
+
 	// Restore mode decides what the client receives; see restorePlan below.
 	plan := planTerminalRestore(req.Restore)
 
