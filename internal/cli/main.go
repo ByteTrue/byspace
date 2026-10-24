@@ -53,12 +53,15 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
                                   wait for an agent's active turn to finish
   byspace heartbeat <create|list|delete> [options]
                                   manage scheduled Pi agent runs and heartbeats
-  byspace worktree <create|list> [options]
-                                  create and list git worktree workspaces
+  byspace worktree <create|list|archive> [options]
+                                  create, list and archive git worktree workspaces
   byspace pair [--home <dir>] [--relay <host:port>] [--app-url <url>]
                                   print a remote pairing offer URL (#offer=...)
-  byspace daemon <status|start|stop|restart|print-plist|print-unit> [options]
-                                  manage daemon lifecycle and service definitions
+  byspace status                  alias for "byspace daemon status"
+  byspace reload                  alias for "byspace daemon reload"
+  byspace restart                 alias for "byspace daemon restart"
+  byspace daemon <status|start|stop|restart|reload|set-password|print-plist|print-unit>
+                                  manage daemon lifecycle, config reload and service definitions
   byspace mcp-bridge              run the self-hosted stdio MCP bridge for child agents
   byspace version                 print version
 `
@@ -228,9 +231,26 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	// These three are top-level aliases for daemon subcommands, matching the node CLI. They exist
+	// because they are the commands a person types without thinking about which object owns them.
+	case "status":
+		if err := runDaemonCmd(version, []string{"status"}, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace status:", err)
+			return 1
+		}
+		return 0
 	case "reload":
-		if err := runAgentReload(rest, stdout); err != nil {
+		// `byspace reload` re-reads the daemon's config.json, matching the node CLI. Reloading one
+		// agent lives under `byspace agent reload <id>` — the two used to share this verb, and the
+		// bare command silently refreshed an agent instead of the config the user had just edited.
+		if err := runDaemonReload(rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace reload:", err)
+			return 1
+		}
+		return 0
+	case "restart":
+		if err := runDaemonCmd(version, append([]string{"restart"}, rest...), stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace restart:", err)
 			return 1
 		}
 		return 0
@@ -1102,6 +1122,12 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 	}
 
 	switch sub {
+	case "reload":
+		return runDaemonReload(rest, stdout)
+
+	case "set-password":
+		return runDaemonSetPassword(rest, stdinOrDefault(nil), stdout)
+
 	case "status":
 		fs := flag.NewFlagSet("daemon status", flag.ContinueOnError)
 		addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
@@ -1523,11 +1549,22 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 		wsURL = strings.TrimPrefix(wsURL, "https://")
 		wsURL = "ws://" + strings.TrimRight(wsURL, "/") + "/ws"
 	}
-	ws, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+	// A daemon with a password rejects the upgrade outright, so the bearer has to ride on the
+	// handshake. Node reads it from BYSPACE_PASSWORD for the same reason: the CLI is run by a
+	// person or a script, and neither should have to pass the password on the command line
+	// where `ps` can read it.
+	dialOptions := &websocket.DialOptions{
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{Proxy: nil},
 		},
-	})
+	}
+	if password := strings.TrimSpace(os.Getenv("BYSPACE_PASSWORD")); password != "" {
+		dialOptions.HTTPHeader = http.Header{"Authorization": []string{"Bearer " + password}}
+		// The daemon also accepts the bearer as a subprotocol, which is the form that survives
+		// proxies that strip Authorization.
+		dialOptions.Subprotocols = []string{"byspace.bearer." + password}
+	}
+	ws, _, err := websocket.Dial(ctx, wsURL, dialOptions)
 	if err != nil {
 		return nil, err
 	}

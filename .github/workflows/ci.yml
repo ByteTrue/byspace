@@ -58,6 +58,7 @@ jobs:
           scripts/sync-release-notes-from-changelog.test.mjs
           scripts/go-parity-audit.test.mjs
           scripts/go-emit-parity.test.mjs
+          scripts/seed-worktree-dev-state.test.mjs
 
   format:
     name: format

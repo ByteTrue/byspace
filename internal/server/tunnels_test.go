@@ -119,8 +119,8 @@ func TestTunnelOpenForwardsBytes(t *testing.T) {
 	srv.tunnelsEnabled = true
 	srv.mu.Unlock()
 	// A bcrypt-shaped hash satisfies the second gate without inventing a login.
+	srv.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv")
 	srv.store.SaveDaemonConfig(map[string]any{
-		"auth":   map[string]any{"passwordHash": "$2a$12$abcdefghijklmnopqrstuv"},
 		"tunnel": map[string]any{"allowedPorts": []any{float64(port)}},
 	})
 

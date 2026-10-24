@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -348,7 +349,7 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 
 func runWorktreeCmd(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: byspace worktree <create|list> [options]")
+		return errors.New("usage: byspace worktree <create|list|archive> [options]")
 	}
 	sub := args[0]
 	rest := args[1:]
@@ -449,9 +450,97 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 		}
 		return nil
 
+	case "archive":
+		return runWorktreeArchive(rest, stdout)
+
 	default:
 		return fmt.Errorf("unknown worktree subcommand %q", sub)
 	}
+}
+
+// runWorktreeArchive archives a worktree by directory name or branch.
+//
+// The daemon's archive RPC takes a path, but a person knows the worktree by its branch or its
+// directory name — so the name is resolved against the worktree list first, exactly the way the
+// node CLI did. Archiving by a guessed path would either do nothing (a stale path, a silent ok) or
+// hit the wrong worktree.
+func runWorktreeArchive(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("worktree archive", flag.ContinueOnError)
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+")")
+	cwd := fs.String("cwd", "", "repository directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	name := ""
+	if fs.NArg() > 0 {
+		name = strings.TrimSpace(fs.Arg(0))
+	}
+	if name == "" {
+		return errors.New("usage: byspace worktree archive <name|branch> [--cwd <repo>]")
+	}
+	workCwd := strings.TrimSpace(*cwd)
+	if workCwd == "" {
+		workCwd, _ = os.Getwd()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	ws, err := dialDaemonWS(ctx, *addr)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "byspace_worktree_list_request",
+		"requestId": "req_wt_archive_list",
+		"cwd":       workCwd,
+	}); err != nil {
+		return err
+	}
+	list, err := waitSessionResp(ctx, ws, "byspace_worktree_list_response", "")
+	if err != nil {
+		return err
+	}
+	entries, _ := list["worktrees"].([]any)
+	matchPath := ""
+	matchBranch := ""
+	for _, raw := range entries {
+		entry, _ := raw.(map[string]any)
+		path, _ := entry["worktreePath"].(string)
+		branch, _ := entry["branch"].(string)
+		// The name a person types is either the last path component or the branch; both identify
+		// exactly one worktree in this repository.
+		if path == name || filepath.Base(path) == name || branch == name {
+			matchPath = path
+			matchBranch = branch
+			break
+		}
+	}
+	if matchPath == "" {
+		return fmt.Errorf("no worktree named %q in %s", name, workCwd)
+	}
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":         "byspace_worktree_archive_request",
+		"requestId":    "req_wt_archive",
+		"worktreePath": matchPath,
+		"scope":        "worktree",
+		"repoRoot":     workCwd,
+		"branchName":   matchBranch,
+	}); err != nil {
+		return err
+	}
+	payload, err := waitSessionResp(ctx, ws, "byspace_worktree_archive_response", "")
+	if err != nil {
+		return err
+	}
+	if errStr, _ := payload["error"].(string); errStr != "" {
+		return errors.New(errStr)
+	}
+	name2 := filepath.Base(matchPath)
+	fmt.Fprintf(stdout, "%s\tarchived\n", name2)
+	return nil
 }
 
 func runPairCmd(version string, args []string, stdout io.Writer) error {

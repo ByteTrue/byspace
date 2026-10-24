@@ -8,7 +8,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/cli"
 )
 
-var version = "0.20.2-go"
+var version = "dev"
 
 func main() {
 	os.Exit(cli.Main(version, os.Args[1:], os.Stdout, os.Stderr))

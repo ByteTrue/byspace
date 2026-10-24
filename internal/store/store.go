@@ -957,6 +957,13 @@ func (s *Store) DeleteLabel(name string) int {
 	return affected
 }
 
+// daemonPasswordHashKey is the config field that holds the bcrypt hash.
+//
+// The field is named `password` and not `passwordHash`: the node daemon has written it under
+// that name since daemon auth existed, so a config carried across the upgrade has to keep
+// working. Renaming it here would silently turn the password off on every existing home.
+const daemonPasswordHashKey = "password"
+
 // LoadDaemonConfig returns the flattened daemon config.
 //
 // On disk the file is `{"version": 1, "daemon": { ... }}` (PersistedConfigSchema in
@@ -966,6 +973,22 @@ func (s *Store) DeleteLabel(name string) int {
 // defaults and keeps unknown keys so a round-trip through SaveDaemonConfig does not
 // erase sections the Go side does not model yet.
 func (s *Store) LoadDaemonConfig() map[string]any {
+	cfg := s.loadDaemonConfigRaw()
+	// `passwordSet` is derived, not stored: the hash is the truth, and a stored boolean could
+	// drift from it (a hand-edited config, a failed write) leaving the settings page claiming a
+	// password exists when it does not — or worse, the reverse.
+	//
+	// The hash itself never leaves this function: the wire carries a derived view ("authorised or
+	// not"), and a bcrypt hash on the socket is as good as the password to anyone who can read
+	// it. The node daemon makes the same split — auth.password on disk, auth.passwordSet on the wire.
+	cfg["auth"] = daemonAuthView(cfg["auth"])
+	return cfg
+}
+
+// loadDaemonConfigRaw returns the persisted config with the password hash still in place.
+//
+// Only the auth path may use it: everything that leaves the process goes through LoadDaemonConfig.
+func (s *Store) loadDaemonConfigRaw() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	cfg := daemonConfigDefaults()
@@ -994,17 +1017,14 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 	if daemon, ok := disk["daemon"].(map[string]any); ok {
 		liftAgentSettings(cfg, daemon["agents"])
 	}
-	// `passwordSet` is derived, not stored: the hash is the truth, and a stored boolean could
-	// drift from it (a hand-edited config, a failed write) leaving the settings page claiming a
-	// password exists when it does not — or worse, the reverse.
-	auth, _ := cfg["auth"].(map[string]any)
-	hash, _ := auth["passwordHash"].(string)
-	if merged, ok := cfg["auth"].(map[string]any); ok {
-		merged["passwordSet"] = strings.TrimSpace(hash) != ""
-	} else {
-		cfg["auth"] = map[string]any{"passwordSet": strings.TrimSpace(hash) != ""}
-	}
 	return cfg
+}
+
+// daemonAuthView turns the persisted auth block into the only shape that may cross the wire.
+func daemonAuthView(raw any) map[string]any {
+	auth, _ := raw.(map[string]any)
+	hash, _ := auth[daemonPasswordHashKey].(string)
+	return map[string]any{"passwordSet": strings.TrimSpace(hash) != ""}
 }
 
 // liftAgentSettings flattens the `agents` block onto the settings map.
@@ -1100,6 +1120,12 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 		daemon = map[string]any{}
 	}
 	for k, v := range patch {
+		// The password has one writer. A patch carrying an auth block here would either store a
+		// plaintext or replace the hash with the derived boolean, so it is ignored rather than
+		// merged — SetDaemonPasswordHash owns that field.
+		if k == "auth" {
+			continue
+		}
 		daemon[k] = v
 	}
 	// The removals produced this providers map; persisting the instruction too would replay it

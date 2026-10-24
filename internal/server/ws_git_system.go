@@ -1403,8 +1403,21 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			Config    map[string]any `json:"config"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		// The wire carries the plaintext password and reads back a derived boolean; the file
+		// carries the bcrypt hash. Translating here keeps the two apart — persisting the plaintext
+		// would leave the password in a readable file, and echoing the hash would hand every
+		// client a copy of it.
+		passwordHash, applyAuth, hashErr := takeDaemonAuthPatch(req.Config)
 		// Validated on write so a malformed entry is reported next to the edit that caused it,
 		// rather than failing later where the message says nothing about the settings.
+		if hashErr != nil {
+			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+				"requestId": req.RequestID,
+				"config":    s.store.LoadDaemonConfig(),
+				"error":     hashErr.Error(),
+			})
+			return
+		}
 		if validationErr := store.ValidateDaemonConfig(req.Config); validationErr != nil {
 			fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", validationErr)
 			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
@@ -1413,6 +1426,17 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				"error":     validationErr.Error(),
 			})
 			return
+		}
+		if applyAuth {
+			if err := s.store.SetDaemonPasswordHash(passwordHash); err != nil {
+				fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", err)
+				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"config":    s.store.LoadDaemonConfig(),
+					"error":     err.Error(),
+				})
+				return
+			}
 		}
 		updated := s.store.SaveDaemonConfig(req.Config)
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{

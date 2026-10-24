@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 // Daemon password authentication, ported from auth.ts.
@@ -66,11 +66,7 @@ func ExtractWSBearerToken(protocols []string) (string, bool) {
 
 // HashDaemonPassword produces the stored bcrypt hash.
 func HashDaemonPassword(password string) (string, error) {
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), passwordBcryptCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashed), nil
+	return store.HashDaemonPassword(password)
 }
 
 // VerifyDaemonPassword checks a presented password against the stored hash.
@@ -78,10 +74,7 @@ func HashDaemonPassword(password string) (string, error) {
 // bcrypt's own comparison is constant-time; the empty-password case means "no auth configured"
 // and is handled by the caller so that a misread config cannot silently open the daemon.
 func VerifyDaemonPassword(hash, password string) bool {
-	if hash == "" {
-		return false
-	}
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+	return store.VerifyDaemonPassword(hash, password)
 }
 
 // ConstantTimeEqual compares two tokens without leaking length via timing.
@@ -118,14 +111,5 @@ func IsAgentMCPRequestAuthorized(passwordHash, capabilityToken, authorizationHea
 // Read per request rather than cached: changing the password in settings must take effect
 // without a restart, and a cache would silently keep accepting the old one.
 func (s *Server) daemonPasswordHash() string {
-	cfg := s.store.LoadDaemonConfig()
-	if cfg == nil {
-		return ""
-	}
-	auth, ok := cfg["auth"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	hash, _ := auth["passwordHash"].(string)
-	return strings.TrimSpace(hash)
+	return s.store.DaemonPasswordHash()
 }

@@ -24,7 +24,7 @@ type, storage, and git metadata names retain their upstream `BySpace` spelling.
                    │
             ┌──────▼──────┐
             │   Daemon    │
-            │  (Node.js)  │
+            │    (Go)     │
             └──────┬──────┘
                    │
       ┌────────────┼────────────┬────────────┬────────────┐
@@ -45,9 +45,9 @@ type, storage, and git metadata names retain their upstream `BySpace` spelling.
 
 ## Packages
 
-### `packages/server` — The daemon
+### `internal/` — The daemon
 
-The heart of BySpace. A Node.js process that:
+The heart of BySpace. A Go process (`byspace serve`) that:
 
 - Listens for WebSocket connections from clients
 - Manages agent lifecycle (create, run, stop, resume, archive)
@@ -56,7 +56,9 @@ The heart of BySpace. A Node.js process that:
 - Optionally connects outbound to a relay for remote access
 - Optionally serves the browser web client from the same HTTP server (self-hosting guide: [public-docs/web-ui.md](../public-docs/web-ui.md))
 
-All paths are under `packages/server/src/`.
+Layout: `internal/server/` owns the WebSocket API and session loop, `internal/agent/` the provider drivers, `internal/workspace/` git and files, `internal/terminal/`, `internal/schedule/`, `internal/relay/`, `internal/webui/` (embedded client assets).
+
+The Node daemon this replaced is kept read-only under `archive/packages/server/`. When a ported behaviour looks wrong, read the archived source at the same call site — it answers "did the port break this, or was it always like this?" faster than any other evidence. [docs/archive-parity.md](archive-parity.md) describes how to use it.
 
 Project identity is daemon-global rather than session-owned. After registry bootstrap, the daemon's
 project Git observer keeps one non-recursive watch on each lexically equivalent active project root

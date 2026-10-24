@@ -288,7 +288,7 @@ func New(opts Options) (*Server, error) {
 	vapidKeys, _ := home.LoadOrCreateVAPIDKeys(homeDir)
 	ver := strings.TrimSpace(opts.Version)
 	if ver == "" {
-		ver = "0.20.2-go"
+		ver = "dev"
 	}
 	ui := opts.WebUI
 	if ui == nil && !opts.DisableWebUI {

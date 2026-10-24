@@ -1,11 +1,13 @@
-# Go 侧构建入口。Node 侧仍用 root package.json 的 npm scripts，二者互不影响：
-#   make build-full  → 打前端 + embed + 单二进制（Go 版唯一交付物）
-#   npm run dev      → Node daemon（现行发布版）
+# Go 侧构建入口。前端仍由 npm workspace 构建，两者分工：
+#   make build       → 编译单二进制（用 internal/webui/dist 里现有的资产）
+#   make build-full  → 打前端 + embed + 单二进制（唯一交付物）
+#
+# 版本号只有 package.json 一处来源，发布脚本用同一份版本写进 ldflags。
 #
 # 布局遵循 Go 项目惯例：cmd/<binary>/main.go 是入口，internal/ 是私有实现。
 # 参考 coder/coder（cmd + site）、go-gitea/gitea（cmd + web_src）、pocketbase（cmd + ui）。
 
-VERSION ?= 0.20.2-go
+VERSION ?= $(shell node -p "require('./package.json').version" 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 BINARY  := bin/byspace
 

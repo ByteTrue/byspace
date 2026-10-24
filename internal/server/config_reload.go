@@ -1,10 +1,10 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
 	"sort"
 	"strings"
-
-	"encoding/json"
 )
 
 // Config reload accounting, ported from daemon-config-store.ts.
@@ -45,6 +45,10 @@ var reloadablePaths = []string{
 
 // environmentOwnedPaths are settings an environment variable owns; editing config.json has no
 // effect on them, and the UI must say so instead of silently ignoring the change.
+//
+// The variable has to be set for the claim to be true. Reporting "the environment owns this" on a
+// daemon started without it told the user their edit was ignored when in fact it applied — and the
+// node daemon gates each of these on the variable being present (config.ts:735-745).
 var environmentOwnedPaths = map[string]string{
 	"daemon.listen":                    "BYSPACE_LISTEN",
 	"daemon.auth.password":             "BYSPACE_PASSWORD",
@@ -55,6 +59,24 @@ var environmentOwnedPaths = map[string]string{
 	"app.baseUrl":                      "BYSPACE_APP_BASE_URL",
 	"daemon.git.maxProcessesPerSecond": "BYSPACE_GIT_MAX_PROCESSES_PER_SECOND",
 	"daemon.git.maxProcessConcurrency": "BYSPACE_GIT_MAX_PROCESS_CONCURRENCY",
+}
+
+// envOwnsSetting reports whether the environment variable that owns this setting is set.
+//
+// The two kinds of variable are tested differently because they mean different things. A listen
+// target or an endpoint is owned as soon as the variable exists, even an empty string — that is
+// node's `!== undefined` check. A password is owned only when it carries something, because
+// BYSPACE_PASSWORD="" is how a shell clears a variable and claiming an override nobody set sends
+// the user looking for an env var that is not there (node trims this one: config.ts:742).
+func envOwnsSetting(ownedPath, envName string) bool {
+	value, present := os.LookupEnv(envName)
+	if !present {
+		return false
+	}
+	if ownedPath == "daemon.auth.password" {
+		return strings.TrimSpace(value) != ""
+	}
+	return true
 }
 
 // pathBelongsTo reports whether a setting path is the owner path or sits underneath it.
@@ -72,7 +94,7 @@ func configReloadReport(previous, next map[string]any, changedPaths []string) ma
 	for _, path := range changedPaths {
 		owner := ""
 		for ownedPath, env := range environmentOwnedPaths {
-			if pathBelongsTo(path, ownedPath) {
+			if pathBelongsTo(path, ownedPath) && envOwnsSetting(ownedPath, env) {
 				owner = env
 				break
 			}
@@ -183,5 +205,9 @@ func (s *Server) daemonConfigSnapshot() map[string]any {
 			daemon[key] = value
 		}
 	}
+	// Auth is reported under its persisted path, matching the node daemon. The mutable view only
+	// carries `passwordSet`, which cannot tell "set" from "rotated" — and the settings page shows
+	// these path strings to the user, so they have to name the same setting the file does.
+	daemon["auth"] = map[string]any{daemonAuthPatchKey: s.store.DaemonAuthFingerprint()}
 	return snapshot
 }
