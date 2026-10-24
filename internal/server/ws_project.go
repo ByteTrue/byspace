@@ -245,11 +245,14 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 	}
 	// The response alone is not enough: a removal the client is not told about leaves the sidebar showing a project the
 	// daemon has archived, which reads as the click doing nothing.
+	// No `projectId` here: the client dispatches a workspace update on `"projectId" in delta`, and
+	// a payload carrying it is read as a project removal, which then skips the per-workspace cleanup
+	// the remove branch does (see internal/server/ws_archive_updates.go). `removedProjectId` is the
+	// field the protocol declares for "the project went with it".
 	for _, wsID := range removedWS {
 		s.broadcastSessionMsg("workspace_update", map[string]any{
 			"kind":             "remove",
 			"id":               wsID,
-			"projectId":        req.ProjectID,
 			"removedProjectId": req.ProjectID,
 		})
 	}

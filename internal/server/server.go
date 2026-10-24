@@ -2123,7 +2123,8 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 		projName := filepath.Base(rec.Cwd)
 		wsName := projName
 		var branch any
-		if ws, ok := wsByID[rec.WorkspaceID]; ok {
+		ws, hasWorkspace := wsByID[rec.WorkspaceID]
+		if hasWorkspace {
 			wsName = ws.DisplayName
 			if ws.Branch != nil {
 				branch = *ws.Branch
@@ -2131,6 +2132,17 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 			if prj, ok := prjByID[ws.ProjectID]; ok {
 				projKey = prj.RootPath
 				projName = prj.DisplayName
+			}
+		}
+		// Node resolves a placement per workspace and drops the row when it has none, which is how
+		// a session whose project was removed stops showing up in history. Synthesizing a placement
+		// from the cwd keeps it in every later query, and a search cannot filter out what a
+		// different host already answered for.
+		if reqType == "fetch_agent_history_request" && hasWorkspace {
+			// Node deletes the project record on removal, so a missing or archived project is what
+			// takes the row out of history.
+			if prj, ok := prjByID[ws.ProjectID]; !ok || prj.ArchivedAt != nil {
+				continue
 			}
 		}
 		entry := map[string]any{
