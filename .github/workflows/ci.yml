@@ -59,6 +59,7 @@ jobs:
           scripts/go-parity-audit.test.mjs
           scripts/go-emit-parity.test.mjs
           scripts/seed-worktree-dev-state.test.mjs
+          scripts/cli-surface.test.mjs
 
   format:
     name: format
