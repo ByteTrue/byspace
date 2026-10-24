@@ -16,6 +16,12 @@ import (
 	"unicode/utf8"
 )
 
+// git prints %(upstream:track) as "ahead 3, behind 2", either half omitted when it is zero.
+var (
+	aheadTrackPattern  = regexp.MustCompile(`ahead (\d+)`)
+	behindTrackPattern = regexp.MustCompile(`behind (\d+)`)
+)
+
 type CheckoutStatus struct {
 	Cwd           string  `json:"cwd"`
 	IsGit         bool    `json:"isGit"`
@@ -223,11 +229,12 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 	// The upstream is read from git rather than composed: on a fork the remote is "upstream", and
 	// the tracking branch is not always named after the local one.
 	var upstreamRefPtr *string
+	var aheadOfOriginPtr, behindOfOriginPtr *int
 	if branch != "" {
-		if upstream, upstreamErr := runGit(ctx, absCwd, "for-each-ref", "--format=%(upstream)", "refs/heads/"+branch); upstreamErr == nil {
-			if trimmed := strings.TrimSpace(upstream); trimmed != "" {
-				upstreamRefPtr = &trimmed
-			}
+		if ref, ahead, behind, ok := upstreamStatus(ctx, absCwd, branch); ok {
+			upstreamRefPtr = &ref
+			aheadOfOriginPtr = &ahead
+			behindOfOriginPtr = &behind
 		}
 	}
 
@@ -240,11 +247,84 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		BaseRef:                baseRefPtr,
 		UpstreamRef:            upstreamRefPtr,
 		AheadBehind:            aheadBehind,
+		AheadOfOrigin:          aheadOfOriginPtr,
+		BehindOfOrigin:         behindOfOriginPtr,
 		HasRemote:              hasRemote,
 		RemoteURL:              remotePtr,
 		IsBySpaceOwnedWorktree: false,
 		RequestID:              requestID,
 	}
+}
+
+// upstreamStatus reports the branch's upstream ref and how far the branch has diverged from it.
+//
+// The divergence is what the archive confirmation reads: "1 unpushed commit" is the difference
+// between deleting a worktree and deleting work. git already tracks both halves — the tracking ref
+// via %(upstream) and the counts via %(upstream:track) — so they are read together in one call
+// instead of a second rev-list.
+//
+// A branch with no configured upstream falls back to origin/<branch> when that ref exists, because
+// a freshly created worktree usually has one and no tracking config. A branch whose upstream is gone
+// reports nothing: 0/0 would read as "in sync" for a branch that cannot be pushed at all.
+func upstreamStatus(ctx context.Context, cwd, branch string) (string, int, int, bool) {
+	out, err := runGit(ctx, cwd, "for-each-ref", "--format=%(upstream)%00%(upstream:track,nobracket)",
+		"refs/heads/"+branch)
+	if err != nil {
+		return "", 0, 0, false
+	}
+	ref, track, _ := strings.Cut(strings.TrimSpace(out), "\x00")
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return sameNameOriginStatus(ctx, cwd, branch)
+	}
+	if track == "gone" {
+		return "", 0, 0, false
+	}
+	return ref, trackAhead(track), trackBehind(track), true
+}
+
+// sameNameOriginStatus measures a branch against origin/<branch> when git has no upstream configured
+// for it.
+func sameNameOriginStatus(ctx context.Context, cwd, branch string) (string, int, int, bool) {
+	ref := "refs/remotes/origin/" + branch
+	if _, err := runGit(ctx, cwd, "show-ref", "--verify", "--quiet", ref); err != nil {
+		return "", 0, 0, false
+	}
+	out, err := runGit(ctx, cwd, "rev-list", "--left-right", "--count", ref+"...refs/heads/"+branch)
+	if err != nil {
+		return "", 0, 0, false
+	}
+	fields := strings.Fields(out)
+	if len(fields) != 2 {
+		return "", 0, 0, false
+	}
+	// Left is the remote side (behind), right is the local side (ahead).
+	behind, behindErr := strconv.Atoi(fields[0])
+	ahead, aheadErr := strconv.Atoi(fields[1])
+	if behindErr != nil || aheadErr != nil {
+		return "", 0, 0, false
+	}
+	return ref, ahead, behind, true
+}
+
+// trackAhead reads "ahead 3" out of git's %(upstream:track) text.
+func trackAhead(track string) int {
+	if m := aheadTrackPattern.FindStringSubmatch(track); len(m) == 2 {
+		if value, err := strconv.Atoi(m[1]); err == nil {
+			return value
+		}
+	}
+	return 0
+}
+
+// trackBehind reads "behind 3" out of git's %(upstream:track) text.
+func trackBehind(track string) int {
+	if m := behindTrackPattern.FindStringSubmatch(track); len(m) == 2 {
+		if value, err := strconv.Atoi(m[1]); err == nil {
+			return value
+		}
+	}
+	return 0
 }
 
 // commitLogFormat is the record format ListCommits asks git for.

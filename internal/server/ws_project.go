@@ -1828,6 +1828,17 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 		CreatedAt:              now,
 		UpdatedAt:              now,
 	}
+	// A worktree checked out from someone else's change request carries that author's
+	// byspace.json. Remember where it came from so setup and scripts stay blocked until the user
+	// explicitly allows them; both create paths have to record it, or the gate never arms.
+	if intent.Kind == workspace.IntentCheckoutChangeRequest && intent.HeadRepository != "" {
+		wsRec.UntrustedSource = &store.UntrustedSource{
+			Kind:           "change_request",
+			Forge:          intent.Forge,
+			Number:         intent.ChangeRequestNumber,
+			HeadRepository: intent.HeadRepository,
+		}
+	}
 	_ = s.store.UpsertWorkspace(wsRec)
 	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(firstAgentContext))
 
@@ -1844,12 +1855,18 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	// completed progress for exactly this case.
 	var setupTerminalID any
 	go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, workspace.ReadSetupCommands(wtPath))
-	_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+	payload := map[string]any{
 		"requestId":       requestID,
 		"workspace":       s.workspaceDescriptor(wsRec, prj),
 		"setupTerminalId": setupTerminalID,
 		"error":           nil,
-	})
+	}
+	// Optional-not-nullable: the client reads this to explain why the setup tab is blocked, and a
+	// null would make it reject the whole response.
+	if wsRec.UntrustedSource != nil {
+		payload["setupSkippedReason"] = workspace.AutomationBlockedError{Source: *wsRec.UntrustedSource}.Error()
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.create.response", payload)
 }
 
 // writeCreatedWorktreeMetadata records what a fresh worktree was cut from.

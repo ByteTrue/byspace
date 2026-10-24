@@ -831,29 +831,117 @@ func ResolveChangeRequestCheckoutTarget(ctx context.Context, forge, repoCwd stri
 		if _, err := exec.LookPath("gh"); err != nil {
 			return ChangeRequestCheckoutTarget{}, fmt.Errorf("gh is not installed")
 		}
-		raw, err := runGH(ctx, repoCwd, "pr", "view", numberArg,
-			"--json", "headRefName,baseRefName,isCrossRepository,headRepository")
+		// The GraphQL query, not `gh pr view`: the checkout gate needs the head repository, and
+		// only this query returns it alongside the base ref. Without it a PR from a fork looked
+		// local, so its author's byspace.json was trusted.
+		repoRaw, err := runGH(ctx, repoCwd, "repo", "view", "--json", "owner,name")
 		if err != nil {
 			return ChangeRequestCheckoutTarget{}, err
 		}
-		var pr struct {
-			HeadRefName       string `json:"headRefName"`
-			BaseRefName       string `json:"baseRefName"`
-			IsCrossRepository bool   `json:"isCrossRepository"`
-			HeadRepository    struct {
-				Name string `json:"name"`
-			} `json:"headRepository"`
+		var repoView struct {
+			Owner struct {
+				Login string `json:"login"`
+			} `json:"owner"`
+			Name string `json:"name"`
 		}
-		if json.Unmarshal([]byte(raw), &pr) != nil {
+		if json.Unmarshal([]byte(repoRaw), &repoView) != nil || repoView.Owner.Login == "" || repoView.Name == "" {
+			return ChangeRequestCheckoutTarget{}, fmt.Errorf("unable to resolve repository for pull request checkout")
+		}
+		raw, err := runGH(ctx, repoCwd, "api", "graphql",
+			"-f", "query="+pullRequestCheckoutTargetQuery,
+			"-F", "owner="+repoView.Owner.Login,
+			"-F", "name="+repoView.Name,
+			"-F", "number="+numberArg)
+		if err != nil {
+			return ChangeRequestCheckoutTarget{}, err
+		}
+		var result struct {
+			Data struct {
+				Repository struct {
+					PullRequest struct {
+						BaseRefName         string `json:"baseRefName"`
+						HeadRefName         string `json:"headRefName"`
+						IsCrossRepository   bool   `json:"isCrossRepository"`
+						HeadRepositoryOwner struct {
+							Login string `json:"login"`
+						} `json:"headRepositoryOwner"`
+						HeadRepository struct {
+							SSHURL string `json:"sshUrl"`
+							URL    string `json:"url"`
+						} `json:"headRepository"`
+					} `json:"pullRequest"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(raw), &result) != nil {
 			return ChangeRequestCheckoutTarget{}, fmt.Errorf("could not read pull request %d", number)
 		}
+		pull := result.Data.Repository.PullRequest
+		owner := strings.TrimSpace(pull.HeadRepositoryOwner.Login)
 		return ChangeRequestCheckoutTarget{
-			HeadRef:           pr.HeadRefName,
-			BaseRefName:       pr.BaseRefName,
-			IsCrossRepository: pr.IsCrossRepository,
-			HeadRepository:    pr.HeadRepository.Name,
+			HeadRef:           pull.HeadRefName,
+			BaseRefName:       pull.BaseRefName,
+			IsCrossRepository: pull.IsCrossRepository,
+			HeadRepository:    headRepositoryName(owner, pull.HeadRepository.URL, pull.HeadRepository.SSHURL),
 		}, nil
 	}
+}
+
+// pullRequestCheckoutTargetQuery is the forge's own checkout-target query, ported verbatim.
+//
+// It is a constant rather than a `gh pr view --json` field list because the REST-shaped field
+// set does not expose the head repository's owner and URL, which is exactly what decides whether
+// a checkout is cross-repository.
+const pullRequestCheckoutTargetQuery = `
+query PullRequestCheckoutTarget($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number
+      baseRefName
+      headRefName
+      isCrossRepository
+      headRepositoryOwner {
+        login
+      }
+      headRepository {
+        sshUrl
+        url
+      }
+    }
+  }
+}`
+
+// headRepositoryName reports "owner/repo" for a change request's head repository.
+//
+// The owner comes from the login when GitHub sent one, otherwise from the second-to-last path
+// segment: forks are identified by owner, and a clone URL is the only place it appears.
+func headRepositoryName(owner, httpsURL, sshURL string) string {
+	raw := httpsURL
+	if raw == "" {
+		raw = sshURL
+	}
+	if raw == "" {
+		return owner
+	}
+	path := strings.TrimSuffix(raw, ".git")
+	sanitized := strings.NewReplacer(":", "/", "//", "/").Replace(path)
+	segments := []string{}
+	for _, segment := range strings.Split(sanitized, "/") {
+		if segment != "" {
+			segments = append(segments, segment)
+		}
+	}
+	if len(segments) == 0 {
+		return owner
+	}
+	repository := segments[len(segments)-1]
+	if owner == "" && len(segments) >= 2 {
+		owner = segments[len(segments)-2]
+	}
+	if owner == "" {
+		return repository
+	}
+	return owner + "/" + repository
 }
 
 // PullRequestTimeline fetches a PR's comments and reviews.
