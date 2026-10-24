@@ -80,6 +80,21 @@ func (s *Server) handleProjectAdd(ctx context.Context, sink frameSink, raw json.
 	})
 }
 
+// announceProject sends the project descriptor to every client.
+//
+// The directory replica keys the sidebar by project: a workspace upsert only adds a row when its
+// project is already known, so a project that a create request just minted stays invisible until
+// the next full refetch. Node's project registry publishes the mutation for the same reason.
+func (s *Server) announceProject(prj store.ProjectRecord) {
+	if prj.ArchivedAt != nil {
+		return
+	}
+	s.broadcastSessionMsg("project.update", map[string]any{
+		"kind":    "upsert",
+		"project": buildProjectDescriptor(prj),
+	})
+}
+
 func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string `json:"requestId"`

@@ -1982,6 +1982,9 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 	if setupSkippedReason != nil {
 		respPayload["setupSkippedReason"] = setupSkippedReason
 	}
+	// The workspace row is only renderable once its project is known, and this request may have
+	// just created that project.
+	s.announceProject(prj)
 	s.broadcastWorkspaceUpsertStatus(ws, prj, createdWorkspaceStatusOverride(req.FirstAgentContext))
 	s.broadcastCheckoutStatusUpdate(ctx, ws.Cwd)
 	if req.FirstAgentContext != nil {
@@ -3772,9 +3775,12 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 	default:
 		workspaceKind = "local_checkout"
 	}
-	labels := ws.Labels
-	if labels == nil {
-		labels = []string{}
+	// Optional, not nullable: the client reads a missing `labels` as "no labels" and an empty
+	// array as a value it has to keep, so a workspace that just lost its last label would render
+	// an empty field instead of dropping it.
+	var labels []string
+	if len(ws.Labels) > 0 {
+		labels = ws.Labels
 	}
 	for _, lbl := range labels {
 		if lbl == store.HomeWorkspaceLabel {
@@ -3807,7 +3813,6 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"workspaceKind":             workspaceKind,
 		"name":                      name,
 		"title":                     ws.Title,
-		"labels":                    labels,
 		"pinnedAt":                  ws.PinnedAt,
 		"archivingAt":               nil,
 		// Overwritten by workspaceDescriptor with the aggregate of this workspace's agents; a
@@ -3831,6 +3836,9 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 				ws.MainRepoRoot,
 			),
 		},
+	}
+	if len(labels) > 0 {
+		out["labels"] = labels
 	}
 	if ws.IsBySpaceOwnedWorktree {
 		out["worktreeSlug"] = filepath.Base(ws.Cwd)
