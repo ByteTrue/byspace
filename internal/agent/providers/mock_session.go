@@ -1419,6 +1419,18 @@ func (s *MockSession) RewindConversation(_ context.Context, messageID string) er
 			break
 		}
 	}
+	// Renumber what survived and rewind the counter with it. A rewind drops every row after the
+	// target, and leaving their seq numbers behind would punch a hole in the middle of the range
+	// that no later row can fill: the next row continues from the old counter, so a client sitting
+	// on the retained row sees a gap, drops every event after it, and asks for a catch-up that
+	// starts inside the hole. Compacting the range means the next row continues right after the
+	// retained one, so clients accept it without a rehydration.
+	for i, entry := range kept {
+		entry.Seq = i + 1
+		entry.SeqEnd = i + 1
+		kept[i] = entry
+	}
+	s.streamSeq = len(kept)
 	s.timeline = kept
 	return nil
 }

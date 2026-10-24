@@ -1649,11 +1649,17 @@ func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target s
 	if err := rw.RewindConversation(ctx, entryID); err != nil {
 		return err
 	}
-	// The provider moved its leaf; the in-memory timeline must follow or the next hydration
-	// will restore the pre-rewind branch.
-	if text, err := mp.session.GetState(ctx); err == nil && text != nil {
-		_ = text
-	}
+	// The provider owns its timeline: RewindConversation already dropped the rows after the target,
+	// so there is nothing to reconcile here beyond telling clients the history moved.
+	// A rewind rewrites history: everything after the target is gone and the rows that follow carry
+	// seq numbers that no longer continue the client's cursor. A client that keeps its cursor would
+	// treat every later row as a gap, drop it, and leave the prompt it just sent without a messageId
+	// — so the rewind trigger never appears on it. Node broadcasts agent.timeline.replacement for
+	// exactly this case; the client answers by refetching the tail.
+	s.broadcastSessionMsg("agent.timeline.replacement", map[string]any{
+		"agentId": mp.record.ID,
+		"epoch":   s.epoch,
+	})
 	return nil
 }
 
