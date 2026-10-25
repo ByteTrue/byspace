@@ -1,8 +1,8 @@
 import { createServer, type Server } from "node:http";
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { existsSync } from "node:fs";
 import { startIsolatedHostDaemon } from "./isolated-host-daemon";
 
 export interface OutdatedDaemon {
@@ -13,23 +13,25 @@ export interface OutdatedDaemon {
 }
 
 const REPO_ROOT = path.resolve(__dirname, "../../../../..");
-const GO_DAEMON_BINARY = path.join(REPO_ROOT, "bin", "byspace");
 const SERVER_ID = "outdated-host";
+
+// The daemon this fixture starts reports a version the app does not have, because the host page
+// renders the update card only when the two disagree. Copying `bin/byspace` cannot do that — it is
+// built at the app's version — so the binary is built here with an older one.
+const OUTDATED_VERSION = "0.0.1-e2e-outdated";
 
 // How long the fake release host stalls before answering. The host page renders the update button's
 // phase label only while the request is in flight, so the download has to last long enough to be
 // observed; a local answer would come back within a frame and the label would never appear.
 const RELEASE_STALL_MS = 750;
 
-function resolveGoDaemonBinary(): string {
-  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
-  if (!existsSync(GO_DAEMON_BINARY)) {
-    throw new Error(
-      `Go daemon binary not found at ${GO_DAEMON_BINARY}. Run \`make build\` first ` +
-        `(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).`,
-    );
-  }
-  return GO_DAEMON_BINARY;
+// Builds the daemon at OUTDATED_VERSION into the given directory.
+function buildOutdatedDaemon(binary: string): void {
+  execFileSync(
+    "go",
+    ["build", "-ldflags", `-X main.version=${OUTDATED_VERSION}`, "-o", binary, "./cmd/byspace"],
+    { cwd: REPO_ROOT, stdio: "pipe" },
+  );
 }
 
 // A release host that stalls, then refuses. Pointing the daemon at it with
@@ -56,7 +58,7 @@ async function startFailingReleaseHost(): Promise<{ server: Server; url: string 
 export async function startOutdatedDaemon(): Promise<OutdatedDaemon> {
   const binaryDir = await mkdtemp(path.join(tmpdir(), "byspace-e2e-outdated-"));
   const binary = path.join(binaryDir, "byspace");
-  await copyFile(resolveGoDaemonBinary(), binary);
+  buildOutdatedDaemon(binary);
   const releaseHost = await startFailingReleaseHost();
 
   const cleanup = async (): Promise<void> => {
