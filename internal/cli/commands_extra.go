@@ -546,6 +546,7 @@ func runWorktreeArchive(args []string, stdout io.Writer) error {
 func runPairCmd(version string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	homeDir := fs.String("home", "", "byspace home directory")
+	addr := fs.String("addr", "", "daemon address (default "+defaultListenAddr()+"); empty mints the offer offline")
 	relayEndpoint := fs.String("relay", os.Getenv("BYSPACE_RELAY_ENDPOINT"), "relay host:port")
 	useTLS := fs.Bool("tls", true, "use TLS for relay")
 	appURL := fs.String("app-url", os.Getenv("BYSPACE_APP_BASE_URL"), "web app base URL")
@@ -554,16 +555,14 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 		return err
 	}
 
-	srv, err := server.New(server.Options{
-		HomeDir: *homeDir,
-		Version: version,
-	})
+	url, err := pairingOfferURL(version, *homeDir, *addr)
 	if err != nil {
 		return err
 	}
-	defer srv.Close()
-
-	url := srv.BuildPairingOfferURL(*relayEndpoint, *useTLS, *appURL)
+	if *relayEndpoint != "" || *appURL != "" || !*useTLS {
+		// An explicit flag means the operator wants those values, not whatever the daemon has.
+		url = buildOfflinePairingOffer(version, *homeDir, *relayEndpoint, *useTLS, *appURL)
+	}
 	if *showQR {
 		qr, qrErr := server.RenderASCIIQRCode(url)
 		if qrErr != nil {
@@ -573,4 +572,51 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, url)
 	return nil
+}
+
+// pairingOfferURL asks the running daemon for its pairing offer.
+//
+// The daemon is the only party that knows how the relay is actually configured: which public
+// endpoint clients should dial, whether it is behind TLS, and which app origin this build belongs
+// to. Minting the offer in-process uses the defaults instead, so an operator who pointed the relay
+// at their own host got a link to the hosted relay.
+func pairingOfferURL(version, homeDir, addr string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	ws, err := dialDaemonWS(ctx, addr)
+	if err != nil {
+		// No daemon running: fall back to the offline offer rather than failing. `pair` is also
+		// how people mint a link before starting the daemon.
+		return buildOfflinePairingOffer(version, homeDir, "", true, ""), nil
+	}
+	defer ws.CloseNow()
+
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      "daemon.get_pairing_offer.request",
+		"requestId": "req_pair",
+	}); err != nil {
+		return "", err
+	}
+	payload, err := waitSessionResp(ctx, ws, "daemon.get_pairing_offer.response", "")
+	if err != nil {
+		return "", err
+	}
+	url, _ := payload["url"].(string)
+	if strings.TrimSpace(url) == "" {
+		return "", errors.New("the daemon has relay pairing disabled; enable the relay first")
+	}
+	return url, nil
+}
+
+// buildOfflinePairingOffer mints an offer without asking a daemon.
+func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS bool, appURL string) string {
+	srv, err := server.New(server.Options{
+		HomeDir: homeDir,
+		Version: version,
+	})
+	if err != nil {
+		return ""
+	}
+	defer srv.Close()
+	return srv.BuildPairingOfferURL(relayEndpoint, useTLS, appURL)
 }
