@@ -61,6 +61,7 @@ jobs:
           scripts/seed-worktree-dev-state.test.mjs
           scripts/cli-surface.test.mjs
           scripts/parity-surface.test.mjs
+          scripts/relay-worker.test.mjs
 
   format:
     name: format
