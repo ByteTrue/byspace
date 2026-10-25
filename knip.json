@@ -5,23 +5,6 @@
       "entry": ["scripts/**/*.{js,mjs,cjs,ts}"],
       "project": ["scripts/**/*.{js,mjs,cjs,ts}"]
     },
-    "packages/server": {
-      "entry": [
-        "src/server/index.ts",
-        "src/server/exports.ts",
-        "src/utils/tool-call-parsers.ts",
-        "src/shared/**/*.ts",
-        "src/client/**/*.ts",
-        "src/server/agent/agent-sdk-types.ts",
-        "src/server/agent/provider-manifest.ts",
-        "scripts/**/*.{ts,mts,mjs,cjs,js}",
-        "src/**/*.test.ts",
-        "src/**/*.test.tsx",
-        "src/**/*.e2e.ts",
-        "src/**/*.e2e.tsx"
-      ],
-      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,mts,mjs,cjs,js}"]
-    },
     "packages/app": {
       "entry": [
         "index.ts",
@@ -42,12 +25,8 @@
       },
       "ignore": ["dist/**", ".expo/**"]
     },
-    "packages/cli": {
-      "entry": ["src/index.ts", "bin/byspace", "src/**/*.test.{ts,tsx}", "tests/**/*.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
-    },
     "packages/relay": {
-      "entry": ["src/index.ts", "src/e2ee.ts", "src/cloudflare-adapter.ts", "src/**/*.test.ts"],
+      "entry": ["src/index.ts", "src/e2ee.ts", "src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/highlight": {

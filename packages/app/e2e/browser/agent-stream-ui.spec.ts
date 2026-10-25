@@ -9,10 +9,12 @@ import {
   expectScrollFollowsNewContent,
 } from "../support/helpers/agent-stream";
 import {
-  expectScrollStaysFixed,
+  expectReadingPositionStaysFixed,
   readScrollMetrics,
   scrollAgentChatToBottom,
   scrollChatAwayFromBottom,
+  scrollChatAwayFromBottomAndReadPosition,
+  expectScrollStaysFixed,
   waitForScrollableChat,
 } from "../support/helpers/agent-bottom-anchor";
 import { delayCreatedAgentInitialTailResponse } from "../support/helpers/agent-timeline-gate";
@@ -239,14 +241,16 @@ test.describe("Agent stream UI", () => {
       minScrollableDistance: SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE,
       timeout: 45_000,
     });
-    const baseline = await scrollChatAwayFromBottom(page, {
+    const baseline = await scrollChatAwayFromBottomAndReadPosition(page, {
       deltaY: -900,
       minDistanceFromBottom: 300,
     });
 
     timelineGate.release();
     await timelineGate.waitForForwardedResponse();
-    await expectScrollStaysFixed(page, baseline);
+    // Assert on the row the reader is looking at, not on scrollTop: the authoritative history
+    // lands above them and grows, which the browser's own anchoring absorbs by moving scrollTop.
+    await expectReadingPositionStaysFixed(page, baseline.reading);
   });
 
   test("keeps stream controls above the composer across desktop, compact, and split layouts", async ({

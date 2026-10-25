@@ -287,6 +287,115 @@ export async function clickToolCallBesideScrollToBottomButton(page: Page): Promi
   };
 }
 
+// A reader who left the bottom is anchored to what they are reading, not to scrollTop. Rows
+// above the reading position can change height for reasons the scroll container cannot
+// prevent — a reasoning row collapsing when the next assistant response starts, a row
+// re-rendered from a canonical echo, the virtualizer mounting a taller row — and the browser's
+// own scroll anchoring absorbs that by moving scrollTop. Asserting on scrollTop therefore
+// fails whenever content above the reader grows, even though nothing moved in their view.
+const READING_ROW_PROBE_OFFSET_PX = 24;
+
+export interface ReadingPosition {
+  rowId: string;
+  viewportOffset: number;
+}
+
+/**
+ * Reads the row rendered at the top of the scroll viewport — the line the reader is looking at.
+ * Returns null when the scroll box has no positioned history row to anchor to.
+ */
+export async function readReadingPosition(page: Page): Promise<ReadingPosition | null> {
+  return getVisibleChatScroll(page).evaluate((root: Element, probeOffset: number) => {
+    const scrollElement = root as HTMLElement;
+    const scrollBounds = scrollElement.getBoundingClientRect();
+    const probeY = scrollBounds.top + probeOffset;
+    const rows = Array.from(root.querySelectorAll<HTMLElement>("[data-history-row-id]"))
+      .map((element) => ({ element, bounds: element.getBoundingClientRect() }))
+      .filter((row) => row.bounds.height > 0)
+      .toSorted((left, right) => left.bounds.top - right.bounds.top);
+    const anchor =
+      rows.find((row) => row.bounds.top <= probeY && row.bounds.bottom > probeY) ??
+      rows.find((row) => row.bounds.top >= probeY) ??
+      null;
+    if (!anchor) {
+      return null;
+    }
+    return {
+      rowId: anchor.element.dataset.historyRowId ?? "",
+      viewportOffset: anchor.bounds.top - scrollBounds.top,
+    };
+  }, READING_ROW_PROBE_OFFSET_PX);
+}
+
+/** Distance from the top of the scroll viewport to the top of one rendered row, or null. */
+async function readRowViewportOffset(page: Page, rowId: string): Promise<number | null> {
+  return getVisibleChatScroll(page).evaluate((root: Element, id: string) => {
+    const scrollElement = root as HTMLElement;
+    const row = Array.from(root.querySelectorAll<HTMLElement>("[data-history-row-id]")).find(
+      (element) => element.dataset.historyRowId === id,
+    );
+    if (!row) {
+      return null;
+    }
+    const bounds = row.getBoundingClientRect();
+    return bounds.height > 0 ? bounds.top - scrollElement.getBoundingClientRect().top : null;
+  }, rowId);
+}
+
+/**
+ * Scrolls away from the bottom and records the reading position, so
+ * {@link expectReadingPositionStaysFixed} can assert the reader's view did not move.
+ */
+export async function scrollChatAwayFromBottomAndReadPosition(
+  page: Page,
+  input: { deltaY: number; minDistanceFromBottom: number },
+): Promise<{ metrics: ScrollMetrics; reading: ReadingPosition }> {
+  const metrics = await scrollChatAwayFromBottom(page, input);
+  await expect
+    .poll(async () => (await readReadingPosition(page))?.rowId ?? null, { timeout: 5_000 })
+    .not.toBeNull();
+  const reading = await readReadingPosition(page);
+  if (!reading) {
+    throw new Error("Agent chat has no rendered history row to anchor the reading position to");
+  }
+  return { metrics, reading };
+}
+
+/**
+ * Asserts the row the reader is looking at keeps its place in the viewport while content lands
+ * above them. Content height is expected to grow; scrollTop is allowed to move with it.
+ */
+export async function expectReadingPositionStaysFixed(
+  page: Page,
+  baseline: ReadingPosition,
+  input?: { durationMs?: number; sampleIntervalMs?: number; tolerancePx?: number },
+): Promise<void> {
+  const durationMs = input?.durationMs ?? 2_000;
+  const sampleIntervalMs = input?.sampleIntervalMs ?? 250;
+  const tolerancePx = input?.tolerancePx ?? DEFAULT_SCROLL_TOLERANCE_PX;
+  const samples: Array<{
+    elapsedMs: number;
+    viewportOffset: number | null;
+    metrics: ScrollMetrics;
+  }> = [];
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < durationMs) {
+    await page.waitForTimeout(sampleIntervalMs);
+    const viewportOffset = await readRowViewportOffset(page, baseline.rowId);
+    const metrics = await readScrollMetrics(page);
+    samples.push({ elapsedMs: Date.now() - startedAt, viewportOffset, metrics });
+    if (viewportOffset === null) {
+      throw new Error(
+        `The reading row ${baseline.rowId} left the rendered window: ${JSON.stringify({ baseline, samples: samples.slice(-12) })}`,
+      );
+    }
+    expect(
+      Math.abs(viewportOffset - baseline.viewportOffset),
+      JSON.stringify({ baseline, samples: samples.slice(-12) }),
+    ).toBeLessThanOrEqual(tolerancePx);
+  }
+}
+
 export async function expectScrollStaysFixed(
   page: Page,
   baseline: ScrollMetrics,

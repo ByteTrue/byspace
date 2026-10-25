@@ -1,7 +1,7 @@
 {
   "name": "@bytetrue/relay",
   "version": "0.20.2",
-  "description": "BySpace relay for bridging daemon and client connections",
+  "description": "BySpace E2EE channel primitives shared by the web client (relay server moved to internal/relay and archive/)",
   "files": [
     "dist",
     "!dist/**/*.map"
@@ -20,18 +20,6 @@
       "node": "./dist/e2ee.js",
       "import": "./src/e2ee.ts",
       "default": "./src/e2ee.ts"
-    },
-    "./cloudflare": {
-      "types": "./dist/cloudflare-adapter.d.ts",
-      "node": "./dist/cloudflare-adapter.js",
-      "import": "./src/cloudflare-adapter.ts",
-      "default": "./src/cloudflare-adapter.ts"
-    },
-    "./node": {
-      "types": "./dist/node-adapter.d.ts",
-      "node": "./dist/node-adapter.js",
-      "import": "./src/node-adapter.ts",
-      "default": "./src/node-adapter.ts"
     }
   },
   "publishConfig": {
@@ -43,8 +31,6 @@
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
-    "deploy": "npm --prefix ../app run build:web && wrangler deploy --env=\"\"",
-    "deploy:beta": "npm --prefix ../app run build:web && wrangler deploy --env beta",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -92,8 +92,12 @@ jobs:
         with:
           node-version: "22.20.0"
           cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
       - run: npm ci
-      - run: npm run build:server
       - run: npm run build:daemon-web-ui
       - run: npm run release:pack:bytetrue
       - name: Verify package identity

@@ -1,6 +1,6 @@
 {
   "worktree": {
-    "setup": ["npm ci", "node ./scripts/seed-worktree-dev-state.mjs", "npm run build:server"]
+    "setup": ["npm ci", "node ./scripts/seed-worktree-dev-state.mjs", "make build"]
   },
   "scripts": {
     "daemon": {

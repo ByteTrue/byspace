@@ -54,6 +54,8 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/terminal-performance.md](docs/terminal-performance.md)         | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                                     |
 | [docs/agent-stream-performance.md](docs/agent-stream-performance.md) | Assistant text pipeline — coalescing window, paced reveal, why arrival lumps are smoothed at render                            |
 | [docs/file-observation.md](docs/file-observation.md)                 | Recursive watcher ownership, Linux constraints, teardown invariants, and Parcel comparison                                     |
+| [docs/go-parity-audit.md](docs/go-parity-audit.md)                   | Go 版本对齐审计 — 四个检查各挡什么、基线守卫、出站审计的下钻与局限                                                             |
+| [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 何时读、怎么读、能回答什么、四个对齐守卫、何时可以删                                                    |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                                      |
 | [docs/mobile-panels.md](docs/mobile-panels.md)                       | Compact left/center/right panel ownership, worklet motion, gesture revisions, and Fabric constraints                           |
@@ -128,6 +130,7 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
   - Never re-run a test suite that another agent already ran and reported green — trust the result.
   - For full suite verification, push to CI and check GitHub Actions instead.
 - **Always run typecheck and lint after every change.**
+- **Before handing back Go work, run `npm run audit`.** It chains the four checks that catch what unit tests miss: `go test ./...`, inbound field parity, outbound field parity, and real-browser conformance. Each one guards a different failure mode — a field the daemon does not parse, a field it does not send, and a payload that is sent but invalid. `--no-browser` skips the browser step when no daemon is running. 详见 `docs/go-parity-audit.md`。
 - **Build workspace packages before diagnosing cross-package type errors.** This repo consumes generated declarations across workspaces. If typecheck fails in a package that depends on another workspace, rebuild the owning stack first so `dist` declarations are current:
   - `npm run build:client` — rebuild protocol and client declarations.
   - `npm run build:server` — rebuild highlight, relay, protocol, client, server, and CLI when server/CLI types may be stale.

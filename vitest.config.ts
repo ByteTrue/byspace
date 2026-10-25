@@ -39,7 +39,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, "packages/relay/src/index.ts"),
       },
       { find: "@", replacement: path.resolve(appDir, "src") },
-      { find: "@server", replacement: path.resolve(__dirname, "packages/server/src") },
       {
         find: "react-native",
         replacement: path.resolve(rootNodeModules, "react-native-web/dist/index.js"),
@@ -66,7 +65,6 @@ export default defineConfig({
     // when it is used the root *is* the repo root and everything below matches.
     // Keep out the trees that must never be collected as tests from here:
     //
-    // - packages/cli/tests holds `npx tsx` standalone scripts, not Vitest tests.
     //   They run real `byspace` commands at module top level, so merely importing
     //   them starts and stops a live daemon -- and from the repo root that is the
     //   developer's own one on 6777. `npx vitest list` is enough to trigger it,
@@ -80,7 +78,6 @@ export default defineConfig({
       ...configDefaults.exclude,
       "**/.claude/**",
       "**/.dev/**",
-      "packages/cli/tests/**",
       "scripts/**/*.test.mjs",
       "packages/app/e2e/**",
       "packages/app/perf/**",

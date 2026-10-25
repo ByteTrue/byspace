@@ -47,7 +47,7 @@ Owner（2026-10-06）：「都按你建议来吧。」
 
 - 规则：`../decisions/003-pi-first-class-and-bytetrue-extension-whitelist.md`
 - 定位：`../vision/index.md` 产品核心与演化地图两处更新
-- 工程：`../epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md` 及 `issues/001`（垂直切片）、`issues/002`（行内卡片）
+- 工程：`../epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md` 及 `issues/001`（垂直切片）、`issues/002`（行内卡片）
 
 ## 实施记录（2026-10-06，issue 001 完成日）
 

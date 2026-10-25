@@ -3,17 +3,17 @@ import { test, expect } from "../support/fixtures";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { waitForConnectedHost } from "../support/helpers/hosts";
 import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
-import { startLocalNodeRelay } from "../support/helpers/local-node-relay";
+import { startLocalGoRelay } from "../support/helpers/local-go-relay";
 
 const SERVER_ID = "setup-guide-pairing";
 
 // The welcome screen's setup guide is the only path a self-hoster has from "I just ran
 // `byspace onboard`" to a connected app: paste the printed pairing link, press Pair. Every other
 // e2e pairing test seeds the host registry directly, so this walks the real path once — browser
-// loads the Metro bundle, talks to a real daemon through the real Node relay, and lands on the
+// loads the Metro bundle, talks to a real daemon through the real relay, and lands on the
 // connected app shell.
 test("pairs with a pasted offer through the setup guide", async ({ page, baseURL }) => {
-  const relay = await startLocalNodeRelay();
+  const relay = await startLocalGoRelay();
   const daemon = await startIsolatedHostDaemon(SERVER_ID, {
     mutableRelay: { enabled: true, endpoint: relay.endpoint },
   });

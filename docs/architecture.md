@@ -24,7 +24,7 @@ type, storage, and git metadata names retain their upstream `BySpace` spelling.
                    │
             ┌──────▼──────┐
             │   Daemon    │
-            │  (Node.js)  │
+            │    (Go)     │
             └──────┬──────┘
                    │
       ┌────────────┼────────────┬────────────┬────────────┐
@@ -45,9 +45,9 @@ type, storage, and git metadata names retain their upstream `BySpace` spelling.
 
 ## Packages
 
-### `packages/server` — The daemon
+### `internal/` — The daemon
 
-The heart of BySpace. A Node.js process that:
+The heart of BySpace. A Go process (`byspace serve`) that:
 
 - Listens for WebSocket connections from clients
 - Manages agent lifecycle (create, run, stop, resume, archive)
@@ -56,7 +56,9 @@ The heart of BySpace. A Node.js process that:
 - Optionally connects outbound to a relay for remote access
 - Optionally serves the browser web client from the same HTTP server (self-hosting guide: [public-docs/web-ui.md](../public-docs/web-ui.md))
 
-All paths are under `packages/server/src/`.
+Layout: `internal/server/` owns the WebSocket API and session loop, `internal/agent/` the provider drivers, `internal/workspace/` git and files, `internal/terminal/`, `internal/schedule/`, `internal/relay/`, `internal/webui/` (embedded client assets).
+
+The Node daemon this replaced is kept read-only under `archive/packages/server/`. When a ported behaviour looks wrong, read the archived source at the same call site — it answers "did the port break this, or was it always like this?" faster than any other evidence. [docs/archive-parity.md](archive-parity.md) describes how to use it.
 
 Project identity is daemon-global rather than session-owned. After registry bootstrap, the daemon's
 project Git observer keeps one non-recursive watch on each lexically equivalent active project root
@@ -200,6 +202,8 @@ Server → Client:  status message with payload { status: "server_info",
 There is no dedicated welcome message; the server emits a `status` session message after accepting the hello, then begins streaming. The session stores client capabilities from the hello and rehydrates them on reconnect, so the wire boundary can ask one question: `session.supports(...)`.
 
 **Top-level WS envelopes** are `hello`, `recording_state`, `ping`/`pong`, and `session` (which wraps the rich union of session messages).
+
+Session messages are dispatched concurrently, the way Node's `void dispatchSessionMessage(...)` does: the read loop must not await a handler, or one slow RPC delays every frame behind it. A `send_agent_message` used to sit ~950ms behind a `checkout_pr_status` plus two provider snapshots. The exceptions are the messages that register socket-scoped state (`file.upload.request` before its binary chunks, and the terminal/file/diff/timeline subscriptions); those run inline because the next frame depends on the registration.
 
 Client liveness checks use the top-level JSON `ping`/`pong` envelope, not a session RPC or RFC6455 control ping. Current clients ping every 10 seconds, beginning one interval after connecting. The first ping claims an application-ownership lease for that physical socket, all later inbound activity renews it, and the daemon forcibly terminates the socket if the lease expires. A legacy or raw socket that never sends an application ping never enters this lease and is not closed for omitting one. Session RPC timeouts are operation failures and must not be treated as proof that the socket is dead.
 
