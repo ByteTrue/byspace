@@ -41,3 +41,7 @@ func killProcessGroup(cmd *exec.Cmd, force bool) error {
 func itoaPID(pid int) string {
 	return strconv.Itoa(pid)
 }
+
+// ownProcessGroup is a no-op on Windows, which has no POSIX process groups; killProcessGroup
+// terminates the tree with taskkill instead.
+func ownProcessGroup(cmd *exec.Cmd) {}

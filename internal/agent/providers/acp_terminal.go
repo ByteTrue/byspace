@@ -128,6 +128,9 @@ func (s *ACPSession) acpCreateTerminal(rpcID any, params map[string]any) {
 		s.sendACPTerminalError(rpcID, err.Error())
 		return
 	}
+	// Its own group, so stopping the terminal stops what it spawned. A shell that forks leaves the
+	// grandchild holding the stdout pipe, and the drain goroutines below never see EOF.
+	ownProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		s.sendACPTerminalError(rpcID, err.Error())
 		return
@@ -224,9 +227,7 @@ func (s *ACPSession) acpKillTerminal(rpcID any, params map[string]any) {
 		s.sendACPTerminalError(rpcID, "unknown terminal")
 		return
 	}
-	if terminal.cmd.Process != nil {
-		_ = terminal.cmd.Process.Kill()
-	}
+	_ = killProcessGroup(terminal.cmd, true)
 	s.sendACPResult(rpcID, map[string]any{})
 }
 
@@ -238,9 +239,7 @@ func (s *ACPSession) acpReleaseTerminal(rpcID any, params map[string]any) {
 	}
 	// The agent is done with it; leaving the entry would keep the output buffer alive for the
 	// whole session.
-	if terminal.cmd.Process != nil {
-		_ = terminal.cmd.Process.Kill()
-	}
+	_ = killProcessGroup(terminal.cmd, true)
 	s.acpTerminalsMu.Lock()
 	delete(s.acpTerminals, terminal.id)
 	s.acpTerminalsMu.Unlock()

@@ -107,12 +107,11 @@ func TestACPTerminalsAreKilledWhenSessionEnds(t *testing.T) {
 		t.Fatal("terminal not registered")
 	}
 
-	// Simulate the session ending: the cleanup path kills and clears.
-	for _, entry := range []*acpTerminal{terminal} {
-		if entry.cmd != nil && entry.cmd.Process != nil {
-			_ = entry.cmd.Process.Kill()
-		}
-	}
+	// Simulate the session ending: the cleanup path kills the whole group. It has to be the group:
+	// `sh -c "sleep 30"` is killed between forking and execing under load sometimes, and the
+	// surviving `sleep` holds the stdout pipe, so the drain goroutines never see EOF and the
+	// terminal is never reaped.
+	_ = killProcessGroup(terminal.cmd, true)
 	select {
 	case <-terminal.done:
 	case <-time.After(5 * time.Second):

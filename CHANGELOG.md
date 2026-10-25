@@ -5,6 +5,49 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.1 - 2026-10-25
+
+### Changed
+
+- The daemon is now one self-contained binary instead of a Node process with a bundled install tree, so it starts faster, uses less memory, and no longer needs a matching Node runtime on the host
+- Windows hosts run the same daemon as macOS and Linux; the daemon was previously unable to start there
+- `byspace` itself is the daemon: `serve`, `relay`, `web` and every other subcommand live in the one binary, and the published npm package ships a prebuilt binary per platform instead of JavaScript
+- The provider catalog is served from memory and rebuilt in the background, so opening a new workspace no longer waits on a provider probe
+- A workspace's status is derived from the agents and terminals inside it, so a workspace with a running agent, a pending permission, or a failed turn no longer shows as done
+- The signed-out relay connects at a dialable address, and a pairing link carries the endpoint the other device can actually reach
+
+### Added
+
+- Choosing which agent homes the orchestration skills install into: `~/.agents/skills` and `~/.claude/skills` can now be selected independently, and turning a home off asks before removing the skills there
+- `byspace daemon reload` applies a `config.json` edit to a running daemon and reports which settings need a restart, and `byspace daemon set-password` enables password auth
+- `byspace worktree archive` and `byspace daemon reload` complete the CLI surface the Node CLI had
+
+### Fixed
+
+- Fixed the composer dropping a queued message typed while a turn was being submitted: the daemon handled session messages one at a time, so a slow provider call delayed the frames behind it
+- Fixed an agent's first prompt not appearing until the provider echoed it, which left rewind unavailable and the row blank during a delayed echo
+- Fixed workspace archive leaving its worktree on disk, and fixed reopening an archived workspace creating a duplicate row instead of restoring the existing one
+- Fixed a new workspace whose project the daemon had not yet announced staying invisible in the sidebar until the next refetch
+- Fixed the Changes pane missing committed work: the checkout diff stat, the base ref, the ahead/behind counts and per-commit file lists now come from git instead of being reported empty
+- Fixed a provider entry defined in `config.json` being ignored: its `models`, `additionalModels`, `extends` and `command` now reach the picker, and a provider whose binary is missing reports unavailable instead of ready
+- Fixed a delayed timeline response scrolling a reader who had scrolled away — the viewport now stays where the reader put it
+- Fixed terminals ignoring the size a reconnecting client asked to restore, so splitting the pane left the PTY at the old row count
+- Fixed the terminal tab title being overwritten by the terminal name, and the activity indicator never clearing after a hook reported attention
+- Fixed workspace scripts not running in a terminal, so their output never appeared and stopping one left the process running
+- Fixed the archive prompt not warning about a worktree whose branch has unpushed commits
+- Fixed the tunnel dropping open streams across a brief reconnect, and fixed the daemon not reconnecting the relay at all when configured with a plain `host:port`
+- Fixed a failed remote daemon update reporting no progress, so the host page kept its old button while the download ran
+- Fixed a schedule's `archiveOnFinish` and its edits being dropped on save, so the form never closed and the workspace was always archived
+- Fixed imported sessions: the daemon now reads real Claude and pi transcripts, reports `agent_resumed`, and refuses a session that is already imported
+- Fixed the sidebar losing a project row after archiving its only workspace
+- Fixed turning a workspace label off saving an empty list instead of no labels
+- Fixed `git remote get-url` being trusted for the forge URL, which a repository that rewrites `insteadOf` serves as a local mirror path
+- Fixed two settings the daemon wrote but never announced, so the composer kept the old model and the host page never showed an update
+
+### Security
+
+- Moved the pinned Node to 22.23.4 and refreshed the container's certificate bundle, because Mozilla dropped the eMudhra emSign G3/C1/C3 roots and the Comodo AAA root on 2026-10-20 after all eight intermediate CA private keys turned out to be generated from a 1-3 bit random value
+
 ## 0.20.2 - 2026-10-18
 
 ### Added

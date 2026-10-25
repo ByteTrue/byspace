@@ -47,3 +47,15 @@ func killProcessGroup(cmd *exec.Cmd, force bool) error {
 	}
 	return nil
 }
+
+// ownProcessGroup puts a hand-started child in its own group.
+//
+// Used where the process must be started manually (pipes are wired before Start), so the caller
+// cannot go through defaultStartProcess. Without it, killing the child leaves its descendants
+// holding the stdout pipe, and the drain goroutines never see EOF.
+func ownProcessGroup(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+}
