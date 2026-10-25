@@ -106,6 +106,16 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		if entries, loadErr := LoadClaudeTimelineFromJSONL(cfg.SessionHandle); loadErr == nil && len(entries) > 0 {
 			s.timeline = entries
 		}
+	} else if cfg.SessionHandle != "" {
+		// Resuming by session id: the process the CLI starts knows the conversation, but this
+		// transport cannot ask it for the transcript, and an imported session has no provider-side
+		// history to replay. Node loads it from disk at construction for the same reason.
+		if path := FindClaudeTranscript(cfg.SessionHandle, cfg.Cwd, ""); path != "" {
+			s.sessionFile = path
+			if entries, loadErr := LoadClaudeTimelineFromJSONL(path); loadErr == nil && len(entries) > 0 {
+				s.timeline = entries
+			}
+		}
 	}
 	proc.OnEvent(s.handleRawEvent)
 	return s, nil
