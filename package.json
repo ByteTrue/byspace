@@ -92,7 +92,11 @@
     "version:sync-internal": "node scripts/sync-workspace-versions.mjs",
     "watch:client": "tsc -p packages/client/tsconfig.json --watch --preserveWatchOutput",
     "watch:protocol": "npm run watch --workspace=@bytetrue/protocol",
-    "web": "npm run web --workspace=@bytetrue/app"
+    "web": "npm run web --workspace=@bytetrue/app",
+    "deploy:hosted": "npm run deploy --workspace=@bytetrue/relay",
+    "deploy:hosted:beta": "npm run deploy:beta --workspace=@bytetrue/relay",
+    "deploy:relay-go": "npm run deploy --workspace=byspace-relay-go",
+    "deploy:relay-go:beta": "npm run deploy --workspace=byspace-relay-go -- --env beta"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",
