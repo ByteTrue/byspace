@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/relay",
-  "version": "0.20.2",
+  "version": "0.21.0-beta.1",
   "description": "BySpace E2EE channel primitives shared by the web client (relay server moved to internal/relay and archive/)",
   "files": [
     "dist",
