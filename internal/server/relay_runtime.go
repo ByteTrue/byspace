@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -79,11 +81,27 @@ func (r *relayRuntime) Apply(parent context.Context, cfg RelayConfig, connect fu
 //
 // Ported from relay-transport.ts. A fixed short retry hammers a relay that is down for a while
 // and gives no signal that the outage is long.
+//
+// The first failure and every change of error is logged. Without that, a wrong endpoint, a
+// rejected handshake or a revoked relay looked exactly like a daemon that had simply not tried:
+// the settings page claimed the relay was on, phones timed out, and nothing in the log said why.
 func (r *relayRuntime) supervise(ctx context.Context, cfg RelayConfig, connect func(context.Context, string) error) {
 	attempt := 0
+	var lastErr string
 	for ctx.Err() == nil {
-		_ = connect(ctx, cfg.Endpoint)
+		err := connect(ctx, cfg.Endpoint)
+		if ctx.Err() != nil {
+			return
+		}
 		attempt++
+		if err != nil {
+			if message := err.Error(); message != lastErr {
+				fmt.Fprintf(os.Stderr, "relay: %s unreachable (attempt %d): %v\n", cfg.Endpoint, attempt, err)
+				lastErr = message
+			}
+		} else {
+			lastErr = ""
+		}
 		delay := time.Duration(attempt) * time.Second
 		if delay > 30*time.Second {
 			delay = 30 * time.Second
