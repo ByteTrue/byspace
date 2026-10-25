@@ -1233,8 +1233,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "agent.skills.get_status.request", "agent.skills.reconcile.request", "agent.skills.uninstall.request":
-		s.skillsMu.Lock()
-		defer s.skillsMu.Unlock()
 		cfg := s.store.LoadDaemonConfig()
 		sel, ok := cfg["skillsSelection"].(map[string]any)
 		if !ok || sel == nil {
@@ -1278,8 +1276,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "agent.skills.save_selection.request":
-		s.skillsMu.Lock()
-		defer s.skillsMu.Unlock()
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
@@ -1354,8 +1350,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "agent.skills.import_legacy_selection.request":
-		s.skillsMu.Lock()
-		defer s.skillsMu.Unlock()
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`

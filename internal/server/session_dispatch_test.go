@@ -34,3 +34,31 @@ func TestSessionMessageNeedsOrderCoversStateRegistrations(t *testing.T) {
 		}
 	}
 }
+
+// Skills commands are applied in arrival order by the server's serial queue. They cannot run
+// inline (each one scans and rewrites the skills directories) but they must not race either, so the
+// read loop must route them through the queue rather than the generic concurrent path.
+func TestSessionMessageSerializesSkillsCommands(t *testing.T) {
+	for _, msgType := range []string{
+		"agent.skills.get_status.request",
+		"agent.skills.reconcile.request",
+		"agent.skills.uninstall.request",
+		"agent.skills.save_selection.request",
+		"agent.skills.import_legacy_selection.request",
+	} {
+		raw, _ := json.Marshal(map[string]any{"type": msgType, "requestId": "r1"})
+		if !sessionMessageSerializes(raw) {
+			t.Errorf("%s rewrites the skills directories and must run through the queue", msgType)
+		}
+		if sessionMessageNeedsOrder(raw) {
+			t.Errorf("%s must not block the read loop", msgType)
+		}
+	}
+
+	for _, msgType := range []string{"send_agent_message_request", "get_providers_snapshot_request"} {
+		raw, _ := json.Marshal(map[string]any{"type": msgType})
+		if sessionMessageSerializes(raw) {
+			t.Errorf("%s does not touch the skills directories", msgType)
+		}
+	}
+}

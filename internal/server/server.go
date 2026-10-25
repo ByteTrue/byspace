@@ -180,11 +180,12 @@ type Server struct {
 	// only thing that tells the two apart.
 	submittedPromptMu   sync.Mutex
 	submittedPromptSeqs map[string]map[string]int
-	// skillsMu serializes the skills commands. Each one takes a snapshot of the skills on disk,
-	// decides a plan from it, and then copies and deletes to match; two of them interleaved apply
-	// plans computed from each other's half-finished state, and the loser's skills stay installed.
-	// Node runs every skills command through one queue for the same reason.
-	skillsMu sync.Mutex
+	// skillsQueue applies skills commands in arrival order. Each one takes a snapshot of the skills
+	// on disk, decides a plan from it, and then copies and deletes to match; two of them interleaved
+	// apply plans computed from each other's half-finished state, and a plain mutex would let
+	// whichever goroutine reached the lock first decide which selection survives. Node chains every
+	// command onto one promise queue for the same reason.
+	skillsQueue *serialQueue
 	// workspaceStatusBuckets caches each workspace's aggregated state bucket. The descriptor
 	// carries it, and a listing builds one descriptor per row, so aggregating every agent per
 	// row would turn one response into N record scans. Refreshed wherever an agent or a
@@ -366,10 +367,12 @@ func New(opts Options) (*Server, error) {
 		timelineViews:         make(map[frameSink]map[string]bool),
 		selectiveTimeline:     make(map[frameSink]bool),
 		pollStop:              make(chan struct{}),
+		skillsQueue:           newSerialQueue(),
 	}
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
 	// config.daemon.hostnames takes precedence when present.
 	srv.allowedHostnames = resolveAllowedHostnames(st)
+	srv.skillsQueue.start()
 	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
 	go func() {
@@ -971,6 +974,15 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 			s.handleSessionMessage(ctx, sink, envelope.Message)
 			return
 		}
+		if sessionMessageSerializes(envelope.Message) {
+			// Enqueued inline so the queue sees the frames in arrival order, but run by the
+			// queue's worker so a slow skills command still does not block the read loop.
+			message := envelope.Message
+			s.skillsQueue.enqueue(func() {
+				s.handleSessionMessage(context.WithoutCancel(ctx), sink, message)
+			})
+			return
+		}
 		go func(ctx context.Context, raw json.RawMessage) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
@@ -982,6 +994,18 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 			s.handleSessionMessage(context.WithoutCancel(ctx), sink, raw)
 		}(ctx, envelope.Message)
 	}
+}
+
+// sessionMessageSerializes lists the messages that must be applied in arrival order but may block.
+// The skills commands plan from a snapshot of the skills on disk and then copy and delete to match
+// it, so two of them interleaved apply plans computed from each other's half-finished state — and
+// a plain mutex would let whichever goroutine wins the race decide which selection survives.
+func sessionMessageSerializes(raw json.RawMessage) bool {
+	var head struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(raw, &head)
+	return strings.HasPrefix(head.Type, "agent.skills.")
 }
 
 // sessionMessageNeedsOrder lists the messages that register socket-scoped state a following

@@ -34,6 +34,7 @@
 - Fixed terminals ignoring the size a reconnecting client asked to restore, so splitting the pane left the PTY at the old row count
 - Fixed the terminal tab title being overwritten by the terminal name, and the activity indicator never clearing after a hook reported attention
 - Fixed workspace scripts not running in a terminal, so their output never appeared and stopping one left the process running
+- Fixed two skill selections saved at the same time leaving the earlier one installed, because the daemon ran them concurrently instead of in the order they arrived
 - Fixed the archive prompt not warning about a worktree whose branch has unpushed commits
 - Fixed the tunnel dropping open streams across a brief reconnect, and fixed the daemon not reconnecting the relay at all when configured with a plain `host:port`
 - Fixed a failed remote daemon update reporting no progress, so the host page kept its old button while the download ran
