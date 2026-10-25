@@ -271,7 +271,7 @@ func GetProviderSpec(providerID string) ProviderSpec {
 		return preset
 	}
 	// The scripted providers are addressable by id but are not part of the product's built-in list.
-	for _, spec := range TestProviders {
+	for _, spec := range registeredTestProviders() {
 		if spec.ID == id {
 			return spec
 		}
@@ -378,21 +378,15 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 
 	// The scripted providers follow the built-ins, matching node's registry which lists every registered
 	// provider. Their models have to be in the catalog for the model picker to offer them.
-	for _, spec := range TestProviders {
-		// The slow provider is registered so its id resolves, but it advertises itself as
-		// unavailable unless the development switch is on: node's isAvailable() does the same, and a
-		// provider that never answers must not look like a working one in the picker.
+	// Only registered scripted providers appear here, so nothing needs a per-entry availability
+	// gate: an id that is absent from the list is one the daemon does not offer at all.
+	for _, spec := range registeredTestProviders() {
 		status := "ready"
-		enabled := true
-		if spec.ID == MockSlowProviderID && !mockSlowEnabled() {
-			status = "unavailable"
-			enabled = false
-		}
 		entries = append(entries, map[string]any{
 			"provider":    spec.ID,
 			"label":       spec.Label,
 			"status":      status,
-			"enabled":     enabled,
+			"enabled":     true,
 			"source":      "builtin",
 			"fetchedAt":   now,
 			"models":      spec.Models,
@@ -443,7 +437,7 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 			"provider":    id,
 			"label":       label,
 			"status":      status,
-			"enabled":     enabled,
+			"enabled":     true,
 			"source":      "custom",
 			"fetchedAt":   now,
 			"models":      MergeProviderModels(id, cfgMap, runtimeModels),

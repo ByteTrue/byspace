@@ -219,10 +219,22 @@ func ResolveMockModel(modelID string) MockModel {
 
 // TestProviders are addressable providers that are not part of the product's six built-ins.
 //
-// Node registers `mock` and `mock-slow` unconditionally in provider-registry.ts, so an agent can be created
-// with either id. Keeping them out of BuiltinProviders preserves "the product ships six providers" while
-// still letting the end-to-end specs create agents with `provider: "mock"`.
-var TestProviders = []ProviderSpec{MockProvider, MockSlowProvider}
+// Keeping them out of BuiltinProviders preserves "the product ships six providers" while still
+// letting the end-to-end specs create agents with `provider: "mock"`.
+var TestProviders = []ProviderSpec{MockProvider}
+
+// registeredTestProviders returns the scripted providers this process exposes.
+//
+// `mock-slow` is registered only when it is switched on, matching the node daemon: there it exists
+// only when the registry is built with `isDev`, and its `isAvailable()` reports the same env flag.
+// Registering it unconditionally would put a second provider in every catalog, which changes the
+// model the composer resolves as its default.
+func registeredTestProviders() []ProviderSpec {
+	if mockSlowEnabled() {
+		return append(append([]ProviderSpec{}, TestProviders...), MockSlowProvider)
+	}
+	return TestProviders
+}
 
 // MockSlowProviderID is a development-only provider whose catalog never resolves.
 //
@@ -231,16 +243,16 @@ var TestProviders = []ProviderSpec{MockProvider, MockSlowProvider}
 // behind BYSPACE_ENABLE_MOCK_SLOW so a normal build never shows it to a user.
 const MockSlowProviderID = "mock-slow"
 
-// MockSlowProvider is registered but unavailable unless BYSPACE_ENABLE_MOCK_SLOW=true.
+// MockSlowProvider is registered only when BYSPACE_ENABLE_MOCK_SLOW=true.
 var MockSlowProvider = ProviderSpec{
 	ID:          MockSlowProviderID,
 	Label:       "Mock Slow",
 	Description: "Development-only provider whose catalog never resolves, for exercising snapshot timeouts",
 	Binary:      MockSlowProviderID,
 	Protocol:    "acp",
-	Models: []sdk.CatalogModel{
-		{Provider: MockSlowProviderID, ID: "mock-slow-default", Label: "Mock Slow Default", IsDefault: true, IsSelectable: true},
-	},
+	// No models on purpose. Node's mock-slow provider never answers fetchCatalog, so its snapshot
+	// entry keeps the initial (empty) model list — advertising one here would make the picker treat
+	// it as a usable provider and change what the composer shows.
 }
 
 // mockSlowEnabled reports whether the development-only slow provider is switched on.

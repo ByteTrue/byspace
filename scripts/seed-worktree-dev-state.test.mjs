@@ -39,8 +39,17 @@ test("keeps worktree setup commands portable across PowerShell and POSIX shells"
   assert.deepEqual(byspaceConfig.worktree.setup, [
     "npm ci",
     "node ./scripts/seed-worktree-dev-state.mjs",
-    "npm run build:server",
+    "make build",
   ]);
+});
+
+// `make` is the only way to produce the daemon now, and a worktree without it has no binary for the
+// e2e fixture to start. The portability rule still holds: no shell syntax, no `&&`, no redirection —
+// every command has to run unchanged under PowerShell and a POSIX shell.
+test("worktree setup stays free of shell syntax", () => {
+  for (const command of byspaceConfig.worktree.setup) {
+    assert.doesNotMatch(command, /[&|;><$`]/, `shell syntax in worktree setup: ${command}`);
+  }
 });
 
 test("seeds durable BySpace metadata and server env without shell syntax", () => {

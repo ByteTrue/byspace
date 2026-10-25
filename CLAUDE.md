@@ -55,6 +55,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/agent-stream-performance.md](docs/agent-stream-performance.md) | Assistant text pipeline — coalescing window, paced reveal, why arrival lumps are smoothed at render                            |
 | [docs/file-observation.md](docs/file-observation.md)                 | Recursive watcher ownership, Linux constraints, teardown invariants, and Parcel comparison                                     |
 | [docs/go-parity-audit.md](docs/go-parity-audit.md)                   | Go 版本对齐审计 — 四个检查各挡什么、基线守卫、出站审计的下钻与局限                                                             |
+| [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 何时读、怎么读、能回答什么、四个对齐守卫、何时可以删                                                    |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                                      |
 | [docs/mobile-panels.md](docs/mobile-panels.md)                       | Compact left/center/right panel ownership, worklet motion, gesture revisions, and Fabric constraints                           |
