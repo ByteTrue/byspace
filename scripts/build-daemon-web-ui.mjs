@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,10 @@ const SOURCE_DIST = path.join(APP_DIR, "dist");
 // The Node daemon used to serve this bundle from packages/server/dist. That package is now
 // archived; the Go binary embeds the bundle directly via //go:embed internal/webui/dist.
 const TARGET_DIST = path.join(REPO_ROOT, "internal", "webui", "dist");
+// Git tracks this empty file so the embed directory exists in a fresh clone. Wiping the directory
+// deletes it, which leaves the worktree dirty — and the release packer refuses a dirty worktree, so
+// every `release:*` command failed right after building the bundle.
+const TARGET_KEEP = path.join(TARGET_DIST, ".keep");
 const COMPRESS_EXTENSIONS = new Set([".html", ".js", ".css", ".json", ".svg", ".map"]);
 
 function fmtMiB(bytes) {
@@ -48,6 +52,7 @@ async function cleanTarget() {
   console.log(`Cleaning ${path.relative(REPO_ROOT, TARGET_DIST)}...`);
   await rm(TARGET_DIST, { recursive: true, force: true });
   await mkdir(TARGET_DIST, { recursive: true });
+  await writeFile(TARGET_KEEP, "");
 }
 
 async function copyAssets() {
