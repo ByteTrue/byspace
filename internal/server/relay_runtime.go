@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -150,16 +151,55 @@ func relayConfigFromStore(cfg map[string]any) RelayConfig {
 	if endpoint, ok := relay["endpoint"].(string); ok {
 		out.Endpoint = strings.TrimSpace(endpoint)
 	}
+	useTLSSet := false
 	if useTLS, ok := relay["useTls"].(bool); ok {
 		out.UseTLS = useTLS
+		useTLSSet = true
 	}
 	if endpoint, ok := relay["publicEndpoint"].(string); ok {
 		out.PublicEndpoint = strings.TrimSpace(endpoint)
 	}
+	publicUseTLSSet := false
 	if useTLS, ok := relay["publicUseTls"].(bool); ok {
 		out.PublicUseTLS = useTLS
+		publicUseTLSSet = true
+	}
+	// An endpoint with no `useTls` beside it still says how to reach it: the hosted relays answer
+	// on 443, and an operator who writes one without thinking about TLS means TLS. Leaving the
+	// zero value produced `ws://<host>:80/ws`, which never connects, and pairing offers carrying
+	// `:80`/`useTls:false` that the client then tried to open over plaintext.
+	if !useTLSSet {
+		out.UseTLS = relayEndpointImpliesTLS(out.Endpoint)
+	}
+	if !publicUseTLSSet {
+		// The public endpoint defaults to the internal one, so an absent public TLS flag follows
+		// whatever the internal one resolved to rather than re-deriving from an empty host.
+		if out.PublicEndpoint == "" {
+			out.PublicUseTLS = out.UseTLS
+		} else {
+			out.PublicUseTLS = relayEndpointImpliesTLS(out.PublicEndpoint)
+		}
 	}
 	return out
+}
+
+// relayEndpointImpliesTLS reports whether an endpoint only makes sense over TLS.
+func relayEndpointImpliesTLS(endpoint string) bool {
+	ep := strings.TrimSpace(endpoint)
+	if ep == "" {
+		return false
+	}
+	if strings.HasPrefix(ep, "wss://") || strings.HasPrefix(ep, "https://") {
+		return true
+	}
+	if strings.HasPrefix(ep, "ws://") || strings.HasPrefix(ep, "http://") {
+		return false
+	}
+	if _, port, err := net.SplitHostPort(ep); err == nil {
+		return port == "443"
+	}
+	// A bare host is dialled at the scheme default, and every hosted relay is a bare host on 443.
+	return true
 }
 
 // ClientRelayEndpoint is the endpoint a client should dial, preferring the public one.
@@ -211,8 +251,13 @@ func (s *Server) ApplyRelayConfig(ctx context.Context) {
 	override := s.relayOverride
 	s.mu.Unlock()
 	if override != "" {
+		// The flag is the whole configuration for this run: an operator who launches the daemon
+		// with `--relay` means that endpoint, and `--relay-use-tls` says how to reach it. Without
+		// reading the flag here it was parsed, stored, and never consulted, so `--relay-use-tls`
+		// did nothing and the connection was dialled over plaintext.
 		cfg.Enabled = true
 		cfg.Endpoint = override
+		cfg.UseTLS = s.relayUseTLS || relayEndpointImpliesTLS(override)
 	}
 	s.relay.Apply(ctx, cfg, func(ctx context.Context, endpoint string) error {
 		return s.ConnectRelay(ctx, relayWebSocketURL(endpoint, cfg.UseTLS))

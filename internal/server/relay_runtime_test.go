@@ -115,3 +115,60 @@ func TestRelayConfigClientEndpointPrefersPublic(t *testing.T) {
 		t.Error("public TLS flag not preferred")
 	}
 }
+
+func TestRelayConfigInfersTLSFromTheEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		relay    map[string]any
+		wantTLS  bool
+		wantPort string
+	}{
+		{
+			name:    "hosted host with no useTls is TLS",
+			relay:   map[string]any{"enabled": true, "endpoint": "app-beta.byspace.cc.cd"},
+			wantTLS: true,
+		},
+		{
+			name:    "explicit 443 is TLS",
+			relay:   map[string]any{"enabled": true, "endpoint": "relay.byspace.cc.cd:443"},
+			wantTLS: true,
+		},
+		{
+			name:    "explicit non-443 port is plaintext",
+			relay:   map[string]any{"enabled": true, "endpoint": "127.0.0.1:6767"},
+			wantTLS: false,
+		},
+		{
+			name:    "an explicit useTls wins over the port",
+			relay:   map[string]any{"enabled": true, "endpoint": "127.0.0.1:6767", "useTls": true},
+			wantTLS: true,
+		},
+		{
+			name:    "a wss url is TLS",
+			relay:   map[string]any{"enabled": true, "endpoint": "wss://relay.example.com/ws"},
+			wantTLS: true,
+		},
+		{
+			name:    "a ws url is plaintext",
+			relay:   map[string]any{"enabled": true, "endpoint": "ws://relay.example.com/ws", "useTls": true},
+			wantTLS: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := relayConfigFromStore(map[string]any{"relay": tc.relay})
+			// An explicit useTls in the map must survive; only an absent one is inferred.
+			if _, set := tc.relay["useTls"]; set {
+				if cfg.UseTLS != tc.wantTLS {
+					t.Fatalf("UseTLS = %v, want %v", cfg.UseTLS, tc.wantTLS)
+				}
+				return
+			}
+			if cfg.UseTLS != tc.wantTLS {
+				t.Fatalf("UseTLS for %q = %v, want %v", tc.relay["endpoint"], cfg.UseTLS, tc.wantTLS)
+			}
+			if cfg.PublicUseTLS != cfg.UseTLS {
+				t.Fatalf("PublicUseTLS = %v, want it to follow UseTLS %v", cfg.PublicUseTLS, cfg.UseTLS)
+			}
+		})
+	}
+}

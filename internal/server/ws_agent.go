@@ -1387,6 +1387,18 @@ func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw 
 	// link that can never connect — a scanned QR that silently fails is worse than "enable the
 	// relay first".
 	relayCfg := relayConfigFromStore(s.store.LoadDaemonConfig())
+	// A `--relay` flag outranks the stored config: an operator who launched the daemon pointed
+	// somewhere means it, and handing out an offer for the stored endpoint would send devices to
+	// a relay this daemon is not connected to.
+	s.mu.Lock()
+	if override := s.relayOverride; override != "" {
+		relayCfg.Enabled = true
+		relayCfg.Endpoint = override
+		relayCfg.PublicEndpoint = override
+		relayCfg.UseTLS = s.relayUseTLS || relayEndpointImpliesTLS(override)
+		relayCfg.PublicUseTLS = relayCfg.UseTLS
+	}
+	s.mu.Unlock()
 	if !relayCfg.Enabled || strings.TrimSpace(relayCfg.Endpoint) == "" {
 		_ = sendSessionMsg(ctx, sink, "daemon.get_pairing_offer.response", map[string]any{
 			"requestId":    req.RequestID,

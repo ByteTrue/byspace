@@ -218,6 +218,9 @@ type Server struct {
 	relay *relayRuntime
 	// relayOverride is a --relay flag that outranks the stored config.
 	relayOverride string
+	// relayUseTLS mirrors `serve --relay-use-tls`, which the stored config cannot express for a
+	// flag-only endpoint.
+	relayUseTLS bool
 	// clientPresence is what connected clients report about themselves, used to suppress
 	// notifications for an agent the user is already looking at.
 	clientPresence []attention.ClientPresence
@@ -339,6 +342,7 @@ func New(opts Options) (*Server, error) {
 		listenAddr:            opts.ListenAddr,
 		capabilityToken:       capabilityToken,
 		relay:                 newRelayRuntime(RelayConfig{}),
+		relayUseTLS:           opts.RelayUseTLS,
 		serverID:              serverID,
 		version:               ver,
 		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
