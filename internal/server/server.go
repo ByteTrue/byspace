@@ -599,6 +599,13 @@ func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
 
 // ConnectRelay maintains a v2 server-control connection to a Relay and spawns E2EE
 // server-data sessions whenever a client connects.
+// The relay watchdog's cadence is a variable so a test can observe several rounds without
+// waiting half a minute. Nothing else changes them.
+var (
+	relayPingInterval = 10 * time.Second
+	relayPingTimeout  = 5 * time.Second
+)
+
 func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 	u, err := url.Parse(relayWSURL)
 	if err != nil {
@@ -618,27 +625,28 @@ func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 
 	// A relay that vanishes without a FIN leaves the socket half-open: `Read` never returns and
 	// `Close` never arrives, so the daemon believes it is still reachable while phones time out.
-	// Protocol pings detect that, and an unanswered ping for 30s forces a reconnect.
-	// Cloudflare answers ping at the edge without waking the hibernated Durable Object, so this
-	// does not bill DO CPU.
+	// The protocol ping is the only probe that answers on an otherwise silent connection — the
+	// control channel sends one `sync` and then nothing until a device connects. Treating a
+	// successful pong as the liveness signal is what makes this a watchdog rather than a timer
+	// that disconnects a healthy relay. Cloudflare answers ping at the edge without waking the
+	// hibernated Durable Object, so this does not bill DO CPU.
 	pingCtx, stopPing := context.WithCancel(ctx)
 	defer stopPing()
-	lastSeen := time.Now()
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(relayPingInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-pingCtx.Done():
 				return
 			case <-ticker.C:
-				if time.Since(lastSeen) > 30*time.Second {
+				pctx, cancel := context.WithTimeout(pingCtx, relayPingTimeout)
+				err := ctrlWS.Ping(pctx)
+				cancel()
+				if err != nil && pingCtx.Err() == nil {
 					ctrlWS.CloseNow()
 					return
 				}
-				pctx, cancel := context.WithTimeout(pingCtx, 5*time.Second)
-				_ = ctrlWS.Ping(pctx)
-				cancel()
 			}
 		}
 	}()
@@ -680,7 +688,6 @@ func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 		if err != nil {
 			return err
 		}
-		lastSeen = time.Now()
 		var evt struct {
 			Type          string   `json:"type"`
 			ConnectionID  string   `json:"connectionId"`
