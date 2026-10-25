@@ -36,6 +36,9 @@
   "env": {
     "beta": {
       "name": "byspace-relay-go-beta",
+      // The beta channel answers on the same hostname the TypeScript Worker used, so
+      // the beta PWA and its relay share one origin exactly like production does.
+      "routes": [{ "pattern": "app-beta.byspace.cc.cd", "custom_domain": true }],
       // Wrangler does not inherit top-level bindings or migrations into a named
       // environment; the beta Worker needs its own. Without these the deploy
       // succeeds and every socket answers 500 because RELAY is unbound.
