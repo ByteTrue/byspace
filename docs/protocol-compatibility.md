@@ -86,7 +86,7 @@ The relay is a separate deployable (hosted Worker, self-hosted Node container), 
 - Frame type is part of the contract: text must arrive as text, binary as binary. `ws` reports it separately from the value (both arrive as a `Buffer`), so inferring "not a string therefore binary" silently converts the plaintext hello and the daemon rejects the handshake. `node-adapter.ts` threads `isBinary` through `normalizeIncoming` for this reason.
 - The relay never inspects message payloads beyond plaintext handshake frames; E2EE applies to everything after `e2ee_hello`/`e2ee_ready`.
 
-Behavioral spec: `packages/relay/src/cloudflare-adapter.ts` (production) and `packages/relay/src/node-adapter.ts` (self-hosted, issue 061). Node e2e (`node-relay-e2e.test.ts`) asserts parity with the Worker. Changes to these semantics are protocol-breaking and need the same two-questions treatment as schema changes.
+Behavioral spec: `packages/relay/src/cloudflare-adapter.ts` (production Worker) and `internal/relay/relay.go` (self-hosted, the Go binary's `relay` subcommand). The two are independent implementations of the same wire contract — the Worker keeps the legacy `node-adapter.ts` semantics for `isBinary`, so a change on one side has to be made on the other. Changes to these semantics are protocol-breaking and need the same two-questions treatment as schema changes.
 
 ## QA
 
