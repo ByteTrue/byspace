@@ -6,15 +6,17 @@ BySpace is a mobile app for monitoring and controlling your local AI coding agen
 
 ## Repository map
 
-This is an npm workspace monorepo:
+This is an npm workspace monorepo with a Go daemon:
 
-- `packages/server` — Daemon: agent lifecycle, WebSocket API, MCP server
+- `internal/` — The daemon and CLI, written in Go (server, agent providers, workspace/git, terminal, `relay` subcommand, embedded web UI)
+- `cmd/byspace` — The `byspace` binary's entry point
+- `workers/relay` — The relay compiled to wasm and run as a Cloudflare Durable Object
 - `packages/app` — Web/PWA client (Expo, web-only build)
-- `packages/cli` — Docker-style CLI (`byspace run/ls/logs/wait`)
-- `packages/relay` — E2E encrypted relay for remote access
+- `packages/relay` — E2E encryption primitives and the TypeScript Worker the hosted domains run
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade
 - `packages/highlight` — Cross-package syntax highlighting
+- `archive/` — The retired Node daemon, CLI and relay, kept as the reference implementation
 
 Native mobile (`packages/app/ios`, `android`) and the Electron desktop wrapper were
 retired in issue 025. `packages/app` builds only for web.
@@ -93,10 +95,11 @@ Do not:
 ## Quick start
 
 ```bash
-npm run dev                          # Start the dev daemon
+npm run dev                          # Start the Go dev daemon (runs make build first)
 npm run dev:app                      # Start Expo against the dev daemon
 npm run cli -- ls -a -g              # List all agents
 npm run cli -- daemon status         # Check daemon status
+npm run test:go                      # Go tests
 npm run typecheck                    # Always run after changes
 npm run lint                         # Always run after changes
 npm run format                       # Auto-format with Biome
@@ -133,8 +136,9 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 - **Before handing back Go work, run `npm run audit`.** It chains the four checks that catch what unit tests miss: `go test ./...`, inbound field parity, outbound field parity, and real-browser conformance. Each one guards a different failure mode — a field the daemon does not parse, a field it does not send, and a payload that is sent but invalid. `--no-browser` skips the browser step when no daemon is running. 详见 `docs/go-parity-audit.md`。
 - **Build workspace packages before diagnosing cross-package type errors.** This repo consumes generated declarations across workspaces. If typecheck fails in a package that depends on another workspace, rebuild the owning stack first so `dist` declarations are current:
   - `npm run build:client` — rebuild protocol and client declarations.
-  - `npm run build:server` — rebuild highlight, relay, protocol, client, server, and CLI when server/CLI types may be stale.
+  - `npm run build:relay` — rebuild the relay package's declarations.
   - Do not patch inferred callback parameters or add local duplicate types just to silence stale declaration errors.
+- **Go code is built with `make build`.** It produces `./bin/byspace`, which the e2e suite and `npm run cli` both use, so a Go change is invisible until you rebuild. `gofmt -w` is the Go formatter — `npm run format` only handles JS/TS.
 - **Run `npm run format` before committing.** This repo uses Biome for formatting. Do not manually fix formatting — let the formatter handle it.
 - **Always use npm scripts for linting and formatting.** Do not run tools directly with `npx eslint`, `npx oxfmt`, `npx oxlint`, or package-local binaries. For targeted checks, pass file paths through the npm script:
   - `npm run lint -- packages/app/src/components/message.tsx`
