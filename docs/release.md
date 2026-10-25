@@ -1,6 +1,6 @@
 # Release
 
-Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checkout.
+Use Node 22.23.4 and npm 10.9.9. Run release commands from a clean `main` checkout.
 
 ## Published targets
 

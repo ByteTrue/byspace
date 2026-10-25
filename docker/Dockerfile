@@ -65,9 +65,25 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
       go build -trimpath -ldflags "-s -w -X main.version=${BYSPACE_VERSION}" \
       -o /out/byspace ./cmd/byspace
 
+FROM --platform=$BUILDPLATFORM debian:12-slim AS trust
+
+# Refresh the root store instead of inheriting whatever the base image shipped.
+# Mozilla dropped the eMudhra emSign G3/C1/C3 roots and the Comodo AAA root on
+# 2026-10-20, after all eight intermediate CA private keys turned out to be
+# generated from a 1-3 bit random value: a runtime holding the pre-2026-10-20
+# bundle keeps trusting them, so anything fetched over TLS stays open to
+# interception with a forged intermediate. The Go binary dials gh, npm and the
+# relay, so it needs the tightened bundle, and the distroless base carries its
+# own copy that cannot be apt-get'd into place from here.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates; \
+    rm -rf /var/lib/apt/lists/*
+
 FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.source="https://github.com/ByteTrue/byspace"
 
+COPY --from=trust /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=binary /out/byspace /usr/local/bin/byspace
 
 # The web export is embedded in the binary at build time (internal/webui/dist);
