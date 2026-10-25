@@ -309,7 +309,34 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 served by the hosted relay Worker (issue 073) from the same origin as the
 relay — deploy with `npm run deploy:hosted` (or `:beta`) from the repo root,
 which builds the web export and runs `wrangler deploy` in `packages/relay`.
-The Docker container serves the same shape from the Node relay.
+The Docker container serves the same shape from the Go relay.
+
+## The Go relay Worker
+
+`workers/relay` compiles `internal/relay` to wasm and runs it inside a Cloudflare
+Durable Object. It is a separate Worker from `packages/relay` — that one still
+serves the hosted `relay.byspace.cc.cd` / `app.byspace.cc.cd` origins.
+
+```bash
+cd workers/relay
+npm run dev          # wrangler dev --local, rebuilds the wasm first
+npm run deploy       # wrangler deploy — publishes byspace-relay-go
+```
+
+`npm run build` inside that directory is the two-step build: `workers-assets-gen`
+writes the JS entry point that declares the Durable Object class, then the Go
+compiler emits the wasm it loads. The class name `RelayRoom` appears in three
+places that must agree — `main.go`, `wrangler.jsonc`, and `build.mjs`.
+
+The wasm is 2.1 MiB gzipped, which is what keeps it inside the free plan's 3 MiB
+limit; growing the relay's dependency graph matters for that reason alone. Do not
+import `coder/websocket` into anything reachable from `workers/relay` — the
+shared core in `internal/relay/protocol.go` exists so the wasm build never links
+a socket library.
+
+`go test ./...` does not see `workers/relay` (it is behind `js && wasm`), so CI
+compiles it explicitly. A plain `go build ./workers/relay/` also drops a `relay`
+binary in the repository root — pass `-o /dev/null`.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
