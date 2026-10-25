@@ -62,13 +62,11 @@ func newRoom(_ *durableobjects.DurableObjectState, _ js.Value) (durableobjects.O
 
 // ServeHTTP handles the object's fetch trigger: the /ws handshake.
 func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// The object only ever sees upgrades that already passed the Worker's checks;
+	// it still validates so a direct object fetch cannot skip them.
 	conn, problem := relay.NewConnection(req.URL.Query())
 	if problem != "" {
 		http.Error(w, problem, http.StatusBadRequest)
-		return
-	}
-	if req.URL.Path != "/ws" {
-		http.Error(w, "Not found", http.StatusNotFound)
 		return
 	}
 
@@ -142,9 +140,20 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 		return
 	}
-	serverID := strings.TrimSpace(req.URL.Query().Get("serverId"))
-	if serverID == "" {
-		http.Error(w, "Missing serverId parameter", http.StatusBadRequest)
+	if req.URL.Path != "/ws" {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	// Validate here, not only inside the object: a request that cannot be
+	// upgraded must not wake a Durable Object, and it deserves the same 400/426
+	// the TypeScript worker answered with.
+	conn, problem := relay.NewConnection(req.URL.Query())
+	if problem != "" {
+		http.Error(w, problem, http.StatusBadRequest)
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(req.Header.Get("Upgrade")), "websocket") {
+		http.Error(w, "Expected WebSocket upgrade", http.StatusUpgradeRequired)
 		return
 	}
 
@@ -153,7 +162,10 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stub, err := ns.Get(ns.IdFromName(serverID))
+	// One object per version and server, not per server: v1 routes frames by role
+	// alone, so a v1 socket sharing a room with v2 sockets would broadcast to
+	// them. The TypeScript worker isolated the versions the same way.
+	stub, err := ns.Get(ns.IdFromName(conn.RoomKey()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
