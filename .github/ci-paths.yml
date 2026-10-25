@@ -32,6 +32,7 @@ quality:
 go:
   - "cmd/**"
   - "internal/**"
+  - "workers/**"
   - "go.mod"
   - "go.sum"
   - "Makefile"

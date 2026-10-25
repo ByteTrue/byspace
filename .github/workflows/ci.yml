@@ -180,6 +180,12 @@ jobs:
           BYSPACE_DICTATION_ENABLED: "0"
           BYSPACE_VOICE_MODE_ENABLED: "0"
 
+      # workers/relay is behind a js/wasm build tag, so go test ./... never sees
+      # it. Compiling it here is what keeps a broken Worker from reaching main:
+      # the failure would otherwise only show up on the next wrangler deploy.
+      - name: Compile the relay Worker
+        run: GOOS=js GOARCH=wasm go build ./workers/relay/
+
   go-tests-windows:
     name: go-tests (windows-latest)
     needs: changes
