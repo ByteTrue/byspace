@@ -2,25 +2,24 @@ package server
 
 import "testing"
 
-func TestBuildPairingOfferFillsTheRelayPortAndDerivesTheAppURL(t *testing.T) {
-	s := &Server{serverID: "srv_x", pubKeyB64: "pk", version: "0.21.0-beta.1"}
+func TestBuildPairingOfferUsesTheChannelAppOrigin(t *testing.T) {
 	cases := []struct {
 		name     string
+		version  string
 		endpoint string
-		useTLS   bool
 		appBase  string
 		want     string
 	}{
-		{"beta app host", "app-beta.byspace.cc.cd", true, "", "https://app-beta.byspace.cc.cd/#offer="},
-		{"beta app host with port", "app-beta.byspace.cc.cd:443", true, "", "https://app-beta.byspace.cc.cd/#offer="},
-		{"stable app host", "app.byspace.cc.cd", true, "", "https://app.byspace.cc.cd/#offer="},
-		{"relay host falls back to the channel", "relay.byspace.cc.cd", true, "", "https://app-beta.byspace.cc.cd/#offer="},
-		{"self-hosted falls back to the channel", "relay.example.com", false, "", "https://app-beta.byspace.cc.cd/#offer="},
-		{"explicit app base wins", "app-beta.byspace.cc.cd", true, "https://custom.example", "https://custom.example/#offer="},
+		{"beta build", "0.21.0-beta.1", "relay.byspace.cc.cd:443", "", "https://app-beta.byspace.cc.cd/#offer="},
+		{"stable build", "0.21.0", "relay.byspace.cc.cd:443", "", "https://app.byspace.cc.cd/#offer="},
+		{"beta build pointed at the beta relay", "0.21.0-beta.1", "app-beta.byspace.cc.cd:443", "", "https://app-beta.byspace.cc.cd/#offer="},
+		{"stable build pointed at the beta relay", "0.21.0", "app-beta.byspace.cc.cd:443", "", "https://app.byspace.cc.cd/#offer="},
+		{"explicit app base wins", "0.21.0-beta.1", "relay.example.com:443", "https://custom.example", "https://custom.example/#offer="},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := s.BuildPairingOfferURL(c.endpoint, c.useTLS, c.appBase)
+			s := &Server{serverID: "srv_x", pubKeyB64: "pk", version: c.version}
+			got := s.BuildPairingOfferURL(c.endpoint, true, c.appBase)
 			if len(got) < len(c.want) || got[:len(c.want)] != c.want {
 				t.Fatalf("got %s, want prefix %s", got, c.want)
 			}
@@ -28,15 +27,7 @@ func TestBuildPairingOfferFillsTheRelayPortAndDerivesTheAppURL(t *testing.T) {
 	}
 }
 
-func TestBuildPairingOfferStableChannelUsesTheStableApp(t *testing.T) {
-	s := &Server{serverID: "srv_x", pubKeyB64: "pk", version: "0.21.0"}
-	got := s.BuildPairingOfferURL("relay.byspace.cc.cd", true, "")
-	if want := "https://app.byspace.cc.cd/#offer="; got[:len(want)] != want {
-		t.Fatalf("got %s, want prefix %s", got, want)
-	}
-}
-
-func TestNormalizeRelayEndpoint(t *testing.T) {
+func TestBuildPairingOfferFillsTheRelayPort(t *testing.T) {
 	cases := []struct {
 		endpoint string
 		useTLS   bool
@@ -53,14 +44,5 @@ func TestNormalizeRelayEndpoint(t *testing.T) {
 		if got := normalizeRelayEndpoint(c.endpoint, c.useTLS); got != c.want {
 			t.Errorf("%q/%v: got %q, want %q", c.endpoint, c.useTLS, got, c.want)
 		}
-	}
-}
-
-func TestAppBaseURLForKeepsAnExplicitAppHost(t *testing.T) {
-	if got := appBaseURLFor("app.byspace.cc.cd:443", "0.21.0-beta.1"); got != "https://app.byspace.cc.cd" {
-		t.Errorf("stable host: got %s", got)
-	}
-	if got := appBaseURLFor("relay.byspace.cc.cd:443", "0.21.0"); got != "https://app.byspace.cc.cd" {
-		t.Errorf("relay host on a stable build: got %s", got)
 	}
 }

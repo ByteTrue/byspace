@@ -1289,36 +1289,13 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 //
 // A beta build has to hand out the beta app: the two channels are separate deployments, and a link
 // that opens the stable app for a beta daemon sends the tester to a client of the other channel.
+// The relay endpoint cannot decide this. Both channels default to the hosted relay, and pointing a
+// daemon at another one is an operator choice that says nothing about which app the tester wants.
 func hostedAppBaseURL(version string) string {
 	if strings.Contains(version, "-") {
 		return "https://app-beta.byspace.cc.cd"
 	}
 	return "https://app.byspace.cc.cd"
-}
-
-// relayEndpointHost returns the host of a relay endpoint, dropping any scheme and port.
-func relayEndpointHost(endpoint string) string {
-	host := strings.TrimSpace(endpoint)
-	if idx := strings.Index(host, "://"); idx >= 0 {
-		host = host[idx+3:]
-	}
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		return h
-	}
-	return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-}
-
-// appBaseURLFor derives the web app origin from the relay endpoint.
-//
-// The Go worker serves the app and the relay from one origin, so an endpoint that already names an
-// app host (`app-beta.byspace.cc.cd`) is the app origin — deriving it keeps the two from drifting
-// apart. Anything else (a `relay.` host, a self-hosted relay, a ws:// override) cannot name the app,
-// so those fall back to the release channel.
-func appBaseURLFor(relayEndpoint, version string) string {
-	if host := relayEndpointHost(relayEndpoint); strings.HasPrefix(host, "app.") || strings.HasPrefix(host, "app-") {
-		return "https://" + host
-	}
-	return hostedAppBaseURL(version)
 }
 
 // normalizeRelayEndpoint fills in the port a bare host implies.
@@ -1365,7 +1342,7 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 		baseURL = strings.TrimSpace(os.Getenv("BYSPACE_APP_BASE_URL"))
 	}
 	if baseURL == "" {
-		baseURL = appBaseURLFor(ep, s.version)
+		baseURL = hostedAppBaseURL(s.version)
 	}
 
 	hostname, _ := os.Hostname()

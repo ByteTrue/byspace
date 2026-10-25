@@ -23,6 +23,7 @@ import {
   buildRelayWebSocketUrl,
   decodeOfferFragmentPayload,
   normalizeHostPort,
+  normalizeRelayEndpointHostPort,
   shouldUseTlsForDefaultHostedRelay,
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -1773,8 +1774,11 @@ export class HostRuntimeStore {
     daemonPublicKeyB64: string;
     label?: string;
   }): Promise<HostProfile> {
-    const relayEndpoint = normalizeHostPort(input.relayEndpoint);
     const useTls = input.useTls ?? false;
+    // The offer carries whatever the daemon configured, and a bare host is a legal choice there:
+    // the scheme decides the port. `normalizeHostPort` demands an explicit one and threw
+    // `Invalid host:port` before any connection was attempted.
+    const relayEndpoint = normalizeRelayEndpointHostPort(input.relayEndpoint, useTls);
     const daemonPublicKeyB64 = input.daemonPublicKeyB64.trim();
     if (!daemonPublicKeyB64) {
       throw new Error("daemonPublicKeyB64 is required");

@@ -3655,6 +3655,39 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
+  it("accepts an offer whose relay endpoint omits the port", async () => {
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage: createMemoryHostRuntimeStorage(),
+    });
+
+    // A daemon configured with a bare host hands out exactly this shape, and pairing used to fail
+    // with `Invalid host:port (expected localhost:6777)` before any connection was attempted.
+    await store.upsertRelayConnection({
+      serverId: "srv_bare_host",
+      relayEndpoint: "app-beta.byspace.cc.cd",
+      useTls: true,
+      daemonPublicKeyB64: "pk_test_bare",
+    });
+
+    const host = store.getHosts().find((entry) => entry.serverId === "srv_bare_host");
+    const connection = host?.connections[0];
+    expect(connection?.type).toBe("relay");
+    expect(connection?.type === "relay" ? connection.relayEndpoint : null).toBe(
+      "app-beta.byspace.cc.cd:443",
+    );
+
+    store.syncHosts([]);
+  });
+
   it("merges a cold-load offer import with hosts that are still being read from storage", async () => {
     const storedHost = makeHost({ serverId: "srv_stored", label: "Stored host" });
     const storage = createMemoryHostRuntimeStorage({
