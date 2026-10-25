@@ -1,6 +1,7 @@
 import {
   normalizeHostPort,
   normalizeLoopbackToLocalhost,
+  normalizeRelayEndpointHostPort,
 } from "@bytetrue/protocol/daemon-endpoints";
 import {
   DirectTcpHostConnectionSchema,
@@ -442,7 +443,10 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
   }
   if (connection.type === "relay") {
     try {
-      const relayEndpoint = normalizeHostPort(connection.relayEndpoint);
+      const relayEndpoint = normalizeRelayEndpointHostPort(
+        connection.relayEndpoint,
+        connection.useTls,
+      );
       const daemonPublicKeyB64 = connection.daemonPublicKeyB64.trim();
       if (!daemonPublicKeyB64) return null;
       const useTls = connection.useTls;

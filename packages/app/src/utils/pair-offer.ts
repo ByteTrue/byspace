@@ -1,4 +1,7 @@
-import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
+import {
+  decodeOfferFragmentPayload,
+  normalizeRelayEndpointHostPort,
+} from "@/utils/daemon-endpoints";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import type { HostProfile } from "@/types/host-connection";
 import { ConnectionOfferSchema, type ConnectionOffer } from "@bytetrue/protocol/connection-offer";
@@ -47,7 +50,10 @@ export async function pairWithOfferUrl(args: {
     {
       id: "probe",
       type: "relay",
-      relayEndpoint: normalizeHostPort(args.offer.relay.endpoint),
+      relayEndpoint: normalizeRelayEndpointHostPort(
+        args.offer.relay.endpoint,
+        args.offer.relay.useTls,
+      ),
       useTls: args.offer.relay.useTls,
       daemonPublicKeyB64: args.offer.daemonPublicKeyB64,
     },

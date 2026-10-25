@@ -7,7 +7,10 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { BarcodeScanningResult, BarcodeSettings } from "expo-camera";
 import { useHostMutations } from "@/runtime/host-runtime";
-import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
+import {
+  decodeOfferFragmentPayload,
+  normalizeRelayEndpointHostPort,
+} from "@/utils/daemon-endpoints";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { ConnectionOfferSchema } from "@bytetrue/protocol/connection-offer";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -179,7 +182,7 @@ export default function PairScanScreen() {
           {
             id: "probe",
             type: "relay",
-            relayEndpoint: normalizeHostPort(offer.relay.endpoint),
+            relayEndpoint: normalizeRelayEndpointHostPort(offer.relay.endpoint, offer.relay.useTls),
             useTls: offer.relay.useTls,
             daemonPublicKeyB64: offer.daemonPublicKeyB64,
           },

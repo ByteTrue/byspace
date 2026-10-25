@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1284,6 +1285,70 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 	})
 }
 
+// hostedAppBaseURL is the web app origin that pairs with this build's release channel.
+//
+// A beta build has to hand out the beta app: the two channels are separate deployments, and a link
+// that opens the stable app for a beta daemon sends the tester to a client of the other channel.
+func hostedAppBaseURL(version string) string {
+	if strings.Contains(version, "-") {
+		return "https://app-beta.byspace.cc.cd"
+	}
+	return "https://app.byspace.cc.cd"
+}
+
+// relayEndpointHost returns the host of a relay endpoint, dropping any scheme and port.
+func relayEndpointHost(endpoint string) string {
+	host := strings.TrimSpace(endpoint)
+	if idx := strings.Index(host, "://"); idx >= 0 {
+		host = host[idx+3:]
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+}
+
+// appBaseURLFor derives the web app origin from the relay endpoint.
+//
+// The Go worker serves the app and the relay from one origin, so an endpoint that already names an
+// app host (`app-beta.byspace.cc.cd`) is the app origin — deriving it keeps the two from drifting
+// apart. Anything else (a `relay.` host, a self-hosted relay, a ws:// override) cannot name the app,
+// so those fall back to the release channel.
+func appBaseURLFor(relayEndpoint, version string) string {
+	if host := relayEndpointHost(relayEndpoint); strings.HasPrefix(host, "app.") || strings.HasPrefix(host, "app-") {
+		return "https://" + host
+	}
+	return hostedAppBaseURL(version)
+}
+
+// normalizeRelayEndpoint fills in the port a bare host implies.
+//
+// The offer carries `host:port` and the client parses it with parseHostPort, which rejects a bare
+// host with `Invalid host:port (expected localhost:6777)`. Operators write `app-beta.byspace.cc.cd`
+// in config and on the command line, so the port is filled in rather than demanded.
+func normalizeRelayEndpoint(endpoint string, useTLS bool) string {
+	ep := strings.TrimSpace(endpoint)
+	if ep == "" {
+		return ep
+	}
+	if strings.Contains(ep, "://") {
+		// A ws:// or wss:// override names its own scheme and port.
+		return ep
+	}
+	if _, _, err := net.SplitHostPort(ep); err == nil {
+		return ep
+	}
+	host := strings.TrimSuffix(strings.TrimPrefix(ep, "["), "]")
+	if host == "" {
+		return ep
+	}
+	port := "80"
+	if useTLS {
+		port = "443"
+	}
+	return net.JoinHostPort(host, port)
+}
+
 // BuildPairingOfferURL constructs a ConnectionOfferV2 fragment URL (#offer=<base64url>).
 func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBaseURL string) string {
 	ep := strings.TrimSpace(relayEndpoint)
@@ -1294,12 +1359,13 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 		ep = "relay.byspace.cc.cd:443"
 		useTLS = true
 	}
+	ep = normalizeRelayEndpoint(ep, useTLS)
 	baseURL := strings.TrimSpace(appBaseURL)
 	if baseURL == "" {
 		baseURL = strings.TrimSpace(os.Getenv("BYSPACE_APP_BASE_URL"))
 	}
 	if baseURL == "" {
-		baseURL = "https://app.byspace.cc.cd"
+		baseURL = appBaseURLFor(ep, s.version)
 	}
 
 	hostname, _ := os.Hostname()

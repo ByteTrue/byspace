@@ -86,6 +86,32 @@ export function normalizeHostPort(input: string): string {
   return isIpv6 ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
+/**
+ * Normalize a relay endpoint, filling in the port the endpoint implies.
+ *
+ * A bare host is a legitimate relay endpoint — the scheme decides the port — but `parseHostPort`
+ * rejects it, so pairing links minted before the port was filled in (and anything a user types by
+ * hand) failed with `Invalid host:port (expected localhost:6777)`.
+ */
+export function normalizeRelayEndpointHostPort(input: string, useTls?: boolean): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("Host is required");
+  }
+  try {
+    return normalizeHostPort(trimmed);
+  } catch {
+    // No port: fall through and add the one the scheme implies.
+  }
+  const bracketed = trimmed.startsWith("[") && trimmed.endsWith("]");
+  const host = bracketed ? trimmed.slice(1, -1) : trimmed;
+  if (!host) {
+    throw new Error("Host is required");
+  }
+  const port = useTls === false ? 80 : 443;
+  return bracketed ? `[${host}]:${port}` : `${host}:${port}`;
+}
+
 export function parseConnectionUri(input: string): ParsedConnectionUri {
   const trimmed = input.trim();
   if (!trimmed) {

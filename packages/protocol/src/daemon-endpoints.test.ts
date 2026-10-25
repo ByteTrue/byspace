@@ -5,6 +5,7 @@ import {
   buildRelayWebSocketUrl,
   CURRENT_RELAY_PROTOCOL_VERSION,
   extractHostPortFromWebSocketUrl,
+  normalizeRelayEndpointHostPort,
   normalizeRelayProtocolVersion,
   parseConnectionUri,
   serializeConnectionUri,
@@ -209,5 +210,33 @@ describe("shouldUseTlsForDefaultHostedRelay", () => {
 
   test("returns false for malformed endpoints", () => {
     expect(shouldUseTlsForDefaultHostedRelay("not-an-endpoint")).toBe(false);
+  });
+});
+
+describe("normalizeRelayEndpointHostPort", () => {
+  test("fills the TLS default port for a bare host", () => {
+    expect(normalizeRelayEndpointHostPort("app-beta.byspace.cc.cd", true)).toBe(
+      "app-beta.byspace.cc.cd:443",
+    );
+  });
+
+  test("fills the plain default port when TLS is off", () => {
+    expect(normalizeRelayEndpointHostPort("relay.example.com", false)).toBe("relay.example.com:80");
+  });
+
+  test("assumes TLS when the flag is absent", () => {
+    expect(normalizeRelayEndpointHostPort("relay.example.com")).toBe("relay.example.com:443");
+  });
+
+  test("leaves an endpoint that already carries a port alone", () => {
+    expect(normalizeRelayEndpointHostPort("127.0.0.1:6778", true)).toBe("127.0.0.1:6778");
+  });
+
+  test("brackets a bare IPv6 host", () => {
+    expect(normalizeRelayEndpointHostPort("[::1]", true)).toBe("[::1]:443");
+  });
+
+  test("rejects an empty endpoint", () => {
+    expect(() => normalizeRelayEndpointHostPort("  ", true)).toThrow("Host is required");
   });
 });
