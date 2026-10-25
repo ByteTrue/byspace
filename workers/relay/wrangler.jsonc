@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "byspace-relay-go",
+  "main": "./build/worker.mjs",
+  "compatibility_date": "2024-12-01",
+  "build": {
+    "command": "npm run build",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RELAY",
+        "class_name": "RelayRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RelayRoom"],
+    },
+  ],
+  "env": {
+    "beta": {
+      "name": "byspace-relay-go-beta",
+    },
+  },
+}

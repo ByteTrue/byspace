@@ -15,4 +15,8 @@ require (
 	golang.org/x/crypto v0.58.0
 )
 
-require golang.org/x/sys v0.49.0 // indirect
+require (
+	github.com/syumai/workers v0.36.0 // indirect
+	github.com/syumai/workers-go v0.36.1-0.20260923184945-a38be30753a4 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+)

@@ -25,7 +25,8 @@
     "packages/protocol",
     "packages/client",
     "packages/app",
-    "packages/relay"
+    "packages/relay",
+    "workers/relay"
   ],
   "scripts": {
     "acp:version-drift": "node scripts/check-acp-catalog-version-drift.mjs",
