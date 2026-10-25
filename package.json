@@ -96,7 +96,7 @@
     "deploy:hosted": "npm run deploy --workspace=@bytetrue/relay",
     "deploy:hosted:beta": "npm run deploy:beta --workspace=@bytetrue/relay",
     "deploy:relay-go": "npm run deploy --workspace=byspace-relay-go",
-    "deploy:relay-go:beta": "npm run deploy --workspace=byspace-relay-go -- --env beta"
+    "deploy:relay-go:beta": "npm run deploy:beta --workspace=byspace-relay-go"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",

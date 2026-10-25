@@ -46,12 +46,13 @@ function buildClass() {
 test("the Durable Object class name agrees across main.go, wrangler.jsonc and build.mjs", () => {
   const declared = goClass();
   const { bound, migrated } = wranglerClasses();
-  assert.deepEqual(bound, [declared], "wrangler.jsonc binds a class main.go does not register");
-  assert.deepEqual(
-    migrated,
-    [declared],
-    "wrangler.jsonc migrates a class main.go does not register",
-  );
+  assert.ok(bound.length > 0, "wrangler.jsonc should bind a Durable Object");
+  for (const name of bound) {
+    assert.equal(name, declared, "wrangler.jsonc binds a class main.go does not register");
+  }
+  for (const name of migrated) {
+    assert.equal(name, declared, "wrangler.jsonc migrates a class main.go does not register");
+  }
   assert.equal(buildClass(), declared, "build.mjs bakes in a different class name");
 });
 
@@ -86,4 +87,36 @@ test("the wasm build keeps the socket library out of its dependency graph", () =
   const source = read("main.go");
   assert.doesNotMatch(source, /coder\/websocket/, "main.go must not import the socket library");
   assert.match(source, /internal\/relay"/, "main.go should use the shared relay core");
+});
+
+test("the Worker serves the web export on the same paths as the hosted one", () => {
+  // The Worker is a drop-in for the TypeScript one, which serves the PWA from
+  // [assets] and keeps /ws and /health on the relay script. An environment
+  // without the assets block silently serves 404 for the app itself.
+  const source = read("wrangler.jsonc");
+  assert.equal(
+    [...source.matchAll(/"directory"\s*:\s*"([^"]+)"/g)].length,
+    2,
+    "both the default and beta environments need an assets directory",
+  );
+  assert.equal(
+    [...source.matchAll(/"run_worker_first"\s*:\s*\[[^\]]*"\/ws"[^\]]*"\/health"[^\]]*\]/g)].length,
+    2,
+    "/ws and /health must stay on the relay script in both environments",
+  );
+});
+
+test("every environment binds the Durable Object it registers", () => {
+  // Wrangler does not inherit top-level bindings or migrations into a named
+  // environment. A beta block without its own durable_objects deploys fine and
+  // then answers 500 on every socket, which is exactly the kind of failure
+  // nobody finds until they try the beta build.
+  const source = read("wrangler.jsonc");
+  const declared = goClass();
+  const bindings = [...source.matchAll(/"class_name"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(bindings, [declared, declared], "default and beta each need one RELAY binding");
+  const migrations = [...source.matchAll(/"new_sqlite_classes"\s*:\s*\[([^\]]*)\]/g)].flatMap((m) =>
+    [...m[1].matchAll(/"([^"]+)"/g)].map((inner) => inner[1]),
+  );
+  assert.deepEqual(migrations, [declared, declared], "default and beta each need the migration");
 });

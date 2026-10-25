@@ -23,9 +23,42 @@
       "new_sqlite_classes": ["RelayRoom"],
     },
   ],
+  // Serve the web export on the same origin as the relay, exactly like the
+  // TypeScript worker does. Asset requests are free and unlimited on every plan
+  // and never enter the wasm — run_worker_first keeps /ws and /health on the
+  // relay script while the platform answers everything else.
+  "assets": {
+    "directory": "../../packages/app/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/ws", "/health"],
+  },
   "env": {
     "beta": {
       "name": "byspace-relay-go-beta",
+      // Wrangler does not inherit top-level bindings or migrations into a named
+      // environment; the beta Worker needs its own. Without these the deploy
+      // succeeds and every socket answers 500 because RELAY is unbound.
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RELAY",
+            "class_name": "RelayRoom",
+          },
+        ],
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": ["RelayRoom"],
+        },
+      ],
+      "assets": {
+        "directory": "../../packages/app/dist",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/ws", "/health"],
+      },
     },
   },
 }

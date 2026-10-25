@@ -6,7 +6,9 @@
   "scripts": {
     "build": "node ./build.mjs",
     "dev": "npm run build && wrangler dev --local",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build:web && npm run build && wrangler deploy",
+    "build:web": "npm --prefix ../../packages/app run build:web",
+    "deploy:beta": "npm run build:web && npm run build && wrangler deploy --env beta"
   },
   "devDependencies": {
     "wrangler": "^4.75.0"
