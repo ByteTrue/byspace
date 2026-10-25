@@ -603,7 +603,11 @@ func pairingOfferURL(version, homeDir, addr string) (string, error) {
 	}
 	url, _ := payload["url"].(string)
 	if strings.TrimSpace(url) == "" {
-		return "", errors.New("the daemon has relay pairing disabled; enable the relay first")
+		// The daemon only answers with a url when its relay is on, and a daemon that has never
+		// been configured reads as off — node defaults the relay to enabled, so this is the
+		// common case on a fresh home. `pair` is a manual command: someone who runs it wants a
+		// link, so mint one from the defaults rather than making them configure the relay first.
+		return buildOfflinePairingOffer(version, homeDir, "", true, ""), nil
 	}
 	return url, nil
 }
