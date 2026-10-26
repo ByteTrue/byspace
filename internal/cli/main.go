@@ -1212,9 +1212,24 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if st, err := probeHealth(*addr); err == nil {
+		if st, probeErr := probeHealth(*addr); probeErr == nil {
 			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", *addr, st.ServerID)
 			return nil
+		}
+		// The home may already have a daemon on another address. Starting a second one for the same
+		// home loses the bind race, and the pid lock can only describe one daemon, so report the
+		// running one instead. Only the address that home recorded counts: a daemon on the default
+		// port that belongs to a different home is a different daemon.
+		if lock, ok := daemon.ReadPIDLock(resolvedHome); ok && lock.Listen != nil {
+			recorded := strings.TrimSpace(*lock.Listen)
+			if recorded != "" && recorded != *addr {
+				recorded = daemonHostCandidatesForHome(recorded, resolvedHome)[0]
+				if st, recErr := probeHealth(recorded); recErr == nil {
+					fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", recorded, st.ServerID)
+					fmt.Fprintf(stdout, "note: asked for %s; stop the daemon before changing its address\n", *addr)
+					return nil
+				}
+			}
 		}
 		// The flags are forwarded to the serve process: accepting them here and not passing them on
 		// would leave the user believing a setting took effect.

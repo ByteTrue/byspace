@@ -135,3 +135,37 @@ func TestDaemonLogTailFallsBackToTheWholeLog(t *testing.T) {
 		t.Fatalf("tail = %q, want the log contents", tail)
 	}
 }
+
+// A second `daemon start` from the same home must say the daemon is already up, even when the
+// address in the flags differs from the one it is bound to.
+//
+// It used to probe only the flagged address, so a start that disagreed with the running daemon
+// spawned a second process for the same home, which lost the bind race and reported a timeout.
+func TestDaemonStartReportsADaemonAlreadyOwnsTheHome(t *testing.T) {
+	homeDir := t.TempDir()
+	srv, err := server.New(server.Options{HomeDir: filepath.Join(homeDir, "daemon"), Version: "9.9.9-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	if err := daemon.WritePIDLock(homeDir, daemon.PIDLockInfo{PID: os.Getpid(), Listen: &addr}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := Main("9.9.9-test",
+		[]string{"daemon", "start", "--home", homeDir, "--addr", "127.0.0.1:1", "--no-web-ui"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("daemon start failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "already running") || !strings.Contains(out.String(), srv.ServerID()) {
+		t.Fatalf("output = %q, want the running daemon reported", out.String())
+	}
+	if !strings.Contains(out.String(), "127.0.0.1:1") {
+		t.Fatalf("output = %q, want the mismatched address mentioned", out.String())
+	}
+}
