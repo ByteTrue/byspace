@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/relay",
-  "version": "0.21.0-beta.1",
+  "version": "0.21.0-beta.2",
   "description": "BySpace E2EE channel primitives for the web client, plus the Cloudflare Worker that runs the hosted relay",
   "files": [
     "dist",
