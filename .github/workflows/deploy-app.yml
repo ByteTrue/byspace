@@ -9,6 +9,10 @@ permissions:
   actions: read
   contents: read
 
+env:
+  # The beta channel deploys the Go relay Worker, which compiles to wasm on this runner.
+  GO_VERSION: "1.27.3"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -56,16 +60,27 @@ jobs:
       - name: Build app dependencies
         run: npm run build:app-deps
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
       - name: Typecheck
         run: npm run typecheck --workspace=@bytetrue/app
 
       - name: Build Web app
         run: npm run build:web --workspace=@bytetrue/app
 
-      - name: Deploy release channel to the relay Worker
-        working-directory: packages/relay
+      # The beta channel is the Go Worker. byspace-relay-go-beta owns app-beta.byspace.cc.cd (a
+      # Cloudflare custom domain routes to exactly one worker, so this cannot be a second route on
+      # the TypeScript worker) and the beta PWA is served from the same origin as its relay, which is
+      # what a pairing offer assumes. Deploying packages/relay here instead would silently replace
+      # the beta UI with one whose relay lives on a different hostname.
+      - name: Deploy the release channel
+        working-directory: ${{ env.RELEASE_CHANNEL == 'beta' && 'workers/relay' || 'packages/relay' }}
         run: |
           if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+            # wrangler runs the Worker's own build command, which compiles the wasm.
             npx wrangler deploy --env beta
           else
             npx wrangler deploy

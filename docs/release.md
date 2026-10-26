@@ -4,13 +4,13 @@ Use Node 22.23.4 and npm 10.9.9. Run release commands from a clean `main` checko
 
 ## Published targets
 
-| Target  | Publication path                                                       |
-| ------- | ---------------------------------------------------------------------- |
-| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag               |
-| Web/PWA | Relay Worker (`byspace-relay` stable, `byspace-relay-beta` prerelease) |
-| Docker  | `ghcr.io/bytetrue/byspace:<version>`                                   |
+| Target  | Publication path                                                          |
+| ------- | ------------------------------------------------------------------------- |
+| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag                  |
+| Web/PWA | Relay Worker (`byspace-relay` stable, `byspace-relay-go-beta` prerelease) |
+| Docker  | `ghcr.io/bytetrue/byspace:<version>`                                      |
 
-Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
+Stable Web releases deploy to `app.byspace.cc.cd` from the TypeScript Worker in `packages/relay`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd` from the Go Worker in `workers/relay`. Each hostname is a Cloudflare custom domain, and one custom domain routes to exactly one Worker, so the two channels cannot share a Worker.
 
 **Deploy App** deploys the Worker with the `CLOUDFLARE_API_TOKEN` secret. That token needs Zone → Workers Routes → Edit, with `byspace.cc.cd` in its zone resources. `wrangler deploy` uploads the Worker and its assets before it publishes the custom-domain routes from `packages/relay/wrangler.toml`, so a token scoped to a different zone, or missing the permission, fails the run with `No access to the specified resource` after the new build is already live.
 
@@ -249,7 +249,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 - `version:all:*` bumps root + syncs workspace versions and `@bytetrue/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
-- The public relay and hosted web UI are the same Cloudflare Worker in `packages/relay` (`byspace-relay`, serving `relay.byspace.cc.cd` and `app.byspace.cc.cd`). Since issue 073 the Deploy App workflow deploys it on every web release — UI and relay go out atomically. For an emergency relay-only fix outside a release, run `npm run deploy:hosted` from the repo root or `wrangler deploy` from `packages/relay`. `packages/relay` also holds the client transport and E2E encryption used by the daemon
+- The public relay and hosted web UI are the same Cloudflare Worker, but the two channels are different Workers: stable is `byspace-relay` in `packages/relay`, beta is `byspace-relay-go-beta` in `workers/relay`. Since issue 073 the Deploy App workflow deploys the channel's Worker on every web release — UI and relay go out atomically. For an emergency relay-only fix outside a release, run `npm run deploy:hosted` (stable) or `npm run deploy:relay-go:beta` (beta) from the repo root. `packages/relay` also holds the client transport and E2E encryption used by the daemon
 
 ## Changelog format
 
