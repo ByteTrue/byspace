@@ -331,6 +331,23 @@ func customProviderBinary(cfg map[string]any, spec ProviderSpec) string {
 	return spec.Binary
 }
 
+// ServedProviderIDs returns the provider ids this daemon answers for, including the scripted ones
+// a development build registers.
+//
+// The config validator needs this: it has to accept a plain `{enabled: false}` patch for a provider
+// the daemon already serves, scripted ones included, and still require a launch command for any
+// other id the user invents.
+func ServedProviderIDs() map[string]bool {
+	out := make(map[string]bool, len(BuiltinProviders)+1)
+	for _, spec := range BuiltinProviders {
+		out[spec.ID] = true
+	}
+	for _, spec := range registeredTestProviders() {
+		out[spec.ID] = true
+	}
+	return out
+}
+
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
 // including the 6 built-in providers plus any custom/derived providers configured in config.json.
 func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {

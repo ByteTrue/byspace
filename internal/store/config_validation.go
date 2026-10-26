@@ -17,6 +17,16 @@ import (
 
 // ValidateDaemonConfig checks the parts the daemon acts on.
 func ValidateDaemonConfig(patch map[string]any) error {
+	return ValidateDaemonConfigForProviders(patch, nil)
+}
+
+// ValidateDaemonConfigForProviders is ValidateDaemonConfig with the provider ids this daemon serves.
+//
+// The set has to come from the caller: a development build registers `mock`, and the settings page
+// offers a switch for it exactly like the built-ins. Without it that switch was rejected as
+// "providers.mock: needs one of command, extends or baseUrl" and the user saw a provider they could
+// not turn off.
+func ValidateDaemonConfigForProviders(patch map[string]any, served map[string]bool) error {
 	if patch == nil {
 		return nil
 	}
@@ -27,7 +37,7 @@ func ValidateDaemonConfig(patch map[string]any) error {
 		}
 	}
 	if raw, ok := patch["providers"]; ok && raw != nil {
-		if err := validateProviders(raw); err != nil {
+		if err := validateProviders(raw, served); err != nil {
 			return err
 		}
 	}
@@ -99,6 +109,24 @@ var builtinProviderIDs = map[string]bool{
 	"claude": true, "codex": true, "copilot": true, "opencode": true, "pi": true, "omp": true,
 }
 
+// canLaunchProvider reports whether a provider entry names a way to start it, or is one the daemon
+// already serves by its own means.
+func canLaunchProvider(id string, config map[string]any, served map[string]bool) bool {
+	if builtinProviderIDs[id] || served[id] {
+		return true
+	}
+	// `command` is an argv list on the wire (`z.array(z.string().min(1)).min(1)`), so reading it as
+	// a plain string rejected every edit that only set a command — the app sent
+	// `command: ["node", "./agent.mjs"]` and the daemon answered "needs one of command, extends or
+	// baseUrl". A bare string is still accepted for configs written by hand.
+	if commandValue(config["command"]) != "" {
+		return true
+	}
+	extends, _ := config["extends"].(string)
+	baseURL, _ := config["baseUrl"].(string)
+	return strings.TrimSpace(extends) != "" || strings.TrimSpace(baseURL) != ""
+}
+
 // validateProviders checks each custom provider names a way to start it.
 //
 // Built-in ids are exempt, matching `ProviderOverridesSchema` in packages/protocol: it requires
@@ -106,7 +134,7 @@ var builtinProviderIDs = map[string]bool{
 // what made the settings switch a no-op — toggling Claude off sends `{claude: {enabled: false}}`,
 // the patch was rejected with "needs one of command, extends or baseUrl", and the UI showed the
 // switch snapping back with nothing logged anywhere the user would look.
-func validateProviders(raw any) error {
+func validateProviders(raw any, served map[string]bool) error {
 	providers, isObject := raw.(map[string]any)
 	if !isObject {
 		return fmt.Errorf("providers: must be an object keyed by provider id")
@@ -116,19 +144,9 @@ func validateProviders(raw any) error {
 		if !isObject {
 			return fmt.Errorf("providers.%s: must be an object", id)
 		}
-		if builtinProviderIDs[id] {
-			continue
-		}
 		// A provider with neither a binary nor a base ACP agent cannot be launched; catching it
 		// here means the providers page says so instead of the agent failing to start.
-		// `command` is an argv list on the wire (`z.array(z.string().min(1)).min(1)`), so reading it
-		// as a plain string rejected every edit that only set a command — the app sent
-		// `command: ["node", "./agent.mjs"]` and the daemon answered "needs one of command,
-		// extends or baseUrl". A bare string is still accepted for configs written by hand.
-		command := commandValue(config["command"])
-		extends, _ := config["extends"].(string)
-		baseURL, _ := config["baseUrl"].(string)
-		if command == "" && strings.TrimSpace(extends) == "" && strings.TrimSpace(baseURL) == "" {
+		if !canLaunchProvider(id, config, served) {
 			return fmt.Errorf("providers.%s: needs one of command, extends or baseUrl", id)
 		}
 	}

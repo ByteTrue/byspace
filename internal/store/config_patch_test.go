@@ -86,3 +86,21 @@ func TestCustomProviderStillNeedsALaunchMethod(t *testing.T) {
 		t.Fatal("a custom provider with no command, extends or baseUrl must still be rejected")
 	}
 }
+
+// A scripted provider is as switchable as a built-in one.
+//
+// `mock` is registered only in a development build, and the settings page still renders a switch
+// for it. Validation that only knew the six built-ins rejected that toggle with "providers.mock:
+// needs one of command, extends or baseUrl" — a second provider the user could not turn off.
+func TestServedScriptedProviderTogglePassesValidation(t *testing.T) {
+	served := map[string]bool{"claude": true, "mock": true}
+	patch := map[string]any{"providers": map[string]any{"mock": map[string]any{"enabled": false}}}
+	if err := ValidateDaemonConfigForProviders(patch, served); err != nil {
+		t.Fatalf("toggling a served scripted provider was rejected: %v", err)
+	}
+	// An id the daemon does not serve is still held to the launch-command rule.
+	unknown := map[string]any{"providers": map[string]any{"nonesuch": map[string]any{"enabled": false}}}
+	if err := ValidateDaemonConfigForProviders(unknown, served); err == nil {
+		t.Fatal("an unknown provider with no launch method must still be rejected")
+	}
+}

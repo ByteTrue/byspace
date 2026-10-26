@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/quota"
 	"github.com/ByteTrue/byspace/internal/store"
@@ -1412,7 +1413,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			})
 			return
 		}
-		if validationErr := store.ValidateDaemonConfig(req.Config); validationErr != nil {
+		if validationErr := store.ValidateDaemonConfigForProviders(req.Config, providers.ServedProviderIDs()); validationErr != nil {
 			fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", validationErr)
 			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 				"requestId": req.RequestID,
