@@ -335,6 +335,11 @@ func New(opts Options) (*Server, error) {
 		}
 	}
 
+	// The CLI's own credential, created here so the first command on a protected home finds it.
+	// Written on every start rather than only when a password exists: setting one later must not
+	// leave the CLI locked out until the daemon restarts.
+	_ = EnsureCLICredential(homeDir)
+
 	srv := &Server{
 		providerCatalogs:      make(map[string]*providerCatalog),
 		shutdownRequested:     make(chan string, 1),
@@ -500,9 +505,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// to be enforced. /mcp/agents authenticates itself inside the handler with its capability
 	// token, so it is exempt here.
 	if path := r.URL.Path; path != "/mcp/agents" && !ShouldBypassBearerAuth(r.Method, path) {
-		if hash := s.daemonPasswordHash(); hash != "" {
+		// Enforcement is triggered by a password alone. The CLI credential is an alternative way to
+		// present that authority, not a second reason to demand one: treating its mere presence as
+		// "auth is on" would 401 the browser app on every password-less home, because only the
+		// CLI can read the file.
+		if s.daemonPasswordHash() != "" {
 			token, ok := ExtractHTTPBearerToken(r.Header.Get("Authorization"))
-			if !ok || !VerifyDaemonPassword(hash, token) {
+			if !ok {
+				// A browser cannot set an Authorization header on a WebSocket, so the client
+				// sends the same token as the `byspace.bearer.<token>` subprotocol. Reading
+				// only the header rejected every browser connection to a protected daemon,
+				// which looked like the app being logged out for no reason.
+				token, ok = ExtractWSBearerToken(strings.Split(
+					r.Header.Get("Sec-WebSocket-Protocol"), ","))
+			}
+			if !ok || !s.authorizedByDaemonCredential(s.homeDir, token) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))

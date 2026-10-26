@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ByteTrue/byspace/internal/server"
 )
 
 // An offer minted without a reachable daemon must name the app origin the home is configured for.
@@ -106,4 +108,26 @@ func decodeOffer(t *testing.T, offer string) (string, offerRelay) {
 		t.Fatalf("offer origin is not a URL: %v", err)
 	}
 	return u.Scheme + "://" + u.Host, payload.Relay
+}
+
+// The CLI must present the home's credential, or every websocket command 401s on a protected home.
+//
+// It read only `BYSPACE_PASSWORD`, which no user has: the password is a bcrypt hash on disk. The
+// result was that `ls` worked (it reads files) while `project list`, `run` and `pair` all failed
+// with an upgrade 401 that looks like the daemon being down.
+func TestCLIReadsTheHomeCredential(t *testing.T) {
+	homeDir := t.TempDir()
+	credential := server.EnsureCLICredential(homeDir)
+	if credential == "" {
+		t.Fatal("expected the server package to mint a credential")
+	}
+	if got := server.LoadCLICredential(homeDir); got != credential {
+		t.Fatalf("LoadCLICredential = %q, want %q", got, credential)
+	}
+
+	// An empty home has no credential, and asking must not invent one: `dialDaemonWS` falls back
+	// to BYSPACE_PASSWORD only when this answers "".
+	if got := server.LoadCLICredential(t.TempDir()); got != "" {
+		t.Fatalf("a home without a credential returned %q", got)
+	}
 }

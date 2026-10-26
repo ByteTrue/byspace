@@ -1639,20 +1639,30 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 		wsURL = strings.TrimPrefix(wsURL, "https://")
 		wsURL = "ws://" + strings.TrimRight(wsURL, "/") + "/ws"
 	}
-	// A daemon with a password rejects the upgrade outright, so the bearer has to ride on the
-	// handshake. Node reads it from BYSPACE_PASSWORD for the same reason: the CLI is run by a
-	// person or a script, and neither should have to pass the password on the command line
-	// where `ps` can read it.
+	// A daemon with a password rejects the upgrade outright, so a bearer has to ride on the
+	// handshake.
+	//
+	// The home's own CLI credential comes first: it exists on every home this daemon serves, so
+	// the CLI works without the user exporting anything. `BYSPACE_PASSWORD` stays supported for a
+	// CLI pointed at a home it does not own — a container, a remote host — where no credential file
+	// is reachable.
 	dialOptions := &websocket.DialOptions{
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{Proxy: nil},
 		},
 	}
-	if password := strings.TrimSpace(os.Getenv("BYSPACE_PASSWORD")); password != "" {
-		dialOptions.HTTPHeader = http.Header{"Authorization": []string{"Bearer " + password}}
+	credential := ""
+	if homeDir := homeDirForClientID(); homeDir != "" {
+		credential = server.LoadCLICredential(homeDir)
+	}
+	if credential == "" {
+		credential = strings.TrimSpace(os.Getenv("BYSPACE_PASSWORD"))
+	}
+	if credential != "" {
+		dialOptions.HTTPHeader = http.Header{"Authorization": []string{"Bearer " + credential}}
 		// The daemon also accepts the bearer as a subprotocol, which is the form that survives
 		// proxies that strip Authorization.
-		dialOptions.Subprotocols = []string{"byspace.bearer." + password}
+		dialOptions.Subprotocols = []string{"byspace.bearer." + credential}
 	}
 	ws, _, err := websocket.Dial(ctx, wsURL, dialOptions)
 	if err != nil {

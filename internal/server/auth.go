@@ -1,10 +1,15 @@
 package server
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -107,10 +112,75 @@ func IsAgentMCPRequestAuthorized(passwordHash, capabilityToken, authorizationHea
 	return VerifyDaemonPassword(passwordHash, token)
 }
 
+// CLICredentialFile holds the token this host's own CLI presents.
+//
+// The CLI runs on the machine that owns the home, but it reaches the daemon over a websocket like
+// any other client, so a daemon with a password refused every command that was not a plain file
+// read: `project list`, `schedule list`, `run`, `pair` all 401'd. Reading the password from an
+// environment variable was not a workaround someone would find; `BYSPACE_PASSWORD` is not in any
+// home, and the value is a bcrypt hash on disk.
+//
+// A file rather than an environment variable because it has to survive a shell that never set one.
+// `0o600` inside the home is the same protection the password hash itself gets: anything that can
+// read this can already rewrite config.json.
+const CLICredentialFile = "cli-credential"
+
+// LoadCLICredential reads the CLI token for a home, or "" when there is none.
+func LoadCLICredential(homeDir string) string {
+	raw, err := os.ReadFile(filepath.Join(homeDir, CLICredentialFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+// EnsureCLICredential returns the home's CLI token, creating it on first use.
+//
+// Rotating the password does not invalidate it: this is a separate credential for a different
+// principal (the CLI on this host), which is what `docs/permissions.md` asks for — credentials are
+// proven per principal and rotated independently.
+func EnsureCLICredential(homeDir string) string {
+	if existing := LoadCLICredential(homeDir); existing != "" {
+		return existing
+	}
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return ""
+	}
+	token := base64.RawURLEncoding.EncodeToString(buf)
+	if err := home.WriteAtomic(filepath.Join(homeDir, CLICredentialFile), []byte(token+"\n"), 0o600); err != nil {
+		return ""
+	}
+	return token
+}
+
 // daemonPasswordHash returns the configured bcrypt hash, or "" when auth is off.
 //
 // Read per request rather than cached: changing the password in settings must take effect
 // without a restart, and a cache would silently keep accepting the old one.
 func (s *Server) daemonPasswordHash() string {
 	return s.store.DaemonPasswordHash()
+}
+
+// cliCredentialAccepted reports whether a presented token is this host's CLI credential.
+func (s *Server) cliCredentialAccepted(homeDir, presented string) bool {
+	if presented == "" {
+		return false
+	}
+	expected := LoadCLICredential(homeDir)
+	if expected == "" {
+		return false
+	}
+	return ConstantTimeEqual(presented, expected)
+}
+
+// authorizedByDaemonCredential checks a bearer against both the password and the CLI credential.
+func (s *Server) authorizedByDaemonCredential(homeDir, presented string) bool {
+	if s.cliCredentialAccepted(homeDir, presented) {
+		return true
+	}
+	if hash := s.daemonPasswordHash(); hash != "" {
+		return VerifyDaemonPassword(hash, presented)
+	}
+	return false
 }
