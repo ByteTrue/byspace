@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.5 - 2026-10-26
+
+### Fixed
+
+- Fixed every CLI command that talks to the daemon failing with 401 once a password was set: `project list`, `schedule list`, `run`, `pair`. The daemon now mints a credential for its own CLI and accepts it where it accepts the password
+- Fixed `byspace pair` on a password-protected daemon handing out a link to the prerelease app instead of the app origin the home is configured for
+- Fixed the web app failing its WebSocket handshake against a password-protected daemon, because the daemon did not echo the bearer subprotocol back
+
 ## 0.21.0-beta.4 - 2026-10-26
 
 ### Fixed
