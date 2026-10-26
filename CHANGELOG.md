@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.3 - 2026-10-26
+
+### Fixed
+
+- Fixed a provider switch that did nothing: the daemon rejected `{enabled: false}` for a built-in provider, so every toggle snapped back on
+- Fixed switching one provider off deleting the other providers' saved settings, including custom providers and their model lists
+- Fixed the development-only "Mock Load Test" provider appearing in a release build
+
 ## 0.21.0-beta.2 - 2026-10-26
 
 ### Added
