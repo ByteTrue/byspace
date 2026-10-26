@@ -1364,6 +1364,14 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 // storedAppBaseURL reads the app base URL from the daemon config. The daemon stores it flat
 // (`appBaseUrl`), while the wire and the node daemon speak `app.baseUrl`; the config snapshot
 // maps between them, so both spellings are accepted here.
+// StoredAppBaseURL is the app origin this home is configured for.
+//
+// Exported because the CLI mints pairing offers in-process when no daemon is reachable, and it has
+// to name the same origin the running daemon would.
+func StoredAppBaseURL(cfg map[string]any) string {
+	return storedAppBaseURL(cfg)
+}
+
 func storedAppBaseURL(cfg map[string]any) string {
 	if v, ok := cfg["appBaseUrl"].(string); ok {
 		return strings.TrimSpace(v)

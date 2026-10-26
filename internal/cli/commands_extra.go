@@ -14,6 +14,7 @@ import (
 
 	duration "github.com/ByteTrue/byspace/internal/cadence"
 	"github.com/ByteTrue/byspace/internal/server"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 func runHeartbeatCmd(args []string, stdout io.Writer) error {
@@ -613,6 +614,11 @@ func pairingOfferURL(version, homeDir, addr string) (string, error) {
 }
 
 // buildOfflinePairingOffer mints an offer without asking a daemon.
+//
+// It reads the home's own config first. Minting purely from the version sent an operator whose home
+// names `app.baseUrl: https://app.byspace.cc.cd` a link to the prerelease app, because the fallback
+// derived the origin from "this build's version has a hyphen" — the offer pointed at a different
+// deployment than the daemon's owner had configured and was using.
 func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS bool, appURL string) string {
 	srv, err := server.New(server.Options{
 		HomeDir: homeDir,
@@ -622,5 +628,14 @@ func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS boo
 		return ""
 	}
 	defer srv.Close()
+	if strings.TrimSpace(appURL) == "" {
+		appURL = server.StoredAppBaseURL(store.New(homeDir).LoadDaemonConfig())
+	}
+	if strings.TrimSpace(relayEndpoint) == "" {
+		if relay := server.ResolveRelayConfig(store.New(homeDir).LoadDaemonConfig()); relay.Enabled {
+			relayEndpoint = relay.ClientRelayEndpoint()
+			useTLS = relay.ClientRelayUseTLS()
+		}
+	}
 	return srv.BuildPairingOfferURL(relayEndpoint, useTLS, appURL)
 }
