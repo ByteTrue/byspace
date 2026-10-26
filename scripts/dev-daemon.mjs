@@ -27,6 +27,10 @@ if (process.env.BYSPACE_WORKTREE_PATH && !process.env.BYSPACE_DEV_ROOT) {
 
 configureDevBySpaceHome();
 process.env.BYSPACE_CORS_ORIGINS = process.env.BYSPACE_CORS_ORIGINS || "*";
+// The dev daemon is the development build, so it exposes the scripted providers the specs and the
+// perf profiles create agents with. A packaged daemon never sets this and therefore never lists
+// "Mock Load Test" next to the real providers.
+process.env.BYSPACE_NODE_ENV = process.env.BYSPACE_NODE_ENV || "development";
 
 // Local speech models live outside the home so a worktree reset does not re-download them.
 const localModelsDir =

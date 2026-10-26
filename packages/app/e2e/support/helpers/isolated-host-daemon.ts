@@ -160,6 +160,10 @@ export async function startIsolatedHostDaemon(
       // Specs assert exact workspace counts; the daemon-owned Chief workspace
       // would shift them by one.
       BYSPACE_DISABLE_HOME_WORKSPACE: "1",
+      // 76 specs create agents with `provider: "mock"`, which only a development
+      // build registers. Without this the daemon starts fine and every one of them
+      // fails with "unknown provider".
+      BYSPACE_NODE_ENV: "development",
     };
     const spawnOptions: SpawnOptions = {
       cwd: REPO_ROOT,

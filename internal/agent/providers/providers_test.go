@@ -36,14 +36,28 @@ func TestBuiltinProvidersCatalog(t *testing.T) {
 			scripted++
 		}
 	}
-	if scripted != 1 {
-		t.Fatalf("expected the scripted provider in the snapshot, got %d entries", scripted)
+	// A shipped daemon lists no scripted provider at all: node gates its dev providers on `isDev`,
+	// and a beta install that offered "Mock Load Test" next to Claude was the Go port dropping it.
+	if scripted != 0 {
+		t.Fatalf("a non-development build must not list the scripted provider, got %d entries", scripted)
 	}
 	snapsWithCustom := BuildSnapshotEntries(nil, "/bin/sh", map[string]any{
 		"cursor": map[string]any{"extends": "acp", "label": "Cursor", "enabled": true},
 	})
 	if len(snapsWithCustom) != len(snaps)+1 {
 		t.Fatalf("expected one more entry with an opt-in custom provider, got %d", len(snapsWithCustom))
+	}
+
+	t.Setenv("BYSPACE_NODE_ENV", "development")
+	devSnaps := BuildSnapshotEntries(nil, "/bin/sh", nil)
+	scripted = 0
+	for _, entry := range devSnaps {
+		if id, _ := entry["provider"].(string); id == MockProviderID {
+			scripted++
+		}
+	}
+	if scripted != 1 {
+		t.Fatalf("the development build must list the scripted provider exactly once, got %d", scripted)
 	}
 	avail := BuildAvailableProviders("/bin/sh")
 	if len(avail) != 6 {

@@ -223,13 +223,27 @@ func ResolveMockModel(modelID string) MockModel {
 // letting the end-to-end specs create agents with `provider: "mock"`.
 var TestProviders = []ProviderSpec{MockProvider}
 
+// devBuild reports whether this daemon is a development build.
+//
+// Node gates its dev-only providers on `isDev`, which `config.ts` derives from BYSPACE_NODE_ENV.
+// The Go port dropped that gate and registered `mock` unconditionally, so every `@beta` install
+// shipped a "Mock Load Test" provider with five synthetic models next to the real ones.
+func devBuild() bool {
+	return os.Getenv("BYSPACE_NODE_ENV") == "development"
+}
+
 // registeredTestProviders returns the scripted providers this process exposes.
 //
-// `mock-slow` is registered only when it is switched on, matching the node daemon: there it exists
-// only when the registry is built with `isDev`, and its `isAvailable()` reports the same env flag.
-// Registering it unconditionally would put a second provider in every catalog, which changes the
-// model the composer resolves as its default.
+// Both are development-only, exactly as in the node daemon:
+//   - `mock` appears only in a development build (`BYSPACE_NODE_ENV=development`), because 76
+//     Playwright specs create agents with `provider: "mock"` and a shipped daemon has no use for
+//     synthetic traffic;
+//   - `mock-slow` additionally needs BYSPACE_ENABLE_MOCK_SLOW=true, since it exists to exercise
+//     the snapshot manager's timeout path.
 func registeredTestProviders() []ProviderSpec {
+	if !devBuild() {
+		return nil
+	}
 	if mockSlowEnabled() {
 		return append(append([]ProviderSpec{}, TestProviders...), MockSlowProvider)
 	}

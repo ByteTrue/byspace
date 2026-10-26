@@ -92,7 +92,20 @@ func validateAgentProfiles(raw any) error {
 	return nil
 }
 
+// builtinProviderIDs are the providers the product ships. A custom provider needs a way to be
+// launched; a built-in one already has its own and only ever appears here to carry overrides
+// (enabled, models, params).
+var builtinProviderIDs = map[string]bool{
+	"claude": true, "codex": true, "copilot": true, "opencode": true, "pi": true, "omp": true,
+}
+
 // validateProviders checks each custom provider names a way to start it.
+//
+// Built-in ids are exempt, matching `ProviderOverridesSchema` in packages/protocol: it requires
+// `extends` and `label` only for a provider that is not one of the six. Requiring them here too is
+// what made the settings switch a no-op — toggling Claude off sends `{claude: {enabled: false}}`,
+// the patch was rejected with "needs one of command, extends or baseUrl", and the UI showed the
+// switch snapping back with nothing logged anywhere the user would look.
 func validateProviders(raw any) error {
 	providers, isObject := raw.(map[string]any)
 	if !isObject {
@@ -102,6 +115,9 @@ func validateProviders(raw any) error {
 		config, isObject := entry.(map[string]any)
 		if !isObject {
 			return fmt.Errorf("providers.%s: must be an object", id)
+		}
+		if builtinProviderIDs[id] {
+			continue
 		}
 		// A provider with neither a binary nor a base ACP agent cannot be launched; catching it
 		// here means the providers page says so instead of the agent failing to start.

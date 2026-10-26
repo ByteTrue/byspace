@@ -1099,9 +1099,11 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	cur := s.LoadDaemonConfig()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for k, v := range patch {
-		cur[k] = v
-	}
+	// Deep, not shallow. Node's daemon-config-store deep-merges the patch, and the providers map
+	// needs it: the settings switch sends `{providers: {codex: {enabled: false}}}`, and replacing
+	// the whole map dropped every other provider entry — a custom provider vanished from the picker
+	// after an unrelated toggle, and toggling one provider back on resurrected nothing.
+	cur = mergeConfigPatch(cur, patch)
 	cur = dropRemovedProviders(cur)
 
 	cfgPath := filepath.Join(s.homeDir, "config.json")
@@ -1126,6 +1128,12 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 		if k == "auth" {
 			continue
 		}
+		if existing, ok := daemon[k].(map[string]any); ok {
+			if incoming, ok := v.(map[string]any); ok {
+				daemon[k] = mergeConfigPatch(existing, incoming)
+				continue
+			}
+		}
 		daemon[k] = v
 	}
 	// The removals produced this providers map; persisting the instruction too would replay it
@@ -1137,6 +1145,28 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	b, _ := json.MarshalIndent(disk, "", "  ")
 	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)
 	return cur
+}
+
+// mergeConfigPatch deep-merges a patch into a config, matching the node daemon's deepMerge.
+//
+// Objects merge key by key; anything else (arrays, scalars, null) replaces. Nested objects are
+// copied rather than mutated so the caller's map — `cur` is built fresh by LoadDaemonConfig, but
+// the patch comes straight off the wire — never aliases into the stored config.
+func mergeConfigPatch(base, patch map[string]any) map[string]any {
+	out := make(map[string]any, len(base)+len(patch))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range patch {
+		if incoming, ok := v.(map[string]any); ok {
+			if existing, ok := out[k].(map[string]any); ok {
+				out[k] = mergeConfigPatch(existing, incoming)
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // dropRemovedProviders applies the `removeProviders` instruction to a merged config. It is an

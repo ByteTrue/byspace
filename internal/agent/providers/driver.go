@@ -378,18 +378,34 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 
 	// The scripted providers follow the built-ins, matching node's registry which lists every registered
 	// provider. Their models have to be in the catalog for the model picker to offer them.
-	// Only registered scripted providers appear here, so nothing needs a per-entry availability
-	// gate: an id that is absent from the list is one the daemon does not offer at all.
+	//
+	// They are gated exactly like the built-ins: a scripted provider the user switched off in settings
+	// has to disappear from the picker. Hardcoding enabled=true here made the settings switch a no-op
+	// for `mock` — the toggle wrote the config, the entry ignored it, and the switch snapped back.
 	for _, spec := range registeredTestProviders() {
-		status := "ready"
+		builtinSet[spec.ID] = true
+		enabled := true
+		if override, ok := customProviders[spec.ID].(map[string]any); ok {
+			if en, hasEn := override["enabled"].(bool); hasEn {
+				enabled = en
+			}
+		}
+		status := "unavailable"
+		if enabled {
+			status = "ready"
+		}
+		models := spec.Models
+		if !enabled {
+			models = []sdk.CatalogModel{}
+		}
 		entries = append(entries, map[string]any{
 			"provider":    spec.ID,
 			"label":       spec.Label,
 			"status":      status,
-			"enabled":     true,
+			"enabled":     enabled,
 			"source":      "builtin",
 			"fetchedAt":   now,
-			"models":      spec.Models,
+			"models":      models,
 			"modes":       spec.Modes,
 			"description": spec.Description,
 		})

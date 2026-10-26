@@ -51,7 +51,9 @@ ACP permission options are rendered as ordered actions and BySpace returns the s
 
 Implement the `AgentClient` and `AgentSession` interfaces from `agent-sdk-types.ts` yourself. This gives full control but requires you to handle process management, streaming, permissions, and session persistence from scratch.
 
-Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`codex-app-server-agent.ts`), `opencode` (`opencode-agent.ts`), `pi` (`providers/pi/agent.ts`), and `omp` (`providers/omp/agent.ts`). The dev-only `mock` provider (`mock-load-test-agent.ts`) is also direct.
+Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`codex-app-server-agent.ts`), `opencode` (`opencode-agent.ts`), `pi` (`providers/pi/agent.ts`), and `omp` (`providers/omp/agent.ts`).
+
+The dev-only `mock` provider (`internal/agent/providers/mock_provider.go`) is also direct. It registers only when `BYSPACE_NODE_ENV=development`, because 76 Playwright specs create agents with `provider: "mock"` and a shipped daemon has no use for synthetic traffic. A beta install that listed "Mock Load Test" beside Claude was that gate missing. `scripts/dev-daemon.mjs` and the e2e daemon helper set the variable; nothing in a packaged install does.
 
 Claude first-party model metadata lives in `packages/server/src/server/agent/providers/claude/model-manifest.ts`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
 
