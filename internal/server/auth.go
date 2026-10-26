@@ -21,6 +21,7 @@ const passwordBcryptCost = 12
 // bearerFreeRoutes never require a password: health is what a client probes before it has one,
 // and the two self-authenticating routes carry their own tokens.
 var bearerFreeRoutes = map[string]bool{
+	"/health":             true,
 	"/api/health":         true,
 	"/api/files/download": true,
 	"/mcp/agents":         true,

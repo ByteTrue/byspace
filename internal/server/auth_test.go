@@ -39,9 +39,14 @@ func TestExtractWSBearerToken(t *testing.T) {
 
 // Health and the two self-authenticating routes must stay reachable before a client has a
 // password, or the app could never discover the daemon it needs to authenticate against.
+//
+// /health belongs here next to /api/health for the same reason: `byspace daemon start` and the
+// container health check probe it before they have a token. Leaving it out made a daemon with a
+// password configured look like one that never came up.
 func TestShouldBypassBearerAuth(t *testing.T) {
 	bypass := []struct{ method, path string }{
 		{"OPTIONS", "/ws"},
+		{"GET", "/health"},
 		{"GET", "/api/health"},
 		{"GET", "/api/files/download"},
 		{"POST", "/mcp/agents"},

@@ -30,12 +30,15 @@ import (
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
+// DefaultDevAddr is the address repository development listens on. It is not a fallback for
+// the CLI: scripts/dev-daemon.mjs sets BYSPACE_LISTEN, and a packaged daemon must default to
+// the production port or `daemon start` and `daemon status` disagree.
 const DefaultDevAddr = "127.0.0.1:6778"
 
 const usageText = `byspace — single-binary AI coding agent host, web workbench, CLI & E2EE relay
 
   byspace serve [--addr host:port] [--home <dir>] [--relay <ws-url>] [--web-dir <dir>]
-                                  run the daemon, Pi agent host, and web UI (default 127.0.0.1:6778)
+                                  run the daemon, Pi agent host, and web UI (default 127.0.0.1:6777)
   byspace web [--addr host:port] [--lan] [--home <dir>] [--web-dir <dir>]
                                   serve the web workbench in a browser alongside the daemon
   byspace relay [--addr host:port] [--web-dir <dir>]
@@ -1210,6 +1213,9 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			return runServe(cliVersion, serveArgs, stdout)
 		}
 
+		// Record how much log already exists: a failed start has to be diagnosed from what this
+		// attempt wrote, not from the previous daemon's periodic metrics.
+		logStart := daemonLogSize(resolvedHome)
 		pid, err := daemon.StartBackgroundWithOptions(daemon.StartOptions{
 			HomeDir:     resolvedHome,
 			Addr:        *addr,
@@ -1235,12 +1241,12 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 				return nil
 			}
 			if !daemon.ProcessAlive(pid) {
-				return fmt.Errorf("daemon exited during startup (pid %d); %s", pid, daemonLogTail(resolvedHome))
+				return fmt.Errorf("daemon exited during startup (pid %d); %s", pid, daemonLogTail(resolvedHome, logStart))
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
 		return fmt.Errorf("daemon did not become ready within %s (pid %d); %s",
-			daemonStartTimeout, pid, daemonLogTail(resolvedHome))
+			daemonStartTimeout, pid, daemonLogTail(resolvedHome, logStart))
 
 	case "stop":
 		fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
@@ -1503,11 +1509,18 @@ func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
 	}
 }
 
+// defaultListenAddr is where a daemon started without --addr listens.
+//
+// It is the packaged port, not the development one. Returning the dev port made `daemon start`
+// bind 6778 while every other command fell back to DefaultTCPListen, so a daemon that had just
+// started looked stopped: `daemon start` wrote the PID file, probed 6778, timed out, and `byspace
+// ls` then asked 6777 and reported nothing. Repository development sets BYSPACE_LISTEN (see
+// scripts/dev-daemon.mjs), so the dev port does not need to be the fallback.
 func defaultListenAddr() string {
 	if v := strings.TrimSpace(os.Getenv("BYSPACE_LISTEN")); v != "" {
 		return v
 	}
-	return DefaultDevAddr
+	return DefaultTCPListen
 }
 
 // dialDaemonWS connects to a daemon.
@@ -1634,18 +1647,51 @@ func waitSessionResp(ctx context.Context, ws *websocket.Conn, wantType, wantStat
 // a moment on a loaded machine, and failing spuriously is its own kind of bug.
 const daemonStartTimeout = 15 * time.Second
 
+// daemonLogSize reports the current length of the daemon log, or 0 when it does not exist.
+//
+// `daemon start` records this before spawning so the timeout message can show only what this
+// attempt wrote. The log is appended to across restarts, so its tail is usually the previous
+// daemon's periodic metrics — which says nothing about why this start failed.
+func daemonLogSize(homeDir string) int64 {
+	info, err := os.Stat(daemon.LogPath(homeDir))
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
 // daemonLogTail returns the last few lines of the daemon log, for an error message.
-func daemonLogTail(homeDir string) string {
-	raw, err := os.ReadFile(daemon.LogPath(homeDir))
+func daemonLogTail(homeDir string, since int64) string {
+	file, err := os.Open(daemon.LogPath(homeDir))
 	if err != nil {
 		return "no daemon log yet"
 	}
-	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
-	if len(lines) > 5 {
-		lines = lines[len(lines)-5:]
+	defer file.Close()
+	if since > 0 {
+		if _, seekErr := file.Seek(since, io.SeekStart); seekErr != nil {
+			return "daemon log is unreadable"
+		}
 	}
-	tail := strings.TrimSpace(strings.Join(lines, "\n"))
+	raw, err := io.ReadAll(io.LimitReader(file, 256*1024))
+	if err != nil {
+		return "daemon log is unreadable"
+	}
+	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	eventLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.Contains(line, `"msg":"ws_runtime_metrics"`) {
+			continue
+		}
+		eventLines = append(eventLines, line)
+	}
+	if len(eventLines) > 5 {
+		eventLines = eventLines[len(eventLines)-5:]
+	}
+	tail := strings.TrimSpace(strings.Join(eventLines, "\n"))
 	if tail == "" {
+		if since > 0 {
+			return "this start wrote nothing to the daemon log"
+		}
 		return "daemon log is empty"
 	}
 	return "last log lines:\n" + tail
