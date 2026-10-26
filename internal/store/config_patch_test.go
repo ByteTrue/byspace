@@ -104,3 +104,59 @@ func TestServedScriptedProviderTogglePassesValidation(t *testing.T) {
 		t.Fatal("an unknown provider with no launch method must still be rejected")
 	}
 }
+
+// A union-valued key is replaced, never merged.
+//
+// `skillsSelection` is `{mode:"all"}` or `{mode:"custom", skills:[...]}` — the wire schema closes
+// the first against `skills`. Deep-merging `{mode:"all"}` over a stored custom selection left
+// `{mode:"all", skills:[...]}`, which no client accepts; the spec that switches from a custom
+// selection to "all" failed with the stale skills array still attached, in CI and again on retry.
+func TestSkillsSelectionReplacesInsteadOfMerging(t *testing.T) {
+	s := New(t.TempDir())
+	s.SaveDaemonConfig(map[string]any{
+		"skillsSelection": map[string]any{"mode": "custom", "skills": []any{"byspace", "byspace-advisor"}},
+	})
+
+	s.SaveDaemonConfig(map[string]any{"skillsSelection": map[string]any{"mode": "all"}})
+
+	sel, _ := s.LoadDaemonConfig()["skillsSelection"].(map[string]any)
+	if sel["mode"] != "all" {
+		t.Fatalf("mode = %v, want all", sel["mode"])
+	}
+	if _, stale := sel["skills"]; stale {
+		t.Fatalf("skillsSelection = %#v; the previous custom list survived a switch to \"all\"", sel)
+	}
+
+	// The reverse has to work too: a custom selection replaces "all" outright.
+	s.SaveDaemonConfig(map[string]any{
+		"skillsSelection": map[string]any{"mode": "custom", "skills": []any{"byspace"}},
+	})
+	sel, _ = s.LoadDaemonConfig()["skillsSelection"].(map[string]any)
+	got, _ := sel["skills"].([]any)
+	if sel["mode"] != "custom" || len(got) != 1 || got[0] != "byspace" {
+		t.Fatalf("skillsSelection = %#v, want the new custom selection", sel)
+	}
+}
+
+// Targets and plugins are replaced, not merged: they are lists, and a list patch means the list.
+func TestSkillTargetsAndPluginsReplace(t *testing.T) {
+	s := New(t.TempDir())
+	s.SaveDaemonConfig(map[string]any{
+		"skillTargets": []any{"agents", "claude"},
+		"plugins":      []any{"a", "b"},
+	})
+	s.SaveDaemonConfig(map[string]any{
+		"skillTargets": []any{"claude"},
+		"plugins":      []any{"c"},
+	})
+
+	cfg := s.LoadDaemonConfig()
+	targets, _ := cfg["skillTargets"].([]any)
+	if len(targets) != 1 || targets[0] != "claude" {
+		t.Fatalf("skillTargets = %#v, want just the new list", targets)
+	}
+	plugins, _ := cfg["plugins"].([]any)
+	if len(plugins) != 1 || plugins[0] != "c" {
+		t.Fatalf("plugins = %#v, want just the new list", plugins)
+	}
+}

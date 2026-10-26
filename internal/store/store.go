@@ -1128,13 +1128,7 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 		if k == "auth" {
 			continue
 		}
-		if existing, ok := daemon[k].(map[string]any); ok {
-			if incoming, ok := v.(map[string]any); ok {
-				daemon[k] = mergeConfigPatch(existing, incoming)
-				continue
-			}
-		}
-		daemon[k] = v
+		daemon[k] = mergeConfigValue(k, daemon[k], v)
 	}
 	// The removals produced this providers map; persisting the instruction too would replay it
 	// against whatever the user adds back later. The disk map is a separate graph from `cur`, so
@@ -1158,15 +1152,37 @@ func mergeConfigPatch(base, patch map[string]any) map[string]any {
 		out[k] = v
 	}
 	for k, v := range patch {
-		if incoming, ok := v.(map[string]any); ok {
-			if existing, ok := out[k].(map[string]any); ok {
-				out[k] = mergeConfigPatch(existing, incoming)
-				continue
-			}
-		}
-		out[k] = v
+		out[k] = mergeConfigValue(k, out[k], v)
 	}
 	return out
+}
+
+// mergeConfigValue merges one key of a config patch into its current value.
+//
+// Two kinds of key need different treatment than a plain deep merge:
+//
+//   - unionPatchKeys. `skillsSelection` is `{mode:"all"}` or `{mode:"custom", skills:[...]}`, and
+//     the wire schema closes the first against `skills`. Merging `{mode:"all"}` over a stored
+//     custom selection left `{mode:"all", skills:[...]}`, which no client accepts and every later
+//     save inherited. Node rewrites these wholesale after its deepMerge.
+//   - everything else deep-merges, so a provider toggle keeps its siblings.
+func mergeConfigValue(key string, current, incoming any) any {
+	if unionPatchKeys[key] {
+		return incoming
+	}
+	existing, currentIsObject := current.(map[string]any)
+	next, incomingIsObject := incoming.(map[string]any)
+	if currentIsObject && incomingIsObject {
+		return mergeConfigPatch(existing, next)
+	}
+	return incoming
+}
+
+// unionPatchKeys are config keys whose value is replaced rather than merged.
+var unionPatchKeys = map[string]bool{
+	"skillsSelection": true,
+	"skillTargets":    true,
+	"plugins":         true,
 }
 
 // dropRemovedProviders applies the `removeProviders` instruction to a merged config. It is an
