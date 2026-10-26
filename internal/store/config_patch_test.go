@@ -239,3 +239,50 @@ func readConfigFile(t *testing.T, dir string) map[string]any {
 	}
 	return disk
 }
+
+// The nested copy wins when a home carries both.
+//
+// A home written by a build that stored these under `daemon` keeps that flat record. Reading it as
+// authoritative means the nested value the node daemon wrote afterwards stays invisible — the exact
+// divergence this whole change is about, just in the other direction.
+func TestNestedAgentSettingsWinOverAStaleFlatCopy(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigFile(t, dir, `{
+  "version": 1,
+  "daemon": {"providers": {"pi": {"enabled": true}}},
+  "agents": {"providers": {"pi": {"enabled": false}}}
+}`)
+
+	providers, _ := New(dir).LoadDaemonConfig()["providers"].(map[string]any)
+	pi, _ := providers["pi"].(map[string]any)
+	if pi["enabled"] != false {
+		t.Fatalf("pi.enabled = %v, want the nested false to win", pi["enabled"])
+	}
+}
+
+// The flat record still answers for keys the nested copy does not mention, or an upgrade would
+// silently drop a provider the user had only in the old shape.
+func TestFlatAgentSettingsStillFillUnmentionedKeys(t *testing.T) {
+	dir := t.TempDir()
+	writeConfigFile(t, dir, `{
+  "version": 1,
+  "daemon": {"providers": {"custom": {"enabled": true}, "pi": {"enabled": true}}},
+  "agents": {"providers": {"pi": {"enabled": false}}}
+}`)
+
+	providers, _ := New(dir).LoadDaemonConfig()["providers"].(map[string]any)
+	if providers["custom"] == nil {
+		t.Fatalf("providers = %#v, want the flat-only entry kept", providers)
+	}
+	pi, _ := providers["pi"].(map[string]any)
+	if pi["enabled"] != false {
+		t.Fatalf("pi.enabled = %v, want the nested value to win", pi["enabled"])
+	}
+}
+
+func writeConfigFile(t *testing.T, dir, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

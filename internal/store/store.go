@@ -1047,8 +1047,13 @@ func nestedAgentSettingKey(flat string) (string, bool) {
 // liftAgentSettings flattens the `agents` block onto the settings map.
 //
 // `agents` is where the persisted config schema and the node daemon put these, while this daemon
-// works on a flat map. Reading only the flat copy meant an override written by anything else was
-// silently ignored — the setting simply seemed to have no effect.
+// works on a flat map. It is also authoritative: a home can carry a flat copy at the same time
+// (written by a build that put them under `daemon`), and letting the flat one win meant the nested
+// value the node daemon had just written stayed invisible.
+//
+// The two copies are the same setting rather than two settings, so objects merge with the nested
+// entry winning per key; a provider switched on in `agents` is not re-disabled by a stale flat
+// record of it being off.
 //
 // `agents.skills` is `{selection, targets}` rather than a flat value, so it maps onto the two flat
 // keys this daemon reads.
@@ -1057,39 +1062,30 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 	if !ok {
 		return
 	}
-	for _, key := range []string{"providers", "metadataGeneration", "catalogRefreshTimeoutMs"} {
+	for _, key := range []string{"providers", "metadataGeneration"} {
 		value, present := agents[key]
 		if !present {
 			continue
 		}
-		if current, exists := cfg[key]; exists && !isEmptySetting(current) {
-			// A flat value already answered; the nested copy only fills what is missing.
-			continue
+		if nested, isObject := value.(map[string]any); isObject {
+			if flat, isObject := cfg[key].(map[string]any); isObject {
+				cfg[key] = mergeConfigPatch(flat, nested)
+				continue
+			}
 		}
 		cfg[key] = value
 	}
+	if value, present := agents["catalogRefreshTimeoutMs"]; present {
+		cfg["catalogRefreshTimeoutMs"] = value
+	}
 	if skills, ok := agents["skills"].(map[string]any); ok {
-		if selection, present := skills["selection"]; present && isEmptySetting(cfg["skillsSelection"]) {
+		if selection, present := skills["selection"]; present {
 			cfg["skillsSelection"] = selection
 		}
-		if targets, present := skills["targets"]; present && isEmptySetting(cfg["skillTargets"]) {
+		if targets, present := skills["targets"]; present {
 			cfg["skillTargets"] = targets
 		}
 	}
-}
-
-// isEmptySetting reports whether a setting carries nothing. The defaults seed `providers` with an
-// empty map, so "key exists" is not the same as "the user configured it".
-func isEmptySetting(value any) bool {
-	switch typed := value.(type) {
-	case nil:
-		return true
-	case map[string]any:
-		return len(typed) == 0
-	case []any:
-		return len(typed) == 0
-	}
-	return false
 }
 
 func daemonConfigDefaults() map[string]any {
