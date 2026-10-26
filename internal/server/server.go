@@ -588,6 +588,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("Not found"))
 }
 
+// offeredBearerProtocols lists the client's bearer subprotocols, for the handshake echo.
+func offeredBearerProtocols(r *http.Request) []string {
+	var out []string
+	for _, part := range strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",") {
+		trimmed := strings.TrimSpace(part)
+		if strings.HasPrefix(trimmed, "byspace.bearer.") {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
 func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
 	// DNS-rebinding guard, on the WebSocket upgrade only — the same place the node daemon
 	// applies it (websocket-server.ts). Applying it to every HTTP request breaks the app: the
@@ -599,6 +611,11 @@ func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
 	}
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
+		// A browser offers `byspace.bearer.<token>` as a subprotocol because it cannot set an
+		// Authorization header. The server has to echo the selected one back or the handshake
+		// fails on the client ("server sent no subprotocol"), which would make the app unable to
+		// reach a protected daemon while the CLI, which sends a header, still worked.
+		Subprotocols: offeredBearerProtocols(r),
 	})
 	if err != nil {
 		return

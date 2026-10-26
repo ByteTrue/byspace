@@ -1,11 +1,16 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
 )
 
 // A home with a password must let its own CLI in without the password.
@@ -137,5 +142,40 @@ func TestCLICredentialFileMode(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Fatalf("credential mode = %o, want 600", perm)
+	}
+}
+
+// The handshake must echo the bearer subprotocol back.
+//
+// A browser client fails the connection when it offered subprotocols and the server selected none
+// ("server sent no subprotocol"). Accepting the upgrade without the echo let the CLI in — it sends
+// an Authorization header — while the app on the same daemon stayed disconnected.
+func TestWebSocketHandshakeEchoesTheBearerSubprotocol(t *testing.T) {
+	homeDir := t.TempDir()
+	srv := newTestServer(t, homeDir)
+	setDaemonPassword(t, srv, "hunter2")
+	credential := EnsureCLICredential(homeDir)
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader:   http.Header{"Authorization": []string{"Bearer " + credential}},
+		Subprotocols: []string{"byspace.bearer." + credential},
+	})
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("dial failed (%d): %v", status, err)
+	}
+	defer conn.CloseNow()
+
+	if got := conn.Subprotocol(); got != "byspace.bearer."+credential {
+		t.Fatalf("negotiated subprotocol = %q, want the bearer echoed back", got)
 	}
 }
