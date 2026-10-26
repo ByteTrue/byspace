@@ -33,8 +33,7 @@
     "typecheck": "tsgo --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "npm --prefix ../app run build:web && wrangler deploy --env=\"\"",
-    "deploy:beta": "npm --prefix ../app run build:web && wrangler deploy --env beta"
+    "deploy": "npm --prefix ../app run build:web && wrangler deploy --env=\"\""
   },
   "dependencies": {
     "base64-js": "^1.5.1",

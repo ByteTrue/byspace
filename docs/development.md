@@ -307,15 +307,18 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 
 `packages/app` exports a single-page Expo web app. The export in `dist/` is
 served by the hosted relay Worker (issue 073) from the same origin as the
-relay — deploy with `npm run deploy:hosted` (or `:beta`) from the repo root,
-which builds the web export and runs `wrangler deploy` in `packages/relay`.
-The Docker container serves the same shape from the Go relay.
+relay. Stable (`app.byspace.cc.cd`) is `packages/relay`; prerelease
+(`app-beta.byspace.cc.cd`) is `workers/relay`. Deploy them with
+`npm run deploy:hosted` (stable) and `npm run deploy:relay-go:beta` (beta) from
+the repo root; each builds the web export and runs `wrangler deploy` in its own
+directory. The Docker container serves the same shape from the Go relay.
 
 ## The Go relay Worker
 
 `workers/relay` compiles `internal/relay` to wasm and runs it inside a Cloudflare
-Durable Object. It is a separate Worker from `packages/relay` — that one still
-serves the hosted `relay.byspace.cc.cd` / `app.byspace.cc.cd` origins.
+Durable Object. It is a separate Worker from `packages/relay` — that one serves
+the hosted `relay.byspace.cc.cd` / `app.byspace.cc.cd` stable origins, while this
+one serves the beta origins.
 
 ```bash
 cd workers/relay
