@@ -5,6 +5,13 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.4 - 2026-10-26
+
+### Fixed
+
+- Fixed provider overrides and skills being saved under a key only this daemon read, so a Node daemon sharing the same home never saw the change and the two showed different answers
+- Fixed a relay configured with `enabled: true` and no endpoint staying connected to nothing: it now falls back to the hosted relay, as the Node daemon does, and `daemon status` reports the address it actually dials
+
 ## 0.21.0-beta.3 - 2026-10-26
 
 ### Fixed
