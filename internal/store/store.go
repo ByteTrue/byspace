@@ -1027,18 +1027,37 @@ func daemonAuthView(raw any) map[string]any {
 	return map[string]any{"passwordSet": strings.TrimSpace(hash) != ""}
 }
 
+// nestedAgentSettingKey maps a flat setting onto its path inside the persisted `agents` block.
+//
+// These are the keys `PersistedConfigSchema` declares under `agents` (packages/protocol and
+// archive/packages/server/src/server/persisted-config.ts), and the keys the reload diff reports to
+// the user. Writing them flat under `daemon` worked only for this daemon, which lifts them back on
+// load; anything else reading the home — the node daemon, the app's own config schema — saw
+// nothing.
+func nestedAgentSettingKey(flat string) (string, bool) {
+	switch flat {
+	case "providers", "metadataGeneration", "catalogRefreshTimeoutMs":
+		return flat, true
+	case "skillsSelection":
+		return "selection", true
+	}
+	return "", false
+}
+
 // liftAgentSettings flattens the `agents` block onto the settings map.
 //
-// Two on-disk shapes exist. This daemon writes provider overrides under `daemon.providers`, while
-// config files written by hand or by a newer harness nest them under `agents.providers` — the same
-// nesting the wire uses. Reading only the flat copy meant an override was silently ignored, which
-// looks exactly like the setting having no effect.
+// `agents` is where the persisted config schema and the node daemon put these, while this daemon
+// works on a flat map. Reading only the flat copy meant an override written by anything else was
+// silently ignored — the setting simply seemed to have no effect.
+//
+// `agents.skills` is `{selection, targets}` rather than a flat value, so it maps onto the two flat
+// keys this daemon reads.
 func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 	agents, ok := agentsRaw.(map[string]any)
 	if !ok {
 		return
 	}
-	for _, key := range []string{"providers", "metadataGeneration", "skills", "skillTargets", "catalogRefreshTimeoutMs"} {
+	for _, key := range []string{"providers", "metadataGeneration", "catalogRefreshTimeoutMs"} {
 		value, present := agents[key]
 		if !present {
 			continue
@@ -1048,6 +1067,14 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 			continue
 		}
 		cfg[key] = value
+	}
+	if skills, ok := agents["skills"].(map[string]any); ok {
+		if selection, present := skills["selection"]; present && isEmptySetting(cfg["skillsSelection"]) {
+			cfg["skillsSelection"] = selection
+		}
+		if targets, present := skills["targets"]; present && isEmptySetting(cfg["skillTargets"]) {
+			cfg["skillTargets"] = targets
+		}
 	}
 }
 
@@ -1119,13 +1146,41 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	}
 	daemon, _ := disk["daemon"].(map[string]any)
 	if daemon == nil {
-		daemon = map[string]any{}
+		n := map[string]any{}
+		daemon = n
 	}
+	agents, _ := disk["agents"].(map[string]any)
+	if agents == nil {
+		agents = map[string]any{}
+	}
+	// The nested `agents` block is where the persisted config schema puts these, and where the node
+	// daemon writes them. Keeping them in `daemon` (the flat shape this daemon reads back through
+	// liftAgentSettings) meant a provider toggle was invisible to a node daemon sharing the home:
+	// both sides showed their own answer and neither saw the other's.
+	agentsTouched := false
 	for k, v := range patch {
 		// The password has one writer. A patch carrying an auth block here would either store a
 		// plaintext or replace the hash with the derived boolean, so it is ignored rather than
 		// merged — SetDaemonPasswordHash owns that field.
 		if k == "auth" {
+			continue
+		}
+		if nestedKey, ok := nestedAgentSettingKey(k); ok {
+			// The flat copy is what this daemon reads, so it is cleared rather than left behind to
+			// shadow the nested value on the next load.
+			delete(daemon, k)
+			if k == "skillsSelection" {
+				// `agents.skills` is `{selection, targets}`, not a selection on its own.
+				skills, _ := agents["skills"].(map[string]any)
+				if skills == nil {
+					skills = map[string]any{}
+				}
+				skills[nestedKey] = mergeConfigValue(k, skills[nestedKey], v)
+				agents["skills"] = skills
+			} else {
+				agents[nestedKey] = mergeConfigValue(k, agents[nestedKey], v)
+			}
+			agentsTouched = true
 			continue
 		}
 		daemon[k] = mergeConfigValue(k, daemon[k], v)
@@ -1135,6 +1190,9 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	// the edit has to happen here as well.
 	dropRemovedProviders(daemon)
 	disk["daemon"] = daemon
+	if agentsTouched {
+		disk["agents"] = agents
+	}
 
 	b, _ := json.MarshalIndent(disk, "", "  ")
 	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)

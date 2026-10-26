@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -108,26 +109,25 @@ func reportRelayStatus(stdout io.Writer, homeFlag string) {
 		return
 	}
 	config := store.New(resolvedHome).LoadDaemonConfig()
-	relay, _ := config["relay"].(map[string]any)
-	if relay == nil {
-		return
-	}
-
-	enabled, _ := relay["enabled"].(bool)
-	if !enabled {
+	// Read it through the same resolver the runtime uses, so `status` reports where the daemon
+	// actually connects rather than whatever literal the file happens to carry. Checking
+	// `publicEndpoint` by hand said "enabled but no publicEndpoint configured" for the common home
+	// that only stores `enabled: true`, while the daemon was connecting to the hosted relay fine.
+	relay := server.ResolveRelayConfig(config)
+	if !relay.Enabled {
 		fmt.Fprintln(stdout, "relay     disabled")
 		return
 	}
-	endpoint, _ := relay["publicEndpoint"].(string)
-	scheme := "ws"
-	if useTLS, _ := relay["publicUseTls"].(bool); useTLS {
-		scheme = "wss"
-	}
+	endpoint := relay.ClientRelayEndpoint()
 	if strings.TrimSpace(endpoint) == "" {
 		// Configured but incomplete: the daemon will never connect, and the user needs to know the
 		// endpoint is what is missing rather than assuming the network is at fault.
-		fmt.Fprintln(stdout, "relay     enabled but no publicEndpoint configured")
+		fmt.Fprintln(stdout, "relay     enabled but no endpoint configured")
 		return
+	}
+	scheme := "ws"
+	if relay.ClientRelayUseTLS() {
+		scheme = "wss"
 	}
 	fmt.Fprintf(stdout, "relay     %s://%s\n", scheme, endpoint)
 }

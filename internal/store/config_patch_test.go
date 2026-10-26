@@ -1,6 +1,11 @@
 package store
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // A provider toggle must not delete the other providers' saved settings.
 //
@@ -159,4 +164,78 @@ func TestSkillTargetsAndPluginsReplace(t *testing.T) {
 	if len(plugins) != 1 || plugins[0] != "c" {
 		t.Fatalf("plugins = %#v, want just the new list", plugins)
 	}
+}
+
+// A provider toggle must land where the persisted schema and the node daemon put it.
+//
+// This daemon reads a flat map, so writing `daemon.providers` worked for it and for nothing else:
+// a node daemon sharing the home kept showing the other answer, and neither side saw the other's
+// change. `PersistedConfigSchema` declares these under `agents`.
+func TestAgentSettingsPersistUnderAgents(t *testing.T) {
+	dir := t.TempDir()
+	s := New(dir)
+	s.SaveDaemonConfig(map[string]any{
+		"providers":       map[string]any{"pi": map[string]any{"enabled": false}},
+		"metadataGeneration": map[string]any{"providers": []any{"pi"}},
+	})
+
+	disk := readConfigFile(t, dir)
+	daemon, _ := disk["daemon"].(map[string]any)
+	if _, flat := daemon["providers"]; flat {
+		t.Fatalf("daemon.providers must not be written: %#v", daemon["providers"])
+	}
+	agents, _ := disk["agents"].(map[string]any)
+	providers, _ := agents["providers"].(map[string]any)
+	pi, _ := providers["pi"].(map[string]any)
+	if pi["enabled"] != false {
+		t.Fatalf("agents.providers = %#v, want pi disabled", providers)
+	}
+	if _, ok := agents["metadataGeneration"]; !ok {
+		t.Fatalf("agents = %#v, want metadataGeneration nested too", agents)
+	}
+
+	// And it still reads back as the flat setting, or the settings page would not show it.
+	cfg := s.LoadDaemonConfig()
+	flatProviders, _ := cfg["providers"].(map[string]any)
+	if flatProviders["pi"] == nil {
+		t.Fatalf("providers = %#v after reload, want the nested entry lifted", cfg["providers"])
+	}
+}
+
+// The skills block keeps its `{selection, targets}` shape.
+func TestSkillsSelectionPersistsUnderAgentsSkills(t *testing.T) {
+	dir := t.TempDir()
+	s := New(dir)
+	s.SaveDaemonConfig(map[string]any{
+		"skillsSelection": map[string]any{"mode": "all"},
+		"skillTargets":    []any{"claude"},
+	})
+
+	disk := readConfigFile(t, dir)
+	agents, _ := disk["agents"].(map[string]any)
+	skills, _ := agents["skills"].(map[string]any)
+	selection, _ := skills["selection"].(map[string]any)
+	if selection["mode"] != "all" {
+		t.Fatalf("agents.skills = %#v, want selection.mode=all", skills)
+	}
+	// A later flat write must not leave the old record shadowing it.
+	s.SaveDaemonConfig(map[string]any{"skillsSelection": map[string]any{"mode": "custom", "skills": []any{"byspace"}}})
+	cfg := s.LoadDaemonConfig()
+	reloaded, _ := cfg["skillsSelection"].(map[string]any)
+	if reloaded["mode"] != "custom" {
+		t.Fatalf("skillsSelection = %#v after reload, want the new mode", reloaded)
+	}
+}
+
+func readConfigFile(t *testing.T, dir string) map[string]any {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var disk map[string]any
+	if err := json.Unmarshal(b, &disk); err != nil {
+		t.Fatal(err)
+	}
+	return disk
 }

@@ -126,6 +126,22 @@ func (r *relayRuntime) Stop() {
 	}
 }
 
+// hostedRelayEndpoint is the relay a daemon reaches when its config says only `enabled`.
+//
+// Matches `DEFAULT_RELAY_ENDPOINT` in packages/protocol/src/daemon-endpoints.ts and the fallback
+// in the node daemon's resolveRelayConfig. Without it, `"relay": {"enabled": true}` — the shape
+// every existing home has, since the endpoint is optional — left Endpoint empty and the daemon
+// never dialled: relay looked on, and remote access was silently dead.
+const hostedRelayEndpoint = "relay.byspace.cc.cd:443"
+
+// ResolveRelayConfig reads the relay settings from a loaded daemon config.
+//
+// Exported because the CLI has to report where the daemon actually connects; reading the file by
+// hand got the fallback and the public/internal split wrong.
+func ResolveRelayConfig(cfg map[string]any) RelayConfig {
+	return relayConfigFromStore(cfg)
+}
+
 // relayConfigFromStore reads the relay settings from the daemon config.
 //
 // LoadDaemonConfig already unwraps the `daemon` object, so the relay block sits at the top
@@ -178,6 +194,19 @@ func relayConfigFromStore(cfg map[string]any) RelayConfig {
 			out.PublicUseTLS = out.UseTLS
 		} else {
 			out.PublicUseTLS = relayEndpointImpliesTLS(out.PublicEndpoint)
+		}
+	}
+	// Enabled with no endpoint means the hosted relay, matching the node daemon's
+	// `?? input.hostedRelayEndpoint`. A home whose config only says `enabled: true` is the common
+	// case: the endpoint is optional there, and every home predating this field has nothing.
+	if out.Enabled {
+		if out.Endpoint == "" {
+			out.Endpoint = hostedRelayEndpoint
+			out.UseTLS = true
+		}
+		if out.PublicEndpoint == "" {
+			out.PublicEndpoint = out.Endpoint
+			out.PublicUseTLS = out.UseTLS
 		}
 	}
 	return out
