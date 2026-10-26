@@ -5,6 +5,12 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.6 - 2026-10-26
+
+### Fixed
+
+- Fixed `byspace pair` with no `--home` reading no config at all, so a home configured for `app.byspace.cc.cd` got a link derived from the build's version
+
 ## 0.21.0-beta.5 - 2026-10-26
 
 ### Fixed
