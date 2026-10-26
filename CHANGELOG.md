@@ -5,6 +5,22 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.2 - 2026-10-26
+
+### Added
+
+- The public relay and the hosted web app are one Go Cloudflare Worker instead of a TypeScript relay next to a separately built site, and the beta channel has its own deployment at `app-beta.byspace.cc.cd` with the relay on that origin
+
+### Fixed
+
+- Fixed `byspace daemon start` timing out on a daemon that had in fact started: it listened on the development port (6778) while every other command looked on 6777, and a configured password made its readiness probe get 401 on `/health`
+- Fixed `byspace daemon status` reporting `stopped` for a daemon it had not started on the default port
+- Fixed the failed-start message printing the previous daemon's periodic metrics instead of what the attempt itself wrote
+- Fixed a beta daemon never reaching its relay: the control channel counted a silent socket as dead and closed it every 30 seconds, so no device could pair through it
+- Fixed `--relay-use-tls` being ignored, and a relay endpoint written without a scheme being dialled over plaintext on port 80, which also put `:80` and `useTls:false` into pairing offers
+- Fixed `byspace pair` minting a link from `config.json` instead of asking the running daemon, so the link named the stable app and the hosted relay even for a beta or self-hosted daemon, and failed outright on a home where the relay had never been configured
+- Fixed a pairing link failing with `Invalid host:port (expected localhost:6777)` when the relay endpoint carried no port
+
 ## 0.21.0-beta.1 - 2026-10-25
 
 ### Changed
