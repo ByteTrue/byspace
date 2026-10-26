@@ -9,7 +9,7 @@
 
 ### Added
 
-- The public relay and the hosted web app are one Go Cloudflare Worker instead of a TypeScript relay next to a separately built site, and the beta channel has its own deployment at `app-beta.byspace.cc.cd` with the relay on that origin
+- The beta channel runs on a Go Cloudflare Worker: the relay compiles to wasm, and `app-beta.byspace.cc.cd` serves the beta web app from the same origin as that relay
 
 ### Fixed
 
