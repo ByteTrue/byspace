@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -131,7 +132,14 @@ func setDaemonPassword(t *testing.T, srv *Server, plaintext string) {
 }
 
 // The credential file is readable only by its owner.
+//
+// Unix only: Windows has no POSIX mode bits, and the file lands with whatever the inherited ACL
+// grants. That is inherent to the platform rather than a gap this file can close — a Windows home
+// is protected by the user profile ACL, not by 0600.
 func TestCLICredentialFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX file modes")
+	}
 	homeDir := t.TempDir()
 	if EnsureCLICredential(homeDir) == "" {
 		t.Fatal("expected a credential")
