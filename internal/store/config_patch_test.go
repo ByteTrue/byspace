@@ -175,7 +175,7 @@ func TestAgentSettingsPersistUnderAgents(t *testing.T) {
 	dir := t.TempDir()
 	s := New(dir)
 	s.SaveDaemonConfig(map[string]any{
-		"providers":       map[string]any{"pi": map[string]any{"enabled": false}},
+		"providers":          map[string]any{"pi": map[string]any{"enabled": false}},
 		"metadataGeneration": map[string]any{"providers": []any{"pi"}},
 	})
 
