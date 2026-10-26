@@ -1,13 +1,58 @@
 package cli
 
 import (
+	"bytes"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/server"
 )
+
+// `daemon status` with no --addr must find the daemon this home recorded.
+//
+// The probe used to run against the raw flag, which is empty when omitted, so it failed with an
+// empty URL and printed "stopped" for every running daemon. The address that works is in the PID
+// lock the daemon wrote — the same one the rest of the CLI dials.
+func TestDaemonStatusProbesTheAddressTheDaemonRecorded(t *testing.T) {
+	homeDir := t.TempDir()
+	srv, err := server.New(server.Options{HomeDir: filepath.Join(homeDir, "daemon"), Version: "9.9.9-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	if err := daemon.WritePIDLock(homeDir, daemon.PIDLockInfo{PID: os.Getpid(), Listen: &addr}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Main("9.9.9-test", []string{"daemon", "status", "--home", homeDir}, &out, &errOut); code != 0 {
+		t.Fatalf("daemon status failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "running") || !strings.Contains(out.String(), srv.ServerID()) {
+		t.Fatalf("output = %q, want the recorded daemon reported as running", out.String())
+	}
+}
+
+// A home with no daemon must keep saying so instead of inventing one.
+func TestDaemonStatusReportsStoppedWithoutADaemon(t *testing.T) {
+	homeDir := t.TempDir()
+
+	var out, errOut bytes.Buffer
+	if code := Main("9.9.9-test", []string{"daemon", "status", "--home", homeDir}, &out, &errOut); code != 0 {
+		t.Fatalf("daemon status failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "stopped") {
+		t.Fatalf("output = %q, want stopped", out.String())
+	}
+}
 
 // `daemon start` must listen where every other command looks.
 //

@@ -1081,6 +1081,40 @@ type healthStatus struct {
 	Status   string `json:"status"`
 	ServerID string `json:"serverId"`
 	Version  string `json:"version"`
+	// addr is the address that answered, which is not the address that was asked for when the
+	// probe fell back to the one a PID lock recorded.
+	addr string
+}
+
+// probeRecordedDaemon probes the address the CLI would talk to, then the one the daemon recorded.
+//
+// A daemon started with --addr is bound to that address alone, so probing only the default reports
+// a running daemon as stopped. The PID lock it wrote is what the rest of the CLI already uses to
+// find it, so status has to consult the same list instead of a single guess.
+func probeRecordedDaemon(explicit, homeDir string) (*healthStatus, error) {
+	var lastErr error
+	for _, candidate := range daemonHostCandidatesForHome(explicit, homeDir) {
+		st, err := probeHealth(candidate)
+		if err == nil {
+			st.addr = candidate
+			return st, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no daemon address was available")
+	}
+	return nil, lastErr
+}
+
+// resolvedHomeForProbe resolves the home the PID lock lives in, ignoring a resolution error so a
+// bad --home cannot turn into a confusing probe failure.
+func resolvedHomeForProbe(homeDir string) string {
+	resolved, err := home.Resolve(homeDir)
+	if err != nil {
+		return ""
+	}
+	return resolved
 }
 
 func probeHealth(addr string) (*healthStatus, error) {
@@ -1139,8 +1173,8 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			return err
 		}
 
-		if st, healthErr := probeHealth(*addr); healthErr == nil {
-			fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", *addr, st.ServerID, st.Version)
+		if st, healthErr := probeRecordedDaemon(*addr, resolvedHomeForProbe(*homeDir)); healthErr == nil {
+			fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", st.addr, st.ServerID, st.Version)
 			// A version mismatch means the CLI and the daemon disagree about the protocol. The
 			// symptom is a command that silently does nothing, so it is worth saying out loud
 			// here rather than leaving the user to infer it from behaviour.

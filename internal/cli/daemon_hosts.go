@@ -26,6 +26,14 @@ const DefaultTCPListen = "127.0.0.1:6777"
 // The order is: an explicit --addr or BYSPACE_HOST, then whatever the running daemon recorded, then
 // the default TCP address. Deduplicated because the recorded address is often the default one.
 func daemonHostCandidates(explicit string) []string {
+	return daemonHostCandidatesForHome(explicit, "")
+}
+
+// daemonHostCandidatesForHome is daemonHostCandidates against a specific home.
+//
+// The recorded PID lock is per home, and `daemon status --home <dir>` must look in that home rather
+// than the default one, or it reports a different daemon than every other command in that home.
+func daemonHostCandidatesForHome(explicit, homeDir string) []string {
 	trimmedExplicit := strings.TrimSpace(explicit)
 	candidates := make([]string, 0, 3)
 
@@ -41,7 +49,14 @@ func daemonHostCandidates(explicit string) []string {
 	}
 
 	// What the running daemon recorded about itself.
-	if homeDir, err := home.Resolve(""); err == nil {
+	if homeDir == "" {
+		var err error
+		homeDir, err = home.Resolve("")
+		if err != nil {
+			homeDir = ""
+		}
+	}
+	if homeDir != "" {
 		if lock, ok := daemon.ReadPIDLock(homeDir); ok && lock.Listen != nil && strings.TrimSpace(*lock.Listen) != "" {
 			candidates = append(candidates, strings.TrimSpace(*lock.Listen))
 		}

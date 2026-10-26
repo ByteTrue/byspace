@@ -1,6 +1,11 @@
 package server
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+)
 
 // A header with extra parts is rejected rather than parsed loosely: accepting "Bearer a b"
 // would let a proxy or a bug smuggle a second token past the comparison.
@@ -58,6 +63,42 @@ func TestShouldBypassBearerAuth(t *testing.T) {
 	}
 	if ShouldBypassBearerAuth("GET", "/ws") || ShouldBypassBearerAuth("POST", "/api/terminal-activity") {
 		t.Fatal("those routes require auth")
+	}
+}
+
+// A daemon with a password must still answer /health without one.
+//
+// The list above is easy to satisfy while the middleware still rejects the request — the bug this
+// guards was exactly that shape: the bypass list was right about /api/health and wrong about
+// /health, and the readiness probe that `daemon start` uses asks /health. So drive the real
+// handler rather than the predicate.
+func TestHealthStaysReachableWithAPasswordConfigured(t *testing.T) {
+	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	hash, err := HashDaemonPassword("hunter2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Store().SetDaemonPasswordHash(hash); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("/health = %d with a password configured, want 200 so a readiness probe can answer",
+			recorder.Code)
+	}
+
+	// Everything else must still be gated, or the exemption has quietly turned into open access.
+	denied := httptest.NewRecorder()
+	srv.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+	if denied.Code != http.StatusUnauthorized {
+		t.Fatalf("/api/status = %d without a token, want 401", denied.Code)
 	}
 }
 
