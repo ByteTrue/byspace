@@ -13,6 +13,7 @@ import (
 	"time"
 
 	duration "github.com/ByteTrue/byspace/internal/cadence"
+	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/store"
 )
@@ -620,19 +621,27 @@ func pairingOfferURL(version, homeDir, addr string) (string, error) {
 // derived the origin from "this build's version has a hyphen" — the offer pointed at a different
 // deployment than the daemon's owner had configured and was using.
 func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS bool, appURL string) string {
+	// Resolve first. `--home` unset means the default home, and an empty string would read no config
+	// at all — the offer then fell back to the version-derived origin even though the home it was
+	// minted for names one.
+	resolvedHome := homeDir
+	if resolved, err := home.Resolve(homeDir); err == nil {
+		resolvedHome = resolved
+	}
 	srv, err := server.New(server.Options{
-		HomeDir: homeDir,
+		HomeDir: resolvedHome,
 		Version: version,
 	})
 	if err != nil {
 		return ""
 	}
 	defer srv.Close()
+	cfg := store.New(resolvedHome).LoadDaemonConfig()
 	if strings.TrimSpace(appURL) == "" {
-		appURL = server.StoredAppBaseURL(store.New(homeDir).LoadDaemonConfig())
+		appURL = server.StoredAppBaseURL(cfg)
 	}
 	if strings.TrimSpace(relayEndpoint) == "" {
-		if relay := server.ResolveRelayConfig(store.New(homeDir).LoadDaemonConfig()); relay.Enabled {
+		if relay := server.ResolveRelayConfig(cfg); relay.Enabled {
 			relayEndpoint = relay.ClientRelayEndpoint()
 			useTLS = relay.ClientRelayUseTLS()
 		}

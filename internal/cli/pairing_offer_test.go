@@ -131,3 +131,22 @@ func TestCLIReadsTheHomeCredential(t *testing.T) {
 		t.Fatalf("a home without a credential returned %q", got)
 	}
 }
+
+// An unset --home means the default home, and its config must still be read.
+//
+// The fallback was handed the empty flag value, so it opened no config at all and derived the origin
+// from the version even though the home it was minting for names one.
+func TestOfflinePairingOfferResolvesTheDefaultHome(t *testing.T) {
+	homeDir := t.TempDir()
+	writeHomeConfig(t, homeDir, `{
+  "version": 1,
+  "daemon": {"relay": {"enabled": true}},
+  "app": {"baseUrl": "https://app.byspace.cc.cd"}
+}`)
+	t.Setenv("BYSPACE_HOME", homeDir)
+
+	origin, _ := decodeOffer(t, buildOfflinePairingOffer("0.21.0-beta.5", "", "", true, ""))
+	if origin != "https://app.byspace.cc.cd" {
+		t.Fatalf("app origin = %q, want the configured one from the default home", origin)
+	}
+}
