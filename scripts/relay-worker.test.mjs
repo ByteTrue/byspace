@@ -120,3 +120,35 @@ test("every environment binds the Durable Object it registers", () => {
   );
   assert.deepEqual(migrations, [declared, declared], "default and beta each need the migration");
 });
+
+test("the deploy workflow publishes each channel to the Worker that owns its hostname", () => {
+  // A Cloudflare custom domain routes to exactly one Worker, so the workflow has
+  // to deploy the one the hostname points at. v0.21.0-beta.1 shipped with the
+  // beta branch deploying packages/relay: the run failed, and had it succeeded it
+  // would have replaced the Go Worker's beta UI with one whose relay lives on a
+  // different origin than the page.
+  const workflow = readFileSync(path.join(root, ".github/workflows/deploy-app.yml"), "utf8");
+  assert.match(
+    workflow,
+    /RELEASE_CHANNEL == 'beta' && 'workers\/relay' \|\| 'packages\/relay'/,
+    "the beta channel deploys workers/relay and the stable channel packages/relay",
+  );
+  assert.match(workflow, /GO_VERSION/, "the beta Worker is wasm, so the job needs a Go toolchain");
+
+  const betaRoutes = [...read("wrangler.jsonc").matchAll(/"pattern"\s*:\s*"([^"]+)"/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(betaRoutes.length > 0, "the Go Worker should declare the beta hostname");
+  // Strip comments: the stable config names the beta hostname once, to say why it
+  // no longer configures it.
+  const stableConfig = readFileSync(path.join(root, "packages/relay/wrangler.toml"), "utf8")
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+  for (const hostname of betaRoutes) {
+    assert.ok(
+      !stableConfig.includes(hostname),
+      `packages/relay/wrangler.toml claims ${hostname}, which the Go Worker owns`,
+    );
+  }
+});
