@@ -1107,17 +1107,33 @@ func probeRecordedDaemon(explicit, homeDir string) (*healthStatus, error) {
 	return nil, lastErr
 }
 
-// resolvedHomeForProbe resolves the home the PID lock lives in, ignoring a resolution error so a
-// bad --home cannot turn into a confusing probe failure.
-func resolvedHomeForProbe(homeDir string) string {
-	resolved, err := home.Resolve(homeDir)
-	if err != nil {
-		return ""
+// daemonBelongsToHome reports whether this home has a daemon of its own: a PID lock whose process
+// is still alive. It is how `daemon status` tells its own daemon from one another home left running
+// on the same port, which the health answer cannot say when it comes from an older build.
+func daemonBelongsToHome(homeDir string) bool {
+	lock, ok := daemon.ReadPIDLock(homeDir)
+	if !ok || !daemon.ProcessAlive(lock.PID) {
+		return false
 	}
-	return resolved
+	return true
 }
 
 func probeHealth(addr string) (*healthStatus, error) {
+	var lastErr error
+	for _, path := range []string{"/health", "/api/health"} {
+		st, err := probeHealthPath(addr, path)
+		if err == nil {
+			return st, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no health path answered")
+	}
+	return nil, lastErr
+}
+
+func probeHealthPath(addr, healthPath string) (*healthStatus, error) {
 	u := addr
 	transport := &http.Transport{Proxy: nil}
 	// A unix socket has no URL to build; the health check has to go over the same connection the
@@ -1135,7 +1151,7 @@ func probeHealth(addr string) (*healthStatus, error) {
 		u = "http://" + u
 	}
 	client := &http.Client{Timeout: 2 * time.Second, Transport: transport}
-	resp, err := client.Get(strings.TrimRight(u, "/") + "/health")
+	resp, err := client.Get(strings.TrimRight(u, "/") + healthPath)
 	if err != nil {
 		return nil, err
 	}
@@ -1173,8 +1189,21 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			return err
 		}
 
-		if st, healthErr := probeRecordedDaemon(*addr, resolvedHomeForProbe(*homeDir)); healthErr == nil {
+		resolvedHome, err := home.Resolve(*homeDir)
+		if err != nil {
+			return err
+		}
+		srvID, _ := home.GetOrCreateServerID(resolvedHome)
+
+		askExplicitly := strings.TrimSpace(*addr) != ""
+		if st, healthErr := probeRecordedDaemon(*addr, resolvedHome); healthErr == nil &&
+			(askExplicitly || daemonBelongsToHome(resolvedHome) || st.ServerID == srvID) {
 			fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", st.addr, st.ServerID, st.Version)
+			// A daemon that reports no serverId is not this build. Saying so is the difference between
+			// "everything is configured" and "you are looking at the daemon the installer left behind".
+			if st.ServerID == "" {
+				fmt.Fprintf(stdout, "warning: that daemon reported no serverId, so it is not this build; stop it before starting this one\n")
+			}
 			// A version mismatch means the CLI and the daemon disagree about the protocol. The
 			// symptom is a command that silently does nothing, so it is worth saying out loud
 			// here rather than leaving the user to infer it from behaviour.
@@ -1187,11 +1216,6 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			return nil
 		}
 
-		resolvedHome, err := home.Resolve(*homeDir)
-		if err != nil {
-			return err
-		}
-		srvID, _ := home.GetOrCreateServerID(resolvedHome)
 		fmt.Fprintf(stdout, "stopped  home=%s  serverId=%s\n", resolvedHome, srvID)
 		return nil
 
@@ -1213,6 +1237,10 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			return err
 		}
 		if st, probeErr := probeHealth(*addr); probeErr == nil {
+			srvID, _ := home.GetOrCreateServerID(resolvedHome)
+			if st.ServerID == "" || st.ServerID != srvID {
+				return fmt.Errorf("a daemon that is not this build is already listening on %s; stop it first", *addr)
+			}
 			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", *addr, st.ServerID)
 			return nil
 		}

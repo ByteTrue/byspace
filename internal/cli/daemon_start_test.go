@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -167,5 +168,40 @@ func TestDaemonStartReportsADaemonAlreadyOwnsTheHome(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "127.0.0.1:1") {
 		t.Fatalf("output = %q, want the mismatched address mentioned", out.String())
+	}
+}
+
+// An older daemon already on the default port must not be reported as this home's daemon.
+//
+// The Node daemon answers /api/health without a serverId. Counting that as "running" sent the user
+// to a daemon that cannot speak this protocol at all, and made a start fail somewhere further down.
+func TestDaemonStatusIgnoresADaemonFromAnotherBuild(t *testing.T) {
+	legacy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/health" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer legacy.Close()
+	port := strings.TrimPrefix(legacy.URL, "http://")
+
+	homeDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	if code := Main("9.9.9-test",
+		[]string{"daemon", "status", "--home", homeDir, "--addr", port}, &out, &errOut); code != 0 {
+		t.Fatalf("daemon status failed (%d): %s", code, errOut.String())
+	}
+	// An explicit --addr may name it, but the output has to say what it is.
+	if strings.Contains(out.String(), "running") &&
+		!strings.Contains(out.String(), "not this build") {
+		t.Fatalf("output = %q, want the older daemon called out", out.String())
+	}
+
+	var startOut, startErr bytes.Buffer
+	if code := Main("9.9.9-test",
+		[]string{"daemon", "start", "--home", homeDir, "--addr", port, "--no-web-ui"},
+		&startOut, &startErr); code == 0 {
+		t.Fatalf("daemon start reported success against a foreign daemon: %q", startOut.String())
 	}
 }
