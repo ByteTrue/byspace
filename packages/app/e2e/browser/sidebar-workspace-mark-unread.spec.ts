@@ -196,6 +196,10 @@ test("manual unread survives departure and clears on reopening without changing 
   page,
   workspaces,
 }) => {
+  // This test drives several real agent turns and three round trips through the sidebar, so it is
+  // long by construction. The 60s default held locally and timed out on CI's 2-worker runs whenever
+  // an agent turn landed slower than usual.
+  test.setTimeout(180_000);
   await gotoAppShell(page);
   await openWorkspace(page, workspaces.other.workspaceId);
   await markBackgroundWorkspaceAndReopen(page, workspaces.subject.workspaceId);
@@ -221,6 +225,8 @@ test("manual unread survives leaving the current workspace on compact layout", a
   page,
   workspaces,
 }) => {
+  // Same shape as the test above, plus a viewport switch that re-renders the sidebar.
+  test.setTimeout(180_000);
   await openCompactWorkspace(page, workspaces.subject);
   await leaveMarkedWorkspaceAndReadOnCompact(page, workspaces);
   await leaveMarkedWorkspaceAndReopenOnCompact(page, workspaces);

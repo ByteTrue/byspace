@@ -262,6 +262,12 @@ test.afterEach(async () => {
   }
 });
 
+// Every test in this file renders the diff canvas and drags on it. Canvas work is the slowest thing
+// the e2e suite does, and on CI's 2-worker runners the 60s default was hit intermittently by
+// whichever canvas test happened to run while the other worker was busy — always a different one,
+// and always passing when re-run alone. The drags are real, so the fix is time rather than a retry.
+test.describe.configure({ timeout: 180_000 });
+
 test("Changes opens the populated committed comparison for a clean checkout", async ({ page }) => {
   const workspace = await createWorkspaceWithCommittedDiff();
 
