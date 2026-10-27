@@ -311,6 +311,11 @@ jobs:
         run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ env.PLAYWRIGHT_SHARD }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # One worker per shard. Each Playwright worker owns a daemon, a Metro server and a
+          # browser; two of those on a two-core runner made unrelated specs time out at random —
+          # a rerun failed on a different set of specs each time, with no code between the runs.
+          # Eight shards still run in parallel, so the wall time is the shard, not the suite.
+          E2E_WORKERS: "1"
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
