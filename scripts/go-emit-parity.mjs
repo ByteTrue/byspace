@@ -66,6 +66,15 @@ const CONDITIONALLY_OMITTED = new Map([
   ["tunnel.remove.response", new Set(["error"])],
   ["hub.management.daemon.disconnect.response", new Set(["warning"])],
   ["providers_snapshot_update", new Set(["cwd", "entries.iconSvg"])], // cwd：仅请求带 cwd 时
+  // 目录同步的 `sync` 块按读取方式变化：`reason` 只在快照时说明为什么退回全量（no_cursor /
+  // generation_changed / cursor_expired），增量响应没有「原因」可言；发一个空字符串等于发了
+  // 一个不存在的 reason。`emptyProjects` 是「没有活跃 workspace 的 project」，定序读只回答
+  // workspace 表（project 表有自己的游标），所以定序时不发这个列表——也就不带 syncSeq。
+  // 两者都是按设计缺席，不是漏发。
+  ["fetch_workspaces_response", new Set(["sync.reason", "emptyProjects.syncSeq"])],
+  ["project.list.response", new Set(["sync.reason"])],
+  ["fetch_agents_response", new Set(["sync.reason"])],
+  ["fetch_agent_history_response", new Set(["sync.reason"])],
   // Go 的 ProviderSpec 没有图标字段：内置与脚本 provider 的图标由客户端
   // `packages/app/src/data/acp-provider-catalog.ts` 自带，插件式 provider 注册（唯一会
   // 提供 SVG 的来源）在 Go 分支不存在。因此快照条目不携带 iconSvg，客户端回退到目录图标。
@@ -273,7 +282,7 @@ export function goEmitSites(root = ROOT, fnIndex = goFunctionIndex(root)) {
   const perSite = [];
   for (const file of walk(path.join(root, "internal"), ".go")) {
     const text = fs.readFileSync(file, "utf8");
-    const re = /\b(sendSessionMsg|broadcastSessionMsg)\(/g;
+    const re = /\b(sendSessionMsg|broadcastSessionMsg|broadcastDirectoryUpdate)\(/g;
     let m;
     while ((m = re.exec(text))) {
       let depth = 1;
@@ -740,7 +749,11 @@ export function goEmitSitesFromText(text) {
   const literals = new Map();
   const dynamic = new Set();
   const perSite = [];
-  const re = /(sendSessionMsg|broadcastSessionMsg)\(([^;]*?)"([a-z0-9_.]+)"\s*,\s*([^;]*)/g;
+  // broadcastDirectoryUpdate 也在扫描范围内：它发的是 project.update / workspace_update /
+  // agent_update，payload 由回调构造（每个受众各一份），静态看不到字段，因此必然会落进
+  // dynamic —— 这比把它排除在外更好，排除会让这三条被报成「从未发送」。
+  const re =
+    /(sendSessionMsg|broadcastSessionMsg|broadcastDirectoryUpdate)\(([^;]*?)"([a-z0-9_.]+)"\s*,\s*([^;]*)/g;
   let m;
   while ((m = re.exec(text))) {
     const type = m[3];
