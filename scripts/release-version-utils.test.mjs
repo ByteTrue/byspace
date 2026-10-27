@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyCiState,
   computeNextReleaseVersion,
   getReleaseInfoFromSourceTag,
   parseReleaseVersion,
@@ -50,4 +51,27 @@ test("emits beta release info from tags", () => {
 
 test("rejects non-beta prerelease versions", () => {
   assert.throws(() => parseReleaseVersion("0.1.60-canary.1"), /Expected beta prerelease versions/);
+});
+
+test("classifies a CI run that has not been created yet as pending", () => {
+  // Right after a push, Actions has no run for the commit. Calling that "not green" is what made
+  // a release take two steps and an extra turn at the Actions tab.
+  assert.equal(classifyCiState(null), "pending");
+  assert.equal(classifyCiState({}), "pending");
+  assert.equal(classifyCiState({ status: "", conclusion: "" }), "pending");
+});
+
+test("classifies an in-flight CI run as pending", () => {
+  assert.equal(classifyCiState({ status: "queued" }), "pending");
+  assert.equal(classifyCiState({ status: "in_progress" }), "pending");
+});
+
+test("classifies a successful CI run as green", () => {
+  assert.equal(classifyCiState({ status: "completed", conclusion: "success" }), "green");
+});
+
+test("classifies a concluded non-success as failed", () => {
+  assert.equal(classifyCiState({ status: "completed", conclusion: "failure" }), "failed");
+  assert.equal(classifyCiState({ status: "completed", conclusion: "cancelled" }), "failed");
+  assert.equal(classifyCiState({ status: "completed", conclusion: "" }), "failed");
 });

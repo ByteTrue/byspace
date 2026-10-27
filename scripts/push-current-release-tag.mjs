@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyCiState } from "./release-version-utils.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -91,32 +92,73 @@ if (remoteMainCommit !== headCommit) {
   throw new Error(`origin/main is ${remoteMainCommit}, expected ${headCommit}.`);
 }
 
+// Wait for CI on the pushed commit instead of failing immediately.
+//
+// A release pushes the version commit and then has to prove CI is green on exactly that commit
+// before tagging. Failing here forced a two-step release — push, wait ten to twenty minutes, rerun
+// — which is why every release cost an extra turn and an extra look at the Actions tab. Waiting in
+// place makes `npm run release:beta:next` a single command.
+//
+// Set RELEASE_CI_WAIT_MS=0 to keep the old fail-fast behaviour for a script that tags externally.
 const repository = process.env.GITHUB_REPOSITORY || "ByteTrue/byspace";
+const waitMs = Number(process.env.RELEASE_CI_WAIT_MS ?? 45 * 60_000);
+const pollMs = 20_000;
 
-const successfulCiRun = tryRunQuiet("gh", [
-  "run",
-  "list",
-  "--repo",
-  repository,
-  "--workflow",
-  "CI",
-  "--commit",
-  headCommit,
-  "--event",
-  "push",
-  "--status",
-  "success",
-  "--limit",
-  "1",
-  "--json",
-  "databaseId",
-  "--jq",
-  ".[0].databaseId // empty",
-]);
-if (!successfulCiRun) {
-  throw new Error(
-    `Pushed ${headCommit} to main, but exact-SHA CI is not green yet. Wait for CI, then rerun npm run release:push.`,
-  );
+function ciRunState(commit) {
+  const out = tryRunQuiet("gh", [
+    "run",
+    "list",
+    "--repo",
+    repository,
+    "--workflow",
+    "CI",
+    "--commit",
+    commit,
+    "--event",
+    "push",
+    "--limit",
+    "1",
+    "--json",
+    "status,conclusion",
+    "--jq",
+    '.[0] | "\\(.status) \\(.conclusion)"',
+  ]);
+  const [status = "", conclusion = ""] = out.split(/\s+/).filter(Boolean);
+  return { status, conclusion };
+}
+
+let ciState = ciRunState(headCommit);
+let ciVerdict = classifyCiState(ciState);
+if (ciVerdict !== "green") {
+  if (!Number.isFinite(waitMs) || waitMs <= 0) {
+    throw new Error(
+      `Pushed ${headCommit} to main, but exact-SHA CI is not green yet. Wait for CI, then rerun npm run release:push.`,
+    );
+  }
+  const shortSha = headCommit.slice(0, 9);
+  process.stdout.write(`Waiting for CI on ${shortSha} (up to ${Math.round(waitMs / 60_000)}m)\n`);
+  const deadline = Date.now() + waitMs;
+  let lastReported = "";
+  while (ciVerdict === "pending" && Date.now() < deadline) {
+    if (ciState.status && ciState.status !== lastReported) {
+      lastReported = ciState.status;
+      process.stdout.write(`  CI ${ciState.status}\n`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    ciState = ciRunState(headCommit);
+    ciVerdict = classifyCiState(ciState);
+  }
+  if (ciVerdict === "failed") {
+    throw new Error(
+      `CI on ${headCommit} concluded ${ciState.conclusion || "without a result"}; refusing to tag. Fix main and cut a new version.`,
+    );
+  }
+  if (ciVerdict !== "green") {
+    throw new Error(
+      `CI on ${headCommit} did not go green within ${Math.round(waitMs / 60_000)}m (last: ${ciState.status || "not started"} ${ciState.conclusion}). Rerun npm run release:push once it does; it will not push again or cut a second version.`,
+    );
+  }
+  process.stdout.write(`  CI green on ${shortSha}\n`);
 }
 
 if (!localTagCommit) run("git", ["tag", "-a", tag, "-m", tag]);

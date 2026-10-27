@@ -172,3 +172,33 @@ export function computeNextReleaseVersion(currentVersion, mode) {
 
   throw new Error(`Unsupported release mode "${mode}".`);
 }
+
+/**
+ * Classify the CI state of a commit as seen through `gh run list`.
+ *
+ * A push does not create a run instantly, so the first poll after `git push` sees no run at all.
+ * Treating that as "not green" is what forced a release into two steps; treating it as "wait" is
+ * what makes one command possible. A concluded non-success is terminal — retrying the wait would
+ * only burn time on a commit that cannot pass.
+ *
+ * @param {{status?: string, conclusion?: string} | null | undefined} state
+ * @returns {"green" | "pending" | "failed"}
+ */
+export function classifyCiState(state) {
+  const status = (state?.status ?? "").trim();
+  const conclusion = (state?.conclusion ?? "").trim();
+  if (status === "completed") {
+    return conclusion === "success" ? "green" : "failed";
+  }
+  if (
+    status === "queued" ||
+    status === "in_progress" ||
+    status === "requested" ||
+    status === "waiting" ||
+    status === "pending"
+  ) {
+    return "pending";
+  }
+  // No run yet: the push happened seconds ago and Actions has not created it.
+  return "pending";
+}

@@ -98,8 +98,16 @@ npm run release:minor
 
 Each command runs `release:check`, bumps and commits the version, then calls
 `release:push`. `release:push` pushes the branch, waits for successful CI on that
-exact `main` SHA, and only then creates and pushes the tag. If CI is not green
-yet it stops with that message — wait for CI and re-run `npm run release:push`.
+exact `main` SHA, and only then creates and pushes the tag. The wait is in place,
+so the version command is the whole release; `RELEASE_CI_WAIT_MS=0` restores the
+old fail-fast behaviour. A run that concludes anything but success stops the
+script without tagging — fix `main` and cut a new version rather than retrying.
+
+**One push, one CI run.** Each release command pushes once and CI therefore runs
+once on the tagged commit, provided the work going into the release is committed
+locally rather than pushed ahead of it. Pushing the work first to watch CI is
+fine, but it adds a second full run (about 13 minutes) because the version
+commit lands on top and needs its own.
 
 Tag pushes start three workflows: **Publish npm**, **Deploy App**, and **Docker**.
 Stable `vX.Y.Z` tag pushes publish `ghcr.io/bytetrue/byspace:X.Y.Z` and
