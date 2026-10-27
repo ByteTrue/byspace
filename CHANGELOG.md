@@ -5,70 +5,7 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
-## 0.21.0-beta.9 - 2026-10-27
-
-### Added
-
-- Directory sync: the daemon now sequences projects, workspaces and agents, so a client that keeps a copy asks for what changed instead of refetching everything, and is told when a row is deleted
-
-## 0.21.0-beta.8 - 2026-10-27
-
-### Changed
-
-- `npm run release:beta:next` now waits for CI on the version commit and tags it, instead of stopping for a manual `release:push` after every release. A failed run stops at once; `RELEASE_CI_WAIT_MS=0` restores the old behaviour
-
-## 0.21.0-beta.7 - 2026-10-27
-
-### Changed
-
-- The end-to-end canvas and unread specs now run with a longer budget. They were failing intermittently on CI whenever another worker competed for the same runner, which blocked releases behind a re-run
-
-## 0.21.0-beta.6 - 2026-10-26
-
-### Fixed
-
-- Fixed `byspace pair` with no `--home` reading no config at all, so a home configured for `app.byspace.cc.cd` got a link derived from the build's version
-
-## 0.21.0-beta.5 - 2026-10-26
-
-### Fixed
-
-- Fixed every CLI command that talks to the daemon failing with 401 once a password was set: `project list`, `schedule list`, `run`, `pair`. The daemon now mints a credential for its own CLI and accepts it where it accepts the password
-- Fixed `byspace pair` on a password-protected daemon handing out a link to the prerelease app instead of the app origin the home is configured for
-- Fixed the web app failing its WebSocket handshake against a password-protected daemon, because the daemon did not echo the bearer subprotocol back
-
-## 0.21.0-beta.4 - 2026-10-26
-
-### Fixed
-
-- Fixed provider overrides and skills being saved under a key only this daemon read, so a Node daemon sharing the same home never saw the change and the two showed different answers
-- Fixed a relay configured with `enabled: true` and no endpoint staying connected to nothing: it now falls back to the hosted relay, as the Node daemon does, and `daemon status` reports the address it actually dials
-
-## 0.21.0-beta.3 - 2026-10-26
-
-### Fixed
-
-- Fixed a provider switch that did nothing: the daemon rejected `{enabled: false}` for a built-in provider, so every toggle snapped back on
-- Fixed switching one provider off deleting the other providers' saved settings, including custom providers and their model lists
-- Fixed the development-only "Mock Load Test" provider appearing in a release build
-
-## 0.21.0-beta.2 - 2026-10-26
-
-### Added
-
-- The beta channel runs on a Go Cloudflare Worker: the relay compiles to wasm, and `app-beta.byspace.cc.cd` serves the beta web app from the same origin as that relay
-
-### Fixed
-
-- Fixed `byspace daemon start` timing out on a daemon that had in fact started: it listened on the development port (6778) while every other command looked on 6777, and a configured password made its readiness probe get 401 on `/health`
-- Fixed `byspace daemon status` reporting `stopped` for a daemon it had not started on the default port
-- Fixed the failed-start message printing the previous daemon's periodic metrics instead of what the attempt itself wrote
-- Fixed a beta daemon never reaching its relay: the control channel counted a silent socket as dead and closed it every 30 seconds, so no device could pair through it
-- Fixed `--relay-use-tls` being ignored, and a relay endpoint written without a scheme being dialled over plaintext on port 80, which also put `:80` and `useTls:false` into pairing offers
-- Fixed `byspace pair` minting a link from `config.json` instead of asking the running daemon, so the link named the stable app and the hosted relay even for a beta or self-hosted daemon, and failed outright on a home where the relay had never been configured
-- Fixed a pairing link failing with `Invalid host:port (expected localhost:6777)` when the relay endpoint carried no port
-
-## 0.21.0-beta.1 - 2026-10-25
+## 0.21.0 - 2026-10-27
 
 ### Changed
 
@@ -81,12 +18,27 @@
 
 ### Added
 
+- Directory sync: the daemon sequences projects, workspaces and agents, so a client that keeps a copy asks for what changed instead of refetching everything, and is told when a row is deleted
 - Choosing which agent homes the orchestration skills install into: `~/.agents/skills` and `~/.claude/skills` can now be selected independently, and turning a home off asks before removing the skills there
 - `byspace daemon reload` applies a `config.json` edit to a running daemon and reports which settings need a restart, and `byspace daemon set-password` enables password auth
 - `byspace worktree archive` and `byspace daemon reload` complete the CLI surface the Node CLI had
 
 ### Fixed
 
+- Fixed a provider switch that did nothing: the daemon rejected `{enabled: false}` for a built-in provider, so every toggle snapped back on
+- Fixed switching one provider off deleting the other providers' saved settings, including custom providers and their model lists
+- Fixed provider overrides and skills being saved under a key only this daemon read, so a Node daemon sharing the same home never saw the change and the two showed different answers
+- Fixed the development-only "Mock Load Test" provider appearing in a release build
+- Fixed every CLI command that talks to the daemon failing with 401 once a password was set: `project list`, `schedule list`, `run`, `pair`. The daemon now mints a credential for its own CLI and accepts it where it accepts the password
+- Fixed the web app failing its WebSocket handshake against a password-protected daemon, because the daemon did not echo the bearer subprotocol back
+- Fixed `byspace pair` minting a link from `config.json` instead of asking the running daemon, so the link named the stable app and the hosted relay even for a beta or self-hosted daemon, and failed outright on a home where the relay had never been configured
+- Fixed `byspace pair` on a daemon with a password handing out a link to the prerelease app, and with no `--home` reading no config at all so a home configured for `app.byspace.cc.cd` got a link derived from the build's version
+- Fixed a pairing link failing with `Invalid host:port (expected localhost:6777)` when the relay endpoint carried no port
+- Fixed a relay configured with `enabled: true` and no endpoint staying connected to nothing: it now falls back to the hosted relay, and `daemon status` reports the address it actually dials
+- Fixed `byspace daemon start` timing out on a daemon that had in fact started: it listened on the development port while every other command looked on 6777, and a configured password made its readiness probe get 401 on `/health`
+- Fixed `byspace daemon status` reporting `stopped` for a daemon it had not started on the default port, and the failed-start message printing the previous daemon's periodic metrics instead of what the attempt itself wrote
+- Fixed a daemon never reaching its relay: the control channel counted a silent socket as dead and closed it every 30 seconds, so no device could pair through it
+- Fixed `--relay-use-tls` being ignored, and a relay endpoint written without a scheme being dialled over plaintext on port 80, which also put `:80` and `useTls:false` into pairing offers
 - Fixed the composer dropping a queued message typed while a turn was being submitted: the daemon handled session messages one at a time, so a slow provider call delayed the frames behind it
 - Fixed an agent's first prompt not appearing until the provider echoed it, which left rewind unavailable and the row blank during a delayed echo
 - Fixed workspace archive leaving its worktree on disk, and fixed reopening an archived workspace creating a duplicate row instead of restoring the existing one
