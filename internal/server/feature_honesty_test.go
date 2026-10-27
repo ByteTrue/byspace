@@ -27,9 +27,10 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 		"pluginSettings":      "plugin system retired by decision (issue 025)",
 		"pluginTimelineItems": "plugin system retired by decision (issue 025)",
 	}
-	notYetPorted := map[string]string{
-		"directorySync": "cross-host directory sync is undecided product work",
-	}
+	// Every feature this daemon claims must have a real implementation behind it. An entry here
+	// means "declared false because it is not built"; it is empty because nothing is left in that
+	// state.
+	notYetPorted := map[string]string{}
 
 	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", PiCommand: writeFaithfulFakePi(t)})
 	if err != nil {

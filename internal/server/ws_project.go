@@ -74,10 +74,7 @@ func (s *Server) handleProjectAdd(ctx context.Context, sink frameSink, raw json.
 		"error":     nil,
 		"errorCode": nil,
 	})
-	s.broadcastSessionMsg("project.update", map[string]any{
-		"kind":    "upsert",
-		"project": desc,
-	})
+	s.broadcastProjectUpsert(desc)
 }
 
 // announceProject sends the project descriptor to every client.
@@ -89,10 +86,7 @@ func (s *Server) announceProject(prj store.ProjectRecord) {
 	if prj.ArchivedAt != nil {
 		return
 	}
-	s.broadcastSessionMsg("project.update", map[string]any{
-		"kind":    "upsert",
-		"project": buildProjectDescriptor(prj),
-	})
+	s.broadcastProjectUpsert(buildProjectDescriptor(prj))
 }
 
 func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -207,11 +201,7 @@ func (s *Server) handleProjectRename(ctx context.Context, sink frameSink, raw js
 			_ = s.store.UpsertProject(p)
 			// The response only answers the caller. Without the broadcast the sidebar keeps the old name until a
 			// full refetch, so renaming a project looked like it did nothing.
-			renamed := buildProjectDescriptor(p)
-			s.broadcastSessionMsg("project.update", map[string]any{
-				"kind":    "upsert",
-				"project": renamed,
-			})
+			s.broadcastProjectUpsert(buildProjectDescriptor(p))
 			_ = sendSessionMsg(ctx, sink, "project.rename.response", map[string]any{
 				"requestId":  req.RequestID,
 				"projectId":  req.ProjectID,
@@ -308,10 +298,7 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 		if projects, listErr := s.store.ListProjects(); listErr == nil {
 			for _, project := range projects {
 				if project.ProjectID == req.ProjectID {
-					s.broadcastSessionMsg("project.update", map[string]any{
-						"kind":    "upsert",
-						"project": buildProjectDescriptor(project),
-					})
+					s.broadcastProjectUpsert(buildProjectDescriptor(project))
 					break
 				}
 			}

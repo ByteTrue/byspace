@@ -28,6 +28,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agenttitle"
 	"github.com/ByteTrue/byspace/internal/attachment"
 	"github.com/ByteTrue/byspace/internal/attention"
+	"github.com/ByteTrue/byspace/internal/directorysync"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -143,7 +144,11 @@ type Server struct {
 	// There used to be a second field with the same meaning and a different format, and the two
 	// disagreed: the client compares the epoch on a prompt index against the epoch it already holds
 	// from the timeline cursor, so the chat outline saw every index as stale and never rendered.
-	epoch        string
+	epoch string
+	// directory orders the app's directory replica: projects, workspaces and agents each get a
+	// sequence, and a deletion is remembered as a tombstone so a polling client can be told the row
+	// is gone. See internal/directorysync.
+	directory    *directorysync.Service
 	keyPair      e2ee.KeyPair
 	pubKeyB64    string
 	vapidKeys    home.VAPIDKeys
@@ -198,8 +203,12 @@ type Server struct {
 	// client is actually showing; without them every socket receives every agent's tokens.
 	timelineViews     map[frameSink]map[string]bool
 	selectiveTimeline map[frameSink]bool
-	pollStop          chan struct{}
-	allowedHostnames  []string
+	// directorySyncSinks records which sockets sent a directory cursor. Those sockets understand
+	// per-row sequences, so live updates for them carry `generation` and `seq`; a socket that never
+	// sent one does not, and stamping it anyway would claim a cursor position it does not hold.
+	directorySyncSinks map[frameSink]bool
+	pollStop           chan struct{}
+	allowedHostnames   []string
 	// agentLoads deduplicates concurrent cold-start attempts for one agent.
 	agentLoads map[string]*agentLoad
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
@@ -351,6 +360,7 @@ func New(opts Options) (*Server, error) {
 		serverID:              serverID,
 		version:               ver,
 		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
+		directory:             directorysync.NewService(),
 		keyPair:               kp,
 		pubKeyB64:             pubB64,
 		vapidKeys:             vapidKeys,
@@ -375,6 +385,7 @@ func New(opts Options) (*Server, error) {
 		clients:               make(map[frameSink]bool),
 		timelineViews:         make(map[frameSink]map[string]bool),
 		selectiveTimeline:     make(map[frameSink]bool),
+		directorySyncSinks:    make(map[frameSink]bool),
 		pollStop:              make(chan struct{}),
 		skillsQueue:           newSerialQueue(),
 	}
@@ -1111,8 +1122,10 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"hubAgentRpc": false,
 			// Hub was removed by decision (issue 025).
 			"hubRelationship": false,
-			// Cross-host directory sync is undecided product work.
-			"directorySync":                   false,
+			// Implemented: internal/directorysync gives projects, workspaces and agents their own
+			// sequences and remembers removals as tombstones, so a client can advance a cursor and
+			// learn that a row was deleted instead of refetching the whole table.
+			"directorySync":                   true,
 			"workspaceLabels":                 true,
 			"workspaceSetupRun":               true,
 			"providersSnapshot":               true,
@@ -1552,7 +1565,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", shellDetectPayload)
 
 	case "project.list.request":
-		s.handleProjectList(ctx, sink, base.RequestID)
+		s.handleProjectList(ctx, sink, raw)
 
 	case "fetch_workspaces_request":
 		s.handleFetchWorkspaces(ctx, sink, raw)
@@ -1867,7 +1880,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	}
 }
 
-func (s *Server) handleProjectList(ctx context.Context, sink frameSink, requestID string) {
+func (s *Server) handleProjectList(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	projects, _ := s.store.ListProjects()
 	descriptors := make([]map[string]any, 0, len(projects))
 	for _, p := range projects {
@@ -1876,10 +1889,27 @@ func (s *Server) handleProjectList(ctx context.Context, sink frameSink, requestI
 		}
 		descriptors = append(descriptors, buildProjectDescriptor(p))
 	}
+	var requestID string
+	if len(raw) > 0 {
+		var req struct {
+			RequestID string `json:"requestId"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		requestID = req.RequestID
+	}
+
+	// The client's cursor decides whether this is a snapshot or a delta. Without reading it every
+	// poll is a snapshot, so the client replaces its whole project table and can never be told a
+	// project was removed.
+	cursor, hasCursor := parseSyncCursor(raw, "sync")
+	entries, meta := s.directory.SynchronizeProjects(descriptors, cursor)
+	if hasCursor {
+		s.markDirectorySyncSink(sink)
+	}
 	_ = sendSessionMsg(ctx, sink, "project.list.response", map[string]any{
 		"requestId": requestID,
-		"projects":  descriptors,
-		"sync":      s.directorySyncMetadata("snapshot"),
+		"projects":  entries,
+		"sync":      syncFromMetadata(meta),
 	})
 }
 
@@ -1896,6 +1926,20 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 		} `json:"subscribe"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	// A sequenced read describes the whole directory, so a filter would ask for a subset of it and
+	// then stamp a cursor that claims to cover everything. Node rejects the combination rather than
+	// answering a cursor that silently skips rows.
+	cursor, sequenced := parseSyncCursor(raw, "sync")
+	if sequenced && req.Filter != nil {
+		_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+			"requestId":   req.RequestID,
+			"requestType": "fetch_workspaces_request",
+			"error":       "Sequenced workspace directory reads do not support filters.",
+			"code":        "invalid_request",
+		})
+		return
+	}
 
 	// The aggregate is derived from agent records that outlive any single broadcast, so a
 	// listing cannot rely on the last agent_update having refreshed it.
@@ -1925,11 +1969,20 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 
 	entries = filterSortPageWorkspaces(entries, req.Filter, req.Sort, req.Page)
 
+	// A sequenced read answers for the workspace table only; the project table has its own
+	// sequence, so re-sending empty projects here would claim they belong to this cursor.
 	emptyProjects := make([]map[string]any, 0)
-	for _, p := range projects {
-		if p.ArchivedAt == nil && wsCountByPrj[p.ProjectID] == 0 {
-			emptyProjects = append(emptyProjects, buildProjectDescriptor(p))
+	if !sequenced {
+		for _, p := range projects {
+			if p.ArchivedAt == nil && wsCountByPrj[p.ProjectID] == 0 {
+				emptyProjects = append(emptyProjects, buildProjectDescriptor(p))
+			}
 		}
+	}
+
+	entries, meta := s.directory.SynchronizeWorkspaces(entries, cursor)
+	if sequenced {
+		s.markDirectorySyncSink(sink)
 	}
 
 	payload := map[string]any{
@@ -1941,7 +1994,7 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 			"prevCursor": nil,
 			"hasMore":    false,
 		},
-		"sync": s.directorySyncMetadata("snapshot"),
+		"sync": syncFromMetadata(meta),
 	}
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
@@ -2111,22 +2164,6 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	syncMode := "snapshot"
-	syncReason := ""
-	if req.Sync != nil {
-		catalog := s.store.LoadLabelCatalog()
-		switch {
-		case req.Sync.Generation == "":
-			syncMode, syncReason = "snapshot", "no_cursor"
-		case req.Sync.Generation != catalog.Generation:
-			syncMode, syncReason = "snapshot", "generation_changed"
-		case req.Sync.AfterSeq == nil:
-			syncMode, syncReason = "snapshot", "no_cursor"
-		default:
-			syncMode = "changes"
-		}
-	}
-
 	searchQuery := req.SearchQuery
 	if strings.TrimSpace(searchQuery) == "" {
 		searchQuery = req.Search
@@ -2156,6 +2193,25 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 		} else {
 			scope = "active"
 		}
+	}
+
+	// A sequenced agent read needs the whole active directory: a filter or an explicit page would
+	// return a subset and then stamp a cursor claiming to cover the rest. Node enforces
+	// `scope=active` with no filter for the same reason.
+	agentCursor, sequenced := parseSyncCursor(raw, "sync")
+	if sequenced && (len(req.Filter) > 0 || strings.TrimSpace(searchQuery) != "") {
+		_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+			"requestId":   req.RequestID,
+			"requestType": reqType,
+			"error":       "Sequenced agent directory reads require no filter or search.",
+			"code":        "invalid_request",
+		})
+		return
+	}
+	if sequenced {
+		scope = "active"
+		limit = 0
+		cursor = ""
 	}
 
 	allRecords, _ := s.store.ListAgents()
@@ -2241,7 +2297,6 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 			}
 			entry["searchMatches"] = describeAgentHistoryMatches(searchQuery, rec, s.buildProjectPlacementForRecord(rec))
 		}
-		entry["syncSeq"] = directorySyncSeq(rec.UpdatedAt)
 		entries = append(entries, entry)
 	}
 
@@ -2262,7 +2317,12 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
 	}
-	payload["sync"] = s.directorySyncMetadataWithReason(syncMode, syncReason)
+	entries, meta := s.directory.SynchronizeAgents(entries, agentCursor)
+	if sequenced {
+		s.markDirectorySyncSink(sink)
+	}
+	payload["entries"] = entries
+	payload["sync"] = syncFromMetadata(meta)
 	if reqType == "fetch_agent_history_request" {
 		payload["searchTruncated"] = false
 	}
@@ -3568,10 +3628,13 @@ func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
 	// only carries that aggregate. Publishing after the agent snapshot keeps the two consistent for
 	// whoever listens to both, and this is the one funnel every agent state change goes through.
 	s.publishWorkspaceStatusChanges()
-	s.broadcastSessionMsg("agent_update", map[string]any{
-		"kind":    "upsert",
+	entry := map[string]any{
 		"agent":   s.buildAgentSnapshotPayload(rec),
 		"project": s.buildProjectPlacementForRecord(rec),
+	}
+	s.broadcastDirectoryUpdate("agent_update", func(includeSequence bool) map[string]any {
+		payload := map[string]any{"kind": "upsert", "agent": entry["agent"], "project": entry["project"]}
+		return s.directory.SequenceAgentUpdate(payload, entry, rec.ID, includeSequence)
 	})
 }
 
@@ -4270,28 +4333,84 @@ func (s *Server) captureFinalUsage(mp *managedPi, sess providers.ManagedSession)
 	s.broadcastAgentUpdate(recCopy)
 }
 
-// directorySyncMetadata is the cursor the client uses to detect a stale directory replica.
-// It is checked against the same counters that drive incremental updates.
-func (s *Server) directorySyncMetadata(mode string) map[string]any {
-	return s.directorySyncMetadataWithReason(mode, "")
+// syncFromMetadata renders a directory read's `sync` block for the wire.
+//
+// The block is always present, because the client decides from `mode` whether its replica can be
+// advanced: an absent block would read as "snapshot" and is what the daemon sent before it had any
+// sequencing at all.
+func syncFromMetadata(meta directorysync.Metadata) map[string]any {
+	removals := make([]any, 0, len(meta.Removals))
+	for _, removal := range meta.Removals {
+		removals = append(removals, map[string]any{"id": removal.ID, "seq": removal.Seq})
+	}
+	out := map[string]any{
+		"generation": meta.Generation,
+		"headSeq":    meta.HeadSeq,
+		"mode":       meta.Mode,
+		"removals":   removals,
+	}
+	// `reason` is optional and only meaningful on a snapshot; an empty string would be a reason
+	// that does not exist.
+	if meta.Reason != "" && meta.Mode == "snapshot" {
+		out["reason"] = meta.Reason
+	}
+	return out
 }
 
-// directorySyncMetadataWithReason adds the reason a snapshot was returned.
+// markDirectorySyncSink records that this socket understands per-row sequences.
+func (s *Server) markDirectorySyncSink(sink frameSink) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.directorySyncSinks[sink] = true
+}
+
+// directorySyncEnabledFor reports whether this socket asked for directory sequencing.
+func (s *Server) directorySyncEnabledFor(sink frameSink) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.directorySyncSinks[sink]
+}
+
+// parseSyncCursor reads the client's cursor off a request.
 //
-// `reason` is optional in the schema, so it is only present when there is one: an empty string
-// renders as a reason that does not exist.
-func (s *Server) directorySyncMetadataWithReason(mode, reason string) map[string]any {
-	catalog := s.store.LoadLabelCatalog()
-	metadata := map[string]any{
-		"generation": catalog.Generation,
-		"headSeq":    catalog.HeadSeq,
-		"mode":       mode,
-		"removals":   []any{},
+// A nil cursor means the client asked for a plain snapshot: it never sent one, so it does not
+// understand per-row sequences and the live broadcasts it receives leave `seq` off.
+func parseSyncCursor(raw json.RawMessage, field string) (directorysync.Cursor, bool) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return directorysync.Cursor{}, false
 	}
-	if reason != "" && mode == "snapshot" {
-		metadata["reason"] = reason
+	payload, ok := envelope[field]
+	if !ok {
+		return directorysync.Cursor{}, false
 	}
-	return metadata
+	var cursor struct {
+		Generation string `json:"generation"`
+		AfterSeq   *int64 `json:"afterSeq"`
+	}
+	if err := json.Unmarshal(payload, &cursor); err != nil {
+		return directorysync.Cursor{}, false
+	}
+	return directorysync.Cursor{Generation: cursor.Generation, AfterSeq: cursor.AfterSeq}, true
+}
+
+// directorySyncSeq turns a record's updatedAt into the positive cursor the directory replica
+// compares; zero would be rejected by the schema (`positive()`).
+//
+// Milliseconds, not nanoseconds: the protocol validates `int` against JavaScript's safe integer
+// range (2^53-1 ≈ 9e15), and UnixNano is ~1.7e18 — every response would fail validation.
+//
+// Still used for the prompt index, which is a separate cursor from the directory.
+func directorySyncSeq(updatedAt string) int64 {
+	t, err := time.Parse(time.RFC3339Nano, updatedAt)
+	if err != nil {
+		return 1
+	}
+	seq := t.UnixMilli()
+	if seq <= 0 {
+		return 1
+	}
+	return seq
 }
 
 // broadcastWorkspaceUpsert tells connected clients that one workspace changed.
@@ -4311,20 +4430,90 @@ func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.Pr
 // Node emits the create update with `status: "running"` for the same reason.
 func (s *Server) broadcastWorkspaceUpsertStatus(ws store.WorkspaceRecord, prj store.ProjectRecord, status string) {
 	if ws.ArchivedAt != nil {
-		s.broadcastSessionMsg("workspace_update", s.archiveRemovePayload(ws.WorkspaceID, ws.ProjectID))
+		s.broadcastWorkspaceRemoval(ws.WorkspaceID, prj.ProjectID)
 		return
 	}
 	descriptor := s.workspaceDescriptor(ws, prj)
 	if status != "" {
 		descriptor["status"] = status
 	}
-	catalog := s.store.LoadLabelCatalog()
-	s.broadcastSessionMsg("workspace_update", map[string]any{
-		"kind":       "upsert",
-		"workspace":  descriptor,
-		"generation": catalog.Generation,
-		"seq":        catalog.HeadSeq + 1,
+	s.broadcastDirectoryUpdate("workspace_update", func(includeSequence bool) map[string]any {
+		return s.directory.SequenceWorkspaceUpdate(
+			map[string]any{"kind": "upsert", "workspace": descriptor},
+			descriptor,
+			ws.WorkspaceID,
+			includeSequence,
+		)
 	})
+}
+
+// broadcastWorkspaceRemoval publishes a workspace deletion and its tombstone.
+func (s *Server) broadcastWorkspaceRemoval(workspaceID, projectID string) {
+	payload := s.archiveRemovePayload(workspaceID, projectID)
+	s.broadcastDirectoryUpdate("workspace_update", func(includeSequence bool) map[string]any {
+		return s.directory.SequenceWorkspaceUpdate(payload, nil, workspaceID, includeSequence)
+	})
+}
+
+// broadcastProjectUpsert publishes a project and advances its sequence.
+func (s *Server) broadcastProjectUpsert(descriptor map[string]any) {
+	s.broadcastDirectoryUpdate("project.update", func(includeSequence bool) map[string]any {
+		projectID, _ := descriptor["projectId"].(string)
+		return s.directory.SequenceProjectUpdate(
+			map[string]any{"kind": "upsert", "project": descriptor},
+			descriptor,
+			projectID,
+			includeSequence,
+		)
+	})
+}
+
+// broadcastProjectRemoval publishes a project deletion and its tombstone.
+func (s *Server) broadcastProjectRemoval(projectID string) {
+	s.broadcastDirectoryUpdate("project.update", func(includeSequence bool) map[string]any {
+		return s.directory.SequenceProjectUpdate(
+			map[string]any{"kind": "remove", "projectId": projectID},
+			nil,
+			projectID,
+			includeSequence,
+		)
+	})
+}
+
+// broadcastDirectoryUpdate renders one directory update for each audience.
+//
+// The sequencing fields are per socket, not per message: the sequence is assigned once, but a socket
+// that never sent a cursor does not read `seq`, and sending it there would make two clients disagree
+// about the same row. The payload is therefore rebuilt for each audience — at most two, so the cost
+// is one extra map.
+func (s *Server) broadcastDirectoryUpdate(msgType string, build func(includeSequence bool) map[string]any) {
+	var sequenced, plain []frameSink
+	s.mu.Lock()
+	for sink, handshaked := range s.clients {
+		if !handshaked {
+			continue
+		}
+		if s.directorySyncSinks[sink] {
+			sequenced = append(sequenced, sink)
+			continue
+		}
+		plain = append(plain, sink)
+	}
+	s.mu.Unlock()
+
+	ctx := context.Background()
+	if len(sequenced) > 0 {
+		payload := build(true)
+		for _, sink := range sequenced {
+			_ = sendSessionMsg(ctx, sink, msgType, payload)
+		}
+	}
+	if len(plain) > 0 {
+		payload := build(false)
+		for _, sink := range plain {
+			_ = sendSessionMsg(ctx, sink, msgType, payload)
+		}
+	}
 }
 
 // createdWorkspaceStatusOverride returns the status a synchronously created workspace announces.
@@ -4380,23 +4569,6 @@ func providerFetchedAt(entries []map[string]any, fallback string) map[string]str
 		out[provider] = fallback
 	}
 	return out
-}
-
-// directorySyncSeq turns a record's updatedAt into the positive cursor the directory replica
-// compares; zero would be rejected by the schema (`positive()`).
-//
-// Milliseconds, not nanoseconds: the protocol validates `int` against JavaScript's safe integer
-// range (2^53-1 ≈ 9e15), and UnixNano is ~1.7e18 — every response would fail validation.
-func directorySyncSeq(updatedAt string) int64 {
-	t, err := time.Parse(time.RFC3339Nano, updatedAt)
-	if err != nil {
-		return 1
-	}
-	seq := t.UnixMilli()
-	if seq <= 0 {
-		return 1
-	}
-	return seq
 }
 
 // projectForWorkspace returns the project record that owns a workspace.
