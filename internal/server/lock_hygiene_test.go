@@ -24,6 +24,8 @@ var selfLockingMethods = map[string]bool{
 	"firstMarkableAgent":   true,
 	"broadcastAgentUpdate": true,
 	"broadcastSessionMsg":  true,
+	// broadcastDirectoryUpdate locks to classify its sinks by cursor capability.
+	"broadcastDirectoryUpdate": true,
 	// appendSystemErrorRow broadcasts, so it self-locks through broadcastSessionMsg.
 	"appendSystemErrorRow":          true,
 	"buildAgentSnapshotPayload":     true,

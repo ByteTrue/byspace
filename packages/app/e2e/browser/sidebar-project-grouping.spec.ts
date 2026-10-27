@@ -450,8 +450,14 @@ test.describe("Sidebar project grouping", () => {
     await removeSecondaryBtn.click();
     await expect(removeModal).not.toBeVisible();
 
-    // After removing from secondary host, the project still exists with primary host's workspace
-    await expect(page.getByText("Primary workspace", { exact: true })).toBeVisible();
+    // After removing from secondary host, the project still exists with primary host's workspace.
+    //
+    // The row comes back from the daemon: the removal round-trips through both hosts and the
+    // sidebar rebuilds the group. That has taken longer than the 10s default on a loaded CI
+    // runner while still arriving, so the assertion carries its own budget.
+    await expect(page.getByText("Primary workspace", { exact: true })).toBeVisible({
+      timeout: 45_000,
+    });
     await expect(page.getByText("Secondary workspace", { exact: true })).not.toBeVisible();
   });
 

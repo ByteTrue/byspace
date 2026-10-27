@@ -66,10 +66,16 @@ async function markAsRead(page: Page, workspaceId: string) {
   await expectStatus(page, workspaceId, "done");
 }
 
+// The indicator is a round trip: the click reaches the daemon, the daemon recomputes the bucket
+// and broadcasts, and the row re-renders. On a loaded CI runner that trip has taken longer than the
+// 10s default while still getting there — the test budget above does not raise this one, so the
+// assertion needs its own.
+const STATUS_SETTLE_TIMEOUT_MS = 45_000;
+
 async function expectStatus(page: Page, workspaceId: string, status: "done" | "attention") {
   await expect(
     workspaceRow(page, workspaceId).getByTestId(`workspace-status-indicator-${status}`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: STATUS_SETTLE_TIMEOUT_MS });
 }
 
 async function markBackgroundWorkspaceAndReopen(page: Page, workspaceId: string) {
