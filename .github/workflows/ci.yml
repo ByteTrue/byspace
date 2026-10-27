@@ -16,12 +16,6 @@ env:
   # e2e runs on Linux like CI does, so the web UI has to be built before the
   # Go binary that embeds it.
   GO_VERSION: "1.27.3"
-  # How many Playwright shards the browser suite is split into. Higher is faster and costs
-  # nothing on a public repository: the jobs are parallel, so the run takes as long as the
-  # slowest shard, and one shard is a whole extra daemon + Metro + browser to pay for at setup
-  # (about 75 seconds). The suite is roughly 80 minutes of single-worker time, so N shards bottoms
-  # out near 80/N minutes regardless.
-  PLAYWRIGHT_SHARDS: "16"
 
 jobs:
   changes:
@@ -273,7 +267,10 @@ jobs:
         run: npm run typecheck:examples --workspace=@bytetrue/client
 
   playwright:
-    name: playwright (shard ${{ matrix.shard }}/${{ env.PLAYWRIGHT_SHARDS }})
+    # `strategy.job-total` is the matrix size. The `env` context is not available in a job name or
+    # a job-level env block — referencing it there makes GitHub reject the whole workflow, which
+    # surfaces as an instant failure with no jobs and the file path shown instead of the name.
+    name: playwright (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: changes
     if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
@@ -282,9 +279,13 @@ jobs:
       # shard count this high is that a single shard is cheap to re-run.
       fail-fast: false
       matrix:
+        # The length of this list is the shard count. Sixteen keeps the slowest shard near five
+        # minutes of specs; the suite is roughly 80 minutes of single-worker time, and the jobs run
+        # in parallel, so the run takes as long as its slowest shard. Each shard also pays about 75
+        # seconds of setup (checkout, npm ci, browsers, builds).
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     env:
-      PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ env.PLAYWRIGHT_SHARDS }}
+      PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
       PLAYWRIGHT_ARTIFACT: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v4
@@ -320,7 +321,7 @@ jobs:
         run: make build
 
       - name: Run Playwright E2E tests
-        run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ env.PLAYWRIGHT_SHARDS }}
+        run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # One worker per shard. Each Playwright worker owns a daemon, a Metro server and a
