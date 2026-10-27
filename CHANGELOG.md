@@ -5,6 +5,12 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.7 - 2026-10-27
+
+### Changed
+
+- The end-to-end canvas and unread specs now run with a longer budget. They were failing intermittently on CI whenever another worker competed for the same runner, which blocked releases behind a re-run
+
 ## 0.21.0-beta.6 - 2026-10-26
 
 ### Fixed
