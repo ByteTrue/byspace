@@ -1902,7 +1902,7 @@ func (s *Server) handleProjectList(ctx context.Context, sink frameSink, raw json
 	// poll is a snapshot, so the client replaces its whole project table and can never be told a
 	// project was removed.
 	cursor, hasCursor := parseSyncCursor(raw, "sync")
-	entries, meta := s.directory.SynchronizeProjects(descriptors, cursor)
+	entries, meta := s.directory.SynchronizeProjects(descriptors, cursor, hasCursor)
 	if hasCursor {
 		s.markDirectorySyncSink(sink)
 	}
@@ -1980,7 +1980,7 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 		}
 	}
 
-	entries, meta := s.directory.SynchronizeWorkspaces(entries, cursor)
+	entries, meta := s.directory.SynchronizeWorkspaces(entries, cursor, sequenced)
 	if sequenced {
 		s.markDirectorySyncSink(sink)
 	}
@@ -2317,7 +2317,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
 	}
-	entries, meta := s.directory.SynchronizeAgents(entries, agentCursor)
+	entries, meta := s.directory.SynchronizeAgents(entries, agentCursor, sequenced)
 	if sequenced {
 		s.markDirectorySyncSink(sink)
 	}
@@ -3872,8 +3872,10 @@ func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
 		// knows whether to fetch /projects/icons/<id>.json. Optional (not nullable): only set
 		// when there is a custom icon, otherwise the key is omitted.
 		"projectIconRevision": nil,
-		// syncSeq is the per-record cursor the directory replica advances on each change.
-		"syncSeq": directorySyncSeq(p.UpdatedAt),
+		// No syncSeq here: the directory service stamps it, and only for a read that carried a
+		// cursor. A descriptor on its own (a create response, an announcement to a client that never
+		// sent one) must not claim a cursor position — two clients would then disagree about the same
+		// row, and the one that never asked for sequences would skip the next delta.
 	}
 	if p.CustomIconRevision != nil && strings.TrimSpace(*p.CustomIconRevision) != "" {
 		out["projectIconRevision"] = *p.CustomIconRevision
@@ -4392,25 +4394,6 @@ func parseSyncCursor(raw json.RawMessage, field string) (directorysync.Cursor, b
 		return directorysync.Cursor{}, false
 	}
 	return directorysync.Cursor{Generation: cursor.Generation, AfterSeq: cursor.AfterSeq}, true
-}
-
-// directorySyncSeq turns a record's updatedAt into the positive cursor the directory replica
-// compares; zero would be rejected by the schema (`positive()`).
-//
-// Milliseconds, not nanoseconds: the protocol validates `int` against JavaScript's safe integer
-// range (2^53-1 ≈ 9e15), and UnixNano is ~1.7e18 — every response would fail validation.
-//
-// Still used for the prompt index, which is a separate cursor from the directory.
-func directorySyncSeq(updatedAt string) int64 {
-	t, err := time.Parse(time.RFC3339Nano, updatedAt)
-	if err != nil {
-		return 1
-	}
-	seq := t.UnixMilli()
-	if seq <= 0 {
-		return 1
-	}
-	return seq
 }
 
 // broadcastWorkspaceUpsert tells connected clients that one workspace changed.

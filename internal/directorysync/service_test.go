@@ -21,12 +21,13 @@ func agent(id, title string) Entry {
 // never saw, so it gets a snapshot.
 func TestCursorFromAnotherGenerationGetsASnapshot(t *testing.T) {
 	s := NewServiceWithGeneration("gen_a")
-	s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{})
+	s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{}, true)
 
 	after := int64(1)
 	entries, meta := s.SynchronizeProjects(
 		[]Entry{project("p1", "one")},
 		Cursor{Generation: "gen_b", AfterSeq: &after},
+		true,
 	)
 	if meta.Mode != "snapshot" || meta.Reason != "generation_changed" {
 		t.Fatalf("metadata = %+v, want a snapshot with generation_changed", meta)
@@ -39,7 +40,7 @@ func TestCursorFromAnotherGenerationGetsASnapshot(t *testing.T) {
 // A cursor with no generation is the first poll and gets a snapshot.
 func TestNoCursorGetsASnapshot(t *testing.T) {
 	s := NewServiceWithGeneration("gen_a")
-	entries, meta := s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{})
+	entries, meta := s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{}, true)
 	if meta.Mode != "snapshot" || meta.Reason != "no_cursor" {
 		t.Fatalf("metadata = %+v, want a snapshot with no_cursor", meta)
 	}
@@ -57,12 +58,12 @@ func TestSecondPollReturnsOnlyChanges(t *testing.T) {
 	_, meta := s.SynchronizeWorkspaces([]Entry{
 		workspace("w1", "p1", "one"),
 		workspace("w2", "p1", "two"),
-	}, Cursor{})
+	}, Cursor{}, true)
 	cursor := meta.HeadSeq
 
 	entries, meta := s.SynchronizeWorkspaces([]Entry{
 		workspace("w1", "p1", "one renamed"),
-	}, Cursor{Generation: "gen_a", AfterSeq: &cursor})
+	}, Cursor{Generation: "gen_a", AfterSeq: &cursor}, true)
 
 	if meta.Mode != "changes" {
 		t.Fatalf("mode = %q, want changes", meta.Mode)
@@ -79,10 +80,10 @@ func TestSecondPollReturnsOnlyChanges(t *testing.T) {
 func TestIdlePollReturnsNothing(t *testing.T) {
 	s := NewServiceWithGeneration("gen_a")
 	snapshot := []Entry{workspace("w1", "p1", "one")}
-	_, meta := s.SynchronizeWorkspaces(snapshot, Cursor{})
+	_, meta := s.SynchronizeWorkspaces(snapshot, Cursor{}, true)
 	cursor := meta.HeadSeq
 
-	entries, meta := s.SynchronizeWorkspaces(snapshot, Cursor{Generation: "gen_a", AfterSeq: &cursor})
+	entries, meta := s.SynchronizeWorkspaces(snapshot, Cursor{Generation: "gen_a", AfterSeq: &cursor}, true)
 	if meta.Mode != "changes" {
 		t.Fatalf("mode = %q, want changes", meta.Mode)
 	}
@@ -97,8 +98,8 @@ func TestIdlePollReturnsNothing(t *testing.T) {
 // The three entity types keep independent sequences.
 func TestEntityTypesDoNotShareASequence(t *testing.T) {
 	s := NewServiceWithGeneration("gen_a")
-	s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{})
-	_, meta := s.SynchronizeWorkspaces([]Entry{workspace("w1", "p1", "one")}, Cursor{})
+	s.SynchronizeProjects([]Entry{project("p1", "one")}, Cursor{}, true)
+	_, meta := s.SynchronizeWorkspaces([]Entry{workspace("w1", "p1", "one")}, Cursor{}, true)
 	if meta.HeadSeq != 1 {
 		t.Fatalf("workspaces headSeq = %d, want 1: a project change must not move it", meta.HeadSeq)
 	}
@@ -145,7 +146,7 @@ func TestLiveRemovalIsReportedByTheNextPoll(t *testing.T) {
 	}
 
 	after := int64(1)
-	_, meta := s.SynchronizeWorkspaces(nil, Cursor{Generation: "gen_a", AfterSeq: &after})
+	_, meta := s.SynchronizeWorkspaces(nil, Cursor{Generation: "gen_a", AfterSeq: &after}, true)
 	if len(meta.Removals) != 1 || meta.Removals[0].ID != "w1" {
 		t.Fatalf("removals = %+v, want w1", meta.Removals)
 	}
@@ -154,10 +155,10 @@ func TestLiveRemovalIsReportedByTheNextPoll(t *testing.T) {
 // Agents key on the nested agent id, not on a top-level field.
 func TestAgentEntriesKeyOnTheNestedAgentID(t *testing.T) {
 	s := NewServiceWithGeneration("gen_a")
-	_, meta := s.SynchronizeAgents([]Entry{agent("a1", "one"), agent("a2", "two")}, Cursor{})
+	_, meta := s.SynchronizeAgents([]Entry{agent("a1", "one"), agent("a2", "two")}, Cursor{}, true)
 	cursor := meta.HeadSeq
 
-	entries, meta := s.SynchronizeAgents([]Entry{agent("a1", "renamed")}, Cursor{Generation: "gen_a", AfterSeq: &cursor})
+	entries, meta := s.SynchronizeAgents([]Entry{agent("a1", "renamed")}, Cursor{Generation: "gen_a", AfterSeq: &cursor}, true)
 	if len(entries) != 1 {
 		t.Fatalf("entries = %+v, want one changed agent", entries)
 	}

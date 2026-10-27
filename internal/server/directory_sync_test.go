@@ -223,3 +223,33 @@ func TestServerInfoAdvertisesDirectorySync(t *testing.T) {
 	}
 	var _ *directorysync.Service = srv.directory
 }
+
+// A read without a cursor must not tag its rows.
+//
+// `syncSeq` says "this row's position in the caller's cursor". A client that never sent one does
+// not store it, so a tagged row is a position the client will not remember — and the next delta,
+// computed from a cursor it never advanced, disagrees with the row it was just shown.
+func TestPlainReadDoesNotTagRows(t *testing.T) {
+	srv, sink := directoryTestServer(t)
+	addProject(t, srv, t.TempDir())
+
+	srv.handleProjectList(context.Background(), sink, json.RawMessage(`{"requestId":"r1"}`))
+	plain := lastSessionPayload[projectListResponse](t, sink, "project.list.response")
+	if len(plain.Projects) == 0 {
+		t.Fatal("the plain read listed no projects")
+	}
+	for _, row := range plain.Projects {
+		if _, has := row["syncSeq"]; has {
+			t.Fatalf("plain read tagged a row: %+v", row)
+		}
+	}
+
+	// The sequenced read does tag them, which is what the client stores.
+	srv.handleProjectList(context.Background(), sink, json.RawMessage(`{"requestId":"r2","sync":{}}`))
+	sequenced := lastSessionPayload[projectListResponse](t, sink, "project.list.response")
+	for _, row := range sequenced.Projects {
+		if _, has := row["syncSeq"]; !has {
+			t.Fatalf("sequenced read did not tag a row: %+v", row)
+		}
+	}
+}

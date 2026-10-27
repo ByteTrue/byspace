@@ -75,30 +75,34 @@ func (s *Service) Generation() string {
 }
 
 // SynchronizeProjects reconciles the project table with a full projection and answers a read.
-func (s *Service) SynchronizeProjects(snapshot []Entry, cursor Cursor) ([]Entry, Metadata) {
+//
+// Rows carry their sequence only when the request came with a cursor. A client that never sent one
+// does not read `syncSeq`, and a row claiming a cursor position the client will not store is a
+// disagreement waiting to happen.
+func (s *Service) SynchronizeProjects(snapshot []Entry, cursor Cursor, sequenced bool) ([]Entry, Metadata) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.projects.ReplaceAll(snapshot)
 	read := s.read(s.projects, cursor)
-	return tagged(read.Values), read.Metadata(s.generation)
+	return entriesOf(read, sequenced), read.Metadata(s.generation)
 }
 
 // SynchronizeWorkspaces reconciles the workspace table with a full projection and answers a read.
-func (s *Service) SynchronizeWorkspaces(snapshot []Entry, cursor Cursor) ([]Entry, Metadata) {
+func (s *Service) SynchronizeWorkspaces(snapshot []Entry, cursor Cursor, sequenced bool) ([]Entry, Metadata) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.workspaces.ReplaceAll(snapshot)
 	read := s.read(s.workspaces, cursor)
-	return tagged(read.Values), read.Metadata(s.generation)
+	return entriesOf(read, sequenced), read.Metadata(s.generation)
 }
 
 // SynchronizeAgents reconciles the agent table with a full projection and answers a read.
-func (s *Service) SynchronizeAgents(snapshot []Entry, cursor Cursor) ([]Entry, Metadata) {
+func (s *Service) SynchronizeAgents(snapshot []Entry, cursor Cursor, sequenced bool) ([]Entry, Metadata) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.agents.ReplaceAll(snapshot)
 	read := s.read(s.agents, cursor)
-	return tagged(read.Values), read.Metadata(s.generation)
+	return entriesOf(read, sequenced), read.Metadata(s.generation)
 }
 
 // SequenceProjectUpdate publishes a project upsert or removal and stamps its sequence.
@@ -135,14 +139,32 @@ func (s *Service) read[T any](collection *Collection[T], cursor Cursor) Read[T] 
 	return collection.ReadAfter(*cursor.AfterSeq)
 }
 
+// entriesOf returns the read's rows, tagged with their sequence only when the client sequences.
+func entriesOf(read Read[Entry], sequenced bool) []Entry {
+	if !sequenced {
+		out := make([]Entry, 0, len(read.Values))
+		for _, versioned := range read.Values {
+			out = append(out, copyEntry(versioned.Value))
+		}
+		return out
+	}
+	return tagged(read.Values)
+}
+
+// copyEntry copies a row so attaching a sequence never mutates the projection the caller built.
+func copyEntry(entry Entry) Entry {
+	out := make(Entry, len(entry)+1)
+	for key, value := range entry {
+		out[key] = value
+	}
+	return out
+}
+
 // tagged attaches each row's sequence to the object the client receives.
 func tagged(values []Versioned[Entry]) []Entry {
 	out := make([]Entry, 0, len(values))
 	for _, versioned := range values {
-		entry := make(Entry, len(versioned.Value)+1)
-		for key, value := range versioned.Value {
-			entry[key] = value
-		}
+		entry := copyEntry(versioned.Value)
 		entry["syncSeq"] = versioned.Seq
 		out = append(out, entry)
 	}

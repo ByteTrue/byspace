@@ -60,10 +60,13 @@ func (s *Server) broadcastProjectRemoved(projectID string, removedWorkspaceIDs [
 	// No `projectId` alongside `removedProjectId`: the client dispatches on `projectId` first and would take the
 	// project-removal branch, which never clears the archived-agent bookkeeping the workspace branch does.
 	for _, target := range targets {
-		s.broadcastSessionMsg("workspace_update", map[string]any{
-			"kind":             "remove",
-			"id":               target,
-			"removedProjectId": projectID,
+		target := target
+		s.broadcastDirectoryUpdate("workspace_update", func(includeSequence bool) map[string]any {
+			return s.directory.SequenceWorkspaceUpdate(map[string]any{
+				"kind":             "remove",
+				"id":               target,
+				"removedProjectId": projectID,
+			}, nil, target, includeSequence)
 		})
 	}
 }

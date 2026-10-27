@@ -255,10 +255,13 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 	// the remove branch does (see internal/server/ws_archive_updates.go). `removedProjectId` is the
 	// field the protocol declares for "the project went with it".
 	for _, wsID := range removedWS {
-		s.broadcastSessionMsg("workspace_update", map[string]any{
-			"kind":             "remove",
-			"id":               wsID,
-			"removedProjectId": req.ProjectID,
+		wsID := wsID
+		s.broadcastDirectoryUpdate("workspace_update", func(includeSequence bool) map[string]any {
+			return s.directory.SequenceWorkspaceUpdate(map[string]any{
+				"kind":             "remove",
+				"id":               wsID,
+				"removedProjectId": req.ProjectID,
+			}, nil, wsID, includeSequence)
 		})
 	}
 	if len(removedWS) == 0 {
