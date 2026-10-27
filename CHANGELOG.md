@@ -5,6 +5,18 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.0-beta.9 - 2026-10-27
+
+### Added
+
+- Directory sync: the daemon now sequences projects, workspaces and agents, so a client that keeps a copy asks for what changed instead of refetching everything, and is told when a row is deleted
+
+## 0.21.0-beta.8 - 2026-10-27
+
+### Changed
+
+- `npm run release:beta:next` now waits for CI on the version commit and tags it, instead of stopping for a manual `release:push` after every release. A failed run stops at once; `RELEASE_CI_WAIT_MS=0` restores the old behaviour
+
 ## 0.21.0-beta.7 - 2026-10-27
 
 ### Changed
