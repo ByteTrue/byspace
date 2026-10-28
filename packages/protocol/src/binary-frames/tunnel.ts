@@ -16,12 +16,21 @@ import { asUint8Array } from "./terminal.js";
  */
 
 export const TunnelFrameOpcode = {
+  /**
+   * Ask the target to dial one of its ports and start a stream.
+   *
+   * Payload is a 2-byte big-endian port. The daemon keeps this handshake on the binary channel so a
+   * `DataUpstream` can never overtake the open that gates it.
+   */
+  Open: 0x1f,
   /** Stream bytes for tunnelId, D1→D2 (client to target host). */
   DataUpstream: 0x20,
   /** Stream bytes for tunnelId, D2→D1 (target host to client). */
   DataDownstream: 0x21,
   /** Half-close/teardown for tunnelId. Sender is done with this stream. */
   Close: 0x22,
+  /** Answer to {@link Open}: one status byte, then a UTF-8 reason when the status is not 0. */
+  OpenAck: 0x23,
 } as const;
 
 export type TunnelFrameOpcode = (typeof TunnelFrameOpcode)[keyof typeof TunnelFrameOpcode];

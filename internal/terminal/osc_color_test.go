@@ -1,15 +1,33 @@
 package terminal
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/aymanbagabas/go-pty"
 )
+
+// writerOnly adapts an *os.File to the pseudo-terminal interface these tests need.
+//
+// The session writes OSC replies back to the terminal; only Write is exercised here, so the other
+// pty.Pty methods never run. Keeping the adapter in the test rather than widening the production
+// interface means the real code still goes through the same type on Unix and Windows.
+type writerOnly struct{ *os.File }
+
+func (writerOnly) Resize(int, int) error { return nil }
+func (writerOnly) Name() string          { return "pipe" }
+func (writerOnly) Command(string, ...string) *pty.Cmd {
+	return nil
+}
+func (writerOnly) CommandContext(context.Context, string, ...string) *pty.Cmd { return nil }
+func (writerOnly) Fd() uintptr                                                { return 0 }
 
 // pipePair returns a writer (stand-in for the pty master) and its reader.
 //
-// A pipe rather than a real pty: the pty's line discipline buffers writes until a newline, and an OSC reply has
-// none — the test would then be measuring termios rather than the reply.
+// A pipe rather than a real pty: the pty's line discipline buffers writes until a newline, and an OSC
+// reply has none — the test would then be measuring termios rather than the reply.
 func pipePair(t *testing.T) (writer, reader *os.File) {
 	t.Helper()
 	// os.Pipe returns (readEnd, writeEnd).
@@ -55,7 +73,7 @@ func readWithin(t *testing.T, reader *os.File, size int, timeout time.Duration) 
 // falls back to its own default, which may be a light theme inside this app's dark one.
 func TestAnswerOSCColorQueriesWritesReplies(t *testing.T) {
 	writer, reader := pipePair(t)
-	session := &Session{ptmx: writer}
+	session := &Session{ptmx: writerOnly{writer}}
 	session.answerOSCColorQueries([]byte("\x1b]11;?\x1b\\"))
 
 	got, ok := readWithin(t, reader, 64, 2*time.Second)
@@ -70,7 +88,7 @@ func TestAnswerOSCColorQueriesWritesReplies(t *testing.T) {
 // All three queries in one chunk are answered.
 func TestAnswerOSCColorQueriesAnswersEach(t *testing.T) {
 	writer, reader := pipePair(t)
-	session := &Session{ptmx: writer}
+	session := &Session{ptmx: writerOnly{writer}}
 	session.answerOSCColorQueries([]byte("\x1b]10;?\x1b]11;?\x1b]12;?"))
 
 	got, ok := readWithin(t, reader, 256, 2*time.Second)
@@ -87,7 +105,7 @@ func TestAnswerOSCColorQueriesAnswersEach(t *testing.T) {
 // A chunk without a query writes nothing: replying to every read would fill the program's input with garbage.
 func TestAnswerOSCColorQueriesIgnoresOtherOutput(t *testing.T) {
 	writer, reader := pipePair(t)
-	session := &Session{ptmx: writer}
+	session := &Session{ptmx: writerOnly{writer}}
 	session.answerOSCColorQueries([]byte("ordinary output\r\n"))
 
 	if got, wrote := readWithin(t, reader, 8, 200*time.Millisecond); wrote {

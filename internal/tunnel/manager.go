@@ -35,6 +35,28 @@ type stream struct {
 	// upstreamDone records that the local side finished sending, so the read pump should not
 	// treat the resulting EOF as a failure.
 	upstreamDone atomic.Bool
+	// opened receives the target's answer to the open request. Buffered so the reader never blocks
+	// on a stream nobody is waiting for any more.
+	opened chan openResult
+	// openOnce guards the single delivery into opened: the answer arrives once, but a disconnect
+	// can also fail every waiting stream.
+	openOnce sync.Once
+}
+
+// openResult is the target's answer to an open request.
+type openResult struct {
+	allowed bool
+	reason  string
+}
+
+// settleOpen delivers an open result at most once.
+func (s *stream) settleOpen(result openResult) {
+	s.openOnce.Do(func() {
+		select {
+		case s.opened <- result:
+		default:
+		}
+	})
 }
 
 // forward is one remote port exposed locally.
@@ -246,10 +268,44 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	}
 
 	id := "t" + strconv.FormatUint(m.nextStream.Add(1), 10)
-	s := &stream{id: id, conn: conn}
+	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1)}
 
 	m.mu.Lock()
 	f.streams[id] = s
+	m.mu.Unlock()
+
+	// Ask the target for the stream before moving any bytes.
+	//
+	// Without this the first chunk was sent into a tunnel id the target had never seen, so
+	// `Target.HandleFrame` treated it as "a frame for a stream we already closed" and dropped it.
+	// The local socket stayed open and the caller saw a connection that never answered — a hang,
+	// not an error.
+	if err := peer.Send(Frame{
+		Opcode:   OpcodeOpen,
+		TunnelID: id,
+		Payload:  EncodeOpenPayload(f.remotePort),
+	}); err != nil {
+		m.dropStream(f, s, "peer send failed: "+err.Error())
+		return
+	}
+
+	result, ok := m.awaitOpen(s)
+	if !ok {
+		// The peer went away, or the manager closed, while the open was in flight.
+		m.dropStream(f, s, "peer disconnected during open")
+		return
+	}
+	if !result.allowed {
+		reason := result.reason
+		if reason == "" {
+			reason = "target refused the stream"
+		}
+		m.setError(f, reason)
+		m.dropStream(f, s, reason)
+		return
+	}
+
+	m.mu.Lock()
 	// The first stream on a port is what proves the path works; the state reflects that.
 	if f.state != StateConnected {
 		f.state = StateConnected
@@ -259,6 +315,26 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 
 	go m.pumpLocalToPeer(peer, f, s)
 }
+
+// awaitOpen waits for the target's answer, the manager closing, or the socket dying.
+//
+// A bound rather than an infinite wait: a target that never answers (an older daemon, a dropped
+// frame) would otherwise pin the accepted socket and its goroutine forever.
+func (m *Manager) awaitOpen(s *stream) (openResult, bool) {
+	timeout := time.NewTimer(openTimeout)
+	defer timeout.Stop()
+	select {
+	case result := <-s.opened:
+		return result, true
+	case <-m.closeCh:
+		return openResult{}, false
+	case <-timeout.C:
+		return openResult{allowed: false, reason: "target did not answer the open request"}, true
+	}
+}
+
+// openTimeout bounds how long a stream waits for its answer.
+const openTimeout = 15 * time.Second
 
 // pumpLocalToPeer moves bytes from the accepted socket into the tunnel.
 func (m *Manager) pumpLocalToPeer(peer PeerConn, f *forward, s *stream) {
@@ -325,6 +401,12 @@ func (m *Manager) handleFrame(frame Frame) {
 	}
 
 	switch frame.Opcode {
+	case OpcodeOpenAck:
+		allowed, reason, ok := DecodeOpenAck(frame.Payload)
+		if !ok {
+			allowed, reason = false, "malformed open acknowledgement"
+		}
+		target.settleOpen(openResult{allowed: allowed, reason: reason})
 	case OpcodeDataDownstream:
 		if _, err := target.conn.Write(frame.Payload); err != nil {
 			m.dropStream(owner, target, err.Error())

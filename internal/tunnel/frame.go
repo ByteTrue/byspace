@@ -14,12 +14,31 @@ import (
 
 // Frame opcodes, allocated after the file-transfer block in protocol/src/binary-frames/tunnel.ts.
 const (
+	// OpcodeOpen asks the target to dial one of its ports and start a stream.
+	//
+	// The node daemon did this with a `tunnel.open.request` JSON message and awaited
+	// `tunnel.open.response` before sending bytes. Keeping it on the binary channel instead means the
+	// handshake cannot be reordered against the data it gates: both travel on the same socket, so a
+	// `DataUpstream` can never overtake its own `Open`.
+	//
+	// Payload: 2-byte big-endian remote port.
+	OpcodeOpen byte = 0x1f
+	// OpcodeOpenAck answers an open: one status byte, then a UTF-8 reason when it is not 0.
+	OpcodeOpenAck byte = 0x23
 	// OpcodeDataUpstream carries stream bytes from the initiator to the target host.
 	OpcodeDataUpstream byte = 0x20
 	// OpcodeDataDownstream carries stream bytes from the target host back to the initiator.
 	OpcodeDataDownstream byte = 0x21
 	// OpcodeClose tears one tunnel stream down.
 	OpcodeClose byte = 0x22
+)
+
+// Open acknowledgement status bytes.
+const (
+	// OpenAllowed means the target dialled the port and the stream is live.
+	OpenAllowed byte = 0
+	// OpenDenied means the target refused, for the reason carried after the byte.
+	OpenDenied byte = 1
 )
 
 // MaxTunnelIDLength bounds the stream id. The wire format stores its length in one byte.
@@ -60,7 +79,9 @@ func DecodeFrame(data []byte) (Frame, bool) {
 		return Frame{}, false
 	}
 	opcode := data[0]
-	if opcode != OpcodeDataUpstream && opcode != OpcodeDataDownstream && opcode != OpcodeClose {
+	switch opcode {
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose:
+	default:
 		return Frame{}, false
 	}
 	idLen := int(data[1])
@@ -84,5 +105,53 @@ func DecodeFrame(data []byte) (Frame, bool) {
 // terminal and file-transfer ranges, so a tunnel frame offered to the terminal decoder is rejected
 // as a bad slot and the bytes are dropped without a trace.
 func IsTunnelOpcode(opcode byte) bool {
-	return opcode == OpcodeDataUpstream || opcode == OpcodeDataDownstream || opcode == OpcodeClose
+	switch opcode {
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose:
+		return true
+	default:
+		return false
+	}
+}
+
+// EncodeOpenPayload writes the port an open request asks for.
+func EncodeOpenPayload(remotePort int) []byte {
+	return []byte{byte(remotePort >> 8), byte(remotePort)}
+}
+
+// DecodeOpenPayload reads that port back.
+func DecodeOpenPayload(payload []byte) (int, bool) {
+	if len(payload) < 2 {
+		return 0, false
+	}
+	port := int(payload[0])<<8 | int(payload[1])
+	if port < 1 || port > 65535 {
+		return 0, false
+	}
+	return port, true
+}
+
+// EncodeOpenAck writes an acknowledgement: status byte, then the denial reason.
+func EncodeOpenAck(allowed bool, reason string) []byte {
+	if allowed {
+		return []byte{OpenAllowed}
+	}
+	out := make([]byte, 1+len(reason))
+	out[0] = OpenDenied
+	copy(out[1:], reason)
+	return out
+}
+
+// DecodeOpenAck reads an acknowledgement.
+func DecodeOpenAck(payload []byte) (allowed bool, reason string, ok bool) {
+	if len(payload) < 1 {
+		return false, "", false
+	}
+	switch payload[0] {
+	case OpenAllowed:
+		return true, "", true
+	case OpenDenied:
+		return false, string(payload[1:]), true
+	default:
+		return false, "", false
+	}
 }

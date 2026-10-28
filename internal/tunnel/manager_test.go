@@ -20,6 +20,14 @@ func echoPeer(conn PeerConn, stop <-chan struct{}) {
 					return
 				}
 				switch frame.Opcode {
+				case OpcodeOpen:
+					// The far side grants every stream, which is what a target with the port on its
+					// allowlist does. The manager will not move bytes until it sees this.
+					_ = conn.Send(Frame{
+						Opcode:   OpcodeOpenAck,
+						TunnelID: frame.TunnelID,
+						Payload:  EncodeOpenAck(true, ""),
+					})
 				case OpcodeDataUpstream:
 					_ = conn.Send(Frame{Opcode: OpcodeDataDownstream, TunnelID: frame.TunnelID, Payload: frame.Payload})
 				case OpcodeClose:

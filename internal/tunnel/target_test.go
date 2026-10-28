@@ -39,19 +39,19 @@ func TestTargetOpenGates(t *testing.T) {
 	allowed := []int{port}
 
 	disabled := NewTarget(func() bool { return false }, func() bool { return true }, func() []int { return allowed })
-	if result, _ := disabled.Open(port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := disabled.Open("", port, func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a disabled host must refuse")
 	} else if result.Reason == "" {
 		t.Fatal("the refusal must say why")
 	}
 
 	noPassword := NewTarget(func() bool { return true }, func() bool { return false }, func() []int { return allowed })
-	if result, _ := noPassword.Open(port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := noPassword.Open("", port, func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a host without a password must refuse")
 	}
 
 	notAllowed := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{1, 2} })
-	result, _ := notAllowed.Open(port, func(Frame) error { return nil })
+	result, _ := notAllowed.Open("", port, func(Frame) error { return nil })
 	if result.Allowed {
 		t.Fatal("a port outside the allowlist must refuse")
 	}
@@ -60,7 +60,7 @@ func TestTargetOpenGates(t *testing.T) {
 	}
 
 	ok := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
-	opened, _ := ok.Open(port, func(Frame) error { return nil })
+	opened, _ := ok.Open("", port, func(Frame) error { return nil })
 	if !opened.Allowed || opened.TunnelID == "" {
 		t.Fatalf("an allowed port must open: %+v", opened)
 	}
@@ -76,11 +76,11 @@ func TestTargetGatesAreReadPerRequest(t *testing.T) {
 	target := NewTarget(func() bool { return enabled }, func() bool { return true }, func() []int { return []int{port} })
 	defer target.Close()
 
-	if result, _ := target.Open(port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := target.Open("", port, func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("should be refused while disabled")
 	}
 	enabled = true
-	if result, _ := target.Open(port, func(Frame) error { return nil }); !result.Allowed {
+	if result, _ := target.Open("", port, func(Frame) error { return nil }); !result.Allowed {
 		t.Fatalf("should be allowed once enabled: %s", result.Reason)
 	}
 }
@@ -103,12 +103,13 @@ func TestTargetForwardsBytes(t *testing.T) {
 		return nil
 	}
 
-	opened, _ := target.Open(port, send)
+	opened, _ := target.Open("t1", port, send)
 	if !opened.Allowed {
 		t.Fatalf("open refused: %s", opened.Reason)
 	}
 
-	if err := sendDownstream(target, send, opened.TunnelID, []byte("ping")); err != nil {
+	// The initiator's client sent "ping": that travels as upstream into the dialled socket.
+	if err := sendUpstream(target, send, opened.TunnelID, []byte("ping")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +118,8 @@ func TestTargetForwardsBytes(t *testing.T) {
 	for len(echoed) < 4 {
 		select {
 		case frame := <-upstream:
-			if frame.Opcode == OpcodeDataUpstream {
+			// The echo comes back as downstream, from the dialled socket to the initiator.
+			if frame.Opcode == OpcodeDataDownstream {
 				echoed = append(echoed, frame.Payload...)
 			}
 		case <-deadline:
@@ -130,7 +132,7 @@ func TestTargetForwardsBytes(t *testing.T) {
 }
 
 // sendDownstream is HandleFrame with the send callback the target's pumps use.
-func sendDownstream(target *Target, send func(Frame) error, tunnelID string, payload []byte) error {
-	target.HandleFrame(Frame{Opcode: OpcodeDataDownstream, TunnelID: tunnelID, Payload: payload}, send)
+func sendUpstream(target *Target, send func(Frame) error, tunnelID string, payload []byte) error {
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: tunnelID, Payload: payload}, send)
 	return nil
 }

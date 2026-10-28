@@ -93,6 +93,49 @@ func tunnelAllowlist(config map[string]any) []int {
 	return ports
 }
 
+// ApplyTunnelConfig reconciles the tunnel gate with the stored config.
+//
+// Called at boot and after every config write, so enabling tunnels in settings starts them and
+// disabling stops the listeners and the reconnect loops. The node daemon does the same through
+// `daemonConfigStore.onFieldChange("tunnel.enabled", ...)`; the Go port only listed the path as
+// reloadable and never read it.
+func (s *Server) ApplyTunnelConfig() {
+	enabled := tunnelEnabledFromConfig(s.store.LoadDaemonConfig())
+
+	s.mu.Lock()
+	changed := s.tunnelsEnabled != enabled
+	s.tunnelsEnabled = enabled
+	s.mu.Unlock()
+
+	// Built here rather than before the assignment: tunnelRegistry reads s.tunnelsEnabled when it
+	// creates the registry, so the first call has to see the value from config. That is also what
+	// starts the peers configured in tunnels.json — without it nothing ever dialled.
+	registry := s.tunnelRegistry()
+	// Start() is idempotent for an unchanged gate, but it is also the only thing that dials the
+	// peers in tunnels.json. Calling SetEnabled on an unchanged gate short-circuits, so a daemon
+	// that boots with the gate already open still needs Start.
+	if changed {
+		registry.SetEnabled(enabled)
+		return
+	}
+	if enabled {
+		registry.Start()
+	}
+}
+
+// tunnelEnabledFromConfig reads the experimental gate.
+//
+// Missing means off, matching the node daemon's `?? false`: a home that never touched tunnels must
+// not start exposing peer ports because a new build happened to add the key.
+func tunnelEnabledFromConfig(config map[string]any) bool {
+	raw, ok := config["tunnel"].(map[string]any)
+	if !ok {
+		return false
+	}
+	enabled, _ := raw["enabled"].(bool)
+	return enabled
+}
+
 // handleTunnelList reports outbound peers and inbound streams.
 func (s *Server) handleTunnelList(ctx context.Context, sink frameSink, requestID string) {
 	registry := s.tunnelRegistry()
@@ -167,7 +210,7 @@ func (s *Server) handleTunnelOpen(ctx context.Context, sink frameSink, raw json.
 	_ = json.Unmarshal(raw, &req)
 
 	target := s.tunnelTarget()
-	result, err := target.Open(req.RemotePort, func(frame tunnel.Frame) error {
+	result, err := target.Open(req.TunnelID, req.RemotePort, func(frame tunnel.Frame) error {
 		encoded, encodeErr := tunnel.EncodeFrame(frame.Opcode, frame.TunnelID, frame.Payload)
 		if encodeErr != nil {
 			return encodeErr

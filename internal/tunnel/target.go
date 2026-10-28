@@ -64,7 +64,11 @@ func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []in
 // The denials are distinguished in the reason text rather than a code because the client shows
 // it verbatim: "port 9999 is not in the tunnel allowlist" tells the user what to fix, while a bare
 // refusal leaves them guessing which of the three gates closed.
-func (t *Target) Open(remotePort int, send func(Frame) error) (OpenResult, error) {
+//
+// tunnelID is the initiator's id for this stream. The target adopts it rather than minting its own,
+// because every frame after the open is routed by that id: a target that invented one would answer
+// with a name the initiator never sent.
+func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (OpenResult, error) {
 	if t.Enabled != nil && !t.Enabled() {
 		return OpenResult{Allowed: false, Reason: "Tunnels are disabled on this host."}, nil
 	}
@@ -87,7 +91,10 @@ func (t *Target) Open(remotePort int, send func(Frame) error) (OpenResult, error
 		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s:%d: %v", host, remotePort, err)}, nil
 	}
 
-	id := "s" + strconv.FormatUint(t.nextID.Add(1), 10)
+	id := tunnelID
+	if id == "" {
+		id = "s" + strconv.FormatUint(t.nextID.Add(1), 10)
+	}
 	stream := &targetStream{id: id, conn: conn}
 
 	t.mu.Lock()
@@ -96,10 +103,15 @@ func (t *Target) Open(remotePort int, send func(Frame) error) (OpenResult, error
 		_ = conn.Close()
 		return OpenResult{Allowed: false, Reason: "Host is shutting down."}, nil
 	}
+	// An id collision means two initiators picked the same name. Replace rather than leak: the old
+	// stream is unreachable either way.
+	if existing, ok := t.streams[id]; ok {
+		_ = existing.conn.Close()
+	}
 	t.streams[id] = stream
 	t.mu.Unlock()
 
-	go t.pumpUpstream(stream, send)
+	go t.pumpDownstream(stream, send)
 	return OpenResult{TunnelID: id, Allowed: true}, nil
 }
 
@@ -118,6 +130,35 @@ func (t *Target) portAllowed(port int) bool {
 
 // HandleFrame routes a downstream frame into a stream.
 func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
+	// An open creates the stream, so it is answered before the lookup below: the id is not in the
+	// table yet, and treating it like a stale frame is exactly what dropped every new stream.
+	if frame.Opcode == OpcodeOpen {
+		port, ok := DecodeOpenPayload(frame.Payload)
+		if !ok {
+			_ = send(Frame{
+				Opcode:   OpcodeOpenAck,
+				TunnelID: frame.TunnelID,
+				Payload:  EncodeOpenAck(false, "Malformed tunnel open request."),
+			})
+			return
+		}
+		result, err := t.Open(frame.TunnelID, port, send)
+		if err != nil {
+			_ = send(Frame{
+				Opcode:   OpcodeOpenAck,
+				TunnelID: frame.TunnelID,
+				Payload:  EncodeOpenAck(false, err.Error()),
+			})
+			return
+		}
+		_ = send(Frame{
+			Opcode:   OpcodeOpenAck,
+			TunnelID: frame.TunnelID,
+			Payload:  EncodeOpenAck(result.Allowed, result.Reason),
+		})
+		return
+	}
+
 	t.mu.Lock()
 	stream := t.streams[frame.TunnelID]
 	t.mu.Unlock()
@@ -127,7 +168,10 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	}
 
 	switch frame.Opcode {
-	case OpcodeDataDownstream:
+	// Upstream: the initiator's local client sent bytes, so they go into the dialled socket.
+	// This side previously listened for Downstream, the direction it sends — so each end ignored
+	// exactly what the other one produced and no byte ever crossed.
+	case OpcodeDataUpstream:
 		if _, err := stream.conn.Write(frame.Payload); err != nil {
 			t.closeStream(stream)
 		}
@@ -136,15 +180,16 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	}
 }
 
-// pumpUpstream moves bytes from the dialled port back to the peer.
-func (t *Target) pumpUpstream(stream *targetStream, send func(Frame) error) {
+// pumpDownstream moves bytes from the dialled port back to the peer.
+func (t *Target) pumpDownstream(stream *targetStream, send func(Frame) error) {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := stream.conn.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
 			if sendErr := send(Frame{
-				Opcode:   OpcodeDataUpstream,
+				// Downstream: bytes read from the dialled service travelling back to the initiator.
+				Opcode:   OpcodeDataDownstream,
 				TunnelID: stream.id,
 				Payload:  chunk,
 			}); sendErr != nil {

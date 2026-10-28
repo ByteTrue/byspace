@@ -1476,6 +1476,8 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		// The relay is the one setting that must actually act on change: it holds a live
 		// connection, and reporting "applied" without connecting would be a lie.
 		s.ApplyRelayConfig(ctx)
+		// Tunnels hold live listeners and reconnect loops for the same reason.
+		s.ApplyTunnelConfig()
 		_ = sendSessionMsg(ctx, sink, "daemon.config.reload.response", map[string]any{
 			"requestId":               base.RequestID,
 			"appliedPaths":            report["appliedPaths"],

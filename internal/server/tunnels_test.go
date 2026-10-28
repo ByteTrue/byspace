@@ -61,7 +61,7 @@ func TestTunnelOpenRefusedWhileGateClosed(t *testing.T) {
 
 	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(port)}})
 
-	result, err := srv.tunnelTarget().Open(port, func(tunnel.Frame) error { return nil })
+	result, err := srv.tunnelTarget().Open("t1", port, func(tunnel.Frame) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestTunnelOpenRefusedWithoutPassword(t *testing.T) {
 	srv.tunnelsEnabled = true
 	srv.mu.Unlock()
 
-	result, _ := srv.tunnelTarget().Open(port, func(tunnel.Frame) error { return nil })
+	result, _ := srv.tunnelTarget().Open("t1", port, func(tunnel.Frame) error { return nil })
 	if result.Allowed {
 		t.Fatal("a host without a password must refuse")
 	}
@@ -125,7 +125,7 @@ func TestTunnelOpenForwardsBytes(t *testing.T) {
 	})
 
 	upstream := make(chan tunnel.Frame, 16)
-	result, err := srv.tunnelTarget().Open(port, func(frame tunnel.Frame) error {
+	result, err := srv.tunnelTarget().Open("t1", port, func(frame tunnel.Frame) error {
 		select {
 		case upstream <- frame:
 		default:
@@ -139,17 +139,23 @@ func TestTunnelOpenForwardsBytes(t *testing.T) {
 		t.Fatalf("refused: %s", result.Reason)
 	}
 
+	// The client's bytes go in as upstream; the service's echo comes back as downstream.
 	srv.tunnelTarget().HandleFrame(tunnel.Frame{
-		Opcode:   tunnel.OpcodeDataDownstream,
+		Opcode:   tunnel.OpcodeDataUpstream,
 		TunnelID: result.TunnelID,
 		Payload:  []byte("hello"),
 	}, func(tunnel.Frame) error { return nil })
 
 	var echoed []byte
+	deadline := time.After(5 * time.Second)
 	for len(echoed) < 5 {
-		frame := <-upstream
-		if frame.Opcode == tunnel.OpcodeDataUpstream {
-			echoed = append(echoed, frame.Payload...)
+		select {
+		case frame := <-upstream:
+			if frame.Opcode == tunnel.OpcodeDataDownstream {
+				echoed = append(echoed, frame.Payload...)
+			}
+		case <-deadline:
+			t.Fatalf("timed out with %q", echoed)
 		}
 	}
 	if string(echoed) != "hello" {

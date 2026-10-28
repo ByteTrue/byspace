@@ -255,7 +255,9 @@ type Server struct {
 	// tunnelStreamSinks maps an inbound stream id to the client that opened it, so downstream
 	// bytes return to that socket rather than being broadcast.
 	tunnelStreamSinks map[string]frameSink
-	// tunnelsEnabled is the experimental gate (issue 063). It starts closed.
+	// tunnelsEnabled is the experimental gate (issue 063). Read from `daemon.tunnel.enabled` at
+	// boot and on every config write; it used to be declared and never assigned, so the gate was
+	// permanently closed and every inbound tunnel open was refused.
 	tunnelsEnabled bool
 	// serviceProxyRoutes serves `type: "service"` scripts at their hostnames.
 	serviceProxyRoutes *serviceproxy.Proxy
@@ -418,6 +420,10 @@ func New(opts Options) (*Server, error) {
 	srv.startSubscriptionPoller()
 	// A relay configured in settings must connect at boot, not only when a CLI flag is passed.
 	srv.ApplyRelayConfig(context.Background())
+	// Tunnels are the same shape of setting: the gate and the configured peers come from config,
+	// and a daemon that boots with them enabled has to dial them. Nothing called this before, so
+	// the Tunnels page listed nothing and no peer port was ever forwarded.
+	srv.ApplyTunnelConfig()
 	// Terminal tabs are recreated at startup from the persisted metadata. The processes and their
 	// scrollback are gone — nothing can bring a shell back — but the tabs are not: reopening the
 	// app should show the terminal the user was using, with its original id so the client's saved
@@ -440,6 +446,20 @@ func (s *Server) Close() error {
 	// than in an agent's Close. Without this the daemon exits and leaves an orphaned server holding a
 	// port until the machine restarts.
 	providers.ShutdownOpenCodePool()
+
+	// Tunnels hold local listeners and a reconnect loop per peer. Closing the server has to stop
+	// both, or the daemon leaves ports bound and keeps dialling the relay after shutdown — and every
+	// test that enables tunnels inherits a goroutine that outlives the test.
+	s.mu.Lock()
+	tunnels := s.tunnels
+	target := s.tunnelTargetServer
+	s.mu.Unlock()
+	if tunnels != nil {
+		tunnels.Close()
+	}
+	if target != nil {
+		target.Close()
+	}
 
 	// Stop the subscription poller before tearing down state it reads.
 	select {
@@ -827,7 +847,8 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 	e2eeSess := e2ee.NewDaemonSession(&rawTransportAdapter{ctx: ctx, raw: rawSink}, s.keyPair)
 	adapter := &e2eeSinkAdapter{ctx: ctx, raw: rawSink, sess: e2eeSess}
 
-	s.serveSessionOnSink(ctx, adapter, func(rctx context.Context) (e2ee.Frame, error) {
+	// greeted: the remote client's hello already arrived on the relay's control channel.
+	s.serveSessionOnSinkGreeted(ctx, adapter, func(rctx context.Context) (e2ee.Frame, error) {
 		for {
 			msgType, data, err := ws.Read(rctx)
 			if err != nil {
@@ -845,7 +866,7 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 				return *plain, nil
 			}
 		}
-	})
+	}, true)
 	return nil
 }
 
@@ -854,8 +875,26 @@ func (s *Server) serveSessionOnSink(
 	sink frameSink,
 	readNext func(context.Context) (e2ee.Frame, error),
 ) {
+	s.serveSessionOnSinkGreeted(ctx, sink, readNext, false)
+}
+
+// serveSessionOnSinkGreeted is serveSessionOnSink for a socket that already speaks for itself.
+//
+// A relay data socket is opened by the daemon on behalf of a remote client whose hello arrived over
+// the relay's control channel — there is no client here to send one. Waiting for it meant the
+// socket was closed after 15s with 4001 for every forwarded connection, which surfaced as the peer
+// disconnecting immediately ("Server disconnected") and no byte ever crossing the tunnel.
+//
+// The node daemon does the same thing through `attachExternalSocket(..., initialHello)`: it seeds
+// the hello instead of requiring one from the wire.
+func (s *Server) serveSessionOnSinkGreeted(
+	ctx context.Context,
+	sink frameSink,
+	readNext func(context.Context) (e2ee.Frame, error),
+	greeted bool,
+) {
 	s.mu.Lock()
-	s.clients[sink] = false
+	s.clients[sink] = greeted
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -871,15 +910,18 @@ func (s *Server) serveSessionOnSink(
 	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
 	// Node closes it after 15s with 4001; without the same deadline a half-open client (a
 	// browser tab suspended before the handshake) accumulates until the daemon restarts.
-	helloDeadline := time.AfterFunc(wsHelloTimeout, func() {
-		s.mu.Lock()
-		greeted := s.clients[sink]
-		s.mu.Unlock()
-		if !greeted {
-			_ = sink.Close(wsCloseHelloTimeout, "Timed out waiting for hello")
-		}
-	})
-	defer helloDeadline.Stop()
+	var helloDeadline *time.Timer
+	if !greeted {
+		helloDeadline = time.AfterFunc(wsHelloTimeout, func() {
+			s.mu.Lock()
+			accepted := s.clients[sink]
+			s.mu.Unlock()
+			if !accepted {
+				_ = sink.Close(wsCloseHelloTimeout, "Timed out waiting for hello")
+			}
+		})
+		defer helloDeadline.Stop()
+	}
 
 	for {
 		frame, err := readNext(ctx)
@@ -906,13 +948,19 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 		if !ok {
 			return
 		}
+		// Replies go back on the socket the request arrived on.
+		//
+		// This used to resolve the owner through `tunnelFrameSinks`, which only the JSON-RPC
+		// `tunnel.open.request` path populates. A peer forwarding over the relay never registers
+		// there, so every acknowledgement — including the answer to the open itself — was looked up,
+		// missed, and dropped without a trace: the target dialled the port and then nobody heard
+		// from it again.
 		s.tunnelTarget().HandleFrame(frame, func(outgoing tunnel.Frame) error {
 			encoded, encodeErr := tunnel.EncodeFrame(outgoing.Opcode, outgoing.TunnelID, outgoing.Payload)
 			if encodeErr != nil {
 				return encodeErr
 			}
-			// The peer that opened this stream is the sink that must receive the bytes back.
-			return s.sendTunnelFrameToOpener(ctx, outgoing.TunnelID, encoded)
+			return sink.SendBinary(ctx, encoded)
 		})
 		return
 	}

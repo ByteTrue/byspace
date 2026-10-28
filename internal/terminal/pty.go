@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/creack/pty"
+	"github.com/aymanbagabas/go-pty"
 
 	"github.com/ByteTrue/byspace/internal/home"
 )
@@ -33,9 +34,13 @@ type Session struct {
 	WorkspaceID   string
 	ActivityToken string
 
-	mu            sync.Mutex
-	cmd           *exec.Cmd
-	ptmx          *os.File
+	mu  sync.Mutex
+	cmd *pty.Cmd
+	// ptmx is the master side of the pseudo-terminal. On Unix it is the pty master; on Windows it
+	// is the ConPTY pseudo console. Read, Write, Resize and Close all go through the library so one
+	// code path serves both — a bare *os.File only exists on Unix, which is why Windows had no
+	// terminal at all.
+	ptmx          pty.Pty
 	revision      int64
 	activityState string // "idle" | "working"
 	// attentionReason marks why a terminal wants attention. "finished" is set when a working
@@ -95,7 +100,11 @@ func StartSession(opts StartOptions) (*Session, error) {
 		cols = 80
 	}
 
-	cmd := exec.Command(shell, args...)
+	term, err := pty.New()
+	if err != nil {
+		return nil, fmt.Errorf("terminal: create pseudo-terminal: %w", err)
+	}
+	cmd := term.Command(shell, args...)
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}
@@ -134,11 +143,14 @@ func StartSession(opts StartOptions) (*Session, error) {
 		cmd.Env = prependDirToPath(cmd.Env, filepath.Dir(cli))
 	}
 
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
-		Rows: rows,
-		Cols: cols,
-	})
-	if err != nil {
+	// Size before start so the first render has the right dimensions; resizing after a process
+	// has already drawn leaves the shell believing the old geometry.
+	if err := term.Resize(int(cols), int(rows)); err != nil {
+		_ = term.Close()
+		return nil, fmt.Errorf("terminal: size pseudo-terminal: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		_ = term.Close()
 		return nil, err
 	}
 
@@ -150,7 +162,7 @@ func StartSession(opts StartOptions) (*Session, error) {
 		ActivityToken:    actToken,
 		Title:            strings.TrimSpace(opts.Title),
 		cmd:              cmd,
-		ptmx:             ptmx,
+		ptmx:             term,
 		activityState:    "idle",
 		onActivityChange: opts.OnActivityChange,
 		vt:               NewVTGrid(int(rows), int(cols)),
@@ -303,7 +315,8 @@ func (s *Session) Resize(rows, cols uint16) error {
 		return os.ErrClosed
 	}
 	s.vt.Resize(int(rows), int(cols))
-	return pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})
+	// Resize takes (width, height); the grid above is (rows, cols).
+	return ptmx.Resize(int(cols), int(rows))
 }
 
 func (s *Session) VT() *VTGrid { return s.vt }

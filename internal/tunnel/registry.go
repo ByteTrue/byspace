@@ -1,11 +1,15 @@
 package tunnel
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/ByteTrue/byspace/internal/home"
@@ -63,6 +67,13 @@ type Registry struct {
 	logf func(string, ...any)
 	// newPeer builds a PeerConn for a peer. Injected so tests drive the registry without a relay.
 	newPeer func(PeerConfig) (PeerConn, error)
+	// cancellers cancels each running reconnector; a peer removed or the gate closing stops them.
+	cancellers map[string]context.CancelFunc
+	// ctx bounds every reconnector this registry starts.
+	ctx context.Context
+	// started records that the initial dial happened, so a later Start does not tear down and
+	// rebuild every peer just because a config write asked again.
+	started bool
 }
 
 // NewRegistry loads the configured peers.
@@ -75,9 +86,11 @@ func NewRegistry(homeDir string, logf func(string, ...any)) *Registry {
 		logf = func(string, ...any) {}
 	}
 	r := &Registry{
-		homeDir:  homeDir,
-		managers: make(map[string]*Manager),
-		logf:     logf,
+		homeDir:    homeDir,
+		managers:   make(map[string]*Manager),
+		cancellers: make(map[string]context.CancelFunc),
+		ctx:        context.Background(),
+		logf:       logf,
 	}
 	r.peers = loadRegistry(homeDir, logf)
 	return r
@@ -117,12 +130,20 @@ func (r *Registry) SetEnabled(enabled bool) {
 		return
 	}
 	r.enabled = enabled
+	// Re-opening the gate must dial again, so the "already started" mark only holds while open.
+	r.started = false
 	peers := append([]PeerConfig(nil), r.peers...)
 	var toStop []*Manager
 	if !enabled {
 		for id, manager := range r.managers {
 			toStop = append(toStop, manager)
 			delete(r.managers, id)
+		}
+		// The reconnector loops forever, so closing the manager is not enough: without this the
+		// gate would stop the listeners and keep dialling the peer.
+		for id, cancel := range r.cancellers {
+			cancel()
+			delete(r.cancellers, id)
 		}
 	}
 	r.mu.Unlock()
@@ -133,6 +154,10 @@ func (r *Registry) SetEnabled(enabled bool) {
 	r.logf("tunnel gate set to %v", enabled)
 
 	if enabled {
+		// Opening the gate dials, so mark it started: the next config write must not dial again.
+		r.mu.Lock()
+		r.started = true
+		r.mu.Unlock()
 		for _, peer := range peers {
 			if err := r.startPeer(peer); err != nil {
 				r.logf("tunnel %s failed to start: %v", peer.PeerID, err)
@@ -149,14 +174,25 @@ func (r *Registry) IsEnabled() bool {
 }
 
 // Start brings up every configured peer, but only when the gate is open.
+//
+// Idempotent: the first call dials, later calls are no-ops. Config writes call this again, and
+// rebuilding every manager each time would drop live connections for an unrelated setting change.
+// Closing and reopening the gate resets the flag, so re-enabling dials again.
 func (r *Registry) Start() {
 	r.mu.Lock()
-	enabled := r.enabled
-	peers := append([]PeerConfig(nil), r.peers...)
-	r.mu.Unlock()
-	if !enabled {
+	if r.started {
+		r.mu.Unlock()
 		return
 	}
+	enabled := r.enabled
+	if !enabled {
+		r.mu.Unlock()
+		return
+	}
+	r.started = true
+	peers := append([]PeerConfig(nil), r.peers...)
+	r.mu.Unlock()
+
 	for _, peer := range peers {
 		if err := r.startPeer(peer); err != nil {
 			r.logf("tunnel %s failed to start at boot: %v", peer.PeerID, err)
@@ -183,9 +219,14 @@ func (r *Registry) startPeer(peer PeerConfig) error {
 	r.mu.Unlock()
 
 	if factory == nil {
-		// No transport configured: the listeners exist but nothing is connected. That is the
-		// honest state for a build without a relay client wired in, and the ports report
-		// "connecting" rather than pretending to work.
+		// Production path: build the reconnector from the peer's own configuration.
+		//
+		// This is what the previous "no transport configured" early return replaced, and it is why
+		// tunnels never worked: the listeners came up, reported "connecting", and nothing ever
+		// dialled the peer. TunnelReconnector is a loop rather than one connection, so it drives the
+		// manager through callbacks instead of returning a PeerConn.
+		manager.SetPeerState(StateConnecting)
+		r.runReconnector(peer, manager)
 		return nil
 	}
 	peerConn, err := factory(peer)
@@ -194,6 +235,79 @@ func (r *Registry) startPeer(peer PeerConfig) error {
 	}
 	manager.SetPeer(peerConn)
 	return nil
+}
+
+// runReconnector dials a peer until the registry stops.
+//
+// The reconnector owns the reconnect loop, so it hands each live connection to the manager via
+// OnPeer. OnState keeps the port rows honest between attempts: a peer whose relay is down reports
+// disconnected rather than staying green from a connection that no longer exists.
+func (r *Registry) runReconnector(peer PeerConfig, manager *Manager) {
+	relayURL, err := relayURLFromPeer(peer)
+	if err != nil {
+		r.logf("tunnel %s: %v", peer.PeerID, err)
+		manager.SetPeerState(StateError)
+		return
+	}
+
+	reconnector := &TunnelReconnector{
+		RelayURL:      relayURL,
+		PeerServerID:  peer.PeerID,
+		PeerPublicKey: peer.DaemonPublicKey,
+		Token:         peer.Token,
+		ClientID:      "byspace-tunnel",
+		OnPeer:        manager.SetPeer,
+		OnState:       manager.SetPeerState,
+		Logf:          r.logf,
+	}
+
+	ctx, cancel := context.WithCancel(r.ctx)
+	r.mu.Lock()
+	if previous, ok := r.cancellers[peer.PeerID]; ok {
+		previous()
+	}
+	r.cancellers[peer.PeerID] = cancel
+	r.mu.Unlock()
+
+	go func() {
+		reconnector.Run(ctx)
+		r.mu.Lock()
+		delete(r.cancellers, peer.PeerID)
+		r.mu.Unlock()
+	}()
+}
+
+// relayURLFromPeer reads the relay endpoint out of a peer's URL.
+//
+// tunnels.json stores the peer as a full URL (the same string the node daemon writes). The
+// reconnector wants the base ws(s) URL without query parameters, and the scheme has to follow the
+// TLS flag rather than being guessed from a port.
+func relayURLFromPeer(peer PeerConfig) (string, error) {
+	raw := strings.TrimSpace(peer.URL)
+	if raw == "" {
+		return "", errors.New("tunnel peer has no relay URL")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("tunnel peer URL %q: %w", raw, err)
+	}
+	switch u.Scheme {
+	case "ws", "wss", "http", "https":
+	default:
+		return "", fmt.Errorf("tunnel peer URL %q has no usable scheme", raw)
+	}
+	host := u.Host
+	if host == "" {
+		host = u.Path
+	}
+	if host == "" {
+		return "", fmt.Errorf("tunnel peer URL %q has no host", raw)
+	}
+	scheme := "wss"
+	if u.Scheme == "ws" || u.Scheme == "http" {
+		scheme = "ws"
+	}
+	return scheme + "://" + host, nil
 }
 
 // List reports every configured peer.
@@ -323,10 +437,15 @@ func (r *Registry) Remove(peerID string) error {
 	r.peers = peers
 	manager := r.managers[peerID]
 	delete(r.managers, peerID)
+	cancel := r.cancellers[peerID]
+	delete(r.cancellers, peerID)
 	r.mu.Unlock()
 
 	if !found {
 		return fmt.Errorf("unknown peer %q", peerID)
+	}
+	if cancel != nil {
+		cancel()
 	}
 	if manager != nil {
 		_ = manager.Close()
@@ -349,7 +468,7 @@ func (r *Registry) save() error {
 	return home.WriteAtomic(filepath.Join(homeDir, RegistryFilename), append(payload, '\n'), 0o600)
 }
 
-// Close stops every manager.
+// Close stops every manager and every reconnector.
 func (r *Registry) Close() {
 	r.mu.Lock()
 	managers := make([]*Manager, 0, len(r.managers))
@@ -357,7 +476,15 @@ func (r *Registry) Close() {
 		managers = append(managers, manager)
 		delete(r.managers, id)
 	}
+	cancels := make([]context.CancelFunc, 0, len(r.cancellers))
+	for id, cancel := range r.cancellers {
+		cancels = append(cancels, cancel)
+		delete(r.cancellers, id)
+	}
 	r.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
 	for _, manager := range managers {
 		_ = manager.Close()
 	}
