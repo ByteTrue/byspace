@@ -187,3 +187,45 @@ func TestWebSocketHandshakeEchoesTheBearerSubprotocol(t *testing.T) {
 		t.Fatalf("negotiated subprotocol = %q, want the bearer echoed back", got)
 	}
 }
+
+// The bundled web UI must load on a password-protected daemon.
+//
+// The reference implementation mounts it before the bearer middleware for exactly this reason: a
+// browser opened at http://127.0.0.1:6777 has nowhere to get a password, so gating the shell meant
+// the page answered `{"error":"Unauthorized"}` instead of the app. Only the API and the socket stay
+// protected, and the static handler refuses those paths itself.
+func TestWebUIIsServedBeforeAuth(t *testing.T) {
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<!doctype html><title>app</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", WebDir: webDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	setDaemonPassword(t, srv, "hunter2")
+
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET / = %d, want 200: the app shell must load without a password", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "<title>app</title>") {
+		t.Fatalf("body = %q, want the index document", recorder.Body.String())
+	}
+
+	// The API behind it stays protected.
+	recorder = httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/status", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /api/status = %d, want 401", recorder.Code)
+	}
+
+	// So does the socket.
+	wsRecorder := httptest.NewRecorder()
+	srv.ServeHTTP(wsRecorder, httptest.NewRequest(http.MethodGet, "/ws", nil))
+	if wsRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /ws = %d, want 401", wsRecorder.Code)
+	}
+}

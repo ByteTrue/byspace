@@ -511,6 +511,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The bundled web UI is served before auth, so the app shell and its assets load without the
+	// daemon password while every API and WebSocket call behind it stays protected. Auth first made
+	// the local UI unreachable in the one situation it exists for: a browser opened at
+	// http://127.0.0.1:6777 answers `{"error":"Unauthorized"}` and a password box it never gets.
+	//
+	// Safe because TryServe refuses /api, /mcp, /public, /ws and /health itself.
+	if s.webUI != nil && s.webUI.TryServe(w, r) {
+		return
+	}
+
 	// Password auth. The daemon is reachable from anything that can open a loopback
 	// connection, and a relay/tunnel extends that; an operator who sets a password expects it
 	// to be enforced. /mcp/agents authenticates itself inside the handler with its capability
@@ -587,10 +597,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/mcp/agents" || strings.HasPrefix(r.URL.Path, "/mcp/") {
 		s.handleMCPHTTP(w, r)
-		return
-	}
-
-	if s.webUI != nil && s.webUI.TryServe(w, r) {
 		return
 	}
 
