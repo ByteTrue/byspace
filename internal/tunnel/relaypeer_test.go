@@ -1,8 +1,12 @@
 package tunnel
 
 import (
+	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ByteTrue/byspace/internal/e2ee"
 )
@@ -109,4 +113,82 @@ func (m *memoryTransport) take() e2ee.Frame {
 	f := m.boxed[0]
 	m.boxed = m.boxed[1:]
 	return f
+}
+
+// A tunnel must keep its socket busy even when it is forwarding nothing.
+//
+// The relay drops a WebSocket that has been silent for about a minute. A tunnel is silent by nature
+// — it forwards only while a local client is connected — so it was torn down and rebuilt roughly
+// every minute, which is the `StatusServiceRestart "Server disconnected"` that appeared in the
+// daemon log while both ends were healthy. A rebuild landing mid-stream would cut a response in half.
+func TestTunnelKeepaliveCadence(t *testing.T) {
+	// The relay's idle tolerance is about a minute. Pinging must be comfortably inside it, or the
+	// socket is reaped before the first ping of the next window.
+	if tunnelPingInterval >= time.Minute {
+		t.Fatalf("tunnelPingInterval = %v, want well below the relay's one-minute idle window", tunnelPingInterval)
+	}
+	// A ping must have time to complete, but not so long that a dead socket looks alive.
+	if tunnelPingTimeout <= 0 || tunnelPingTimeout >= tunnelPingInterval {
+		t.Fatalf("tunnelPingTimeout = %v, want a positive value below the interval", tunnelPingTimeout)
+	}
+}
+
+// The keepalive actually pings, and a failed ping finishes the peer.
+//
+// Without this the loop could be wired but never fire — the constants would still look right and
+// every existing test would pass, because nothing shortens the twenty-second cadence.
+func TestKeepalivePingsAndDiesOnFailure(t *testing.T) {
+	prevInterval, prevTimeout := tunnelPingInterval, tunnelPingTimeout
+	tunnelPingInterval, tunnelPingTimeout = 20*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { tunnelPingInterval, tunnelPingTimeout = prevInterval, prevTimeout })
+
+	var calls atomic.Int32
+	var transport relayTransport
+	peer := &relayPeer{
+		transport: &transport,
+		frames:    make(chan Frame, 8),
+		done:      make(chan struct{}),
+		logf:      t.Logf,
+		ping: func(context.Context) error {
+			if calls.Add(1) >= 2 {
+				return errors.New("ping failed")
+			}
+			return nil
+		},
+	}
+	peer.startKeepalive()
+
+	select {
+	case <-peer.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("a failing ping did not finish the peer")
+	}
+	if calls.Load() < 2 {
+		t.Fatalf("pinged %d times, want at least 2", calls.Load())
+	}
+	if peer.err == nil {
+		t.Fatal("the peer finished without recording why")
+	}
+}
+
+// A closed peer stops its keepalive, and closing twice is safe.
+//
+// The loop waits on the peer's done channel; without that it would outlive the connection and keep
+// pinging a socket that belongs to nobody.
+func TestRelayPeerKeepaliveStopsOnClose(t *testing.T) {
+	peer := &relayPeer{
+		frames: make(chan Frame, 8),
+		done:   make(chan struct{}),
+		logf:   t.Logf,
+	}
+	peer.startKeepalive()
+
+	peer.finish(nil)
+	select {
+	case <-peer.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("finish did not close done")
+	}
+	// A second close must not panic; sync.Once guards it.
+	peer.finish(errors.New("again"))
 }

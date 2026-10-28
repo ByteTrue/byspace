@@ -60,6 +60,14 @@ const (
 	handshakeTimeout = 10 * time.Second
 )
 
+// tunnelPingInterval keeps the tunnel socket from looking idle to the relay in between forwarded
+// connections; tunnelPingTimeout bounds the round trip that proves it still works. Variables rather
+// than constants so a test can shorten the cadence and observe it.
+var (
+	tunnelPingInterval = 20 * time.Second
+	tunnelPingTimeout  = 10 * time.Second
+)
+
 // Run connects and reconnects until ctx is cancelled.
 func (r *TunnelReconnector) Run(ctx context.Context) {
 	if r.Logf == nil {
@@ -154,8 +162,10 @@ func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
 		frames:    make(chan Frame, 64),
 		done:      make(chan struct{}),
 		logf:      r.Logf,
+		ping:      ws.Ping,
 	}
 	go conn.readLoop()
+	conn.startKeepalive()
 
 	// "Connected" has to mean the peer answered, not that the relay accepted our socket.
 	//
@@ -254,7 +264,10 @@ func (t *relayTransport) Close(code int, reason string) error {
 // relayPeer is the PeerConn backed by a relay websocket.
 type relayPeer struct {
 	transport *relayTransport
-	session   *e2ee.ClientSession
+	// ping is the transport's protocol ping. Injected so a test can drive the keepalive without a
+	// live relay.
+	ping    func(context.Context) error
+	session *e2ee.ClientSession
 
 	frames chan Frame
 	done   chan struct{}
@@ -306,6 +319,49 @@ func (p *relayPeer) readLoop() {
 			}
 		}
 	}
+}
+
+// startKeepalive pings the relay so the middle of the path never sees an idle socket.
+//
+// A tunnel is idle most of the time: it forwards traffic only when a local client connects. Left
+// silent, the connection was torn down roughly every minute — observed as a repeating
+// `StatusServiceRestart "Server disconnected"` in the daemon log while both ends were healthy. The
+// daemon's control channel already pings for the same reason (`relayPingInterval` in server.go);
+// this is the tunnel's copy of that, and a protocol ping is answered at Cloudflare's edge without
+// waking the Durable Object, so it costs nothing.
+//
+// A failed ping is fatal on purpose: a socket that cannot complete a round trip within the timeout
+// is not usable for a stream, and letting it linger hides the breakage until traffic hits it.
+func (p *relayPeer) startKeepalive() {
+	go func() {
+		ticker := time.NewTicker(tunnelPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-p.done:
+				return
+			case <-ticker.C:
+				if p.ping == nil {
+					return
+				}
+				ctx, cancel := context.WithTimeout(p.pingContext(), tunnelPingTimeout)
+				err := p.ping(ctx)
+				cancel()
+				if err != nil {
+					p.finish(fmt.Errorf("tunnel ping failed: %w", err))
+					return
+				}
+			}
+		}
+	}()
+}
+
+// pingContext is the context a ping runs under: the transport's, when there is one.
+func (p *relayPeer) pingContext() context.Context {
+	if p.transport != nil && p.transport.ctx != nil {
+		return p.transport.ctx
+	}
+	return context.Background()
 }
 
 // finish closes the frame channel exactly once.
