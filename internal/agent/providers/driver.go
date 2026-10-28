@@ -79,7 +79,24 @@ type ProviderSpec struct {
 	Modes         []ModeDefinition
 	Features      []FeatureDefinition
 	Models        []sdk.CatalogModel
+	// EnabledByDefault is the value the provider switch starts at on a home that has never
+	// configured it. Nil means true: only a provider the product wants off until opted into needs
+	// to say so, and the protocol manifest expresses the same default by omitting the field at all.
+	//
+	// A pointer rather than a bool so "unset" stays distinguishable from an explicit false.
+	EnabledByDefault *bool
 }
+
+// enabledByDefault resolves the field above, defaulting to true.
+func (spec ProviderSpec) enabledByDefault() bool {
+	if spec.EnabledByDefault == nil {
+		return true
+	}
+	return *spec.EnabledByDefault
+}
+
+// boolPtr is the pointer literal the manifest entries need.
+func boolPtr(value bool) *bool { return &value }
 
 var builtinThinkingOptions = []sdk.ThinkingOption{
 	{ID: "off", Label: "Off"},
@@ -188,13 +205,17 @@ var BuiltinProviders = []ProviderSpec{
 		Models:      pi.DefaultFallbackModels(),
 	},
 	{
-		ID:            "omp",
-		Label:         "Oh My Pi",
-		Description:   "Multi-provider coding agent with native approvals, host tools, and subagents",
-		Binary:        "omp",
-		DefaultArgs:   []string{"--mode", "rpc"},
-		Protocol:      "pi-rpc",
-		DefaultModeID: "full",
+		ID:          "omp",
+		Label:       "Oh My Pi",
+		Description: "Multi-provider coding agent with native approvals, host tools, and subagents",
+		Binary:      "omp",
+		// EnabledByDefault mirrors `enabledByDefault` in the protocol's provider manifest. Without it
+		// every built-in started enabled, and the app showed Oh My Pi in the picker on a fresh install
+		// although the manifest says it starts off.
+		EnabledByDefault: boolPtr(false),
+		DefaultArgs:      []string{"--mode", "rpc"},
+		Protocol:         "pi-rpc",
+		DefaultModeID:    "full",
 		Modes: []ModeDefinition{
 			{ID: "full", Label: "Full Access", Description: "Launches OMP with yolo approval mode so tools run without prompts.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 			{ID: "write", Label: "Write Approval", Description: "Launches OMP with write approval mode — reads are free, writes require approval.", Icon: "ShieldAlert", ColorTier: "moderate"},
@@ -362,7 +383,7 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		// lists by it, so deriving it from availability hid every provider whose binary was not on
 		// PATH — the import sheet asked only the survivors and read the silence as "no history".
 		// Availability belongs in `status`, which is what the UI renders as "not installed".
-		enabled := true
+		enabled := spec.enabledByDefault()
 		if override, ok := customProviders[spec.ID].(map[string]any); ok {
 			if en, hasEn := override["enabled"].(bool); hasEn {
 				enabled = en

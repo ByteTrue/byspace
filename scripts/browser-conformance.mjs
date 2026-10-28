@@ -87,7 +87,7 @@ function refFor(snapshot, pattern) {
 function queryProviderSnapshot() {
   const script = `
     const WebSocket = (await import("ws")).default;
-    const ws = new WebSocket("http://127.0.0.1:6778/ws");
+    const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
     let done = false;
     const finish = (value) => { if (!done) { done = true; console.log(JSON.stringify(value)); process.exit(0); } };
     ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "conf-providers", protocolVersion: 1 })));
@@ -178,14 +178,22 @@ ws.on("message", (raw) => {
   }
   if (env?.message?.type === "workspace.create.response") {
     const wsId = payload?.workspace?.id;
+    // The project this workspace belongs to. archive_workspace_response does not carry it (the
+    // protocol has no field for it) and the remove update deliberately omits projectId, so the
+    // only place it appears is here and in the upsert.
+    globalThis.__projectId = payload?.workspace?.projectId ?? null;
     globalThis.__wsId = wsId;
     send({ type: "archive_workspace_request", requestId: "a", workspaceId: wsId });
     return;
   }
-  if (env?.message?.type === "workspace_update") out.updates.push(payload);
+  // project.update carries the project-table changes. The directory replica is driven by it, so a
+  // project removal that arrives this way clears the sidebar just as a workspace update would.
+  if (env?.message?.type === "workspace_update" || env?.message?.type === "project.update") {
+    out.updates.push({ ...payload, __messageType: env.message.type });
+  }
   if (env?.message?.type === "archive_workspace_response") {
     out.archived = { workspaceId: payload.workspaceId, error: payload.error };
-    send({ type: "project.remove.request", requestId: "r", projectId: payload.projectId ?? (out.updates.at(-1)?.projectId) });
+    send({ type: "project.remove.request", requestId: "r", projectId: globalThis.__projectId });
     return;
   }
   if (env?.message?.type === "project.remove.response") {
@@ -214,18 +222,26 @@ setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); proce
     );
     // The project row survives only if the client is told the project still exists; without this field it deletes the
     // group along with its last workspace.
-    result.archivedKeptProject =
-      Boolean(archiveUpdate) &&
-      Boolean(archiveUpdate.emptyProject) &&
-      archiveUpdate.emptyProject.projectId === archiveUpdate.projectId;
+    //
+    // The update deliberately carries no `projectId` — that field means "this is a project removal" to the client —
+    // so the empty project's own id is what proves the field was populated.
+    const archivedProjectId = archiveUpdate?.emptyProject?.projectId ?? null;
+    result.archivedKeptProject = Boolean(archiveUpdate) && Boolean(archivedProjectId);
     result.archivedDetail = archiveUpdate
       ? `archive update: ${JSON.stringify(archiveUpdate).slice(0, 220)}`
       : `no remove update for the archived workspace; updates=${JSON.stringify(observed.updates ?? []).slice(0, 220)}`;
 
     // The removal is announced on the workspace channel; a response alone leaves the sidebar showing what the daemon
     // already archived.
+    // Either form proves the client was told: a workspace update naming the project it took with
+    // it, or a project-table removal. Which one arrives depends on whether any live workspace was
+    // left when the removal ran — here none is, because the step above already archived the only one.
     const removalUpdate = (observed.updates ?? []).find(
-      (u) => u.removedProjectId && u.removedProjectId === archiveUpdate?.projectId,
+      (u) =>
+        (u.removedProjectId && u.removedProjectId === archivedProjectId) ||
+        (u.__messageType === "project.update" &&
+          u.kind === "remove" &&
+          u.projectId === archivedProjectId),
     );
     result.removedProject = Boolean(removalUpdate) && observed.removed?.accepted === true;
     result.removedDetail = removalUpdate
@@ -235,6 +251,60 @@ setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); proce
     rmSync(root, { recursive: true, force: true });
   }
   return result;
+}
+
+/**
+ * The route that opens one existing workspace, or null when the daemon has none.
+ *
+ * `serverId` comes from `/health`; the workspace id from the daemon over the socket, because it is
+ * the only place that knows which workspaces exist. Built rather than clicked: from the
+ * empty-project screen a sidebar row press does not navigate.
+ */
+function openAWorkspaceRoute() {
+  const serverId = (() => {
+    try {
+      const body = execFileSync("curl", ["-s", "-m", "5", `${BASE}/health`], { encoding: "utf8" });
+      return JSON.parse(body)?.serverId ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  if (!serverId) return null;
+
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-wks-"));
+  const probePath = path.join(root, "wks.cjs");
+  writeFileSync(
+    probePath,
+    `
+const WebSocket = require(${JSON.stringify(WS_MODULE)});
+const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
+const send = (message) => ws.send(JSON.stringify({ type: "session", message }));
+ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "wks-probe", protocolVersion: 1 })));
+ws.on("message", (raw) => {
+  const env = JSON.parse(raw.toString());
+  if (env?.message?.type === "fetch_workspaces_response") {
+    const id = env.message.payload?.entries?.[0]?.id ?? null;
+    console.log(JSON.stringify({ id }));
+    process.exit(0);
+  }
+  if (env?.message?.payload?.status === "server_info") {
+    send({ type: "fetch_workspaces_request", requestId: "w", page: { limit: 1 } });
+  }
+});
+setTimeout(() => { console.log(JSON.stringify({ id: null })); process.exit(0); }, 15000);
+`,
+  );
+  try {
+    const run = spawnSync(process.execPath, [probePath], { encoding: "utf8", timeout: 60000 });
+    const line = (run.stdout ?? "").trim().split("\n").findLast(Boolean) ?? "";
+    const workspaceId = line ? JSON.parse(line).id : null;
+    if (!workspaceId) return null;
+    return `${BASE}/h/${encodeURIComponent(serverId)}/workspace/${encodeURIComponent(workspaceId)}`;
+  } catch {
+    return null;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 function failFast(name, message) {
@@ -261,6 +331,15 @@ try {
   bsk(["debug", "start", "--session", session, "--name", "browser-conformance"], {
     allowFailure: true,
   });
+  // Start from a clean host registry.
+  //
+  // The app boots from localStorage first and only then falls back to the daemon's same-origin
+  // connection hint, and `registryHasConnection` matches by endpoint — so a host record left by an
+  // earlier daemon on the same address (a temp home, a reset server-id) is kept and never
+  // re-probed. The run then measures that stale record instead of the daemon under test, reporting
+  // the empty sidebar it produces as four product failures.
+  bsk(["navigate", BASE, "--session", session], { allowFailure: true });
+  bsk(["evaluate", "localStorage.clear()", "--session", session], { allowFailure: true });
   bsk(["navigate", BASE, "--session", session]);
   sleep(2500);
   // The app restores the last route. When that route names a workspace the daemon no longer has — an archived one,
@@ -353,6 +432,21 @@ try {
       if (!back) break;
       click(back);
       sleep(1500);
+    }
+    // Open a workspace when the app is resting on the empty-project landing page.
+    //
+    // The composer only exists inside a workspace, and the app restores whatever route was last
+    // open — on a fresh registry that is `/open-project`. Clicking the sidebar row does not navigate
+    // from that screen, so the route is built directly: the serverId comes from the sidebar's own
+    // title, the workspace id from the daemon.
+    let landing = ensureSidebarVisible();
+    if (!/Select model \([A-Z]/.test(landing)) {
+      const target = openAWorkspaceRoute();
+      if (target) {
+        bsk(["navigate", target, "--session", session], { allowFailure: true });
+        sleep(2600);
+        landing = ensureSidebarVisible();
+      }
     }
     let s2 = ensureSidebarVisible();
     // 侧栏打开后 composer 才没有被盖住。上一步把它打开，这里要把它关掉才能看到 composer。
