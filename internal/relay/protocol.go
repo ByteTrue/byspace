@@ -375,6 +375,14 @@ func (c Connection) Role() string { return c.meta.Role }
 // and for the v2 control channel.
 func (c Connection) ConnectionID() string { return c.meta.ConnectionID }
 
+// ServerID is the server this socket belongs to. The Durable Object writes it
+// onto the socket so a later, post-hibernation instance can rebuild the
+// Connection without the original request.
+func (c Connection) ServerID() string { return c.meta.ServerID }
+
+// Version is "1" or "2", the relay protocol the socket speaks.
+func (c Connection) Version() string { return c.meta.Version }
+
 // Tags are the Room tags a peer with this connection must be registered under.
 func (c Connection) Tags() []string {
 	if c.meta.Version == LegacyVersion {

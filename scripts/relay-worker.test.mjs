@@ -152,3 +152,53 @@ test("the deploy workflow publishes each channel to the Worker that owns its hos
     );
   }
 });
+
+// The relay Durable Object must accept sockets with the hibernation API.
+//
+// A socket taken with websocket.Upgrade keeps the object (and its billed
+// duration) awake for the connection's whole lifetime. Measured on this account
+// that cost 16.2s per connection against the hibernating TypeScript worker's
+// 4.1ms: 2860 requests burned 46.3k GB-s, more than the free plan's monthly
+// allowance, and every WebSocket handshake started failing with
+// "Exceeded allowed duration in Durable Objects free tier."
+test("the relay worker accepts sockets hibernating", () => {
+  const source = readFileSync(new URL("../workers/relay/main.go", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /UpgradeHibernating\(/,
+    "the relay must use websocket.UpgradeHibernating: websocket.Upgrade keeps the Durable Object awake and bills its whole lifetime",
+  );
+  assert.match(
+    source,
+    /AcceptHibernatingConn\(/,
+    "an upgraded socket must be registered with the hibernation API, or the object is never evicted",
+  );
+  assert.doesNotMatch(
+    source,
+    /\bcfws\.Upgrade\(|\bwebsocket\.Upgrade\(/,
+    "the non-hibernating Upgrade must not come back",
+  );
+});
+
+// Message handling must be a Durable Object trigger, not a goroutine.
+//
+// With hibernation the object is evicted between messages, so a read loop on a
+// goroutine would be reading a socket that no longer exists in this instance.
+test("the relay worker routes messages from the trigger", () => {
+  const source = readFileSync(new URL("../workers/relay/main.go", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /func \(r \*room\) WebSocketMessage\(/,
+    "the room must implement WebSocketMessageHandler",
+  );
+  assert.match(
+    source,
+    /func \(r \*room\) WebSocketClose\(/,
+    "the room must implement WebSocketCloseHandler, or departures never notify the control channel",
+  );
+  assert.doesNotMatch(
+    source,
+    /go r\.serve\(/,
+    "a per-connection goroutine read loop cannot survive hibernation",
+  );
+});
