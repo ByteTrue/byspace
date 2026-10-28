@@ -33,6 +33,8 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **域名与 origin 稳定性。** cutover 保持域名不变（从 Pages 解绑再挂 Worker），已装 PWA、localStorage host 配置、`#offer` 配对链接全部不受影响。Workers 自定义域要求 hostname 无外部 DNS 记录——Pages 解绑不清理 DNS，迁移时必须先删 zone 里的遗留 CNAME。
 - **`wrangler.toml` 的 account_id 曾长期是错的**（v0.10.0 写入的 ID 与真实账号不符，本机 deploy 从未成功过）——已修正。对「约定说手动部署、实际从未部署成功」这类漂移保持警惕。
 - **beta 与 stable 是两个 Worker**（独立 DO 命名空间），不是同一 Worker 的两个 route。zijieapi.de5.net 时代的 byspace 子域已废弃，routes 已移除。
+- **relay 的 socket 必须用 Durable Object 的 hibernation API 接收。** 这不是性能优化，是能不能在免费额度里活下去的前提：`acceptWebSocket` 收进来的连接空闲时对象被驱逐、不计费，而 `Upgrade` + 常驻读循环让对象在整个连接生命周期里保持唤醒、全程计费。同一账户实测差 4000 倍（TS 版 4.1 毫秒/请求，Go 版 16.2 秒/请求），后者几天就烧穿免费层每日额度。**任何一方改动 socket 接收方式前先读 [notes/018](../notes/018-durable-object-billing-and-hibernation.md)。** 守卫在 `scripts/relay-worker.test.mjs`。
+- **额度的症状与 relay 故障不同。** 额度耗尽时所有 WebSocket 握手 500（浏览器侧 `code 1006`），但 `/health` 仍 200——它不碰 Durable Object。这种时候换 worker、换 serverId 都没用，是账户级、按日重置。
 
 ## 自托管部署
 
