@@ -286,3 +286,37 @@ func writeConfigFile(t *testing.T, dir, body string) {
 		t.Fatal(err)
 	}
 }
+
+// A config written by a Windows editor must be read, not silently replaced by defaults.
+//
+// PowerShell's `Set-Content -Encoding UTF8` and Notepad both write a UTF-8 BOM, and
+// `json.Unmarshal` rejects it. The parse failed, `loadDaemonConfigRaw` returned defaults, and every
+// setting the user had configured disappeared — tunnels, auth, providers, all of it. On the write
+// path it was worse: an unparseable file was treated as empty and overwritten, so the next save
+// destroyed the contents.
+func TestConfigWithUTF8BOMIsReadNotDiscarded(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"version":1,"daemon":{"tunnel":{"enabled":true,"allowedPorts":[3425]},"auth":{"password":"$2a$12$abc"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), append([]byte{0xEF, 0xBB, 0xBF}, []byte(body)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(dir)
+	config := s.LoadDaemonConfig()
+	tunnel, _ := config["tunnel"].(map[string]any)
+	if tunnel["enabled"] != true {
+		t.Fatalf("tunnel = %#v, want the BOM-prefixed file to be read", config["tunnel"])
+	}
+	if ports, ok := tunnel["allowedPorts"].([]any); !ok || len(ports) != 1 {
+		t.Fatalf("allowedPorts = %#v (%T), want the configured port", tunnel["allowedPorts"], tunnel["allowedPorts"])
+	}
+	if s.DaemonPasswordHash() == "" {
+		t.Fatal("the password hash was lost")
+	}
+
+	// Writing must preserve what the file already had, not start from an empty object.
+	s.SaveDaemonConfig(map[string]any{"tunnel": map[string]any{"enabled": true}})
+	if s.DaemonPasswordHash() == "" {
+		t.Fatal("a save after a BOM-prefixed read destroyed the password hash")
+	}
+}

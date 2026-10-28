@@ -72,7 +72,7 @@ func (s *Store) SetDaemonPasswordHash(hash string) error {
 	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
 	if b, err := os.ReadFile(cfgPath); err == nil {
 		var existing map[string]any
-		if json.Unmarshal(b, &existing) == nil {
+		if json.Unmarshal(stripBOM(b), &existing) == nil {
 			disk = existing
 			if _, ok := disk["version"]; !ok {
 				disk["version"] = 1

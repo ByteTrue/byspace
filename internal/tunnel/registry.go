@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -103,6 +104,9 @@ func loadRegistry(homeDir string, logf func(string, ...any)) []PeerConfig {
 	if err != nil {
 		return nil
 	}
+	// A UTF-8 BOM is what Windows editors write by default, and `json.Unmarshal` refuses it. The
+	// peer list then read as malformed and every tunnel silently vanished.
+	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 	var file registryFile
 	if err := json.Unmarshal(raw, &file); err != nil {
 		logf("tunnels.json is malformed; starting empty: %v", err)

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -985,6 +986,17 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 	return cfg
 }
 
+// stripBOM removes a UTF-8 byte-order mark.
+//
+// Windows editors (PowerShell's `Set-Content -Encoding UTF8`, Notepad, Visual Studio) write one by
+// default, and `json.Unmarshal` refuses it. Every read of a JSON file in the home goes through this:
+// without it the parse failed, the caller fell back to defaults, and the user's settings silently
+// disappeared — worse on the write path, where an unparseable existing file was treated as empty and
+// overwritten.
+func stripBOM(b []byte) []byte {
+	return bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
+}
+
 // loadDaemonConfigRaw returns the persisted config with the password hash still in place.
 //
 // Only the auth path may use it: everything that leaves the process goes through LoadDaemonConfig.
@@ -996,6 +1008,7 @@ func (s *Store) loadDaemonConfigRaw() map[string]any {
 	if err != nil {
 		return cfg
 	}
+	b = stripBOM(b)
 	var disk map[string]any
 	if json.Unmarshal(b, &disk) != nil {
 		return cfg
@@ -1133,7 +1146,7 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
 	if b, err := os.ReadFile(cfgPath); err == nil {
 		var existing map[string]any
-		if json.Unmarshal(b, &existing) == nil {
+		if json.Unmarshal(stripBOM(b), &existing) == nil {
 			disk = existing
 			if _, ok := disk["version"]; !ok {
 				disk["version"] = 1
