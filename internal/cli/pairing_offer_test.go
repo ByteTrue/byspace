@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -148,5 +149,35 @@ func TestOfflinePairingOfferResolvesTheDefaultHome(t *testing.T) {
 	origin, _ := decodeOffer(t, buildOfflinePairingOffer("0.21.0-beta.5", "", "", true, ""))
 	if origin != "https://app.byspace.cc.cd" {
 		t.Fatalf("app origin = %q, want the configured one from the default home", origin)
+	}
+}
+
+// The QR code is what `byspace pair` prints by default.
+//
+// The reference CLI always rendered one — pairing with a phone means scanning — but the Go port
+// made it an opt-in `--qr` flag, so the common case printed a link and nothing to scan.
+func TestPairingQRCodeIsRenderedNotOptIn(t *testing.T) {
+	offer := "https://app.example.test/#offer=abc"
+
+	// Not a terminal: the code is skipped silently, because block characters in a log are useless.
+	// (The test process is not a terminal, which is exactly the case being checked.)
+	qr, reason := renderPairingQRCode(offer, io.Discard)
+	if qr != "" {
+		t.Fatalf("a QR code was rendered to a non-terminal")
+	}
+	if reason != "" {
+		t.Fatalf("a non-terminal got an explanation it cannot need: %q", reason)
+	}
+
+	// The renderer itself works, which is what the default path depends on.
+	code, err := server.RenderASCIIQRCode(offer)
+	if err != nil {
+		t.Fatalf("RenderASCIIQRCode: %v", err)
+	}
+	if strings.Count(code, "\n") < 5 {
+		t.Fatalf("the QR rendering is %d lines, which cannot be a symbol", strings.Count(code, "\n")+1)
+	}
+	if widest := widestLine(code); widest < 20 {
+		t.Fatalf("the QR rendering is %d columns wide", widest)
 	}
 }

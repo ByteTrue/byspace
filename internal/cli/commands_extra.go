@@ -16,6 +16,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/store"
+	"golang.org/x/term"
 )
 
 func runHeartbeatCmd(args []string, stdout io.Writer) error {
@@ -552,7 +553,7 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 	relayEndpoint := fs.String("relay", os.Getenv("BYSPACE_RELAY_ENDPOINT"), "relay host:port")
 	useTLS := fs.Bool("tls", true, "use TLS for relay")
 	appURL := fs.String("app-url", os.Getenv("BYSPACE_APP_BASE_URL"), "web app base URL")
-	showQR := fs.Bool("qr", false, "render ASCII QR code in terminal")
+	noQR := fs.Bool("no-qr", false, "skip the QR code and print only the link")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -565,15 +566,62 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 		// An explicit flag means the operator wants those values, not whatever the daemon has.
 		url = buildOfflinePairingOffer(version, *homeDir, *relayEndpoint, *useTLS, *appURL)
 	}
-	if *showQR {
-		qr, qrErr := server.RenderASCIIQRCode(url)
-		if qrErr != nil {
-			return qrErr
+	// The QR code is the default, not an opt-in.
+	//
+	// The reference CLI always printed one — `formatPairingInstructions` renders "Scan to pair"
+	// unconditionally — because pairing with a phone means scanning. Requiring a flag meant the
+	// common case, running `byspace pair` and picking up the phone, printed nothing to scan.
+	//
+	// Its absence is explained rather than silent: a narrow terminal cannot fit the symbol, and a
+	// link without that explanation looks like the feature is missing.
+	if !*noQR {
+		switch qr, reason := renderPairingQRCode(url, stdout); {
+		case qr != "":
+			fmt.Fprintln(stdout, qr)
+		case reason != "":
+			fmt.Fprintln(stdout, reason)
 		}
-		fmt.Fprintln(stdout, qr)
 	}
 	fmt.Fprintln(stdout, url)
 	return nil
+}
+
+// renderPairingQRCode renders the offer as a terminal QR code.
+//
+// Returns either the rendering or a one-line explanation of why it was skipped, so the caller can
+// print the reason where the code would have been.
+func renderPairingQRCode(url string, stdout io.Writer) (string, string) {
+	qr, err := server.RenderASCIIQRCode(url)
+	if err != nil {
+		return "", "QR code unavailable; use the pairing link below."
+	}
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		// Piped output, a CI log, a script. Printing the code there would fill the log with block
+		// characters nobody can scan.
+		return "", ""
+	}
+	// Only skip when the width is known to be too small. A terminal can report zero columns — a
+	// pty without a winsize does — and treating that as "too narrow" hid the code on terminals
+	// that could have shown it.
+	columns, _, sizeErr := term.GetSize(int(os.Stdout.Fd()))
+	if sizeErr == nil && columns > 0 {
+		if width := widestLine(qr); columns <= width {
+			return "", fmt.Sprintf("QR code not shown: the terminal is %d columns, it needs %d. Resize and rerun, or use the link below.", columns, width+1)
+		}
+	}
+	_ = stdout
+	return qr, ""
+}
+
+// widestLine is the visible width of a block of text, in terminal columns.
+func widestLine(text string) int {
+	widest := 0
+	for _, line := range strings.Split(text, "\n") {
+		if len([]rune(line)) > widest {
+			widest = len([]rune(line))
+		}
+	}
+	return widest
 }
 
 // pairingOfferURL asks the running daemon for its pairing offer.
