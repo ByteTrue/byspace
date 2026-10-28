@@ -254,6 +254,33 @@ setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); proce
 }
 
 /**
+ * Closes whatever sheet, drawer or menu is covering the surface and returns the resulting snapshot.
+ *
+ * A workspace opened on a compact layout puts the sidebar in an overlay that covers the composer,
+ * and a leftover menu from the previous step covers it too. Both are dismissed the same way: Escape,
+ * then the explicit close affordance when the snapshot still shows an overlay.
+ */
+function dismissOverlays(snapshot) {
+  let current = snapshot;
+  for (let guard = 0; guard < 5; guard += 1) {
+    // Two different things cover the composer here: the sidebar overlay on a compact layout (its
+    // affordance is "Close menu") and the workspace actions sheet that opens on top of it (no close
+    // button — Escape is the only way out). Handle both, and stop as soon as nothing is on top.
+    const closer = refFor(current, /button "(Close menu|Close|Done)"/);
+    const covered = /^\s*L\d+ (modal|dialog|sheet) /m.test(current);
+    if (!closer && !covered) break;
+    if (closer) {
+      click(closer);
+    } else {
+      bsk(["press", "Escape", "--session", session], { allowFailure: true });
+    }
+    sleep(700);
+    current = observe();
+  }
+  return current;
+}
+
+/**
  * The route that opens one existing workspace, or null when the daemon has none.
  *
  * `serverId` comes from `/health`; the workspace id from the daemon over the socket, because it is
@@ -419,70 +446,44 @@ try {
   // 这一段的入口条件很脆：需要一个**空会话**的 composer。浏览器会恢复上次打开的路由
   // （可能是刚刚的 settings 页），路径不同、渲染时机也不同。所以重试有限次，直到出现
   // composer 为止，而不是假定一次点击就够。
-  let thinkingRef = null;
-  for (let attempt = 0; attempt < 3 && !thinkingRef; attempt += 1) {
-    bsk(["navigate", BASE, "--session", session], { allowFailure: true });
-    sleep(2200);
-    // Navigating back re-enters the restored route, so the unavailable-workspace screen can return on every attempt.
-    // Clear it here rather than only once at the top, or all three attempts fail the same way.
-    for (let guard = 0; guard < 3; guard += 1) {
-      const current = observe();
-      if (!current.includes("Workspace unavailable")) break;
-      const back = refFor(current, /button "Back"/);
-      if (!back) break;
-      click(back);
-      sleep(1500);
-    }
-    // Open a workspace when the app is resting on the empty-project landing page.
-    //
-    // The composer only exists inside a workspace, and the app restores whatever route was last
-    // open — on a fresh registry that is `/open-project`. Clicking the sidebar row does not navigate
-    // from that screen, so the route is built directly: the serverId comes from the sidebar's own
-    // title, the workspace id from the daemon.
-    let landing = ensureSidebarVisible();
-    if (!/Select model \([A-Z]/.test(landing)) {
-      const target = openAWorkspaceRoute();
-      if (target) {
-        bsk(["navigate", target, "--session", session], { allowFailure: true });
-        sleep(2600);
-        landing = ensureSidebarVisible();
-      }
-    }
-    let s2 = ensureSidebarVisible();
-    // 侧栏打开后 composer 才没有被盖住。上一步把它打开，这里要把它关掉才能看到 composer。
-    for (let guard = 0; guard < 3; guard += 1) {
-      const closer = refFor(s2, /button "Close menu"/);
-      if (!closer) break;
-      click(closer);
-      sleep(700);
-      s2 = observe();
-    }
-
-    // 抽屉里的 "New tab" 会展开一个菜单（Agent / Terminal 两个入口）。菜单有时已经展开，
-    // 有时需要先点开；两种情况下都要点 "Agent"，然后确认菜单收起。
-    if (!refFor(s2, /menuitem "Agent"/)) {
-      const newTab = refFor(s2, /button "New tab"/) ?? refFor(s2, /button "New Agent"/);
-      if (newTab) {
-        click(newTab);
-        sleep(700);
-        s2 = observe();
-      }
-    }
-    const agentItem = refFor(s2, /menuitem "Agent"/) ?? refFor(s2, /button "Agent"/);
-    if (agentItem) {
-      click(agentItem);
-      sleep(2200);
-      s2 = observe();
-    }
-    // 菜单遮罩如果还留着会把 composer 盖住；Escape 关掉再看。
-    if (refFor(s2, /button "Menu backdrop"/) || /occluded by L1/.test(s2)) {
-      bsk(["press", "Escape", "--session", session], { allowFailure: true });
-      sleep(700);
-      s2 = observe();
-    }
-    thinkingRef = refFor(s2, /button "Select thinking option/);
-    snap = s2;
+  // The thinking button lives in a workspace composer and only exists once a model is chosen — it
+  // lists the levels *that model* supports. So this walks to a workspace, clears whatever overlay
+  // is on top, and picks the first model the catalog offers, which is the entry a user reaches too.
+  //
+  // It navigates by route instead of clicking through the sidebar: from the empty-project screen a
+  // sidebar press does not move, and the "New tab → Agent" dance ended on that same screen with an
+  // overlay on top on every attempt.
+  let s2 = dismissOverlays(observe());
+  const workspaceRoute = openAWorkspaceRoute();
+  if (workspaceRoute) {
+    bsk(["navigate", workspaceRoute, "--session", session], { allowFailure: true });
+    sleep(2800);
+    s2 = dismissOverlays(observe());
   }
+  let chosenModelId = null;
+  if (/button "Select model \(Select model\)"/.test(s2)) {
+    click(refFor(s2, /button "Select model \(Select model\)"/));
+    sleep(1300);
+    const modelSnapshot = observe();
+    const firstModel = refFor(
+      modelSnapshot,
+      /button "[^"]+ [^"]*\/\S+ Create profile from this model"/,
+    );
+    if (firstModel) {
+      // The entry is labelled "<name> <provider>/<modelId>", and that id is what the provider
+      // catalog is keyed by — the check compares the rendered menu against the model's own
+      // declared levels, so it has to know which model got picked.
+      const entryLabel = modelSnapshot.match(
+        /button "([^"]+ [^"]*\/\S+) Create profile from this model"/,
+      );
+      chosenModelId = entryLabel ? entryLabel[1].split(/\s+/).pop() : null;
+      click(firstModel);
+      sleep(1600);
+      s2 = dismissOverlays(observe());
+    }
+  }
+  const thinkingRef = refFor(s2, /button "Select thinking option/);
+  snap = s2;
   if (!thinkingRef) {
     const reachable = bsk(["observe", "--session", session], { allowFailure: true });
     failFast(
@@ -500,19 +501,36 @@ try {
   sleep(700);
   snap = observe();
 
-  const menuEntries = ["Off", "Minimal", "Low", "Medium", "High", "XHigh", "Max"].filter((lvl) =>
-    new RegExp(`button "${lvl}"`).test(snap),
-  );
+  // The menu must list exactly what the selected model declares, not a fixed ladder: models differ
+  // (one supports off/low/high/max, another low/medium/high/xhigh/max), and a hardcoded list either
+  // invents a level the model rejects or hides one it accepts.
+  const declared = (() => {
+    if (!chosenModelId) return null;
+    const entry = queryProviderSnapshot().find(
+      (provider) =>
+        Array.isArray(provider.models) &&
+        provider.models.some((model) => model.id === chosenModelId),
+    );
+    const model = entry?.models?.find((candidate) => candidate.id === chosenModelId);
+    return model?.thinkingOptions?.map((option) => option.id) ?? null;
+  })();
+  const knownLabels = ["Off", "Minimal", "Low", "Medium", "High", "Extra high", "Max"];
+  const menuEntries = knownLabels.filter((lvl) => new RegExp(`button "${lvl}"`).test(snap));
+  // Any level label the menu shows that is not one of the protocol's names — a locally invented
+  // word like "XHigh" rendered raw, or the old "Extra high" spelling drifting — is a mismatch
+  // between the daemon's vocabulary and the app's.
+  const unknownEntries = [
+    ...snap.matchAll(/button "(XHigh|Xhigh|Maximal|ExtraHigh|Off \(|Minimal \(|None)"/g),
+  ].map((match) => match[1]);
   record(
-    "Thinking menu renders at least Off and Max for the active model",
-    menuEntries.includes("Off") && menuEntries.includes("Max"),
-    `rendered: ${menuEntries.join(", ") || "(none)"}`,
+    "Thinking menu renders the levels the selected model declares",
+    Boolean(declared) && declared.length === menuEntries.length,
+    `model=${chosenModelId ?? "(unresolved)"} declared=${JSON.stringify(declared)} rendered=${JSON.stringify(menuEntries)}`,
   );
-  const unsupported = menuEntries.filter((lvl) => lvl === "Extra high");
   record(
     "Thinking menu uses protocol level names (no invented labels)",
-    unsupported.length === 0,
-    `unexpected entries: ${unsupported.join(", ")}`,
+    unknownEntries.length === 0 && menuEntries.length > 0,
+    `unexpected entries: ${JSON.stringify(unknownEntries)}`,
   );
   console.log(`      thinking levels rendered: ${menuEntries.join(", ")}`);
 
