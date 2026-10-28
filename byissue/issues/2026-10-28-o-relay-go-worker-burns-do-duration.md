@@ -108,7 +108,26 @@ hibernation 下空闲连接让 DO 冻结、不计费；`Upgrade` 下 socket 一�
 
 ## 验证
 
-1. `GOOS=js GOARCH=wasm` 构建通过
-2. 部署 beta worker 后：`relay.byspace.cc.cd` 的 `/ws` 从 500 恢复
-3. **关键判据**：部署后观察 DO 的「持续时间 / 请求数」比值，必须从 16 秒回到毫秒级
-4. 端到端：真浏览器经 relay 配对并打开 agent 会话
+1. `GOOS=js GOARCH=wasm` 构建通过 ✅
+2. **关键判据：单位成本** ✅ 部署 beta 后新实例 17,174 请求 / 平均 1.7 毫秒
+   （修复前 16.2 秒/请求，TS 版 4.1 毫秒）
+3. 端到端恢复 ⏳ **未完成，被账户额度挡住**
+
+第 3 项失败的原因不是代码：账户已用 49.7k GB-秒（免费层 13,000/日），额度耗尽期间**任何**
+worker 的 DO 请求都会抛 `Exceeded allowed duration in Durable Objects free tier`。
+用全新 serverId（=全新 DO 实例）验证过，同样 502；TS worker 同样 500 —— 与 worker 和代码都无关。
+
+额度按日重置。**明天需复验**：真浏览器经 relay 配对、打开 agent 会话、并确认 DO 的
+「持续时间/请求数」保持在毫秒级。
+
+## 部署状态
+
+- `byspace-relay-go-beta`（`app-beta.byspace.cc.cd`）：**已部署**，版本
+  `9d4ae964-4422-47e3-9ec7-24824960564c`
+- `byspace-relay-go`（生产）：**未部署**，等 beta 复验通过再推
+
+## 遗留
+
+本机 `~/.byspace/tunnels.json` 有一个指向 `srv_KpHUSmbbklHz`（那台已关机的 Windows，3425 端口）的
+peer。它是 owner 10-23 自己配的，不是测试残留。它每 30 秒重连一次，在额度紧张时也是一份消耗；
+是否保留由 owner 决定。
