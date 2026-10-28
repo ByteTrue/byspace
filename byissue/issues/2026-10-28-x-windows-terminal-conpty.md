@@ -73,3 +73,7 @@ Node 版有专门的 Windows 终端工作（PR #4 / PR #7），Go 重写时整�
 - `mode con` 输出 `Lines: 55 / Columns: 206 / Code page: 437`，证明拿到的是真实 ConPTY 而非伪终端，且 resize 生效。
 
 **Windows 上启动 daemon 的坑**（与产品无关，记录供后续测试用）：`Start-Process` 和 SSH 直接执行都会在会话结束时把 daemon 一起杀掉。可靠做法是注册计划任务再 `Start-ScheduledTask`，进程才脱离 SSH 会话存活。
+
+## 结论
+
+已交付。代码提交 `24a7b83de`，验证记录见上。

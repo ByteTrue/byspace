@@ -88,3 +88,7 @@ func (r *Registry) Start()   // 启动所有已配置 peer
 
 - 单元：`TestManagerAndTargetExchangeBytes` 把 Manager 和 Target 用进程内 PeerConn 对接，跑真实 TCP 服务，断言字节往返。反向核对：把数据方向改回错误版本，该测试 5 秒超时失败。
 - 端到端：本地 relay + 两个 daemon（A 发起、B 目标），A 配置 peer 指向 B 的 serverId 与公钥；在 B 上跑 HTTP 服务，`curl` A 的隧道端口拿到 `200` 和完整页面。
+
+## 结论
+
+已交付。代码提交 `24a7b83de`，验证记录见上。
