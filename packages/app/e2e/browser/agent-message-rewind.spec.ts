@@ -69,7 +69,10 @@ test.describe("Agent message rewind", () => {
         minDistanceFromBottom: 300,
       });
       await fillComposerDraft(page, preservedDraft);
-      rewindCompletion.clearTimelineStreamCount();
+      // Settle first: the previous turn reports idle before its last rows have crossed the socket,
+      // and those land while the rewind menu opens. Counting them would blame the rewind for traffic
+      // it did not produce.
+      await rewindCompletion.settleThenClear();
 
       const rewind = rewindConversation(page, userMessage, rewoundPrompt);
       await rewindCompletion.waitForDelayedResponse();

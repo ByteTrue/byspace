@@ -189,12 +189,56 @@ assistant / reasoning delta，每行带上它覆盖的 source seq 区间，分�
 
 临时 daemon（真实 home 数据副本）上 `node scripts/browser-conformance.mjs --base ...` **9/10**，此前 1/6。
 
-### 仍未解决
+### 第二轮：全部查完（同日）
 
-- `Open thinking menu` 仍是 FAIL，但**不是产品行为**：检查需要一个已选模型的空 composer，脚本走到
-  workspace 后又被一个 cover=100% 的 modal 挡住（`Open menu` / `Workspace actions`），关闭步骤还没写对。
-  手工验证过按钮正常：选中模型后 composer 出现 `Select thinking option (High)`。
-- `new-workspace-model-*` / `provider-removal` 与 `workspace-labels` 这三项本轮没碰，仍未定位。
+**`Open thinking menu` 连同它后面的两条一起修好了，`browser-conformance.mjs` 现在 12/12。**
+三个独立原因，每个都在报告「产品失败」而其实没测到产品：
+
+1. **写死了 `Off..Max` 阶梯。** 检查断言菜单必须同时有 `Off` 和 `Max`，但它选中的那个模型
+   声明的就是 `low/medium/high/xhigh/max`，根本没有 `off`。模型之间的档位本就不同
+   （另一个是 `off/low/high/max`），写死阶梯要么要求模型不认的档位、要么漏掉它支持的档位。
+   现在从 provider catalog 读出所选模型声明的档位，逐个与菜单比对。
+2. **走侧栏 + `New tab → Agent` 进 composer。** 从空项目落地页出发，这条路三次都回到同一屏，
+   并且上面还盖着一层 modal。改为直接用 daemon 自己的 id 构造 workspace 路由。
+3. **新草稿没有选中模型**，而 thinking 按钮只在选好模型后才存在（它列的是那个模型的档位）。
+   现在会选中 catalog 里的第一个模型，与用户实际会走到的入口一致。
+
+顺带：`dismissOverlays` 加了 Escape 分支——侧栏 overlay 有 `Close menu`，但盖在它上面的
+workspace actions 面板没有关闭按钮，只有 Escape 能关。
+
+### 全量跑 + 逐条对照发布版（同日，第三轮）
+
+`node scripts/e2e-runnable.mjs --files` 的 170 个文件、628 个用例，`E2E_WORKERS=1` 跑完：
+**601 passed / 9 failed**。9 条逐条对照 0.21.1 发布版（同 spec、同方式），**没有一条是本轮改动引入的**。
+6 条是既有缺口或环境限制，3 条是并发下的抖动（单跑全绿）：
+
+| spec                                                                                                    | 单跑                | 0.21.1 对照 | 归类                                                |
+| ------------------------------------------------------------------------------------------------------- | ------------------- | ----------- | --------------------------------------------------- |
+| `agent-message-rewind`                                                                                  | 1 failed / 2 passed | 同样 failed | 既有缺口 → 已开 issue                               |
+| `import-session-flow`                                                                                   | 1 failed / 1 passed | 同样 failed | 既有缺口 → 已开 issue                               |
+| `new-workspace-entry` (Ctrl+P)                                                                          | 8 passed（已修）    | 同样 failed | **测试自身的平台假设错误，已修**                    |
+| `new-workspace-mode-cycle-safety`                                                                       | failed              | —           | 本机未装 `codex`（CI 会装）                         |
+| `new-workspace-codex-mode-preferences`                                                                  | 2 failed            | —           | 同上                                                |
+| `pr-pane`                                                                                               | failed              | —           | `gh repo create` 触发 GitHub 限流（账户级，非代码） |
+| `agent-timeline-resume` / `changes-pane-canvas-render` / `sessions-empty` / `replica-cache-measurement` | 全 passed           | —           | 全量并发下的抖动                                    |
+
+**`Ctrl+P` 那条的根因**：`openNewWorkspaceProjectPickerWithShortcut` 写死了 `Control+P`，而
+`keyboard-shortcuts.ts` 里是 `Cmd+P`（mac）+ `Ctrl+P`（非 mac）两个绑定。在 mac 上按 Control 匹配不到
+任何快捷键，选择器自然不开。改用同文件其它 helper 已在用的 `ControlOrMeta+P` 后 8/8 通过。
+
+### 上一轮记的三条：已无法复现
+
+单跑两轮、每轮 7 例，全绿：
+
+| spec                                   | 结果                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| `workspace-labels.spec.ts`             | 3 passed（含此前超时的 `creates, multi-assigns, filters, groups, and edits`） |
+| `new-workspace-model-memory.spec.ts`   | 通过                                                                          |
+| `new-workspace-model-recovery.spec.ts` | 通过                                                                          |
+| `provider-removal.spec.ts`             | 通过                                                                          |
+
+它们当初的失败记录来自「单 worker 共享 Metro 与 daemon 时的抖动」，与真实缺陷混在一起。
+本轮在 `E2E_WORKERS=1` 下不再复现，说明当时的归因是对的：那不是产品缺陷。
 
 ## 未解决（2026-10-22 记录，部分已被上节取代）
 

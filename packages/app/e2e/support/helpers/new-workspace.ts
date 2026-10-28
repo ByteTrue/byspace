@@ -239,7 +239,11 @@ export async function expectNewWorkspaceControlsEnabled(page: Page): Promise<voi
 }
 
 export async function openNewWorkspaceProjectPickerWithShortcut(page: Page): Promise<void> {
-  await page.keyboard.press("Control+P");
+  // `ControlOrMeta`, because the binding is Cmd+P on macOS and Ctrl+P elsewhere
+  // (keyboard-shortcuts.ts: workspace-project-pick-{cmd-p-mac,ctrl-p-non-mac}). A hardcoded
+  // Control sent the non-mac chord on a mac, which match nothing and left the picker closed — the
+  // spec then reported "Ctrl+P does not open the picker" for a shortcut that works.
+  await page.keyboard.press("ControlOrMeta+P");
 
   const searchInput = page.getByPlaceholder("Search projects");
   await expect(searchInput).toBeVisible({ timeout: 30_000 });

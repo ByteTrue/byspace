@@ -29,6 +29,16 @@ export interface DaemonHydrationGate {
 export interface RewindCompletionGate {
   clearTimelineStreamCount(): void;
   release(): void;
+  /**
+   * Waits until no new timeline deltas arrive for `quietMs`, then resets the counter.
+   *
+   * The assertion that follows asks "the rewind itself must not stream anything back". Deltas that
+   * were already in flight when the previous turn reported idle are not that: the turn is finished
+   * but its last rows are still crossing the socket, and they land during the hover-and-click that
+   * opens the rewind menu. Settling first separates "the rewind replayed history" from "the previous
+   * turn was still draining", which is the only question this counter can answer.
+   */
+  settleThenClear(quietMs?: number): Promise<void>;
   timelineStreamCount(): number;
   waitForDelayedResponse(): Promise<void>;
 }
@@ -280,6 +290,20 @@ export async function holdRewindCompletion(
 
   return {
     clearTimelineStreamCount() {
+      timelineStreamCount = 0;
+    },
+    async settleThenClear(quietMs = 600) {
+      let stable = 0;
+      let last = timelineStreamCount;
+      while (stable < quietMs) {
+        await page.waitForTimeout(100);
+        if (timelineStreamCount === last) {
+          stable += 100;
+          continue;
+        }
+        last = timelineStreamCount;
+        stable = 0;
+      }
       timelineStreamCount = 0;
     },
     release() {
