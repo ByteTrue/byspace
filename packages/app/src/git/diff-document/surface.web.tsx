@@ -571,7 +571,15 @@ export function DiffSurface(props: DiffSurfaceProps) {
     [schedulePaint],
   );
   useEffect(() => {
-    dragRef.current = null;
+    // Never abort a gesture that is still underway.
+    //
+    // The deps include `props.files`, whose identity changes on ordinary re-renders. A selection
+    // made by pointerDown is committed to state immediately, so a re-render landing between
+    // pointerDown and pointerUp used to clear dragRef and the selection behind the user's hand: the
+    // drag continued, the copy that followed produced nothing, and whether it happened at all
+    // depended on how busy the parent was. A committed selection still resets here, which is the
+    // point of the effect — content that changed underneath an old selection has to be re-selected.
+    if (dragRef.current) return;
     setSelection(null);
   }, [props.collapsedFilePaths, props.displayPreferences.layout, props.files, setSelection]);
   const pointerDown = useCallback(
