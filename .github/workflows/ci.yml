@@ -169,7 +169,11 @@ jobs:
         run: node scripts/npm-retry.mjs ci
 
       - name: Install agent CLIs for provider tests
-        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code opencode-ai
+        # Pinned, like codex below. `opencode-ai` ships per-platform binaries as separate
+        # packages, and the registry has served a release whose platform package was still 404 —
+        # which failed this step for every job at once. A pinned version makes CI depend on what
+        # we tested against rather than on whatever upstream published this morning.
+        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code opencode-ai@1.19.4
 
       - name: Run Go tests
         run: go test ./...
@@ -310,7 +314,7 @@ jobs:
       - name: Install agent CLIs for provider tests
         # Several specs start agents through a real provider CLI; without it the daemon cannot
         # spawn the agent and the spec fails deep in the UI assertions.
-        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai
+        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai@1.19.4
 
       - name: Build workspace packages
         # The e2e harness imports @bytetrue/client, which imports @bytetrue/relay's E2EE module, so
