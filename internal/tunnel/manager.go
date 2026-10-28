@@ -180,15 +180,14 @@ func (m *Manager) Status() []ForwardState {
 	out := make([]ForwardState, 0, len(m.forwards))
 	for _, port := range m.sortedPorts() {
 		f := m.forwards[port]
-		state := f.state
-		if state == StateConnecting && m.peer != nil {
-			state = StateConnected
-		}
+		// The stored state is the answer. Inferring "connected" from `m.peer != nil` reported a
+		// live tunnel whenever a connection object existed — and one always does after the first
+		// dial, even when the peer daemon has been stopped and the relay is holding an idle socket.
 		out = append(out, ForwardState{
+			State:      f.state,
 			RemotePort: f.remotePort,
 			Label:      f.label,
 			LocalPort:  f.localPort,
-			State:      state,
 			LastError:  f.lastError,
 		})
 	}

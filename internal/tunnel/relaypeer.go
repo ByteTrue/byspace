@@ -56,6 +56,8 @@ type TunnelReconnector struct {
 const (
 	defaultReconnectBaseDelay = 500 * time.Millisecond
 	defaultReconnectMaxDelay  = 30 * time.Second
+	// handshakeTimeout bounds how long a newly dialled peer may take to prove it is alive.
+	handshakeTimeout = 10 * time.Second
 )
 
 // Run connects and reconnects until ctx is cancelled.
@@ -155,6 +157,23 @@ func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
 	}
 	go conn.readLoop()
 
+	// "Connected" has to mean the peer answered, not that the relay accepted our socket.
+	//
+	// The relay keeps a client socket open when no daemon is registered for that serverId — it has
+	// to, because either side may arrive first. So a successful dial proves only that Cloudflare
+	// took the connection: a stopped peer looked identical to a live one, and the tunnels page
+	// showed "Connected" for a host that was not running.
+	//
+	// The end-to-end handshake is the proof. It cannot complete without the peer decrypting and
+	// replying, so waiting for it turns the state into something the user can trust.
+	if session != nil {
+		if err := conn.waitHandshake(); err != nil {
+			_ = conn.Close()
+			<-conn.done
+			return err
+		}
+	}
+
 	if r.OnState != nil {
 		r.OnState(StateConnected)
 	}
@@ -164,6 +183,30 @@ func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
 
 	<-conn.done
 	return conn.err
+}
+
+// waitHandshake blocks until the end-to-end session is established or the connection ends.
+//
+// Polled rather than notified because the session reports readiness as a boolean: the alternative
+// is plumbing a channel through the e2ee client for the one caller that wants to wait on it.
+func (p *relayPeer) waitHandshake() error {
+	deadline := time.Now().Add(handshakeTimeout)
+	for {
+		if p.session == nil || p.session.IsReady() {
+			return nil
+		}
+		select {
+		case <-p.done:
+			if p.err != nil {
+				return p.err
+			}
+			return errors.New("connection ended before the peer answered")
+		case <-time.After(50 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			return errors.New("peer did not complete the handshake")
+		}
+	}
 }
 
 // clientURL builds the relay URL for the initiator role.

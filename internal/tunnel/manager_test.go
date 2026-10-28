@@ -210,3 +210,54 @@ func itoa(value int) string {
 	}
 	return string(digits)
 }
+
+// A forward whose peer never answered must not report "connected".
+//
+// The relay keeps a client socket open when no daemon is registered for that serverId, so a
+// successful dial proved nothing. `Status` treated the presence of a connection object as proof of
+// life, which reported a tunnel as Connected for a host that had been stopped — the tunnels page
+// showed a green badge for a daemon that was not running.
+func TestStatusDoesNotInferConnectedFromAPeerObject(t *testing.T) {
+	manager := NewManager("srv_peer", "peer-host", t.Logf)
+	t.Cleanup(func() { _ = manager.Close() })
+	if _, err := manager.AddForward(5432, "db"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Before any connection exists the forward is connecting, not connected.
+	for _, state := range manager.Status() {
+		if state.State == StateConnected {
+			t.Fatalf("a forward reported connected before any peer answered: %+v", state)
+		}
+	}
+
+	// A connection object that has not been proven alive changes nothing.
+	manager.SetPeer(&stubPeer{})
+	for _, state := range manager.Status() {
+		if state.State == StateConnected {
+			t.Fatalf("a peer object alone flipped the state to connected: %+v", state)
+		}
+	}
+
+	// Only an explicit connected event does.
+	manager.SetPeerState(StateConnected)
+	states := manager.Status()
+	if len(states) != 1 || states[0].State != StateConnected {
+		t.Fatalf("SetPeerState(connected) did not reach the forward: %+v", states)
+	}
+
+	// And losing it takes the state back down.
+	manager.SetPeerState(StateDisconnected)
+	if states := manager.Status(); states[0].State == StateConnected {
+		t.Fatalf("a disconnected event left the forward connected: %+v", states)
+	}
+}
+
+// stubPeer is a PeerConn that never delivers anything, standing in for a socket the relay holds
+// open with no daemon behind it.
+type stubPeer struct{}
+
+func (stubPeer) Send(Frame) error     { return nil }
+func (stubPeer) Frames() <-chan Frame { return make(chan Frame) }
+func (stubPeer) Err() error           { return nil }
+func (stubPeer) Close() error         { return nil }
