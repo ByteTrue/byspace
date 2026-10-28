@@ -72,3 +72,11 @@ Node 的 `deliverTimelineReplacement(agentId, source)`，且能让计数从 51 �
 1. `agent-message-rewind.spec.ts` 三条全绿，其中第 48 行那条的计时门计数为 0
 2. 手工在浏览器里 rewind 一次，确认消息确实消失、草稿保留、滚动位置正确
 3. 两个客户端同时打开同一 agent，只有非发起方收到 replacement 并重取
+
+## 沉淀去向
+
+- **`docs/testing.md` →「Before debugging a failure, check the test reached its subject」**：
+  `waitForFinish(...).status === "idle"` 只表示 provider 报完，不等于最后几行已经过 socket；
+  用 idle 清零事件计数就会把上一轮的拖尾算到下一个动作头上。
+- 该 issue 原判「provider 回放整棵树」被数据推翻（`rewind.response` 到达时计数只有 52），
+  推翻过程保留在本文，不再另立记录。

@@ -72,3 +72,10 @@ Could not import selected session. [exec: "claude": executable file not found in
 
 1. `import-session-flow.spec.ts` 两条全绿
 2. 手工通过 UI 导入一个 Claude/Codex/pi 会话，确认面板关闭且 transcript 完整
+
+## 沉淀去向
+
+- **`docs/testing.md` →「Before debugging a failure, check the test reached its subject」**：
+  本机缺 `claude` / `codex` 导致两条 spec 红，CI 装了就没问题——环境差异伪装成产品缺陷。
+  判据是先用 `node scripts/e2e-runnable.mjs` 确认 spec 是否在当前机器可跑。
+- 错误文案的整改落在代码里（`importFailureMessage`），属于代码级事实，不进 docs。

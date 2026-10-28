@@ -77,3 +77,10 @@ Node 版有专门的 Windows 终端工作（PR #4 / PR #7），Go 重写时整�
 ## 结论
 
 已交付。代码提交 `24a7b83de`，验证记录见上。
+
+## 沉淀去向
+
+- **`docs/go-parity-audit.md` →「编译得过不等于跑得起来」**：`creack/pty` 在 Windows 编进
+  `pty_unsupported.go`、运行时返回哨兵错误；交叉编译和单测都看不见这类缺陷。同在 `pty.go` 的注释里
+  留了具体选型理由。
+- 产品边界未变（Terminal 的字符与顺序语义在 `byissue/spec/terminal.md`），不需要回写 spec。

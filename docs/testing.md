@@ -111,6 +111,32 @@ A package that imports something it only lists as a `peerDependency` resolves fi
 
 Prefer a `@lezer/*` grammar. When a language only ships inside an editor extension, vendor the grammar into `packages/highlight/src/<lang>/` — see `svelte/`, `nix/`, and `csharp/`.
 
+## Before debugging a failure, check the test reached its subject
+
+A red e2e is a claim about the app only after the harness demonstrably got to the thing it
+measures. Three failures in one session were all the harness, and each looked exactly like a
+product bug:
+
+- **`waitForFinish(...).status === "idle"` is not "the stream is over".** Idle means the provider
+  finished reporting; the last rows are still crossing the socket. A step that cleared an event
+  counter on idle and then asserted "the next action produced no events" counted the previous
+  turn's tail. Settle on quiet (no new events for a few hundred ms) before clearing.
+- **A hardcoded modifier key measures nothing on the other platform.** A helper pressed
+  `Control+P` while the binding is `Cmd+P` on macOS, so the chord matched nothing and the spec
+  reported "the shortcut does not open the picker" — for a shortcut that works. Use
+  `ControlOrMeta`, and read the binding table before trusting a key that "does nothing".
+- **A harness can be pointing at a daemon other than the one under test.** Failures that look
+  like empty data may be a stale connection: the app boots from localStorage first, and a host
+  record left by an earlier run on the same endpoint is kept rather than re-probed. Clear the
+  store, and assert you are on the daemon you started (its `serverId`) before reading any
+  assertion failure as a product fact.
+
+Also check the path filter: a change that only touches docs or the specs themselves can leave the
+filtered job `skipped`, so a green run proves nothing about the code you changed.
+
+The general rule: when a test fails, the first question is "what did this actually observe?", not
+"what is wrong with the code?".
+
 ## Test organization
 
 - Collocate tests with implementation: `thing.ts` + `thing.test.ts`

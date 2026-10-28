@@ -92,3 +92,10 @@ func (r *Registry) Start()   // 启动所有已配置 peer
 ## 结论
 
 已交付。代码提交 `24a7b83de`，验证记录见上。
+
+## 沉淀去向
+
+- **`byissue/notes/018-durable-object-billing-and-hibernation.md`**：`BeforeRegister` 必须在 accept 之前
+  —— 它靠 tag 注册表找旧 socket，先 accept 会让新连接找到并关掉自己。这条是 hibernation 改造的前提。
+- **产品边界已在 `byissue/spec/connection.md`** 的「Daemon 隧道」段，本次未改变（gate 语义、白名单、
+  relay 归属都没动，只是把已有的接线补齐）。因此不回写 spec。

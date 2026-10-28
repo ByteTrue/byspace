@@ -78,6 +78,23 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 **仍未覆盖**：`packages/app/e2e` 下的 150+ 个 Playwright spec 覆盖的交互面远大于这两条。它们才是跨端契约的
 完整验收面，跑它们比再加断言更值得。
 
+## 编译得过不等于跑得起来
+
+`GOOS=windows go build ./...` 通过，证明的只是「能在 Windows 上编译」。依赖可以在每个平台都编译成功，
+然后在非 Linux/macOS 上返回一个 stub 错误——整个能力在移植时消失，而 CI 全绿。
+
+`github.com/creack/pty` 就是这样：Windows 上编进 `pty_unsupported.go`，`open()` 返回
+`errors.New("unsupported")`。字面量 `unsupported` 直接显示在 UI 里，用户看到的是一个词而不是错误信息。
+`internal/terminal` 没有任何 Windows 专用文件，这个问题在交叉编译和单测里都看不见，只有真机点一次
+「新建终端」才暴露。换成 `github.com/aymanbagabas/go-pty`（Unix + ConPTY 双后端）才修好。
+
+判据：**移植一个能力时，检查它依赖的库在每个目标平台都有真实实现。** 查法是看那个库的
+`*_windows.go` / `*_unsupported.go` 文件，或者直接看它是否在非目标平台返回哨兵错误。
+`go vet` 和 `go build` 都不看这个。
+
+同类还有：`os/exec` 找 Shell 的方式（`sh -c` 在 Windows 没有）、路径分隔符、进程组终止
+（Windows 没有 POSIX 进程组，见 [notes/017](../byissue/notes/017-go-process-termination-needs-the-group.md)）。
+
 ## 它看不见什么
 
 字段对账读的是 Go **源码**里的 key，所以两种情况它必然漏：

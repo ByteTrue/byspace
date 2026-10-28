@@ -393,3 +393,12 @@ if cut < len(tl)` 量纲不符，条件几乎恒 false，边界被静默忽略�
    的 status 语义（那是两件事），但失败 agent 不会像完成 agent 那样在侧栏点亮。
 
 这三项都是独立工作项，应各自开 issue，不要塞进本轮。
+
+## 沉淀去向
+
+- **`docs/testing.md` →「Before debugging a failure, check the test reached its subject」**：
+  本轮三次把 harness 的问题读成产品缺陷——host 注册表被旧记录顶替、helper 写死 `Control+P`
+  （mac 上是 Cmd+P）、以及 idle 不等于流结束。这条规矩就是从这里来的。
+- **`docs/go-parity-audit.md` →「Playwright 套件是这一层的验收面」**：92/185 的可跑清单与
+  `scripts/e2e-runnable.mjs` 的判据（文件名 + 去注释后的 provider 字面量），已在该节。
+- 修掉的 provider 快照 scope / ETag 缺陷属于代码行为，见 `internal/agent/providers`。

@@ -126,6 +126,13 @@ worker 的 DO 请求都会抛 `Exceeded allowed duration in Durable Objects free
   `9d4ae964-4422-47e3-9ec7-24824960564c`
 - `byspace-relay-go`（生产）：**未部署**，等 beta 复验通过再推
 
+## 沉淀去向
+
+- **`byissue/spec/connection.md` →「托管部署」**：relay 必须用 hibernation API 接收 socket，
+  这是长期约束不是性能优化。同时记了「额度耗尽的症状与 relay 故障不同」（`/health` 仍 200）。
+- **`byissue/notes/018-durable-object-billing-and-hibernation.md`**：数字来源、诊断顺序、
+  代码该怎么写、以及一条更普适的教训——比对移植实现时除了协议行为，还要问它怎么持有托管环境的资源。
+
 ## 遗留
 
 本机 `~/.byspace/tunnels.json` 有一个指向 `srv_KpHUSmbbklHz`（那台已关机的 Windows，3425 端口）的
