@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.1 - 2026-10-28
+
+### Fixed
+
+- Fixed the bundled web UI answering `{"error":"Unauthorized"}` on a daemon with a password set: the page was gated behind the same check as the API, and a browser opened at `127.0.0.1:6777` has no password to offer. The static shell is served before the check; the API and the socket stay protected
+- Fixed the terminal failing with `unsupported` on Windows: the daemon used a pseudo-terminal library with no Windows backend, so no tab could open. It now uses ConPTY, and typing, resizing and closing work there
+- Fixed tunnels not working at all. The feature gate was declared and never read from config, the peer registry was never started, and the peer transport was never wired to the reconnect loop. The stream protocol was also missing its open handshake, so an initiator sent bytes for a stream the target had never heard of and the target discarded them: a port forwarded, the target dialled the service, and not one byte crossed
+- Fixed the two ends of a tunnel having their data directions mirrored, so each discarded what the other produced, and fixed replies being resolved through a table only the JSON-RPC path populates, which silently dropped every acknowledgement on the relay path
+- Fixed a relay data socket closing 15 seconds after opening, because it was held to the same `hello` deadline as a browser connection. The daemon opens those sockets on behalf of a remote client, so no `hello` ever arrives; every forwarded connection died with `Server disconnected`
+
 ## 0.21.0 - 2026-10-27
 
 ### Changed
