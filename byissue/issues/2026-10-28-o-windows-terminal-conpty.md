@@ -62,3 +62,14 @@ Node 版有专门的 Windows 终端工作（PR #4 / PR #7），Go 重写时整�
 - `GOOS=windows go build ./...` 通过，产物里能查到 `CreatePseudoConsole` 符号。
 - macOS 真机验证：新建终端、`echo` 回显、resize 均正常（用真实 daemon 跑）。
 - 未验证：Windows 真机。需要在一台 Windows 上跑一次新建终端，这是本 issue 唯一遗留的验证项。
+
+### Windows 真机验证（已完成）
+
+在 `zijie1@10.1.115.59`（Windows 11, build 26300.9711, AMD64）上用构建产物实测：
+
+- 通过 SSH 隧道把 Windows daemon 的 6777 映射到本机 16777，用 bsk 打开 web UI。
+- 新建项目、新建 workspace、`Ctrl+Shift+T` 打开终端：**没有出现 `unsupported`**，终端标签页正常创建。
+- `echo WINDOWS_PTY_OK_$((6*7))` 返回 `WINDOWS_PTY_OK_42`。
+- `mode con` 输出 `Lines: 55 / Columns: 206 / Code page: 437`，证明拿到的是真实 ConPTY 而非伪终端，且 resize 生效。
+
+**Windows 上启动 daemon 的坑**（与产品无关，记录供后续测试用）：`Start-Process` 和 SSH 直接执行都会在会话结束时把 daemon 一起杀掉。可靠做法是注册计划任务再 `Start-ScheduledTask`，进程才脱离 SSH 会话存活。
