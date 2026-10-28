@@ -5,6 +5,18 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.21.2 - 2026-10-28
+
+### Fixed
+
+- Fixed a terminal drag in the diff view losing its selection when the pane re-rendered mid-drag: the copy that followed produced nothing, which made the whole changes pane feel unresponsive on a busy host
+- Fixed a tunnel reporting `connected` for a peer whose daemon was stopped. The relay keeps a client socket open with nothing registered behind it, so a successful dial proved nothing; the state now only turns connected once the peer answers the handshake, and drops when it stops
+- Fixed tunnels being torn down and rebuilt about once a minute: the tunnel socket sent nothing while it had nothing to forward, and a silent WebSocket gets reaped. It now pings on a timer, which is what keeps a long streaming response from being cut in half
+- Fixed `config.json` being discarded entirely when a Windows editor saved it. PowerShell's `Set-Content -Encoding UTF8` and Notepad write a UTF-8 BOM, `json.Unmarshal` refuses it, and the daemon fell back to defaults with nothing logged — tunnels, auth and provider settings simply gone. Saving was worse: the unparseable file read as empty and was overwritten
+- Fixed Oh My Pi being on in a fresh install. The protocol manifest marks it `enabledByDefault: false`; the daemon ignored that and enabled every built-in provider
+- Fixed `byspace pair` printing only the link. The QR code was behind a `--qr` flag, but pairing with a phone means scanning — it is now the default, with `--no-qr` for scripts
+- Fixed an import failure showing `exec: "claude": executable file not found in $PATH`, and a recent-session import failure showing no reason at all. The daemon now names the missing command and the sheet carries its message
+
 ## 0.21.1 - 2026-10-28
 
 ### Fixed
