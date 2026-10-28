@@ -158,7 +158,45 @@ assistant / reasoning delta，每行带上它覆盖的 source seq 区间，分�
 教训与前三次相同，但这次有了可复用的手段：**先用分步诊断或 WS probe 复现那一步，再改代码**。probe 不起浏览器、
 不抢 Metro，一次就能把「daemon 发了什么」和「客户端怎么用」分开。
 
-## 未解决
+## 收尾（2026-10-28）
+
+`--base` 之外的三个缺陷已修，上一轮「未解决」的前三条随之有了结论。
+
+### 修掉的
+
+1. **`browser-conformance.mjs` 的 provider 探针硬编码 6778**（上一轮「验证状态」里点名的那条）：
+   `queryProviderSnapshot()` 现在拼 `BASE`，探针才真正问被测 daemon。
+2. **跑之前不清 host 注册表**：应用只在 endpoint 未知时才用 daemon 的 same-origin 连接提示重建，
+   而 `registryHasConnection` 按 endpoint 匹配。浏览器里留着同地址的旧记录（临时 home、重设过的
+   server-id）时，应用保留旧记录、不再探测，整轮检查测的是那条旧记录 —— 表现为「侧栏空」的四条
+   假失败。现在每轮先清 localStorage 再从提示重建。
+3. **状态转移探针两处口径错**：`archive_workspace_response` 里根本没有 `projectId`（协议没有这个
+   字段），而探针拿它去发 `project.remove.request`，于是 projectId 是空串、移除静默返回
+   `accepted: false`；`emptyProject.projectId` 又被拿去和 update 上的 `projectId` 比较，而那条
+   update **故意不带** `projectId`（客户端把它当「项目移除」的信号）。改为从 create 响应取
+   projectId，并把「workspace update 带 removedProjectId」与「project.update kind=remove」都认作
+   已广播。
+
+### 查出的产品缺陷
+
+**`enabledByDefault` 在 Go 侧不存在。** `BuildSnapshotEntries` 对每个内置 provider 一律
+`enabled := true`，而 `packages/protocol/src/provider-manifest.ts` 给 `omp` 标了
+`enabledByDefault: false`。空 home 里 Oh My Pi 因此出现在选择器里，与产品声明相反。
+`ProviderSpec` 现在带 `EnabledByDefault`（nil 即 true，和 manifest 省略字段同义）。
+守卫：`TestEnabledByDefaultMatchesTheManifest`、`TestExplicitEnableOverridesTheDefault`，都做了反向核对。
+
+### 结果
+
+临时 daemon（真实 home 数据副本）上 `node scripts/browser-conformance.mjs --base ...` **9/10**，此前 1/6。
+
+### 仍未解决
+
+- `Open thinking menu` 仍是 FAIL，但**不是产品行为**：检查需要一个已选模型的空 composer，脚本走到
+  workspace 后又被一个 cover=100% 的 modal 挡住（`Open menu` / `Workspace actions`），关闭步骤还没写对。
+  手工验证过按钮正常：选中模型后 composer 出现 `Select thinking option (High)`。
+- `new-workspace-model-*` / `provider-removal` 与 `workspace-labels` 这三项本轮没碰，仍未定位。
+
+## 未解决（2026-10-22 记录，部分已被上节取代）
 
 - `new-workspace-model-memory` / `new-workspace-model-recovery` / `provider-removal`：provider 目录加上 scope 隔离后
   仍有 4 条失败。Go 侧读、写、ETag 都已单独验证正确，剩余差异在**前端使用哪个 scope** 上，属产品行为取舍。
