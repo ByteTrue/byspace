@@ -27,14 +27,28 @@ func TestOutputCoalescingPreservesAllBytes(t *testing.T) {
 	defer unsub()
 
 	// Emit in many small writes to provoke the coalescing path.
-	if err := sess.WriteInput([]byte("for i in $(seq 1 200); do printf 'X'; done; echo DONE\r")); err != nil {
+	//
+	// The writes come from here rather than from a shell loop: this used `for i in $(seq 1 200)`,
+	// which cmd.exe does not understand, and that went unnoticed while the Windows terminal still
+	// failed to start and the test skipped. Writing the bytes directly exercises the coalescer the
+	// same way on every platform.
+	for i := 0; i < 200; i++ {
+		if err := sess.WriteInput([]byte("X")); err != nil {
+			t.Fatal(err)
+		}
+		// A short pause so the writes land in separate reads instead of one big buffer.
+		if i%20 == 0 {
+			time.Sleep(2 * time.Millisecond)
+		}
+	}
+	if err := sess.WriteInput([]byte("\r")); err != nil {
 		t.Fatal(err)
 	}
 
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
-		done := strings.Contains(got.String(), "DONE") && strings.Count(got.String(), "X") >= 200
+		done := strings.Count(got.String(), "X") >= 200
 		mu.Unlock()
 		if done {
 			break

@@ -452,13 +452,21 @@ test.describe("Sidebar project grouping", () => {
 
     // After removing from secondary host, the project still exists with primary host's workspace.
     //
+    // Scoped to the sidebar row rather than the bare text: the row was hovered to reach its kebab,
+    // and the hover card repeats the workspace name, so `getByText` resolves to two elements and
+    // fails on strict mode instead of on the behaviour under test.
+    //
     // The row comes back from the daemon: the removal round-trips through both hosts and the
-    // sidebar rebuilds the group. That has taken longer than the 10s default on a loaded CI
-    // runner while still arriving, so the assertion carries its own budget.
-    await expect(page.getByText("Primary workspace", { exact: true })).toBeVisible({
-      timeout: 45_000,
+    // sidebar rebuilds the group. That has taken longer than the 10s default on a loaded CI runner
+    // while still arriving, so the assertion carries its own budget.
+    const primaryRow = page.locator('[data-testid^="sidebar-workspace-row-"]', {
+      hasText: "Primary workspace",
     });
-    await expect(page.getByText("Secondary workspace", { exact: true })).not.toBeVisible();
+    await expect(primaryRow).toHaveCount(1, { timeout: 45_000 });
+    const secondaryRow = page.locator('[data-testid^="sidebar-workspace-row-"]', {
+      hasText: "Secondary workspace",
+    });
+    await expect(secondaryRow).toHaveCount(0);
   });
 
   test("shows only participating hosts in new workspace host picker", async ({
