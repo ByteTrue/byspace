@@ -651,7 +651,10 @@ describe("ImportSessionSheet", () => {
 
     fireEvent.click(await screen.findByTestId("import-session-session-claude-provider-thread-1"));
 
-    await screen.findByText("Could not import selected session.");
+    // The banner carries the daemon's own reason after the fixed sentence, so the stub's message
+    // has to appear: a fixed string alone left the user guessing whether the session was already
+    // imported, the transcript was unreadable, or the provider CLI was missing.
+    await screen.findByText(/Could not import selected session\. \[import unavailable\]/);
     expect(importAgent).toHaveBeenCalledWith({
       providerId: "claude",
       providerHandleId: "provider-thread-1",
