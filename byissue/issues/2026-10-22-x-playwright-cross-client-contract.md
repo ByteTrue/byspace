@@ -226,6 +226,22 @@ workspace actions 面板没有关闭按钮，只有 Escape 能关。
 `keyboard-shortcuts.ts` 里是 `Cmd+P`（mac）+ `Ctrl+P`（非 mac）两个绑定。在 mac 上按 Control 匹配不到
 任何快捷键，选择器自然不开。改用同文件其它 helper 已在用的 `ControlOrMeta+P` 后 8/8 通过。
 
+### 第三轮结论：9 条失败全部有归属
+
+| spec                                                                                                    | 归类                                       | 处置                                                           |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| `agent-message-rewind`                                                                                  | 测试把上一轮拖尾算进 rewind                | **已修**（`settleThenClear`），反向核对后 4/4 绿               |
+| `new-workspace-entry` (Ctrl+P)                                                                          | 测试写死 `Control+P`，mac 上绑定是 `Cmd+P` | **已修**（`ControlOrMeta+P`），8/8 绿                          |
+| `import-session-flow`                                                                                   | 本机没装 `claude` CLI                      | 错误信息**已修**，见 issue 2026-10-28-x-import-failure-message |
+| `new-workspace-mode-cycle-safety`                                                                       | 本机没装 `codex`                           | 环境；CI 装了                                                  |
+| `new-workspace-codex-mode-preferences`                                                                  | 同上                                       | 环境                                                           |
+| `pr-pane`                                                                                               | `gh repo create` 触发账户级限流            | 环境                                                           |
+| `agent-timeline-resume` / `changes-pane-canvas-render` / `sessions-empty` / `replica-cache-measurement` | 全量并发下的抖动                           | 单跑全绿                                                       |
+
+`import-session-flow` 那条还顺带修掉一个真实缺陷：失败原因从来没到过屏幕上（banner 由布尔驱动，
+mutation 的 message 被丢掉），而服务端给的是 Go 的原始 `exec: "claude": executable file not found`。
+现在两者都改了。
+
 ### 上一轮记的三条：已无法复现
 
 单跑两轮、每轮 7 例，全绿：
