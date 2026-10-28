@@ -509,7 +509,7 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 	} else {
 		imported, err := s.importProviderTranscript(provider, strings.TrimSpace(req.ProviderHandleID), strings.TrimSpace(req.Cwd))
 		if err != nil {
-			failImport(err.Error())
+			failImport(importFailureMessage(provider, err))
 			return
 		}
 		rec = imported.record
@@ -522,7 +522,10 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 	}
 	mp, err := s.startOrGetPiAgent(rec)
 	if err != nil {
-		failImport(err.Error())
+		// Starting the imported agent launches its provider CLI. On a host without that CLI the
+		// error is `exec: "claude": executable file not found in $PATH`, which the import sheet
+		// renders verbatim in the user's face.
+		failImport(importFailureMessage(provider, err))
 		return
 	}
 	if len(history) > 0 {

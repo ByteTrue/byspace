@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -78,6 +79,17 @@ func (s *Server) importProviderTranscript(provider, handle, requestedCwd string)
 		},
 		history: history,
 	}, nil
+}
+
+// importFailureMessage turns a launch failure into something a user can act on.
+//
+// The import sheet shows the daemon's message as-is, so a raw `exec: "claude": executable file not
+// found in $PATH` reads as a bug in BySpace rather than as a missing tool on this host.
+func importFailureMessage(provider string, err error) string {
+	if errors.Is(err, exec.ErrNotFound) || strings.Contains(err.Error(), "executable file not found") {
+		return fmt.Sprintf("importing a %s session needs the %s command on this host's PATH", provider, provider)
+	}
+	return err.Error()
 }
 
 // findClaudeTranscript locates `<config>/projects/**\/<sessionId>.jsonl`.

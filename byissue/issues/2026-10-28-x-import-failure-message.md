@@ -1,11 +1,11 @@
 ---
 kind: issue
-title: "导入会话后面板不关闭：选中一行没有任何反应"
+title: "导入失败时把 Go 的原始错误直接甩给用户，且 recent 导入不显示原因"
 type: bug
 created: 2026-10-28
 ---
 
-# 导入会话后面板不关闭
+# 导入失败时的错误信息
 
 ## 预期与实际
 
@@ -14,6 +14,35 @@ created: 2026-10-28
 **实际**：`import-session-sheet` 一直存在（`toHaveCount(0)` 等 30 秒失败），transcript 没出现。
 `import-session-flow.spec.ts` 的 `captures the compact import-session journey` 因此失败；同一文件另一条
 用例通过。
+
+## 根因：本机没有 `claude` CLI
+
+把 `importMutation.error.message` 渲染出来之后，答案就在屏幕上：
+
+```
+Could not import selected session. [exec: "claude": executable file not found in $PATH]
+```
+
+导入一个 Claude 会话要启动 `claude`（`startOrGetPiAgent` 会拉起 provider CLI），本机 PATH 上只有
+`opencode`，没有 `claude`/`codex`。**这不是产品缺陷**：CI 的 `Install agent CLIs` 步骤装了
+`@anthropic-ai/claude-code`、`@openai/codex`、`opencode-ai` 三个，所以这个 spec 在 CI 上是绿的，
+本机是红的。同一类还有 `new-workspace-mode-cycle-safety` 与 `new-workspace-codex-mode-preferences`
+（都缺 `codex`）。
+
+## 顺带修掉的一个真实缺陷：错误信息是给人看的吗
+
+上面那条消息里，`exec: "claude": executable file not found in $PATH` 是 Go 的原始错误，被 import sheet
+原样渲染给用户。它读起来像 BySpace 坏了，而实际上是这台机器缺工具。
+
+新增 `importFailureMessage(provider, err)`：识别 `exec.ErrNotFound` 与 "executable file not found"，
+换成 `importing a claude session needs the claude command on this host's PATH`。接线在
+`handleImportAgent` 的两个失败出口（转录读取、agent 启动）。
+
+同时给 import sheet 接上了错误正文（`importErrorMessage`）：此前 recent 导入失败只显示
+"Could not import selected session."，**服务端给的原因被丢掉了** —— 这条 issue 之所以难查，
+就是因为那个 message 从来没到过屏幕上。
+
+## 原来的调查记录（保留）
 
 ## 已确认的事实
 
@@ -30,11 +59,6 @@ created: 2026-10-28
 对照：用 pi 会话对临时 daemon 直接发 `import_agent_request`（`providerId` + `providerHandleId`）是**成功**的，
 `agent_resumed` 的字段（`status`/`agentId`/`requestId`/`timelineSize`/`agent`）也齐全。所以不是这条 RPC 的整体问题，
 是 fixture 里那个 claude 会话走到某个失败分支。
-
-## 仍未定位
-
-`importMutation` 的 `error.message` 是空的（UI 落到了 `fallbackFailure`），所以看不到服务端给的原因。
-下一步要把这个 message 露出来：或让 `onError` 对 recent 也写进可见状态，或直接开 WS 抓那条 `status` 错误。
 
 ## 影响面
 

@@ -140,11 +140,22 @@ function isManualImportPending(mutation: {
 }
 
 /** A manual submit shows its own inline error, so it must not also light up the list-level banner. */
-function isRecentImportError(mutation: {
+/**
+ * The reason a recent-session import failed, or null when it did not.
+ *
+ * Returns the daemon's own message: it is the only place that knows whether the session is already
+ * imported, the transcript is unreadable, or the provider CLI is missing. The banner used to show a
+ * fixed string, which left the user guessing at all three.
+ */
+function recentImportError(mutation: {
   isError: boolean;
   variables?: ImportSessionRequest | undefined;
-}): boolean {
-  return mutation.isError && mutation.variables?.source !== "manual";
+  error: unknown;
+}): string | null {
+  if (!mutation.isError || mutation.variables?.source === "manual") {
+    return null;
+  }
+  return mutation.error instanceof Error ? mutation.error.message : "";
 }
 
 function buildSessionsQueriesConfig(args: {
@@ -184,7 +195,7 @@ interface SheetStatusMessagesProps {
   hasNoImportableProviders: boolean;
   isLoadingSessions: boolean;
   hasRows: boolean;
-  importErrored: boolean;
+  importErrorMessage: string | null;
 }
 
 function SheetStatusMessages({
@@ -193,7 +204,7 @@ function SheetStatusMessages({
   hasNoImportableProviders,
   isLoadingSessions,
   hasRows,
-  importErrored,
+  importErrorMessage,
 }: SheetStatusMessagesProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -214,8 +225,11 @@ function SheetStatusMessages({
           <Text style={styles.statusText}>{t("importSession.status.loading")}</Text>
         </View>
       ) : null}
-      {importErrored ? (
-        <Text style={styles.statusText}>{t("importSession.status.failedImport")}</Text>
+      {importErrorMessage !== null ? (
+        <Text style={styles.statusText}>
+          {t("importSession.status.failedImport")}
+          {importErrorMessage ? ` [${importErrorMessage}]` : ""}
+        </Text>
       ) : null}
     </>
   );
@@ -1036,7 +1050,7 @@ export function ImportSessionSheet({
         hasNoImportableProviders={hasNoImportableProviders}
         isLoadingSessions={isLoadingSessions}
         hasRows={visibleEntries.length > 0}
-        importErrored={isRecentImportError(importMutation)}
+        importErrorMessage={recentImportError(importMutation)}
       />
       {providerErrorRows.length > 0 ? (
         <ProviderErrorBanner rows={providerErrorRows} onRetry={handleRetryProvider} />
