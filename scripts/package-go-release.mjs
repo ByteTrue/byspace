@@ -126,14 +126,18 @@ function fail(message) {
 }
 
 function packBinary(target, destination) {
-  run("go", ["build", "-trimpath", `-ldflags=${ldflags}`, "-o", destination, "./cmd/byspace"], {
-    env: {
-      ...process.env,
-      CGO_ENABLED: "0",
-      GOOS: target.goos,
-      GOARCH: target.goarch,
+  run(
+    "go",
+    ["build", "-tags", "nogui", "-trimpath", `-ldflags=${ldflags}`, "-o", destination, "."],
+    {
+      env: {
+        ...process.env,
+        CGO_ENABLED: "0",
+        GOOS: target.goos,
+        GOARCH: target.goarch,
+      },
     },
-  });
+  );
   if (!existsSync(destination)) {
     fail(`go build produced no binary for ${target.goos}/${target.goarch}`);
   }

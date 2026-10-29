@@ -66,6 +66,8 @@ const usageText = `byspace — single-binary AI coding agent host, desktop & mob
   byspace restart                 alias for "byspace daemon restart"
   byspace daemon <status|start|stop|restart|reload|set-password|print-plist|print-unit>
                                   manage daemon lifecycle, config reload and service definitions
+  byspace update [check] [--proxy <url>] [--mirror <prefix>]
+                                  check for or install the newest BySpace release
   byspace mcp-bridge              run the self-hosted stdio MCP bridge for child agents
   byspace version                 print version
 `
@@ -247,9 +249,22 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
-	case "update", "mode":
-		if err := runAgentUpdate(rest, stdout); err != nil {
+	case "update":
+		if shouldDispatchAgentUpdate(rest) {
+			if err := runAgentUpdate(rest, stdout); err != nil {
+				fmt.Fprintln(stderr, "byspace update:", err)
+				return 1
+			}
+			return 0
+		}
+		if err := runSelfUpdateCmd(version, rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace update:", err)
+			return 1
+		}
+		return 0
+	case "mode":
+		if err := runAgentUpdate(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace mode:", err)
 			return 1
 		}
 		return 0

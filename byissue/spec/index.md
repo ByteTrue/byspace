@@ -23,8 +23,8 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 
 ## 边界与考量
 
-- 实现跨浏览器与手机 PWA；原生移动端与 Electron 已退出（见 [025](../issues/025-x-architecture-retention-audit.md)），只有平台能力确实不同才分流。
+- 同一套 Go 单二进制与内嵌 Web 前端通过编译标签（`-tags nogui` vs Wails v3）延伸出无头 CLI/Daemon/Docker、桌面客户端（macOS / Windows / Linux，单主窗口 + 托盘驻留 + 本机 daemon 主从自愈接管）与 Android 远程客户端（侧载 APK，不在手机本地起 daemon），见 [Decision 005](../decisions/005-wails-v3-unified-desktop-and-android-client.md) 与 [Epic 2026-10-29](../epics/2026-10-29-x-wails-v3-desktop-and-android/spec.md)。
 - App 与 daemon 可以异步更新，wire protocol 保持双向兼容。
 - Terminal、Agent stream 和移动面板的性能优化不得以删除现有用户能力为代价。
 - BySpace 使用统一 Data Relay；Relay 只转发 E2EE 数据，不解析 Agent 会话内容。
-- **已决定不做的方向**：原生移动 App、Electron 桌面壳、SSH 接入、Hub 集成、插件系统（provider 扩展改走 custom provider）。决策理由、替代路径与移除批次见 [025](../issues/025-x-architecture-retention-audit.md)；跨 workspace 编排的放弃理由见 [026](../issues/026-d-cross-workspace-orchestrator.md)。
+- **已决定不做的方向**：独立 React Native 原生工程、Electron 桌面包装器、iOS 原生壳、应用商店上架分发（Android 仅走直接侧载 APK）、npm 包分发、SSH 接入、Hub 集成、插件系统（provider 扩展改走 custom provider）。历史退出批次见 [025](../issues/025-x-architecture-retention-audit.md)，Wails v3 单二进制同构延伸与二进制直发决策见 [Decision 005](../decisions/005-wails-v3-unified-desktop-and-android-client.md)；跨 workspace 编排的放弃理由见 [026](../issues/026-d-cross-workspace-orchestrator.md)。

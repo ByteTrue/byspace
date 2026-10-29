@@ -62,8 +62,8 @@ COPY . .
 COPY --from=web /tmp/byspace-src/internal/webui/dist ./internal/webui/dist
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-      go build -trimpath -ldflags "-s -w -X main.version=${BYSPACE_VERSION}" \
-      -o /out/byspace ./cmd/byspace
+      go build -tags nogui -trimpath -ldflags "-s -w -X main.version=${BYSPACE_VERSION}" \
+      -o /out/byspace .
 
 FROM --platform=$BUILDPLATFORM debian:12-slim AS trust
 

@@ -18,15 +18,17 @@ package selfupdate
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Phase is one step of an update, matching DaemonSelfUpdatePhase.
@@ -184,9 +186,9 @@ func writableReason(executable string) string {
 
 // ReplaceBinary writes the new binary over the old one.
 //
-// Write to a sibling temp file then rename: a rename within one directory is atomic, so a crash
-// leaves either the old binary or the new one, never a truncated file. Writing in place would make
-// an interrupted update unbootable.
+// Write to a sibling temp file then rename (using InstallBinary so a running Windows .exe is
+// moved aside first): a rename within one directory is atomic, so a crash leaves either the old
+// binary or the new one, never a truncated file.
 func ReplaceBinary(executable string, payload []byte) error {
 	dir := filepath.Dir(executable)
 	temp, err := os.CreateTemp(dir, ".byspace-update-*")
@@ -215,7 +217,7 @@ func ReplaceBinary(executable string, payload []byte) error {
 		_ = os.Remove(tempPath)
 		return err
 	}
-	if err := os.Rename(tempPath, executable); err != nil {
+	if err := InstallBinary(tempPath, executable); err != nil {
 		_ = os.Remove(tempPath)
 		return err
 	}
@@ -237,7 +239,9 @@ func releaseBaseURL() string {
 	return ReleaseBaseURL
 }
 
-// Download fetches the release archive for this platform.
+// Download fetches the release binary for this platform, checking both the Magpie-style
+// byspace-cli-<os>-<arch> name and the legacy byspace-<os>-<arch> name, and verifying SHA-256
+// when SHA256SUMS is published alongside the release.
 func Download(ctx context.Context, version string) ([]byte, error) {
 	tag := version
 	if tag == "" {
@@ -245,23 +249,40 @@ func Download(ctx context.Context, version string) ([]byte, error) {
 	} else if !strings.HasPrefix(tag, "v") {
 		tag = "v" + tag
 	}
-	asset := "byspace-" + runtime.GOOS + "-" + runtime.GOARCH
-	if runtime.GOOS == "windows" {
-		asset += ".exe"
-	}
-	url := releaseBaseURL() + "/" + tag + "/" + asset
+	base := releaseBaseURL()
+	sums, _ := fetchChecksums(ctx, tag)
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for _, asset := range []string{BinaryAsset(), LegacyBinaryAsset()} {
+		u := base + "/" + tag + "/" + asset
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		response, err := httpClientFor(ctx, 10*time.Minute).Do(request)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		data, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("release download returned %d for %s", response.StatusCode, u)
+			continue
+		}
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		if wantSum := sums[asset]; wantSum != "" {
+			got := sha256.Sum256(data)
+			gotHex := hex.EncodeToString(got[:])
+			if !strings.EqualFold(gotHex, wantSum) {
+				return nil, fmt.Errorf("SHA-256 mismatch for %s (got %s, want %s)", asset, gotHex, wantSum)
+			}
+		}
+		return data, nil
 	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("release download returned %d for %s", response.StatusCode, url)
-	}
-	return io.ReadAll(response.Body)
+	return nil, lastErr
 }

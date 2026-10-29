@@ -98,6 +98,23 @@ describe("test-daemon-connection connectToDaemon", () => {
     expect(probe.clientIdsRequested).toBe(0);
   });
 
+  it("allows insecure direct TCP from a Wails native WebView (https://wails.localhost)", async () => {
+    vi.stubGlobal("window", { location: { protocol: "https:", hostname: "wails.localhost" } });
+    const { connectToDaemon } = await import("./test-daemon-connection");
+    const result = await connectToDaemon(
+      {
+        id: "direct:lan:6777",
+        type: "directTcp",
+        endpoint: "192.168.1.20:6777",
+      },
+      undefined,
+      probe.deps,
+    );
+    await result.client.close();
+    expect(probe.createdClients).toHaveLength(1);
+    expect(probe.createdConfigs()[0]?.url).toBe("ws://192.168.1.20:6777/ws");
+  });
+
   it("allows loopback direct TCP from hosted HTTPS", async () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     for (const endpoint of [

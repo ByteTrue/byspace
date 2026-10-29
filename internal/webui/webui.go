@@ -43,9 +43,11 @@ var contentTypes = map[string]string{
 // Handler serves the BySpace web UI from an external directory (if provided and valid)
 // or from the Go-embedded dist/ filesystem (if built with assets).
 type Handler struct {
-	fsys                 fs.FS
-	injectConnectionHint bool
-	label                string
+	fsys                  fs.FS
+	injectConnectionHint  bool
+	explicitListen        string
+	label                 string
+	disablePrecompression bool
 }
 
 // WithConnectionHint enables injecting window.__BYSPACE_INITIAL_DAEMON_CONNECTION__ into index.html
@@ -57,6 +59,36 @@ func (h *Handler) WithConnectionHint(label string) *Handler {
 	h.injectConnectionHint = true
 	h.label = label
 	return h
+}
+
+// WithExplicitConnectionHint injects a fixed daemon listen address into index.html instead of r.Host.
+// Wails desktop windows serve static assets from wails://localhost while the daemon listens on loopback TCP.
+func (h *Handler) WithExplicitConnectionHint(listenAddr, label string) *Handler {
+	if h == nil {
+		return nil
+	}
+	h.injectConnectionHint = true
+	h.explicitListen = strings.TrimSpace(listenAddr)
+	h.label = label
+	return h
+}
+
+// WithoutPrecompression disables serving pre-compressed .br/.gz responses with Content-Encoding headers.
+// In-process WebView scheme handlers (WKURLSchemeTask, WebViewAssetLoader) do not decompress HTTP
+// Content-Encoding streams; with precompression disabled, TryServe inflates .gz assets in memory.
+func (h *Handler) WithoutPrecompression() *Handler {
+	if h == nil {
+		return nil
+	}
+	h.disablePrecompression = true
+	return h
+}
+
+// ServeHTTP implements http.Handler so Handler can be passed directly to Wails AssetOptions.
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !h.TryServe(w, r) {
+		http.NotFound(w, r)
+	}
 }
 
 // NewHandler resolves a web UI asset source: explicit dir wins, then embedded dist/.
@@ -126,7 +158,7 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 
 	finalFile := resolvedFile
 	encoding := ""
-	if !isIndex {
+	if !isIndex && !h.disablePrecompression {
 		finalFile, encoding = h.resolveEncoding(resolvedFile, r.Header.Get("Accept-Encoding"))
 	}
 
@@ -144,7 +176,7 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	if isIndex && h.injectConnectionHint {
-		data = injectDaemonConnectionHint(data, r, h.label)
+		data = injectDaemonConnectionHint(data, r, h.explicitListen, h.label)
 	}
 
 	w.Header().Set("Content-Type", getContentType(resolvedFile))
@@ -217,9 +249,13 @@ func setCacheHeaders(w http.ResponseWriter, isIndex bool, resolvedFile string) {
 	}
 }
 
-func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, label string) []byte {
-	host := r.Host
-	useTLS := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListen, label string) []byte {
+	host := explicitListen
+	useTLS := false
+	if host == "" {
+		host = r.Host
+		useTLS = r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	}
 	hint := map[string]any{
 		"listen": host,
 		"useTls": useTLS,

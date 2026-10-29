@@ -29,7 +29,7 @@ export function buildSetupCommands(input: SetupCommandsInput): SetupCommands {
     onboardFlags.push("--relay");
   }
   return {
-    installCommand: "npm install -g @bytetrue/byspace",
+    installCommand: "curl -fsSL https://app.byspace.cc.cd/install.sh | sh",
     onboardCommand: `byspace onboard ${onboardFlags.join(" ")}`,
   };
 }

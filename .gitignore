@@ -93,7 +93,17 @@ app.json
 
 # Go single-binary build & embedded web assets
 /byspace
+/BySpace.app/
 /bin/
+!/build/
+/build/*
+!/build/android/
+!/build/darwin/
+/build/android/.gradle/
+/build/android/build/
+/build/android/app/build/
+/build/android/app/src/main/jniLibs/
+/build/android/local.properties
 # `go build ./workers/relay/` without -o drops this in the repo root.
 /relay
 !internal/webui/dist/

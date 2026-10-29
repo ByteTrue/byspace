@@ -108,6 +108,7 @@ func isASCIILetter(c byte) bool {
 // Kept as a list next to the dispatcher: a command missing from here would be shadowed by a
 // directory of the same name in the working directory.
 var knownCommandNames = map[string]bool{
+	"app": true, "gui": true, "tray": true, "healthcheck": true,
 	"serve": true, "web": true, "relay": true, "ls": true, "run": true, "logs": true,
 	"attach": true, "wait": true, "send": true, "stop": true, "start": true, "status": true,
 	"restart": true, "reload": true, "rm": true, "delete": true, "archive": true,

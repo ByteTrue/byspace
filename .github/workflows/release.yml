@@ -1,0 +1,222 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        required: true
+        default: main
+        type: string
+      publish:
+        description: "Attach built binaries and SHA256SUMS to GitHub Release (ref must be a v* tag)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+      - id: release
+        env:
+          SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+          SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "tag=$SOURCE_REF"
+            echo "version=$(node -p 'require("./package.json").version')"
+            echo "publish=$SHOULD_PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+
+  web-assets:
+    needs: context
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.4"
+          cache: npm
+      - run: npm ci
+      - run: make build-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+          if-no-files-found: error
+
+  build-cli-and-windows:
+    needs: [context, web-assets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: make release-cli release-windows VERSION="${{ needs.context.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-cli-windows
+          path: dist/byspace-*
+          if-no-files-found: error
+
+  build-linux-desktop:
+    needs: [context, web-assets]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install GTK3 and WebKit2GTK 4.1 headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: make release-linux-desktop GOARCH="${{ matrix.goarch }}" VERSION="${{ needs.context.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-desktop-${{ matrix.goarch }}
+          path: dist/byspace-linux-*
+          if-no-files-found: error
+
+  build-macos:
+    needs: [context, web-assets]
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [arm64, amd64]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: make dmg GOARCH="${{ matrix.goarch }}" VERSION="${{ needs.context.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos-${{ matrix.goarch }}
+          path: |
+            dist/byspace-darwin-*.zip
+            dist/byspace-darwin-*.dmg
+          if-no-files-found: error
+
+  build-android:
+    needs: [context, web-assets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK & SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+      - run: make build-android VERSION="${{ needs.context.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/byspace-android-arm64.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [context, build-cli-and-windows, build-linux-desktop, build-macos, build-android]
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: dist-*
+      - run: make checksums
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes_file=".github/release/$TAG.md"
+          if [[ ! -f "$notes_file" ]]; then
+            printf 'BySpace %s\n' "$TAG" > /tmp/RELEASE_NOTES.md
+            notes_file="/tmp/RELEASE_NOTES.md"
+          fi
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            args=(release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $TAG" --notes-file "$notes_file")
+            [[ "$TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}"
+          fi
+          gh release upload "$TAG" dist/byspace-* dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber

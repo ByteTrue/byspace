@@ -29,7 +29,16 @@ const RELEASE_STALL_MS = 750;
 function buildOutdatedDaemon(binary: string): void {
   execFileSync(
     "go",
-    ["build", "-ldflags", `-X main.version=${OUTDATED_VERSION}`, "-o", binary, "./cmd/byspace"],
+    [
+      "build",
+      "-tags",
+      "nogui",
+      "-ldflags",
+      `-X main.version=${OUTDATED_VERSION}`,
+      "-o",
+      binary,
+      ".",
+    ],
     { cwd: REPO_ROOT, stdio: "pipe" },
   );
 }

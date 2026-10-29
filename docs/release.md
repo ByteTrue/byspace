@@ -4,11 +4,11 @@ Use Node 22.23.4 and npm 10.9.9. Run release commands from a clean `main` checko
 
 ## Published targets
 
-| Target  | Publication path                                                             |
-| ------- | ---------------------------------------------------------------------------- |
-| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag                     |
-| Web/PWA | Relay Worker (`byspace-relay-go` stable, `byspace-relay-go-beta` prerelease) |
-| Docker  | `ghcr.io/bytetrue/byspace:<version>`                                         |
+| Target   | Publication path                                                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Binaries | GitHub Release assets (`byspace-cli-*`, `byspace-darwin-*.{dmg,zip}`, `byspace-windows-*.exe`, `byspace-linux-*`, `byspace-android-arm64.apk`, `SHA256SUMS`) |
+| Web/PWA  | Relay Worker (`byspace-relay-go` stable, `byspace-relay-go-beta` prerelease)                                                                                 |
+| Docker   | `ghcr.io/bytetrue/byspace:<version>`                                                                                                                         |
 
 Both channels deploy the Go Worker in `workers/relay`: stable Web releases to `app.byspace.cc.cd`, versions with a prerelease suffix to `app-beta.byspace.cc.cd`. Each hostname is a Cloudflare custom domain, and one custom domain routes to exactly one Worker, so the channels are two deployments of the same code rather than two implementations.
 

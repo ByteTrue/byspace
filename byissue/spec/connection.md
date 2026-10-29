@@ -11,7 +11,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 ## 安全边界
 
 - Hosted HTTPS 页面在创建 WebSocket 前拒绝非 loopback 的 `ws://` Direct endpoint，并给出可行动提示；loopback、`wss://`、Relay 与同源 Web UI 不受影响。
-- 上一条让**装成 PWA 与局域网明文直连互斥**：service worker 只在安全上下文里注册，而从 HTTPS 源加载的页面又连不了 `ws://192.168.x.x`。两者要同时成立，只能走 Relay、`wss://`，或给 daemon 配一张受信证书。原生 App 没有这个限制，它不是网页。影响到的能力见 [通知送达](notifications.md)。
+- 上一条让**浏览器装成 PWA 与局域网明文直连互斥**：service worker 只在安全上下文里注册，而从 HTTPS 源加载的浏览器页面又连不了 `ws://192.168.x.x`。Wails v3 Android 客户端（侧载 APK，运行于本地 `https://wails.localhost` 并开启 `MIXED_CONTENT_ALWAYS_ALLOW` 与 `usesCleartextTraffic`）不受此限制，可直接连接局域网/Tailscale 明文 `ws://` daemon。影响到的能力见 [通知送达](notifications.md) 与 [notes/019](../notes/019-wails-v3-in-process-assets-and-android-mixed-content.md)。
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
 - **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
 
@@ -39,7 +39,14 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 
 ## 自托管部署
 
-自托管的发布物是一个容器（`ghcr.io/bytetrue/byspace`）：web 静态资源与 relay 在同一镜像、同一端口（`https://host/` 与 `wss://host/ws`，TLS 反代下一张证书同时罩住两者）。daemon 不出镜像，只从 npm 安装 `@bytetrue/byspace`。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个 npm 包，见 `docs/docker.md`。
+自托管的发布物是一个容器（`ghcr.io/bytetrue/byspace`）：web 静态资源与 relay 在同一镜像、同一端口（`https://host/` 与 `wss://host/ws`，TLS 反代下一张证书同时罩住两者）。daemon 不出独立镜像，通过安装脚本直接安装预编译单二进制（`curl -fsSL https://app.byspace.cc.cd/install.sh | sh` 或 Windows `irm https://app.byspace.cc.cd/install.ps1 | iex`）。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个二进制，见 `docs/docker.md`。
+
+## 二进制直发与自更新
+
+- **不走 npm，全部产物由 GitHub Releases 直接分发并强制校验 `SHA256SUMS`**。
+- **安装脚本全平台行为统一**：`install.sh`（macOS / Linux / Termux）与 `install.ps1`（Windows）默认**只安装独立 CLI 二进制**（`byspace-cli-<os>-<arch>`）到 `~/.local/bin`；桌面与 Android 客户端常规从 GitHub Releases 下载安装包（`.dmg` / `.exe` / Linux 桌面二进制 / `.apk`），或向安装脚本显式传 `--app`。
+- **Android 侧载签名固定**：APK 仅作直接侧载分发，使用仓库固定签名证书保证跨机器/CI 构建的新版 APK 可直接覆盖安装升级。
+- **CLI 与客户端同源自更新**：`byspace update [check]` 与桌面客户端后台巡检共用 `internal/selfupdate`（支持 `--proxy` 与 `--mirror` 加速，哈希仍严格比对原始 `SHA256SUMS`）；桌面端在后台静默 stage 新版后通过托盘菜单一键重启切换或在退出时自动替换。
 
 - **配对链接跟随 `app.baseUrl`**。自托管 origin 下 `byspace onboard --web-origin <origin>` 一次设好 `app.baseUrl` 与 `daemon.cors.allowedOrigins`，之后生成的配对链接指向该 origin。命令幂等，daemon 已在跑时走热更新。`--hostnames` 是 Host header 检查（DNS rebinding 防护），与 CORS 无关，两者不合并。
 - **App 侧没有 relay 白名单。** relay 是每个 host 的连接属性，随 pairing offer 流入——认证材料（E2EE 公钥）只能这样传递。因此不提供手动添加 relay，也不在 host 设置里编辑 relay：首次部署与迁移是同一个漏斗，部署 compose → 打开自托管 web → 弹窗给出命令 → 粘贴配对链接。
@@ -50,3 +57,4 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 ## 历史证据
 
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
+- [Epic 2026-10-29：Wails v3 桌面端与 Android 客户端同构延伸及二进制直发](../epics/2026-10-29-x-wails-v3-desktop-and-android/spec.md)
