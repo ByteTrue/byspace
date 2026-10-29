@@ -5,6 +5,19 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.1 - 2026-10-29
+
+### Added
+
+- Pinned local ports and full in-place CRUD for daemon tunnels: port forwards now default to matching the remote port (and persist the assigned local port in `tunnels.json` across reconnects and restarts), support editing local/remote ports in place without re-entering credentials, allow comma-separated batch port input, and remove individual ports without dropping other forwards on the same peer
+- Native desktop and Android notification handling in Wails containers so enabling notifications succeeds immediately without requiring browser FCM Service Worker push subscriptions
+
+### Fixed
+
+- Fixed the Windows desktop app flashing black console windows when probing provider CLIs (`pi`, `claude`, `codex`) or running `git` and `powershell` subprocesses by routing all child commands through `proc.Command` with `CREATE_NO_WINDOW`
+- Fixed the Windows native title bar rendering as a mismatched grey strip by tinting `TitleBarColour` and DWM caption theme to match the active page surface color
+- Fixed the Desktop App settings card using plain text pressables instead of standard `DropdownMenu` and `Button` components
+
 ## 0.23.0 - 2026-10-29
 
 ### Added
