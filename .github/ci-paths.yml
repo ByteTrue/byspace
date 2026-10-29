@@ -51,8 +51,6 @@ sdk:
 browser:
   - "cmd/**"
   - "internal/**"
-  - "!internal/gui/**"
-  - "!internal/selfupdate/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
   - "packages/protocol/src/client-capabilities.ts"
   - "packages/app/src/**"

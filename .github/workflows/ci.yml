@@ -273,7 +273,7 @@ jobs:
   build-e2e:
     name: build-e2e
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -314,7 +314,7 @@ jobs:
     # surfaces as an instant failure with no jobs and the file path shown instead of the name.
     name: playwright (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: [changes, build-e2e]
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
     strategy:
       # Shards are independent. One failing shard must not cancel the others: the point of a
