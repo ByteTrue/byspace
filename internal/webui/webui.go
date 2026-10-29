@@ -285,13 +285,14 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 		"&", `\u0026`,
 	).Replace(string(b))
 
-	// When explicitListen is set, we are serving inside a Wails desktop window: inject window
-	// drag region rules so the top 36px strip drags the window while buttons remain clickable.
-	wailsStyle := ""
+	// When explicitListen is set, we are serving inside a Wails desktop window: load Wails'
+	// /wails/runtime.js (which registers the --wails-draggable mouse handlers and double-click zoom)
+	// and inject drag rules so the top 36px header strip drags the window while controls stay clickable.
+	wailsHead := ""
 	if explicitListen != "" {
-		wailsStyle = `<style>[data-wails-drag="true"]{--wails-draggable:drag}button,[role="button"],a,input,textarea,select,[data-menu-item="true"]{--wails-draggable:no-drag}</style>`
+		wailsHead = `<script type="module" src="/wails/runtime.js"></script><style>[data-wails-drag="true"]{--wails-draggable:drag}button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]{--wails-draggable:no-drag}</style><script>window.addEventListener("mousedown",function(e){if(e.clientY>=0&&e.clientY<=38&&e.target instanceof HTMLElement&&!e.target.closest('button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]')){e.target.style.setProperty("--wails-draggable","drag")}},true);</script>`
 	}
-	script := wailsStyle + "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
+	script := wailsHead + "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
 	htmlStr := string(htmlBytes)
 	lower := strings.ToLower(htmlStr)
 	if idx := strings.Index(lower, "</head>"); idx != -1 {
