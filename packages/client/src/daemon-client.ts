@@ -5432,7 +5432,7 @@ export class DaemonClient {
       url: string;
       password: string;
       daemonPublicKeyB64?: string;
-      forwards: Array<{ remotePort: number; label?: string }>;
+      forwards: Array<{ remotePort: number; localPort?: number; label?: string }>;
     },
     requestId?: string,
   ): Promise<Extract<TunnelCreateResponse, { type: "tunnel.create.response" }>["payload"]> {

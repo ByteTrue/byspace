@@ -1663,6 +1663,7 @@ export const TunnelCreateRequestSchema = z.object({
       .array(
         z.object({
           remotePort: z.number().int().min(1).max(65535),
+          localPort: z.number().int().min(1).max(65535).optional(),
           label: z.string().optional(),
         }),
       )

@@ -7,8 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"sort"
 	"strings"
 	"sync"
@@ -1408,7 +1409,7 @@ func (s *Store) MutateLabelCatalog(mutate func(*LabelCatalog) (map[string]any, b
 
 // gitRemoteURL reads origin's URL for the repository at repoPath, or "" when there is none.
 func gitRemoteURL(repoPath string) string {
-	out, err := exec.Command("git", "-C", repoPath, "config", "--get", "remote.origin.url").Output()
+	out, err := proc.Command("git", "-C", repoPath, "config", "--get", "remote.origin.url").Output()
 	if err != nil {
 		return ""
 	}
@@ -1426,7 +1427,7 @@ func (s *Store) SetServerID(serverID string) {
 // repository. The value feeds project-key derivation: a repo root and one of its subdirectories
 // are different projects (`#subdir:` suffix), while being the root itself is not.
 func gitRepoRoot(repoPath string) string {
-	out, err := exec.Command("git", "-C", repoPath, "rev-parse", "--show-toplevel").Output()
+	out, err := proc.Command("git", "-C", repoPath, "rev-parse", "--show-toplevel").Output()
 	if err == nil {
 		if root := strings.TrimSpace(string(out)); root != "" {
 			return root
@@ -1642,7 +1643,7 @@ func DeriveWorkspaceDisplayName(cwd string) string {
 // Separate from gitRepoRoot because a failure to read the branch must not make the repository
 // look like a non-repository.
 func gitCurrentBranch(repoPath string) (string, error) {
-	out, err := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	out, err := proc.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return "", err
 	}

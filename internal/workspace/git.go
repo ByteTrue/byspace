@@ -7,8 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"regexp"
 	"sort"
 	"strconv"
@@ -144,7 +145,7 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 		return "", acquireErr
 	}
 	defer release()
-	cmd := exec.CommandContext(cctx, "git", args...)
+	cmd := proc.CommandContext(cctx, "git", args...)
 	cmd.Dir = cwd
 	// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would
 	// otherwise sit waiting for a prompt nobody can answer, until the timeout fires.

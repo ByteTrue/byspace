@@ -484,6 +484,7 @@ async function createTunnelFromOffer(input: {
   offerUrl: string;
   password: string;
   remotePort: number;
+  localPort?: number;
 }): Promise<{ ok: boolean; error?: string }> {
   const parsed = parsePairingOfferUrl(input.offerUrl);
   if (!parsed.ok) {
@@ -501,7 +502,12 @@ async function createTunnelFromOffer(input: {
     }),
     password: input.password,
     daemonPublicKeyB64: offer.daemonPublicKeyB64,
-    forwards: [{ remotePort: input.remotePort }],
+    forwards: [
+      {
+        remotePort: input.remotePort,
+        ...(input.localPort ? { localPort: input.localPort } : {}),
+      },
+    ],
   });
 }
 
@@ -537,6 +543,7 @@ function AddTunnelSheet({
   const [offerUrl, setOfferUrl] = useState("");
   const [password, setPassword] = useState("");
   const [remotePort, setRemotePort] = useState("");
+  const [localPort, setLocalPort] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -617,6 +624,15 @@ function AddTunnelSheet({
       setError(t("tunnels.addForm.invalidPort"));
       return;
     }
+    let parsedLocalPort: number | undefined;
+    if (localPort.trim().length > 0) {
+      const lp = Number.parseInt(localPort.trim(), 10);
+      if (!Number.isInteger(lp) || lp < 1 || lp > 65535) {
+        setError(t("tunnels.addForm.invalidPort"));
+        return;
+      }
+      parsedLocalPort = lp;
+    }
     if (!password) {
       setError(t("tunnels.addForm.passwordRequired"));
       return;
@@ -636,13 +652,19 @@ function AddTunnelSheet({
               ...(selection.target.daemonPublicKeyB64
                 ? { daemonPublicKeyB64: selection.target.daemonPublicKeyB64 }
                 : {}),
-              forwards: [{ remotePort: port }],
+              forwards: [
+                {
+                  remotePort: port,
+                  ...(parsedLocalPort ? { localPort: parsedLocalPort } : {}),
+                },
+              ],
             })
           : await createTunnelFromOffer({
               client,
               offerUrl: selection.url,
               password,
               remotePort: port,
+              ...(parsedLocalPort ? { localPort: parsedLocalPort } : {}),
             });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
@@ -654,7 +676,7 @@ function AddTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [client, password, remotePort, onCreated, resolveSelection, t]);
+  }, [client, localPort, password, remotePort, onCreated, resolveSelection, t]);
 
   const submit = useCallback(() => {
     void submitAsync();
@@ -701,6 +723,14 @@ function AddTunnelSheet({
           placeholder="3000"
           keyboardType="number-pad"
           testID="tunnels-add-port-input"
+        />
+      </Field>
+      <Field label={t("tunnels.addForm.localPortLabel", { defaultValue: "Local port (optional)" })}>
+        <FormTextInput
+          onChangeText={setLocalPort}
+          placeholder={remotePort.trim() || "Auto (pinned on first bind)"}
+          keyboardType="number-pad"
+          testID="tunnels-add-local-port-input"
         />
       </Field>
       {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}

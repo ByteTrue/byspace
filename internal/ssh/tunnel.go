@@ -3,6 +3,7 @@ package ssh
 import (
 	"errors"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"net"
 	"os/exec"
 	"strings"
@@ -63,7 +64,7 @@ func (t *Tunnel) accept(args []string) {
 	t.conn = conn
 	t.mu.Unlock()
 
-	child := exec.Command("ssh", args...)
+	child := proc.Command("ssh", args...)
 	stdin, stdinErr := child.StdinPipe()
 	stdout, stdoutErr := child.StdoutPipe()
 	if stdinErr != nil || stdoutErr != nil {

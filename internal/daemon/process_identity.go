@@ -1,10 +1,11 @@
 package daemon
 
 import (
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 )
 
 // Process identity checking, following managed-processes.ts.
@@ -22,14 +23,14 @@ func ProcessCommandLine(pid int) string {
 	switch runtime.GOOS {
 	case "windows":
 		// CIM is the supported replacement for wmic, which is removed from current Windows.
-		out, err := exec.Command("powershell", "-NoProfile", "-Command",
+		out, err := proc.Command("powershell", "-NoProfile", "-Command",
 			"(Get-CimInstance Win32_Process -Filter \"ProcessId="+strconv.Itoa(pid)+"\").CommandLine").Output()
 		if err != nil {
 			return ""
 		}
 		return strings.TrimSpace(string(out))
 	default:
-		out, err := exec.Command("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+		out, err := proc.Command("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
 		if err != nil {
 			return ""
 		}

@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"os/exec"
 	"strings"
 	"sync"
@@ -92,7 +93,7 @@ func (s *ACPSession) acpCreateTerminal(rpcID any, params map[string]any) {
 		return
 	}
 
-	cmd := exec.Command(command, args...)
+	cmd := proc.Command(command, args...)
 	if cwd, ok := params["cwd"].(string); ok && strings.TrimSpace(cwd) != "" {
 		cmd.Dir = cwd
 	}

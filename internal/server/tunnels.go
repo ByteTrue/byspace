@@ -309,6 +309,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 			DaemonPublicKey string  `json:"daemonPublicKeyB64"`
 			Forwards        []struct {
 				RemotePort int    `json:"remotePort"`
+				LocalPort  int    `json:"localPort"`
 				Label      string `json:"label"`
 			} `json:"forwards"`
 		} `json:"config"`
@@ -317,7 +318,11 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 
 	forwards := make([]tunnel.ForwardConfig, 0, len(req.Config.Forwards))
 	for _, forward := range req.Config.Forwards {
-		forwards = append(forwards, tunnel.ForwardConfig{RemotePort: forward.RemotePort, Label: forward.Label})
+		forwards = append(forwards, tunnel.ForwardConfig{
+			RemotePort: forward.RemotePort,
+			LocalPort:  forward.LocalPort,
+			Label:      forward.Label,
+		})
 	}
 
 	err := s.tunnelRegistry().Add(tunnel.PeerConfig{

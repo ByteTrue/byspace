@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"strings"
 )
 
@@ -144,7 +145,7 @@ func equalStrings(left, right []string) bool {
 
 // runGitCommandOutput runs a read-only git command and returns its stdout.
 func runGitCommandOutput(ctx context.Context, repoRoot string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := proc.CommandContext(ctx, "git", args...)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.Output()

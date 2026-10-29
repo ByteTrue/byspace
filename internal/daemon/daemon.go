@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"html"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"strconv"
 	"strings"
 	"time"
@@ -370,7 +371,7 @@ func spawnBackground(exePath, homeDir string, args []string) (int, error) {
 	}
 	defer logFile.Close()
 
-	cmd := exec.Command(exePath, args...)
+	cmd := proc.Command(exePath, args...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.Stdin = nil

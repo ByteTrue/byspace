@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"strings"
 	"time"
 
@@ -1105,7 +1107,7 @@ func (s *Server) handleEditors(ctx context.Context, sink frameSink, msgType stri
 		} else {
 			args = append(args, req.Path)
 		}
-		cmd := exec.Command(target, args...)
+		cmd := proc.Command(target, args...)
 		if strings.TrimSpace(req.Cwd) != "" {
 			cmd.Dir = req.Cwd
 		}

@@ -5,7 +5,6 @@ package proc
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -13,7 +12,7 @@ import (
 )
 
 func listeningOn(ctx context.Context, port int) ([]int, error) {
-	out, err := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command",
+	out, err := CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`try { Get-NetTCPConnection -State Listen -LocalPort `+strconv.Itoa(port)+` -ErrorAction Stop | ForEach-Object { $_.OwningProcess } } `+
 			`catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { exit 0 }; [Console]::Error.WriteLine($_); exit 1 }`).Output()
 	if err != nil {

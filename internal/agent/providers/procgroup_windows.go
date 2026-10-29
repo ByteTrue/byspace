@@ -4,6 +4,7 @@ package providers
 
 import (
 	"context"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"os/exec"
 	"strconv"
 )
@@ -13,7 +14,7 @@ import (
 // Windows has no process groups in the POSIX sense; `taskkill /T` is what kills a tree, and it is
 // invoked from killProcessGroup.
 func defaultStartProcess(ctx context.Context, command string, args []string, dir string, env []string) (*exec.Cmd, error) {
-	cmd := exec.CommandContext(ctx, command, args...)
+	cmd := proc.CommandContext(ctx, command, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	if err := cmd.Start(); err != nil {
@@ -31,7 +32,7 @@ func killProcessGroup(cmd *exec.Cmd, force bool) error {
 	if force {
 		args = append(args, "/F")
 	}
-	if err := exec.Command("taskkill", args...).Run(); err != nil {
+	if err := proc.Command("taskkill", args...).Run(); err != nil {
 		return cmd.Process.Kill()
 	}
 	return nil

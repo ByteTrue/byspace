@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,7 +92,7 @@ func Probe(ctx context.Context, executablePath string) bool {
 	probeCtx, cancel := context.WithTimeout(ctx, ProbeTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(probeCtx, executablePath, "--version")
+	cmd := proc.CommandContext(probeCtx, executablePath, "--version")
 	// Some CLIs write version output to stderr; both streams must be drained or the process can
 	// block on a full pipe before it exits.
 	cmd.Stdout = nil
@@ -179,7 +180,7 @@ func Version(ctx context.Context, executablePath string) (string, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, ProbeTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(probeCtx, executablePath, "--version")
+	cmd := proc.CommandContext(probeCtx, executablePath, "--version")
 	var combined strings.Builder
 	cmd.Stdout = &combined
 	cmd.Stderr = &combined

@@ -102,18 +102,28 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 	}
 }
 
-// AddForward exposes one remote port locally.
-//
-// Binding happens immediately so the caller learns about a port collision at configuration time
-// rather than when the first request arrives.
+// AddForward exposes one remote port locally on an ephemeral port (or use AddForwardWithLocalPort
+// to bind a fixed local port).
 func (m *Manager) AddForward(remotePort int, label string) (*forward, error) {
+	return m.AddForwardWithLocalPort(remotePort, 0, label)
+}
+
+// AddForwardWithLocalPort exposes one remote port locally, binding preferredLocalPort when > 0.
+func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, label string) (*forward, error) {
 	if remotePort < 1 || remotePort > 65535 {
 		return nil, fmt.Errorf("remotePort %d out of range", remotePort)
 	}
+	if preferredLocalPort < 0 || preferredLocalPort > 65535 {
+		return nil, fmt.Errorf("localPort %d out of range", preferredLocalPort)
+	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listenAddr := "127.0.0.1:0"
+	if preferredLocalPort > 0 {
+		listenAddr = fmt.Sprintf("127.0.0.1:%d", preferredLocalPort)
+	}
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open local listener for %d: %w", remotePort, err)
+		return nil, fmt.Errorf("cannot open local listener on %s for remote %d: %w", listenAddr, remotePort, err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 

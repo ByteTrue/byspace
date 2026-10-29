@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"os/exec"
 	"strings"
 	"time"
@@ -130,7 +131,7 @@ func runForgeProbe(cwd, binary string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), forgeProbeDeadline)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := proc.CommandContext(ctx, binary, args...)
 	cmd.Dir = cwd
 	// Covers the case the deadline cannot: the process exits but a child keeps its pipes open.
 	cmd.WaitDelay = 2 * time.Second

@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"github.com/ByteTrue/byspace/internal/workspace"
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,7 +189,7 @@ func AllocatePortFromScript(ctx context.Context, command, cwd, scriptName, works
 	// `bash -c "<cmd>" a b` binds `a` to $0 of the *shell*, and a script the command line invokes
 	// does not inherit them — `node port.js` would start with an empty argv either way.
 	invocation := workspace.PortScriptInvocation(command, []string{scriptName, workspaceID, branchName, cwd})
-	cmd := exec.CommandContext(sctx, invocation.Shell, invocation.Args...)
+	cmd := proc.CommandContext(sctx, invocation.Shell, invocation.Args...)
 	cmd.Dir = cwd
 	cmd.Env = home.ExternalProcessEnv(os.Environ())
 	cmd.Env = append(cmd.Env,

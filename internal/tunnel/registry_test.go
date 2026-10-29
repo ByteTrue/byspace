@@ -159,3 +159,58 @@ func TestAggregateState(t *testing.T) {
 		t.Fatalf("connecting = %q", got)
 	}
 }
+
+func TestRegistryPinsLocalPortAcrossRestartsAndMergesForwards(t *testing.T) {
+	dir := t.TempDir()
+	r := NewRegistry(dir, t.Logf)
+	r.SetPeerFactory(func(PeerConfig) (PeerConn, error) { return nil, nil })
+	r.SetEnabled(true)
+
+	// 1. Add forward 3425 with LocalPort=0; startPeer must pin the assigned LocalPort into tunnels.json.
+	if err := r.Add(PeerConfig{
+		PeerID: "peer-mac",
+		URL:    "wss://app.byspace.cc.cd/ws",
+		Forwards: []ForwardConfig{
+			{RemotePort: 3425},
+		},
+	}); err != nil {
+		t.Fatalf("Add 3425: %v", err)
+	}
+
+	// 2. Add a second forward 3430 for the same peer; both 3425 and 3430 must be preserved.
+	if err := r.Add(PeerConfig{
+		PeerID: "peer-mac",
+		URL:    "wss://app.byspace.cc.cd/ws",
+		Forwards: []ForwardConfig{
+			{RemotePort: 3430},
+		},
+	}); err != nil {
+		t.Fatalf("Add 3430: %v", err)
+	}
+
+	peers := r.List()
+	if len(peers) != 1 || len(peers[0].Forwards) != 2 {
+		t.Fatalf("expected 1 peer with 2 forwards, got %+v", peers)
+	}
+	pinned3425 := peers[0].Forwards[0].LocalPort
+	pinned3430 := peers[0].Forwards[1].LocalPort
+	if pinned3425 <= 0 || pinned3430 <= 0 {
+		t.Fatalf("expected positive pinned local ports, got %d, %d", pinned3425, pinned3430)
+	}
+	r.Close()
+
+	// 3. Restart registry from disk: it must re-bind the exact same pinned LocalPort values.
+	r2 := NewRegistry(dir, t.Logf)
+	defer r2.Close()
+	r2.SetPeerFactory(func(PeerConfig) (PeerConn, error) { return nil, nil })
+	r2.SetEnabled(true)
+
+	peers2 := r2.List()
+	if len(peers2) != 1 || len(peers2[0].Forwards) != 2 {
+		t.Fatalf("after restart: got %+v", peers2)
+	}
+	if peers2[0].Forwards[0].LocalPort != pinned3425 || peers2[0].Forwards[1].LocalPort != pinned3430 {
+		t.Fatalf("expected local ports (%d, %d) to stay pinned across restarts, got (%d, %d)",
+			pinned3425, pinned3430, peers2[0].Forwards[0].LocalPort, peers2[0].Forwards[1].LocalPort)
+	}
+}

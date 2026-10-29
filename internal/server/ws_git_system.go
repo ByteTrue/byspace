@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 	"regexp"
 	"strings"
 	"time"
@@ -670,7 +671,7 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		if dst == "" {
 			dst = filepath.Join(s.homeDir, "clones", filepath.Base(repo))
 		}
-		if err := exec.CommandContext(ctx, "git", "clone", repo, dst).Run(); err != nil {
+		if err := proc.CommandContext(ctx, "git", "clone", repo, dst).Run(); err != nil {
 			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
 				"requestId":    base.RequestID,
 				"repo":         repo,

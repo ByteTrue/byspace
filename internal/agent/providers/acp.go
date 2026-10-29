@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
 	"os"
 	"os/exec"
@@ -66,7 +67,7 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 		bin = spec.Binary
 	}
 
-	cmd := exec.Command(bin, args...)
+	cmd := proc.Command(bin, args...)
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
 	}

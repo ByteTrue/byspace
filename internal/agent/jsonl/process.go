@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
 	"os"
 	"os/exec"
@@ -89,7 +90,7 @@ func Start(cfg LaunchConfig) (*Process, error) {
 	if strings.TrimSpace(cfg.Command) == "" {
 		return nil, errors.New("empty command for JSONL RPC process")
 	}
-	cmd := exec.Command(cfg.Command, cfg.Args...)
+	cmd := proc.Command(cfg.Command, cfg.Args...)
 	// Own process group: killing only the parent would orphan whatever the provider spawned.
 	setupProcessGroup(cmd)
 	if cfg.Cwd != "" {

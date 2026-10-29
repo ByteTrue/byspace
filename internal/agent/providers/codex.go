@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
 	"os"
 	"os/exec"
@@ -67,7 +68,7 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		bin = "codex"
 	}
 	args := []string{"app-server"}
-	cmd := exec.Command(bin, args...)
+	cmd := proc.Command(bin, args...)
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
 	}

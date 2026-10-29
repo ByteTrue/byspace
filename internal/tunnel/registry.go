@@ -32,6 +32,7 @@ type PeerConfig struct {
 // ForwardConfig is one port to expose locally.
 type ForwardConfig struct {
 	RemotePort int    `json:"remotePort"`
+	LocalPort  int    `json:"localPort,omitempty"`
 	Label      string `json:"label,omitempty"`
 }
 
@@ -207,11 +208,31 @@ func (r *Registry) Start() {
 // startPeer builds a manager for one peer and attaches its connection.
 func (r *Registry) startPeer(peer PeerConfig) error {
 	manager := NewManager(peer.PeerID, derefString(peer.PeerHostname), r.logf)
-	for _, forward := range peer.Forwards {
-		if _, err := manager.AddForward(forward.RemotePort, forward.Label); err != nil {
+	updatedPin := false
+	for i := range peer.Forwards {
+		forward := &peer.Forwards[i]
+		f, err := manager.AddForwardWithLocalPort(forward.RemotePort, forward.LocalPort, forward.Label)
+		if err != nil {
 			_ = manager.Close()
 			return err
 		}
+		// Pin the assigned local port into tunnels.json so future reconnects and restarts
+		// keep binding the exact same local port instead of picking a random port each time.
+		if forward.LocalPort == 0 && f != nil && f.localPort > 0 {
+			forward.LocalPort = f.localPort
+			updatedPin = true
+		}
+	}
+	if updatedPin {
+		r.mu.Lock()
+		for idx := range r.peers {
+			if r.peers[idx].PeerID == peer.PeerID {
+				r.peers[idx].Forwards = append([]ForwardConfig(nil), peer.Forwards...)
+				break
+			}
+		}
+		r.mu.Unlock()
+		_ = r.save()
 	}
 
 	r.mu.Lock()
@@ -395,12 +416,39 @@ func (r *Registry) Add(peer PeerConfig) error {
 		if forward.RemotePort < 1 || forward.RemotePort > 65535 {
 			return fmt.Errorf("remotePort %d out of range", forward.RemotePort)
 		}
+		if forward.LocalPort < 0 || forward.LocalPort > 65535 {
+			return fmt.Errorf("localPort %d out of range", forward.LocalPort)
+		}
 	}
 
 	r.mu.Lock()
 	replaced := false
 	for index := range r.peers {
 		if r.peers[index].PeerID == peer.PeerID {
+			// Merge forwards by RemotePort so adding a second port (e.g. 3430 after 3425) for
+			// the same peer preserves existing forwarded ports instead of overwriting them.
+			merged := make([]ForwardConfig, 0, len(r.peers[index].Forwards)+len(peer.Forwards))
+			incoming := make(map[int]ForwardConfig, len(peer.Forwards))
+			for _, fw := range peer.Forwards {
+				incoming[fw.RemotePort] = fw
+			}
+			for _, oldFw := range r.peers[index].Forwards {
+				if up, exists := incoming[oldFw.RemotePort]; exists {
+					if up.LocalPort == 0 && oldFw.LocalPort > 0 {
+						up.LocalPort = oldFw.LocalPort
+					}
+					merged = append(merged, up)
+					delete(incoming, oldFw.RemotePort)
+				} else {
+					merged = append(merged, oldFw)
+				}
+			}
+			for _, fw := range peer.Forwards {
+				if up, still := incoming[fw.RemotePort]; still {
+					merged = append(merged, up)
+				}
+			}
+			peer.Forwards = merged
 			r.peers[index] = peer
 			replaced = true
 			break

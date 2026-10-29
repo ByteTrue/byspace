@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"net/url"
 	"os/exec"
 	"sort"
@@ -17,7 +18,7 @@ import (
 func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, bin, args...)
+	cmd := proc.CommandContext(cctx, bin, args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}

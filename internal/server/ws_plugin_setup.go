@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -194,7 +194,7 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		// bash -c, not -lc: a project-authored command must not depend on the user's login
 		// shell files, which can change PATH or cd elsewhere.
 		invocation := workspace.BuildShellInvocation(command)
-		cmd := exec.Command(invocation.Shell, invocation.Args...)
+		cmd := proc.Command(invocation.Shell, invocation.Args...)
 		cmd.Dir = cwd
 		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive
 		// bash source an arbitrary file before the project command runs.

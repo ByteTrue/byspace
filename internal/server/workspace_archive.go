@@ -2,8 +2,8 @@ package server
 
 import (
 	"context"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/ByteTrue/byspace/internal/home"
@@ -165,7 +165,7 @@ func (s *Server) runWorktreeTeardownCommands(ctx context.Context, worktreePath s
 			return &message
 		}
 		invocation := workspace.BuildShellInvocation(command)
-		cmd := exec.CommandContext(ctx, invocation.Shell, invocation.Args...)
+		cmd := proc.CommandContext(ctx, invocation.Shell, invocation.Args...)
 		cmd.Dir = worktreePath
 		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive bash
 		// source an arbitrary file before the project command runs.
