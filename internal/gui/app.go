@@ -67,6 +67,7 @@ func withDesktopSettingsAPI(
 	sup *DaemonSupervisor,
 	updater *ClientUpdater,
 	onDockChanged func(DesktopSettings),
+	onTintTitleBar func([3]uint8, bool),
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/_byspace/desktop/settings" {
@@ -79,16 +80,18 @@ func withDesktopSettingsAPI(
 			case http.MethodPost:
 				current := LoadDesktopSettings(homeDir)
 				var patch struct {
-					KeepAwake      *string `json:"keepAwake"`
-					HideFromDock   *bool   `json:"hideFromDock"`
-					OpenAtLogin    *bool   `json:"openAtLogin"`
-					Lightweight    *bool   `json:"lightweight"`
-					NoAutoUpdate   *bool   `json:"noAutoUpdate"`
-					NoAutoDownload *bool   `json:"noAutoDownload"`
-					AutoRestart    *bool   `json:"autoRestart"`
-					LinkCLI        bool    `json:"linkCLI"`
-					TakeOverDaemon bool    `json:"takeOverDaemon"`
-					CreateBackup   bool    `json:"createBackup"`
+					KeepAwake      *string   `json:"keepAwake"`
+					HideFromDock   *bool     `json:"hideFromDock"`
+					OpenAtLogin    *bool     `json:"openAtLogin"`
+					Lightweight    *bool     `json:"lightweight"`
+					NoAutoUpdate   *bool     `json:"noAutoUpdate"`
+					NoAutoDownload *bool     `json:"noAutoDownload"`
+					AutoRestart    *bool     `json:"autoRestart"`
+					LinkCLI        bool      `json:"linkCLI"`
+					TakeOverDaemon bool      `json:"takeOverDaemon"`
+					CreateBackup   bool      `json:"createBackup"`
+					TitleBarColor  *[3]uint8 `json:"titleBarColor"`
+					TitleBarDark   *bool     `json:"titleBarDark"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -112,6 +115,16 @@ func withDesktopSettingsAPI(
 				}
 				if patch.AutoRestart != nil {
 					current.AutoRestart = *patch.AutoRestart
+				}
+				if patch.TitleBarColor != nil {
+					c := *patch.TitleBarColor
+					current.TitleBarColor = &c
+					if patch.TitleBarDark != nil {
+						current.TitleBarDark = *patch.TitleBarDark
+					}
+					if onTintTitleBar != nil {
+						onTintTitleBar(c, current.TitleBarDark)
+					}
 				}
 				if err := SaveDesktopSettings(homeDir, current); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -218,9 +231,23 @@ func Run(version string, showMain bool, initialLink string) error {
 				WithExplicitConnectionHint(sup.Addr, "BySpace").
 				WithLocalCredential(localToken)
 		}
-		assetHandler = withDesktopSettingsAPI(uiHandler, homeDir, sup, updater, func(s DesktopSettings) {
-			syncDockPolicy(s, true)
-		})
+		assetHandler = withDesktopSettingsAPI(
+			uiHandler,
+			homeDir,
+			sup,
+			updater,
+			func(s DesktopSettings) {
+				syncDockPolicy(s, true)
+			},
+			func(rgb [3]uint8, dark bool) {
+				winMu.Lock()
+				w := mainWin
+				winMu.Unlock()
+				if w != nil {
+					tintWindowsTitleBar(w, rgb, dark)
+				}
+			},
+		)
 
 		// Start intelligent sleep inhibition (Keep Awake while agents work + 10m grace)
 		go awake.Keep(bgCtx, func() awake.Level {
@@ -252,16 +279,19 @@ func Run(version string, showMain bool, initialLink string) error {
 			width, height = prefs.WindowWidth, prefs.WindowHeight
 		}
 		startHidden := hidden || runtime.GOOS == "windows"
+		winOpts, winBg := initialWindowsChrome(prefs)
 		w := app.Window.NewWithOptions(application.WebviewWindowOptions{
-			Name:      "main",
-			Title:     "BySpace",
-			URL:       url,
-			Width:     width,
-			Height:    height,
-			MinWidth:  800,
-			MinHeight: 560,
-			Hidden:    startHidden,
-			Mac:       mainMacWindowOptions(),
+			Name:             "main",
+			Title:            "BySpace",
+			URL:              url,
+			Width:            width,
+			Height:           height,
+			MinWidth:         800,
+			MinHeight:        560,
+			Hidden:           startHidden,
+			Mac:              mainMacWindowOptions(),
+			Windows:          winOpts,
+			BackgroundColour: winBg,
 		})
 
 		if !isAndroid {
@@ -303,6 +333,13 @@ func Run(version string, showMain bool, initialLink string) error {
 			if runtime.GOOS == "windows" {
 				var shownOnce atomic.Bool
 				w.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
+					if frameOnlyResizeJS != "" {
+						w.ExecJS(frameOnlyResizeJS)
+					}
+					s := LoadDesktopSettings(homeDir)
+					if s.TitleBarColor != nil {
+						tintWindowsTitleBar(w, *s.TitleBarColor, s.TitleBarDark)
+					}
 					if !hidden && shownOnce.CompareAndSwap(false, true) {
 						application.InvokeAsync(func() {
 							w.Show().Focus()

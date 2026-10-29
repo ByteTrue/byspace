@@ -19,14 +19,16 @@ const (
 
 // DesktopSettings stores the desktop client preferences in $BYSPACE_HOME/desktop.json.
 type DesktopSettings struct {
-	KeepAwake      string `json:"keepAwake,omitempty"` // "off" | "system" (default) | "display"
-	HideFromDock   bool   `json:"hideFromDock"`        // macOS: hide from Dock when main window is closed
-	Lightweight    bool   `json:"lightweight"`
-	NoAutoUpdate   bool   `json:"noAutoUpdate"`
-	NoAutoDownload bool   `json:"noAutoDownload"`
-	AutoRestart    bool   `json:"autoRestart"`
-	WindowWidth    int    `json:"windowWidth,omitempty"`
-	WindowHeight   int    `json:"windowHeight,omitempty"`
+	KeepAwake      string    `json:"keepAwake,omitempty"` // "off" | "system" (default) | "display"
+	HideFromDock   bool      `json:"hideFromDock"`        // macOS: hide from Dock when main window is closed
+	Lightweight    bool      `json:"lightweight"`
+	NoAutoUpdate   bool      `json:"noAutoUpdate"`
+	NoAutoDownload bool      `json:"noAutoDownload"`
+	AutoRestart    bool      `json:"autoRestart"`
+	WindowWidth    int       `json:"windowWidth,omitempty"`
+	WindowHeight   int       `json:"windowHeight,omitempty"`
+	TitleBarColor  *[3]uint8 `json:"titleBarColor,omitempty"`
+	TitleBarDark   bool      `json:"titleBarDark,omitempty"`
 }
 
 // EffectiveKeepAwake returns the normalized awake.Level (defaulting empty to awake.System).

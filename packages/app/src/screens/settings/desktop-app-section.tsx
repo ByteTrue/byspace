@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
+import { StyleSheet } from "react-native-unistyles";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { settingsStyles } from "@/styles/settings";
@@ -35,6 +39,8 @@ interface DesktopSettingsResponse {
   daemonStatus?: DaemonHostStatus;
   backupCount?: number;
 }
+
+const KEEP_AWAKE_LEVELS: readonly KeepAwakeLevel[] = ["system", "display", "off"];
 
 function isWailsDesktopContainer(): boolean {
   if (!isWeb || typeof window === "undefined") {
@@ -71,12 +77,6 @@ function resolveKeepAwakeLabel(isZh: boolean, level: KeepAwakeLevel): string {
   if (level === "off") return "Off";
   if (level === "display") return "System & Display";
   return "System";
-}
-
-function nextKeepAwakeLevel(current: KeepAwakeLevel): KeepAwakeLevel {
-  if (current === "system") return "display";
-  if (current === "display") return "off";
-  return "system";
 }
 
 function resolveDaemonDescription(isZh: boolean, st: DaemonHostStatus | null): string {
@@ -167,6 +167,29 @@ function resolveDesktopCopy(
   };
 }
 
+interface KeepAwakeMenuItemProps {
+  level: KeepAwakeLevel;
+  label: string;
+  selected: boolean;
+  onSelectLevel: (level: KeepAwakeLevel) => void;
+}
+
+function KeepAwakeMenuItem({ level, label, selected, onSelectLevel }: KeepAwakeMenuItemProps) {
+  const handleSelect = useCallback(() => {
+    onSelectLevel(level);
+  }, [level, onSelectLevel]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {label}
+    </DropdownMenuItem>
+  );
+}
+
+const triggerStyle = ({ pressed }: PressableStateCallbackType) => [
+  styles.dropdownTrigger,
+  pressed && { opacity: 0.7 },
+];
+
 export function DesktopAppSection() {
   const { i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
@@ -226,9 +249,10 @@ export function DesktopAppSection() {
     (value: boolean) => sendPatch({ hideFromDock: !value }),
     [sendPatch],
   );
-  const handleCycleKeepAwake = useCallback(() => {
-    sendPatch({ keepAwake: nextKeepAwakeLevel(keepAwake) });
-  }, [keepAwake, sendPatch]);
+  const handleSelectKeepAwake = useCallback(
+    (level: KeepAwakeLevel) => sendPatch({ keepAwake: level }),
+    [sendPatch],
+  );
   const handleLightweightChange = useCallback(
     (value: boolean) => sendPatch({ lightweight: value }),
     [sendPatch],
@@ -265,6 +289,7 @@ export function DesktopAppSection() {
     daemonSt && !daemonSt.inProcess && daemonSt.reason === "external-byspace",
   );
   const copy = resolveDesktopCopy(isZh, autoDownloadEnabled, state?.backupCount ?? 0, daemonSt);
+  const selectedKeepAwakeLabel = resolveKeepAwakeLabel(isZh, keepAwake);
 
   return (
     <SettingsSection title={copy.sectionTitle}>
@@ -300,14 +325,27 @@ export function DesktopAppSection() {
             <Text style={settingsStyles.rowTitle}>{copy.keepAwakeLabel}</Text>
             <Text style={settingsStyles.rowHint}>{copy.keepAwakeHint}</Text>
           </View>
-          <Pressable
-            onPress={handleCycleKeepAwake}
-            accessibilityRole="button"
-            accessibilityLabel={copy.keepAwakeLabel}
-            testID="desktop-keep-awake-button"
-          >
-            <Text style={settingsStyles.rowTitle}>{resolveKeepAwakeLabel(isZh, keepAwake)}</Text>
-          </Pressable>
+          <DropdownMenu>
+            <DropdownTrigger
+              accessibilityRole="button"
+              accessibilityLabel={`${copy.keepAwakeLabel}: ${selectedKeepAwakeLabel}`}
+              style={triggerStyle}
+              testID="desktop-keep-awake-button"
+            >
+              <Text style={styles.dropdownTriggerText}>{selectedKeepAwakeLabel}</Text>
+            </DropdownTrigger>
+            <DropdownMenuContent side="bottom" align="end" width={180}>
+              {KEEP_AWAKE_LEVELS.map((lvl) => (
+                <KeepAwakeMenuItem
+                  key={lvl}
+                  level={lvl}
+                  label={resolveKeepAwakeLabel(isZh, lvl)}
+                  selected={keepAwake === lvl}
+                  onSelectLevel={handleSelectKeepAwake}
+                />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </View>
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
@@ -366,14 +404,14 @@ export function DesktopAppSection() {
               <Text style={settingsStyles.rowHint}>{copy.daemonHint}</Text>
             </View>
             {canTakeOver ? (
-              <Pressable
+              <Button
+                variant="secondary"
+                size="sm"
                 onPress={handleTakeOverDaemon}
-                accessibilityRole="button"
-                accessibilityLabel={copy.takeOverBtnText}
                 testID="desktop-daemon-takeover-button"
               >
-                <Text style={settingsStyles.rowTitle}>{copy.takeOverBtnText}</Text>
-              </Pressable>
+                {copy.takeOverBtnText}
+              </Button>
             ) : null}
           </View>
         ) : null}
@@ -382,16 +420,33 @@ export function DesktopAppSection() {
             <Text style={settingsStyles.rowTitle}>{copy.backupLabel}</Text>
             <Text style={settingsStyles.rowHint}>{copy.backupHint}</Text>
           </View>
-          <Pressable
+          <Button
+            variant="secondary"
+            size="sm"
             onPress={handleCreateBackup}
-            accessibilityRole="button"
-            accessibilityLabel={copy.backupNowText}
             testID="desktop-backup-now-button"
           >
-            <Text style={settingsStyles.rowTitle}>{copy.backupNowText}</Text>
-          </Pressable>
+            {copy.backupNowText}
+          </Button>
         </View>
       </View>
     </SettingsSection>
   );
 }
+
+const styles = StyleSheet.create((theme) => ({
+  dropdownTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  dropdownTriggerText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+  },
+}));
