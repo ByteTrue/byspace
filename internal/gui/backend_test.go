@@ -76,3 +76,66 @@ func TestDaemonSupervisorAttachesAndTakesOverOnExit(t *testing.T) {
 	t.Fatalf("expected supervisor to take over %s after external daemon exited (owns=%v, health=%v)",
 		addr, sup.OwnsInProcessDaemon(), ProbeDaemonHealth(addr))
 }
+
+func TestLightStepMatchesMagpieRule(t *testing.T) {
+	type look struct {
+		on, shown, release bool
+	}
+	for name, looks := range map[string][]look{
+		"closed":        {{true, false, false}, {true, false, true}},
+		"off":           {{false, false, false}, {false, false, false}, {false, false, false}},
+		"shown":         {{true, true, false}, {true, true, false}, {true, true, false}},
+		"shown between": {{true, false, false}, {true, true, false}, {true, false, false}, {true, false, true}},
+		"turned off":    {{true, false, false}, {false, false, false}, {true, false, false}, {true, false, true}},
+	} {
+		ticks := 0
+		for i, l := range looks {
+			var release bool
+			ticks, release = LightStep(l.on, l.shown, ticks)
+			if release != l.release {
+				t.Fatalf("%s: look %d released=%v, want %v", name, i, release, l.release)
+			}
+			if release {
+				ticks = 0
+			}
+		}
+	}
+}
+
+func TestIdleAtRequiresNoActiveAgentsUnfocusedWindowAndSettleElapsed(t *testing.T) {
+	now := time.Now()
+	if IdleAt(true, false, now, now, 10*time.Second) {
+		t.Fatal("must not be idle while an agent is running")
+	}
+	if IdleAt(false, true, time.Time{}, now, 10*time.Second) {
+		t.Fatal("must not be idle while the window is focused in the foreground")
+	}
+	if IdleAt(false, false, now.Add(-5*time.Second), now, 10*time.Second) {
+		t.Fatal("must not be idle before the 10s settle window has elapsed")
+	}
+	if !IdleAt(false, false, now.Add(-11*time.Second), now, 10*time.Second) {
+		t.Fatal("expected idle once agents finished >10s ago and window is unfocused")
+	}
+}
+
+func TestDesktopSettingsDefaultsAndPersistence(t *testing.T) {
+	dir := t.TempDir()
+	def := LoadDesktopSettings(dir)
+	if def.Lightweight || def.NoAutoUpdate || def.NoAutoDownload || def.AutoRestart {
+		t.Fatalf("expected all booleans false by default (matching magpie), got %+v", def)
+	}
+	want := DesktopSettings{
+		Lightweight:    true,
+		NoAutoDownload: true,
+		AutoRestart:    true,
+		WindowWidth:    1440,
+		WindowHeight:   900,
+	}
+	if err := SaveDesktopSettings(dir, want); err != nil {
+		t.Fatalf("SaveDesktopSettings: %v", err)
+	}
+	got := LoadDesktopSettings(dir)
+	if got != want {
+		t.Fatalf("LoadDesktopSettings = %+v, want %+v", got, want)
+	}
+}

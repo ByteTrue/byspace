@@ -187,3 +187,25 @@ func (s *Server) workspaceStatus(workspaceID string) string {
 	}
 	return bucket
 }
+
+// HasActiveAgentWork reports whether any loaded agent session is currently running a turn
+// or waiting on a pending permission request. Used by the desktop client's idle auto-updater.
+func (s *Server) HasActiveAgentWork() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, mp := range s.agents {
+		if mp == nil || mp.record.ArchivedAt != nil {
+			continue
+		}
+		if mp.record.LastStatus == "running" {
+			return true
+		}
+		if mp.session != nil && len(mp.session.PendingPermissions()) > 0 {
+			return true
+		}
+	}
+	return false
+}

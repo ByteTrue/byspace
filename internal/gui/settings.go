@@ -1,0 +1,81 @@
+package gui
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/ByteTrue/byspace/internal/home"
+)
+
+const (
+	desktopSettingsFile = "desktop.json"
+	LightEvery          = 30 * time.Second
+	LightTicks          = 2
+	IdleSettle          = 10 * time.Second
+)
+
+// DesktopSettings stores the desktop client preferences in $BYSPACE_HOME/desktop.json.
+// Defaults match Magpie: automatic update checks and downloads are on by default, while
+// automatic idle restart (AutoRestart) and Lightweight mode are off by default and enabled
+// in Settings.
+type DesktopSettings struct {
+	Lightweight    bool `json:"lightweight"`
+	NoAutoUpdate   bool `json:"noAutoUpdate"`
+	NoAutoDownload bool `json:"noAutoDownload"`
+	AutoRestart    bool `json:"autoRestart"`
+	WindowWidth    int  `json:"windowWidth,omitempty"`
+	WindowHeight   int  `json:"windowHeight,omitempty"`
+}
+
+// LoadDesktopSettings reads $BYSPACE_HOME/desktop.json, returning zero-value defaults when absent.
+func LoadDesktopSettings(homeDir string) DesktopSettings {
+	if homeDir == "" {
+		return DesktopSettings{}
+	}
+	raw, err := os.ReadFile(filepath.Join(homeDir, desktopSettingsFile))
+	if err != nil {
+		return DesktopSettings{}
+	}
+	var s DesktopSettings
+	if json.Unmarshal(raw, &s) != nil {
+		return DesktopSettings{}
+	}
+	return s
+}
+
+// SaveDesktopSettings atomically persists s to $BYSPACE_HOME/desktop.json.
+func SaveDesktopSettings(homeDir string, s DesktopSettings) error {
+	if homeDir == "" {
+		return nil
+	}
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return home.WriteAtomic(filepath.Join(homeDir, desktopSettingsFile), append(b, '\n'), 0o600)
+}
+
+// LightStep evaluates one 30s lightweight-mode tick (ported from magpie's lightweight_rule.go):
+// when lightweight mode is on and the window is not shown for LightTicks consecutive checks
+// (30–60s after closing), it returns release=true so the WebView process is freed.
+func LightStep(on, shown bool, ticks int) (int, bool) {
+	if !on || shown {
+		return 0, false
+	}
+	ticks++
+	return ticks, ticks >= LightTicks
+}
+
+// IdleAt reports whether a staged update can safely auto-restart at now without interrupting
+// active agents, a recent turn transition (settle window), or a focused foreground window.
+func IdleAt(agentBusy, windowFocused bool, lastBusy, now time.Time, settle time.Duration) bool {
+	if agentBusy || windowFocused {
+		return false
+	}
+	if !lastBusy.IsZero() && now.Sub(lastBusy) < settle {
+		return false
+	}
+	return true
+}

@@ -39,6 +39,7 @@ var selfLockingMethods = map[string]bool{
 	"publishWorkspaceStatusChanges": true,
 	"broadcastWorkspaceUpsert":      true,
 	"workspaceStatus":               true,
+	"HasActiveAgentWork":            true,
 }
 
 // TestNoReentrantServerLocks parses every non-test file in this package and reports a call to a

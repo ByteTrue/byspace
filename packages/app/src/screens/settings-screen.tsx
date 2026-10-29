@@ -56,6 +56,7 @@ import { Button } from "@/components/ui/button";
 
 import { CommunityLinks } from "@/components/community-links";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DesktopAppSection } from "@/screens/settings/desktop-app-section";
 import { WebPushSection } from "@/screens/settings/web-push-section";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
@@ -274,95 +275,100 @@ function GeneralSection({
   }, [settings.terminalScrollbackLines]);
 
   return (
-    <SettingsSection title={t("settings.general.title")}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.general.defaultSend.label")}</Text>
-            <Text style={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</Text>
+    <>
+      <SettingsSection title={t("settings.general.title")}>
+        <View style={settingsStyles.card}>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.general.defaultSend.label")}</Text>
+              <Text style={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</Text>
+            </View>
+            <DropdownMenu>
+              <DropdownTrigger
+                accessibilityRole="button"
+                accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
+                style={themeTriggerStyle}
+              >
+                <Text style={styles.themeTriggerText}>{selectedSendBehaviorLabel}</Text>
+              </DropdownTrigger>
+              <DropdownMenuContent side="bottom" align="end" width={200}>
+                {sendBehaviorOptions.map((option) => (
+                  <SendBehaviorMenuItem
+                    key={option.value}
+                    value={option.value}
+                    label={option.label}
+                    selected={settings.sendBehavior === option.value}
+                    onChange={handleSendBehaviorChange}
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
-              style={themeTriggerStyle}
-            >
-              <Text style={styles.themeTriggerText}>{selectedSendBehaviorLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={200}>
-              {sendBehaviorOptions.map((option) => (
-                <SendBehaviorMenuItem
-                  key={option.value}
-                  value={option.value}
-                  label={option.label}
-                  selected={settings.sendBehavior === option.value}
-                  onChange={handleSendBehaviorChange}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.general.language.description")}</Text>
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.general.language.description")}
+              </Text>
+            </View>
+            <DropdownMenu>
+              <DropdownTrigger
+                accessibilityRole="button"
+                accessibilityLabel={selectedLanguageLabel}
+                style={themeTriggerStyle}
+              >
+                <Text style={styles.themeTriggerText}>{selectedLanguageLabel}</Text>
+              </DropdownTrigger>
+              <DropdownMenuContent side="bottom" align="end" width={300}>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <LanguageMenuItem
+                    key={option.value}
+                    value={option.value}
+                    activeLocale={activeLocale}
+                    selected={settings.language === option.value}
+                    onChange={handleLanguageChange}
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={selectedLanguageLabel}
-              style={themeTriggerStyle}
-            >
-              <Text style={styles.themeTriggerText}>{selectedLanguageLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={300}>
-              {LANGUAGE_OPTIONS.map((option) => (
-                <LanguageMenuItem
-                  key={option.value}
-                  value={option.value}
-                  activeLocale={activeLocale}
-                  selected={settings.language === option.value}
-                  onChange={handleLanguageChange}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {t("settings.general.terminalScrollback.label")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {t("settings.general.terminalScrollback.description")}
-            </Text>
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>
+                {t("settings.general.terminalScrollback.label")}
+              </Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.general.terminalScrollback.description")}
+              </Text>
+            </View>
+            <TextInput
+              initialValue={terminalScrollbackValue}
+              onChangeText={handleTerminalScrollbackChangeText}
+              onBlur={commitTerminalScrollback}
+              onSubmitEditing={commitTerminalScrollback}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              selectTextOnFocus
+              style={styles.terminalScrollbackInput}
+              accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
+            />
           </View>
-          <TextInput
-            initialValue={terminalScrollbackValue}
-            onChangeText={handleTerminalScrollbackChangeText}
-            onBlur={commitTerminalScrollback}
-            onSubmitEditing={commitTerminalScrollback}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            selectTextOnFocus
-            style={styles.terminalScrollbackInput}
-            accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
-          />
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.editor.vimKeybindings")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.editor.vimHint")}</Text>
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.editor.vimKeybindings")}</Text>
+              <Text style={settingsStyles.rowHint}>{t("settings.editor.vimHint")}</Text>
+            </View>
+            <Switch
+              value={settings.vimKeybindings}
+              onValueChange={handleVimKeybindingsChange}
+              accessibilityLabel={t("settings.editor.vimKeybindings")}
+              testID="vim-keybindings-toggle"
+            />
           </View>
-          <Switch
-            value={settings.vimKeybindings}
-            onValueChange={handleVimKeybindingsChange}
-            accessibilityLabel={t("settings.editor.vimKeybindings")}
-            testID="vim-keybindings-toggle"
-          />
         </View>
-      </View>
-    </SettingsSection>
+      </SettingsSection>
+      <DesktopAppSection />
+    </>
   );
 }
 

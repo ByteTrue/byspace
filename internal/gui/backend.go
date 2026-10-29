@@ -90,6 +90,7 @@ type DaemonSupervisor struct {
 	httpSrv   *http.Server
 	ln        net.Listener
 	ownsPID   int
+	lastBusy  time.Time
 	stopWatch chan struct{}
 	closed    bool
 }
@@ -128,6 +129,26 @@ func (d *DaemonSupervisor) OwnsInProcessDaemon() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.srv != nil
+}
+
+// BusyState reports whether the in-process daemon currently has any running agent turn or
+// pending permission request, and the last timestamp at which it was observed busy.
+func (d *DaemonSupervisor) BusyState() (busy bool, lastBusy time.Time) {
+	if d == nil {
+		return false, time.Time{}
+	}
+	d.mu.Lock()
+	srv := d.srv
+	last := d.lastBusy
+	d.mu.Unlock()
+	if srv != nil && srv.HasActiveAgentWork() {
+		now := time.Now()
+		d.mu.Lock()
+		d.lastBusy = now
+		d.mu.Unlock()
+		return true, now
+	}
+	return false, last
 }
 
 func (d *DaemonSupervisor) watchLoop() {

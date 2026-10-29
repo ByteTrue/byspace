@@ -155,7 +155,10 @@ func mainMacWindowOptions() application.MacWindow {
 }
 
 func configureNativeTitlebar(w *application.WebviewWindow) {
-	application.InvokeSync(func() {
+	if w == nil {
+		return
+	}
+	application.InvokeAsync(func() {
 		if p := w.NativeWindow(); p != nil {
 			C.insetLights(p)
 		}

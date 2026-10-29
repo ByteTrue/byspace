@@ -30,3 +30,8 @@ created: 2026-10-29
 - **本机密码开启时的客户端自动直连**：若 `config.json` 配置了访问密码（`daemon.auth.password`），桌面窗口在 `window.__BYSPACE_INITIAL_DAEMON_CONNECTION__` 中必须附带 `server.EnsureCLICredential(homeDir)`（作为 `password` 令牌），否则窗口首次连接 `ws://127.0.0.1:6777/ws` 会因 401 退回 `Welcome to BySpace`。
 - **Wails v3 顶栏拖拽与 WebKit I-beam 光标**：Wails v3 的 `--wails-draggable: drag` 依赖页面引入 `/wails/runtime.js`（`drag.ts`）；且 `drag.ts` 在 `mousedown` 时未调 `preventDefault()`，导致 macOS `WKWebView` 在第一帧 `mousemove` 前误启动文本选择状态机并将光标切为 I 型。必须在顶栏 `mousedown` 捕获阶段同时设置 `-webkit-user-select: none; cursor: default` 并调用 `e.preventDefault()`。
 - **macOS Dock 图标网格比例**：Apple macOS Big Sur+ HIG 要求 1024×1024 画布内圆角矩形主体占中央 824×824（四周各 100px 透明边距），零边距满铺图在 Dock 中会比标准应用大 24%。
+
+## 4. 轻量模式释放 WKWebView 与 Wails 主线程调用死锁红线
+
+- **轻量模式销毁窗口前必须先解绑 `WKWebView`**：在 macOS 上仅对 Wails `WebviewWindow` 调用 `Close()` 不会立即释放 `WKWebView` 及其关联的 `com.apple.WebKit.WebContent` 进程（因 delegate 与 `WKUserContentController` 强引用环）。必须在主线程先执行 `dropWebView`（清空 `navigationDelegate`、`UIDelegate`、`removeAllScriptMessageHandlers` 并 `removeFromSuperview`）再调 `Close()`。
+- **严禁在 `app.Run()` 启动前或 `InvokeSync` 回调内调用 `application.InvokeSync`**：在 `app.Run()` 启动 Cocoa 主事件循环之前调用 `application.InvokeSync`，或在已经在主线程运行的 `InvokeSync` 闭包内嵌套调用 `InvokeSync`（底层为 GCD `dispatch_sync(dispatch_get_main_queue())`），会直接造成主线程死锁导致应用无法打开窗口。初始原生窗口配置须挂在 `events.Common.ApplicationStarted` 之后，且原生层操作优先使用 `application.InvokeAsync`。

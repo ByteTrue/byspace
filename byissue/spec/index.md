@@ -23,7 +23,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 
 ## 边界与考量
 
-- 同一套 Go 单二进制与内嵌 Web 前端通过编译标签（`-tags nogui` vs Wails v3）延伸出无头 CLI/Daemon/Docker、桌面客户端（macOS / Windows / Linux，单主窗口 + 托盘驻留 + 本机 daemon 主从自愈接管）与 Android 远程客户端（侧载 APK，不在手机本地起 daemon），见 [Decision 005](../decisions/005-wails-v3-unified-desktop-and-android-client.md) 与 [Epic 2026-10-29](../epics/2026-10-29-x-wails-v3-desktop-and-android/spec.md)。
+- 同一套 Go 单二进制与内嵌 Web 前端通过编译标签（`-tags nogui` vs Wails v3）延伸出无头 CLI/Daemon/Docker、桌面客户端（macOS / Windows / Linux，单主窗口 + 托盘驻留 + 本机 daemon 主从自愈接管，支持在设置中开启轻量模式与空闲自动安装更新）与 Android 远程客户端（侧载 APK，不在手机本地起 daemon），见 [Decision 005](../decisions/005-wails-v3-unified-desktop-and-android-client.md)、[Epic 2026-10-29](../epics/2026-10-29-x-wails-v3-desktop-and-android/spec.md) 与 [2026-10-29-x-desktop-idle-auto-update-and-lightweight-mode](../issues/2026-10-29-x-desktop-idle-auto-update-and-lightweight-mode.md)。
 - App 与 daemon 可以异步更新，wire protocol 保持双向兼容。
 - Terminal、Agent stream 和移动面板的性能优化不得以删除现有用户能力为代价。
 - BySpace 使用统一 Data Relay；Relay 只转发 E2EE 数据，不解析 Agent 会话内容。

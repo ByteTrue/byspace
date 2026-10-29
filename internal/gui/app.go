@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -28,7 +31,79 @@ var appIcon []byte
 //go:embed tray.png
 var trayIcon []byte
 
-// Run launches the Wails v3 native application (Desktop with tray + daemon takeover, or Android client).
+func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUpdater) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/_byspace/desktop/settings" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			switch r.Method {
+			case http.MethodGet:
+				st, latest := "", ""
+				if updater != nil {
+					st, latest = updater.State()
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"desktop":       runtime.GOOS != "android",
+					"settings":      LoadDesktopSettings(homeDir),
+					"updateState":   st,
+					"latestVersion": latest,
+				})
+				return
+			case http.MethodPost:
+				current := LoadDesktopSettings(homeDir)
+				var patch struct {
+					Lightweight    *bool `json:"lightweight"`
+					NoAutoUpdate   *bool `json:"noAutoUpdate"`
+					NoAutoDownload *bool `json:"noAutoDownload"`
+					AutoRestart    *bool `json:"autoRestart"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if patch.Lightweight != nil {
+					current.Lightweight = *patch.Lightweight
+				}
+				if patch.NoAutoUpdate != nil {
+					current.NoAutoUpdate = *patch.NoAutoUpdate
+				}
+				if patch.NoAutoDownload != nil {
+					current.NoAutoDownload = *patch.NoAutoDownload
+				}
+				if patch.AutoRestart != nil {
+					current.AutoRestart = *patch.AutoRestart
+				}
+				if err := SaveDesktopSettings(homeDir, current); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if updater != nil {
+					if !current.NoAutoDownload {
+						updater.DownloadFound()
+					}
+					if current.AutoRestart {
+						go updater.AutoTick()
+					}
+				}
+				st, latest := "", ""
+				if updater != nil {
+					st, latest = updater.State()
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"desktop":       runtime.GOOS != "android",
+					"settings":      current,
+					"updateState":   st,
+					"latestVersion": latest,
+				})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Run launches the Wails v3 native application (Desktop with tray + daemon takeover + lightweight
+// mode + idle auto-update, or Android client).
 func Run(version string, showMain bool, initialLink string) error {
 	isAndroid := runtime.GOOS == "android"
 	homeDir, _ := home.Resolve("")
@@ -41,6 +116,10 @@ func Run(version string, showMain bool, initialLink string) error {
 
 	var sup *DaemonSupervisor
 	var assetHandler http.Handler
+	updater := &ClientUpdater{
+		Version: version,
+		HomeDir: homeDir,
+	}
 
 	webDir := strings.TrimSpace(os.Getenv("BYSPACE_WEB_DIR"))
 	baseUI := webui.NewHandler(webDir).WithoutPrecompression()
@@ -49,8 +128,6 @@ func Run(version string, showMain bool, initialLink string) error {
 	}
 
 	if isAndroid {
-		// On Android, the app is a pure remote client shell: serve the embedded web UI in-process
-		// via WebViewAssetLoader without starting a local daemon or injecting a localhost hint.
 		if baseUI != nil {
 			assetHandler = baseUI
 		} else {
@@ -66,23 +143,120 @@ func Run(version string, showMain bool, initialLink string) error {
 			log.Printf("byspace gui: daemon supervisor warning: %v", err)
 		}
 		localToken := server.EnsureCLICredential(homeDir)
+		var uiHandler http.Handler = http.NotFoundHandler()
 		if baseUI != nil {
-			assetHandler = baseUI.
+			uiHandler = baseUI.
 				WithExplicitConnectionHint(sup.Addr, "BySpace").
 				WithLocalCredential(localToken)
-		} else {
-			assetHandler = http.NotFoundHandler()
 		}
+		assetHandler = withDesktopSettingsAPI(uiHandler, homeDir, updater)
 	}
 
 	var quitting atomic.Bool
+	var appStarted atomic.Bool
+	var winMu sync.Mutex
 	var mainWin *application.WebviewWindow
-	updater := &ClientUpdater{Version: version}
+	var releasedWin atomic.Pointer[application.WebviewWindow]
 
 	sum := sha256.Sum256([]byte(homeDir))
 	uniqueID := "com.bytetrue.byspace." + hex.EncodeToString(sum[:6])
 
-	app := application.New(application.Options{
+	var app *application.App
+
+	// makeMainWindow creates (or recreates after lightweight mode released it) the main WebviewWindow.
+	// Must be called on the main thread (via application.InvokeSync / InvokeAsync).
+	makeMainWindow := func(url string, hidden bool) *application.WebviewWindow {
+		if url == "" {
+			url = "/"
+		}
+		prefs := LoadDesktopSettings(homeDir)
+		width, height := 1280, 820
+		if prefs.WindowWidth >= 800 && prefs.WindowHeight >= 560 {
+			width, height = prefs.WindowWidth, prefs.WindowHeight
+		}
+		startHidden := hidden || runtime.GOOS == "windows"
+		w := app.Window.NewWithOptions(application.WebviewWindowOptions{
+			Name:      "main",
+			Title:     "BySpace",
+			URL:       url,
+			Width:     width,
+			Height:    height,
+			MinWidth:  800,
+			MinHeight: 560,
+			Hidden:    startHidden,
+			Mac:       mainMacWindowOptions(),
+		})
+
+		if !isAndroid {
+			var resizeTimer *time.Timer
+			w.OnWindowEvent(events.Common.WindowDidResize, func(*application.WindowEvent) {
+				if resizeTimer != nil {
+					resizeTimer.Stop()
+				}
+				resizeTimer = time.AfterFunc(500*time.Millisecond, func() {
+					application.InvokeAsync(func() {
+						if w.IsFullscreen() || w.IsMinimised() {
+							return
+						}
+						wd, ht := w.Size()
+						if wd >= 800 && ht >= 560 {
+							s := LoadDesktopSettings(homeDir)
+							if s.WindowWidth != wd || s.WindowHeight != ht {
+								s.WindowWidth, s.WindowHeight = wd, ht
+								_ = SaveDesktopSettings(homeDir, s)
+							}
+						}
+					})
+				})
+			})
+
+			w.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+				if quitting.Load() || releasedWin.Load() == w {
+					return
+				}
+				e.Cancel()
+				if runtime.GOOS == "darwin" && w.IsFullscreen() {
+					w.UnFullscreen()
+				}
+				w.Hide()
+			})
+
+			if runtime.GOOS == "windows" {
+				var shownOnce atomic.Bool
+				w.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
+					if !hidden && shownOnce.CompareAndSwap(false, true) {
+						application.InvokeAsync(func() {
+							w.Show().Focus()
+						})
+					}
+				})
+			} else if appStarted.Load() {
+				configureNativeTitlebar(w)
+			}
+		}
+		return w
+	}
+
+	// showMainWindow opens the main window (recreating its WebView if lightweight mode released it).
+	showMainWindow := func(targetURL string) {
+		winMu.Lock()
+		defer winMu.Unlock()
+		application.InvokeSync(func() {
+			if mainWin == nil {
+				mainWin = makeMainWindow(targetURL, false)
+				if runtime.GOOS != "windows" {
+					mainWin.Show().Focus()
+				}
+				return
+			}
+			if targetURL != "" {
+				mainWin.SetURL(targetURL)
+			}
+			mainWin.Show().Focus()
+		})
+	}
+
+	app = application.New(application.Options{
 		Name:        "BySpace",
 		Description: "Your dev environment, in your pocket",
 		Icon:        appIcon,
@@ -102,15 +276,11 @@ func Run(version string, showMain bool, initialLink string) error {
 				if trayOnly && link == "" {
 					return
 				}
-				application.InvokeAsync(func() {
-					if mainWin == nil {
-						return
-					}
-					if link != "" {
-						mainWin.SetURL(NormalizeDeepLink(link))
-					}
-					mainWin.Show().Focus()
-				})
+				target := ""
+				if link != "" {
+					target = NormalizeDeepLink(link)
+				}
+				go showMainWindow(target)
 			},
 		},
 		Mac: application.MacOptions{
@@ -129,8 +299,6 @@ func Run(version string, showMain bool, initialLink string) error {
 			if sup != nil {
 				_ = sup.Close()
 			}
-			// Like Magpie: any update staged in the background is installed on the way out so the
-			// next launch starts on the new version.
 			updater.InstallStaged()
 		},
 		ErrorHandler: func(err error) {
@@ -139,55 +307,18 @@ func Run(version string, showMain bool, initialLink string) error {
 	})
 
 	startURL := NormalizeDeepLink(initialLink)
-	// On Windows, keep the window hidden until WebView2 finishes its first navigation so
-	// it never flashes a black frame before the page paints (ported from magpie).
-	startHidden := (!showMain && !isAndroid) || runtime.GOOS == "windows"
-	mainWin = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:      "main",
-		Title:     "BySpace",
-		URL:       startURL,
-		Width:     1280,
-		Height:    820,
-		MinWidth:  800,
-		MinHeight: 560,
-		Hidden:    startHidden,
-		Mac:       mainMacWindowOptions(),
-	})
-
-	if runtime.GOOS == "windows" {
-		var shownOnce atomic.Bool
-		mainWin.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
-			if showMain && shownOnce.CompareAndSwap(false, true) {
-				application.InvokeAsync(func() {
-					mainWin.Show().Focus()
-				})
-			}
-		})
-	} else if !isAndroid {
-		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			configureNativeTitlebar(mainWin)
-		})
-	}
+	mainWin = makeMainWindow(startURL, !showMain && !isAndroid)
 
 	if !isAndroid {
-		// Closing the desktop window hides it to the system tray so running agents stay alive.
-		// On macOS, if the window is in native full screen, exit full screen first so macOS does
-		// not leave an empty black Space behind (ported from magpie's closeStep).
-		mainWin.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-			if quitting.Load() {
-				return
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			appStarted.Store(true)
+			if mainWin != nil {
+				configureNativeTitlebar(mainWin)
 			}
-			e.Cancel()
-			if runtime.GOOS == "darwin" && mainWin.IsFullscreen() {
-				mainWin.UnFullscreen()
-			}
-			mainWin.Hide()
 		})
 
 		app.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(e *application.ApplicationEvent) {
-			application.InvokeSync(func() {
-				mainWin.Show().Focus()
-			})
+			go showMainWindow("")
 			e.Cancel()
 		})
 
@@ -201,15 +332,20 @@ func Run(version string, showMain bool, initialLink string) error {
 
 		menu := app.NewMenu()
 		menu.Add("Open BySpace").OnClick(func(*application.Context) {
-			application.InvokeSync(func() {
-				mainWin.Show().Focus()
-			})
+			go showMainWindow("")
 		})
 		menu.AddSeparator()
 		menu.Add("BySpace " + version).SetEnabled(false)
 		if sup != nil {
 			menu.Add("Daemon: " + sup.Addr).SetEnabled(false)
 		}
+		downloadItem := menu.Add("Download update").SetHidden(true)
+		downloadItem.OnClick(func(*application.Context) {
+			downloadItem.SetLabel("Downloading update…")
+			downloadItem.SetEnabled(false)
+			menu.Update()
+			updater.DownloadFound()
+		})
 		restartItem := menu.Add("Restart to update").SetHidden(true)
 		restartItem.OnClick(func(*application.Context) {
 			shown := application.InvokeSyncWithResult(func() bool {
@@ -230,7 +366,16 @@ func Run(version string, showMain bool, initialLink string) error {
 		})
 		tray.SetMenu(menu)
 		tray.OnClick(func() {
+			winMu.Lock()
+			defer winMu.Unlock()
 			application.InvokeSync(func() {
+				if mainWin == nil {
+					mainWin = makeMainWindow("/", false)
+					if runtime.GOOS != "windows" {
+						mainWin.Show().Focus()
+					}
+					return
+				}
 				if mainWin.IsVisible() {
 					mainWin.Hide()
 				} else {
@@ -239,13 +384,80 @@ func Run(version string, showMain bool, initialLink string) error {
 			})
 		})
 
+		updater.OnFound = func(newVer string) {
+			application.InvokeSync(func() {
+				downloadItem.SetLabel("Download update v" + newVer)
+				downloadItem.SetEnabled(true)
+				downloadItem.SetHidden(false)
+				menu.Update()
+			})
+		}
 		updater.OnReady = func(newVer string) {
 			application.InvokeSync(func() {
+				downloadItem.SetHidden(true)
 				restartItem.SetLabel("Restart to update to v" + newVer)
 				restartItem.SetHidden(false)
 				menu.Update()
 			})
 		}
+		updater.IsIdle = func() bool {
+			agentBusy, lastBusy := false, time.Time{}
+			if sup != nil {
+				agentBusy, lastBusy = sup.BusyState()
+			}
+			focused := application.InvokeSyncWithResult(func() bool {
+				return isWindowFocusedOnMain(mainWin)
+			})
+			return IdleAt(agentBusy, focused, lastBusy, time.Now(), IdleSettle)
+		}
+		updater.AutoRelaunch = func() {
+			shown := application.InvokeSyncWithResult(func() bool {
+				return mainWin != nil && mainWin.IsVisible()
+			})
+			if updater.InstallAndRelaunch(shown) {
+				quitting.Store(true)
+				app.Quit()
+			}
+		}
+
+		// Lightweight mode background loop (ported from magpie's lighten()):
+		// checks every 30s and drops the hidden window's WebView after 2 consecutive hidden ticks.
+		go func() {
+			var ticks int
+			ticker := time.NewTicker(LightEvery)
+			defer ticker.Stop()
+			for range ticker.C {
+				if quitting.Load() {
+					return
+				}
+				on := LoadDesktopSettings(homeDir).Lightweight
+				var toClose *application.WebviewWindow
+				winMu.Lock()
+				application.InvokeSync(func() {
+					if mainWin == nil {
+						ticks = 0
+						return
+					}
+					shown := mainWin.IsVisible()
+					var release bool
+					ticks, release = LightStep(on, shown, ticks)
+					if !release {
+						return
+					}
+					ticks = 0
+					w := mainWin
+					dropWebView(w)
+					mainWin = nil
+					releasedWin.Store(w)
+					toClose = w
+				})
+				winMu.Unlock()
+				if toClose != nil {
+					log.Println("byspace lightweight: released hidden main window WebView")
+					toClose.Close()
+				}
+			}
+		}()
 	} else {
 		updater.OnAndroidAPK = func(newVer, apkURL string) {
 			application.InvokeAsync(func() {
@@ -270,12 +482,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			return
 		}
 		target := NormalizeDeepLink(u)
-		application.InvokeAsync(func() {
-			if mainWin != nil {
-				mainWin.SetURL(target)
-				mainWin.Show().Focus()
-			}
-		})
+		go showMainWindow(target)
 	})
 
 	return app.Run()
