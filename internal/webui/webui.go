@@ -285,7 +285,13 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 		"&", `\u0026`,
 	).Replace(string(b))
 
-	script := "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
+	// When explicitListen is set, we are serving inside a Wails desktop window: inject window
+	// drag region rules so the top 36px strip drags the window while buttons remain clickable.
+	wailsStyle := ""
+	if explicitListen != "" {
+		wailsStyle = `<style>[data-wails-drag="true"]{--wails-draggable:drag}button,[role="button"],a,input,textarea,select,[data-menu-item="true"]{--wails-draggable:no-drag}</style>`
+	}
+	script := wailsStyle + "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
 	htmlStr := string(htmlBytes)
 	lower := strings.ToLower(htmlStr)
 	if idx := strings.Index(lower, "</head>"); idx != -1 {

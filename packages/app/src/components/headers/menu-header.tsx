@@ -9,7 +9,7 @@ import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
 import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
@@ -132,7 +132,14 @@ export function SidebarMenuToggle({
 }: SidebarMenuToggleProps = {}) {
   const isMobile = useIsCompactFormFactor();
   const desktopSidebarVisible = useDesktopSidebarVisible();
-  const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
+  const trafficLightInset = useMacTrafficLightInset();
+  // When the pinned sidebar is hidden (or in compact layout), the content header owns the
+  // top-left corner where macOS traffic lights sit.
+  const cornerInset = host === "content" ? trafficLightInset : 0;
+  const resolvedStyle = useMemo(
+    () => [styles.leadingToggle, cornerInset > 0 ? { marginLeft: cornerInset } : null, style],
+    [cornerInset, style],
+  );
   // One source for both hosts: the pinned sidebar shows it while it is visible, a content
   // header only while it is not, so `menu-button` exists exactly once in every state.
   const owner = resolveSidebarToggleHost({ isCompact: isMobile, desktopSidebarVisible });

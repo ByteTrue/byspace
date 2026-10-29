@@ -41,7 +41,12 @@ import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  useIsCompactFormFactor,
+  useMacTrafficLightInset,
+  WAILS_DRAG_DATA_SET,
+} from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -729,9 +734,17 @@ function DesktopSidebar({
     ],
     [active, resizeAnimatedStyle],
   );
+  const trafficLightInset = useMacTrafficLightInset();
   const desktopSidebarBorderStyle = useMemo(
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
+  );
+  const sidebarTopRowStyle = useMemo(
+    () =>
+      trafficLightInset > 0
+        ? [styles.sidebarTopRow, { paddingLeft: theme.spacing[3] + trafficLightInset }]
+        : styles.sidebarTopRow,
+    [theme.spacing, trafficLightInset],
   );
   return (
     <Animated.View
@@ -742,8 +755,8 @@ function DesktopSidebar({
       style={desktopSidebarStyle}
     >
       <View style={desktopSidebarBorderStyle}>
-        <View style={styles.sidebarHeaderArea}>
-          <View style={styles.sidebarTopRow}>
+        <View style={styles.sidebarHeaderArea} dataSet={WAILS_DRAG_DATA_SET}>
+          <View style={sidebarTopRowStyle} dataSet={WAILS_DRAG_DATA_SET}>
             <SidebarMenuToggle host="sidebar" tooltipSide="bottom" />
             <SidebarNavMenu panelActive={active} />
           </View>

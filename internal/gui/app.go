@@ -104,6 +104,9 @@ func Run(version string, showMain bool, initialLink string) error {
 	})
 
 	startURL := NormalizeDeepLink(initialLink)
+	// On Windows, keep the window hidden until WebView2 finishes its first navigation so
+	// it never flashes a black frame before the page paints (ported from magpie).
+	startHidden := (!showMain && !isAndroid) || runtime.GOOS == "windows"
 	mainWin = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      "main",
 		Title:     "BySpace",
@@ -112,16 +115,37 @@ func Run(version string, showMain bool, initialLink string) error {
 		Height:    820,
 		MinWidth:  800,
 		MinHeight: 560,
-		Hidden:    !showMain && !isAndroid,
+		Hidden:    startHidden,
+		Mac:       mainMacWindowOptions(),
 	})
+
+	if runtime.GOOS == "windows" {
+		var shownOnce atomic.Bool
+		mainWin.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
+			if showMain && shownOnce.CompareAndSwap(false, true) {
+				application.InvokeAsync(func() {
+					mainWin.Show().Focus()
+				})
+			}
+		})
+	} else if !isAndroid {
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			configureNativeTitlebar(mainWin)
+		})
+	}
 
 	if !isAndroid {
 		// Closing the desktop window hides it to the system tray so running agents stay alive.
+		// On macOS, if the window is in native full screen, exit full screen first so macOS does
+		// not leave an empty black Space behind (ported from magpie's closeStep).
 		mainWin.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 			if quitting.Load() {
 				return
 			}
 			e.Cancel()
+			if runtime.GOOS == "darwin" && mainWin.IsFullscreen() {
+				mainWin.UnFullscreen()
+			}
 			mainWin.Hide()
 		})
 

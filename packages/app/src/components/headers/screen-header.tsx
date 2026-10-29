@@ -8,6 +8,7 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
   useIsCompactFormFactor,
+  WAILS_DRAG_DATA_SET,
 } from "@/constants/layout";
 
 interface ScreenHeaderProps {
@@ -56,7 +57,7 @@ export function ScreenHeader({
   return (
     <View style={styles.header}>
       <View style={innerStyle}>
-        <View onLayout={onRowLayout} style={rowStyle}>
+        <View onLayout={onRowLayout} style={rowStyle} dataSet={WAILS_DRAG_DATA_SET}>
           <View style={leftCombinedStyle}>{left}</View>
           <View style={rightCombinedStyle}>{right}</View>
         </View>

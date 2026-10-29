@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
-import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  HEADER_INNER_HEIGHT_MOBILE,
+  useMacTrafficLightInset,
+  WAILS_DRAG_DATA_SET,
+} from "@/constants/layout";
 import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { sidebarLabelStyles } from "@/styles/sidebar";
@@ -31,9 +36,17 @@ interface SidebarHeaderRowProps {
  */
 export function SidebarHeaderRow({ icon: Icon, label, onPress, testID }: SidebarHeaderRowProps) {
   const ThemedIcon = useMemo(() => withUnistyles(Icon), [Icon]);
+  const trafficLightInset = useMacTrafficLightInset();
+  const containerStyle = useMemo(
+    () =>
+      trafficLightInset > 0
+        ? [styles.container, { paddingLeft: 8 + trafficLightInset }]
+        : styles.container,
+    [trafficLightInset],
+  );
 
   return (
-    <View style={styles.container}>
+    <View style={containerStyle} dataSet={WAILS_DRAG_DATA_SET}>
       <Pressable
         onPress={onPress}
         testID={testID}
