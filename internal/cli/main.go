@@ -404,6 +404,13 @@ func runServe(version string, args []string, stdout io.Writer) error {
 
 	// BYSPACE_LISTEN accepts tcp, unix socket and windows named pipe forms; see
 	// daemon.ParseListenTarget for why sockets matter in restricted environments.
+	myPID := os.Getpid()
+	// Check the PID lock before binding the listener so running `byspace serve` when the desktop
+	// app or a background daemon is already up reports the running PID clearly instead of a raw
+	// EADDRINUSE socket error.
+	if existing, ok := daemon.ReadPIDLock(srv.HomeDir()); ok && !daemon.IsStale(srv.HomeDir(), existing) && existing.PID != myPID {
+		return fmt.Errorf("another byspace daemon is already running (pid %d, started %s)", existing.PID, existing.StartedAt)
+	}
 	listenTarget, err := daemon.ParseListenTarget(*addr)
 	if err != nil {
 		return err
@@ -412,13 +419,7 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	myPID := os.Getpid()
 	listenAddr := listenTarget.Address()
-	// The lock carries metadata and a heartbeat mtime: a bare pid cannot tell "running" from
-	// "crashed and this pid got recycled", which is what left stale locks blocking startup.
-	if existing, ok := daemon.ReadPIDLock(srv.HomeDir()); ok && !daemon.IsStale(srv.HomeDir(), existing) && existing.PID != myPID {
-		return fmt.Errorf("another byspace daemon is already running (pid %d, started %s)", existing.PID, existing.StartedAt)
-	}
 	exeName := ""
 	if exe, exeErr := os.Executable(); exeErr == nil {
 		exeName = filepath.Base(exe)

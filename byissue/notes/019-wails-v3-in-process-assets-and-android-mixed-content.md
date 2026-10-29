@@ -24,3 +24,9 @@ created: 2026-10-29
   1. `build/android/app/src/main/java/com/wails/app/MainActivity.java` 设为 `WebSettings.MIXED_CONTENT_ALWAYS_ALLOW`，并在 `loadApplication()` 与 `onNewIntent()` 中解析 `byspace://` Intent URI 映射为 `https://wails.localhost/#offer=...`；
   2. `build/android/app/src/main/AndroidManifest.xml` 开启 `android:usesCleartextTraffic="true"`；
   3. 前端 `readBrowserConnectionContext()` 识别 `window.location.hostname === "wails.localhost"`（或 `"wails" in window`）为原生 WebView 容器，放行非 TLS 局域网 Direct TCP。
+
+## 3. 桌面端隐藏标题栏、拖拽光标与本地免密直连
+
+- **本机密码开启时的客户端自动直连**：若 `config.json` 配置了访问密码（`daemon.auth.password`），桌面窗口在 `window.__BYSPACE_INITIAL_DAEMON_CONNECTION__` 中必须附带 `server.EnsureCLICredential(homeDir)`（作为 `password` 令牌），否则窗口首次连接 `ws://127.0.0.1:6777/ws` 会因 401 退回 `Welcome to BySpace`。
+- **Wails v3 顶栏拖拽与 WebKit I-beam 光标**：Wails v3 的 `--wails-draggable: drag` 依赖页面引入 `/wails/runtime.js`（`drag.ts`）；且 `drag.ts` 在 `mousedown` 时未调 `preventDefault()`，导致 macOS `WKWebView` 在第一帧 `mousemove` 前误启动文本选择状态机并将光标切为 I 型。必须在顶栏 `mousedown` 捕获阶段同时设置 `-webkit-user-select: none; cursor: default` 并调用 `e.preventDefault()`。
+- **macOS Dock 图标网格比例**：Apple macOS Big Sur+ HIG 要求 1024×1024 画布内圆角矩形主体占中央 824×824（四周各 100px 透明边距），零边距满铺图在 Dock 中会比标准应用大 24%。

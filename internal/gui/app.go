@@ -3,7 +3,9 @@
 package gui
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
@@ -29,8 +31,12 @@ var trayIcon []byte
 // Run launches the Wails v3 native application (Desktop with tray + daemon takeover, or Android client).
 func Run(version string, showMain bool, initialLink string) error {
 	isAndroid := runtime.GOOS == "android"
+	homeDir, _ := home.Resolve("")
 	if !isAndroid {
 		selfupdate.AwaitPredecessor()
+		if acquireOrHandOverGUILock(homeDir, showMain, initialLink) {
+			return nil
+		}
 	}
 
 	var sup *DaemonSupervisor
@@ -53,12 +59,12 @@ func Run(version string, showMain bool, initialLink string) error {
 	} else {
 		sup = &DaemonSupervisor{
 			Addr:    ResolveDesktopDaemonAddr(),
+			HomeDir: homeDir,
 			Version: version,
 		}
 		if err := sup.Start(); err != nil {
 			log.Printf("byspace gui: daemon supervisor warning: %v", err)
 		}
-		homeDir, _ := home.Resolve("")
 		localToken := server.EnsureCLICredential(homeDir)
 		if baseUI != nil {
 			assetHandler = baseUI.
@@ -73,11 +79,40 @@ func Run(version string, showMain bool, initialLink string) error {
 	var mainWin *application.WebviewWindow
 	updater := &ClientUpdater{Version: version}
 
+	sum := sha256.Sum256([]byte(homeDir))
+	uniqueID := "com.bytetrue.byspace." + hex.EncodeToString(sum[:6])
+
 	app := application.New(application.Options{
 		Name:        "BySpace",
 		Description: "Your dev environment, in your pocket",
 		Icon:        appIcon,
 		Assets:      application.AssetOptions{Handler: assetHandler},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: uniqueID,
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				var link string
+				var trayOnly bool
+				for _, arg := range data.Args[1:] {
+					if strings.HasPrefix(arg, "byspace://") || strings.HasPrefix(arg, "#offer=") {
+						link = arg
+					} else if arg == "tray" {
+						trayOnly = true
+					}
+				}
+				if trayOnly && link == "" {
+					return
+				}
+				application.InvokeAsync(func() {
+					if mainWin == nil {
+						return
+					}
+					if link != "" {
+						mainWin.SetURL(NormalizeDeepLink(link))
+					}
+					mainWin.Show().Focus()
+				})
+			},
+		},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,
 		},

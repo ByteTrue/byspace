@@ -213,6 +213,26 @@ func (d *DaemonSupervisor) startInProcess() error {
 	d.ownsPID = myPID
 	d.mu.Unlock()
 
+	stopWatch := d.stopWatch
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopWatch:
+				return
+			case <-ticker.C:
+				d.mu.Lock()
+				stillOwned := !d.closed && d.srv == srv
+				d.mu.Unlock()
+				if !stillOwned {
+					return
+				}
+				daemon.TouchPIDLock(srv.HomeDir())
+			}
+		}
+	}()
+
 	go func() {
 		_ = httpSrv.Serve(ln)
 	}()
