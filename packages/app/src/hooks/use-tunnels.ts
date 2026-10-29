@@ -48,7 +48,8 @@ export function useTunnels(): {
         runtime,
       }),
     dataShape: "list",
-    staleTimeMs: 5_000,
+    staleTimeMs: 2_000,
+    refetchInterval: 2_500,
   });
 
   if (query.data?.status === "connecting") {

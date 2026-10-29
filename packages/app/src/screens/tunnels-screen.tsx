@@ -620,7 +620,7 @@ async function createTunnelFromOffer(input: {
       serverId: offer.serverId,
       role: "client",
     }),
-    password: input.password,
+    ...(input.password ? { password: input.password } : {}),
     daemonPublicKeyB64: offer.daemonPublicKeyB64,
     forwards: input.forwards,
   });
@@ -666,8 +666,15 @@ function AddTunnelSheet({
     [selectableTargets, selectedPeerId],
   );
   const isPastingOffer = selectedTarget === null;
-  const peerAlreadyConfigured = Boolean(
-    selectedTarget && existingPeerIds.has(selectedTarget.serverId),
+  const parsedOffer = useMemo(
+    () => (isPastingOffer && offerUrl.trim() ? parsePairingOfferUrl(offerUrl) : null),
+    [isPastingOffer, offerUrl],
+  );
+  const hasPublicKeyAuth = Boolean(
+    selectedTarget?.daemonPublicKeyB64 || (parsedOffer?.ok && parsedOffer.offer.daemonPublicKeyB64),
+  );
+  const passwordOptional = Boolean(
+    hasPublicKeyAuth || (selectedTarget && existingPeerIds.has(selectedTarget.serverId)),
   );
 
   const peerOptions = useMemo(
@@ -748,7 +755,7 @@ function AddTunnelSheet({
       }
       parsedLocalPorts = lps;
     }
-    if (!password && !peerAlreadyConfigured) {
+    if (!password && !passwordOptional) {
       setError(t("tunnels.addForm.passwordRequired"));
       return;
     }
@@ -800,16 +807,7 @@ function AddTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [
-    client,
-    localPort,
-    password,
-    onCreated,
-    peerAlreadyConfigured,
-    remotePort,
-    resolveSelection,
-    t,
-  ]);
+  }, [client, localPort, password, onCreated, passwordOptional, remotePort, resolveSelection, t]);
 
   const submit = useCallback(() => {
     void submitAsync();
@@ -843,7 +841,7 @@ function AddTunnelSheet({
           />
         </Field>
       ) : undefined}
-      {!peerAlreadyConfigured ? (
+      {!passwordOptional ? (
         <Field label={t("tunnels.addForm.passwordLabel")}>
           <FormTextInput
             initialValue={password}
