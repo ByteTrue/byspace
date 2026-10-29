@@ -160,3 +160,16 @@ func TestDockStepAndShouldShowInDock(t *testing.T) {
 		t.Fatal("when window is shown, app should be in Dock")
 	}
 }
+
+func TestClientUpdaterNeverDownloadsSameOrOlderVersion(t *testing.T) {
+	u := &ClientUpdater{
+		Version: "0.23.1",
+		HomeDir: t.TempDir(),
+		state:   "latest",
+	}
+	// Calling DownloadFound when state is "latest" (or when no newer release exists) must be a no-op.
+	u.DownloadFound()
+	if st, _ := u.State(); st != "latest" {
+		t.Fatalf("expected state to remain 'latest', got %q", st)
+	}
+}

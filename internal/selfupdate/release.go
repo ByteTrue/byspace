@@ -628,12 +628,24 @@ func heldOpen(err error) bool {
 	return errors.Is(err, errSharingViolation) || errors.Is(err, errLockViolation)
 }
 
-// RemoveOld cleans up any leftover .old binaries from earlier Windows updates.
+// RemoveOld cleans up any leftover .old binaries and interrupted .byspace-dl-* / .new
+// temp files from earlier updates.
 func RemoveOld(exe string) {
+	if exe == "" {
+		return
+	}
 	_ = os.Remove(exe + ".old")
+	_ = os.Remove(exe + ".new")
 	olds, _ := filepath.Glob(exe + ".old-*")
 	for _, o := range olds {
 		_ = os.Remove(o)
+	}
+	dir := filepath.Dir(exe)
+	for _, pat := range []string{".byspace-dl-*", ".byspace-new-*"} {
+		leftovers, _ := filepath.Glob(filepath.Join(dir, pat))
+		for _, f := range leftovers {
+			_ = os.Remove(f)
+		}
 	}
 }
 
@@ -869,11 +881,14 @@ func RelaunchBinary(exe string, showWindow bool) error {
 		args = []string{"tray"}
 	}
 	cmd := exec.Command(exe, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
+	detachProcess(cmd)
 	cmd.Env = append(os.Environ(), "BYSPACE_REPLACES="+strconv.Itoa(os.Getpid()))
 	return cmd.Start()
 }
 
-// AwaitPredecessor waits up to 15s for the process named in BYSPACE_REPLACES to exit.
+// AwaitPredecessor waits up to 15s for the process named in BYSPACE_REPLACES to exit
+// before acquiring SingleInstance or binding ports, then cleans up any .old binary.
 func AwaitPredecessor() {
 	pid, err := strconv.Atoi(os.Getenv("BYSPACE_REPLACES"))
 	_ = os.Unsetenv("BYSPACE_REPLACES")
@@ -881,11 +896,13 @@ func AwaitPredecessor() {
 		return
 	}
 	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
-		p, findErr := os.FindProcess(pid)
-		if findErr != nil || p.Signal(syscall.Signal(0)) != nil {
-			return
+		if !processAlive(pid) {
+			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if exe, exeErr := Executable(); exeErr == nil && exe != "" {
+		RemoveOld(exe)
 	}
 }
 

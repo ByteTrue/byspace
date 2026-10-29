@@ -8,9 +8,11 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -166,10 +168,10 @@ func withDesktopSettingsAPI(
 					} else if patch.RestartToUpdate && updater.AutoRelaunch != nil {
 						go updater.AutoRelaunch()
 					} else {
-						if !current.NoAutoDownload {
+						if patch.NoAutoDownload != nil && !*patch.NoAutoDownload {
 							updater.DownloadFound()
 						}
-						if current.AutoRestart {
+						if patch.AutoRestart != nil && *patch.AutoRestart {
 							go updater.AutoTick()
 						}
 					}
@@ -182,6 +184,27 @@ func withDesktopSettingsAPI(
 	})
 }
 
+func setupDesktopLogFile(homeDir string) *os.File {
+	if homeDir == "" {
+		return nil
+	}
+	_ = os.MkdirAll(homeDir, 0o700)
+	logPath := filepath.Join(homeDir, "daemon.log")
+	if fi, err := os.Stat(logPath); err == nil && fi.Size() > 10<<20 {
+		_ = os.Rename(logPath, logPath+".old")
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return nil
+	}
+	if runtime.GOOS == "windows" {
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(io.MultiWriter(os.Stderr, f))
+	}
+	return f
+}
+
 // Run launches the Wails v3 native application.
 func Run(version string, showMain bool, initialLink string) error {
 	isAndroid := runtime.GOOS == "android"
@@ -192,6 +215,10 @@ func Run(version string, showMain bool, initialLink string) error {
 		if acquireOrHandOverGUILock(homeDir, showMain, initialLink) {
 			return nil
 		}
+		if logFile := setupDesktopLogFile(homeDir); logFile != nil {
+			defer logFile.Close()
+		}
+		log.Printf("byspace desktop %s starting (os=%s arch=%s home=%s)", version, runtime.GOOS, runtime.GOARCH, homeDir)
 		selfupdate.EnsureAppCLISymlink(false)
 		_ = autostart.Refresh()
 	}
@@ -443,8 +470,18 @@ func Run(version string, showMain bool, initialLink string) error {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
+			// Close the in-process daemon with a bounded deadline so an open WebView2 socket on
+			// Windows never blocks shutdown indefinitely.
 			if sup != nil {
-				_ = sup.Close()
+				done := make(chan struct{})
+				go func() {
+					_ = sup.Close()
+					close(done)
+				}()
+				select {
+				case <-done:
+				case <-time.After(800 * time.Millisecond):
+				}
 			}
 			updater.InstallStaged()
 		},
@@ -501,15 +538,40 @@ func Run(version string, showMain bool, initialLink string) error {
 			menu.Update()
 			updater.DownloadFound()
 		})
-		restartItem := menu.Add("Restart to update").SetHidden(true)
-		restartItem.OnClick(func(*application.Context) {
+		triggerRelaunch := func() {
 			shown := application.InvokeSyncWithResult(func() bool {
 				return mainWin != nil && mainWin.IsVisible()
 			})
-			if updater.InstallAndRelaunch(shown) {
-				quitting.Store(true)
-				app.Quit()
+			if !updater.InstallAndRelaunch(shown) {
+				return
 			}
+			quitting.Store(true)
+			cancelBg()
+			updater.Stop()
+			// Guarantee the old process exits promptly on Windows even if WebView2's window loop
+			// stalls during teardown, so the newly spawned process waiting in AwaitPredecessor
+			// takes over immediately without leaving a frozen window.
+			go func() {
+				if sup != nil {
+					_ = sup.Close()
+				}
+				os.Exit(0)
+			}()
+			application.InvokeAsync(func() {
+				if mainWin != nil {
+					releasedWin.Store(mainWin)
+					mainWin.Close()
+				}
+				app.Quit()
+			})
+			time.AfterFunc(1200*time.Millisecond, func() {
+				os.Exit(0)
+			})
+		}
+
+		restartItem := menu.Add("Restart to update").SetHidden(true)
+		restartItem.OnClick(func(*application.Context) {
+			go triggerRelaunch()
 		})
 		menu.Add("Check for Updates…").OnClick(func(*application.Context) {
 			go updater.CheckNow()
@@ -569,15 +631,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			})
 			return IdleAt(agentBusy, focused, lastBusy, time.Now(), IdleSettle)
 		}
-		updater.AutoRelaunch = func() {
-			shown := application.InvokeSyncWithResult(func() bool {
-				return mainWin != nil && mainWin.IsVisible()
-			})
-			if updater.InstallAndRelaunch(shown) {
-				quitting.Store(true)
-				app.Quit()
-			}
-		}
+		updater.AutoRelaunch = triggerRelaunch
 
 		go func() {
 			var ticks int

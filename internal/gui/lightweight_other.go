@@ -1,4 +1,4 @@
-//go:build !darwin && !nogui
+//go:build !darwin && !windows && !nogui
 
 package gui
 

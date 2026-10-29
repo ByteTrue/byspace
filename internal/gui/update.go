@@ -173,7 +173,10 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 	}
 	if !selfupdate.Released(u.Version) || !selfupdate.Newer(rel.Version, u.Version) {
 		u.mu.Lock()
-		u.latest = rel
+		u.latest = nil
+		u.staged = ""
+		u.downloaded = 0
+		u.total = 0
 		u.state = "latest"
 		u.mu.Unlock()
 		return
@@ -223,12 +226,13 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 }
 
 // DownloadFound starts downloading a previously discovered update when NoAutoDownload was on.
+// It is a no-op unless state is "found" and rel.Version is strictly newer than u.Version.
 func (u *ClientUpdater) DownloadFound() {
 	u.mu.Lock()
 	rel := u.latest
 	bundle := u.bundle
 	exe := u.exe
-	if rel == nil || u.state == "downloading" || u.state == "ready" {
+	if u.state != "found" || rel == nil || !selfupdate.Newer(rel.Version, u.Version) {
 		u.mu.Unlock()
 		return
 	}
