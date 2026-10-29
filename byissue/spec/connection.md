@@ -35,6 +35,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **beta 与 stable 是两个 Worker**（独立 DO 命名空间），不是同一 Worker 的两个 route。zijieapi.de5.net 时代的 byspace 子域已废弃，routes 已移除。
 - **relay 的 socket 必须用 Durable Object 的 hibernation API 接收。** 这不是性能优化，是能不能在免费额度里活下去的前提：`acceptWebSocket` 收进来的连接空闲时对象被驱逐、不计费，而 `Upgrade` + 常驻读循环让对象在整个连接生命周期里保持唤醒、全程计费。同一账户实测差 4000 倍（TS 版 4.1 毫秒/请求，Go 版 16.2 秒/请求），后者几天就烧穿免费层每日额度。**任何一方改动 socket 接收方式前先读 [notes/018](../notes/018-durable-object-billing-and-hibernation.md)。** 守卫在 `scripts/relay-worker.test.mjs`。
 - **额度的症状与 relay 故障不同。** 额度耗尽时所有 WebSocket 握手 500（浏览器侧 `code 1006`），但 `/health` 仍 200——它不碰 Durable Object。这种时候换 worker、换 serverId 都没用，是账户级、按日重置。
+- **隧道经托管 relay 的成本是可算的，且远低于额度。** 实测 0.28 毫 GB-s/帧（含两跳 DO 消息）。按真实用量折算，历史峰值日（9,080 次 AI 调用）全走隧道也只占免费层额度 13%，常态 1–5%。折算方法、两个反直觉细节（按字节输入占 96% 但按帧数只占 5–13%；不要用看板的 token 总量估）见 [notes/018](../notes/018-durable-object-billing-and-hibernation.md)。
 
 ## 自托管部署
 

@@ -104,3 +104,15 @@ text=我是由深度求索公司开发的AI助手，能为你解答问题、提�
 1. D1/D2 连托管 relay，`curl` 通过隧道的 `/v1/models` 返回 200
 2. SSE 流式对话能完整流出
 3. 之后才能测「隧道 + AI API」的 DO 消耗量
+
+## 沉淀去向
+
+- **`byissue/notes/018`**：新增「隧道 + AI API 的实际额度占用」一节 —— 实测常数 0.28 毫 GB-s/帧、
+  按真实用量的折算表、两个算错过的细节（按字节输入占 96% 但按帧数只占 5–13%；不要用看板 token
+  总量估额度）、以及「真正的成本大头是常驻连接不是对话」。
+- **`byissue/spec/connection.md`**：加一条指针，说明隧道成本可算且远低于额度。
+- **`scripts/relay-worker.test.mjs`**：守卫 `socket.Get("(de)?serializeAttachment")` 不得出现。
+
+`this` 丢失这条本身留在本文作证据：它是「编译通过 + 单测通过 + 浏览器可用」三重假象下仍存在的
+runtime 错误，只有 `wrangler tail` 能看见。没有独立成 note —— 它的教训和 notes/018 的
+「单位成本」是同一条：托管环境的运行时语义不在代码里。
