@@ -116,10 +116,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install GTK3 and WebKit2GTK 4.1 headers
+      - name: Install GTK4 and WebKitGTK 6.0 headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
       - run: make release-linux-desktop GOARCH="${{ matrix.goarch }}" VERSION="${{ needs.context.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
@@ -176,9 +176,12 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
       - name: Install Android NDK & SDK 36
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+        run: |
+          set -euo pipefail
+          SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)"
+          yes | "$SDKM" --licenses >/dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - run: make build-android VERSION="${{ needs.context.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
