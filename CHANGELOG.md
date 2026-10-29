@@ -5,6 +5,18 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.2 - 2026-10-29
+
+### Added
+
+- Desktop App settings rows for `Version` (manual check, byte-level download progress, manual download, and one-click restart to update), `Config folder` (shows `~/.byspace` and opens it in Explorer / Finder), and `Command line` (per-shell PATH inspection and one-click `Add to PATH` with Windows `byspace.cmd` shim and `WM_SETTINGCHANGE` broadcast)
+- Automatic desktop logging to `~/.byspace/daemon.log` with 10 MB rotation
+
+### Fixed
+
+- Fixed the desktop updater re-downloading the already-installed release when toggling settings switches by clearing `latest` when already up to date and guarding `DownloadFound` on `state == "found"` and `Newer(latest, current)`
+- Fixed Windows update relaunch freezing the old window and exiting the new instance prematurely because `os.Process.Signal(0)` is unsupported on Windows; `AwaitPredecessor` now uses `OpenProcess(SYNCHRONIZE)` + `WaitForSingleObject`
+
 ## 0.23.1 - 2026-10-29
 
 ### Added

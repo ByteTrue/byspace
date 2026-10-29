@@ -10,6 +10,6 @@ import (
 
 func init() {
 	application.RegisterAndroidMain(func() {
-		os.Exit(Main("0.23.1", os.Args[1:], os.Stdout, os.Stderr))
+		os.Exit(Main("0.23.2", os.Args[1:], os.Stdout, os.Stderr))
 	})
 }
