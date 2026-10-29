@@ -78,9 +78,26 @@ attachment 一旦能读写，`GetWebSockets(tag)` 与 `conn.Tags()` 都对得上
 固定唤醒开销远大于预期的 CPU 时间。但量级仍然安全：重度使用一天也只占额度个位数百分比。
 真正烧额度的是常驻连接，那已由 hibernation 解决（14,527 → 0.27 GB-s/天）。
 
+## Windows 也验过了
+
+Windows 11（10.1.115.59）作**发起端**、本机 Mac 作**目标端**（暴露 3425 的 magpie 网关），
+同一条生产 relay：
+
+```
+port=50307  bytes=28097  chunks=124  done=1  textlen=113
+text=我是由深度求索公司开发的AI助手，能为你解答问题、提供信息并协助完成各种任务。
+```
+
+完整 SSE 流：124 个 chunk、收到 `[DONE]`、中文回答完整。
+
+**一个 Windows 特有的启动抖动**：首次启动时隧道那条 WS 报
+`net/http: TLS handshake timeout`，而同一进程的 control 通道已连上、PowerShell 的 HTTPS 也是 200。
+重启后不再出现。判断是冷启动时并发 TLS 握手的一次性超时；隧道自己的重连退避会恢复，
+但第一次失败会让本地转发端口短暂处于"已监听但不通"的状态。未深究，记在这里。
+
 ## 影响
 
-隧道经托管 relay 完全不可用。经自托管 relay 可用。
+（已修）隧道经托管 relay 可用，macOS 与 Windows 双向验过。
 
 ## 验证
 
