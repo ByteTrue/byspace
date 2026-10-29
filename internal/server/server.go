@@ -4274,17 +4274,33 @@ func (s *Server) rememberIdempotentAgent(key, agentID string) {
 
 // applyCORS writes the allow-listed CORS headers and answers preflight requests.
 // It reports whether the request was fully handled.
+func isWailsNativeOrigin(origin string) bool {
+	lower := strings.ToLower(strings.TrimSpace(origin))
+	return lower == "wails://localhost" ||
+		lower == "wails://wails.localhost" ||
+		lower == "http://wails.localhost" ||
+		lower == "https://wails.localhost"
+}
+
 func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin != "" {
-		for _, allowed := range s.corsOrigins() {
-			if allowed == "*" || allowed == origin {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Vary", "Origin")
-				break
+		if isWailsNativeOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Vary", "Origin")
+		} else {
+			for _, allowed := range s.corsOrigins() {
+				if allowed == "*" || allowed == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Vary", "Origin")
+					break
+				}
 			}
 		}
 	}

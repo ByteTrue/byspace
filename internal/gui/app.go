@@ -14,7 +14,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
+	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/selfupdate"
+	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/webui"
 )
 
@@ -56,8 +58,12 @@ func Run(version string, showMain bool, initialLink string) error {
 		if err := sup.Start(); err != nil {
 			log.Printf("byspace gui: daemon supervisor warning: %v", err)
 		}
+		homeDir, _ := home.Resolve("")
+		localToken := server.EnsureCLICredential(homeDir)
 		if baseUI != nil {
-			assetHandler = baseUI.WithExplicitConnectionHint(sup.Addr, "BySpace")
+			assetHandler = baseUI.
+				WithExplicitConnectionHint(sup.Addr, "BySpace").
+				WithLocalCredential(localToken)
 		} else {
 			assetHandler = http.NotFoundHandler()
 		}

@@ -1281,11 +1281,15 @@ const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__BYSPACE_INITIAL_DAEMON_CONN
 export interface InitialDaemonConnectionHint {
   listen: string;
   useTls?: boolean;
+  label?: string;
+  password?: string;
 }
 
 const InitialDaemonConnectionHintSchema: z.ZodType<InitialDaemonConnectionHint> = z.object({
   listen: z.string().trim().min(1),
   useTls: z.boolean().optional().default(false),
+  label: z.string().trim().min(1).optional(),
+  password: z.string().trim().min(1).optional(),
 });
 
 export function readInitialDaemonConnectionHint(input?: {
@@ -1582,7 +1586,11 @@ export class HostRuntimeStore {
     }
     const connectionWithHint: HostConnection =
       connection.type === "directTcp"
-        ? { ...connection, useTls: hint.useTls ?? connection.useTls ?? false }
+        ? {
+            ...connection,
+            useTls: hint.useTls ?? connection.useTls ?? false,
+            ...(hint.password ? { password: hint.password } : {}),
+          }
         : connection;
     if (registryHasConnection(this.hosts, connectionWithHint)) {
       return true;
@@ -1591,6 +1599,7 @@ export class HostRuntimeStore {
     try {
       await this.probeAndUpsertConnection({
         connection: connectionWithHint,
+        ...(hint.label ? { label: hint.label } : {}),
         timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
       });
       return true;

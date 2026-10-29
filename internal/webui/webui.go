@@ -47,6 +47,7 @@ type Handler struct {
 	injectConnectionHint  bool
 	explicitListen        string
 	label                 string
+	credential            string
 	disablePrecompression bool
 }
 
@@ -70,6 +71,16 @@ func (h *Handler) WithExplicitConnectionHint(listenAddr, label string) *Handler 
 	h.injectConnectionHint = true
 	h.explicitListen = strings.TrimSpace(listenAddr)
 	h.label = label
+	return h
+}
+
+// WithLocalCredential attaches this host's local CLI credential to the injected connection hint so
+// the desktop app window authenticates automatically even when a daemon password is configured.
+func (h *Handler) WithLocalCredential(token string) *Handler {
+	if h == nil {
+		return nil
+	}
+	h.credential = strings.TrimSpace(token)
 	return h
 }
 
@@ -176,7 +187,7 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	if isIndex && h.injectConnectionHint {
-		data = injectDaemonConnectionHint(data, r, h.explicitListen, h.label)
+		data = injectDaemonConnectionHint(data, r, h.explicitListen, h.label, h.credential)
 	}
 
 	w.Header().Set("Content-Type", getContentType(resolvedFile))
@@ -249,7 +260,7 @@ func setCacheHeaders(w http.ResponseWriter, isIndex bool, resolvedFile string) {
 	}
 }
 
-func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListen, label string) []byte {
+func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListen, label, credential string) []byte {
 	host := explicitListen
 	useTLS := false
 	if host == "" {
@@ -260,6 +271,9 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 		"listen": host,
 		"useTls": useTLS,
 		"label":  label,
+	}
+	if credential != "" {
+		hint["password"] = credential
 	}
 	b, err := json.Marshal(hint)
 	if err != nil {
