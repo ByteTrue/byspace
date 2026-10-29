@@ -734,7 +734,7 @@ func BuildRelaunchScript(bundle string, showWindow bool, logFile string, waits [
 	if logFile == "" {
 		logFile = os.DevNull
 	}
-	exe := filepath.Join(bundle, "Contents", "MacOS", "byspace")
+	exe := filepath.ToSlash(filepath.Join(bundle, "Contents", "MacOS", "byspace"))
 	run := shellQuote(exe)
 	openCmd := "open -n " + shellQuote(bundle)
 	if !showWindow {
