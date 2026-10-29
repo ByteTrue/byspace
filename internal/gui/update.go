@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -41,6 +42,7 @@ type ClientUpdater struct {
 	lastErr    string
 	bundle     string
 	exe        string
+	self       os.FileInfo
 	staged     string
 	latest     *selfupdate.Release
 	running    bool
@@ -64,7 +66,9 @@ func (u *ClientUpdater) Start() {
 			u.bundle = b
 		} else if exe, err := selfupdate.Executable(); err == nil && selfupdate.Writable(filepath.Dir(exe)) {
 			u.exe = exe
+			u.self, _ = os.Stat(exe)
 			selfupdate.RemoveOld(exe)
+			selfupdate.RemoveStaleNew(exe)
 		}
 	}
 	u.mu.Unlock()
@@ -312,6 +316,10 @@ func (u *ClientUpdater) AutoTick() {
 func (u *ClientUpdater) InstallStaged() bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	if u.exe != "" && selfupdate.Replaced(u.exe, u.self) {
+		u.staged = ""
+		return true
+	}
 	if u.staged == "" {
 		return false
 	}

@@ -1,16 +1,19 @@
 package selfupdate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSemverNewerAndReleased(t *testing.T) {
@@ -31,6 +34,58 @@ func TestSemverNewerAndReleased(t *testing.T) {
 	}
 	if Newer("0.21.2", "0.21.2") {
 		t.Fatal("equal versions are not newer")
+	}
+}
+
+func TestDownloadAssetResumesAcrossDroppedConnection(t *testing.T) {
+	oldWaits := retryWaits
+	retryWaits = []time.Duration{time.Millisecond, time.Millisecond}
+	defer func() { retryWaits = oldWaits }()
+
+	body := bytes.Repeat([]byte("byspace-resume-test-"), 8192)
+	sum := sha256.Sum256(body)
+	var ranges []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rng := r.Header.Get("Range")
+		ranges = append(ranges, rng)
+		if len(ranges) == 1 {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+			_, _ = w.Write(body[:4096])
+			if fl, ok := w.(http.Flusher); ok {
+				fl.Flush()
+			}
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					_ = conn.Close()
+				}
+			}
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 4096-%d/%d", len(body)-1, len(body)))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)-4096))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(body[4096:])
+	}))
+	defer srv.Close()
+
+	var lastDone, lastTotal int64
+	ctx := WithProgress(context.Background(), func(d, tot int64) {
+		lastDone, lastTotal = d, tot
+	})
+	dest := filepath.Join(t.TempDir(), "byspace.new")
+	err := DownloadAsset(ctx, Asset{
+		URL:    srv.URL + "/byspace",
+		Size:   int64(len(body)),
+		SHA256: hex.EncodeToString(sum[:]),
+	}, dest)
+	if err != nil {
+		t.Fatalf("DownloadAsset with resume: %v", err)
+	}
+	if len(ranges) != 2 || ranges[0] != "" || ranges[1] != "bytes=4096-" {
+		t.Fatalf("unexpected Range requests: %v", ranges)
+	}
+	if lastDone != int64(len(body)) || lastTotal != int64(len(body)) {
+		t.Fatalf("progress = %d/%d, want %d/%d", lastDone, lastTotal, len(body), len(body))
 	}
 }
 

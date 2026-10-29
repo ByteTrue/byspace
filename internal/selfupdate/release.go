@@ -519,75 +519,159 @@ func ResolveBinaryAsset(rel *Release) (string, Asset, error) {
 	return "", Asset{}, fmt.Errorf("release %s has no %s", rel.Version, BinaryAsset())
 }
 
-// DownloadAsset downloads a to destPath (through ctx's mirror/proxy if set) and verifies its SHA-256.
+var retryWaits = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second}
+
+type netDownloadError struct {
+	file string
+	err  error
+}
+
+func (e *netDownloadError) Error() string {
+	return fmt.Sprintf("download of %s interrupted (%v)", e.file, e.err)
+}
+
+func (e *netDownloadError) Unwrap() error { return e.err }
+
+func isNetDownloadError(err error) bool {
+	var ne *netDownloadError
+	return errors.As(err, &ne)
+}
+
+type readErrTracker struct {
+	r   io.Reader
+	err error
+}
+
+func (r *readErrTracker) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err != nil && err != io.EOF {
+		r.err = err
+	}
+	return n, err
+}
+
+func fileSHA256(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// DownloadAsset downloads a to destPath (with Range resume across transient network drops,
+// ported from magpie's download/fetch) and verifies its SHA-256 over the whole file.
 func DownloadAsset(ctx context.Context, a Asset, destPath string) error {
 	if a.SHA256 == "" {
 		return fmt.Errorf("release lists no SHA-256 checksum for %s", filepath.Base(destPath))
 	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+	_ = os.Remove(destPath)
+	var err error
+	for try := 0; try <= len(retryWaits); try++ {
+		if try > 0 {
+			select {
+			case <-ctx.Done():
+				_ = os.Remove(destPath)
+				return err
+			case <-time.After(retryWaits[try-1]):
+			}
+		}
+		if err = fetchAssetAttempt(ctx, a, destPath); err == nil || ctx.Err() != nil || !isNetDownloadError(err) {
+			break
+		}
+	}
+	if err != nil {
+		_ = os.Remove(destPath)
+		return err
+	}
+	if err := os.Chmod(destPath, 0o755); err != nil {
+		_ = os.Remove(destPath)
+		return err
+	}
+	return nil
+}
+
+func fetchAssetAttempt(ctx context.Context, a Asset, destPath string) error {
 	client := httpClientFor(ctx, 10*time.Minute)
 	targetURL := mirroredURL(Mirror(ctx), a.URL)
+	name := filepath.Base(destPath)
+
+	var have int64
+	if fi, err := os.Stat(destPath); err == nil && fi.Mode().IsRegular() {
+		have = fi.Size()
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return err
 	}
+	if have > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
+	}
+	fail := func(err error) error {
+		if !isNetDownloadError(err) {
+			_ = os.Remove(destPath)
+		}
+		return err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			return fail(err)
+		}
+		return fail(&netDownloadError{file: name, err: err})
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s returned HTTP %d", targetURL, resp.StatusCode)
+
+	flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	switch {
+	case resp.StatusCode == http.StatusPartialContent && have > 0 && strings.HasPrefix(resp.Header.Get("Content-Range"), fmt.Sprintf("bytes %d-", have)):
+		flags = os.O_WRONLY | os.O_APPEND
+	case resp.StatusCode == http.StatusOK:
+		have = 0
+	default:
+		return fail(fmt.Errorf("download %s returned HTTP %d", name, resp.StatusCode))
 	}
 
-	dir := filepath.Dir(destPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".byspace-dl-*")
+	f, err := os.OpenFile(destPath, flags, 0o644)
 	if err != nil {
-		return err
+		return fail(err)
 	}
-	tmpName := tmp.Name()
-	cleanup := func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-	}
-
-	total := resp.ContentLength
-	if total <= 0 && a.Size > 0 {
-		total = a.Size
-	}
-	var src io.Reader = resp.Body
+	in := &readErrTracker{r: resp.Body}
+	var body io.Reader = in
 	if fn, _ := ctx.Value(progressKey{}).(func(int64, int64)); fn != nil {
-		fn(0, total)
-		src = &progressReader{r: resp.Body, total: total, fn: fn}
+		total := resp.ContentLength
+		if total > 0 {
+			total += have
+		} else {
+			total = a.Size
+		}
+		if total < 0 {
+			total = 0
+		}
+		fn(have, total)
+		body = &progressReader{r: in, done: have, total: total, fn: fn}
 	}
-	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmp, hasher), src); err != nil {
-		cleanup()
-		return err
+	_, copyErr := io.Copy(f, body)
+	if closeErr := f.Close(); copyErr == nil {
+		copyErr = closeErr
 	}
-	if err := tmp.Sync(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return err
+	if copyErr != nil {
+		if ctx.Err() == nil && in.err != nil {
+			copyErr = &netDownloadError{file: name, err: copyErr}
+		}
+		return fail(copyErr)
 	}
 
-	got := hex.EncodeToString(hasher.Sum(nil))
+	got := fileSHA256(destPath)
 	if !strings.EqualFold(got, a.SHA256) {
-		_ = os.Remove(tmpName)
-		return fmt.Errorf("SHA-256 mismatch for %s (got %s, want %s)", filepath.Base(destPath), got, a.SHA256)
-	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
-		_ = os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, destPath); err != nil {
-		_ = os.Remove(tmpName)
-		return err
+		return fail(fmt.Errorf("SHA-256 mismatch for %s (got %s, want %s)", name, got, a.SHA256))
 	}
 	return nil
 }
@@ -622,20 +706,71 @@ var asideWaits = []time.Duration{
 	200 * time.Millisecond,
 	400 * time.Millisecond,
 	800 * time.Millisecond,
+	1500 * time.Millisecond,
+}
+
+var heldFor = 30 * time.Second
+
+func waitHeld(i int, err error, start time.Time, retry bool) bool {
+	if !retry {
+		return false
+	}
+	if i < len(asideWaits) {
+		time.Sleep(asideWaits[i])
+		return true
+	}
+	if !heldOpen(err) || len(asideWaits) == 0 {
+		return false
+	}
+	pause := asideWaits[len(asideWaits)-1]
+	if time.Since(start)+pause > heldFor {
+		return false
+	}
+	time.Sleep(pause)
+	return true
+}
+
+func moveIn(from, exe string) error {
+	start := time.Now()
+	for i := 0; ; i++ {
+		err := os.Rename(from, exe)
+		if err == nil || !waitHeld(i, err, start, heldOpen(err)) {
+			return err
+		}
+	}
 }
 
 func heldOpen(err error) bool {
 	return errors.Is(err, errSharingViolation) || errors.Is(err, errLockViolation)
 }
 
-// RemoveOld cleans up any leftover .old binaries and interrupted .byspace-dl-* / .new
+// Replaced reports whether exe on disk is no longer the binary that was present when this
+// process started (ported from magpie's update.Replaced).
+func Replaced(exe string, started os.FileInfo) bool {
+	now, err := os.Stat(exe)
+	return err == nil && started != nil && (now.Size() != started.Size() || !now.ModTime().Equal(started.ModTime()))
+}
+
+// RemoveStaleNew removes exe.new when its hash matches the already-running exe.
+func RemoveStaleNew(exe string) {
+	staged := exe + ".new"
+	a, err1 := os.Stat(exe)
+	b, err2 := os.Stat(staged)
+	if err1 != nil || err2 != nil || a.Size() != b.Size() {
+		return
+	}
+	if ha, hb := fileSHA256(exe), fileSHA256(staged); ha != "" && ha == hb {
+		_ = os.Remove(staged)
+	}
+}
+
+// RemoveOld cleans up any leftover .old binaries and interrupted .byspace-dl-*
 // temp files from earlier updates.
 func RemoveOld(exe string) {
 	if exe == "" {
 		return
 	}
 	_ = os.Remove(exe + ".old")
-	_ = os.Remove(exe + ".new")
 	olds, _ := filepath.Glob(exe + ".old-*")
 	for _, o := range olds {
 		_ = os.Remove(o)
@@ -670,8 +805,9 @@ func moveAside(exe string) (string, error) {
 	return "", fmt.Errorf("could not move running executable %s aside: %w", filepath.Base(exe), err)
 }
 
-// InstallBinary swaps a staged binary into place at exe. On Windows, if direct replacement fails
-// because exe is currently executing, the running exe is moved aside to exe.old first.
+// InstallBinary swaps a staged binary into place at exe, waiting up to heldFor on Windows when
+// an antivirus scanner holds the new download open and restoring from .old on failure (ported
+// from magpie's InstallBinaryAside).
 func InstallBinary(staged, exe string) error {
 	if err := os.Rename(staged, exe); err == nil {
 		return nil
@@ -687,16 +823,9 @@ func InstallBinary(staged, exe string) error {
 			return err
 		}
 	}
-	var err error
-	for i := 0; ; i++ {
-		if err = os.Rename(staged, exe); err == nil || i == len(asideWaits) || !heldOpen(err) {
-			break
-		}
-		time.Sleep(asideWaits[i])
-	}
-	if err != nil {
+	if err := moveIn(staged, exe); err != nil {
 		if old != "" {
-			_ = os.Rename(old, exe)
+			_ = moveIn(old, exe)
 		}
 		return err
 	}
