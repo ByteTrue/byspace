@@ -622,17 +622,21 @@ func moveAside(exe string) (string, error) {
 	return "", fmt.Errorf("could not move running executable %s aside: %w", filepath.Base(exe), err)
 }
 
-// InstallBinary swaps a staged binary into place at exe. On Windows, the running exe is moved
-// aside to exe.old first so it can be replaced while in use.
+// InstallBinary swaps a staged binary into place at exe. On Windows, if direct replacement fails
+// because exe is currently executing, the running exe is moved aside to exe.old first.
 func InstallBinary(staged, exe string) error {
+	if err := os.Rename(staged, exe); err == nil {
+		return nil
+	} else if runtime.GOOS != "windows" {
+		return err
+	}
+
+	RemoveOld(exe)
 	var old string
-	if runtime.GOOS == "windows" {
-		RemoveOld(exe)
-		if _, statErr := os.Stat(exe); statErr == nil {
-			var err error
-			if old, err = moveAside(exe); err != nil {
-				return err
-			}
+	if _, statErr := os.Stat(exe); statErr == nil {
+		var err error
+		if old, err = moveAside(exe); err != nil {
+			return err
 		}
 	}
 	var err error

@@ -108,9 +108,10 @@ func TestStageAndInstallBinaryVerifiesSHA256AndRejectsTamperedPayload(t *testing
 }
 
 func TestBundleOfDetectsMacAppBundle(t *testing.T) {
-	p := "/Applications/BySpace.app/Contents/MacOS/byspace"
-	if got := BundleOf(p); got != "/Applications/BySpace.app" {
-		t.Fatalf("BundleOf(%q) = %q, want /Applications/BySpace.app", p, got)
+	p := filepath.FromSlash("/Applications/BySpace.app/Contents/MacOS/byspace")
+	want := filepath.FromSlash("/Applications/BySpace.app")
+	if got := BundleOf(p); got != want {
+		t.Fatalf("BundleOf(%q) = %q, want %s", p, got, want)
 	}
 	if got := BundleOf("/usr/local/bin/byspace"); got != "" {
 		t.Fatalf("BundleOf(/usr/local/bin/byspace) = %q, want empty", got)
