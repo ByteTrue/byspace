@@ -39,9 +39,9 @@ var trayIcon []byte
 var trayTemplateIcon []byte
 
 func buildDesktopStatusPayload(homeDir string, sup *DaemonSupervisor, updater *ClientUpdater) map[string]any {
-	st, latest := "", ""
+	var upd UpdateStatusSnapshot
 	if updater != nil {
-		st, latest = updater.State()
+		upd = updater.Status()
 	}
 	prefs := LoadDesktopSettings(homeDir)
 	prefs.KeepAwake = string(prefs.EffectiveKeepAwake())
@@ -50,14 +50,18 @@ func buildDesktopStatusPayload(homeDir string, sup *DaemonSupervisor, updater *C
 		daemonSt = sup.Status()
 	}
 	return map[string]any{
-		"desktop":       runtime.GOOS != "android",
-		"platform":      runtime.GOOS,
-		"settings":      prefs,
-		"openAtLogin":   autostart.Enabled() == autostart.On,
-		"daemonStatus":  daemonSt,
-		"backupCount":   len(backup.List(homeDir)),
-		"updateState":   st,
-		"latestVersion": latest,
+		"desktop":          runtime.GOOS != "android",
+		"platform":         runtime.GOOS,
+		"settings":         prefs,
+		"openAtLogin":      autostart.Enabled() == autostart.On,
+		"daemonStatus":     daemonSt,
+		"backupCount":      len(backup.List(homeDir)),
+		"configFolder":     selfupdate.TildePath(homeDir),
+		"configFolderFull": homeDir,
+		"cliStatus":        selfupdate.ReadCLIStatus(),
+		"update":           upd,
+		"updateState":      upd.State,
+		"latestVersion":    upd.LatestVersion,
 	}
 }
 
@@ -68,6 +72,7 @@ func withDesktopSettingsAPI(
 	updater *ClientUpdater,
 	onDockChanged func(DesktopSettings),
 	onTintTitleBar func([3]uint8, bool),
+	onOpenConfigFolder func(),
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/_byspace/desktop/settings" {
@@ -80,18 +85,23 @@ func withDesktopSettingsAPI(
 			case http.MethodPost:
 				current := LoadDesktopSettings(homeDir)
 				var patch struct {
-					KeepAwake      *string   `json:"keepAwake"`
-					HideFromDock   *bool     `json:"hideFromDock"`
-					OpenAtLogin    *bool     `json:"openAtLogin"`
-					Lightweight    *bool     `json:"lightweight"`
-					NoAutoUpdate   *bool     `json:"noAutoUpdate"`
-					NoAutoDownload *bool     `json:"noAutoDownload"`
-					AutoRestart    *bool     `json:"autoRestart"`
-					LinkCLI        bool      `json:"linkCLI"`
-					TakeOverDaemon bool      `json:"takeOverDaemon"`
-					CreateBackup   bool      `json:"createBackup"`
-					TitleBarColor  *[3]uint8 `json:"titleBarColor"`
-					TitleBarDark   *bool     `json:"titleBarDark"`
+					KeepAwake        *string   `json:"keepAwake"`
+					HideFromDock     *bool     `json:"hideFromDock"`
+					OpenAtLogin      *bool     `json:"openAtLogin"`
+					Lightweight      *bool     `json:"lightweight"`
+					NoAutoUpdate     *bool     `json:"noAutoUpdate"`
+					NoAutoDownload   *bool     `json:"noAutoDownload"`
+					AutoRestart      *bool     `json:"autoRestart"`
+					LinkCLI          bool      `json:"linkCLI"`
+					AddCLIToPath     bool      `json:"addCLIToPath"`
+					OpenConfigFolder bool      `json:"openConfigFolder"`
+					CheckForUpdates  bool      `json:"checkForUpdates"`
+					DownloadUpdate   bool      `json:"downloadUpdate"`
+					RestartToUpdate  bool      `json:"restartToUpdate"`
+					TakeOverDaemon   bool      `json:"takeOverDaemon"`
+					CreateBackup     bool      `json:"createBackup"`
+					TitleBarColor    *[3]uint8 `json:"titleBarColor"`
+					TitleBarDark     *bool     `json:"titleBarDark"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -136,8 +146,11 @@ func withDesktopSettingsAPI(
 				if patch.HideFromDock != nil && onDockChanged != nil {
 					onDockChanged(current)
 				}
-				if patch.LinkCLI {
-					selfupdate.EnsureAppCLISymlink(true)
+				if patch.LinkCLI || patch.AddCLIToPath {
+					_, _ = selfupdate.AddCLIToPath()
+				}
+				if patch.OpenConfigFolder && onOpenConfigFolder != nil {
+					go onOpenConfigFolder()
 				}
 				if patch.TakeOverDaemon && sup != nil {
 					sup.TakeOver()
@@ -146,11 +159,19 @@ func withDesktopSettingsAPI(
 					_, _, _ = backup.Snapshot(homeDir)
 				}
 				if updater != nil {
-					if !current.NoAutoDownload {
+					if patch.CheckForUpdates {
+						go updater.Check(false)
+					} else if patch.DownloadUpdate {
 						updater.DownloadFound()
-					}
-					if current.AutoRestart {
-						go updater.AutoTick()
+					} else if patch.RestartToUpdate && updater.AutoRelaunch != nil {
+						go updater.AutoRelaunch()
+					} else {
+						if !current.NoAutoDownload {
+							updater.DownloadFound()
+						}
+						if current.AutoRestart {
+							go updater.AutoTick()
+						}
 					}
 				}
 				_ = json.NewEncoder(w).Encode(buildDesktopStatusPayload(homeDir, sup, updater))
@@ -185,6 +206,7 @@ func Run(version string, showMain bool, initialLink string) error {
 		HomeDir: homeDir,
 	}
 
+	var app *application.App
 	var quitting atomic.Bool
 	var appStarted atomic.Bool
 	var winMu sync.Mutex
@@ -247,6 +269,9 @@ func Run(version string, showMain bool, initialLink string) error {
 					tintWindowsTitleBar(w, rgb, dark)
 				}
 			},
+			func() {
+				_ = openFolder(app, homeDir)
+			},
 		)
 
 		// Start intelligent sleep inhibition (Keep Awake while agents work + 10m grace)
@@ -266,8 +291,6 @@ func Run(version string, showMain bool, initialLink string) error {
 
 	sum := sha256.Sum256([]byte(homeDir))
 	uniqueID := "com.bytetrue.byspace." + hex.EncodeToString(sum[:6])
-
-	var app *application.App
 
 	makeMainWindow := func(url string, hidden bool) *application.WebviewWindow {
 		if url == "" {

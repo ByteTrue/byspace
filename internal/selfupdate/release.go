@@ -46,6 +46,33 @@ type Asset struct {
 
 type mirrorKey struct{}
 type proxyKey struct{}
+type progressKey struct{}
+
+// WithProgress attaches a byte-level download progress callback to ctx.
+func WithProgress(ctx context.Context, fn func(done, total int64)) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, progressKey{}, fn)
+}
+
+type progressReader struct {
+	r     io.Reader
+	done  int64
+	total int64
+	fn    func(done, total int64)
+}
+
+func (p *progressReader) Read(buf []byte) (int, error) {
+	n, err := p.r.Read(buf)
+	if n > 0 {
+		p.done += int64(n)
+		if p.fn != nil {
+			p.fn(p.done, p.total)
+		}
+	}
+	return n, err
+}
 
 // WithMirror routes GitHub release downloads under ctx through the mirror prefix
 // (e.g. "https://mirror.example/https://github.com/..."). Checksums are still verified
@@ -526,8 +553,17 @@ func DownloadAsset(ctx context.Context, a Asset, destPath string) error {
 		_ = os.Remove(tmpName)
 	}
 
+	total := resp.ContentLength
+	if total <= 0 && a.Size > 0 {
+		total = a.Size
+	}
+	var src io.Reader = resp.Body
+	if fn, _ := ctx.Value(progressKey{}).(func(int64, int64)); fn != nil {
+		fn(0, total)
+		src = &progressReader{r: resp.Body, total: total, fn: fn}
+	}
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmp, hasher), resp.Body); err != nil {
+	if _, err := io.Copy(io.MultiWriter(tmp, hasher), src); err != nil {
 		cleanup()
 		return err
 	}

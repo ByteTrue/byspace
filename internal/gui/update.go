@@ -11,8 +11,19 @@ import (
 	"github.com/ByteTrue/byspace/internal/selfupdate"
 )
 
-// ClientUpdater manages background release polling, optional auto-download, and optional idle
-// auto-install/restart (modeled on magpie's internal/gui/update.go and update_wait.go).
+// UpdateStatusSnapshot is the JSON-serializable state of the desktop updater.
+type UpdateStatusSnapshot struct {
+	State          string `json:"state"` // "" | "latest" | "checking" | "found" | "downloading" | "ready" | "error"
+	CurrentVersion string `json:"currentVersion"`
+	LatestVersion  string `json:"latestVersion,omitempty"`
+	ReleaseURL     string `json:"releaseUrl,omitempty"`
+	Downloaded     int64  `json:"downloaded,omitempty"`
+	Total          int64  `json:"total,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
+// ClientUpdater manages background release polling, manual check/download/restart triggers,
+// byte-level download progress, and optional idle auto-restart.
 type ClientUpdater struct {
 	Version       string
 	HomeDir       string
@@ -23,14 +34,17 @@ type ClientUpdater struct {
 	IsIdle        func() bool
 	AutoRelaunch  func()
 
-	mu      sync.Mutex
-	state   string // "" | "checking" | "found" | "downloading" | "ready" | "error"
-	bundle  string
-	exe     string
-	staged  string
-	latest  *selfupdate.Release
-	running bool
-	stopCh  chan struct{}
+	mu         sync.Mutex
+	state      string
+	downloaded int64
+	total      int64
+	lastErr    string
+	bundle     string
+	exe        string
+	staged     string
+	latest     *selfupdate.Release
+	running    bool
+	stopCh     chan struct{}
 }
 
 // Start begins periodic background update checks and idle auto-restart polling.
@@ -96,8 +110,7 @@ func (u *ClientUpdater) Stop() {
 	close(u.stopCh)
 }
 
-// State returns the current update state ("", "checking", "found", "downloading", "ready", "error")
-// and the latest discovered version string.
+// State returns the current update state and latest version string.
 func (u *ClientUpdater) State() (state, latestVersion string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -107,24 +120,38 @@ func (u *ClientUpdater) State() (state, latestVersion string) {
 	return u.state, latestVersion
 }
 
+// Status returns a full snapshot including byte-level download progress.
+func (u *ClientUpdater) Status() UpdateStatusSnapshot {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	snap := UpdateStatusSnapshot{
+		State:          u.state,
+		CurrentVersion: u.Version,
+		Downloaded:     u.downloaded,
+		Total:          u.total,
+		Error:          u.lastErr,
+	}
+	if u.latest != nil {
+		snap.LatestVersion = u.latest.Version
+		snap.ReleaseURL = u.latest.URL
+	}
+	return snap
+}
+
 // CheckNow triggers an immediate check and downloads if a newer version is found.
 func (u *ClientUpdater) CheckNow() {
 	u.Check(true)
 }
 
-// Check queries the release feed. When forceDownload is false and DesktopSettings.NoAutoDownload
-// is true, a newly discovered release stops at state="found" until the user clicks Download or
-// turns auto-download on.
+// Check queries the release feed.
 func (u *ClientUpdater) Check(forceDownload bool) {
-	if !selfupdate.Released(u.Version) {
-		return
-	}
 	u.mu.Lock()
 	if u.state == "checking" || u.state == "downloading" {
 		u.mu.Unlock()
 		return
 	}
 	u.state = "checking"
+	u.lastErr = ""
 	u.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -137,13 +164,17 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 			u.state = "ready"
 		} else {
 			u.state = "error"
+			if err != nil {
+				u.lastErr = err.Error()
+			}
 		}
 		u.mu.Unlock()
 		return
 	}
-	if !selfupdate.Newer(rel.Version, u.Version) {
+	if !selfupdate.Released(u.Version) || !selfupdate.Newer(rel.Version, u.Version) {
 		u.mu.Lock()
-		u.state = ""
+		u.latest = rel
+		u.state = "latest"
 		u.mu.Unlock()
 		return
 	}
@@ -184,6 +215,8 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 		return
 	}
 	u.state = "downloading"
+	u.downloaded = 0
+	u.total = 0
 	u.mu.Unlock()
 
 	u.downloadAndStage(ctx, rel, bundle, exe)
@@ -200,6 +233,9 @@ func (u *ClientUpdater) DownloadFound() {
 		return
 	}
 	u.state = "downloading"
+	u.downloaded = 0
+	u.total = 0
+	u.lastErr = ""
 	u.mu.Unlock()
 
 	go func() {
@@ -210,6 +246,12 @@ func (u *ClientUpdater) DownloadFound() {
 }
 
 func (u *ClientUpdater) downloadAndStage(ctx context.Context, rel *selfupdate.Release, bundle, exe string) {
+	ctx = selfupdate.WithProgress(ctx, func(done, total int64) {
+		u.mu.Lock()
+		u.downloaded = done
+		u.total = total
+		u.mu.Unlock()
+	})
 	var staged string
 	var err error
 	if bundle != "" {
@@ -221,6 +263,7 @@ func (u *ClientUpdater) downloadAndStage(ctx context.Context, rel *selfupdate.Re
 		log.Printf("byspace update stage failed: %v", err)
 		u.mu.Lock()
 		u.state = "error"
+		u.lastErr = err.Error()
 		u.mu.Unlock()
 		return
 	}
