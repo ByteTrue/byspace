@@ -2,24 +2,24 @@
 # do not inherit their dependencies' test suites; manual runs and merge-queue
 # entries execute every contract regardless of these paths, while main pushes
 # route exactly like pull requests.
+#
+# Note: dependency changes always touch package-lock.json; omitting bare
+# package.json from workspace keeps version-bump release commits ("chore(release): cut vX.Y.Z")
+# on the fast format/lint/typecheck track instead of re-running all 16 Playwright shards.
 routing:
-  - ".github/ci-paths.yml"
+  - ".github/actions/**"
 
 workspace:
   - ".mise.toml"
   - ".tool-versions"
-  - "package.json"
   - "package-lock.json"
   - "patches/**"
-  - "scripts/**"
   - "tsconfig.json"
   - "tsconfig.base.json"
   - "vitest.config.ts"
 
 ci:
   - ".github/actions/**"
-  - ".github/workflows/ci.yml"
-  - "Makefile"
 
 format:
   - ".agents/**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
@@ -30,6 +30,8 @@ quality:
   - "**/*.{cjs,js,json,jsx,mjs,ts,tsx}"
 
 go:
+  - "main.go"
+  - "main_android.go"
   - "cmd/**"
   - "internal/**"
   - "workers/**"
@@ -38,7 +40,8 @@ go:
   - "Makefile"
 
 app:
-  - "packages/app/**"
+  - "packages/app/src/**"
+  - "packages/app/package.json"
 
 sdk:
   - "packages/client/**"
@@ -48,6 +51,8 @@ sdk:
 browser:
   - "cmd/**"
   - "internal/**"
+  - "!internal/gui/**"
+  - "!internal/selfupdate/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
   - "packages/protocol/src/client-capabilities.ts"
   - "packages/app/src/**"
@@ -57,7 +62,6 @@ browser:
   - "packages/app/public/**"
   - "packages/app/index.ts"
   - "packages/app/*config.{cjs,js,ts}"
-  - "packages/app/package.json"
 
 relay:
   - "packages/relay/**"

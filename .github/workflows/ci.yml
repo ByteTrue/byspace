@@ -270,27 +270,11 @@ jobs:
       - name: Typecheck client examples
         run: npm run typecheck:examples --workspace=@bytetrue/client
 
-  playwright:
-    # `strategy.job-total` is the matrix size. The `env` context is not available in a job name or
-    # a job-level env block — referencing it there makes GitHub reject the whole workflow, which
-    # surfaces as an instant failure with no jobs and the file path shown instead of the name.
-    name: playwright (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+  build-e2e:
+    name: build-e2e
     needs: changes
     if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
-    strategy:
-      # Shards are independent. One failing shard must not cancel the others: the point of a
-      # shard count this high is that a single shard is cheap to re-run.
-      fail-fast: false
-      matrix:
-        # The length of this list is the shard count. Sixteen keeps the slowest shard near five
-        # minutes of specs; the suite is roughly 80 minutes of single-worker time, and the jobs run
-        # in parallel, so the run takes as long as its slowest shard. Each shard also pays about 75
-        # seconds of setup (checkout, npm ci, browsers, builds).
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-    env:
-      PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
-      PLAYWRIGHT_ARTIFACT: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v4
 
@@ -307,6 +291,63 @@ jobs:
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
 
+      - name: Build workspace packages and headless daemon binary once for all shards
+        run: |
+          npm run build:app-deps && npm run build:relay
+          make build
+
+      - name: Upload prebuilt E2E bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-prebuilt
+          path: |
+            bin/byspace
+            packages/highlight/dist
+            packages/protocol/dist
+            packages/client/dist
+            packages/relay/dist
+          if-no-files-found: error
+
+  playwright:
+    # `strategy.job-total` is the matrix size. The `env` context is not available in a job name or
+    # a job-level env block — referencing it there makes GitHub reject the whole workflow, which
+    # surfaces as an instant failure with no jobs and the file path shown instead of the name.
+    name: playwright (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: [changes, build-e2e]
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Shards are independent. One failing shard must not cancel the others: the point of a
+      # shard count this high is that a single shard is cheap to re-run.
+      fail-fast: false
+      matrix:
+        # The length of this list is the shard count. Sixteen keeps the slowest shard near five
+        # minutes of specs; the suite is roughly 80 minutes of single-worker time, and the jobs run
+        # in parallel, so the run takes as long as its slowest shard.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    env:
+      PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+      PLAYWRIGHT_ARTIFACT: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+          cache: "npm"
+
+      - name: Install dependencies with retry
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Download prebuilt workspace packages and daemon binary
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-prebuilt
+          path: .
+
+      - name: Make prebuilt daemon binary executable
+        run: chmod +x bin/byspace
+
       - name: Install Playwright browsers
         timeout-minutes: 10
         run: npx playwright install chromium
@@ -315,14 +356,6 @@ jobs:
         # Several specs start agents through a real provider CLI; without it the daemon cannot
         # spawn the agent and the spec fails deep in the UI assertions.
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai@1.19.4
-
-      - name: Build workspace packages
-        # The e2e harness imports @bytetrue/client, which imports @bytetrue/relay's E2EE module, so
-        # relay has to be built too. build:app-deps covers only highlight and client.
-        run: npm run build:app-deps && npm run build:relay
-
-      - name: Build the daemon binary the e2e harness runs
-        run: make build
 
       - name: Run Playwright E2E tests
         run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
