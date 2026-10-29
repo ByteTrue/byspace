@@ -273,7 +273,7 @@ jobs:
   build-e2e:
     name: build-e2e
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -291,9 +291,10 @@ jobs:
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
 
-      - name: Build workspace packages and headless daemon binary once for all shards
+      - name: Build static web UI, workspace packages, and daemon binary once for all shards
         run: |
           npm run build:app-deps && npm run build:relay
+          make build-web
           make build
 
       - name: Upload prebuilt E2E bundle
@@ -302,6 +303,7 @@ jobs:
           name: e2e-prebuilt
           path: |
             bin/byspace
+            internal/webui/dist
             packages/highlight/dist
             packages/protocol/dist
             packages/client/dist
@@ -314,7 +316,7 @@ jobs:
     # surfaces as an instant failure with no jobs and the file path shown instead of the name.
     name: playwright (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: [changes, build-e2e]
-    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.browser != 'false') }}
     runs-on: ubuntu-latest
     strategy:
       # Shards are independent. One failing shard must not cancel the others: the point of a
@@ -361,10 +363,10 @@ jobs:
         run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # One worker per shard. Each Playwright worker owns a daemon, a Metro server and a
-          # browser; two of those on a two-core runner made unrelated specs time out at random —
-          # a rerun failed on a different set of specs each time, with no code between the runs.
-          E2E_WORKERS: "1"
+          E2E_STATIC_WEB_DIR: ${{ github.workspace }}/internal/webui/dist
+          # With the prebuilt static bundle replacing the per-shard Metro dev bundler, the runner
+          # no longer spends a core and 1.5 GB RAM on Metro and can run 2 workers per shard.
+          E2E_WORKERS: "2"
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4

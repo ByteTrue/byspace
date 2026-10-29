@@ -19,7 +19,10 @@ created: 2026-10-29
 
 ## 落地与验证
 
-1. **新增 `build-e2e` 预构建 job（`.github/workflows/ci.yml`）**：集中构建一次 `packages/*/dist` 与 `bin/byspace` 并上传为 `e2e-prebuilt` artifact，16 个 `playwright` 分片直接下载产物开跑测试，省去 16 次 Go 与 TS 重复编译。
+1. **`build-e2e` 一次静态导出 + `global-setup.ts` 零 Metro 静态直出 + `E2E_WORKERS=2`（`.github/workflows/ci.yml` & `packages/app/e2e/support/global-setup.ts`）**：
+   - 根因定位：此前 16 个 Playwright 分片各自启动一个实时的 `expo start --web`（Metro Dev Bundler），光 `warmMetro` 预热每个分片就要白烧 60–90 秒，且 Metro 常驻占满 1 个 CPU 核与 1.5GB 内存、每次 `page.goto` 传输 25MB 未压缩开发包，迫使 2 核 Runner 锁死 `E2E_WORKERS=1` 并频繁发生 CPU 争抢随机超时。
+   - 治本改造：在 `build-e2e` job 中统一执行一次 `make build-web`（导出静态 `internal/webui/dist`）与 `make build`；`global-setup.ts` 在检测到 `E2E_STATIC_WEB_DIR`（或 CI 预构建 `internal/webui/dist`）时，直接用 Node 原生 `http.createServer` 在毫秒内提供静态 bundle（自动支持 `.gz` 与 SPA 路由回退，0 Metro 进程），并将分片内并发提升至 `E2E_WORKERS=2`，同时恢复在 `main` push 上运行全量 16 分片 Playwright。
+   - 本机实测：`E2E_STATIC_WEB_DIR=internal/webui/dist` 运行 `appearance-theme-picker.spec.ts`（4 条完整浏览器用例），静态服务 0 秒就绪，单条用例 1.0–1.6s，总耗时从原先含 Metro 预热的 ~75s 降至 **9.1s**。
 2. **精准路径路由与版本号提交快速通道（`.github/ci-paths.yml`）**：
    - 依赖变更始终修改 `package-lock.json`，从 `workspace` 过滤列表中移除裸 `package.json`，使 `chore(release): cut vX.Y.Z` 版本号提交仅触发快速的 `changes` / `format` / `lint` / `typecheck` 守卫（~1.5 分钟直通打标）；
    - 在 `browser` 过滤列表中排除 `!internal/gui/**` 与 `!internal/selfupdate/**`（Playwright 跑的是 `-tags nogui` 无头服务，不受桌面壳与自更新包影响）。
