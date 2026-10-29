@@ -401,13 +401,17 @@ func aggregateState(forwards []ForwardState) string {
 	}
 }
 
-// Add configures a peer, replacing any peer with the same id.
+// Add configures a peer or updates/merges forwards on an existing peer.
 func (r *Registry) Add(peer PeerConfig) error {
+	return r.AddOrUpdate(peer, 0)
+}
+
+// AddOrUpdate configures a peer or updates an existing peer's forwards. When replaceRemotePort > 0,
+// that previous remotePort entry is replaced by peer.Forwards (supporting editing remotePort/localPort
+// in place without re-entering credentials).
+func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
 	if peer.PeerID == "" {
 		return fmt.Errorf("peerId is required")
-	}
-	if peer.URL == "" {
-		return fmt.Errorf("url is required")
 	}
 	if len(peer.Forwards) == 0 {
 		return fmt.Errorf("at least one forward is required")
@@ -425,14 +429,35 @@ func (r *Registry) Add(peer PeerConfig) error {
 	replaced := false
 	for index := range r.peers {
 		if r.peers[index].PeerID == peer.PeerID {
-			// Merge forwards by RemotePort so adding a second port (e.g. 3430 after 3425) for
-			// the same peer preserves existing forwarded ports instead of overwriting them.
-			merged := make([]ForwardConfig, 0, len(r.peers[index].Forwards)+len(peer.Forwards))
+			oldPeer := r.peers[index]
+			if peer.URL == "" {
+				peer.URL = oldPeer.URL
+			}
+			if peer.Token == "" {
+				peer.Token = oldPeer.Token
+			}
+			if peer.PeerHostname == nil {
+				peer.PeerHostname = oldPeer.PeerHostname
+			}
+			if peer.DaemonPublicKey == "" {
+				peer.DaemonPublicKey = oldPeer.DaemonPublicKey
+			}
+			merged := make([]ForwardConfig, 0, len(oldPeer.Forwards)+len(peer.Forwards))
 			incoming := make(map[int]ForwardConfig, len(peer.Forwards))
 			for _, fw := range peer.Forwards {
 				incoming[fw.RemotePort] = fw
 			}
-			for _, oldFw := range r.peers[index].Forwards {
+			for _, oldFw := range oldPeer.Forwards {
+				if replaceRemotePort > 0 && oldFw.RemotePort == replaceRemotePort {
+					if len(peer.Forwards) > 0 {
+						first := peer.Forwards[0]
+						if _, ok := incoming[first.RemotePort]; ok {
+							merged = append(merged, first)
+							delete(incoming, first.RemotePort)
+						}
+					}
+					continue
+				}
 				if up, exists := incoming[oldFw.RemotePort]; exists {
 					if up.LocalPort == 0 && oldFw.LocalPort > 0 {
 						up.LocalPort = oldFw.LocalPort
@@ -455,6 +480,10 @@ func (r *Registry) Add(peer PeerConfig) error {
 		}
 	}
 	if !replaced {
+		if peer.URL == "" {
+			r.mu.Unlock()
+			return fmt.Errorf("url is required")
+		}
 		r.peers = append(r.peers, peer)
 	}
 	enabled := r.enabled
@@ -470,6 +499,58 @@ func (r *Registry) Add(peer PeerConfig) error {
 	}
 	if enabled {
 		return r.startPeer(peer)
+	}
+	return nil
+}
+
+// RemoveForward deletes a single forwarded remotePort from a peer, or removes the entire peer
+// when remotePort <= 0 or when it was the peer's last forward.
+func (r *Registry) RemoveForward(peerID string, remotePort int) error {
+	if remotePort <= 0 {
+		return r.Remove(peerID)
+	}
+	r.mu.Lock()
+	var updatedPeer *PeerConfig
+	for i := range r.peers {
+		if r.peers[i].PeerID != peerID {
+			continue
+		}
+		kept := make([]ForwardConfig, 0, len(r.peers[i].Forwards))
+		for _, fw := range r.peers[i].Forwards {
+			if fw.RemotePort != remotePort {
+				kept = append(kept, fw)
+			}
+		}
+		if len(kept) == len(r.peers[i].Forwards) {
+			r.mu.Unlock()
+			return fmt.Errorf("tunnel forward %s:%d not found", peerID, remotePort)
+		}
+		if len(kept) == 0 {
+			r.mu.Unlock()
+			return r.Remove(peerID)
+		}
+		r.peers[i].Forwards = kept
+		cp := r.peers[i]
+		updatedPeer = &cp
+		break
+	}
+	if updatedPeer == nil {
+		r.mu.Unlock()
+		return fmt.Errorf("tunnel peer %s not found", peerID)
+	}
+	enabled := r.enabled
+	existing := r.managers[peerID]
+	delete(r.managers, peerID)
+	r.mu.Unlock()
+
+	if existing != nil {
+		_ = existing.Close()
+	}
+	if err := r.save(); err != nil {
+		return err
+	}
+	if enabled {
+		return r.startPeer(*updatedPeer)
 	}
 	return nil
 }

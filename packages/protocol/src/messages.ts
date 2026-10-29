@@ -1656,9 +1656,10 @@ export const TunnelCreateRequestSchema = z.object({
   config: z.object({
     peerId: z.string().min(1),
     peerHostname: z.string().optional(),
-    url: z.string().min(1),
-    password: z.string().min(1),
+    url: z.string().optional(),
+    password: z.string().optional(),
     daemonPublicKeyB64: z.string().optional(),
+    replaceRemotePort: z.number().int().min(1).max(65535).optional(),
     forwards: z
       .array(
         z.object({
@@ -1675,6 +1676,7 @@ export const TunnelRemoveRequestSchema = z.object({
   type: z.literal("tunnel.remove.request"),
   requestId: z.string(),
   peerId: z.string().min(1),
+  remotePort: z.number().int().min(1).max(65535).optional(),
 });
 
 export const PluginCatalogGetRequestSchema = z.object({

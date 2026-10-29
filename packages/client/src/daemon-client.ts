@@ -5429,9 +5429,10 @@ export class DaemonClient {
     config: {
       peerId: string;
       peerHostname?: string;
-      url: string;
-      password: string;
+      url?: string;
+      password?: string;
       daemonPublicKeyB64?: string;
+      replaceRemotePort?: number;
       forwards: Array<{ remotePort: number; localPort?: number; label?: string }>;
     },
     requestId?: string,
@@ -5458,11 +5459,13 @@ export class DaemonClient {
   async removeTunnel(
     peerId: string,
     requestId?: string,
+    remotePort?: number,
   ): Promise<Extract<TunnelRemoveResponse, { type: "tunnel.remove.response" }>["payload"]> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "tunnel.remove.request",
       peerId,
+      ...(remotePort !== undefined ? { remotePort } : {}),
       requestId: resolvedRequestId,
     });
     const response = await this.sendRequest({

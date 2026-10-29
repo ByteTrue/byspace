@@ -2,9 +2,10 @@ import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
-import { ArrowRightLeft, Plus, Trash2 } from "lucide-react-native";
+import { ArrowRight, ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MenuHeader } from "@/components/headers/menu-header";
+import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -22,14 +23,46 @@ import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunne
 import { settingsStyles } from "@/styles/settings";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
 
-type FormState = { mode: "closed" } | { mode: "create" };
+type FormState =
+  | { mode: "closed" }
+  | { mode: "create" }
+  | { mode: "edit"; entry: AggregatedTunnelEntry };
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
+const ThemedArrowRight = withUnistyles(ArrowRight, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedTrashIcon = withUnistyles(Trash2, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+
+const EMPTY_TUNNEL_ENTRIES: AggregatedTunnelEntry[] = [];
 
 function outboundPeerId(entry: AggregatedTunnelEntry): string {
   return entry.tunnelId.split(":")[0];
+}
+
+function parsePortList(raw: string): number[] | null {
+  const tokens = raw
+    .split(/[\s,，]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (tokens.length === 0) {
+    return null;
+  }
+  const out: number[] = [];
+  for (const tok of tokens) {
+    const n = Number.parseInt(tok, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 65535 || String(n) !== tok) {
+      return null;
+    }
+    if (!out.includes(n)) {
+      out.push(n);
+    }
+  }
+  return out;
 }
 
 export function TunnelsScreen(): ReactElement {
@@ -48,15 +81,32 @@ function TunnelsScreenContent(): ReactElement {
   const localDaemonSupportsTunnels = useHostFeature(localDaemonServerId, "daemonTunnels");
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
 
-  const entries = loadState.status === "loaded" ? loadState.data : [];
+  const entries = loadState.status === "loaded" ? loadState.data : EMPTY_TUNNEL_ENTRIES;
   const tunnelsEnabled = config?.tunnel?.enabled === true;
+
+  const existingPeerIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of entries) {
+      if (e.direction === "outbound") {
+        s.add(outboundPeerId(e));
+      }
+    }
+    return s;
+  }, [entries]);
 
   const openCreateForm = useCallback(() => {
     setFormState({ mode: "create" });
   }, []);
-  const closeCreateForm = useCallback(() => {
+  const openEditForm = useCallback((entry: AggregatedTunnelEntry) => {
+    setFormState({ mode: "edit", entry });
+  }, []);
+  const closeForm = useCallback(() => {
     setFormState({ mode: "closed" });
   }, []);
+  const handleSaved = useCallback(() => {
+    setFormState({ mode: "closed" });
+    refetch();
+  }, [refetch]);
 
   return (
     <View style={styles.container}>
@@ -71,15 +121,20 @@ function TunnelsScreenContent(): ReactElement {
           entries={entries}
           loadState={loadState}
           onAddTunnel={openCreateForm}
+          onEditTunnel={openEditForm}
           onRemoved={refetch}
         />
       </ScrollView>
       {formState.mode === "create" && localDaemonServerId && tunnelsEnabled ? (
         <AddTunnelSheet
           serverId={localDaemonServerId}
-          onClose={closeCreateForm}
-          onCreated={refetch}
+          existingPeerIds={existingPeerIds}
+          onClose={closeForm}
+          onCreated={handleSaved}
         />
+      ) : undefined}
+      {formState.mode === "edit" && localDaemonServerId && tunnelsEnabled ? (
+        <EditTunnelSheet entry={formState.entry} onClose={closeForm} onSaved={handleSaved} />
       ) : undefined}
     </View>
   );
@@ -94,15 +149,13 @@ function TunnelsScreenBody(props: {
   entries: AggregatedTunnelEntry[];
   loadState: TunnelLoadState;
   onAddTunnel: () => void;
+  onEditTunnel: (entry: AggregatedTunnelEntry) => void;
   onRemoved: () => void;
 }): ReactElement {
   const { t } = useTranslation();
   if (!props.localDaemonServerId) {
     return <Text style={styles.hint}>{t("tunnels.noLocalDaemon")}</Text>;
   }
-  // Capability before state: a host without the tunnel RPCs has no config field
-  // to enable, so the Enable card would patch nothing and leave the screen as it
-  // was. See docs/protocol-compatibility.md.
   if (!props.localDaemonSupportsTunnels) {
     return <Text style={styles.hint}>{t("tunnels.hostTooOld")}</Text>;
   }
@@ -123,6 +176,7 @@ function TunnelsScreenBody(props: {
       loadState={props.loadState}
       localDaemonServerId={props.localDaemonServerId}
       onAddTunnel={props.onAddTunnel}
+      onEditTunnel={props.onEditTunnel}
       onRemoved={props.onRemoved}
     />
   );
@@ -133,28 +187,42 @@ function TunnelsEnabledBody({
   loadState,
   localDaemonServerId,
   onAddTunnel,
+  onEditTunnel,
   onRemoved,
 }: {
   entries: AggregatedTunnelEntry[];
   loadState: TunnelLoadState;
   localDaemonServerId: string;
   onAddTunnel: () => void;
+  onEditTunnel: (entry: AggregatedTunnelEntry) => void;
   onRemoved: () => void;
 }): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.enabledBody}>
-      <View style={styles.toolbarRow}>
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
+  const forwardsTitle = isZh ? "端口转发 (Port forwards)" : "Port forwards";
+
+  const sectionTrailing = useMemo(
+    () => (
+      <View style={styles.sectionHeaderActions}>
         <StatusBadge label={t("tunnels.experimental")} variant="muted" />
         <AddTunnelButton onPress={onAddTunnel} />
       </View>
-      <TunnelsListBody
-        localDaemonServerId={localDaemonServerId}
-        loadState={loadState}
-        entries={entries}
-        onAddTunnel={onAddTunnel}
-        onRemoved={onRemoved}
-      />
+    ),
+    [onAddTunnel, t],
+  );
+
+  return (
+    <View style={styles.enabledBody}>
+      <SettingsSection title={forwardsTitle} trailing={sectionTrailing}>
+        <TunnelsListBody
+          localDaemonServerId={localDaemonServerId}
+          loadState={loadState}
+          entries={entries}
+          onAddTunnel={onAddTunnel}
+          onEditTunnel={onEditTunnel}
+          onRemoved={onRemoved}
+        />
+      </SettingsSection>
       <AllowlistSection serverId={localDaemonServerId} />
     </View>
   );
@@ -219,12 +287,14 @@ function TunnelsListBody({
   loadState,
   entries,
   onAddTunnel,
+  onEditTunnel,
   onRemoved,
 }: {
   localDaemonServerId: string | null;
   loadState: TunnelLoadState;
   entries: AggregatedTunnelEntry[];
   onAddTunnel: () => void;
+  onEditTunnel: (entry: AggregatedTunnelEntry) => void;
   onRemoved: () => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -270,6 +340,7 @@ function TunnelsListBody({
           key={entry.serverId + ":" + entry.tunnelId}
           entry={entry}
           isLast={index === entries.length - 1}
+          onEdit={onEditTunnel}
           onRemoved={onRemoved}
         />
       ))}
@@ -280,13 +351,16 @@ function TunnelsListBody({
 function TunnelRow({
   entry,
   isLast,
+  onEdit,
   onRemoved,
 }: {
   entry: AggregatedTunnelEntry;
   isLast: boolean;
+  onEdit: (entry: AggregatedTunnelEntry) => void;
   onRemoved: () => void;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(entry.serverId);
   const isConnected = useHostRuntimeIsConnected(entry.serverId);
 
@@ -305,17 +379,22 @@ function TunnelRow({
 
   const isOutbound = entry.direction === "outbound";
   const badgeVariant = resolveBadgeVariant(entry.state);
+
+  const handleEdit = useCallback(() => {
+    onEdit(entry);
+  }, [entry, onEdit]);
+
   const remove = useCallback(() => {
     if (!client || !isConnected || !isOutbound) return;
     void client
-      .removeTunnel(outboundPeerId(entry))
+      .removeTunnel(outboundPeerId(entry), undefined, entry.remotePort)
       .then(() => onRemoved())
       .catch(() => undefined);
   }, [client, isConnected, isOutbound, entry, onRemoved]);
 
-  const title = isOutbound
-    ? (entry.peerHostname ?? outboundPeerId(entry)) + " → :" + entry.remotePort
-    : t("tunnels.inboundFrom", { port: entry.remotePort });
+  const peerLabel = entry.peerHostname ?? outboundPeerId(entry);
+  const localEndpoint = entry.localPort == null ? "127.0.0.1:—" : `127.0.0.1:${entry.localPort}`;
+  const remoteEndpoint = `${peerLabel}:${entry.remotePort}`;
 
   const subtitle = isOutbound
     ? t("tunnels.outboundSubtitle", {
@@ -330,12 +409,27 @@ function TunnelRow({
       testID={isOutbound ? "tunnels-row-outbound" : "tunnels-row-inbound"}
     >
       <View style={styles.rowContent}>
-        <View style={styles.rowTitleLine}>
-          {isOutbound ? <ArrowRightLeft size={14} /> : undefined}
-          <Text style={styles.rowTitle} numberOfLines={1}>
-            {title}
-          </Text>
-        </View>
+        {isOutbound ? (
+          <View style={styles.mappingLine}>
+            <View style={styles.endpointPill}>
+              <Text testID="tunnels-row-local-port" style={styles.endpointMono} numberOfLines={1}>
+                {localEndpoint}
+              </Text>
+            </View>
+            <ThemedArrowRight size={13} />
+            <View style={styles.endpointPill}>
+              <Text style={styles.endpointMono} numberOfLines={1}>
+                {remoteEndpoint}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.rowTitleLine}>
+            <Text style={styles.rowTitle} numberOfLines={1}>
+              {t("tunnels.inboundFrom", { port: entry.remotePort })}
+            </Text>
+          </View>
+        )}
         <Text style={styles.rowSubtitle} numberOfLines={1}>
           {subtitle}
         </Text>
@@ -346,16 +440,30 @@ function TunnelRow({
         ) : undefined}
       </View>
       <View style={styles.rowTrailing}>
-        {isOutbound ? (
-          <Text testID="tunnels-row-local-port" style={styles.localPortText} numberOfLines={1}>
-            {entry.localPort == null ? "—" : ":" + entry.localPort}
-          </Text>
-        ) : undefined}
         <StatusBadge label={stateLabel} variant={badgeVariant} />
         {isOutbound ? (
-          <Button variant="ghost" size="xs" onPress={remove} disabled={!isConnected}>
-            <Trash2 size={14} />
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="xs"
+              leftIcon={Pencil}
+              onPress={handleEdit}
+              disabled={!isConnected}
+              testID="tunnels-row-edit"
+            >
+              {isZh ? "改端口" : "Edit"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onPress={remove}
+              disabled={!isConnected}
+              accessibilityLabel={isZh ? "删除此端口转发" : "Remove port forward"}
+              testID="tunnels-row-delete"
+            >
+              <ThemedTrashIcon size={14} />
+            </Button>
+          </>
         ) : undefined}
       </View>
     </View>
@@ -363,29 +471,40 @@ function TunnelRow({
 }
 
 function AllowlistSection({ serverId }: { serverId: string }): ReactElement | null {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [draft, setDraft] = useState("");
+  const [resetSeq, setResetSeq] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const allowedPorts = useMemo(() => config?.tunnel?.allowedPorts ?? [], [config]);
 
-  const addPort = useCallback(async () => {
-    const port = Number.parseInt(draft.trim(), 10);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  const addPortAsync = useCallback(async () => {
+    const parsedPorts = parsePortList(draft);
+    if (!parsedPorts) {
       setError(t("tunnels.allowlist.invalidPort"));
       return;
     }
-    if (allowedPorts.includes(port)) {
+    const merged = [...allowedPorts];
+    for (const p of parsedPorts) {
+      if (!merged.includes(p)) {
+        merged.push(p);
+      }
+    }
+    merged.sort((a, b) => a - b);
+    if (merged.length === allowedPorts.length) {
       setDraft("");
+      setResetSeq((n) => n + 1);
       setError(null);
       return;
     }
     setSaving(true);
     try {
-      await patchConfig({ tunnel: { allowedPorts: [...allowedPorts, port] } });
+      await patchConfig({ tunnel: { allowedPorts: merged } });
       setDraft("");
+      setResetSeq((n) => n + 1);
       setError(null);
     } catch {
       setError(t("tunnels.allowlist.saveFailed"));
@@ -393,6 +512,10 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
       setSaving(false);
     }
   }, [draft, allowedPorts, patchConfig, t]);
+
+  const addPort = useCallback(() => {
+    void addPortAsync();
+  }, [addPortAsync]);
 
   const removePort = useCallback(
     async (port: number) => {
@@ -419,40 +542,19 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   }
 
   return (
-    <View style={styles.allowlistSection}>
-      <Text style={styles.sectionLabel}>{t("tunnels.allowlist.title")}</Text>
+    <SettingsSection title={t("tunnels.allowlist.title")}>
       <View style={settingsStyles.card}>
-        {allowedPorts.length === 0 ? (
-          <Text style={[settingsStyles.row, styles.allowlistEmptyText]}>
-            {t("tunnels.allowlist.empty")}
-          </Text>
-        ) : (
-          allowedPorts.map((port, index) => (
-            <View
-              key={port}
-              style={[
-                settingsStyles.row,
-                index === allowedPorts.length - 1 ? undefined : settingsStyles.rowBorder,
-              ]}
-            >
-              <Text style={styles.rowTitle}>{t("tunnels.allowlist.port", { port })}</Text>
-              <Button
-                variant="ghost"
-                size="xs"
-                onPress={makeRemovePortHandler(port)}
-                disabled={saving}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </View>
-          ))
-        )}
-        <View style={[settingsStyles.row, settingsStyles.rowBorder, styles.allowlistInputRow]}>
+        <View style={[settingsStyles.row, styles.allowlistInputRow]}>
           <FormTextInput
             size="sm"
             style={styles.portInput}
+            initialValue={draft}
+            resetKey={resetSeq}
             onChangeText={setDraft}
-            placeholder={t("tunnels.allowlist.portPlaceholder")}
+            onSubmitEditing={addPort}
+            placeholder={
+              isZh ? "输入端口号（可填多个，如 3425, 3430）" : "Enter port(s), e.g. 3425, 3430"
+            }
             keyboardType="number-pad"
             testID="tunnels-allowlist-input"
           />
@@ -465,26 +567,44 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
             {saving ? t("tunnels.allowlist.saving") : t("tunnels.allowlist.add")}
           </Button>
         </View>
-        {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}
+        {allowedPorts.length === 0 ? (
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <Text style={styles.allowlistEmptyText}>{t("tunnels.allowlist.empty")}</Text>
+          </View>
+        ) : (
+          allowedPorts.map((port) => (
+            <View key={port} style={[settingsStyles.row, settingsStyles.rowBorder]}>
+              <View style={styles.allowlistPortRow}>
+                <View style={styles.endpointPill}>
+                  <Text style={styles.endpointMono}>127.0.0.1:{port}</Text>
+                </View>
+                <Text style={styles.rowSubtitle}>{t("tunnels.allowlist.port", { port })}</Text>
+              </View>
+              <Button
+                variant="ghost"
+                size="xs"
+                onPress={makeRemovePortHandler(port)}
+                disabled={saving}
+              >
+                <ThemedTrashIcon size={14} />
+              </Button>
+            </View>
+          ))
+        )}
       </View>
+      {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}
       <Text style={styles.hint}>{t("tunnels.allowlist.hint")}</Text>
-    </View>
+    </SettingsSection>
   );
 }
 
-/** Sentinel id for the "paste a pairing link instead" option in the peer picker. */
 const PASTE_OFFER_OPTION_ID = "paste-offer";
 
-/**
- * Create a tunnel from a pasted pairing link. The registry path (a paired host)
- * is the common case; this covers a peer that has not been added as a host yet.
- */
 async function createTunnelFromOffer(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   offerUrl: string;
   password: string;
-  remotePort: number;
-  localPort?: number;
+  forwards: Array<{ remotePort: number; localPort?: number }>;
 }): Promise<{ ok: boolean; error?: string }> {
   const parsed = parsePairingOfferUrl(input.offerUrl);
   if (!parsed.ok) {
@@ -502,46 +622,40 @@ async function createTunnelFromOffer(input: {
     }),
     password: input.password,
     daemonPublicKeyB64: offer.daemonPublicKeyB64,
-    forwards: [
-      {
-        remotePort: input.remotePort,
-        ...(input.localPort ? { localPort: input.localPort } : {}),
-      },
-    ],
+    forwards: input.forwards,
   });
 }
 
-/**
- * The target a submit will dial: either a paired host from the registry, or the
- * daemon described by a pasted pairing link.
- */
 type TunnelPeerSelection =
   | { kind: "host"; target: TunnelPeerTarget }
   | { kind: "offer"; url: string };
 
 function AddTunnelSheet({
   serverId,
+  existingPeerIds,
   onClose,
   onCreated,
 }: {
   serverId: string;
+  existingPeerIds: Set<string>;
   onClose: () => void;
   onCreated: () => void;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(serverId);
   const hosts = useHosts();
   const peerTargets = useMemo(() => resolveTunnelPeerTargets(hosts), [hosts]);
-  // The daemon we are configuring is the tunnel's local end, so it can never be
-  // the peer: a host is only listed once the registry knows about another one.
   const selectableTargets = useMemo(
     () => peerTargets.filter((target) => target.serverId !== serverId),
     [peerTargets, serverId],
   );
 
-  const [selectedPeerId, setSelectedPeerId] = useState<string>(PASTE_OFFER_OPTION_ID);
+  const [selectedPeerId, setSelectedPeerId] = useState<string>(
+    selectableTargets[0]?.serverId ?? PASTE_OFFER_OPTION_ID,
+  );
   const [offerUrl, setOfferUrl] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(selectableTargets[0]?.password ?? "");
   const [remotePort, setRemotePort] = useState("");
   const [localPort, setLocalPort] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -552,6 +666,9 @@ function AddTunnelSheet({
     [selectableTargets, selectedPeerId],
   );
   const isPastingOffer = selectedTarget === null;
+  const peerAlreadyConfigured = Boolean(
+    selectedTarget && existingPeerIds.has(selectedTarget.serverId),
+  );
 
   const peerOptions = useMemo(
     () => [
@@ -595,8 +712,6 @@ function AddTunnelSheet({
       setSelectedPeerId(value);
       setError(null);
       const target = selectableTargets.find((candidate) => candidate.serverId === value);
-      // A host that stores its password (direct TCP) fills the field so the user
-      // does not retype a credential the registry already holds.
       setPassword(target?.password ?? "");
     },
     [selectableTargets],
@@ -619,26 +734,41 @@ function AddTunnelSheet({
       setError(t("workspace.terminal.hostDisconnected"));
       return;
     }
-    const port = Number.parseInt(remotePort.trim(), 10);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const remotePorts = parsePortList(remotePort);
+    if (!remotePorts) {
       setError(t("tunnels.addForm.invalidPort"));
       return;
     }
-    let parsedLocalPort: number | undefined;
+    let parsedLocalPorts: number[] | undefined;
     if (localPort.trim().length > 0) {
-      const lp = Number.parseInt(localPort.trim(), 10);
-      if (!Number.isInteger(lp) || lp < 1 || lp > 65535) {
+      const lps = parsePortList(localPort);
+      if (!lps || (lps.length !== 1 && lps.length !== remotePorts.length)) {
         setError(t("tunnels.addForm.invalidPort"));
         return;
       }
-      parsedLocalPort = lp;
+      parsedLocalPorts = lps;
     }
-    if (!password) {
+    if (!password && !peerAlreadyConfigured) {
       setError(t("tunnels.addForm.passwordRequired"));
       return;
     }
     const selection = resolveSelection();
     if (!selection) return;
+
+    const forwards = remotePorts.map((rp, idx) => {
+      let lp = rp;
+      if (parsedLocalPorts !== undefined) {
+        lp =
+          parsedLocalPorts.length === 1 && remotePorts.length === 1
+            ? parsedLocalPorts[0]
+            : parsedLocalPorts[idx];
+      }
+      const item: { remotePort: number; localPort?: number } = { remotePort: rp };
+      if (lp) {
+        item.localPort = lp;
+      }
+      return item;
+    });
 
     setSubmitting(true);
     try {
@@ -648,23 +778,17 @@ function AddTunnelSheet({
               peerId: selection.target.serverId,
               peerHostname: selection.target.label,
               url: selection.target.url,
-              password,
+              ...(password ? { password } : {}),
               ...(selection.target.daemonPublicKeyB64
                 ? { daemonPublicKeyB64: selection.target.daemonPublicKeyB64 }
                 : {}),
-              forwards: [
-                {
-                  remotePort: port,
-                  ...(parsedLocalPort ? { localPort: parsedLocalPort } : {}),
-                },
-              ],
+              forwards,
             })
           : await createTunnelFromOffer({
               client,
               offerUrl: selection.url,
               password,
-              remotePort: port,
-              ...(parsedLocalPort ? { localPort: parsedLocalPort } : {}),
+              forwards,
             });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
@@ -676,7 +800,16 @@ function AddTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [client, localPort, password, remotePort, onCreated, resolveSelection, t]);
+  }, [
+    client,
+    localPort,
+    password,
+    onCreated,
+    peerAlreadyConfigured,
+    remotePort,
+    resolveSelection,
+    t,
+  ]);
 
   const submit = useCallback(() => {
     void submitAsync();
@@ -701,6 +834,7 @@ function AddTunnelSheet({
       {isPastingOffer ? (
         <Field label={t("tunnels.addForm.offerLabel")}>
           <FormTextInput
+            initialValue={offerUrl}
             onChangeText={setOfferUrl}
             placeholder={t("tunnels.addForm.offerPlaceholder")}
             autoCapitalize="none"
@@ -709,26 +843,43 @@ function AddTunnelSheet({
           />
         </Field>
       ) : undefined}
-      <Field label={t("tunnels.addForm.passwordLabel")}>
+      {!peerAlreadyConfigured ? (
+        <Field label={t("tunnels.addForm.passwordLabel")}>
+          <FormTextInput
+            initialValue={password}
+            resetKey={selectedPeerId}
+            onChangeText={setPassword}
+            placeholder={t("tunnels.addForm.passwordPlaceholder")}
+            secureTextEntry
+            testID="tunnels-add-password-input"
+          />
+        </Field>
+      ) : undefined}
+      <Field
+        label={
+          isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")
+        }
+      >
         <FormTextInput
-          onChangeText={setPassword}
-          placeholder={t("tunnels.addForm.passwordPlaceholder")}
-          secureTextEntry
-          testID="tunnels-add-password-input"
-        />
-      </Field>
-      <Field label={t("tunnels.addForm.remotePortLabel")}>
-        <FormTextInput
+          initialValue={remotePort}
           onChangeText={setRemotePort}
-          placeholder="3000"
+          placeholder="3425, 3430"
           keyboardType="number-pad"
           testID="tunnels-add-port-input"
         />
       </Field>
-      <Field label={t("tunnels.addForm.localPortLabel", { defaultValue: "Local port (optional)" })}>
+      <Field
+        label={
+          isZh
+            ? "本地固定端口（可选，不填默认与远端端口相同）"
+            : "Local port (optional, defaults to same as remote port)"
+        }
+      >
         <FormTextInput
+          initialValue={localPort}
           onChangeText={setLocalPort}
-          placeholder={remotePort.trim() || "Auto (pinned on first bind)"}
+          onSubmitEditing={submit}
+          placeholder={remotePort.trim() || "3425, 3430"}
           keyboardType="number-pad"
           testID="tunnels-add-local-port-input"
         />
@@ -741,6 +892,127 @@ function AddTunnelSheet({
         </Button>
         <Button variant="default" onPress={submit} disabled={submitting}>
           {submitting ? t("tunnels.addForm.submitting") : t("tunnels.add")}
+        </Button>
+      </View>
+    </AdaptiveModalSheet>
+  );
+}
+
+function resolveEditSaveButtonLabel(
+  submitting: boolean,
+  isZh: boolean,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (submitting) {
+    return t("common.states.loading");
+  }
+  if (isZh) {
+    return "保存并重绑";
+  }
+  return t("common.actions.save", { defaultValue: "Save" });
+}
+
+function EditTunnelSheet({
+  entry,
+  onClose,
+  onSaved,
+}: {
+  entry: AggregatedTunnelEntry;
+  onClose: () => void;
+  onSaved: () => void;
+}): ReactElement {
+  const { t, i18n } = useTranslation();
+  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
+  const client = useHostRuntimeClient(entry.serverId);
+  const [remotePort, setRemotePort] = useState(String(entry.remotePort));
+  const [localPort, setLocalPort] = useState(
+    entry.localPort != null ? String(entry.localPort) : String(entry.remotePort),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const peerId = outboundPeerId(entry);
+  const peerLabel = entry.peerHostname ?? peerId;
+
+  const saveAsync = useCallback(async () => {
+    if (!client) {
+      setError(t("workspace.terminal.hostDisconnected"));
+      return;
+    }
+    const rp = Number.parseInt(remotePort.trim(), 10);
+    const lp = Number.parseInt(localPort.trim(), 10);
+    if (
+      !Number.isInteger(rp) ||
+      rp < 1 ||
+      rp > 65535 ||
+      !Number.isInteger(lp) ||
+      lp < 1 ||
+      lp > 65535
+    ) {
+      setError(t("tunnels.addForm.invalidPort"));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await client.createTunnel({
+        peerId,
+        ...(entry.peerHostname ? { peerHostname: entry.peerHostname } : {}),
+        replaceRemotePort: entry.remotePort,
+        forwards: [{ remotePort: rp, localPort: lp }],
+      });
+      if (!response.ok) {
+        setError(response.error ?? t("tunnels.addForm.failed"));
+        return;
+      }
+      onSaved();
+    } catch {
+      setError(t("tunnels.addForm.failed"));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [client, entry.peerHostname, entry.remotePort, localPort, onSaved, peerId, remotePort, t]);
+
+  const save = useCallback(() => {
+    void saveAsync();
+  }, [saveAsync]);
+
+  const header = useMemo<SheetHeader>(
+    () => ({
+      title: isZh ? `修改端口转发 · ${peerLabel}` : `Edit port forward · ${peerLabel}`,
+    }),
+    [isZh, peerLabel],
+  );
+
+  return (
+    <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-edit-sheet">
+      <Field label={isZh ? "本地监听端口 (127.0.0.1)" : "Local port (127.0.0.1)"}>
+        <FormTextInput
+          initialValue={localPort}
+          onChangeText={setLocalPort}
+          onSubmitEditing={save}
+          placeholder="3425"
+          keyboardType="number-pad"
+          testID="tunnels-edit-local-port-input"
+        />
+      </Field>
+      <Field label={isZh ? `远端目标端口 (${peerLabel})` : `Remote port (${peerLabel})`}>
+        <FormTextInput
+          initialValue={remotePort}
+          onChangeText={setRemotePort}
+          onSubmitEditing={save}
+          placeholder="3425"
+          keyboardType="number-pad"
+          testID="tunnels-edit-remote-port-input"
+        />
+      </Field>
+      {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}
+      <View style={styles.sheetActions}>
+        <Button variant="secondary" onPress={onClose} disabled={submitting}>
+          {t("common.actions.cancel")}
+        </Button>
+        <Button variant="default" onPress={save} disabled={submitting} testID="tunnels-edit-save">
+          {resolveEditSaveButtonLabel(submitting, isZh, t)}
         </Button>
       </View>
     </AdaptiveModalSheet>
@@ -760,17 +1032,13 @@ const styles = StyleSheet.create((theme) => {
       width: "100%",
       alignSelf: "center",
     },
-    toolbar: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-    },
     enabledBody: {
       gap: theme.spacing[4],
     },
-    toolbarRow: {
+    sectionHeaderActions: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      gap: theme.spacing[2],
     },
     enableCardRow: {
       gap: theme.spacing[3],
@@ -807,6 +1075,7 @@ const styles = StyleSheet.create((theme) => {
     hint: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.foregroundMuted,
+      marginTop: theme.spacing[2],
     },
     sectionLabel: {
       fontSize: theme.fontSize.base,
@@ -822,6 +1091,23 @@ const styles = StyleSheet.create((theme) => {
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing[2],
+    },
+    mappingLine: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: theme.spacing[2],
+    },
+    endpointPill: {
+      paddingVertical: 2,
+      paddingHorizontal: theme.spacing[2],
+      borderRadius: theme.borderRadius.sm,
+      backgroundColor: theme.colors.surface2,
+    },
+    endpointMono: {
+      fontSize: theme.fontSize.sm,
+      fontFamily: theme.fontFamily.mono,
+      color: theme.colors.foreground,
     },
     rowTitle: {
       fontSize: theme.fontSize.base,
@@ -845,29 +1131,27 @@ const styles = StyleSheet.create((theme) => {
       alignItems: "center",
       gap: theme.spacing[2],
     },
-    localPortText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.foregroundMuted,
-    },
-    allowlistSection: {
-      marginTop: theme.spacing[2],
-      gap: theme.spacing[2],
-    },
     allowlistEmptyText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.foregroundMuted,
     },
     allowlistInputRow: {
+      gap: theme.spacing[2],
+    },
+    allowlistPortRow: {
+      flexDirection: "row",
+      alignItems: "center",
       gap: theme.spacing[3],
+      flex: 1,
     },
     portInput: {
       flex: 1,
-      minWidth: 0,
     },
     sheetActions: {
       flexDirection: "row",
+      justifyContent: "flex-end",
       gap: theme.spacing[2],
-      marginTop: theme.spacing[4],
+      marginTop: theme.spacing[2],
     },
   };
 });

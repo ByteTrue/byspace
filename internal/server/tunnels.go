@@ -302,12 +302,13 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 	var req struct {
 		RequestID string `json:"requestId"`
 		Config    struct {
-			PeerID          string  `json:"peerId"`
-			PeerHostname    *string `json:"peerHostname"`
-			URL             string  `json:"url"`
-			Token           string  `json:"password"`
-			DaemonPublicKey string  `json:"daemonPublicKeyB64"`
-			Forwards        []struct {
+			PeerID            string  `json:"peerId"`
+			PeerHostname      *string `json:"peerHostname"`
+			URL               string  `json:"url"`
+			Token             string  `json:"password"`
+			DaemonPublicKey   string  `json:"daemonPublicKeyB64"`
+			ReplaceRemotePort int     `json:"replaceRemotePort"`
+			Forwards          []struct {
 				RemotePort int    `json:"remotePort"`
 				LocalPort  int    `json:"localPort"`
 				Label      string `json:"label"`
@@ -325,14 +326,14 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 		})
 	}
 
-	err := s.tunnelRegistry().Add(tunnel.PeerConfig{
+	err := s.tunnelRegistry().AddOrUpdate(tunnel.PeerConfig{
 		PeerID:          req.Config.PeerID,
 		PeerHostname:    req.Config.PeerHostname,
 		URL:             req.Config.URL,
 		Token:           req.Config.Token,
 		DaemonPublicKey: req.Config.DaemonPublicKey,
 		Forwards:        forwards,
-	})
+	}, req.Config.ReplaceRemotePort)
 	payload := map[string]any{
 		"requestId": req.RequestID,
 		"peerId":    req.Config.PeerID,
@@ -347,12 +348,13 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 // handleTunnelRemove deletes an outbound peer.
 func (s *Server) handleTunnelRemove(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		PeerID    string `json:"peerId"`
+		RequestID  string `json:"requestId"`
+		PeerID     string `json:"peerId"`
+		RemotePort int    `json:"remotePort"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	err := s.tunnelRegistry().Remove(req.PeerID)
+	err := s.tunnelRegistry().RemoveForward(req.PeerID, req.RemotePort)
 	payload := map[string]any{
 		"requestId": req.RequestID,
 		"peerId":    req.PeerID,

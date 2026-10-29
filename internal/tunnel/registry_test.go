@@ -213,4 +213,13 @@ func TestRegistryPinsLocalPortAcrossRestartsAndMergesForwards(t *testing.T) {
 		t.Fatalf("expected local ports (%d, %d) to stay pinned across restarts, got (%d, %d)",
 			pinned3425, pinned3430, peers2[0].Forwards[0].LocalPort, peers2[0].Forwards[1].LocalPort)
 	}
+
+	// 4. RemoveForward removes only 3425 while keeping 3430 intact.
+	if err := r2.RemoveForward("peer-mac", 3425); err != nil {
+		t.Fatalf("RemoveForward(3425): %v", err)
+	}
+	peers3 := r2.List()
+	if len(peers3) != 1 || len(peers3[0].Forwards) != 1 || peers3[0].Forwards[0].RemotePort != 3430 {
+		t.Fatalf("expected only port 3430 to remain, got %+v", peers3)
+	}
 }
