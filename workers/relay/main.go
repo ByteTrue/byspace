@@ -178,21 +178,35 @@ func writeAttachment(socket js.Value, value attachment) {
 	if err != nil {
 		return
 	}
-	serialize := socket.Get("serializeAttachment")
-	if serialize.Type() != js.TypeFunction {
-		return
+	// Call through the socket, not through a function pulled off it: a method detached with
+	// `socket.Get(...)` loses its `this`, and the runtime rejects that with "Illegal invocation:
+	// function called with incorrect `this` value", which the Durable Object surfaces as a panic in
+	// the message and close handlers.
+	callJS(socket, "serializeAttachment", string(encoded))
+}
+
+// callJS invokes a method with its receiver intact.
+//
+// `value.Get("method").Invoke(...)` detaches the function from its receiver — "Illegal invocation:
+// function called with incorrect `this` value". `Value.Call` keeps the receiver but panics on error,
+// so the recover turns a runtime rejection into a plain false.
+func callJS(receiver js.Value, method string, args ...any) (result js.Value, ok bool) {
+	defer func() {
+		if recover() != nil {
+			result, ok = js.Value{}, false
+		}
+	}()
+	if receiver.Get(method).Type() != js.TypeFunction {
+		return js.Value{}, false
 	}
-	serialize.Invoke(string(encoded))
+	return receiver.Call(method, args...), true
 }
 
 // connectionFromAttachment rebuilds the Connection a socket belongs to.
 func connectionFromAttachment(socket js.Value) (relay.Connection, bool) {
-	deserialize := socket.Get("deserializeAttachment")
-	if deserialize.Type() != js.TypeFunction {
-		return relay.Connection{}, false
-	}
-	raw := deserialize.Invoke()
-	if raw.Type() != js.TypeString || raw.String() == "" {
+	// Same reason as writeAttachment: the method must be invoked on the socket.
+	raw, ok := callJS(socket, "deserializeAttachment")
+	if !ok || raw.Type() != js.TypeString || raw.String() == "" {
 		return relay.Connection{}, false
 	}
 	var saved attachment

@@ -225,3 +225,25 @@ test("the relay worker routes messages from the trigger", () => {
     "a per-connection goroutine read loop cannot survive hibernation",
   );
 });
+
+// Attachment methods must be invoked on the socket, not pulled off it.
+//
+// `socket.Get("serializeAttachment").Invoke(...)` detaches the function from its receiver and the
+// runtime answers "Illegal invocation: function called with incorrect `this` value". The Durable
+// Object surfaces that as a panic in the message and close handlers — every routed frame and every
+// disconnect failed, while the Worker still reported `outcome: "ok"` for the requests that did not
+// throw. It survived review because the code compiles and the relay's own tests never run on the
+// runtime that enforces `this`.
+test("socket attachment access keeps its receiver", () => {
+  const source = readFileSync(new URL("../workers/relay/main.go", import.meta.url), "utf8");
+  assert.doesNotMatch(
+    source,
+    /\.Get\("(de)?serializeAttachment"\)/,
+    "call the attachment method through the socket; a detached function loses `this`",
+  );
+  assert.match(
+    source,
+    /callJS\(socket, "(de)?serializeAttachment"/,
+    "attachment access should go through callJS, which invokes on the receiver",
+  );
+});
