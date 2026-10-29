@@ -176,7 +176,7 @@ Enables remote access when the daemon is behind a firewall.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`.
 
-The production relay is the Cloudflare Worker in `packages/relay`, deployed as `byspace-relay` at `relay.byspace.cc.cd`. Since issue 073 it also serves the hosted web UI at `app.byspace.cc.cd` from the same origin (`[assets]` in `wrangler.toml`; `/ws` and `/health` stay on the worker via `run_worker_first`), and the Deploy App workflow deploys it on web releases. `BYSPACE_RELAY_UPSTREAM` in the Worker env proxies all traffic to another relay instead; it is unset in production.
+The production relay is the Cloudflare Worker in `workers/relay`, deployed as `byspace-relay-go` at `relay.byspace.cc.cd`. Since issue 073 it also serves the hosted web UI at `app.byspace.cc.cd` from the same origin (`[assets]` in `wrangler.toml`; `/ws` and `/health` stay on the worker via `run_worker_first`), and the Deploy App workflow deploys it on web releases. `BYSPACE_RELAY_UPSTREAM` in the Worker env proxies all traffic to another relay instead; it is unset in production.
 
 The routing logic lives in `internal/relay/protocol.go` — a `Peer`/`Room` interface plus the v1/v2 frame router — and two hosts serve it. `byspace relay` runs it over a real socket. `workers/relay` runs it inside a Durable Object, compiled to wasm, deployed as `byspace-relay-go`; one object per `relay-v<version>:<serverId>` owns that server's sockets and the buffer for a daemon that is away. The Worker build is 2.1 MiB gzipped, inside the free plan's 3 MiB, which is what makes a free hosted relay possible.
 
@@ -188,7 +188,7 @@ Three of the Durable Object host's rules are the platform's, not the protocol's,
 
 The worker does not hibernate its sockets: routing needs the room's in-memory peer registry, and a hibernated object wakes with an empty one. The hosted relay has always buffered in memory and dropped that buffer on restart, so this keeps the same semantics.
 
-`packages/relay/src/cloudflare-adapter.ts` is still the TypeScript implementation the hosted domains run, and the two Worker builds are independent implementations of the same wire contract — a change to frame routing has to be made in both. See [protocol-compatibility.md](protocol-compatibility.md) for that rule.
+There is one Worker build. `packages/relay` used to hold a TypeScript Worker adapter that served the stable hostnames alongside this one; it was retired once the Go Worker measured cheaper and the cost of two independent implementations of the same wire contract stopped buying anything. The package itself stays — it exports the E2EE primitives `packages/client` imports. See [protocol-compatibility.md](protocol-compatibility.md) for the wire contract that outlives either implementation.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 

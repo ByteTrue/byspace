@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -121,36 +121,58 @@ test("every environment binds the Durable Object it registers", () => {
   assert.deepEqual(migrations, [declared, declared], "default and beta each need the migration");
 });
 
-test("the deploy workflow publishes each channel to the Worker that owns its hostname", () => {
-  // A Cloudflare custom domain routes to exactly one Worker, so the workflow has
-  // to deploy the one the hostname points at. v0.21.0-beta.1 shipped with the
-  // beta branch deploying packages/relay: the run failed, and had it succeeded it
-  // would have replaced the Go Worker's beta UI with one whose relay lives on a
-  // different origin than the page.
+test("the deploy workflow publishes both channels to the Go Worker", () => {
+  // A Cloudflare custom domain routes to exactly one Worker, so the workflow has to deploy the one
+  // each hostname points at. This used to assert a split — beta to workers/relay, stable to
+  // packages/relay — because the Go relay was unproven and the TypeScript worker kept production.
+  // The split is gone: one implementation serves every hostname, so a branch in the workflow would
+  // silently reintroduce a second relay with a second Durable Object namespace.
   const workflow = readFileSync(path.join(root, ".github/workflows/deploy-app.yml"), "utf8");
   assert.match(
     workflow,
-    /RELEASE_CHANNEL == 'beta' && 'workers\/relay' \|\| 'packages\/relay'/,
-    "the beta channel deploys workers/relay and the stable channel packages/relay",
+    /working-directory:\s*workers\/relay/,
+    "every channel deploys workers/relay",
   );
-  assert.match(workflow, /GO_VERSION/, "the beta Worker is wasm, so the job needs a Go toolchain");
-
-  const betaRoutes = [...read("wrangler.jsonc").matchAll(/"pattern"\s*:\s*"([^"]+)"/g)].map(
-    (m) => m[1],
-  );
-  assert.ok(betaRoutes.length > 0, "the Go Worker should declare the beta hostname");
-  // Strip comments: the stable config names the beta hostname once, to say why it
-  // no longer configures it.
-  const stableConfig = readFileSync(path.join(root, "packages/relay/wrangler.toml"), "utf8")
+  // Comments name the retired worker to explain the history, so strip them before asserting that
+  // nothing *deploys* it — otherwise the explanation itself fails the check.
+  const steps = workflow
     .split("\n")
     .filter((line) => !line.trimStart().startsWith("#"))
     .join("\n");
-  for (const hostname of betaRoutes) {
+  assert.doesNotMatch(
+    steps,
+    /packages\/relay/,
+    "nothing deploys packages/relay any more; its Worker adapter is retired",
+  );
+  assert.match(workflow, /GO_VERSION/, "the Worker is wasm, so the job needs a Go toolchain");
+
+  // The stable hostnames have to be declared by the Go Worker, or a deploy would leave them
+  // pointing at the retired TypeScript Worker and production would go dark.
+  const routes = new Set(
+    [...read("wrangler.jsonc").matchAll(/"pattern"\s*:\s*"([^"]+)"/g)].map((m) => m[1]),
+  );
+  for (const hostname of ["relay.byspace.cc.cd", "app.byspace.cc.cd", "app-beta.byspace.cc.cd"]) {
+    assert.ok(routes.has(hostname), `wrangler.jsonc should declare ${hostname}`);
+  }
+});
+
+// The TypeScript Worker adapter must stay gone.
+//
+// Retiring it is what makes the split unrepeatable: with no adapter there is nothing for a future
+// workflow branch or a manual `wrangler deploy` to publish back onto a production hostname.
+test("the TypeScript Worker adapter is retired", () => {
+  for (const retired of [
+    "packages/relay/wrangler.toml",
+    "packages/relay/src/cloudflare-adapter.ts",
+    "packages/relay/src/cutover-proxy.ts",
+  ]) {
     assert.ok(
-      !stableConfig.includes(hostname),
-      `packages/relay/wrangler.toml claims ${hostname}, which the Go Worker owns`,
+      !existsSync(path.join(root, retired)),
+      `${retired} is back; the Go Worker is the only relay`,
     );
   }
+  // The package itself stays: packages/client imports its E2EE primitives.
+  assert.ok(existsSync(path.join(root, "packages/relay/src/e2ee.ts")), "e2ee primitives stay");
 });
 
 // The relay Durable Object must accept sockets with the hibernation API.

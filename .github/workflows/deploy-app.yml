@@ -71,13 +71,16 @@ jobs:
       - name: Build Web app
         run: npm run build:web --workspace=@bytetrue/app
 
-      # The beta channel is the Go Worker. byspace-relay-go-beta owns app-beta.byspace.cc.cd (a
-      # Cloudflare custom domain routes to exactly one worker, so this cannot be a second route on
-      # the TypeScript worker) and the beta PWA is served from the same origin as its relay, which is
-      # what a pairing offer assumes. Deploying packages/relay here instead would silently replace
-      # the beta UI with one whose relay lives on a different hostname.
+      # Both channels deploy the Go Worker. This used to branch: beta went to workers/relay and
+      # stable stayed on packages/relay's TypeScript worker. The split existed because the Go relay
+      # was unproven; it is now measured cheaper (one idle connection held 180s: 0.06 GB-s against
+      # the TypeScript worker's 1.93) and quieter, so the TypeScript Durable Object is retired and
+      # one implementation serves every hostname.
+      #
+      # A Cloudflare custom domain routes to exactly one Worker, so `wrangler deploy` moving the
+      # route is the whole cutover — and the whole rollback, if packages/relay is deployed again.
       - name: Deploy the release channel
-        working-directory: ${{ env.RELEASE_CHANNEL == 'beta' && 'workers/relay' || 'packages/relay' }}
+        working-directory: workers/relay
         run: |
           if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
             # wrangler runs the Worker's own build command, which compiles the wasm.
