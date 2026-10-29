@@ -1,6 +1,6 @@
 ---
 kind: issue
-title: "隧道经托管 relay 不通：握手过了但数据不转发"
+title: "隧道经托管 relay 不通（已修）：socket attachment 丢 this"
 type: bug
 created: 2026-10-29
 ---
@@ -45,17 +45,38 @@ message / close handler 的 panic。`wrangler tail` 里抓到 5 次，而同一�
 
 **这个缺陷是我在 `61ab7b359`（hibernation 改造）引入的，它让 attachment 读写在生产上一直失败。**
 
-## 仍未知
+## 结论：就是那一个缺陷，修复后通
 
-`roomView.Peers(tag)` 依赖 `state.GetWebSockets(tag)` + 从 attachment 重建 `relay.Connection`。
-attachment 修复后仍不通，说明还有第二个原因。候选：
+打完点之后一次就看清了，之前三轮猜测全是浪费：
 
-1. 上传的 wasm 是否真的带上了修复（部署时间与旧 socket 的生命周期交错）
-2. `deserializeAttachment` 的返回形状（字符串 vs 对象）与 `callJS` 的假设不符
-3. hibernation 下 `GetWebSockets(tag)` 的 tag 与我 accept 时传的不一致
+```
+RELAY attach ok=true type=string len=93 val="{\"role\":\"client\",\"connectionId\":\"conn_54e2...\"}"
+RELAY msg ok=true role="client" mt=BinaryMessage len=46
+RELAY peers tag="server:conn_54e2..." sockets=1
+RELAY msg done role="client" sent=1
+```
 
-下一步需要在 `connectionFromAttachment` 与 `roomView.Peers` 上打点，用一次 `wrangler tail` 换取真相——
-猜测已经浪费了太多轮。
+attachment 一旦能读写，`GetWebSockets(tag)` 与 `conn.Tags()` 都对得上，双向转发恢复。
+
+**第二个"原因"是我自己的测试配置写错了**：目标端密码键写成了 `auth.passwordHash`，实际是
+`auth.password`（`daemonPasswordHashKey` 常量）。目标端因此报
+`This host has no daemon password set, so tunnels are disabled` 并拒绝开流。
+不是产品缺陷，但值得记：拼错的键**不会**报配置错误，只会让功能静默失效。
+
+## 顺带：实测「隧道 + AI API」的消耗
+
+3 次流式对话（2156 个 SSE chunk，24 秒传输，3041 字输出）：**0.603 GB-s**，即
+**每次对话约 0.20 GB-s**。
+
+| 使用强度    | 每日     | 占免费层额度（13,000 GB-s） |
+| ----------- | -------- | --------------------------- |
+| 10 次对话   | 2 GB-s   | 0.015%                      |
+| 100 次对话  | 20 GB-s  | 0.15%                       |
+| 1000 次对话 | 200 GB-s | 1.5%                        |
+
+**原先的估算（0.002 GB-s/次）低估了 100 倍**——每个 chunk 在 relay 上要过两次 DO 消息处理，
+固定唤醒开销远大于预期的 CPU 时间。但量级仍然安全：重度使用一天也只占额度个位数百分比。
+真正烧额度的是常驻连接，那已由 hibernation 解决（14,527 → 0.27 GB-s/天）。
 
 ## 影响
 
