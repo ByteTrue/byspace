@@ -5,6 +5,25 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.22.0 - 2026-10-29
+
+### Added
+
+- Native desktop app for macOS, Windows and Linux built from the same binary with Wails v3: runs in the system tray when the window is closed, attaches to an already-running local daemon or starts one in-process, and takes over automatically if the external daemon exits
+- Android client APK (`byspace-android-arm64.apk`) built from the same Go and web bundle for direct sideloading, with plaintext `ws://` LAN and Tailscale connections allowed alongside `wss://` relay connections and `byspace://` pairing deep links
+- `byspace update` and `byspace update check` with `--proxy` and `--mirror` support to verify `SHA256SUMS` and atomically update the CLI binary or enclosing `BySpace.app` bundle in place, plus background update staging in the desktop tray menu
+
+### Changed
+
+- Releases now ship standalone binaries and native installers directly on GitHub Releases instead of publishing to npm, with `curl -fsSL https://app.byspace.cc.cd/install.sh | sh` and `irm https://app.byspace.cc.cd/install.ps1 | iex` installing the standalone CLI binary by default on every platform
+- The hosted relay on `app.byspace.cc.cd` now runs the Go Worker on both stable and beta channels, and `relay.byspace.cc.cd` is retired in favour of the single `app.byspace.cc.cd:443` origin
+- `byspace daemon status` queries the running daemon's `/health` for both the configured relay endpoint and the address the last successful dial reached, instead of reporting `config.json` as if it were connected
+
+### Fixed
+
+- Fixed the Go relay Worker holding a live goroutine per WebSocket instead of using Durable Object WebSocket hibernation, which exhausted the daily Durable Object duration allowance and made new handshakes fail with HTTP 500
+- Fixed the hibernating relay Worker detaching `serializeAttachment` and `deserializeAttachment` from their socket receiver, which caused tunnel and session attachment reads to panic in the Durable Object
+
 ## 0.21.2 - 2026-10-28
 
 ### Fixed
