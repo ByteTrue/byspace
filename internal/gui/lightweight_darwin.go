@@ -36,10 +36,10 @@ static void dropWebView(void *win) {
 	[web removeFromSuperview];
 }
 
-static BOOL isWindowKeyAndAppActive(void *win) {
+static int isWindowKeyAndAppActive(void *win) {
 	NSWindow *w = (NSWindow *)win;
-	if (w == nil) return NO;
-	return [NSApp isActive] && [w isVisible] && [w isKeyWindow];
+	if (w == nil) return 0;
+	return ([NSApp isActive] && [w isVisible] && [w isKeyWindow]) ? 1 : 0;
 }
 */
 import "C"
@@ -63,5 +63,5 @@ func isWindowFocusedOnMain(w *application.WebviewWindow) bool {
 	if p == nil {
 		return false
 	}
-	return bool(C.isWindowKeyAndAppActive(p))
+	return C.isWindowKeyAndAppActive(p) != 0
 }
