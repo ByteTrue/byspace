@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agenthooks"
+	"github.com/ByteTrue/byspace/internal/agent/hooks"
 )
 
 // `byspace hooks <agent> <event>` records agent hook activity.

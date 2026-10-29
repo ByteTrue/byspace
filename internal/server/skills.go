@@ -401,7 +401,7 @@ func resolveSkillsSourceDir() string {
 			return candidate
 		}
 	}
-	return ""
+	return extractBundledSkills()
 }
 
 // copySkillDir copies a bundled skill directory into an agent home, mirroring sync.ts.

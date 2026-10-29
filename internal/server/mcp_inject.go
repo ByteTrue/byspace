@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
-	"github.com/ByteTrue/byspace/internal/agentroles"
+	"github.com/ByteTrue/byspace/internal/agent/roles"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 

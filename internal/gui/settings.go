@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/awake"
+	"github.com/ByteTrue/byspace/internal/gui/awake"
 	"github.com/ByteTrue/byspace/internal/home"
 )
 

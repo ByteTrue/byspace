@@ -20,10 +20,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
-	"github.com/ByteTrue/byspace/internal/autostart"
-	"github.com/ByteTrue/byspace/internal/awake"
-	"github.com/ByteTrue/byspace/internal/backup"
+	"github.com/ByteTrue/byspace/internal/gui/autostart"
+	"github.com/ByteTrue/byspace/internal/gui/awake"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/home/backup"
 	"github.com/ByteTrue/byspace/internal/selfupdate"
 	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/webui"

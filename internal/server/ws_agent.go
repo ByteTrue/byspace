@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/activity"
+	"github.com/ByteTrue/byspace/internal/agent/notices"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
-	"github.com/ByteTrue/byspace/internal/agentnotices"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/schedule"

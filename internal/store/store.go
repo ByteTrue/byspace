@@ -17,7 +17,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/pathutil"
-	"github.com/ByteTrue/byspace/internal/projectkey"
+	"github.com/ByteTrue/byspace/internal/workspace/projectkey"
 )
 
 // ProjectRecord mirrors PersistedProjectRecord in packages/server/src/server/workspace-registry.ts.

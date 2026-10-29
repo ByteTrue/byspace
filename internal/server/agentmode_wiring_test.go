@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ByteTrue/byspace/internal/agentmode"
+	"github.com/ByteTrue/byspace/internal/agent/mode"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 

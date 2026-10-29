@@ -20,15 +20,14 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/ByteTrue/byspace/internal/agent/mode"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/roles"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
-	"github.com/ByteTrue/byspace/internal/agentmode"
-	"github.com/ByteTrue/byspace/internal/agentroles"
-	"github.com/ByteTrue/byspace/internal/agenttitle"
+	"github.com/ByteTrue/byspace/internal/agent/title"
 	"github.com/ByteTrue/byspace/internal/attachment"
 	"github.com/ByteTrue/byspace/internal/attention"
-	"github.com/ByteTrue/byspace/internal/directorysync"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -38,6 +37,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/tunnel"
 	"github.com/ByteTrue/byspace/internal/webui"
 	"github.com/ByteTrue/byspace/internal/workspace"
+	"github.com/ByteTrue/byspace/internal/workspace/directorysync"
 )
 
 const WSProtocolVersion = 1

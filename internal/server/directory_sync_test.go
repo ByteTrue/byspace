@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/ByteTrue/byspace/internal/directorysync"
 	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/workspace/directorysync"
 )
 
 // projectListResponse is the shape `handleProjectList` answers with.

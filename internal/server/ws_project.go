@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ByteTrue/byspace/internal/projecticon"
+	"github.com/ByteTrue/byspace/internal/workspace/projecticon"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/dirstream"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/pathutil"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
+	"github.com/ByteTrue/byspace/internal/workspace/dirstream"
 )
 
 func expandUserPath(raw string) string {

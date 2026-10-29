@@ -368,7 +368,7 @@ esac
 				sawTurnCompleted = true
 			}
 		}
-		if sawTurnFailed {
+		if sawTurnFailed && agentID != "" {
 			break
 		}
 	}

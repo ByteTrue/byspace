@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agentroles"
+	"github.com/ByteTrue/byspace/internal/agent/roles"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/tunnel"
 )
