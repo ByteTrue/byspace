@@ -57,7 +57,7 @@ dmg: app
 
 ## build-android: 编译 Wails v3 Android 侧载客户端 APK (bin/byspace-android-arm64.apk)
 build-android:
-	VERSION="$(VERSION)" bash ./scripts/build-android.sh
+	VERSION="$(VERSION)" bash ./build/android/build.sh
 	@mkdir -p dist && cp bin/byspace-android-arm64.apk dist/byspace-android-arm64.apk
 
 ## release-cli: 交叉编译全平台无头 CLI 二进制到 dist/
@@ -89,8 +89,6 @@ checksums:
 
 ## build-web: 导出 Expo Web，预压缩资产直接写进 internal/webui/dist 供 //go:embed
 build-web:
-	cp install.sh packages/app/public/install.sh
-	cp install.ps1 packages/app/public/install.ps1
 	npm run build:daemon-web-ui
 	find internal/webui/dist/_expo -name "*.js" -size +1M -delete
 	touch internal/webui/dist/.keep

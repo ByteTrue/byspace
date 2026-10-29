@@ -18,17 +18,24 @@ const VERDICTS = ["待审", "MATCH", "FIXED", "N/A", "DROPPED", "已实现未接
 
 const text = fs.readFileSync(LEDGER, "utf8");
 
-// 期望的条目集合，从磁盘上的真实文件列表算出来。
+// 期望的条目集合，从快照或磁盘上的真实文件列表算出来。
 const expected = new Set();
-for (const [root] of ROOTS) {
-  const walk = (dir) =>
-    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-      if (e.isDirectory()) return walk(path.join(dir, e.name));
-      if (e.name.endsWith(".ts") && !e.name.endsWith(".test.ts")) return [path.join(dir, e.name)];
-      return [];
-    });
-  for (const file of walk(root)) {
-    expected.add(file.slice(root.length + 1));
+if (!fs.existsSync("archive/packages/server/src")) {
+  const snap = JSON.parse(fs.readFileSync("scripts/node-surface-snapshot.json", "utf8"));
+  for (const file of snap.ledgerFiles ?? []) {
+    expected.add(file);
+  }
+} else {
+  for (const [root] of ROOTS) {
+    const walk = (dir) =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        if (e.isDirectory()) return walk(path.join(dir, e.name));
+        if (e.name.endsWith(".ts") && !e.name.endsWith(".test.ts")) return [path.join(dir, e.name)];
+        return [];
+      });
+    for (const file of walk(root)) {
+      expected.add(file.slice(root.length + 1));
+    }
   }
 }
 

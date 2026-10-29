@@ -1,5 +1,13 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const defaultRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+function loadSnapshot() {
+  return JSON.parse(
+    readFileSync(join(defaultRoot, "scripts", "node-surface-snapshot.json"), "utf8"),
+  );
+}
 
 // Surface parity guards.
 //
@@ -45,9 +53,11 @@ function readAll(files) {
 // node registers with `registerTool(\n  "name",`; Go declares each with mcpToolDef("name", ...).
 
 export function nodeMcpTools(root) {
-  const source = readAll(
-    walk(join(root, "archive/packages/server/src"), { extensions: [".ts"], skipTests: true }),
-  );
+  const archiveServer = join(root, "archive/packages/server/src");
+  if (!existsSync(archiveServer)) {
+    return new Set(loadSnapshot().mcpTools);
+  }
+  const source = readAll(walk(archiveServer, { extensions: [".ts"], skipTests: true }));
   return new Set(
     [...source.matchAll(/registerTool\(\s*"([a-z][a-z0-9_]*)"/g)].map((match) => match[1]),
   );
@@ -66,9 +76,11 @@ export function goMcpTools(root) {
 // so `app.get("/")`-style registrations are matched by their literal path and compared literally.
 
 export function nodeHttpRoutes(root) {
-  const source = readAll(
-    walk(join(root, "archive/packages/server/src"), { extensions: [".ts"], skipTests: true }),
-  );
+  const archiveServer = join(root, "archive/packages/server/src");
+  if (!existsSync(archiveServer)) {
+    return new Set(loadSnapshot().httpRoutes);
+  }
+  const source = readAll(walk(archiveServer, { extensions: [".ts"], skipTests: true }));
   const routes = new Set();
   for (const match of source.matchAll(/\.(?:get|post|put|delete|all)\(\s*"(\/[^"]*)"/g)) {
     routes.add(match[1]);
@@ -91,8 +103,12 @@ export function goHttpRoutes(root) {
 // string is not an input, and counting it made the first pass report a gap that did not exist.
 
 export function nodeEnvVars(root) {
+  const archiveServer = join(root, "archive/packages/server/src");
+  if (!existsSync(archiveServer)) {
+    return new Set(loadSnapshot().envVars);
+  }
   const source = readAll([
-    ...walk(join(root, "archive/packages/server/src"), { extensions: [".ts"], skipTests: true }),
+    ...walk(archiveServer, { extensions: [".ts"], skipTests: true }),
     ...walk(join(root, "archive/packages/cli/src"), { extensions: [".ts"], skipTests: true }),
   ]);
   const found = new Set();

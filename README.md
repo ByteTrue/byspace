@@ -72,7 +72,7 @@ For full setup and configuration, see:
 
 - [Development and setup](docs/development.md)
 - [Architecture](docs/architecture.md)
-- [Server and CLI reference](archive/packages/server/README.md)
+- [Server and CLI reference](docs/architecture.md)
 
 ### Self-hosting with Docker
 
@@ -102,7 +102,7 @@ byspace send abc123 "also add tests" # follow-up task
 byspace run --host workstation.local:6777 --cwd /workspace "run the full test suite"
 ```
 
-See the [CLI reference](archive/packages/server/README.md) for more.
+See the [CLI reference](docs/architecture.md) for more.
 
 ## Skills
 

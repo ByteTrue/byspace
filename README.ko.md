@@ -72,7 +72,7 @@ BySpace는 기본적으로 `127.0.0.1:6777`에서 시작합니다. 암호화 릴
 
 - [개발 및 설치](docs/development.md)
 - [아키텍처](docs/architecture.md)
-- [Server 및 CLI 레퍼런스](archive/packages/server/README.md)
+- [Server 및 CLI 레퍼런스](docs/architecture.md)
 
 ### Docker
 
@@ -102,7 +102,7 @@ byspace send abc123 "also add tests" # 후속 작업 전송
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-자세한 내용은 [Server 및 CLI 레퍼런스](archive/packages/server/README.md)를 참고하세요.
+자세한 내용은 [Server 및 CLI 레퍼런스](docs/architecture.md)를 참고하세요.
 
 ## 스킬
 

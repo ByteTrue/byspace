@@ -74,7 +74,7 @@ BySpace はデフォルトで `127.0.0.1:6777` で起動します。端末から
 
 - [開発とセットアップ](docs/development.md)
 - [アーキテクチャ](docs/architecture.md)
-- [Server と CLI リファレンス](archive/packages/server/README.md)
+- [Server と CLI リファレンス](docs/architecture.md)
 
 ## CLI
 
@@ -92,7 +92,7 @@ byspace send abc123 "also add tests" # 追加タスクを送信
 byspace --host workstation.local:6777 run "run the full test suite"
 ```
 
-詳細は [Server と CLI リファレンス](archive/packages/server/README.md)を参照してください。
+詳細は [Server と CLI リファレンス](docs/architecture.md)を参照してください。
 
 ## スキル
 

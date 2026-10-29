@@ -5,7 +5,7 @@
 // guard against the failure mode that actually happened — four commands quietly went missing and
 // nobody noticed until someone typed one of them.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +26,12 @@ function walk(dir, out = []) {
 // group registers its own subcommands in commands/<group>/index.ts.
 export function nodeSurface(root = repoRoot) {
   const cliDir = join(root, "archive", "packages", "cli", "src");
+  if (!existsSync(cliDir)) {
+    const snap = JSON.parse(
+      readFileSync(join(repoRoot, "scripts", "node-surface-snapshot.json"), "utf8"),
+    );
+    return snap.cli;
+  }
   const cliSource = readFileSync(join(cliDir, "cli.ts"), "utf8");
 
   const topLevel = new Set();

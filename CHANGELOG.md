@@ -12,6 +12,10 @@
 - Pinned local ports and full in-place CRUD for daemon tunnels: port forwards now default to matching the remote port (and persist the assigned local port in `tunnels.json` across reconnects and restarts), support editing local/remote ports in place without re-entering credentials, allow comma-separated batch port input, and remove individual ports without dropping other forwards on the same peer
 - Native desktop and Android notification handling in Wails containers so enabling notifications succeeds immediately without requiring browser FCM Service Worker push subscriptions
 
+### Changed
+
+- Removed the retired `archive/` Node daemon/CLI tree (with parity surface baselines preserved in `scripts/node-surface-snapshot.json`), the duplicate `cmd/byspace/` entrypoint, and 12 obsolete release/iOS scripts
+
 ### Fixed
 
 - Fixed the Windows desktop app flashing black console windows when probing provider CLIs (`pi`, `claude`, `codex`) or running `git` and `powershell` subprocesses by routing all child commands through `proc.Command` with `CREATE_NO_WINDOW`

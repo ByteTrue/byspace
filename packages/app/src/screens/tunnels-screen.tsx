@@ -906,10 +906,7 @@ function resolveEditSaveButtonLabel(
   if (submitting) {
     return t("common.states.loading");
   }
-  if (isZh) {
-    return "保存并重绑";
-  }
-  return t("common.actions.save", { defaultValue: "Save" });
+  return isZh ? "保存并重绑" : "Save";
 }
 
 function EditTunnelSheet({
