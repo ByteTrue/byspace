@@ -47,3 +47,4 @@ created: 2026-10-29
 3. [003-x-wails-v3-android-client.md](issues/003-x-wails-v3-android-client.md) — Wails v3 Android 客户端（`build/android` 工程、JNI `libwails.so` 构建链、局域网明文 `ws://` 放行与 APK 打包验证）
 4. [004-x-magpie-style-self-update-cli-and-app.md](issues/004-x-magpie-style-self-update-cli-and-app.md) — Magpie 式 CLI（`byspace update`）与客户端（桌面端后台预下载+托盘重启更新 / Android APK 更新）自更新体系
 5. [005-x-direct-binary-distribution-and-installers.md](issues/005-x-direct-binary-distribution-and-installers.md) — 退出 npm 分发：`install.sh`（curl）与 `install.ps1`（pwsh）安装脚本、macOS `.app` 打包、Android 固定侧载签名与 GitHub Releases 二进制直发工作流
+6. [2026-10-29-x-ff-macos-inset-titlebar-and-instance-lifecycle.md](issues/2026-10-29-x-ff-macos-inset-titlebar-and-instance-lifecycle.md) — 桌面客户端收口：macOS 隐藏标题栏交通灯内嵌、本地免密直连、Dock 图标网格与单实例生命周期
