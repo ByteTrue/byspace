@@ -702,15 +702,128 @@ func InstallApp(staged, bundle string) error {
 	return nil
 }
 
-// RelaunchApp reopens a macOS .app bundle after the current process exits.
-func RelaunchApp(bundle string, showWindow bool) error {
-	openCmd := fmt.Sprintf("open %q", bundle)
-	if !showWindow {
-		openCmd = fmt.Sprintf("open %q --args tray", bundle)
+var openWaits = []string{"0.5", "1", "1", "2", "2", "3", "4"}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func relaunchLogPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		return os.DevNull
 	}
-	script := fmt.Sprintf("while kill -0 %d 2>/dev/null; do sleep 0.2; done; %s", os.Getpid(), openCmd)
+	dir := filepath.Join(homeDir, ".byspace")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return os.DevNull
+	}
+	p := filepath.Join(dir, "relaunch.log")
+	if fi, err := os.Stat(p); err == nil && fi.Size() > 64<<10 {
+		_ = os.Rename(p, p+".old")
+	}
+	return p
+}
+
+// BuildRelaunchScript builds the shell command that reopens bundle after the parent pid exits
+// (ported from magpie's relaunchScript):
+//   - uses `open -n` so LaunchServices does not send a reopen event to the dying process (-600 procNotFound);
+//   - retries across waits (~13.5s total);
+//   - falls back to exec'ing Contents/MacOS/byspace directly when LaunchServices refuses `open`
+//     (e.g. during an idle auto-update while the macOS screen is locked).
+func BuildRelaunchScript(bundle string, showWindow bool, logFile string, waits []string) string {
+	if logFile == "" {
+		logFile = os.DevNull
+	}
+	exe := filepath.Join(bundle, "Contents", "MacOS", "byspace")
+	run := shellQuote(exe)
+	openCmd := "open -n " + shellQuote(bundle)
+	if !showWindow {
+		run += " 'tray'"
+		openCmd += " --args 'tray'"
+	}
+	var b strings.Builder
+	b.WriteString("log=" + shellQuote(logFile) + "; ")
+	b.WriteString(`note() { echo "$(date '+%Y-%m-%d %H:%M:%S %z') $*" >> "$log" 2>/dev/null; }; `)
+	b.WriteString(`try() { n=$((n+1)); e=$(` + openCmd + ` 2>&1 >/dev/null); s=$?; note "open try $n: exit $s $(printf '%s' "$e" | tr '\n' ' ')"; return $s; }; `)
+	b.WriteString("n=0; note " + shellQuote("byspace has exited; opening "+bundle) + "; ")
+	if len(waits) == 0 {
+		b.WriteString("try")
+	} else {
+		b.WriteString(fmt.Sprintf("for w in %s; do try && exit 0; sleep $w; done; try", strings.Join(waits, " ")))
+	}
+	b.WriteString(` || { note "open gave up after $n tries; starting ` + exe + `"; `)
+	b.WriteString("[ -x " + shellQuote(exe) + " ] || exit 1; ")
+	b.WriteString("exec " + run + " </dev/null >/dev/null 2>&1; }")
+	return b.String()
+}
+
+// RelaunchApp reopens a macOS .app bundle in its own detached session after the current process exits.
+func RelaunchApp(bundle string, showWindow bool) error {
+	inner := BuildRelaunchScript(bundle, showWindow, relaunchLogPath(), openWaits)
+	script := fmt.Sprintf("while kill -0 %d 2>/dev/null; do sleep 0.2; done; %s", os.Getpid(), inner)
 	cmd := exec.Command("/bin/sh", "-c", script)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
+	detachProcess(cmd)
 	return cmd.Start()
+}
+
+// EnsureAppCLISymlink links ~/.local/bin/byspace to the running macOS .app bundle's binary
+// when the user installed BySpace.app via .dmg drag-and-drop and ~/.local/bin/byspace is either
+// absent or already a symlink. If force is true, a standalone regular file at ~/.local/bin/byspace
+// is also replaced with the symlink.
+func EnsureAppCLISymlink(force bool) (linkedPath string, ok bool) {
+	if runtime.GOOS != "darwin" {
+		return "", false
+	}
+	bundle := Bundle()
+	if bundle == "" {
+		return "", false
+	}
+	return EnsureBundleCLISymlink(bundle, "", force)
+}
+
+// EnsureBundleCLISymlink links binDir/byspace to bundle/Contents/MacOS/byspace.
+func EnsureBundleCLISymlink(bundle, binDir string, force bool) (string, bool) {
+	if bundle == "" {
+		return "", false
+	}
+	target := filepath.Join(bundle, "Contents", "MacOS", "byspace")
+	if _, err := os.Stat(target); err != nil {
+		return "", false
+	}
+	if binDir == "" {
+		binDir = strings.TrimSpace(os.Getenv("BYSPACE_BIN_DIR"))
+	}
+	if binDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil || homeDir == "" {
+			return "", false
+		}
+		binDir = filepath.Join(homeDir, ".local", "bin")
+	}
+	linkPath := filepath.Join(binDir, "byspace")
+	if st, err := os.Lstat(linkPath); err == nil {
+		if st.Mode()&os.ModeSymlink != 0 {
+			if dest, readErr := os.Readlink(linkPath); readErr == nil && dest == target {
+				return linkPath, true
+			}
+		} else if !force {
+			return linkPath, false
+		}
+	}
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return "", false
+	}
+	tmpLink := linkPath + ".tmp-link"
+	_ = os.Remove(tmpLink)
+	if err := os.Symlink(target, tmpLink); err != nil {
+		return "", false
+	}
+	if err := os.Rename(tmpLink, linkPath); err != nil {
+		_ = os.Remove(tmpLink)
+		return "", false
+	}
+	return linkPath, true
 }
 
 // RelaunchBinary spawns the updated binary with BYSPACE_REPLACES=<pid>.

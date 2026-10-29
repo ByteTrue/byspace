@@ -56,6 +56,7 @@ func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUp
 					NoAutoUpdate   *bool `json:"noAutoUpdate"`
 					NoAutoDownload *bool `json:"noAutoDownload"`
 					AutoRestart    *bool `json:"autoRestart"`
+					LinkCLI        bool  `json:"linkCLI"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -72,6 +73,9 @@ func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUp
 				}
 				if patch.AutoRestart != nil {
 					current.AutoRestart = *patch.AutoRestart
+				}
+				if patch.LinkCLI {
+					selfupdate.EnsureAppCLISymlink(true)
 				}
 				if err := SaveDesktopSettings(homeDir, current); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -112,6 +116,9 @@ func Run(version string, showMain bool, initialLink string) error {
 		if acquireOrHandOverGUILock(homeDir, showMain, initialLink) {
 			return nil
 		}
+		// If running from BySpace.app (e.g. installed via .dmg) and ~/.local/bin/byspace is
+		// absent or already a symlink, link it automatically so the CLI tracks app updates.
+		selfupdate.EnsureAppCLISymlink(false)
 	}
 
 	var sup *DaemonSupervisor

@@ -117,3 +117,56 @@ func TestBundleOfDetectsMacAppBundle(t *testing.T) {
 		t.Fatalf("BundleOf(/usr/local/bin/byspace) = %q, want empty", got)
 	}
 }
+
+func TestBuildRelaunchScriptUsesOpenMinusNRetriesAndExecFallback(t *testing.T) {
+	script := BuildRelaunchScript("/Applications/BySpace.app", false, "/tmp/relaunch.log", []string{"0.5", "1"})
+	if !strings.Contains(script, "open -n '/Applications/BySpace.app' --args 'tray'") {
+		t.Fatalf("expected open -n with tray arg, got %s", script)
+	}
+	if !strings.Contains(script, "for w in 0.5 1; do try && exit 0; sleep $w; done; try") {
+		t.Fatalf("expected retry loop in relaunch script, got %s", script)
+	}
+	if !strings.Contains(script, "exec '/Applications/BySpace.app/Contents/MacOS/byspace' 'tray'") {
+		t.Fatalf("expected direct exec fallback for locked-screen updates, got %s", script)
+	}
+}
+
+func TestEnsureBundleCLISymlinkLinksAndRespectsStandaloneCopyUnlessForced(t *testing.T) {
+	tmp := t.TempDir()
+	bundle := filepath.Join(tmp, "BySpace.app")
+	macOSDir := filepath.Join(bundle, "Contents", "MacOS")
+	if err := os.MkdirAll(macOSDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(macOSDir, "byspace")
+	if err := os.WriteFile(target, []byte("app-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binDir := filepath.Join(tmp, "bin")
+
+	// 1. When ~/.local/bin/byspace is absent, creates symlink automatically.
+	linkPath, ok := EnsureBundleCLISymlink(bundle, binDir, false)
+	if !ok || linkPath == "" {
+		t.Fatalf("expected symlink creation to succeed, got ok=%v path=%q", ok, linkPath)
+	}
+	if dest, err := os.Readlink(linkPath); err != nil || dest != target {
+		t.Fatalf("readlink = %q (err=%v), want %q", dest, err, target)
+	}
+
+	// 2. When a standalone regular file exists and force=false, leaves it untouched.
+	_ = os.Remove(linkPath)
+	if err := os.WriteFile(linkPath, []byte("standalone-cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := EnsureBundleCLISymlink(bundle, binDir, false); ok {
+		t.Fatal("expected standalone CLI copy not to be overwritten when force=false")
+	}
+
+	// 3. With force=true, replaces standalone copy with symlink to the .app binary.
+	if _, ok := EnsureBundleCLISymlink(bundle, binDir, true); !ok {
+		t.Fatal("expected force=true to replace standalone copy with symlink")
+	}
+	if dest, err := os.Readlink(linkPath); err != nil || dest != target {
+		t.Fatalf("readlink after force = %q (err=%v), want %q", dest, err, target)
+	}
+}
