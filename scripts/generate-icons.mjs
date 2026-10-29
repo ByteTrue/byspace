@@ -133,6 +133,20 @@ async function main() {
   writeFileSync(resolve(root, "assets/logo.svg"), appIconSvg);
   console.log("Generated: assets/logo.svg");
 
+  // 6. Wails 桌面客户端图标 (internal/gui/icon.png)
+  // Apple macOS Big Sur+ HIG 规范：1024x1024 画布内主体圆角矩形为 824x824（四周各 100px 透明边距），
+  // 否则在 macOS Dock 栏中会比标准系统图标大一圈（1024/824 = 1.24x）。
+  const macScale = 824 / 1024;
+  const macOffset = (1024 - 824) / 2;
+  const macDesktopSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${BYSPACE_LOGO_VIEWBOX}">
+<g transform="translate(${macOffset}, ${macOffset}) scale(${macScale.toFixed(6)})">
+  <rect width="${S}" height="${S}" rx="${RX}" fill="#000000"/>
+  <path d="${BYSPACE_LOGO_PATH}" fill="#FFFFFF"/>
+</g>
+</svg>`;
+  await renderPng(macDesktopSvg, 1024, resolve(root, "internal/gui/icon.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "internal/gui/tray.png"));
+
   console.log("All BySpace icon assets generated successfully!");
 }
 

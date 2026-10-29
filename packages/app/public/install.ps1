@@ -29,9 +29,22 @@ $file = if ($wantApp) { "byspace-windows-$arch.exe" } else { "byspace-cli-window
 $iwParams = @{ UseBasicParsing = $true }
 if ($proxy) { $iwParams.Proxy = $proxy }
 
+$ProgressPreference = "SilentlyContinue"
 if ($targetVersion -eq "latest") {
-  $apiResp = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" @iwParams
-  $tag = $apiResp.tag_name
+  $req = [System.Net.HttpWebRequest]::Create("https://github.com/$repo/releases/latest")
+  $req.AllowAutoRedirect = $false
+  if ($proxy) { $req.Proxy = New-Object System.Net.WebProxy($proxy) }
+  try {
+    $resp = $req.GetResponse()
+  } catch [System.Net.WebException] {
+    $resp = $_.Exception.Response
+  }
+  $loc = if ($resp) { $resp.Headers["Location"] } else { $null }
+  if ($resp) { $resp.Close() }
+  if (-not $loc -or ($loc -notmatch "/tag/([^/?#]+)")) {
+    throw "Could not resolve latest release tag from GitHub"
+  }
+  $tag = $Matches[1]
 } elseif ($targetVersion.StartsWith('v')) {
   $tag = $targetVersion
 } else {
