@@ -54,7 +54,7 @@ You aren't expected to own every device. You are expected to say what you covere
 
 A phone-sized browser viewport (or device-mode in dev tools) covers the compact layout; see [development.md](development.md).
 
-For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../CLAUDE.md). The recurring traps have their own docs: [hover.md](hover.md), [unistyles.md](unistyles.md), [floating-panels.md](floating-panels.md), [mobile-panels.md](mobile-panels.md), [expo-router.md](expo-router.md).
+For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../AGENTS.md). The recurring traps have their own docs: [hover.md](hover.md), [unistyles.md](unistyles.md), [floating-panels.md](floating-panels.md), [mobile-panels.md](mobile-panels.md), [expo-router.md](expo-router.md).
 
 App and daemon versions also drift, in both directions. That has its own contract: [protocol-compatibility.md](protocol-compatibility.md).
 

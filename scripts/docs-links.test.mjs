@@ -19,7 +19,7 @@ const repoRoot = resolve(new URL("..", import.meta.url).pathname);
 
 const SCANNED = [
   "AGENTS.md",
-  "CLAUDE.md",
+  "AGENTS.md",
   "CONTRIBUTING.md",
   "SECURITY.md",
   "README.md",
