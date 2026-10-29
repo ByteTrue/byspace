@@ -5,6 +5,18 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.22.1 - 2026-10-29
+
+### Added
+
+- Desktop app settings under Settings → General for Lightweight mode (releases the hidden window's WebView process after 60 seconds in the tray and recreates it on reopen), automatic update checks, automatic background update downloads, and automatic idle update installation (installs and restarts once no agent is running and the window has been unfocused for 10 seconds)
+- Single-instance handoff for the desktop app so launching `byspace` or `BySpace.app` a second time focuses the existing window instead of spawning a second tray icon
+
+### Fixed
+
+- Fixed the macOS desktop app using a separate system titlebar and an oversized full-bleed Dock icon: traffic-light controls are now inset into the sidebar header row and the app icon follows the 824/1024 macOS HIG grid
+- Fixed the desktop app falling back to the Welcome screen on launch when a daemon `password` was configured in `config.json` by injecting the local CLI credential into the window's initial connection hint
+
 ## 0.22.0 - 2026-10-29
 
 ### Added
