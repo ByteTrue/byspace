@@ -5,7 +5,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 ## 通道与地址
 
 - Stable 构建使用 `app.byspace.cc.cd`，prerelease 构建使用 `app-beta.byspace.cc.cd`；选择集中在发布通道定义，不散落多处判断。
-- Stable 与 prerelease 使用同一个 Relay：`relay.byspace.cc.cd:443`，不保留 Beta Relay 兼容通道。
+- Relay 默认在 stable App 的 origin 上：`app.byspace.cc.cd:443`，两个渠道共用同一个 relay 与同一个 Durable Object namespace。`relay.byspace.cc.cd` 已下线——它曾是同一 Worker 的第二个 hostname、同一个 namespace 的第二个入口，而配对 offer 本来就假设页面和它的 relay 同源。prerelease 的 relay 仍部署在 `app-beta.byspace.cc.cd`（独立 namespace，用于验证 relay 改动），但不再是默认。
 - 用户自定义 App/Relay endpoint 覆盖通道默认值。
 
 ## 安全边界

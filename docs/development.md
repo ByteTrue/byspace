@@ -317,7 +317,7 @@ directory. The Docker container serves the same shape from the Go relay.
 
 `workers/relay` compiles `internal/relay` to wasm and runs it inside a Cloudflare
 Durable Object. It is a separate Worker from `packages/relay` — that one serves
-the hosted `relay.byspace.cc.cd` / `app.byspace.cc.cd` stable origins, while this
+the hosted `app.byspace.cc.cd` stable origin, while this
 one serves the beta origins.
 
 ```bash

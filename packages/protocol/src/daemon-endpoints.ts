@@ -16,7 +16,14 @@ export type RelayRole = "server" | "client";
 export type RelayProtocolVersion = "1" | "2";
 
 export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
-export const DEFAULT_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
+// The hosted relay lives on the app origin.
+//
+// `relay.byspace.cc.cd` was a second hostname for the same Worker, from when the relay was its own
+// service. The Worker serves `/ws` on the app origin (`run_worker_first`), so the extra hostname was
+// a second route to the same Durable Object namespace and a second thing to keep pointing somewhere.
+// Retired: one origin per channel carries both the PWA and its relay, which is what a pairing offer
+// already assumes.
+export const DEFAULT_RELAY_ENDPOINT = "app.byspace.cc.cd:443";
 
 export function isBySpaceHostedRelayEndpoint(value: string | undefined): boolean {
   return value === DEFAULT_RELAY_ENDPOINT;

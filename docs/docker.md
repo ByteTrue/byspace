@@ -36,11 +36,11 @@ first.
 
 ## What is where
 
-| Piece  | Runs where                               | Notes                                                                                                                       |
-| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Web UI | container `byspace`, port `:8080`        | static build, no daemon inside                                                                                              |
-| Daemon | your machine, npm package                | `byspace onboard --web-origin http://your-host:8080` points pairing links at your web (see the connect guide in the web UI) |
-| Relay  | same container, or `relay.byspace.cc.cd` | the daemon normally uses the hosted relay; a self-hosted one needs `--relay` at onboard time                                |
+| Piece  | Runs where                             | Notes                                                                                                                       |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Web UI | container `byspace`, port `:8080`      | static build, no daemon inside                                                                                              |
+| Daemon | your machine, npm package              | `byspace onboard --web-origin http://your-host:8080` points pairing links at your web (see the connect guide in the web UI) |
+| Relay  | same container, or `app.byspace.cc.cd` | the daemon normally uses the hosted relay; a self-hosted one needs `--relay` at onboard time                                |
 
 Sessions on a self-hosted relay live in memory only; restarting the container
 just forces reconnects.

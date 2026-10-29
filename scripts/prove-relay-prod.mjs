@@ -27,7 +27,7 @@ const args = parseArgs(process.argv);
 const serverId = args["server-id"] ?? byspaceEnv("SERVER_ID");
 const daemonPublicKeyB64 = args["daemon-public-key-b64"] ?? byspaceEnv("DAEMON_PUBLIC_KEY_B64");
 const relayEndpoint =
-  args["relay-endpoint"] ?? byspaceEnv("RELAY_ENDPOINT") ?? "relay.byspace.cc.cd:443";
+  args["relay-endpoint"] ?? byspaceEnv("RELAY_ENDPOINT") ?? "app.byspace.cc.cd:443";
 const baseUrl = args["base-url"] ?? byspaceEnv("APP_URL") ?? "https://app.byspace.cc.cd";
 const timeoutMs = Number(args["timeout-ms"] ?? byspaceEnv("PROVE_TIMEOUT_MS") ?? 60_000);
 const stabilityMs = Number(args["stability-ms"] ?? byspaceEnv("PROVE_STABILITY_MS") ?? 30_000);

@@ -33,7 +33,7 @@ func TestOfflinePairingOfferUsesTheConfiguredAppOrigin(t *testing.T) {
 	if origin != "https://app.byspace.cc.cd" {
 		t.Fatalf("app origin = %q, want the configured one", origin)
 	}
-	if relay.Endpoint != "relay.byspace.cc.cd:443" || !relay.UseTLS {
+	if relay.Endpoint != "app.byspace.cc.cd:443" || !relay.UseTLS {
 		t.Fatalf("relay = %+v, want the hosted relay over TLS", relay)
 	}
 }

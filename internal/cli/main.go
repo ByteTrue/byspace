@@ -35,8 +35,9 @@ import (
 // the production port or `daemon start` and `daemon status` disagree.
 const DefaultDevAddr = "127.0.0.1:6778"
 
-const usageText = `byspace — single-binary AI coding agent host, web workbench, CLI & E2EE relay
+const usageText = `byspace — single-binary AI coding agent host, desktop & mobile app, web workbench, CLI & E2EE relay
 
+  byspace [app|gui|tray]          open the native Wails desktop app (or start in the system tray)
   byspace serve [--addr host:port] [--home <dir>] [--relay <ws-url>] [--web-dir <dir>]
                                   run the daemon, Pi agent host, and web UI (default 127.0.0.1:6777)
   byspace web [--addr host:port] [--lan] [--home <dir>] [--web-dir <dir>]
@@ -72,7 +73,7 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
 // Main dispatches command-line arguments and returns the process exit code.
 func Main(version string, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		if err := runServe(version, nil, stdout); err != nil {
+		if err := runDefaultNoArgs(version, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace:", err)
 			return 1
 		}
@@ -81,6 +82,14 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 
 	cmd := args[0]
 	rest := args[1:]
+
+	if strings.HasPrefix(cmd, "byspace://") {
+		if err := runGUI(version, true, cmd); err != nil {
+			fmt.Fprintln(stderr, "byspace:", err)
+			return 1
+		}
+		return 0
+	}
 
 	// A bare path opens that project, the way `code .` does. Checked before the switch so the
 	// convenience applies to every invocation, and only for an existing directory so a typo
@@ -101,6 +110,22 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "-v", "--version", "version":
 		fmt.Fprintln(stdout, version)
+		return 0
+	case "app", "gui":
+		link := ""
+		if len(rest) > 0 {
+			link = rest[0]
+		}
+		if err := runGUI(version, true, link); err != nil {
+			fmt.Fprintf(stderr, "byspace %s: %v\n", cmd, err)
+			return 1
+		}
+		return 0
+	case "tray":
+		if err := runGUI(version, false, ""); err != nil {
+			fmt.Fprintln(stderr, "byspace tray:", err)
+			return 1
+		}
 		return 0
 	case "serve":
 		if err := runServe(version, rest, stdout); err != nil {
@@ -1081,9 +1106,21 @@ type healthStatus struct {
 	Status   string `json:"status"`
 	ServerID string `json:"serverId"`
 	Version  string `json:"version"`
+	// Relay is what the daemon is actually connected to. `daemon status` used to read config.json
+	// for this, so a daemon started with `--relay` reported the configured address while dialling
+	// somewhere else — a status command describing intent rather than runtime state.
+	Relay *relayHealth `json:"relay"`
 	// addr is the address that answered, which is not the address that was asked for when the
 	// probe fell back to the one a PID lock recorded.
 	addr string
+}
+
+// relayHealth is the relay section of /health.
+type relayHealth struct {
+	Enabled   bool   `json:"enabled"`
+	Endpoint  string `json:"endpoint"`
+	Connected string `json:"connected"`
+	UseTLS    bool   `json:"useTls"`
 }
 
 // probeRecordedDaemon probes the address the CLI would talk to, then the one the daemon recorded.
@@ -1212,7 +1249,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 					st.Version, cliVersion)
 			}
 			reportProviderHealth(stdout)
-			reportRelayStatus(stdout, *homeDir)
+			reportRelayStatus(stdout, *homeDir, st.Relay)
 			return nil
 		}
 

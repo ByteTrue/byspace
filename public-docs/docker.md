@@ -28,7 +28,7 @@ on your machine with `npm install -g @bytetrue/byspace`, pair, done.
 
 The relay is in the same container — `wss://your-host/ws` — so there is no
 separate profile. The daemon normally uses the hosted relay at
-`relay.byspace.cc.cd:443`; point it at your own relay instead when pairing
+`app.byspace.cc.cd:443`; point it at your own relay instead when pairing
 (`byspace onboard --relay-endpoint your-host:443`).
 
 ## Version pinning
@@ -54,11 +54,11 @@ passwords on direct connections travel in cleartext. See
 
 ## What is where
 
-| Piece  | Runs where                               | Notes                                                                             |
-| ------ | ---------------------------------------- | --------------------------------------------------------------------------------- |
-| Web UI | container `byspace`, port `:8080`        | static build, no daemon inside                                                    |
-| Daemon | your machine, npm package                | `byspace onboard --web-origin https://your-host` points pairing links at your web |
-| Relay  | same container, or `relay.byspace.cc.cd` | E2EE relay, untrusted by design                                                   |
+| Piece  | Runs where                             | Notes                                                                             |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------------- |
+| Web UI | container `byspace`, port `:8080`      | static build, no daemon inside                                                    |
+| Daemon | your machine, npm package              | `byspace onboard --web-origin https://your-host` points pairing links at your web |
+| Relay  | same container, or `app.byspace.cc.cd` | E2EE relay, untrusted by design                                                   |
 
 ## Running the daemon in a container
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -37,6 +38,11 @@ type relayRuntime struct {
 	config  RelayConfig
 	cancel  context.CancelFunc
 	stopped bool
+	// connectedEndpoint is the endpoint the last successful dial used. Config is what was asked
+	// for; this is what actually worked, and `daemon status` needs the second one — a `--relay`
+	// override or a dial that silently fell back would otherwise be reported as the configured
+	// address.
+	connectedEndpoint string
 }
 
 func newRelayRuntime(cfg RelayConfig) *relayRuntime {
@@ -48,6 +54,20 @@ func (r *relayRuntime) Config() RelayConfig {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.config
+}
+
+// State is the live picture: what it is configured to dial, and what it last reached.
+func (r *relayRuntime) State() (RelayConfig, string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.config, r.connectedEndpoint
+}
+
+// markConnected records the endpoint a successful dial used.
+func (r *relayRuntime) markConnected(endpoint string) {
+	r.mu.Lock()
+	r.connectedEndpoint = endpoint
+	r.mu.Unlock()
 }
 
 // Apply starts, stops or restarts the relay so it matches cfg.
@@ -90,6 +110,8 @@ func (r *relayRuntime) supervise(ctx context.Context, cfg RelayConfig, connect f
 	attempt := 0
 	var lastErr string
 	for ctx.Err() == nil {
+		// connect reports success the moment the dial is established (see ConnectRelay), so this
+		// records the address that worked rather than the one that was configured.
 		err := connect(ctx, cfg.Endpoint)
 		if ctx.Err() != nil {
 			return
@@ -132,7 +154,7 @@ func (r *relayRuntime) Stop() {
 // in the node daemon's resolveRelayConfig. Without it, `"relay": {"enabled": true}` — the shape
 // every existing home has, since the endpoint is optional — left Endpoint empty and the daemon
 // never dialled: relay looked on, and remote access was silently dead.
-const hostedRelayEndpoint = "relay.byspace.cc.cd:443"
+const hostedRelayEndpoint = "app.byspace.cc.cd:443"
 
 // ResolveRelayConfig reads the relay settings from a loaded daemon config.
 //
@@ -301,4 +323,43 @@ func (s *Server) SetRelayOverride(endpoint string) {
 	s.mu.Lock()
 	s.relayOverride = strings.TrimSpace(endpoint)
 	s.mu.Unlock()
+}
+
+// relayEndpointFromURL turns a dial URL back into the host:port an offer carries.
+func relayEndpointFromURL(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	return u.Host
+}
+
+// relayRuntimeState is the live relay picture `/health` reports and `daemon status` prints.
+//
+// It answers "where is this daemon connected", which is not the same question as "what does
+// config.json say": a `--relay` override, or a dial that never succeeded, makes the two disagree.
+func (s *Server) relayRuntimeState() map[string]any {
+	if s.relay == nil {
+		return map[string]any{"enabled": false}
+	}
+	cfg, connected := s.relay.State()
+	state := map[string]any{
+		"enabled":  cfg.Enabled,
+		"useTls":   cfg.UseTLS,
+		"endpoint": cfg.Endpoint,
+	}
+	if connected != "" {
+		state["connected"] = relayEndpointFromURL2(connected)
+	}
+	return state
+}
+
+// relayEndpointFromURL2 normalizes whatever markConnected received to host:port.
+func relayEndpointFromURL2(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "ws://") || strings.HasPrefix(trimmed, "wss://") {
+		if u, err := url.Parse(trimmed); err == nil {
+			return u.Host
+		}
+	}
+	return trimmed
 }

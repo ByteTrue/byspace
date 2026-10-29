@@ -146,12 +146,13 @@ test("the deploy workflow publishes both channels to the Go Worker", () => {
   );
   assert.match(workflow, /GO_VERSION/, "the Worker is wasm, so the job needs a Go toolchain");
 
-  // The stable hostnames have to be declared by the Go Worker, or a deploy would leave them
-  // pointing at the retired TypeScript Worker and production would go dark.
+  // The stable hostname has to be declared by the Go Worker, or a deploy would leave it pointing at
+  // the retired TypeScript Worker and production would go dark. `relay.byspace.cc.cd` is
+  // deliberately absent: one origin per channel carries both the PWA and its relay.
   const routes = new Set(
     [...read("wrangler.jsonc").matchAll(/"pattern"\s*:\s*"([^"]+)"/g)].map((m) => m[1]),
   );
-  for (const hostname of ["relay.byspace.cc.cd", "app.byspace.cc.cd", "app-beta.byspace.cc.cd"]) {
+  for (const hostname of ["app.byspace.cc.cd", "app-beta.byspace.cc.cd"]) {
     assert.ok(routes.has(hostname), `wrangler.jsonc should declare ${hostname}`);
   }
 });

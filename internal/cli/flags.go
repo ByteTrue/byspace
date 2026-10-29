@@ -103,7 +103,17 @@ func readImageForPrompt(path string) (string, string, error) {
 // Ported from selectRelayStatus. The answer decides whether the phone can connect at all, and
 // "disabled" versus "configured but not connected" are different problems with different fixes —
 // printing one line for both leaves the user guessing which they have.
-func reportRelayStatus(stdout io.Writer, homeFlag string) {
+//
+// live is the daemon's own answer from /health, and it wins. Config is intent: a daemon started
+// with `--relay` dials an endpoint that never reaches config.json, so reading the file reported
+// the old address for a daemon that was connected elsewhere. Config is still the fallback, for a
+// daemon too old to report its state.
+func reportRelayStatus(stdout io.Writer, homeFlag string, live *relayHealth) {
+	if live != nil {
+		reportLiveRelayStatus(stdout, live)
+		return
+	}
+
 	resolvedHome, err := home.Resolve(homeFlag)
 	if err != nil {
 		return
@@ -130,6 +140,37 @@ func reportRelayStatus(stdout io.Writer, homeFlag string) {
 		scheme = "wss"
 	}
 	fmt.Fprintf(stdout, "relay     %s://%s\n", scheme, endpoint)
+}
+
+// reportLiveRelayStatus prints the daemon's own answer.
+//
+// "connected" and "configured but never reached" are separated because the first means a phone can
+// pair right now and the second means nothing will work until the endpoint or the network does.
+func reportLiveRelayStatus(stdout io.Writer, live *relayHealth) {
+	if !live.Enabled {
+		fmt.Fprintln(stdout, "relay     disabled")
+		return
+	}
+	endpoint := strings.TrimSpace(live.Endpoint)
+	if endpoint == "" {
+		fmt.Fprintln(stdout, "relay     enabled but no endpoint configured")
+		return
+	}
+	scheme := "ws"
+	if live.UseTLS {
+		scheme = "wss"
+	}
+	if connected := strings.TrimSpace(live.Connected); connected != "" {
+		if connected != endpoint {
+			// A --relay override: the flag is the whole configuration for this run, so say what it
+			// reached rather than what the file asked for.
+			fmt.Fprintf(stdout, "relay     %s://%s (override)\n", scheme, connected)
+			return
+		}
+		fmt.Fprintf(stdout, "relay     %s://%s\n", scheme, endpoint)
+		return
+	}
+	fmt.Fprintf(stdout, "relay     %s://%s (not connected)\n", scheme, endpoint)
 }
 
 // readPromptText resolves the message text and agent id from the three input forms.

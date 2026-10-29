@@ -572,10 +572,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/health" || r.URL.Path == "/api/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		// relay is the connection actually in use, not what config.json says.
+		//
+		// `daemon status` reported the configured endpoint, so a daemon started with `--relay`
+		// showed the old address while connecting to the new one — a command that exists to report
+		// runtime state reading intent instead. /health is the only thing the CLI probes, so the
+		// live answer has to travel with it.
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":    "ok",
 			"serverId":  s.serverID,
 			"version":   s.version,
+			"relay":     s.relayRuntimeState(),
 			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 		})
 		return
@@ -697,6 +704,12 @@ func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 		return err
 	}
 	defer ctrlWS.CloseNow()
+	// The dial is the proof: record what was reached while it holds, so `/health` can report the
+	// live endpoint instead of the configured one. Nil in tests that dial without a runtime, and a
+	// status detail is never worth failing a connection over.
+	if s.relay != nil {
+		s.relay.markConnected(relayEndpointFromURL(u))
+	}
 
 	// A relay that vanishes without a FIN leaves the socket half-open: `Read` never returns and
 	// `Close` never arrives, so the daemon believes it is still reachable while phones time out.

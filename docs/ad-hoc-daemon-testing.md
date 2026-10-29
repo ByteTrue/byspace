@@ -36,7 +36,7 @@ const daemon = await createBySpaceDaemon(
     agentClients: {},
     agentStoragePath: path.join(byspaceHome, "agents"),
     relayEnabled: false,
-    relayEndpoint: "relay.byspace.cc.cd:443",
+    relayEndpoint: "app.byspace.cc.cd:443",
     appBaseUrl: "https://app.byspace.cc.cd",
     // Add custom config here, e.g.:
     // providerOverrides: { ... },

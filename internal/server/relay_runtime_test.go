@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -170,5 +173,70 @@ func TestRelayConfigInfersTLSFromTheEndpoint(t *testing.T) {
 				t.Fatalf("PublicUseTLS = %v, want it to follow UseTLS %v", cfg.PublicUseTLS, cfg.UseTLS)
 			}
 		})
+	}
+}
+
+// `daemon status` must report the endpoint the daemon is connected to, not the one in config.json.
+//
+// The CLI probed /health and read the config file for this, so a daemon started with `--relay`
+// printed the configured address while dialling somewhere else — a command that exists to report
+// runtime state was reporting intent. /health carries the live answer now.
+func TestHealthReportsTheLiveRelayEndpoint(t *testing.T) {
+	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", DisableWebUI: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+
+	// A dial records what it reached, separately from what was configured.
+	srv.relay.mu.Lock()
+	srv.relay.config = RelayConfig{Enabled: true, Endpoint: "configured.example:443", UseTLS: true}
+	srv.relay.mu.Unlock()
+	srv.relay.markConnected("reached.example:443")
+
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /health = %d", recorder.Code)
+	}
+	var body struct {
+		Relay struct {
+			Enabled   bool   `json:"enabled"`
+			Endpoint  string `json:"endpoint"`
+			Connected string `json:"connected"`
+		} `json:"relay"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Relay.Endpoint != "configured.example:443" {
+		t.Fatalf("endpoint = %q, want the configured one", body.Relay.Endpoint)
+	}
+	if body.Relay.Connected != "reached.example:443" {
+		t.Fatalf("connected = %q, want the endpoint the dial reached", body.Relay.Connected)
+	}
+}
+
+// A daemon that never reached its relay must say so rather than implying it is up.
+func TestHealthOmitsConnectedWhenTheDialNeverSucceeded(t *testing.T) {
+	srv, err := New(Options{HomeDir: t.TempDir(), Version: "test", DisableWebUI: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+
+	srv.relay.mu.Lock()
+	srv.relay.config = RelayConfig{Enabled: true, Endpoint: "unreachable.example:443", UseTLS: true}
+	srv.relay.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	relay, _ := body["relay"].(map[string]any)
+	if _, present := relay["connected"]; present {
+		t.Fatalf("relay.connected present for a daemon that never dialled: %#v", relay)
 	}
 }

@@ -9,18 +9,15 @@
   "observability": {
     "enabled": true,
   },
-  // Stable owns the long-standing hostnames too. `relay.byspace.cc.cd` is the address every daemon
-  // and client in the field dials, and `app.byspace.cc.cd` serves the PWA from the same origin as
-  // `wss://…/ws` — a pairing offer assumes exactly that.
+  // One hostname per channel. `app.byspace.cc.cd` serves the PWA and `wss://app.byspace.cc.cd/ws`
+  // from the same origin, which is what a pairing offer assumes; a separate `relay.` hostname was a
+  // second route to the same Durable Object namespace and is retired.
   //
   // These were the TypeScript worker's until the Go worker proved itself: same scenario, one idle
   // connection held 180s, cost 0.06 GB-s here against 1.93 GB-s there. A Cloudflare custom domain
   // routes to exactly one Worker, so deploying this moves them, and rolling back means deploying
   // packages/relay again with its own routes.
-  "routes": [
-    { "pattern": "relay.byspace.cc.cd", "custom_domain": true },
-    { "pattern": "app.byspace.cc.cd", "custom_domain": true },
-  ],
+  "routes": [{ "pattern": "app.byspace.cc.cd", "custom_domain": true }],
   "durable_objects": {
     "bindings": [
       {

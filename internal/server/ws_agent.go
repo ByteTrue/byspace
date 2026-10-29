@@ -1333,7 +1333,7 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 		ep = strings.TrimSpace(os.Getenv("BYSPACE_RELAY_ENDPOINT"))
 	}
 	if ep == "" {
-		ep = "relay.byspace.cc.cd:443"
+		ep = "app.byspace.cc.cd:443"
 		useTLS = true
 	}
 	ep = normalizeRelayEndpoint(ep, useTLS)
