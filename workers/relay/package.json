@@ -1,6 +1,6 @@
 {
   "name": "byspace-relay-go",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "private": true,
   "description": "The BySpace relay, compiled to WebAssembly and hosted on Cloudflare Workers.",
   "scripts": {
