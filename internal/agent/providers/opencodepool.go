@@ -32,9 +32,10 @@ const openCodeHomeDirName = "opencode-home"
 
 // OpenCodeServer is one running `opencode serve` process.
 type OpenCodeServer struct {
-	URL  string
-	Port int
-	cmd  *exec.Cmd
+	URL    string
+	Port   int
+	cmd    *exec.Cmd
+	exited chan error
 	// generation increments on every restart; a client holding an old URL must not keep using it.
 	generation int
 	// retired marks a server that has been replaced and must not be handed out again.
@@ -208,15 +209,25 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 	startCtx, cancel := context.WithTimeout(ctx, p.startupTimeout)
 	defer cancel()
 
-	cmd, err := p.startProcess(startCtx, p.command, args, p.homeDir, env)
+	// Do not pass startCtx to startProcess: startCtx is cancelled by defer as soon as startServer
+	// returns, which would immediately SIGKILL the newly started long-lived opencode serve process.
+	cmd, err := p.startProcess(context.Background(), p.command, args, p.homeDir, env)
 	if err != nil {
 		return nil, fmt.Errorf("opencode serve: %w", err)
 	}
 
+	exited := make(chan error, 1)
+	if cmd != nil && cmd.Process != nil {
+		go func() {
+			exited <- cmd.Wait()
+			close(exited)
+		}()
+	}
 	server := &OpenCodeServer{
-		URL:  fmt.Sprintf("http://127.0.0.1:%d", port),
-		Port: port,
-		cmd:  cmd,
+		URL:    fmt.Sprintf("http://127.0.0.1:%d", port),
+		Port:   port,
+		cmd:    cmd,
+		exited: exited,
 	}
 
 	// Wait for it to answer rather than assuming it is up: a server that failed to bind returns
@@ -243,6 +254,14 @@ func (p *OpenCodePool) waitReady(ctx context.Context, server *OpenCodeServer) er
 			return fmt.Errorf("opencode serve did not answer on %s within %s", server.URL, p.startupTimeout)
 		}
 		select {
+		case err, ok := <-server.exited:
+			if p.serverAlive(server) {
+				return nil
+			}
+			if ok && err != nil {
+				return fmt.Errorf("opencode serve exited before becoming ready: %w", err)
+			}
+			return fmt.Errorf("opencode serve exited before answering on %s", server.URL)
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(150 * time.Millisecond):
@@ -286,7 +305,11 @@ func (p *OpenCodePool) stopServer(server *OpenCodeServer) {
 	_ = killProcessGroup(server.cmd, false)
 	done := make(chan struct{})
 	go func() {
-		_, _ = server.cmd.Process.Wait()
+		if server.exited != nil {
+			<-server.exited
+		} else {
+			_, _ = server.cmd.Process.Wait()
+		}
 		close(done)
 	}()
 	select {

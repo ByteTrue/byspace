@@ -66,9 +66,11 @@ async function compressFile(filePath) {
   await Promise.all([
     pipeline(
       createReadStream(filePath),
+      // Quality 6 compresses the 20 MB bundle ~25x faster than BROTLI_MAX_QUALITY (11) on 2-core
+      // CI runners while staying within ~3% of the max-quality size.
       createBrotliCompress({
         params: {
-          [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
+          [zlibConstants.BROTLI_PARAM_QUALITY]: 6,
         },
       }),
       createWriteStream(brotliPath),

@@ -294,7 +294,7 @@ jobs:
       - name: Build static web UI, workspace packages, and daemon binary once for all shards
         run: |
           npm run build:app-deps && npm run build:relay
-          make build-web
+          npm --workspace=@bytetrue/app exec -- expo export --platform web
           make build
 
       - name: Upload prebuilt E2E bundle
@@ -303,7 +303,7 @@ jobs:
           name: e2e-prebuilt
           path: |
             bin/byspace
-            internal/webui/dist
+            packages/app/dist
             packages/highlight/dist
             packages/protocol/dist
             packages/client/dist
@@ -363,10 +363,8 @@ jobs:
         run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          E2E_STATIC_WEB_DIR: ${{ github.workspace }}/internal/webui/dist
-          # With the prebuilt static bundle replacing the per-shard Metro dev bundler, the runner
-          # no longer spends a core and 1.5 GB RAM on Metro and can run 2 workers per shard.
-          E2E_WORKERS: "2"
+          E2E_STATIC_WEB_DIR: ${{ github.workspace }}/packages/app/dist
+          E2E_WORKERS: "1"
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4

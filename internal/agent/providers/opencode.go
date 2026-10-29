@@ -57,8 +57,9 @@ func StartOpenCodeSession(cfg LaunchConfig, cmdOverride string) (ManagedSession,
 	// an OpenCode agent on a machine with no manually started server did not work at all — the session
 	// appeared to exist and every request failed.
 	if !strings.HasSuffix(cmdOverride, "acp") {
-		spec := GetProviderSpec("opencode")
-		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, spec.DefaultArgs)
+		// Pass nil args so the pool runs `opencode serve --port <p>` rather than prepending
+		// spec.DefaultArgs ("acp"), which ran `opencode acp serve` and hung 30s until timeout.
+		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, nil)
 		server, err := pool.Acquire(context.Background())
 		if err == nil && server != nil {
 			return newHTTPOpenCodeSession(cfg, server.URL)
