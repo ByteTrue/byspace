@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/awake"
 	"github.com/ByteTrue/byspace/internal/home"
 )
 
@@ -17,16 +18,20 @@ const (
 )
 
 // DesktopSettings stores the desktop client preferences in $BYSPACE_HOME/desktop.json.
-// Defaults match Magpie: automatic update checks and downloads are on by default, while
-// automatic idle restart (AutoRestart) and Lightweight mode are off by default and enabled
-// in Settings.
 type DesktopSettings struct {
-	Lightweight    bool `json:"lightweight"`
-	NoAutoUpdate   bool `json:"noAutoUpdate"`
-	NoAutoDownload bool `json:"noAutoDownload"`
-	AutoRestart    bool `json:"autoRestart"`
-	WindowWidth    int  `json:"windowWidth,omitempty"`
-	WindowHeight   int  `json:"windowHeight,omitempty"`
+	KeepAwake      string `json:"keepAwake,omitempty"` // "off" | "system" (default) | "display"
+	HideFromDock   bool   `json:"hideFromDock"`        // macOS: hide from Dock when main window is closed
+	Lightweight    bool   `json:"lightweight"`
+	NoAutoUpdate   bool   `json:"noAutoUpdate"`
+	NoAutoDownload bool   `json:"noAutoDownload"`
+	AutoRestart    bool   `json:"autoRestart"`
+	WindowWidth    int    `json:"windowWidth,omitempty"`
+	WindowHeight   int    `json:"windowHeight,omitempty"`
+}
+
+// EffectiveKeepAwake returns the normalized awake.Level (defaulting empty to awake.System).
+func (s DesktopSettings) EffectiveKeepAwake() awake.Level {
+	return awake.NormalizeLevel(s.KeepAwake)
 }
 
 // LoadDesktopSettings reads $BYSPACE_HOME/desktop.json, returning zero-value defaults when absent.
@@ -57,9 +62,7 @@ func SaveDesktopSettings(homeDir string, s DesktopSettings) error {
 	return home.WriteAtomic(filepath.Join(homeDir, desktopSettingsFile), append(b, '\n'), 0o600)
 }
 
-// LightStep evaluates one 30s lightweight-mode tick (ported from magpie's lightweight_rule.go):
-// when lightweight mode is on and the window is not shown for LightTicks consecutive checks
-// (30–60s after closing), it returns release=true so the WebView process is freed.
+// LightStep evaluates one 30s lightweight-mode tick (ported from magpie's lightweight_rule.go).
 func LightStep(on, shown bool, ticks int) (int, bool) {
 	if !on || shown {
 		return 0, false

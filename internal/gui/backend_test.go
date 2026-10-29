@@ -138,4 +138,25 @@ func TestDesktopSettingsDefaultsAndPersistence(t *testing.T) {
 	if got != want {
 		t.Fatalf("LoadDesktopSettings = %+v, want %+v", got, want)
 	}
+	if got.EffectiveKeepAwake() != "system" {
+		t.Fatalf("expected default EffectiveKeepAwake=system, got %s", got.EffectiveKeepAwake())
+	}
+}
+
+func TestDockStepAndShouldShowInDock(t *testing.T) {
+	if got := DockStep(true, true, true); got != (dockMove{}) {
+		t.Fatalf("already regular: got %+v", got)
+	}
+	if got := DockStep(false, true, true); got != (dockMove{policy: true, again: true, front: true}) {
+		t.Fatalf("joining Dock to front must set again=true: got %+v", got)
+	}
+	if !ShouldShowInDock(DesktopSettings{HideFromDock: false}, false, false) {
+		t.Fatal("when HideFromDock is false, app stays in Dock even when window is hidden")
+	}
+	if ShouldShowInDock(DesktopSettings{HideFromDock: true}, false, false) {
+		t.Fatal("when HideFromDock is true and window is hidden, app should leave Dock")
+	}
+	if !ShouldShowInDock(DesktopSettings{HideFromDock: true}, true, false) {
+		t.Fatal("when window is shown, app should be in Dock")
+	}
 }

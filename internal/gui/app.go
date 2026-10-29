@@ -3,6 +3,7 @@
 package gui
 
 import (
+	"context"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
@@ -19,6 +20,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
+	"github.com/ByteTrue/byspace/internal/autostart"
+	"github.com/ByteTrue/byspace/internal/awake"
+	"github.com/ByteTrue/byspace/internal/backup"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/selfupdate"
 	"github.com/ByteTrue/byspace/internal/server"
@@ -31,36 +35,71 @@ var appIcon []byte
 //go:embed tray.png
 var trayIcon []byte
 
-func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUpdater) http.Handler {
+//go:embed tray-template.png
+var trayTemplateIcon []byte
+
+func buildDesktopStatusPayload(homeDir string, sup *DaemonSupervisor, updater *ClientUpdater) map[string]any {
+	st, latest := "", ""
+	if updater != nil {
+		st, latest = updater.State()
+	}
+	prefs := LoadDesktopSettings(homeDir)
+	prefs.KeepAwake = string(prefs.EffectiveKeepAwake())
+	var daemonSt DaemonHostStatus
+	if sup != nil {
+		daemonSt = sup.Status()
+	}
+	return map[string]any{
+		"desktop":       runtime.GOOS != "android",
+		"platform":      runtime.GOOS,
+		"settings":      prefs,
+		"openAtLogin":   autostart.Enabled() == autostart.On,
+		"daemonStatus":  daemonSt,
+		"backupCount":   len(backup.List(homeDir)),
+		"updateState":   st,
+		"latestVersion": latest,
+	}
+}
+
+func withDesktopSettingsAPI(
+	next http.Handler,
+	homeDir string,
+	sup *DaemonSupervisor,
+	updater *ClientUpdater,
+	onDockChanged func(DesktopSettings),
+) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/_byspace/desktop/settings" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			switch r.Method {
 			case http.MethodGet:
-				st, latest := "", ""
-				if updater != nil {
-					st, latest = updater.State()
-				}
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"desktop":       runtime.GOOS != "android",
-					"settings":      LoadDesktopSettings(homeDir),
-					"updateState":   st,
-					"latestVersion": latest,
-				})
+				_ = json.NewEncoder(w).Encode(buildDesktopStatusPayload(homeDir, sup, updater))
 				return
 			case http.MethodPost:
 				current := LoadDesktopSettings(homeDir)
 				var patch struct {
-					Lightweight    *bool `json:"lightweight"`
-					NoAutoUpdate   *bool `json:"noAutoUpdate"`
-					NoAutoDownload *bool `json:"noAutoDownload"`
-					AutoRestart    *bool `json:"autoRestart"`
-					LinkCLI        bool  `json:"linkCLI"`
+					KeepAwake      *string `json:"keepAwake"`
+					HideFromDock   *bool   `json:"hideFromDock"`
+					OpenAtLogin    *bool   `json:"openAtLogin"`
+					Lightweight    *bool   `json:"lightweight"`
+					NoAutoUpdate   *bool   `json:"noAutoUpdate"`
+					NoAutoDownload *bool   `json:"noAutoDownload"`
+					AutoRestart    *bool   `json:"autoRestart"`
+					LinkCLI        bool    `json:"linkCLI"`
+					TakeOverDaemon bool    `json:"takeOverDaemon"`
+					CreateBackup   bool    `json:"createBackup"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
+				}
+				if patch.KeepAwake != nil {
+					current.KeepAwake = string(awake.NormalizeLevel(*patch.KeepAwake))
+					awake.Notify()
+				}
+				if patch.HideFromDock != nil {
+					current.HideFromDock = *patch.HideFromDock
 				}
 				if patch.Lightweight != nil {
 					current.Lightweight = *patch.Lightweight
@@ -74,12 +113,24 @@ func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUp
 				if patch.AutoRestart != nil {
 					current.AutoRestart = *patch.AutoRestart
 				}
-				if patch.LinkCLI {
-					selfupdate.EnsureAppCLISymlink(true)
-				}
 				if err := SaveDesktopSettings(homeDir, current); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
+				}
+				if patch.OpenAtLogin != nil {
+					_ = autostart.Set(*patch.OpenAtLogin)
+				}
+				if patch.HideFromDock != nil && onDockChanged != nil {
+					onDockChanged(current)
+				}
+				if patch.LinkCLI {
+					selfupdate.EnsureAppCLISymlink(true)
+				}
+				if patch.TakeOverDaemon && sup != nil {
+					sup.TakeOver()
+				}
+				if patch.CreateBackup {
+					_, _, _ = backup.Snapshot(homeDir)
 				}
 				if updater != nil {
 					if !current.NoAutoDownload {
@@ -89,16 +140,7 @@ func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUp
 						go updater.AutoTick()
 					}
 				}
-				st, latest := "", ""
-				if updater != nil {
-					st, latest = updater.State()
-				}
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"desktop":       runtime.GOOS != "android",
-					"settings":      current,
-					"updateState":   st,
-					"latestVersion": latest,
-				})
+				_ = json.NewEncoder(w).Encode(buildDesktopStatusPayload(homeDir, sup, updater))
 				return
 			}
 		}
@@ -106,26 +148,46 @@ func withDesktopSettingsAPI(next http.Handler, homeDir string, updater *ClientUp
 	})
 }
 
-// Run launches the Wails v3 native application (Desktop with tray + daemon takeover + lightweight
-// mode + idle auto-update, or Android client).
+// Run launches the Wails v3 native application.
 func Run(version string, showMain bool, initialLink string) error {
 	isAndroid := runtime.GOOS == "android"
 	homeDir, _ := home.Resolve("")
 	if !isAndroid {
+		webkitDefaults()
 		selfupdate.AwaitPredecessor()
 		if acquireOrHandOverGUILock(homeDir, showMain, initialLink) {
 			return nil
 		}
-		// If running from BySpace.app (e.g. installed via .dmg) and ~/.local/bin/byspace is
-		// absent or already a symlink, link it automatically so the CLI tracks app updates.
 		selfupdate.EnsureAppCLISymlink(false)
+		_ = autostart.Refresh()
 	}
+
+	bgCtx, cancelBg := context.WithCancel(context.Background())
+	defer cancelBg()
 
 	var sup *DaemonSupervisor
 	var assetHandler http.Handler
 	updater := &ClientUpdater{
 		Version: version,
 		HomeDir: homeDir,
+	}
+
+	var quitting atomic.Bool
+	var appStarted atomic.Bool
+	var winMu sync.Mutex
+	var mainWin *application.WebviewWindow
+	var releasedWin atomic.Pointer[application.WebviewWindow]
+
+	syncDockPolicy := func(s DesktopSettings, front bool) {
+		if runtime.GOOS != "darwin" || !appStarted.Load() {
+			return
+		}
+		shown, full := false, false
+		if mainWin != nil {
+			shown = mainWin.IsVisible()
+			full = mainWin.IsFullscreen()
+		}
+		setDock(ShouldShowInDock(s, shown, full), front)
 	}
 
 	webDir := strings.TrimSpace(os.Getenv("BYSPACE_WEB_DIR"))
@@ -156,22 +218,30 @@ func Run(version string, showMain bool, initialLink string) error {
 				WithExplicitConnectionHint(sup.Addr, "BySpace").
 				WithLocalCredential(localToken)
 		}
-		assetHandler = withDesktopSettingsAPI(uiHandler, homeDir, updater)
-	}
+		assetHandler = withDesktopSettingsAPI(uiHandler, homeDir, sup, updater, func(s DesktopSettings) {
+			syncDockPolicy(s, true)
+		})
 
-	var quitting atomic.Bool
-	var appStarted atomic.Bool
-	var winMu sync.Mutex
-	var mainWin *application.WebviewWindow
-	var releasedWin atomic.Pointer[application.WebviewWindow]
+		// Start intelligent sleep inhibition (Keep Awake while agents work + 10m grace)
+		go awake.Keep(bgCtx, func() awake.Level {
+			return LoadDesktopSettings(homeDir).EffectiveKeepAwake()
+		}, func() awake.State {
+			if sup == nil {
+				return awake.State{}
+			}
+			busy, last := sup.BusyState()
+			return awake.State{Busy: busy, Last: last}
+		})
+
+		// Start periodic rolling backups of core $BYSPACE_HOME config files
+		go backup.StartPeriodic(bgCtx, homeDir)
+	}
 
 	sum := sha256.Sum256([]byte(homeDir))
 	uniqueID := "com.bytetrue.byspace." + hex.EncodeToString(sum[:6])
 
 	var app *application.App
 
-	// makeMainWindow creates (or recreates after lightweight mode released it) the main WebviewWindow.
-	// Must be called on the main thread (via application.InvokeSync / InvokeAsync).
 	makeMainWindow := func(url string, hidden bool) *application.WebviewWindow {
 		if url == "" {
 			url = "/"
@@ -226,6 +296,8 @@ func Run(version string, showMain bool, initialLink string) error {
 					w.UnFullscreen()
 				}
 				w.Hide()
+				s := LoadDesktopSettings(homeDir)
+				setDock(ShouldShowInDock(s, false, false), false)
 			})
 
 			if runtime.GOOS == "windows" {
@@ -244,10 +316,11 @@ func Run(version string, showMain bool, initialLink string) error {
 		return w
 	}
 
-	// showMainWindow opens the main window (recreating its WebView if lightweight mode released it).
 	showMainWindow := func(targetURL string) {
 		winMu.Lock()
 		defer winMu.Unlock()
+		s := LoadDesktopSettings(homeDir)
+		setDock(ShouldShowInDock(s, true, false), true)
 		application.InvokeSync(func() {
 			if mainWin == nil {
 				mainWin = makeMainWindow(targetURL, false)
@@ -261,6 +334,12 @@ func Run(version string, showMain bool, initialLink string) error {
 			}
 			mainWin.Show().Focus()
 		})
+	}
+
+	initialPrefs := LoadDesktopSettings(homeDir)
+	initialActivationPolicy := application.ActivationPolicyRegular
+	if !ShouldShowInDock(initialPrefs, showMain, false) {
+		initialActivationPolicy = application.ActivationPolicyAccessory
 	}
 
 	app = application.New(application.Options{
@@ -291,7 +370,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			},
 		},
 		Mac: application.MacOptions{
-			ActivationPolicy: application.ActivationPolicyRegular,
+			ActivationPolicy: initialActivationPolicy,
 		},
 		Windows: application.WindowsOptions{
 			DisableQuitOnLastWindowClosed: true,
@@ -302,6 +381,7 @@ func Run(version string, showMain bool, initialLink string) error {
 		},
 		OnShutdown: func() {
 			quitting.Store(true)
+			cancelBg()
 			updater.Stop()
 			if sup != nil {
 				_ = sup.Close()
@@ -313,10 +393,16 @@ func Run(version string, showMain bool, initialLink string) error {
 		},
 	})
 
+	if !checkWebView2Runtime(app) {
+		return nil
+	}
+
 	startURL := NormalizeDeepLink(initialLink)
 	mainWin = makeMainWindow(startURL, !showMain && !isAndroid)
 
 	if !isAndroid {
+		registerDockFullscreenObserver()
+
 		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 			appStarted.Store(true)
 			if mainWin != nil {
@@ -331,7 +417,9 @@ func Run(version string, showMain bool, initialLink string) error {
 
 		tray := app.SystemTray.New()
 		tray.SetTooltip("BySpace")
-		if len(trayIcon) > 0 {
+		if runtime.GOOS == "darwin" && len(trayTemplateIcon) > 0 {
+			tray.SetTemplateIcon(trayTemplateIcon)
+		} else if len(trayIcon) > 0 {
 			tray.SetIcon(trayIcon)
 		} else if len(appIcon) > 0 {
 			tray.SetIcon(appIcon)
@@ -375,8 +463,10 @@ func Run(version string, showMain bool, initialLink string) error {
 		tray.OnClick(func() {
 			winMu.Lock()
 			defer winMu.Unlock()
+			s := LoadDesktopSettings(homeDir)
 			application.InvokeSync(func() {
 				if mainWin == nil {
+					setDock(ShouldShowInDock(s, true, false), true)
 					mainWin = makeMainWindow("/", false)
 					if runtime.GOOS != "windows" {
 						mainWin.Show().Focus()
@@ -385,7 +475,9 @@ func Run(version string, showMain bool, initialLink string) error {
 				}
 				if mainWin.IsVisible() {
 					mainWin.Hide()
+					setDock(ShouldShowInDock(s, false, false), false)
 				} else {
+					setDock(ShouldShowInDock(s, true, false), true)
 					mainWin.Show().Focus()
 				}
 			})
@@ -427,41 +519,44 @@ func Run(version string, showMain bool, initialLink string) error {
 			}
 		}
 
-		// Lightweight mode background loop (ported from magpie's lighten()):
-		// checks every 30s and drops the hidden window's WebView after 2 consecutive hidden ticks.
 		go func() {
 			var ticks int
 			ticker := time.NewTicker(LightEvery)
 			defer ticker.Stop()
-			for range ticker.C {
-				if quitting.Load() {
+			for {
+				select {
+				case <-bgCtx.Done():
 					return
-				}
-				on := LoadDesktopSettings(homeDir).Lightweight
-				var toClose *application.WebviewWindow
-				winMu.Lock()
-				application.InvokeSync(func() {
-					if mainWin == nil {
+				case <-ticker.C:
+					if quitting.Load() {
+						return
+					}
+					on := LoadDesktopSettings(homeDir).Lightweight
+					var toClose *application.WebviewWindow
+					winMu.Lock()
+					application.InvokeSync(func() {
+						if mainWin == nil {
+							ticks = 0
+							return
+						}
+						shown := mainWin.IsVisible()
+						var release bool
+						ticks, release = LightStep(on, shown, ticks)
+						if !release {
+							return
+						}
 						ticks = 0
-						return
+						w := mainWin
+						dropWebView(w)
+						mainWin = nil
+						releasedWin.Store(w)
+						toClose = w
+					})
+					winMu.Unlock()
+					if toClose != nil {
+						log.Println("byspace lightweight: released hidden main window WebView")
+						toClose.Close()
 					}
-					shown := mainWin.IsVisible()
-					var release bool
-					ticks, release = LightStep(on, shown, ticks)
-					if !release {
-						return
-					}
-					ticks = 0
-					w := mainWin
-					dropWebView(w)
-					mainWin = nil
-					releasedWin.Store(w)
-					toClose = w
-				})
-				winMu.Unlock()
-				if toClose != nil {
-					log.Println("byspace lightweight: released hidden main window WebView")
-					toClose.Close()
 				}
 			}
 		}()

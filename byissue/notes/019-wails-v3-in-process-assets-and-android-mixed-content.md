@@ -35,3 +35,10 @@ created: 2026-10-29
 
 - **轻量模式销毁窗口前必须先解绑 `WKWebView`**：在 macOS 上仅对 Wails `WebviewWindow` 调用 `Close()` 不会立即释放 `WKWebView` 及其关联的 `com.apple.WebKit.WebContent` 进程（因 delegate 与 `WKUserContentController` 强引用环）。必须在主线程先执行 `dropWebView`（清空 `navigationDelegate`、`UIDelegate`、`removeAllScriptMessageHandlers` 并 `removeFromSuperview`）再调 `Close()`。
 - **严禁在 `app.Run()` 启动前或 `InvokeSync` 回调内调用 `application.InvokeSync`**：在 `app.Run()` 启动 Cocoa 主事件循环之前调用 `application.InvokeSync`，或在已经在主线程运行的 `InvokeSync` 闭包内嵌套调用 `InvokeSync`（底层为 GCD `dispatch_sync(dispatch_get_main_queue())`），会直接造成主线程死锁导致应用无法打开窗口。初始原生窗口配置须挂在 `events.Common.ApplicationStarted` 之后，且原生层操作优先使用 `application.InvokeAsync`。
+
+## 5. 跨平台桌面宿主深度适配要点（吸收自 Magpie v0.1.2030）
+
+- **macOS 从 `Accessory` 重新加入 Dock 时的 `Cmd+Tab` 排序（`activateAgain`）**：处于 `NSApplicationActivationPolicyAccessory`（无 Dock 图标）的应用在重新切回 `Regular` 并激活窗口时，macOS 会将其排在 `Cmd+Tab` 列表末尾；必须先短暂激活 `com.apple.dock` 再立即调 `[NSApp activateIgnoringOtherApps:YES]` 才能排到 `Cmd+Tab` 首位。
+- **macOS `LaunchAgents` 开机自启的 `AbandonProcessGroup`**：通过 `LaunchAgents` 开机自启的进程在执行自更新退出时，若 plist 未声明 `<key>AbandonProcessGroup</key><true/>`，`launchd` 会在主进程退出瞬间杀死整个进程组，导致负责拉起新版本的重启脚本一并被杀。
+- **Linux Wayland 与无 GPU 环境下的 WebKitGTK 合成器保护**：在 Wayland 会话或无法打开 `/dev/dri/renderD*` 硬件渲染节点的 X11 环境（VNC/xrdp）下，WebKitGTK 的默认加速合成会导致点击闪烁或触发 `llvmpipe` 占用 400%+ CPU；需在创建首个窗口前自动设置 `WEBKIT_DISABLE_COMPOSITING_MODE=1`。
+- **Windows `-H windowsgui` 双重身份的控制台借用**：Windows 桌面二进制使用 `-H windowsgui` 消除双击黑框后，启动时无标准流；当在 PowerShell/cmd 中带子命令参数运行时自动调用 `kernel32.dll` 的 `AttachConsole(ATTACH_PARENT_PROCESS)` 并重新打开 `CONOUT$`/`CONIN$`，使同一个 `.exe` 兼具无黑框 GUI 与终端 CLI 输出能力。

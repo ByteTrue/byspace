@@ -1,0 +1,82 @@
+//go:build linux
+
+package proc
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+func listeningOn(ctx context.Context, port int) ([]int, error) {
+	inodes := map[string]bool{}
+	read := false
+	for _, f := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		read = true
+		for k := range listenInodes(string(b), port) {
+			inodes[k] = true
+		}
+	}
+	if !read {
+		return nil, fmt.Errorf("cannot read /proc/net/tcp")
+	}
+	if len(inodes) == 0 {
+		return nil, nil
+	}
+	dirs, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+	var ps []int
+	for _, d := range dirs {
+		pid, err := strconv.Atoi(d.Name())
+		if err != nil {
+			continue
+		}
+		if ctx.Err() != nil {
+			return ps, ctx.Err()
+		}
+		fds, err := os.ReadDir(filepath.Join("/proc", d.Name(), "fd"))
+		if err != nil {
+			continue
+		}
+		for _, fd := range fds {
+			l, err := os.Readlink(filepath.Join("/proc", d.Name(), "fd", fd.Name()))
+			if err == nil && strings.HasPrefix(l, "socket:[") && inodes[strings.TrimSuffix(strings.TrimPrefix(l, "socket:["), "]")] {
+				ps = append(ps, pid)
+				break
+			}
+		}
+	}
+	return ps, nil
+}
+
+func listenInodes(table string, port int) map[string]bool {
+	out := map[string]bool{}
+	want := fmt.Sprintf(":%04X", port)
+	lines := strings.Split(table, "\n")
+	if len(lines) <= 1 {
+		return out
+	}
+	for _, l := range lines[1:] {
+		f := strings.Fields(l)
+		if len(f) < 10 || f[3] != "0A" || !strings.HasSuffix(strings.ToUpper(f[1]), want) {
+			continue
+		}
+		if f[9] != "0" {
+			out[f[9]] = true
+		}
+	}
+	return out
+}
+
+func executable(pid int) (string, error) {
+	return os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+}

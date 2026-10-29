@@ -5,6 +5,17 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.0 - 2026-10-29
+
+### Added
+
+- Intelligent sleep inhibition (`Keep awake while agents work` under Settings → General, defaulting to `System` with `System & Display` and `Off` modes) that prevents the computer from idle-sleeping while any agent is running and for a 10-minute grace window afterward via `caffeinate` on macOS, `SetThreadExecutionState` on Windows, and `systemd-inhibit` on Linux
+- Cross-platform `Open at login` setting that launches BySpace silently in the system tray at user sign-in across macOS (`LaunchAgents` with `AssociatedBundleIdentifiers` and `AbandonProcessGroup`), Windows (`HKCU\...\Run`), Linux (XDG `autostart`), and Android Termux (`~/.termux/boot`)
+- macOS `Keep in Dock when window is closed` setting to automatically hide the Dock icon when the main window is closed to the menu bar and restore it at the front of `Command-Tab` on reopen, plus a monochrome adaptive template icon for the macOS menu bar
+- Local daemon host diagnostics and one-click in-process takeover under Settings → General when port 6777 is served by an external or older BySpace process, with container forwarder and foreign-process conflict detection
+- Rolling content-deduplicated configuration backups under `~/.byspace/backups/` (retaining the 10 newest snapshots on startup, every 6 hours, and on demand from Settings → General)
+- Windows parent-console attachment (`AttachConsole`) when invoking the GUI binary with CLI arguments, a native WebView2 Runtime check and download prompt on Windows, and automatic `WEBKIT_DISABLE_COMPOSITING_MODE=1` fallback on Linux Wayland or headless X11 sessions
+
 ## 0.22.1 - 2026-10-29
 
 ### Added

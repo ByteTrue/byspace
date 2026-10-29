@@ -13,7 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"strconv"
+
 	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"github.com/ByteTrue/byspace/internal/server"
 )
 
@@ -50,29 +53,49 @@ func ResolveDesktopDaemonAddr() string {
 	return defaultDesktopDaemonAddr
 }
 
-// ProbeDaemonHealth reports whether a BySpace daemon is already answering /health on addr.
-func ProbeDaemonHealth(addr string) bool {
+// ProbeDaemonInfo queries /health on addr and returns whether a daemon is answering along with its version.
+func ProbeDaemonInfo(addr string) (ok bool, version string) {
 	target, err := daemon.ParseListenTarget(addr)
 	if err != nil || target.Kind != "tcp" {
-		return false
+		return false, ""
 	}
 	client := &http.Client{Timeout: 1500 * time.Millisecond}
 	resp, err := client.Get("http://" + target.Address() + "/health")
 	if err != nil {
-		return false
+		return false, ""
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return false
+		return false, ""
 	}
 	var payload struct {
-		OK     bool   `json:"ok"`
-		Status string `json:"status"`
+		OK      bool   `json:"ok"`
+		Status  string `json:"status"`
+		Version string `json:"version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return false
+		return false, ""
 	}
-	return payload.OK || strings.EqualFold(payload.Status, "ok")
+	healthy := payload.OK || strings.EqualFold(payload.Status, "ok")
+	return healthy, payload.Version
+}
+
+// ProbeDaemonHealth reports whether a BySpace daemon is already answering /health on addr.
+func ProbeDaemonHealth(addr string) bool {
+	ok, _ := ProbeDaemonInfo(addr)
+	return ok
+}
+
+// DaemonHostStatus describes who is currently serving the local daemon port (ported from
+// magpie's gatewayFixJSON / ServedBy).
+type DaemonHostStatus struct {
+	InProcess      bool   `json:"inProcess"`
+	Healthy        bool   `json:"healthy"`
+	Addr           string `json:"addr"`
+	RunningVersion string `json:"runningVersion,omitempty"`
+	ExternalPID    int    `json:"externalPid,omitempty"`
+	ExternalPath   string `json:"externalPath,omitempty"`
+	Reason         string `json:"reason,omitempty"` // "" | "external-byspace" | "container" | "not-byspace" | "offline"
 }
 
 // DaemonSupervisor manages the Magpie-style primary/replica daemon lifecycle for the desktop app:
@@ -129,6 +152,99 @@ func (d *DaemonSupervisor) OwnsInProcessDaemon() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.srv != nil
+}
+
+// Status inspects the current daemon ownership and any external process holding Addr.
+func (d *DaemonSupervisor) Status() DaemonHostStatus {
+	if d == nil {
+		return DaemonHostStatus{}
+	}
+	d.mu.Lock()
+	owned := d.srv != nil
+	addr := d.Addr
+	ver := d.Version
+	d.mu.Unlock()
+
+	if owned {
+		return DaemonHostStatus{
+			InProcess:      true,
+			Healthy:        true,
+			Addr:           addr,
+			RunningVersion: ver,
+		}
+	}
+
+	healthy, extVer := ProbeDaemonInfo(addr)
+	st := DaemonHostStatus{
+		InProcess:      false,
+		Healthy:        healthy,
+		Addr:           addr,
+		RunningVersion: extVer,
+		Reason:         "offline",
+	}
+
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return st
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port <= 0 {
+		return st
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	pids, _ := proc.ListeningOn(ctx, port)
+	for _, pid := range pids {
+		if pid == os.Getpid() {
+			continue
+		}
+		st.ExternalPID = pid
+		st.ExternalPath, _ = proc.Executable(pid)
+		switch {
+		case proc.IsContainerForwarder(st.ExternalPath):
+			st.Reason = "container"
+		case proc.IsBySpace(st.ExternalPath) || healthy:
+			st.Reason = "external-byspace"
+		default:
+			st.Reason = "not-byspace"
+		}
+		break
+	}
+	if st.ExternalPID == 0 && healthy {
+		st.Reason = "external-byspace"
+	}
+	return st
+}
+
+// TakeOver terminates an external BySpace daemon listening on Addr and starts the daemon
+// in-process inside this desktop client (ported from magpie's takeOverGateway).
+func (d *DaemonSupervisor) TakeOver() DaemonHostStatus {
+	if d == nil {
+		return DaemonHostStatus{}
+	}
+	if d.OwnsInProcessDaemon() {
+		return d.Status()
+	}
+	st := d.Status()
+	if st.Reason == "not-byspace" || st.Reason == "container" {
+		return st
+	}
+	if st.ExternalPID > 0 && (proc.IsBySpace(st.ExternalPath) || st.Healthy) {
+		_ = proc.Terminate(st.ExternalPID)
+		deadline := time.Now().Add(4 * time.Second)
+		for time.Now().Before(deadline) {
+			if !ProbeDaemonHealth(st.Addr) {
+				break
+			}
+			time.Sleep(80 * time.Millisecond)
+		}
+		if ProbeDaemonHealth(st.Addr) {
+			_ = proc.Kill(st.ExternalPID)
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+	_ = d.startInProcess()
+	return d.Status()
 }
 
 // BusyState reports whether the in-process daemon currently has any running agent turn or

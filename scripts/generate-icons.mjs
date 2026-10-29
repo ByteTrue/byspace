@@ -147,6 +147,15 @@ async function main() {
   await renderPng(macDesktopSvg, 1024, resolve(root, "internal/gui/icon.png"));
   await renderPng(favNoneSvg, 48, resolve(root, "internal/gui/tray.png"));
 
+  // 7. macOS 菜单栏 Template 透明单色矢量图标 (internal/gui/tray-template.png)
+  // 透明背景 + 纯黑 (#000000) BS 徽标，macOS NSImage setTemplate:YES 会随浅色/深色菜单栏自动反转颜色。
+  const trayTemplateSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${BYSPACE_LOGO_VIEWBOX}">
+<g transform="translate(81.92, 81.92) scale(0.84)">
+  <path d="${BYSPACE_LOGO_PATH}" fill="#000000"/>
+</g>
+</svg>`;
+  await renderPng(trayTemplateSvg, 44, resolve(root, "internal/gui/tray-template.png"));
+
   console.log("All BySpace icon assets generated successfully!");
 }
 
