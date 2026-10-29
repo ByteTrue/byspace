@@ -290,7 +290,7 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 	// and inject drag rules so the top 36px header strip drags the window while controls stay clickable.
 	wailsHead := ""
 	if explicitListen != "" {
-		wailsHead = `<script type="module" src="/wails/runtime.js"></script><style>[data-wails-drag="true"]{--wails-draggable:drag}button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]{--wails-draggable:no-drag}</style><script>window.addEventListener("mousedown",function(e){if(e.clientY>=0&&e.clientY<=38&&e.target instanceof HTMLElement&&!e.target.closest('button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]')){e.target.style.setProperty("--wails-draggable","drag")}},true);</script>`
+		wailsHead = `<script type="module" src="/wails/runtime.js"></script><style>[data-wails-drag="true"]{--wails-draggable:drag;-webkit-user-select:none;user-select:none;cursor:default}button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]{--wails-draggable:no-drag}</style><script>window.addEventListener("mousedown",function(e){if(e.button===0&&e.clientY>=0&&e.clientY<=38&&e.target instanceof HTMLElement&&!e.target.closest('button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]')){e.target.style.setProperty("--wails-draggable","drag");e.target.style.setProperty("-webkit-user-select","none");e.target.style.setProperty("cursor","default");e.preventDefault()}},true);</script>`
 	}
 	script := wailsHead + "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
 	htmlStr := string(htmlBytes)
