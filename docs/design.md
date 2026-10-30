@@ -30,14 +30,16 @@ Before adding a new component, read `components/ui/`. The primitive usually exis
 
 Hierarchy is conveyed through weight and color, not size. Most interface text is `fontSize.base`; compact metadata and hints use `fontSize.sm`. The distinction between a row's primary line and its secondary line is `foreground` versus `foregroundMuted`.
 
-The authored interface ramp uses a 14px base. New native installs default to 15px; web and desktop default to 14px. The Appearance **Interface size** setting is the rendered `fontSize.base` value and scales the rest of the UI ramp proportionally. Primary readable content has its own `fontSize.content`, which defaults to 16px on native and 15px on web and desktop. It owns message bodies, composer input, Markdown, and PR prose. Controls, navigation, metadata, tool chrome, code, diffs, editors, and terminals stay on their interface or code tokens. **Code size** remains independent.
+The interface face is Geist, self-hosted from `packages/app/public/fonts` with the platform UI faces behind it for CJK (`DEFAULT_UI_FONT_STACK` in `theme.ts`). The authored interface ramp uses a 14px base. New native installs default to 15px; web and desktop default to 14px. The Appearance **Interface size** setting is the rendered `fontSize.base` value and scales the rest of the UI ramp proportionally. Primary readable content has its own `fontSize.content`, which defaults to 16px on native and 15px on web and desktop. It owns message bodies, composer input, Markdown, and PR prose. Controls, navigation, metadata, tool chrome, code, diffs, editors, and terminals stay on their interface or code tokens. **Code size** remains independent.
 
 Weight has four tiers, applied by role:
 
-- **Screen titles** — the title in app chrome — use `<ScreenTitle>` (`packages/app/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at weight `400` on compact and `300` on desktop. The New workspace hero is the only larger product title; it uses `fontSize["2xl"]` (`packages/app/src/screens/new-workspace-screen.tsx`).
+- **Screen titles** — the title in app chrome — use `<ScreenTitle>` (`packages/app/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at `fontWeight.medium`; the project beside it is plain `foregroundMuted` text, not a chip. The New workspace hero is the only larger product title; it uses `fontSize["2xl"]` (`packages/app/src/screens/new-workspace-screen.tsx`).
 - **The app title in a sidebar's corner row** — the `BySpace` label — uses `fontWeight.semibold` (`packages/app/src/styles/sidebar.ts`). It is a title-bar label rather than a row, and it names the whole app, so it reads above the list of rows it sits on. The structural tier below it stays `medium`.
-- **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`packages/app/src/components/agent-list.tsx:519-523`, `packages/app/src/components/keyboard-shortcuts-dialog.tsx:63-67`), form field labels above an input inside a modal (`packages/app/src/components/add-host-modal.tsx:19-23`, `packages/app/src/components/pair-link-modal.tsx:24-28`), the title at the top of a modal/sheet/dialog (`packages/app/src/components/adaptive-modal-sheet.tsx:90-94`, `packages/app/src/components/ui/combobox.tsx:1607-1611`, `packages/app/src/components/welcome-screen.tsx:48-53`), action button labels in tight components such as the sidebar callout actions (`packages/app/src/components/sidebar-callout.tsx:218-221`), and inline data emphasis on dense metadata rows (`packages/app/src/components/git-diff-pane.tsx:2322-2327`, `packages/app/src/components/file-explorer-pane.tsx:1115-1122`).
-- **Content** uses `fontWeight.normal`. This applies to settings rows (`packages/app/src/styles/settings.ts`), sidebar primary list-item titles (`projectTitle` / `workspaceBranchText` in `packages/app/src/components/sidebar-workspace-list.tsx`, `packages/app/src/components/agent-list.tsx:572-578`), `<Button>` text (`packages/app/src/components/ui/button.tsx:80-84`), `<StatusBadge>` text (`packages/app/src/components/ui/status-badge.tsx:56-60`), and `<SidebarCallout>` titles (`packages/app/src/components/sidebar-callout.tsx:175-180`).
+- **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`packages/app/src/components/agent-list.tsx:519-523`, `packages/app/src/components/keyboard-shortcuts-dialog.tsx:63-67`), form field labels above an input inside a modal (`packages/app/src/components/add-host-modal.tsx:19-23`, `packages/app/src/components/pair-link-modal.tsx:24-28`), the title at the top of a modal/sheet/dialog (`packages/app/src/components/adaptive-modal-sheet.tsx:90-94`, `packages/app/src/components/ui/combobox.tsx:1607-1611`, `packages/app/src/components/welcome-screen.tsx:48-53`), inline data emphasis on dense metadata rows (`packages/app/src/components/git-diff-pane.tsx:2322-2327`, `packages/app/src/components/file-explorer-pane.tsx:1115-1122`), and, following shadcn/ui, control labels: `<Button>`, `<SegmentedControl>` and tab labels, `<StatusBadge>` and key-cap text, tool-call row labels, and sidebar project titles. The selected sidebar row also turns `medium`; that weight shift is half of its selection signal (§12).
+- **Content** uses `fontWeight.normal`. This applies to settings rows (`packages/app/src/styles/settings.ts`), idle sidebar workspace titles (`workspaceBranchText` in `packages/app/src/components/sidebar/sidebar-workspace-row-content.tsx`, `packages/app/src/components/agent-list.tsx:572-578`), menu items, field text, and `<SidebarCallout>` titles (`packages/app/src/components/sidebar-callout.tsx:175-180`).
+
+Control chrome copies shadcn/ui (nova style, `neutral` base colour). The visual contract is `design/component-sheet.html`, and the numbers it uses come from the source snapshot in `design/references/shadcn/`. Read a value from there instead of eyeballing one.
 
 The rule, condensed: text that _names_ a surface or a group is `medium`. Text that lives _inside_ a surface or a group is `normal`. Top-of-screen titles are `<ScreenTitle>`, which is lighter still. The name of the app itself, in a sidebar's corner row, is the one label above `medium`.
 
@@ -57,9 +59,9 @@ The button is `<Button>` (`packages/app/src/components/ui/button.tsx`). It has f
 
 `default` is the one primary action on a surface — filled with `accent`. At most one per page. The primary slot inside an `<AdaptiveModalSheet>` and the highlighted action on the welcome screen are the canonical uses.
 
-`secondary` is the paired action when two actions carry equal weight — filled with `surface3`. The component default is `secondary`, which matches its frequency in the codebase.
+`secondary` is the paired action when two actions carry equal weight — filled with `surface2`, `surface3` on hover. The component default is `secondary`, which matches its frequency in the codebase.
 
-`outline` is the low-frequency action that lives on a row — transparent with `borderAccent`. Restart, Remove, Update on host detail (`packages/app/src/screens/settings/host-page.tsx:585-594`).
+`outline` is the low-frequency action that lives on a row — `controlFill` behind a `borderAccent` border, `controlFillHover` on hover. Restart, Remove, Update on host detail (`packages/app/src/screens/settings/host-page.tsx:585-594`). Header split buttons (open in editor, git actions, scripts) use the same outline chrome at `HEADER_CONTROL_HEIGHT`.
 
 `ghost` is structural and non-committal — no border, no fill. Back arrows, header toggles, "Load more" footers (`packages/app/src/screens/sessions-screen.tsx:54-63`), more-affordances. Ghost is used when the affordance is part of the chrome, not a decision.
 
@@ -67,11 +69,13 @@ Header and toolbar controls use `interactionHighlight` for hovered, pressed, ope
 backgrounds. It is a translucent semantic fill so the same control works over the main surface and
 the sidebar. Apply it as `backgroundColor`; setting `opacity` on the control also fades its content.
 
-`destructive` is filled with `destructive`. It only appears inside a confirm. The button on the page is `outline`; the destructive button is the confirm button inside the dialog.
+`destructive` is a soft tint (`destructiveSoft`) with `destructive` text, as in shadcn/ui; a solid red slab is wrong. It only appears inside a confirm. The button on the page is `outline`; the destructive button is the confirm button inside the dialog.
+
+Every variant sinks one pixel when pressed instead of fading, and every focusable control takes the same focus ring: the border turns `ring` and a 3px `focusRing` outline sits flush outside it.
 
 Sizes: `xs` for ultra-tight inline triggers. `sm` for any button sitting in a row. `md` is the page default. `lg` is reserved for large standalone CTAs.
 
-Sizes are a shared contract across control kinds, defined once in `control-geometry.ts`: `xs` = 28px tall with `fontSize.sm` labels, `sm` = 32px with `fontSize.base`, `md`/`lg` = 44px with `fontSize.base`. `<SegmentedControl>` (`packages/app/src/components/ui/segmented-control.tsx`) takes the same `xs`/`sm`/`md` sizes — a segmented control next to a `<Button>` of the same size always matches in height, label size, and corner radius. Its segments run one padding step tighter than a button, because the gap between segments already reads as padding. The selected segment is a `surface3` fill with `foreground` text, not an inverted one — inverting it inside thin chrome puts a white slab in the toolbar. Thin chrome such as the file toolbar uses `xs`; settings rows use `sm`. Never shrink a control's font or padding locally to fit a context — if the context needs a smaller control, the size tier is missing or the wrong one is in use.
+Sizes are a shared contract across control kinds, defined once in `control-geometry.ts`. From the `md` breakpoint up they are shadcn/ui's heights, `DESKTOP_CONTROL_HEIGHTS`: `xs` 24px, `sm` 28px, `md` 32px, `lg` 36px. Below it the touch heights stay (`xs` 28, `sm` 32, `md`/`lg` 44) so a phone keeps finger-sized targets. `xs` takes `fontSize.sm` labels; the rest take `fontSize.base`. `<SegmentedControl>` (`packages/app/src/components/ui/segmented-control.tsx`) takes the same `xs`/`sm`/`md` sizes — a segmented control next to a `<Button>` of the same size always matches in height and label size. It is shadcn/ui's tabs list: a `surface2` track with a 3px inset (2px at `xs`) holding a raised selected segment (`segmentedThumb` with `shadow.sm`; in dark a translucent fill with a `borderAccent` edge), its corner one step tighter than the track's. Thin chrome such as the file toolbar uses `xs`; settings rows use `sm`. Never shrink a control's font or padding locally to fit a context — if the context needs a smaller control, the size tier is missing or the wrong one is in use.
 
 A `<Pressable>` wrapping a `<Text>` is a sixth variant. It is wrong. `<Button>` accepts `style`, `textStyle`, `leftIcon`, `disabled`, `size`, and `variant`.
 
@@ -89,7 +93,7 @@ A list that is itself the page content — sidebar items in `sidebar-workspace-l
 
 Pane chrome — the workspace pane header, the file-explorer header, the diff pane header — uses a single bottom border to separate the header from the content (`packages/app/src/components/git-diff-pane.tsx:2328-2331`). One border, no shadow.
 
-`borderAccent` is reserved for the outline button. Inputs use `border`. Single-thing borders are wrong; a single bordered element is either a card with one row (use the card) or it does not need a border.
+`border` frames cards, panes and dividers. `borderAccent` is shadcn/ui's `input` colour: the edge of every control a user types into or presses — fields, the composer, outline and split buttons, checkboxes. In light the two are the same grey; in dark `borderAccent` is one step brighter so controls separate from the cards they sit on. Single-thing borders are wrong; a single bordered element is either a card with one row (use the card) or it does not need a border.
 
 ---
 
@@ -106,6 +110,10 @@ Five primitives. The pick is determined by option count, the need to search, and
 `<AdaptiveModalSheet>` is for a focused task. Multi-field forms (`packages/app/src/components/add-host-modal.tsx`, `packages/app/src/components/pair-link-modal.tsx`, `packages/app/src/components/project-picker-modal.tsx`), confirmations with detail, anything that earns a backdrop. Bottom sheet on compact, centered card on desktop. Raw `Modal` is wrong for any of these.
 
 `<AdaptiveModalSheet>` owns the presentation. Its content inset — the gutter that puts sheet content on the same rails as the sheet header — and compact bottom safe-area padding are the sheet's, not the caller's. A caller declares layout intent through `contentStyle` and never branches on form factor to add its own margins. If a sheet's first snap point is shorter than its header, content, and safe-area clearance, raise that snap point rather than moving the sheet container.
+
+The desktop card is shadcn/ui's dialog: `popover` fill, hairline `border`, `shadow.lg`, and a footer strip on `surfaceFooter`. Footer actions sit on the right at their content width, cancel before confirm; buttons stretched to share the row are the compact sheet's layout, not the desktop card's.
+
+Tooltips invert against the surface (`tooltip` fill, `tooltipForeground` text, no border or shadow); a key cap inside one reads `TooltipSurfaceContext` and inverts with it. Text inside tooltip content takes `tooltipForeground` or `tooltipForegroundMuted`, never `foreground`.
 
 `confirmDialog` is for destructive yes/no and imperative confirmation. Promise-based: `await confirmDialog({ destructive: true, ... })`. Anything where a wrong click loses work.
 
@@ -127,7 +135,7 @@ A section may collapse (`collapsible` on `<SettingsSection>`, chevron on the hea
 
 Cards inside a section sit closer than sections. Rows inside a card touch — only the divider separates them. The rhythm is page → spacious; section → spacious; card → tight.
 
-Rows have generous vertical padding: roughly 16px of content plus 16px of vertical padding for settings rows, 8–12px for sidebar list items where many rows must fit. Compressing rows below the established density to fit more on the screen is wrong. Too many rows means more cards or more sections, not smaller rows.
+Settings rows are shadcn/ui items: at least 56px tall with 12px vertical padding, inside a card with a hairline `border`, a `borderRadius.xl` corner and no shadow. Sidebar list items are 32px rows on desktop (36px on compact). Compressing rows below the established density to fit more on the screen is wrong. Too many rows means more cards or more sections, not smaller rows.
 
 The whitespace is the design.
 
@@ -218,7 +226,7 @@ Changing state must not move the layout. A row that grows when its badge arrives
 
 ## 12. List rows
 
-The row anatomy is a content column with an optional trailing slot. Inside a card the row is `settingsStyles.row`. Inside a sidebar list the row carries its own padding and `borderRadius.lg` per item (`workspaceRow` in `packages/app/src/components/sidebar-workspace-list.tsx`).
+The row anatomy is a content column with an optional trailing slot. Inside a card the row is `settingsStyles.row`. Inside a sidebar list the row carries its own padding and `borderRadius.md` per item (`workspaceRow` in `packages/app/src/components/sidebar-workspace-list.tsx`).
 
 Rows that drill into a detail lead with a chevron in the trailing slot (`ChevronRight`, `iconSize.sm`, `foregroundMuted`). The whole row is the `<Pressable>`. Pair-device row (`packages/app/src/screens/settings/host-page.tsx:644-668`), provider row (`packages/app/src/screens/settings/providers-section.tsx:92-132`), project row in the projects list. Chevron means navigation.
 
@@ -228,7 +236,7 @@ A row may carry both a chevron and a kebab when both navigation and row-level ac
 
 Switches and segmented controls also sit in the trailing slot. A row that both navigates and toggles is a `<Pressable>` with a `<Switch>` in the trailing slot — the switch calls `event.stopPropagation()` so the row press does not fire (`packages/app/src/screens/settings/providers-section.tsx:92-132`). Sidebar items that hold a status dot, a count, and a kebab follow the same rule (`packages/app/src/components/sidebar-workspace-list.tsx`).
 
-Selected rows use `surfaceSidebarSelected` in both the settings list+detail and the sidebar list (`packages/app/src/screens/settings-screen.tsx`, `packages/app/src/components/agent-list.tsx`). Pressed uses the same token: it is one step past hover, and in Light hover and `surface2` are the same colour.
+Hover and selection share one fill, `surfaceSidebarSelected` (= `surface2`, shadcn/ui's `sidebar-accent`), in both the settings list+detail and the sidebar list (`packages/app/src/screens/settings-screen.tsx`, `packages/app/src/components/agent-list.tsx`). The selected row is told apart by a 2px `foreground` bar on its left edge and a `medium` title, not by a darker fill. Horizontal tabs (workspace tabs, the Explorer rail) are the other half of that pair: no fill, and the active tab carries a 2px `foreground` underline on the bar's bottom edge. Vertical lists use the left bar, horizontal tabs use the underline; do not swap them.
 
 ---
 
@@ -238,7 +246,7 @@ There is exactly one token per status signal — `statusSuccess`, `statusDanger`
 
 Status **dots** are the one exception, and they are a family of their own — `statusDotSuccess`, `statusDotDanger`, `statusDotWarning`, `statusDotRunning`, read only by `getStatusDotColor` (`packages/app/src/utils/status-dot-color.ts`). Same hues and the same generation rule, but their own band: 90% of gamut chroma against the status family's 55–60%. A dot is a few points of solid color with no shape to read and no label attached, and the running one pulses, so at the status band's chroma the dots read dimmer than the metadata beside them — backwards, since the dot is the row's state. Lightness is set by hue separation rather than by distance from the surface: at 6pt four dark hues on a light surface all read as one dark blob no matter how much contrast they have. So the light band runs as bright as the contrast floor allows at L=0.62, the last step where all four clear 3:1 against the sidebar's `surface2`; the dark band sits at L=0.72, where danger turns pink above. All four move together; regenerate the set, never one hue.
 
-Status pills use the status token for text on the shared `surface3` and `border` shell. The neutral shell keeps the signal legible without manufacturing translucent colors outside the theme. The `<StatusBadge>` primitive (`packages/app/src/components/ui/status-badge.tsx`) is canonical; a pill never reaches into `palette`.
+Status pills use the status token for text on a borderless `surface2` pill (shadcn/ui's secondary badge); a muted pill uses `foreground` text. The neutral shell keeps the signal legible without manufacturing translucent colors outside the theme. The `<StatusBadge>` primitive (`packages/app/src/components/ui/status-badge.tsx`) is canonical; a pill never reaches into `palette`.
 
 Status dots — the small filled circles next to a host or agent name — are `borderRadius.full` filled with the status token. Which token a given agent state maps to is owned by `getStatusDotColor` (`packages/app/src/utils/status-dot-color.ts`); a row, a group header, and a project icon all call it rather than restating the mapping. They sit in the trailing slot of a sidebar row or as a leading marker on a status pill.
 
@@ -250,7 +258,7 @@ New status pills use `<StatusBadge>`. Identity, shortcut, and interactive link b
 
 ## 14. Forbidden
 
-- `fontWeight.medium` on row titles, body text, button labels, badge text, or `<SidebarCallout>` titles. Medium is reserved for the structural-label tier described in §3 — section labels, modal/sheet titles, dense metadata emphasis, and tight action labels. Anything else is `normal`. `<ScreenTitle>` is responsive `400/300` and is never overridden.
+- `fontWeight.medium` on idle row titles, body text, menu items, or `<SidebarCallout>` titles. Medium is the structural and control-label tier described in §3. Anything else is `normal`. `<ScreenTitle>` is `medium` and is never overridden.
 - `<Pressable>` wrapping `<Text>` to make a button. `<Button>` exists.
 - Bare `<Text>` for a section header inside settings. `<SettingsSection>` exists.
 - A muted paragraph between a section header and its card. Section-level explanation is the header's `info` tooltip (§7).
