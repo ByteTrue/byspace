@@ -1278,7 +1278,7 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentProfiles":                true,
 			"agentConfigApply":             true,
 			"daemonNetworkConfig":          true,
-			"daemonServiceInstall":         true,
+			"daemonServiceInstall":         supportsDaemonServiceInstall(),
 		},
 	}
 }
@@ -1393,7 +1393,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "get_daemon_config_request":
 		_ = sendSessionMsg(ctx, sink, "get_daemon_config_response", map[string]any{
 			"requestId": base.RequestID,
-			"config":    s.store.LoadDaemonConfig(),
+			"config":    s.loadDaemonConfigWithService(),
 		})
 
 	case "list_available_providers_request":

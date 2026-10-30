@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/gui/autostart"
 	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/quota"
 	"github.com/ByteTrue/byspace/internal/store"
@@ -1403,6 +1405,17 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		// carries the bcrypt hash. Translating here keeps the two apart — persisting the plaintext
 		// would leave the password in a readable file, and echoing the hash would hand every
 		// client a copy of it.
+		installSvc, hasServicePatch := takeDaemonServicePatch(req.Config)
+		if hasServicePatch {
+			if err := s.applyDaemonServicePatch(installSvc); err != nil {
+				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"config":    s.loadDaemonConfigWithService(),
+					"error":     err.Error(),
+				})
+				return
+			}
+		}
 		passwordHash, applyAuth, hashErr := takeDaemonAuthPatch(req.Config)
 		// Validated on write so a malformed entry is reported next to the edit that caused it,
 		// rather than failing later where the message says nothing about the settings.
@@ -1435,17 +1448,15 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			}
 		}
 		updated := s.store.SaveDaemonConfig(req.Config)
+		if svc := daemon.BuildServiceView(); svc != nil {
+			updated["service"] = svc
+		}
 		s.ApplyRelayConfig(ctx)
 		s.ApplyTunnelConfig()
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 			"requestId": req.RequestID,
 			"config":    updated,
 		})
-		// Every other open client has to learn about the edit: Node broadcasts a
-		// `status: daemon_config_changed` frame from its config-apply path. Without it a page
-		// that was loaded before the write keeps rendering the settings it read once — the
-		// new-workspace launch menu kept offering a terminal profile another client had just
-		// deleted, and the settings sheet showed edits that never happened.
 		s.broadcastSessionMsg("status", map[string]any{
 			"status": "daemon_config_changed",
 			"config": updated,
@@ -1808,4 +1819,53 @@ func promptPreview(text string) string {
 		return collapsed
 	}
 	return string(runes[:promptPreviewMaxLen-1]) + "…"
+}
+
+func supportsDaemonServiceInstall() bool {
+	return daemon.BuildServiceView() != nil
+}
+
+func (s *Server) loadDaemonConfigWithService() map[string]any {
+	cfg := s.store.LoadDaemonConfig()
+	if svc := daemon.BuildServiceView(); svc != nil {
+		cfg["service"] = svc
+	}
+	return cfg
+}
+
+func takeDaemonServicePatch(cfg map[string]any) (install bool, ok bool) {
+	if cfg == nil {
+		return false, false
+	}
+	raw, exists := cfg["service"]
+	delete(cfg, "service")
+	if !exists {
+		return false, false
+	}
+	svcMap, isMap := raw.(map[string]any)
+	if !isMap {
+		return false, false
+	}
+	val, hasInstall := svcMap["install"].(bool)
+	return val, hasInstall
+}
+
+func (s *Server) applyDaemonServicePatch(install bool) error {
+	if !install {
+		return daemon.UninstallLoginService()
+	}
+	if autostart.Enabled() == autostart.On {
+		return fmt.Errorf("BySpace already opens at login from the desktop app (Settings → General → Open at login)")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	_, err = daemon.InstallLoginService(
+		exe,
+		[]string{"serve", "--home", s.homeDir},
+		daemon.CarriedEnviron(),
+		daemon.LogPath(s.homeDir),
+	)
+	return err
 }

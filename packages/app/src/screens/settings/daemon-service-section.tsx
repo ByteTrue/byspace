@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Alert as InlineAlert } from "@/components/ui/alert";
+import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -24,6 +26,21 @@ interface ServiceView {
   linger?: boolean;
 }
 
+function isWailsDesktopContainer(): boolean {
+  if (!isWeb || typeof window === "undefined") {
+    return false;
+  }
+  const isWailsOrigin =
+    window.location?.protocol === "wails:" ||
+    window.location?.hostname === "wails.localhost" ||
+    "wails" in window;
+  if (!isWailsOrigin) {
+    return false;
+  }
+  const ua = window.navigator?.userAgent ?? "";
+  return !/android|iphone|ipad|ipod/i.test(ua);
+}
+
 /**
  * Host settings toggle for daemon service hosting (issue 043, visibility relaxed in
  * issue 057). Rendered for any host whose daemon has the daemonServiceInstall
@@ -38,6 +55,8 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const localDaemonServerId = useLocalDaemonServerId();
+  const isLocalDaemon = localDaemonServerId === serverId;
   const serviceFeature = useHostFeature(serverId, "daemonServiceInstall");
   const { config } = useDaemonConfig(serverId);
   const [isBusy, setIsBusy] = useState(false);
@@ -92,7 +111,10 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
     [client, hostLabel, t],
   );
 
-  if (serviceFeature !== true) {
+  // Inside the Wails desktop app, the local host's login startup is owned by Settings → General →
+  // Open at login (which launches the tray app and its in-process daemon together). Hide the
+  // duplicate headless OS service toggle for the local host while keeping it for remote servers.
+  if (serviceFeature !== true || (isWailsDesktopContainer() && isLocalDaemon)) {
     return null;
   }
 

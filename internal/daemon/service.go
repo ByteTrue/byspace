@@ -84,6 +84,29 @@ type ServiceStatus struct {
 	Detail string
 }
 
+// BuildServiceView returns the wire-compatible service state object for get_daemon_config_response.
+func BuildServiceView() map[string]any {
+	st := QueryServiceStatus()
+	if !st.Supported {
+		return nil
+	}
+	label := LaunchdLabel
+	if runtime.GOOS == "linux" {
+		label = SystemdUnit + ".service"
+	}
+	state := "not-installed"
+	switch {
+	case st.Registered && st.Running:
+		state = "managed-by-service"
+	case st.Registered && !st.Running:
+		state = "installed-stopped"
+	}
+	return map[string]any{
+		"state": state,
+		"label": label,
+	}
+}
+
 // QueryServiceStatus asks the platform about the login service.
 func QueryServiceStatus() ServiceStatus {
 	userHome, err := os.UserHomeDir()
