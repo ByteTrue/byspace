@@ -5,6 +5,18 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.3 - 2026-10-30
+
+### Added
+
+- Per-port start/pause toggle and batch `Start all` / `Pause all` controls on the Tunnels screen: pausing a forward immediately releases its local listener port (and stops the peer reconnect loop when all forwards on a peer are paused) while keeping its configuration and pinned `localPort` ready to resume
+- Embedded multi-size PE icon, version resource, and per-monitor-v2 DPI manifest in Windows desktop binaries (`byspace-windows-{amd64,arm64}.exe`) via `go-winres`
+
+### Fixed
+
+- Fixed enabling tunnels from the Tunnels screen saving `daemon.tunnel.enabled` to `config.json` without calling `ApplyTunnelConfig()`, which left newly added tunnels unstarted and hidden until the daemon was reloaded
+- Fixed the desktop app defaulting the local host label to `BySpace` instead of the machine's hostname
+
 ## 0.23.2 - 2026-10-29
 
 ### Added
