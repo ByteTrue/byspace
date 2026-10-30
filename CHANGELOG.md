@@ -5,6 +5,13 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.5 - 2026-10-30
+
+### Added
+
+- Framed rounded-card desktop shell (`DesktopContentFrame`) inspired by AGCopilot across all routes: the sidebar and outer frame form a continuous borderless surface wrapping the main content area in a 12px rounded card with 6px insets (and an L-shaped frameless top title bar with native-styled `— □ ×` window controls on Windows)
+- `desktop` dev service (`scripts/dev-desktop.mjs`) in `byspace.json` that launches the Wails v3 desktop client against `.dev/byspace-home` on `127.0.0.1:6778`
+
 ## 0.23.4 - 2026-10-30
 
 ### Added
