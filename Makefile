@@ -11,7 +11,7 @@
 
 VERSION    ?= $(shell node -p "require('./package.json').version" 2>/dev/null || echo dev)
 GOARCH     ?= $(shell go env GOARCH)
-LDFLAGS    := -s -w -X main.version=$(VERSION)
+LDFLAGS    := -s -w -X main.version=$(VERSION) -X github.com/ByteTrue/byspace/internal/cli.DefaultVersion=$(VERSION)
 BINARY     := bin/byspace
 APP_BINARY := bin/byspace-app
 CLI_TARGETS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64 android/arm64

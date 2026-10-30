@@ -127,37 +127,16 @@ function ciRunState(commit) {
   return { status, conclusion };
 }
 
-// Resolve the most recent commit that touched non-release-metadata files (i.e. actual code/tests).
-// Pure changelog + version-bump commits are ignored by CI push triggers so releasing already-tested
-// main code starts packaging immediately without re-running the test suite a second time.
-const codeCommit =
-  tryRunQuiet("git", [
-    "log",
-    "-n",
-    "1",
-    "--format=%H",
-    "HEAD",
-    "--",
-    ".",
-    ":!CHANGELOG.md",
-    ":!package.json",
-    ":!packages/*/package.json",
-    ":!workers/*/package.json",
-    ":!internal/cli/gui_android.go",
-  ]) || headCommit;
-
-let ciState = ciRunState(codeCommit);
+let ciState = ciRunState(headCommit);
 let ciVerdict = classifyCiState(ciState);
 if (ciVerdict !== "green") {
   if (!Number.isFinite(waitMs) || waitMs <= 0) {
     throw new Error(
-      `Pushed ${headCommit} to main, but CI on code commit ${codeCommit} is not green yet. Wait for CI, then rerun npm run release:push.`,
+      `Pushed ${headCommit} to main, but exact-SHA CI is not green yet. Wait for CI, then rerun npm run release:push.`,
     );
   }
-  const shortSha = codeCommit.slice(0, 9);
-  process.stdout.write(
-    `Waiting for CI on code commit ${shortSha} (up to ${Math.round(waitMs / 60_000)}m)\n`,
-  );
+  const shortSha = headCommit.slice(0, 9);
+  process.stdout.write(`Waiting for CI on ${shortSha} (up to ${Math.round(waitMs / 60_000)}m)\n`);
   const deadline = Date.now() + waitMs;
   let lastReported = "";
   while (ciVerdict === "pending" && Date.now() < deadline) {
@@ -166,17 +145,17 @@ if (ciVerdict !== "green") {
       process.stdout.write(`  CI ${ciState.status}\n`);
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));
-    ciState = ciRunState(codeCommit);
+    ciState = ciRunState(headCommit);
     ciVerdict = classifyCiState(ciState);
   }
   if (ciVerdict === "failed") {
     throw new Error(
-      `CI on ${codeCommit} concluded ${ciState.conclusion || "without a result"}; refusing to tag. Fix main and cut a new version.`,
+      `CI on ${headCommit} concluded ${ciState.conclusion || "without a result"}; refusing to tag. Fix main and cut a new version.`,
     );
   }
   if (ciVerdict !== "green") {
     throw new Error(
-      `CI on ${codeCommit} did not go green within ${Math.round(waitMs / 60_000)}m (last: ${ciState.status || "not started"} ${ciState.conclusion}). Rerun npm run release:push once it does; it will not push again or cut a second version.`,
+      `CI on ${headCommit} did not go green within ${Math.round(waitMs / 60_000)}m (last: ${ciState.status || "not started"} ${ciState.conclusion}). Rerun npm run release:push once it does; it will not push again or cut a second version.`,
     );
   }
   process.stdout.write(`  CI green on ${shortSha}\n`);

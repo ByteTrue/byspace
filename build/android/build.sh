@@ -45,7 +45,7 @@ CXX="$CXX_ARM64" \
 go build \
   -buildmode=c-shared \
   -trimpath \
-  -ldflags="-s -w -X main.version=$VERSION" \
+  -ldflags="-s -w -X main.version=$VERSION -X github.com/ByteTrue/byspace/internal/cli.DefaultVersion=$VERSION" \
   -o "$JNILIBS_ARM64/libwails.so" \
   .
 
