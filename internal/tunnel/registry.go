@@ -366,6 +366,15 @@ func (r *Registry) List() []PeerStatus {
 					break
 				}
 			}
+		} else {
+			for _, fw := range item.peer.Forwards {
+				status.Forwards = append(status.Forwards, ForwardState{
+					RemotePort: fw.RemotePort,
+					LocalPort:  fw.LocalPort,
+					Label:      fw.Label,
+					State:      StateDisconnected,
+				})
+			}
 		}
 		out = append(out, status)
 	}

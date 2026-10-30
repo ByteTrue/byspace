@@ -1435,6 +1435,8 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			}
 		}
 		updated := s.store.SaveDaemonConfig(req.Config)
+		s.ApplyRelayConfig(ctx)
+		s.ApplyTunnelConfig()
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 			"requestId": req.RequestID,
 			"config":    updated,

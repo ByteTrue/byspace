@@ -326,6 +326,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 		})
 	}
 
+	s.ApplyTunnelConfig()
 	err := s.tunnelRegistry().AddOrUpdate(tunnel.PeerConfig{
 		PeerID:          req.Config.PeerID,
 		PeerHostname:    req.Config.PeerHostname,
