@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -155,6 +155,13 @@ async function main() {
 </g>
 </svg>`;
   await renderPng(trayTemplateSvg, 44, resolve(root, "internal/gui/tray-template.png"));
+
+  // 8. Windows .exe PE 资源图标 (build/windows/icon-{256,128,64,48,32,16}.png)
+  const winIconDir = resolve(root, "build/windows");
+  mkdirSync(winIconDir, { recursive: true });
+  for (const size of [256, 128, 64, 48, 32, 16]) {
+    await renderPng(appIconSvg, size, resolve(winIconDir, `icon-${size}.png`));
+  }
 
   console.log("All BySpace icon assets generated successfully!");
 }

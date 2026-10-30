@@ -69,13 +69,17 @@ release-cli:
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -tags nogui -trimpath -ldflags="$(LDFLAGS)" -o dist/byspace-cli-$$os-$$arch$$ext . || exit 1; \
 	done
 
-## release-windows: 交叉编译 Windows Wails v3 桌面客户端到 dist/
+WINVER = $(shell echo $(VERSION) | sed -E 's/^v//; s/[^0-9.].*//')
+
+## release-windows: 交叉编译 Windows Wails v3 桌面客户端到 dist/ (含 PE 图标/版本/DPI Manifest)
 release-windows:
 	@mkdir -p dist
+	@go run github.com/tc-hib/go-winres@v0.3.3 make --in build/windows/winres.json --arch amd64,arm64 --out rsrc \
+		--file-version "$(or $(WINVER),0.0.0)" --product-version "$(or $(WINVER),0.0.0)"
 	@for arch in amd64 arm64; do \
 		echo "  windows/$$arch (desktop app)"; \
 		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch go build -trimpath -ldflags="$(LDFLAGS) -H windowsgui" -o dist/byspace-windows-$$arch.exe . || exit 1; \
-	done
+	done; rm -f rsrc_windows_*.syso
 
 ## release-linux-desktop: 在 Linux 宿主上编译 Wails v3 桌面客户端 (需 libgtk-3-dev libwebkit2gtk-4.1-dev)
 release-linux-desktop:
@@ -106,6 +110,6 @@ vet:
 
 ## clean: 清掉构建产物
 clean:
-	rm -rf $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk BySpace.app dist
+	rm -rf $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk BySpace.app rsrc_windows_*.syso dist
 	rm -rf internal/webui/dist/*
 	touch internal/webui/dist/.keep
