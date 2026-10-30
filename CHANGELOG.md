@@ -5,6 +5,12 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.23.6 - 2026-10-30
+
+### Fixed
+
+- Fixed confirmation actions (`Uninstall` on Orchestration skills, project removal, workspace archive warnings, file deletion, and 18 other `confirmDialog` call sites) doing nothing in the desktop app because `WKWebView` silently returns `false` from `window.confirm()`; Wails containers now display native OS confirmation dialogs via `app.Dialog.Question()`
+
 ## 0.23.5 - 2026-10-30
 
 ### Added
