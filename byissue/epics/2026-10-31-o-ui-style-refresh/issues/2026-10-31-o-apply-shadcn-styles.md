@@ -1,0 +1,39 @@
+---
+kind: issue
+title: "在 packages/app 落地样板页：基础设定、基础组件、组合部件"
+type: feature
+created: 2026-10-31
+---
+
+# 在 packages/app 落地样板页：基础设定、基础组件、组合部件
+
+## 目标与范围
+
+把已确认的样板页 `design/component-sheet.html` 落到现有 Expo 版里，浅色深色两套。
+
+包含：
+
+- 基础设定：shadcn/ui `neutral` 颜色、Geist、圆角阶梯、阴影、3px 焦点环。
+- 基础组件（样板页 B1–B9）：按钮、输入框、下拉框、分段选择、开关、复选框、菜单、提示气泡、快捷键、徽标、弹窗。
+- 组合部件（样板页 C1–C7）：设置卡片、侧栏、顶栏和标签栏、发消息的输入框、对话和工具调用、Markdown 和代码块、文字选中色。
+
+不包含：布局（区域位置和大小、左包右大卡片、面板结构、导航）；样板页没覆盖到的页面（文件树、Diff 顶栏、终端标签、历史列表、定时任务卡片、首页卡片、新建工作区页、命令面板、通知横幅）只随全局设定变化，没有逐个对照。
+
+## 方案要点
+
+- 桌面端控件高度用 shadcn nova 的 24 / 28 / 32 / 36，`md` 断点以下保留原来的触控高度，手机上点击区域不缩小（`DESKTOP_CONTROL_HEIGHTS`）。
+- 提示气泡反色；里面的文字一律用 `tooltipForeground`，快捷键键帽读 `TooltipSurfaceContext` 跟着反色。
+- 标签栏去掉悬停遮罩，关闭按钮放在标题后面预留的位置，不再盖住标题和下划线。
+- 发送按钮常驻，没内容时禁用，不再消失。
+- 文字选中色用 Unistyles 发布的 `--colors-foreground` 变量做 15% 叠色，写在 `public/index.html`。
+- 规则写进 `docs/design.md`（字重分层、按钮变体、尺寸、边框分工、选中态、弹窗、提示气泡）。
+
+## 验证
+
+- `npm run typecheck`、`npm run lint` 通过；相关单测 23 + 66 + 20 + 14 项通过（control-geometry、theme、markdown-styles、tooltip、workspace-tab-layout、composer input 等）。
+- 在开发服务 8081 上用真实浏览器逐项截图对照样板页，浅色深色各一遍：设置页、Appearance、菜单、新建定时任务弹窗、提示气泡、侧栏、顶栏和标签栏（含悬停）、输入框（空、聚焦、有内容）、用 Mock 模型跑的一段对话（消息、工具调用悬停、Markdown、代码）、文字选中。
+- 没验：手机尺寸；Windows 上的字体渲染；样板页没覆盖的页面。
+
+## 执行记录
+
+- 2026-10-31：用户确认样板页「这样改可以」，开始落地。提交 `dbde2cc46`（基础设定和基础组件）、`b8fee463c`（设置卡片）、`aa8319587`（侧栏）、`5a485adcc`（顶栏和标签栏）、`080548b0d`（输入框）、`36e0e8e57`（对话和 Markdown）、`49f18c3b0`（复选框和选中色）、`f99e3753f`（`docs/design.md`）。
