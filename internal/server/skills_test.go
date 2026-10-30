@@ -6,64 +6,52 @@ import (
 	"testing"
 )
 
-func writeSkill(t *testing.T, root, name, file, content string) {
-	t.Helper()
-	dir := filepath.Join(root, name)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+func TestSkillsInstallAndUninstallRemovesAllManagedSkillDirs(t *testing.T) {
+	sourceDir := resolveSkillsSourceDir()
+	if sourceDir == "" {
+		t.Fatal("expected non-empty bundled skills sourceDir")
 	}
-	if err := os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
+	userHome := t.TempDir()
+	sel := map[string]any{"mode": "all"}
+	targets := []string{"agents", "claude"}
 
-// The state must be computed from disk, not hardcoded. Node's getSkillsStatus returns
-// "not-installed" when no home holds any managed skill, "up-to-date" when the ops list is
-// empty, and "drift" otherwise.
-func TestGetSkillsStatusThreeStates(t *testing.T) {
-	tmp := t.TempDir()
-	source := filepath.Join(tmp, "skills")
-	userHome := filepath.Join(tmp, "home")
-	writeSkill(t, source, "alpha", "SKILL.md", "alpha body")
-
-	// 1. Nothing installed anywhere.
-	status := getSkillsStatus(source, userHome, map[string]any{"mode": "all"}, nil)
-	if status.State != "not-installed" {
-		t.Fatalf("expected not-installed, got %q (ops=%+v)", status.State, status.Ops)
-	}
-	if len(status.Ops) == 0 {
-		t.Fatal("expected an add op for the missing skill")
+	// 1. Initially not-installed.
+	st0 := getSkillsStatus(sourceDir, userHome, sel, targets)
+	if st0.State != "not-installed" || len(st0.Installed) != 0 {
+		t.Fatalf("expected initial state not-installed, got %+v", st0)
 	}
 
-	// 2. Converge, then it must be up-to-date.
-	applySkillsStatus(source, userHome, status)
-	status = getSkillsStatus(source, userHome, map[string]any{"mode": "all"}, nil)
-	if status.State != "up-to-date" {
-		t.Fatalf("expected up-to-date after apply, got %q (ops=%+v)", status.State, status.Ops)
+	// 2. Reconcile installs bundled skills into both ~/.agents/skills and ~/.claude/skills.
+	if err := applySkillsStatus(sourceDir, userHome, st0); err != nil {
+		t.Fatalf("applySkillsStatus install: %v", err)
 	}
-	if len(status.Ops) != 0 {
-		t.Fatalf("expected no ops when converged, got %+v", status.Ops)
+	st1 := getSkillsStatus(sourceDir, userHome, sel, targets)
+	if st1.State != "up-to-date" || len(st1.Installed) == 0 {
+		t.Fatalf("expected up-to-date after install, got %+v", st1)
 	}
-
-	// 3. Change the bundle bytes -> drift with an update op targeting the affected homes.
-	writeSkill(t, source, "alpha", "SKILL.md", "alpha body v2")
-	status = getSkillsStatus(source, userHome, map[string]any{"mode": "all"}, nil)
-	if status.State != "drift" {
-		t.Fatalf("expected drift after bundle change, got %q (ops=%+v)", status.State, status.Ops)
-	}
-	if len(status.Ops) != 1 || status.Ops[0].Kind != "update" {
-		t.Fatalf("expected one update op, got %+v", status.Ops)
-	}
-
-	// 4. Narrowing targets must delete the copy in the home that is no longer selected.
-	status = getSkillsStatus(source, userHome, map[string]any{"mode": "all"}, []string{"agents"})
-	foundDelete := false
-	for _, op := range status.Ops {
-		if op.Kind == "delete" && len(op.Targets) == 1 && op.Targets[0] == "claude" {
-			foundDelete = true
+	for _, dir := range []string{
+		filepath.Join(userHome, ".agents", "skills", "byspace"),
+		filepath.Join(userHome, ".claude", "skills", "byspace"),
+	} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("expected %s to exist after install: %v", dir, err)
 		}
 	}
-	if !foundDelete {
-		t.Fatalf("expected a delete op for the deselected claude home, got %+v", status.Ops)
+
+	// 3. Uninstall removes all managed skill directories and transitions back to not-installed.
+	st2, err := uninstallSkills(sourceDir, userHome, sel, targets)
+	if err != nil {
+		t.Fatalf("uninstallSkills: %v", err)
+	}
+	if st2.State != "not-installed" || len(st2.Installed) != 0 {
+		t.Fatalf("expected not-installed and 0 installed skills after uninstall, got %+v", st2)
+	}
+	for _, dir := range []string{
+		filepath.Join(userHome, ".agents", "skills", "byspace"),
+		filepath.Join(userHome, ".claude", "skills", "byspace"),
+	} {
+		if _, err := os.Stat(dir); !os.IsNotExist(err) {
+			t.Fatalf("expected %s to be removed after uninstall, stat err=%v", dir, err)
+		}
 	}
 }

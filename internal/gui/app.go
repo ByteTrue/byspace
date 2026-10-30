@@ -383,12 +383,6 @@ func Run(version string, showMain bool, initialLink string) error {
 					d := app.Dialog.Question().
 						SetTitle(title).
 						SetMessage(message)
-					winMu.Lock()
-					w := mainWin
-					winMu.Unlock()
-					if w != nil {
-						d.AttachToWindow(w)
-					}
 					confirmBtn := d.AddButton(confirmLabel)
 					confirmBtn.OnClick(func() {
 						select {

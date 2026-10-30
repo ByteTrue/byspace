@@ -20,8 +20,19 @@ import (
 var SkillTargetIDs = []string{"agents", "claude"}
 
 // legacySkillNames are retired bundled skills that still need cleanup on disk.
-// Mirrors LEGACY_SKILL_NAMES in node.
-var legacySkillNames = []string{}
+// Mirrors LEGACY_SKILL_NAMES in node (operations.ts).
+var legacySkillNames = []string{
+	"byspace",
+	"byspace-advisor",
+	"byspace-chat",
+	"byspace-committee",
+	"byspace-epic",
+	"byspace-handoff",
+	"byspace-help",
+	"byspace-orchestrate",
+	"byspace-orchestrator",
+	"byspace-plugin",
+}
 
 // skillFiles maps a skill-relative file path to its SHA-256.
 type skillFiles map[string]string
@@ -297,6 +308,32 @@ func containsString(list []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+// uninstallSkills removes every managed BySpace skill directory across all managed agent homes
+// (~/.agents/skills and ~/.claude/skills), mirroring node's uninstallSkills in operations.ts.
+func uninstallSkills(sourceDir, userHome string, selection map[string]any, selectedTargets []string) (skillsStatus, error) {
+	available := listBundledSkills(sourceDir)
+	names := managedSkillNames(available)
+	homes := skillHomes(userHome)
+	var ops []skillOp
+	for _, name := range names {
+		var present []string
+		for _, h := range homes {
+			if st, err := os.Stat(filepath.Join(h.Dir, name)); err == nil && st.IsDir() {
+				present = append(present, h.ID)
+			}
+		}
+		if len(present) > 0 {
+			ops = append(ops, skillOp{Kind: "delete", Name: name, Targets: present})
+		}
+	}
+	if len(ops) > 0 {
+		if err := applySkillsStatus(sourceDir, userHome, skillsStatus{Ops: ops}); err != nil {
+			return getSkillsStatus(sourceDir, userHome, selection, selectedTargets), err
+		}
+	}
+	return getSkillsStatus(sourceDir, userHome, selection, selectedTargets), nil
 }
 
 // applySkillsStatus executes a previously computed plan, mirroring node's applySkills: the

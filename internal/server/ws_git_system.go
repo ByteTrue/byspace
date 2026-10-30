@@ -1256,14 +1256,22 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if homeErr != nil {
 			userHome = ""
 		}
-		status := getSkillsStatus(sourceDir, userHome, sel, targets)
+		var status skillsStatus
 		var applyErr any
-		if msgType != "agent.skills.get_status.request" {
-			// A failed install must reach the user: the status below would otherwise describe
-			// a selection the disk does not have, and the UI would show "up to date".
+		switch msgType {
+		case "agent.skills.uninstall.request":
+			var err error
+			status, err = uninstallSkills(sourceDir, userHome, sel, targets)
+			if err != nil {
+				applyErr = err.Error()
+			}
+		case "agent.skills.reconcile.request":
+			status = getSkillsStatus(sourceDir, userHome, sel, targets)
 			if err := applySkillsStatus(sourceDir, userHome, status); err != nil {
 				applyErr = err.Error()
 			}
+			status = getSkillsStatus(sourceDir, userHome, sel, targets)
+		default:
 			status = getSkillsStatus(sourceDir, userHome, sel, targets)
 		}
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
