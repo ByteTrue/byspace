@@ -33,6 +33,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { ChangelogHost } from "@/changelog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
+import { DesktopWindowTitleBar, isWindowsWailsDesktop } from "@/components/desktop-window-titlebar";
 import { LeftSidebar } from "@/components/left-sidebar";
 import {
   canDesktopAppSidebarShare,
@@ -448,19 +449,40 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   if (isWeb) {
     themedSidebarChrome = <AppearanceStyleBoundary>{sidebarChrome}</AppearanceStyleBoundary>;
   }
+  const hasWindowsTitleBar = !isCompactLayout && chromeEnabled && isWindowsWailsDesktop();
+  const isFramedDesktopCard = !isCompactLayout && chromeEnabled;
+  const contentCardStyle = useMemo(
+    () =>
+      isFramedDesktopCard
+        ? [
+            layoutStyles.framedCard,
+            hasWindowsTitleBar ? layoutStyles.framedCardBelowTitleBar : layoutStyles.framedCardMac,
+            !desktopSidebarVisible && layoutStyles.framedCardSidebarCollapsed,
+          ]
+        : flexStyle,
+    [desktopSidebarVisible, hasWindowsTitleBar, isFramedDesktopCard],
+  );
+
+  const mainContentBody = usesCompactExplorerHost ? (
+    <CompactExplorerSidebarHost
+      enabled={chromeEnabled}
+      presentation={explorerSidebarPresentation === "dock" ? "dock" : "overlay"}
+    >
+      <View style={contentCardStyle}>{children}</View>
+    </CompactExplorerSidebarHost>
+  ) : (
+    <View style={contentCardStyle}>{children}</View>
+  );
+
   const workspaceChrome = (
     <View style={rowStyle}>
       {!isCompactLayout ? themedSidebarChrome : null}
-      {usesCompactExplorerHost ? (
-        <CompactExplorerSidebarHost
-          enabled={chromeEnabled}
-          presentation={explorerSidebarPresentation === "dock" ? "dock" : "overlay"}
-        >
-          <View style={flexStyle}>{children}</View>
-        </CompactExplorerSidebarHost>
-      ) : (
-        <View style={flexStyle}>{children}</View>
-      )}
+      <View style={layoutStyles.mainColumn}>
+        {hasWindowsTitleBar ? (
+          <DesktopWindowTitleBar sidebarCollapsed={!desktopSidebarVisible} />
+        ) : null}
+        {mainContentBody}
+      </View>
     </View>
   );
 
@@ -757,6 +779,34 @@ export default function RootLayout() {
 const layoutStyles = StyleSheet.create((theme) => ({
   surfaceFill: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  mainColumn: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    flexDirection: "column",
+    backgroundColor: "transparent",
+  },
+  framedCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    marginRight: 6,
+    marginBottom: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+    overflow: "hidden",
+  },
+  framedCardMac: {
+    marginTop: 6,
+  },
+  framedCardBelowTitleBar: {
+    marginTop: 0,
+  },
+  framedCardSidebarCollapsed: {
+    marginLeft: 6,
   },
 }));

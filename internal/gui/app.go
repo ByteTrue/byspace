@@ -77,6 +77,7 @@ func withDesktopSettingsAPI(
 	onDockChanged func(DesktopSettings),
 	onTintTitleBar func([3]uint8, bool),
 	onOpenConfigFolder func(),
+	onWindowAction func(string),
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/_byspace/desktop/settings" {
@@ -108,6 +109,7 @@ func withDesktopSettingsAPI(
 					CreateBackup     bool      `json:"createBackup"`
 					TitleBarColor    *[3]uint8 `json:"titleBarColor"`
 					TitleBarDark     *bool     `json:"titleBarDark"`
+					WindowAction     string    `json:"windowAction"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -165,6 +167,9 @@ func withDesktopSettingsAPI(
 				}
 				if patch.LinkCLI || patch.AddCLIToPath {
 					_, _ = selfupdate.AddCLIToPath()
+				}
+				if patch.WindowAction != "" && onWindowAction != nil {
+					onWindowAction(patch.WindowAction)
 				}
 				if patch.OpenConfigFolder && onOpenConfigFolder != nil {
 					go onOpenConfigFolder()
@@ -315,6 +320,33 @@ func Run(version string, showMain bool, initialLink string) error {
 			func() {
 				_ = openFolder(app, homeDir)
 			},
+			func(action string) {
+				application.InvokeAsync(func() {
+					winMu.Lock()
+					w := mainWin
+					winMu.Unlock()
+					if w == nil {
+						return
+					}
+					switch action {
+					case "minimize":
+						w.Minimise()
+					case "maximize":
+						if w.IsMaximised() {
+							w.UnMaximise()
+						} else {
+							w.Maximise()
+						}
+					case "close":
+						if runtime.GOOS == "darwin" && w.IsFullscreen() {
+							w.UnFullscreen()
+						}
+						w.Hide()
+						s := LoadDesktopSettings(homeDir)
+						setDock(ShouldShowInDock(s, false, false), false)
+					}
+				})
+			},
 		)
 
 		// Start intelligent sleep inhibition (Keep Awake while agents work + 10m grace)
@@ -354,6 +386,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			Height:           height,
 			MinWidth:         800,
 			MinHeight:        560,
+			Frameless:        runtime.GOOS == "windows",
 			Hidden:           startHidden,
 			Mac:              mainMacWindowOptions(),
 			Windows:          winOpts,

@@ -9,6 +9,7 @@ import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
+import { isWindowsWailsDesktop } from "@/components/desktop-window-titlebar";
 import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
@@ -43,7 +44,7 @@ interface SidebarMenuToggleProps {
    * Which host renders this instance. The sidebar's own top row and a content header both
    * put the toggle at the window's top-left corner; exactly one of them owns it at a time.
    */
-  host?: "content" | "sidebar";
+  host?: "content" | "sidebar" | "titlebar";
 }
 
 const MOBILE_MENU_LINE_WIDTH = 16;
@@ -140,9 +141,12 @@ export function SidebarMenuToggle({
     () => [styles.leadingToggle, cornerInset > 0 ? { marginLeft: cornerInset } : null, style],
     [cornerInset, style],
   );
-  // One source for both hosts: the pinned sidebar shows it while it is visible, a content
-  // header only while it is not, so `menu-button` exists exactly once in every state.
-  const owner = resolveSidebarToggleHost({ isCompact: isMobile, desktopSidebarVisible });
+  // One source for all hosts: the pinned sidebar shows it while it is visible; when collapsed on
+  // Windows Wails desktop, the L-frame top titlebar owns it so the rounded content card below needs
+  // no duplicate toggle.
+  const baseOwner = resolveSidebarToggleHost({ isCompact: isMobile, desktopSidebarVisible });
+  const owner =
+    baseOwner === "content" && !isMobile && isWindowsWailsDesktop() ? "titlebar" : baseOwner;
 
   if (owner !== host) return null;
 

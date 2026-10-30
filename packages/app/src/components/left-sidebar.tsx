@@ -1095,19 +1095,14 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebar,
   },
   desktopSidebarBorder: {
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
   /**
-   * The pinned sidebar's header area: the corner row (toggle + app menu). No horizontal padding
-   * of its own — each child owns its inset, so the corner row and the workspace rows below put
-   * their left edges on the same rail.
+   * The pinned sidebar's header area: the corner row (toggle + app menu). In the framed-card shell
+   * (AGCopilot style), the sidebar and outer frame form one continuous surface with no dividing
+   * border; the inset rounded content card carries its own border.
    */
-  sidebarHeaderArea: {
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: theme.colors.border,
-  },
+  sidebarHeaderArea: {},
   /**
    * The corner row: the collapse toggle and the app menu side by side.
    *
@@ -1154,8 +1149,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
   },
   footerIconRow: {
     flexDirection: "row",
