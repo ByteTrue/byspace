@@ -322,7 +322,7 @@ export const MutableDaemonConfigSchema = z
     tunnel: z
       .object({
         enabled: z.boolean().default(false),
-        allowedPorts: z.array(z.number().int().min(1).max(65535)),
+        allowedPorts: z.array(z.number().int().min(1).max(65535)).default([]),
       })
       .passthrough()
       .optional(),

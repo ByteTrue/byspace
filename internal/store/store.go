@@ -1027,6 +1027,14 @@ func (s *Store) loadDaemonConfigRaw() map[string]any {
 			cfg[k] = v
 		}
 	}
+	if tun, ok := cfg["tunnel"].(map[string]any); ok {
+		if _, hasEnabled := tun["enabled"].(bool); !hasEnabled {
+			tun["enabled"] = false
+		}
+		if tun["allowedPorts"] == nil {
+			tun["allowedPorts"] = []int{}
+		}
+	}
 	liftAgentSettings(cfg, disk["agents"])
 	if daemon, ok := disk["daemon"].(map[string]any); ok {
 		liftAgentSettings(cfg, daemon["agents"])

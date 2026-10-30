@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/gui/awake"
@@ -17,12 +19,16 @@ const (
 	IdleSettle          = 10 * time.Second
 )
 
+var ValidUpdateEveries = []int{30, 60, 360, 1440}
+
 // DesktopSettings stores the desktop client preferences in $BYSPACE_HOME/desktop.json.
 type DesktopSettings struct {
 	KeepAwake      string    `json:"keepAwake,omitempty"` // "off" | "system" (default) | "display"
-	HideFromDock   bool      `json:"hideFromDock"`        // macOS: hide from Dock when main window is closed
+	DockMode       string    `json:"dockMode,omitempty"`  // "show" (default) | "window" | "hide"
+	HideFromDock   bool      `json:"hideFromDock,omitempty"`
 	Lightweight    bool      `json:"lightweight"`
 	NoAutoUpdate   bool      `json:"noAutoUpdate"`
+	UpdateEvery    int       `json:"updateEvery,omitempty"` // minutes: 30 (default), 60, 360, 1440
 	NoAutoDownload bool      `json:"noAutoDownload"`
 	AutoRestart    bool      `json:"autoRestart"`
 	WindowWidth    int       `json:"windowWidth,omitempty"`
@@ -36,7 +42,31 @@ func (s DesktopSettings) EffectiveKeepAwake() awake.Level {
 	return awake.NormalizeLevel(s.KeepAwake)
 }
 
-// LoadDesktopSettings reads $BYSPACE_HOME/desktop.json, returning zero-value defaults when absent.
+// EffectiveDockMode returns "show", "window", or "hide".
+func (s DesktopSettings) EffectiveDockMode() string {
+	switch strings.ToLower(strings.TrimSpace(s.DockMode)) {
+	case "hide":
+		return "hide"
+	case "window":
+		return "window"
+	case "show":
+		return "show"
+	}
+	if s.HideFromDock {
+		return "window"
+	}
+	return "show"
+}
+
+// EffectiveUpdateEvery returns the check interval in minutes (defaulting to 30 minutes).
+func (s DesktopSettings) EffectiveUpdateEvery() int {
+	if slices.Contains(ValidUpdateEveries, s.UpdateEvery) {
+		return s.UpdateEvery
+	}
+	return 30
+}
+
+// LoadDesktopSettings reads $BYSPACE_HOME/desktop.json, returning defaults when absent.
 func LoadDesktopSettings(homeDir string) DesktopSettings {
 	if homeDir == "" {
 		return DesktopSettings{}

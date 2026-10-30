@@ -37,6 +37,7 @@ type ClientUpdater struct {
 
 	mu         sync.Mutex
 	state      string
+	lastCheck  time.Time
 	downloaded int64
 	total      int64
 	lastErr    string
@@ -83,8 +84,6 @@ func (u *ClientUpdater) Start() {
 			u.Check(false)
 		}
 
-		checkTicker := time.NewTicker(u.CheckInterval)
-		defer checkTicker.Stop()
 		idleTicker := time.NewTicker(5 * time.Second)
 		defer idleTicker.Stop()
 
@@ -92,11 +91,17 @@ func (u *ClientUpdater) Start() {
 			select {
 			case <-u.stopCh:
 				return
-			case <-checkTicker.C:
-				if !LoadDesktopSettings(u.HomeDir).NoAutoUpdate {
-					u.Check(false)
-				}
 			case <-idleTicker.C:
+				prefs := LoadDesktopSettings(u.HomeDir)
+				if !prefs.NoAutoUpdate {
+					u.mu.Lock()
+					last := u.lastCheck
+					u.mu.Unlock()
+					every := time.Duration(prefs.EffectiveUpdateEvery()) * time.Minute
+					if last.IsZero() || time.Since(last) >= every {
+						u.Check(false)
+					}
+				}
 				u.AutoTick()
 			}
 		}
@@ -155,6 +160,7 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 		return
 	}
 	u.state = "checking"
+	u.lastCheck = time.Now()
 	u.lastErr = ""
 	u.mu.Unlock()
 

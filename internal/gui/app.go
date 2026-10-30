@@ -47,6 +47,8 @@ func buildDesktopStatusPayload(homeDir string, sup *DaemonSupervisor, updater *C
 	}
 	prefs := LoadDesktopSettings(homeDir)
 	prefs.KeepAwake = string(prefs.EffectiveKeepAwake())
+	prefs.DockMode = prefs.EffectiveDockMode()
+	prefs.UpdateEvery = prefs.EffectiveUpdateEvery()
 	var daemonSt DaemonHostStatus
 	if sup != nil {
 		daemonSt = sup.Status()
@@ -88,10 +90,12 @@ func withDesktopSettingsAPI(
 				current := LoadDesktopSettings(homeDir)
 				var patch struct {
 					KeepAwake        *string   `json:"keepAwake"`
+					DockMode         *string   `json:"dockMode"`
 					HideFromDock     *bool     `json:"hideFromDock"`
 					OpenAtLogin      *bool     `json:"openAtLogin"`
 					Lightweight      *bool     `json:"lightweight"`
 					NoAutoUpdate     *bool     `json:"noAutoUpdate"`
+					UpdateEvery      *int      `json:"updateEvery"`
 					NoAutoDownload   *bool     `json:"noAutoDownload"`
 					AutoRestart      *bool     `json:"autoRestart"`
 					LinkCLI          bool      `json:"linkCLI"`
@@ -113,14 +117,25 @@ func withDesktopSettingsAPI(
 					current.KeepAwake = string(awake.NormalizeLevel(*patch.KeepAwake))
 					awake.Notify()
 				}
-				if patch.HideFromDock != nil {
+				if patch.DockMode != nil {
+					current.DockMode = *patch.DockMode
+					current.HideFromDock = (*patch.DockMode != "show")
+				} else if patch.HideFromDock != nil {
 					current.HideFromDock = *patch.HideFromDock
+					if *patch.HideFromDock {
+						current.DockMode = "window"
+					} else {
+						current.DockMode = "show"
+					}
 				}
 				if patch.Lightweight != nil {
 					current.Lightweight = *patch.Lightweight
 				}
 				if patch.NoAutoUpdate != nil {
 					current.NoAutoUpdate = *patch.NoAutoUpdate
+				}
+				if patch.UpdateEvery != nil {
+					current.UpdateEvery = *patch.UpdateEvery
 				}
 				if patch.NoAutoDownload != nil {
 					current.NoAutoDownload = *patch.NoAutoDownload
@@ -145,7 +160,7 @@ func withDesktopSettingsAPI(
 				if patch.OpenAtLogin != nil {
 					_ = autostart.Set(*patch.OpenAtLogin)
 				}
-				if patch.HideFromDock != nil && onDockChanged != nil {
+				if (patch.DockMode != nil || patch.HideFromDock != nil) && onDockChanged != nil {
 					onDockChanged(current)
 				}
 				if patch.LinkCLI || patch.AddCLIToPath {

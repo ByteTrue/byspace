@@ -1,22 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
-import { Text, View, type PressableStateCallbackType } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
 import { isWeb } from "@/constants/platform";
 import { settingsStyles } from "@/styles/settings";
 
 type KeepAwakeLevel = "off" | "system" | "display";
+type DockMode = "hide" | "window" | "show";
+type UpdateEveryStr = "30" | "60" | "360" | "1440";
 
 interface DesktopPreferences {
   keepAwake?: KeepAwakeLevel;
+  dockMode?: DockMode;
   hideFromDock: boolean;
   lightweight: boolean;
   noAutoUpdate: boolean;
+  updateEvery?: number;
   noAutoDownload: boolean;
   autoRestart: boolean;
 }
@@ -71,8 +73,6 @@ interface DesktopSettingsResponse {
   update?: UpdateStatusSnapshot;
 }
 
-const KEEP_AWAKE_LEVELS: readonly KeepAwakeLevel[] = ["system", "display", "off"];
-
 function isWailsDesktopContainer(): boolean {
   if (!isWeb || typeof window === "undefined") {
     return false;
@@ -88,6 +88,10 @@ function isWailsDesktopContainer(): boolean {
   return !/android|iphone|ipad|ipod/i.test(ua);
 }
 
+function isChineseLanguage(lang: string | undefined): boolean {
+  return Boolean(lang && lang.toLowerCase().startsWith("zh"));
+}
+
 function formatMegabytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
 }
@@ -95,21 +99,21 @@ function formatMegabytes(bytes: number): string {
 function formatDownloadingProgress(isZh: boolean, upd: UpdateStatusSnapshot): string {
   const done = upd.downloaded ?? 0;
   const total = upd.total ?? 0;
-  const ver = upd.latestVersion ? ` v${upd.latestVersion}` : "";
+  const ver = upd.latestVersion ?? "";
   if (total > 0) {
     const pct = Math.min(100, Math.round((done * 100) / total));
     return isZh
-      ? `正在下载${ver}… ${pct}% (${formatMegabytes(done)} / ${formatMegabytes(total)} MB)`
-      : `Downloading${ver}… ${pct}% (${formatMegabytes(done)} / ${formatMegabytes(total)} MB)`;
+      ? `正在下载 ${ver}… ${pct}% · ${formatMegabytes(done)} / ${formatMegabytes(total)} MB`
+      : `Downloading ${ver}… ${pct}% · ${formatMegabytes(done)} of ${formatMegabytes(total)} MB`;
   }
   return isZh
-    ? `正在下载${ver}… (${formatMegabytes(done)} MB)`
-    : `Downloading${ver}… (${formatMegabytes(done)} MB)`;
+    ? `正在下载 ${ver}… ${formatMegabytes(done)} MB`
+    : `Downloading ${ver}… ${formatMegabytes(done)} MB`;
 }
 
 function resolveVersionSubtitle(isZh: boolean, upd?: UpdateStatusSnapshot): string {
   if (!upd) {
-    return isZh ? "检查并安装客户端更新" : "Check for and install client updates";
+    return isZh ? "已是最新版本" : "Up to date";
   }
   switch (upd.state) {
     case "checking":
@@ -122,15 +126,19 @@ function resolveVersionSubtitle(isZh: boolean, upd?: UpdateStatusSnapshot): stri
         : `${upd.latestVersion ?? ""} is downloaded`;
     case "found":
       return isZh
-        ? `发现新版本 v${upd.latestVersion ?? ""}`
-        : `v${upd.latestVersion ?? ""} is available`;
+        ? `发现新版本 ${upd.latestVersion ?? ""}`
+        : `${upd.latestVersion ?? ""} is available`;
     case "error":
       return isZh
-        ? `检查或下载更新失败${upd.error ? ": " + upd.error : ""}`
+        ? `检查或下载失败${upd.error ? ": " + upd.error : ""}`
         : `Update failed${upd.error ? ": " + upd.error : ""}`;
     default:
       return isZh ? "已是最新版本" : "Up to date";
   }
+}
+
+function resolveActionVariant(state?: string): "default" | "secondary" {
+  return state === "ready" || state === "found" ? "default" : "secondary";
 }
 
 function resolveVersionActionLabel(isZh: boolean, state?: string): string {
@@ -149,281 +157,6 @@ function resolveVersionActionLabel(isZh: boolean, state?: string): string {
   return isZh ? "检查更新" : "Check for updates";
 }
 
-function resolveAutoDownloadHint(isZh: boolean, enabled: boolean): string {
-  if (isZh) {
-    return enabled
-      ? "发现新版本后立即在后台下载。使用按流量计费的网络或代理时可以关闭。"
-      : "已关闭：发现新版本时不会自动下载，点击上方「下载更新」后才下载。";
-  }
-  return enabled
-    ? "Downloads a newer version in the background as soon as it is found."
-    : "Off: a newer version is downloaded only when you click Download update.";
-}
-
-function resolveKeepAwakeLabel(isZh: boolean, level: KeepAwakeLevel): string {
-  if (isZh) {
-    if (level === "off") return "关闭";
-    if (level === "display") return "系统与屏幕";
-    return "系统";
-  }
-  if (level === "off") return "Off";
-  if (level === "display") return "System & Display";
-  return "System";
-}
-
-function resolveDaemonDescription(isZh: boolean, st: DaemonHostStatus | null): string {
-  if (!st) {
-    return "";
-  }
-  if (st.inProcess) {
-    return isZh
-      ? `由当前桌面客户端进程内托管 (${st.addr})`
-      : `Served in-process by this desktop app (${st.addr})`;
-  }
-  if (st.reason === "container") {
-    return isZh
-      ? `端口 ${st.addr} 由容器转发占用 (${st.externalPath ?? "container"})`
-      : `Port ${st.addr} is held by a container forwarder (${st.externalPath ?? "container"})`;
-  }
-  if (st.reason === "not-byspace") {
-    return isZh
-      ? `端口 ${st.addr} 被其它程序占用 (PID ${st.externalPid ?? "?"}: ${st.externalPath ?? ""})`
-      : `Port ${st.addr} is held by another program (PID ${st.externalPid ?? "?"}: ${st.externalPath ?? ""})`;
-  }
-  const verInfo = st.runningVersion ? ` v${st.runningVersion}` : "";
-  const pidInfo = st.externalPid ? ` · PID ${st.externalPid}` : "";
-  return isZh
-    ? `当前附着在外部 BySpace Daemon (${st.addr}${verInfo}${pidInfo})，可一键由当前客户端进程内接管。`
-    : `Attached to an external BySpace daemon (${st.addr}${verInfo}${pidInfo}). Click to take over in-process.`;
-}
-
-function resolveCLIHint(isZh: boolean, cli?: CLIStatus): string {
-  if (!cli) {
-    return "";
-  }
-  if (cli.ours) {
-    return isZh
-      ? `终端中的 byspace 命令已指向当前客户端 (${cli.command ?? ""})。`
-      : `The byspace command in your terminal runs this app (${cli.command ?? ""}).`;
-  }
-  return isZh
-    ? "新打开的终端还找不到 byspace 命令，点击右侧按钮将其添加到 PATH。"
-    : "A new terminal can't find the byspace command yet. Click Add to PATH to install it.";
-}
-
-function resolveDesktopCopy(
-  isZh: boolean,
-  autoDownloadEnabled: boolean,
-  backupCount: number,
-  daemonSt: DaemonHostStatus | null,
-  upd?: UpdateStatusSnapshot,
-  cli?: CLIStatus,
-) {
-  const versionSubtitle = resolveVersionSubtitle(isZh, upd);
-  const versionAction = resolveVersionActionLabel(isZh, upd?.state);
-  const cliHint = resolveCLIHint(isZh, cli);
-  if (isZh) {
-    return {
-      sectionTitle: "桌面客户端",
-      versionLabel: "客户端版本 (Version)",
-      versionSubtitle,
-      versionAction,
-      configFolderLabel: "配置文件夹 (Config folder)",
-      configFolderHint: "存放主机配置、项目注册表、定时任务与客户端设置。",
-      openFolderText: "打开",
-      cliLabel: "命令行工具 (Command line)",
-      cliHint,
-      addToPathText: cli?.ours ? "重新配置 PATH" : "添加到 PATH",
-      notFoundText: "未找到",
-      defaultShellTag: "默认",
-      openAtLoginLabel: "开机自启",
-      openAtLoginHint: "登录系统时自动在后台系统托盘启动 BySpace（不弹出窗口）。",
-      showInDockLabel: "关闭窗口后保留在程序坞 (Dock)",
-      showInDockHint: "关闭后，关掉主窗口退驻菜单栏时自动从 macOS Dock 收起图标，保持程序坞整洁。",
-      keepAwakeLabel: "Agent 运行时防止休眠",
-      keepAwakeHint:
-        "当有 Agent 正在运行（及结束后 10 分钟宽限期内）时阻止电脑自动休眠，空闲后恢复正常休眠。",
-      lightweightLabel: "轻量模式",
-      lightweightHint:
-        "窗口关闭退驻托盘满 1 分钟后自动释放 WebView 渲染进程以节省内存，下次打开时重新加载。",
-      autoUpdateLabel: "自动检查更新",
-      autoUpdateHint: "后台自动检查是否有新版本发布。",
-      autoDownloadLabel: "自动下载更新",
-      autoDownloadHint: resolveAutoDownloadHint(true, autoDownloadEnabled),
-      autoRestartLabel: "空闲时自动安装更新",
-      autoRestartHint: "新版本下载好后，当窗口未在前台聚焦且没有 Agent 运行时自动完成安装并重启。",
-      daemonLabel: "本地 Daemon 宿主",
-      daemonHint: resolveDaemonDescription(true, daemonSt),
-      takeOverBtnText: "接管",
-      backupLabel: "核心配置自动滚动备份",
-      backupHint: `启动及每 6 小时自动在 ~/.byspace/backups 下保留最近 10 份配置快照（当前已存 ${backupCount} 份）。`,
-      backupNowText: "立即备份",
-    };
-  }
-  return {
-    sectionTitle: "Desktop App",
-    versionLabel: "Version",
-    versionSubtitle,
-    versionAction,
-    configFolderLabel: "Config folder",
-    configFolderHint: "Providers, projects, schedules and desktop settings.",
-    openFolderText: "Open",
-    cliLabel: "Command line",
-    cliHint,
-    addToPathText: cli?.ours ? "Refresh PATH" : "Add to PATH",
-    notFoundText: "not found",
-    defaultShellTag: "default",
-    openAtLoginLabel: "Open at login",
-    openAtLoginHint: "Starts BySpace silently in the system tray when you log in.",
-    showInDockLabel: "Keep in Dock when window is closed",
-    showInDockHint:
-      "When off, closing the window hides the Dock icon so BySpace lives only in the menu bar.",
-    keepAwakeLabel: "Keep awake while agents work",
-    keepAwakeHint:
-      "Prevents the computer from idle-sleeping while an agent is working and for 10 minutes after.",
-    lightweightLabel: "Lightweight mode",
-    lightweightHint:
-      "Releases the window's WebView process after it stays closed in the tray for a minute, and recreates it on the next open.",
-    autoUpdateLabel: "Automatic updates",
-    autoUpdateHint: "Checks for a newer BySpace release in the background.",
-    autoDownloadLabel: "Download updates automatically",
-    autoDownloadHint: resolveAutoDownloadHint(false, autoDownloadEnabled),
-    autoRestartLabel: "Restart automatically when idle",
-    autoRestartHint:
-      "Once an update is downloaded, installs and restarts into it when the window is unfocused and no agent is running.",
-    daemonLabel: "Local daemon host",
-    daemonHint: resolveDaemonDescription(false, daemonSt),
-    takeOverBtnText: "Take over",
-    backupLabel: "Automatic config backups",
-    backupHint: `Keeps the 10 most recent configuration snapshots under ~/.byspace/backups (currently ${backupCount} saved).`,
-    backupNowText: "Back up now",
-  };
-}
-
-interface KeepAwakeMenuItemProps {
-  level: KeepAwakeLevel;
-  label: string;
-  selected: boolean;
-  onSelectLevel: (level: KeepAwakeLevel) => void;
-}
-
-function KeepAwakeMenuItem({ level, label, selected, onSelectLevel }: KeepAwakeMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onSelectLevel(level);
-  }, [level, onSelectLevel]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-const triggerStyle = ({ pressed }: PressableStateCallbackType) => [
-  styles.dropdownTrigger,
-  pressed && { opacity: 0.7 },
-];
-
-function DesktopSystemRows({
-  copy,
-  state,
-  updState,
-  onVersionAction,
-  onOpenConfigFolder,
-  onAddCLIToPath,
-}: {
-  copy: ReturnType<typeof resolveDesktopCopy>;
-  state: DesktopSettingsResponse | null;
-  updState: string | undefined;
-  onVersionAction: () => void;
-  onOpenConfigFolder: () => void;
-  onAddCLIToPath: () => void;
-}) {
-  const isUpdateBusy = updState === "checking" || updState === "downloading";
-  const actionVariant = updState === "ready" || updState === "found" ? "default" : "secondary";
-  const shells = state?.cliStatus?.shells ?? [];
-  const currentVersion = state?.update?.currentVersion;
-  const configFolder = state?.configFolder;
-
-  return (
-    <>
-      <View style={settingsStyles.row}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{copy.versionLabel}</Text>
-          <Text style={settingsStyles.rowHint}>{copy.versionSubtitle}</Text>
-        </View>
-        <View style={styles.trailingActions}>
-          {currentVersion ? <Text style={styles.monoValue}>{currentVersion}</Text> : null}
-          <Button
-            variant={actionVariant}
-            size="sm"
-            onPress={onVersionAction}
-            disabled={isUpdateBusy}
-            testID="desktop-version-action-button"
-          >
-            {copy.versionAction}
-          </Button>
-        </View>
-      </View>
-      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{copy.configFolderLabel}</Text>
-          <Text style={settingsStyles.rowHint}>{copy.configFolderHint}</Text>
-        </View>
-        <View style={styles.trailingActions}>
-          {configFolder ? <Text style={styles.monoValue}>{configFolder}</Text> : null}
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={onOpenConfigFolder}
-            testID="desktop-open-config-folder-button"
-          >
-            {copy.openFolderText}
-          </Button>
-        </View>
-      </View>
-      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{copy.cliLabel}</Text>
-          <Text style={settingsStyles.rowHint}>{copy.cliHint}</Text>
-          {shells.length > 0 ? (
-            <View style={styles.shellList}>
-              {shells.map((sh) => (
-                <View key={sh.name} style={styles.shellRow}>
-                  <View
-                    style={[
-                      styles.shellDot,
-                      sh.ours ? styles.shellDotActive : styles.shellDotInactive,
-                    ]}
-                  />
-                  <Text style={styles.shellName}>
-                    {sh.name}
-                    {sh.default ? ` · ${copy.defaultShellTag}` : ""}
-                  </Text>
-                  <Text style={styles.shellCmd} numberOfLines={1}>
-                    {sh.command ? sh.command : copy.notFoundText}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </View>
-        <Button
-          variant="secondary"
-          size="sm"
-          onPress={onAddCLIToPath}
-          testID="desktop-add-to-path-button"
-        >
-          {copy.addToPathText}
-        </Button>
-      </View>
-    </>
-  );
-}
-
-function isChineseLanguage(lang: string | undefined): boolean {
-  return Boolean(lang && lang.toLowerCase().startsWith("zh"));
-}
-
 function resolveVersionPatch(updState: string | undefined): Record<string, unknown> {
   if (updState === "ready") {
     return { restartToUpdate: true };
@@ -434,9 +167,47 @@ function resolveVersionPatch(updState: string | undefined): Record<string, unkno
   return { checkForUpdates: true };
 }
 
-export function DesktopAppSection() {
-  const { i18n } = useTranslation();
-  const isZh = isChineseLanguage(i18n.language);
+function resolveCLIHint(isZh: boolean, cli?: CLIStatus): string {
+  if (!cli) {
+    return "";
+  }
+  if (cli.ours) {
+    return isZh
+      ? `在新打开的终端中，byspace 运行当前应用：${cli.command ?? ""}`
+      : `In a new terminal, byspace runs this app: ${cli.command ?? ""}`;
+  }
+  return isZh
+    ? "新打开的终端还找不到 byspace 命令，点击右侧按钮将其添加到 PATH。"
+    : "In a new terminal, byspace is not on your PATH yet.";
+}
+
+function resolveDaemonDescription(isZh: boolean, st: DaemonHostStatus | null): string {
+  if (!st) {
+    return "";
+  }
+  if (st.inProcess) {
+    return isZh
+      ? "本地 Agent 与客户端连接的地址"
+      : "the address local agents and clients connect to";
+  }
+  if (st.reason === "container") {
+    return isZh
+      ? `端口 ${st.addr} 由容器转发占用 (${st.externalPath ?? "container"})`
+      : `Port ${st.addr} is held by a container forwarder (${st.externalPath ?? "container"})`;
+  }
+  if (st.reason === "not-byspace") {
+    return isZh
+      ? `端口 ${st.addr} 被其它程序占用 (PID ${st.externalPid ?? "?"})`
+      : `Port ${st.addr} is held by another program (PID ${st.externalPid ?? "?"})`;
+  }
+  const verInfo = st.runningVersion ? ` v${st.runningVersion}` : "";
+  const pidInfo = st.externalPid ? ` · PID ${st.externalPid}` : "";
+  return isZh
+    ? `当前由外部 BySpace 进程提供服务 (${verInfo}${pidInfo})，可一键由当前应用接管`
+    : `Served by an external BySpace process (${verInfo}${pidInfo}); click to take over`;
+}
+
+function useDesktopSettingsState() {
   const [state, setState] = useState<DesktopSettingsResponse | null>(null);
 
   const fetchSettings = useCallback(async () => {
@@ -448,7 +219,7 @@ export function DesktopAppSection() {
         setState(data);
       }
     } catch {
-      // Ignore when not running inside the Wails desktop host
+      // Ignore outside the Wails desktop host
     }
   }, []);
 
@@ -490,39 +261,271 @@ export function DesktopAppSection() {
     void save();
   }, []);
 
+  return { state, sendPatch };
+}
+
+/**
+ * Desktop rows embedded at the bottom of the Settings → General card (matching Magpie's General
+ * page: Open at login, Show in Dock [Hide | With window | Show], Lightweight mode, Prevent sleep
+ * [Off | On | Screen on too]).
+ */
+export function DesktopGeneralRows() {
+  const { i18n } = useTranslation();
+  const isZh = isChineseLanguage(i18n.language);
+  const { state, sendPatch } = useDesktopSettingsState();
   const prefs = state?.settings;
-  const keepAwake: KeepAwakeLevel = prefs?.keepAwake ?? "system";
 
-  const handleVersionAction = useCallback(() => {
-    sendPatch(resolveVersionPatch(updState));
-  }, [sendPatch, updState]);
+  const dockOptions = useMemo(
+    () => [
+      { value: "hide" as const, label: isZh ? "隐藏" : "Hide" },
+      { value: "window" as const, label: isZh ? "打开窗口时" : "With window" },
+      { value: "show" as const, label: isZh ? "常驻" : "Show" },
+    ],
+    [isZh],
+  );
 
-  const handleOpenConfigFolder = useCallback(() => {
-    sendPatch({ openConfigFolder: true });
-  }, [sendPatch]);
-
-  const handleAddCLIToPath = useCallback(() => {
-    sendPatch({ addCLIToPath: true });
-  }, [sendPatch]);
+  const sleepOptions = useMemo(
+    () => [
+      { value: "off" as const, label: isZh ? "关闭" : "Off" },
+      { value: "system" as const, label: isZh ? "开启" : "On" },
+      { value: "display" as const, label: isZh ? "保持亮屏" : "Screen on too" },
+    ],
+    [isZh],
+  );
 
   const handleOpenAtLoginChange = useCallback(
     (value: boolean) => sendPatch({ openAtLogin: value }),
     [sendPatch],
   );
-  const handleShowInDockChange = useCallback(
-    (value: boolean) => sendPatch({ hideFromDock: !value }),
-    [sendPatch],
-  );
-  const handleSelectKeepAwake = useCallback(
-    (level: KeepAwakeLevel) => sendPatch({ keepAwake: level }),
+  const handleDockModeChange = useCallback(
+    (mode: DockMode) => sendPatch({ dockMode: mode }),
     [sendPatch],
   );
   const handleLightweightChange = useCallback(
     (value: boolean) => sendPatch({ lightweight: value }),
     [sendPatch],
   );
+  const handleKeepAwakeChange = useCallback(
+    (level: KeepAwakeLevel) => sendPatch({ keepAwake: level }),
+    [sendPatch],
+  );
+
+  if (!prefs) {
+    return null;
+  }
+
+  const isMac = state?.platform === "darwin";
+  const dockMode: DockMode = prefs.dockMode ?? (prefs.hideFromDock ? "window" : "show");
+  const keepAwake: KeepAwakeLevel = prefs.keepAwake ?? "system";
+
+  return (
+    <>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{isZh ? "开机自启" : "Open at login"}</Text>
+        </View>
+        <Switch
+          value={Boolean(state?.openAtLogin)}
+          onValueChange={handleOpenAtLoginChange}
+          accessibilityLabel={isZh ? "开机自启" : "Open at login"}
+          testID="desktop-open-at-login-toggle"
+        />
+      </View>
+      {isMac ? (
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {isZh ? "程序坞 (Dock) 图标" : "Show in Dock"}
+            </Text>
+          </View>
+          <SegmentedControl
+            size="sm"
+            options={dockOptions}
+            value={dockMode}
+            onValueChange={handleDockModeChange}
+          />
+        </View>
+      ) : null}
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{isZh ? "轻量模式" : "Lightweight mode"}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {isZh
+              ? "窗口关闭 1 分钟后释放约 100 MB 内存；后台 Daemon 与 Agent 继续运行，仅下次打开时重载页面"
+              : "A closed window frees about 100 MB after a minute; the daemon and agents keep running, only the page reloads"}
+          </Text>
+        </View>
+        <Switch
+          value={prefs.lightweight}
+          onValueChange={handleLightweightChange}
+          accessibilityLabel={isZh ? "轻量模式" : "Lightweight mode"}
+          testID="desktop-lightweight-toggle"
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{isZh ? "防止休眠" : "Prevent sleep"}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {isZh
+              ? "当 BySpace 正在运行 Agent 任务时阻止电脑进入休眠"
+              : "Keeps this computer awake while BySpace runs agents"}
+          </Text>
+        </View>
+        <SegmentedControl
+          size="sm"
+          options={sleepOptions}
+          value={keepAwake}
+          onValueChange={handleKeepAwakeChange}
+        />
+      </View>
+    </>
+  );
+}
+
+const UPDATE_EVERY_OPTIONS: Array<{ value: UpdateEveryStr; label: string }> = [
+  { value: "30", label: "30 min" },
+  { value: "60", label: "1 h" },
+  { value: "360", label: "6 h" },
+  { value: "1440", label: "24 h" },
+];
+
+function formatShellNameLabel(sh: CLIShellStatus, isZh: boolean): string {
+  if (!sh.default) {
+    return sh.name;
+  }
+  return sh.name + (isZh ? " · 默认" : " · default");
+}
+
+function formatShellCommandStatus(sh: CLIShellStatus, isZh: boolean): string {
+  if (sh.ours) {
+    return isZh ? "运行当前应用" : "runs this app";
+  }
+  if (sh.command) {
+    return sh.command;
+  }
+  return isZh ? "未找到" : "not found";
+}
+
+function resolveAboutCopy(isZh: boolean) {
+  if (isZh) {
+    return {
+      versionTitle: "版本 (Version)",
+      autoUpdateTitle: "自动更新",
+      autoUpdateHint: "自动检查并下载新版本 BySpace",
+      checkEveryTitle: "检查频率",
+      checkEveryHint: "BySpace 多久检查一次是否有新版本",
+      autoDownloadTitle: "自动下载更新",
+      autoDownloadHint: "发现新版本后立即下载。使用按流量计费的网络或代理时可关闭",
+      autoRestartTitle: "自动重启更新",
+      autoRestartHint: "更新下载完成后，在不中断正在运行的 Agent 请求的前提下自动重启完成安装",
+      configFolderTitle: "配置目录 (Config folder)",
+      configFolderHint: "providers、projects、schedules 与当前设置",
+      openText: "打开",
+      daemonUrlTitle: "Daemon 地址 (Daemon URL)",
+      takeOverText: "接管",
+    };
+  }
+  return {
+    versionTitle: "Version",
+    autoUpdateTitle: "Automatic updates",
+    autoUpdateHint: "Checks for a newer BySpace and downloads it",
+    checkEveryTitle: "Check every",
+    checkEveryHint: "How often BySpace looks for a newer version",
+    autoDownloadTitle: "Download updates automatically",
+    autoDownloadHint:
+      "Downloads a newer version as soon as it is found. Turn off on a metered network or a proxy billed by traffic",
+    autoRestartTitle: "Restart automatically",
+    autoRestartHint:
+      "Once an update is downloaded, restarts into it without cutting off an agent's request",
+    configFolderTitle: "Config folder",
+    configFolderHint: "providers, projects, schedules and these settings",
+    openText: "Open",
+    daemonUrlTitle: "Daemon URL",
+    takeOverText: "Take over",
+  };
+}
+
+function DesktopCommandLineBlock({
+  isZh,
+  cli,
+  onAddCLIToPath,
+}: {
+  isZh: boolean;
+  cli: CLIStatus | undefined;
+  onAddCLIToPath: () => void;
+}) {
+  const shells = cli?.shells ?? [];
+  const allOurs = Boolean(cli?.ours && shells.every((s) => s.ours));
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {isZh ? "命令行 (Command line)" : "Command line"}
+        </Text>
+        <Text style={settingsStyles.rowHint}>{resolveCLIHint(isZh, cli)}</Text>
+        {shells.length > 0 ? (
+          <View style={styles.shellList}>
+            {shells.map((sh) => (
+              <View key={sh.name} style={styles.shellRow}>
+                <View
+                  style={[
+                    styles.shellDot,
+                    sh.ours ? styles.shellDotActive : styles.shellDotInactive,
+                  ]}
+                />
+                <Text style={styles.shellName}>{formatShellNameLabel(sh, isZh)}</Text>
+                <Text style={styles.shellCmd} numberOfLines={1}>
+                  {formatShellCommandStatus(sh, isZh)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+      {!allOurs ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          onPress={onAddCLIToPath}
+          testID="desktop-add-to-path-button"
+        >
+          {isZh ? "添加到 PATH" : "Add to PATH"}
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Desktop rows embedded inside the Settings → About card (matching Magpie's About page:
+ * Version with check/download/progress/restart, What's new, Automatic updates, Check every
+ * [30 min | 1 h | 6 h | 24 h], Download updates automatically, Restart automatically,
+ * Config folder, Command line, and Daemon URL).
+ */
+export function DesktopAboutCardContent({
+  appVersionText,
+  whatsNewRow,
+  diagnosticRow,
+}: {
+  appVersionText: string;
+  whatsNewRow: React.ReactNode;
+  diagnosticRow: React.ReactNode;
+}) {
+  const { t, i18n } = useTranslation();
+  const isZh = isChineseLanguage(i18n.language);
+  const { state, sendPatch } = useDesktopSettingsState();
+  const prefs = state?.settings;
+  const updState = state?.update?.state;
+
+  const handleVersionAction = useCallback(() => {
+    sendPatch(resolveVersionPatch(updState));
+  }, [sendPatch, updState]);
   const handleAutoUpdateChange = useCallback(
     (value: boolean) => sendPatch({ noAutoUpdate: !value }),
+    [sendPatch],
+  );
+  const handleUpdateEveryChange = useCallback(
+    (val: UpdateEveryStr) => sendPatch({ updateEvery: Number.parseInt(val, 10) }),
     [sendPatch],
   );
   const handleAutoDownloadChange = useCallback(
@@ -533,199 +536,161 @@ export function DesktopAppSection() {
     (value: boolean) => sendPatch({ autoRestart: value }),
     [sendPatch],
   );
+  const handleOpenConfigFolder = useCallback(() => {
+    sendPatch({ openConfigFolder: true });
+  }, [sendPatch]);
+  const handleAddCLIToPath = useCallback(() => {
+    sendPatch({ addCLIToPath: true });
+  }, [sendPatch]);
   const handleTakeOverDaemon = useCallback(() => {
     sendPatch({ takeOverDaemon: true });
   }, [sendPatch]);
-  const handleCreateBackup = useCallback(() => {
-    sendPatch({ createBackup: true });
-  }, [sendPatch]);
 
   if (!prefs) {
-    return null;
+    return (
+      <>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("settings.about.appVersion")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.about.thisDevice")}</Text>
+          </View>
+          <Text style={styles.monoValue}>{appVersionText}</Text>
+        </View>
+        {whatsNewRow}
+        {diagnosticRow}
+      </>
+    );
   }
 
-  const isMac = state?.platform === "darwin";
   const autoUpdateEnabled = !prefs.noAutoUpdate;
   const autoDownloadEnabled = !prefs.noAutoDownload;
-  const showInDock = !prefs.hideFromDock;
-  const daemonSt = state?.daemonStatus ?? null;
-  const canTakeOver = daemonSt?.reason === "external-byspace";
-  const copy = resolveDesktopCopy(
-    isZh,
-    autoDownloadEnabled,
-    state?.backupCount ?? 0,
-    daemonSt,
-    state?.update,
-    state?.cliStatus,
-  );
-  const selectedKeepAwakeLabel = resolveKeepAwakeLabel(isZh, keepAwake);
+  const updateEveryVal = String(prefs.updateEvery ?? 30) as UpdateEveryStr;
+  const isUpdateBusy = updState === "checking" || updState === "downloading";
+  const actionVariant = resolveActionVariant(updState);
+  const daemonSt = state?.daemonStatus;
+  const currentVersion = state?.update?.currentVersion ?? appVersionText;
+  const copy = resolveAboutCopy(isZh);
 
   return (
-    <SettingsSection title={copy.sectionTitle}>
-      <View style={settingsStyles.card}>
-        <DesktopSystemRows
-          copy={copy}
-          state={state}
-          updState={updState}
-          onVersionAction={handleVersionAction}
-          onOpenConfigFolder={handleOpenConfigFolder}
-          onAddCLIToPath={handleAddCLIToPath}
+    <>
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.versionTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{resolveVersionSubtitle(isZh, state?.update)}</Text>
+        </View>
+        <View style={styles.trailingActions}>
+          <Text style={styles.monoValue}>{currentVersion}</Text>
+          <Button
+            variant={actionVariant}
+            size="sm"
+            onPress={handleVersionAction}
+            disabled={isUpdateBusy}
+            testID="desktop-version-action-button"
+          >
+            {resolveVersionActionLabel(isZh, updState)}
+          </Button>
+        </View>
+      </View>
+      {whatsNewRow}
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.autoUpdateTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{copy.autoUpdateHint}</Text>
+        </View>
+        <Switch
+          value={autoUpdateEnabled}
+          onValueChange={handleAutoUpdateChange}
+          accessibilityLabel={copy.autoUpdateTitle}
+          testID="desktop-auto-update-toggle"
         />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.checkEveryTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{copy.checkEveryHint}</Text>
+        </View>
+        <SegmentedControl
+          size="sm"
+          options={UPDATE_EVERY_OPTIONS}
+          value={updateEveryVal}
+          onValueChange={handleUpdateEveryChange}
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.autoDownloadTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{copy.autoDownloadHint}</Text>
+        </View>
+        <Switch
+          value={autoDownloadEnabled}
+          onValueChange={handleAutoDownloadChange}
+          disabled={!autoUpdateEnabled}
+          accessibilityLabel={copy.autoDownloadTitle}
+          testID="desktop-auto-download-toggle"
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.autoRestartTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{copy.autoRestartHint}</Text>
+        </View>
+        <Switch
+          value={prefs.autoRestart}
+          onValueChange={handleAutoRestartChange}
+          disabled={!autoUpdateEnabled}
+          accessibilityLabel={copy.autoRestartTitle}
+          testID="desktop-auto-restart-toggle"
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{copy.configFolderTitle}</Text>
+          <Text style={settingsStyles.rowHint}>{copy.configFolderHint}</Text>
+        </View>
+        <View style={styles.trailingActions}>
+          {state?.configFolder ? <Text style={styles.monoValue}>{state.configFolder}</Text> : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={handleOpenConfigFolder}
+            testID="desktop-open-config-folder-button"
+          >
+            {copy.openText}
+          </Button>
+        </View>
+      </View>
+      <DesktopCommandLineBlock
+        isZh={isZh}
+        cli={state?.cliStatus}
+        onAddCLIToPath={handleAddCLIToPath}
+      />
+      {daemonSt ? (
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.openAtLoginLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.openAtLoginHint}</Text>
+            <Text style={settingsStyles.rowTitle}>{copy.daemonUrlTitle}</Text>
+            <Text style={settingsStyles.rowHint}>{resolveDaemonDescription(isZh, daemonSt)}</Text>
           </View>
-          <Switch
-            value={Boolean(state?.openAtLogin)}
-            onValueChange={handleOpenAtLoginChange}
-            accessibilityLabel={copy.openAtLoginLabel}
-            testID="desktop-open-at-login-toggle"
-          />
-        </View>
-        {isMac ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <View style={settingsStyles.rowContent}>
-              <Text style={settingsStyles.rowTitle}>{copy.showInDockLabel}</Text>
-              <Text style={settingsStyles.rowHint}>{copy.showInDockHint}</Text>
-            </View>
-            <Switch
-              value={showInDock}
-              onValueChange={handleShowInDockChange}
-              accessibilityLabel={copy.showInDockLabel}
-              testID="desktop-show-in-dock-toggle"
-            />
-          </View>
-        ) : null}
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.keepAwakeLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.keepAwakeHint}</Text>
-          </View>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityRole="button"
-              accessibilityLabel={`${copy.keepAwakeLabel}: ${selectedKeepAwakeLabel}`}
-              style={triggerStyle}
-              testID="desktop-keep-awake-button"
-            >
-              <Text style={styles.dropdownTriggerText}>{selectedKeepAwakeLabel}</Text>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={180}>
-              {KEEP_AWAKE_LEVELS.map((lvl) => (
-                <KeepAwakeMenuItem
-                  key={lvl}
-                  level={lvl}
-                  label={resolveKeepAwakeLabel(isZh, lvl)}
-                  selected={keepAwake === lvl}
-                  onSelectLevel={handleSelectKeepAwake}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.lightweightLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.lightweightHint}</Text>
-          </View>
-          <Switch
-            value={prefs.lightweight}
-            onValueChange={handleLightweightChange}
-            accessibilityLabel={copy.lightweightLabel}
-            testID="desktop-lightweight-toggle"
-          />
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.autoUpdateLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.autoUpdateHint}</Text>
-          </View>
-          <Switch
-            value={autoUpdateEnabled}
-            onValueChange={handleAutoUpdateChange}
-            accessibilityLabel={copy.autoUpdateLabel}
-            testID="desktop-auto-update-toggle"
-          />
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.autoDownloadLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.autoDownloadHint}</Text>
-          </View>
-          <Switch
-            value={autoDownloadEnabled}
-            onValueChange={handleAutoDownloadChange}
-            disabled={!autoUpdateEnabled}
-            accessibilityLabel={copy.autoDownloadLabel}
-            testID="desktop-auto-download-toggle"
-          />
-        </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.autoRestartLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.autoRestartHint}</Text>
-          </View>
-          <Switch
-            value={prefs.autoRestart}
-            onValueChange={handleAutoRestartChange}
-            disabled={!autoUpdateEnabled}
-            accessibilityLabel={copy.autoRestartLabel}
-            testID="desktop-auto-restart-toggle"
-          />
-        </View>
-        {daemonSt ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <View style={settingsStyles.rowContent}>
-              <Text style={settingsStyles.rowTitle}>{copy.daemonLabel}</Text>
-              <Text style={settingsStyles.rowHint}>{copy.daemonHint}</Text>
-            </View>
-            {canTakeOver ? (
+          <View style={styles.trailingActions}>
+            <Text style={styles.monoValue}>{`http://${daemonSt.addr}`}</Text>
+            {daemonSt.reason === "external-byspace" ? (
               <Button
                 variant="secondary"
                 size="sm"
                 onPress={handleTakeOverDaemon}
                 testID="desktop-daemon-takeover-button"
               >
-                {copy.takeOverBtnText}
+                {copy.takeOverText}
               </Button>
             ) : null}
           </View>
-        ) : null}
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{copy.backupLabel}</Text>
-            <Text style={settingsStyles.rowHint}>{copy.backupHint}</Text>
-          </View>
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handleCreateBackup}
-            testID="desktop-backup-now-button"
-          >
-            {copy.backupNowText}
-          </Button>
         </View>
-      </View>
-    </SettingsSection>
+      ) : null}
+      {diagnosticRow}
+    </>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  dropdownTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  dropdownTriggerText: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-  },
   trailingActions: {
     flexDirection: "row",
     alignItems: "center",
