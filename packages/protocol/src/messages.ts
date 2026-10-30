@@ -1624,6 +1624,7 @@ export const TunnelEntrySchema = z.object({
   localPort: z.number().int().nullable().optional(),
   peerHostname: z.string().nullable().optional(),
   state: z.enum(["connecting", "connected", "disconnected", "error"]),
+  disabled: z.boolean().optional(),
   lastError: z.string().nullable().optional(),
 });
 
@@ -1665,6 +1666,7 @@ export const TunnelCreateRequestSchema = z.object({
         z.object({
           remotePort: z.number().int().min(1).max(65535),
           localPort: z.number().int().min(1).max(65535).optional(),
+          disabled: z.boolean().optional(),
           label: z.string().optional(),
         }),
       )

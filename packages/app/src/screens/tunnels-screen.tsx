@@ -9,6 +9,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Switch } from "@/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
@@ -199,16 +200,112 @@ function TunnelsEnabledBody({
 }): ReactElement {
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
+  const client = useHostRuntimeClient(localDaemonServerId);
+  const [batchBusy, setBatchBusy] = useState(false);
   const forwardsTitle = isZh ? "端口转发 (Port forwards)" : "Port forwards";
+
+  const outboundEntries = useMemo(
+    () => entries.filter((e) => e.direction === "outbound"),
+    [entries],
+  );
+  const hasDisabledOutbound = useMemo(
+    () => outboundEntries.some((e) => e.disabled === true),
+    [outboundEntries],
+  );
+  const hasActiveOutbound = useMemo(
+    () => outboundEntries.some((e) => !e.disabled),
+    [outboundEntries],
+  );
+
+  const setAllOutboundDisabled = useCallback(
+    async (disabled: boolean) => {
+      if (!client || outboundEntries.length === 0) return;
+      setBatchBusy(true);
+      try {
+        const byPeer = new Map<
+          string,
+          {
+            peerHostname?: string | null;
+            forwards: Array<{ remotePort: number; localPort?: number; disabled: boolean }>;
+          }
+        >();
+        for (const e of outboundEntries) {
+          const pid = outboundPeerId(e);
+          let group = byPeer.get(pid);
+          if (!group) {
+            group = { peerHostname: e.peerHostname, forwards: [] };
+            byPeer.set(pid, group);
+          }
+          group.forwards.push({
+            remotePort: e.remotePort,
+            ...(e.localPort ? { localPort: e.localPort } : {}),
+            disabled,
+          });
+        }
+        for (const [peerId, group] of byPeer) {
+          await client.createTunnel({
+            peerId,
+            ...(group.peerHostname ? { peerHostname: group.peerHostname } : {}),
+            forwards: group.forwards,
+          });
+        }
+        onRemoved();
+      } catch {
+        // Ignore transient batch errors
+      } finally {
+        setBatchBusy(false);
+      }
+    },
+    [client, onRemoved, outboundEntries],
+  );
+
+  const handleStartAll = useCallback(() => {
+    void setAllOutboundDisabled(false);
+  }, [setAllOutboundDisabled]);
+
+  const handlePauseAll = useCallback(() => {
+    void setAllOutboundDisabled(true);
+  }, [setAllOutboundDisabled]);
 
   const sectionTrailing = useMemo(
     () => (
       <View style={styles.sectionHeaderActions}>
         <StatusBadge label={t("tunnels.experimental")} variant="muted" />
+        {hasDisabledOutbound ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={handleStartAll}
+            disabled={batchBusy}
+            testID="tunnels-start-all"
+          >
+            {isZh ? "全部开启" : "Start all"}
+          </Button>
+        ) : undefined}
+        {hasActiveOutbound ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={handlePauseAll}
+            disabled={batchBusy}
+            testID="tunnels-pause-all"
+          >
+            {isZh ? "全部暂停" : "Pause all"}
+          </Button>
+        ) : undefined}
         <AddTunnelButton onPress={onAddTunnel} />
       </View>
     ),
-    [onAddTunnel, t],
+    [
+      batchBusy,
+      handlePauseAll,
+      handleStartAll,
+      hasActiveOutbound,
+      hasDisabledOutbound,
+      isZh,
+      onAddTunnel,
+      t,
+    ],
   );
 
   return (
@@ -364,7 +461,12 @@ function TunnelRow({
   const client = useHostRuntimeClient(entry.serverId);
   const isConnected = useHostRuntimeIsConnected(entry.serverId);
 
+  const isPaused = entry.disabled === true;
+
   const stateLabel = useMemo(() => {
+    if (isPaused) {
+      return isZh ? "已暂停" : "Paused";
+    }
     switch (entry.state) {
       case "connected":
         return t("tunnels.state.connected");
@@ -375,10 +477,31 @@ function TunnelRow({
       default:
         return t("tunnels.state.disconnected");
     }
-  }, [entry.state, t]);
+  }, [entry.state, isPaused, isZh, t]);
 
   const isOutbound = entry.direction === "outbound";
-  const badgeVariant = resolveBadgeVariant(entry.state);
+  const badgeVariant = isPaused ? "muted" : resolveBadgeVariant(entry.state);
+
+  const handleToggleEnabled = useCallback(
+    (enabled: boolean) => {
+      if (!client || !isConnected || !isOutbound) return;
+      void client
+        .createTunnel({
+          peerId: outboundPeerId(entry),
+          ...(entry.peerHostname ? { peerHostname: entry.peerHostname } : {}),
+          forwards: [
+            {
+              remotePort: entry.remotePort,
+              ...(entry.localPort ? { localPort: entry.localPort } : {}),
+              disabled: !enabled,
+            },
+          ],
+        })
+        .then(() => onRemoved())
+        .catch(() => undefined);
+    },
+    [client, entry, isConnected, isOutbound, onRemoved],
+  );
 
   const handleEdit = useCallback(() => {
     onEdit(entry);
@@ -443,6 +566,13 @@ function TunnelRow({
         <StatusBadge label={stateLabel} variant={badgeVariant} />
         {isOutbound ? (
           <>
+            <Switch
+              value={!isPaused}
+              onValueChange={handleToggleEnabled}
+              disabled={!isConnected}
+              accessibilityLabel={isZh ? "启用或暂停此端口转发" : "Enable or pause port forward"}
+              testID="tunnels-row-toggle"
+            />
             <Button
               variant="outline"
               size="xs"

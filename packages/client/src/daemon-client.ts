@@ -5433,7 +5433,12 @@ export class DaemonClient {
       password?: string;
       daemonPublicKeyB64?: string;
       replaceRemotePort?: number;
-      forwards: Array<{ remotePort: number; localPort?: number; label?: string }>;
+      forwards: Array<{
+        remotePort: number;
+        localPort?: number;
+        disabled?: boolean;
+        label?: string;
+      }>;
     },
     requestId?: string,
   ): Promise<Extract<TunnelCreateResponse, { type: "tunnel.create.response" }>["payload"]> {

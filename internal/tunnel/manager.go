@@ -17,6 +17,7 @@ type ForwardState struct {
 	Label      string `json:"label,omitempty"`
 	LocalPort  int    `json:"localPort"`
 	State      string `json:"state"`
+	Disabled   bool   `json:"disabled,omitempty"`
 	LastError  string `json:"lastError,omitempty"`
 }
 

@@ -150,6 +150,7 @@ func (s *Server) handleTunnelList(ctx context.Context, sink frameSink, requestID
 				"localPort":    forward.LocalPort,
 				"peerHostname": peer.PeerHostname,
 				"state":        forward.State,
+				"disabled":     forward.Disabled,
 				"lastError":    nullableString(forward.LastError),
 			})
 		}
@@ -311,6 +312,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 			Forwards          []struct {
 				RemotePort int    `json:"remotePort"`
 				LocalPort  int    `json:"localPort"`
+				Disabled   bool   `json:"disabled"`
 				Label      string `json:"label"`
 			} `json:"forwards"`
 		} `json:"config"`
@@ -322,6 +324,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 		forwards = append(forwards, tunnel.ForwardConfig{
 			RemotePort: forward.RemotePort,
 			LocalPort:  forward.LocalPort,
+			Disabled:   forward.Disabled,
 			Label:      forward.Label,
 		})
 	}

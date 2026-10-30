@@ -222,4 +222,32 @@ func TestRegistryPinsLocalPortAcrossRestartsAndMergesForwards(t *testing.T) {
 	if len(peers3) != 1 || len(peers3[0].Forwards) != 1 || peers3[0].Forwards[0].RemotePort != 3430 {
 		t.Fatalf("expected only port 3430 to remain, got %+v", peers3)
 	}
+
+	// 5. Pause port 3430 (Disabled=true): local port must be released while keeping the entry in List().
+	if err := r2.AddOrUpdate(PeerConfig{
+		PeerID: "peer-mac",
+		Forwards: []ForwardConfig{
+			{RemotePort: 3430, LocalPort: pinned3430, Disabled: true},
+		},
+	}, 0); err != nil {
+		t.Fatalf("pause 3430: %v", err)
+	}
+	peersPaused := r2.List()
+	if len(peersPaused) != 1 || len(peersPaused[0].Forwards) != 1 || !peersPaused[0].Forwards[0].Disabled {
+		t.Fatalf("expected paused forward in List(), got %+v", peersPaused)
+	}
+
+	// 6. Resume port 3430 (Disabled=false): rebinds the exact same pinned LocalPort.
+	if err := r2.AddOrUpdate(PeerConfig{
+		PeerID: "peer-mac",
+		Forwards: []ForwardConfig{
+			{RemotePort: 3430, LocalPort: pinned3430, Disabled: false},
+		},
+	}, 0); err != nil {
+		t.Fatalf("resume 3430: %v", err)
+	}
+	peersResumed := r2.List()
+	if len(peersResumed) != 1 || peersResumed[0].Forwards[0].Disabled || peersResumed[0].Forwards[0].LocalPort != pinned3430 {
+		t.Fatalf("expected resumed forward on port %d, got %+v", pinned3430, peersResumed)
+	}
 }

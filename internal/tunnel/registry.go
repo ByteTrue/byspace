@@ -33,6 +33,7 @@ type PeerConfig struct {
 type ForwardConfig struct {
 	RemotePort int    `json:"remotePort"`
 	LocalPort  int    `json:"localPort,omitempty"`
+	Disabled   bool   `json:"disabled,omitempty"`
 	Label      string `json:"label,omitempty"`
 }
 
@@ -207,10 +208,23 @@ func (r *Registry) Start() {
 
 // startPeer builds a manager for one peer and attaches its connection.
 func (r *Registry) startPeer(peer PeerConfig) error {
+	activeCount := 0
+	for _, fw := range peer.Forwards {
+		if !fw.Disabled {
+			activeCount++
+		}
+	}
+	if activeCount == 0 {
+		return nil
+	}
+
 	manager := NewManager(peer.PeerID, derefString(peer.PeerHostname), r.logf)
 	updatedPin := false
 	for i := range peer.Forwards {
 		forward := &peer.Forwards[i]
+		if forward.Disabled {
+			continue
+		}
 		f, err := manager.AddForwardWithLocalPort(forward.RemotePort, forward.LocalPort, forward.Label)
 		if err != nil {
 			_ = manager.Close()
@@ -338,6 +352,7 @@ func relayURLFromPeer(peer PeerConfig) (string, error) {
 // List reports every configured peer.
 func (r *Registry) List() []PeerStatus {
 	r.mu.Lock()
+	enabled := r.enabled
 	type snapshot struct {
 		peer    PeerConfig
 		manager *Manager
@@ -356,24 +371,35 @@ func (r *Registry) List() []PeerStatus {
 			Forwards:     []ForwardState{},
 			State:        StateDisconnected,
 		}
-		if item.manager != nil {
-			status.Forwards = item.manager.Status()
-			status.State = aggregateState(status.Forwards)
-			for _, forward := range status.Forwards {
-				if forward.LastError != "" {
-					message := forward.LastError
-					status.LastError = &message
-					break
+		if enabled {
+			liveByRemote := make(map[int]ForwardState)
+			if item.manager != nil {
+				for _, st := range item.manager.Status() {
+					liveByRemote[st.RemotePort] = st
 				}
 			}
-		} else {
 			for _, fw := range item.peer.Forwards {
+				if !fw.Disabled {
+					if live, ok := liveByRemote[fw.RemotePort]; ok {
+						status.Forwards = append(status.Forwards, live)
+						continue
+					}
+				}
 				status.Forwards = append(status.Forwards, ForwardState{
 					RemotePort: fw.RemotePort,
 					LocalPort:  fw.LocalPort,
 					Label:      fw.Label,
 					State:      StateDisconnected,
+					Disabled:   fw.Disabled,
 				})
+			}
+		}
+		status.State = aggregateState(status.Forwards)
+		for _, forward := range status.Forwards {
+			if forward.LastError != "" {
+				message := forward.LastError
+				status.LastError = &message
+				break
 			}
 		}
 		out = append(out, status)
