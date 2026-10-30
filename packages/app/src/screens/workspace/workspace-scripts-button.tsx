@@ -744,6 +744,7 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
     overflow: "hidden",
+    backgroundColor: theme.colors.controlFill,
   },
   ghostButtonFrame: {
     flexDirection: "row",
@@ -774,7 +775,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.5,
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
   splitButtonContent: {
     flexDirection: "row",

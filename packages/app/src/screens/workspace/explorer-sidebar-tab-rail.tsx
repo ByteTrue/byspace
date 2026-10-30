@@ -19,7 +19,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
-import { buttonControlHeight } from "@/components/ui/control-geometry";
 import {
   WorkspaceTabIcon,
   WorkspaceTabPresentationResolver,
@@ -128,7 +127,6 @@ function ExplorerSidebarTab({
               onHoverOut={handleHoverOut}
               style={[
                 styles.tab,
-                hovered ? styles.tabHovered : null,
                 item.isActive ? styles.tabActive : null,
                 isDragging ? styles.tabDragging : null,
               ]}
@@ -144,7 +142,7 @@ function ExplorerSidebarTab({
                 selectable={false}
                 numberOfLines={1}
                 ellipsizeMode="tail"
-                style={[styles.tabLabel, item.isActive ? styles.tabLabelActive : null]}
+                style={[styles.tabLabel, item.isActive || hovered ? styles.tabLabelActive : null]}
               >
                 {presentation.label}
               </Text>
@@ -414,28 +412,28 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
     marginHorizontal: TAB_GAP / 2,
   },
+  // shadcn/ui line tabs, as in the workspace tab bar.
   tab: {
-    height: buttonControlHeight.xs,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     maxWidth: 180,
-    paddingHorizontal: theme.spacing[1.5],
-    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingTop: 2,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
     userSelect: "none",
   },
-  tabHovered: {
-    backgroundColor: theme.colors.interactionHighlight,
-  },
   tabActive: {
-    backgroundColor: theme.colors.interactionHighlight,
+    borderBottomColor: theme.colors.foreground,
   },
   tabLabel: {
     minWidth: 0,
     flexShrink: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
     userSelect: "none",
   },
   tabLabelActive: {

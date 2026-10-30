@@ -9,7 +9,13 @@ import React, {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type PressableStateCallbackType,
+} from "react-native";
 import {
   CopyX,
   ArrowLeftToLine,
@@ -66,7 +72,6 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { Theme } from "@/styles/theme";
 import { RenderProfile } from "@/utils/render-profiler";
-import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
@@ -108,7 +113,9 @@ const TAB_DROP_INDICATOR_WIDTH = 4;
 const TAB_MODIFIED_DOT_SIZE = 8;
 const TAB_MIN_WIDTH = 96;
 const TAB_MAX_WIDTH = 240;
-const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 0;
+// The close button sits in reserved space after the label, so it never covers the title or the
+// active underline. Kept in the measured tab width (workspace-tab-layout.ts) and the right padding.
+const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 20;
 const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
 const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 
@@ -638,16 +645,11 @@ function useMiddleClickClose(onClose: () => void) {
   return ref;
 }
 
-/** The chip fill the running-status ring has to knock out of. Mirrors `styles.tab*` exactly. */
-function resolveChipBackdrop({
-  isActiveFocused,
-  isFilled,
-}: {
-  isActiveFocused: boolean;
-  isFilled: boolean;
-}): SurfaceBackdrop {
-  if (isActiveFocused) return "surface2";
-  return isFilled ? "surface1" : "surface0";
+/** Tabs draw no fill (shadcn/ui line tabs), so the running-status ring knocks out of the bar. */
+const TAB_BACKDROP: SurfaceBackdrop = "surface0";
+
+function tabCloseButtonStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.tabCloseButton, hovered ? styles.tabCloseButtonHovered : null];
 }
 
 function TabHandleContent({
@@ -749,11 +751,9 @@ function TabChip({
   const isActiveFocused = isActive && isFocused;
   const isHovered = hovered || isCloseHovered;
   const isHighlighted = isActiveFocused || isHovered;
-  const chipBackdrop: SurfaceBackdrop = resolveChipBackdrop({
-    isActiveFocused,
-    isFilled: isActive || isHovered,
-  });
-  const showCloseControl = showCloseButton && (isHovered || isCompact || isClosingTab);
+  const chipBackdrop = TAB_BACKDROP;
+  const showCloseControl =
+    showCloseButton && (isHovered || isActiveFocused || isCompact || isClosingTab);
   const closeButtonDragBlockers = isWeb
     ? ({
         onPointerDown: (event: { stopPropagation?: () => void }) => {
@@ -770,7 +770,6 @@ function TabChip({
       styles.tab,
       isActiveFocused && styles.tabActive,
       isActive && !isFocused && styles.tabActiveUnfocused,
-      !isActive && isHovered && styles.tabHovered,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -778,7 +777,7 @@ function TabChip({
         maxWidth: resolvedTabWidth,
       },
     ],
-    [isActive, isActiveFocused, isDragging, isFocused, isHovered, resolvedTabWidth],
+    [isActive, isActiveFocused, isDragging, isFocused, resolvedTabWidth],
   );
 
   const handleTabPointerEnter = useCallback(() => {
@@ -884,7 +883,6 @@ function TabChip({
               showCloseControl ? styles.tabTrailingOverlayShown : styles.tabTrailingOverlayHidden,
             ]}
           >
-            <TrailingActionScrim backdrop={chipBackdrop} />
             <Pressable
               {...(closeButtonDragBlockers as object | undefined)}
               testID={closeButtonTestId}
@@ -893,7 +891,7 @@ function TabChip({
               onHoverIn={handleCloseButtonHoverIn}
               onHoverOut={handleCloseButtonHoverOut}
               onPress={handleCloseButtonPress}
-              style={styles.tabCloseButton}
+              style={tabCloseButtonStyle}
             >
               {({ hovered: closeHovered, pressed }) => {
                 const highlighted = closeHovered || pressed;
@@ -1579,23 +1577,25 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING,
     marginRight: PANE_SPLIT_ACTIONS_OUTER_MARGIN,
   },
+  // shadcn/ui line tabs: no fill; the active tab carries a 2px underline on the bar's bottom edge.
   tab: {
-    height: buttonControlHeight.xs,
-    paddingHorizontal: TAB_CHIP_HORIZONTAL_PADDING,
-    borderRadius: theme.borderRadius.md,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT - 1,
+    paddingLeft: TAB_CHIP_HORIZONTAL_PADDING,
+    paddingRight: TAB_CHIP_HORIZONTAL_PADDING + TAB_CLOSE_BUTTON_RESERVED_WIDTH,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+    paddingTop: 2,
     flexDirection: "row",
     alignItems: "center",
     gap: TAB_CONTENT_GAP,
     userSelect: "none",
   },
-  tabHovered: {
-    backgroundColor: theme.colors.surface1,
-  },
   tabActive: {
-    backgroundColor: theme.colors.surface2,
+    borderBottomColor: theme.colors.foreground,
   },
+  // The active tab of a pane without focus keeps its place with a quiet underline.
   tabActiveUnfocused: {
-    backgroundColor: theme.colors.surface1,
+    borderBottomColor: theme.colors.borderAccent,
   },
   tabHoverFrame: {
     position: "relative",
@@ -1643,7 +1643,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
     userSelect: "none",
   },
   tabLabelMeasurements: {
@@ -1673,15 +1673,12 @@ const styles = StyleSheet.create((theme) => ({
   tabTrailingOverlay: {
     position: "absolute",
     top: 0,
-    right: 0,
-    bottom: 0,
-    width: 48,
-    borderTopRightRadius: theme.borderRadius.md,
-    borderBottomRightRadius: theme.borderRadius.md,
+    bottom: 2,
+    right: TAB_CHIP_HORIZONTAL_PADDING - 2,
+    width: 18,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
-    overflow: "hidden",
   },
   tabTrailingOverlayShown: {
     opacity: 1,
@@ -1690,14 +1687,14 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0,
   },
   tabCloseButton: {
-    position: "absolute",
-    right: 4,
     width: 18,
     height: 18,
     borderRadius: theme.borderRadius.sm,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1,
+  },
+  tabCloseButtonHovered: {
+    backgroundColor: theme.colors.surface2,
   },
   tabModifiedDot: {
     width: TAB_MODIFIED_DOT_SIZE,

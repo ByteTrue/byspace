@@ -25,7 +25,7 @@ export interface ControlInteractionStyleMap {
 const TIGHT_CONTROL_HEIGHT = 28;
 const COMPACT_CONTROL_HEIGHT = 32;
 const FIELD_CONTROL_HEIGHT = 44;
-export const HEADER_CONTROL_HEIGHT = 26;
+export const HEADER_CONTROL_HEIGHT = 28;
 const SEGMENTED_TIGHT_INSET = 2;
 const SEGMENTED_INSET = 3;
 // shadcn/ui switch: 32 x 18.4 track behind a 1px transparent border, 16px thumb.

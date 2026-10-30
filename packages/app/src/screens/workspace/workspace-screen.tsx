@@ -4108,14 +4108,10 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexShrink: 1,
   },
+  // The project is plain muted text after the title, not a chip.
   headerProjectTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    backgroundColor: theme.colors.surface2,
-    paddingHorizontal: theme.spacing[1.5],
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.sm,
-    overflow: "hidden",
+    fontSize: theme.fontSize.base,
     flexShrink: 1,
     minWidth: 0,
   },

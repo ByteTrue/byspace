@@ -284,8 +284,9 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "stretch",
     borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
     overflow: "hidden",
+    backgroundColor: theme.colors.controlFill,
   },
   splitButtonPrimary: {
     paddingHorizontal: {
@@ -310,7 +311,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.controlFill,
   },
   splitButtonPrimaryDisabled: {
     opacity: 0.6,
@@ -319,7 +321,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.5,
     color: theme.colors.foreground,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
   splitButtonContent: {
     flexDirection: "row",
@@ -341,7 +343,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],
-    borderLeftColor: theme.colors.border,
+    borderLeftColor: theme.colors.borderAccent,
   },
   iconButton: {
     width: {
