@@ -162,11 +162,10 @@ export function DesktopContentFrame({
   testID?: string;
   children: ReactNode;
 }) {
-  const active = enabled && isWailsDesktopShell();
-  const hasWindowsTitleBar = active && isWindowsWailsDesktop();
+  const hasWindowsTitleBar = enabled && isWindowsWailsDesktop();
   const resolvedCardStyle = useMemo(
     () =>
-      active
+      enabled
         ? [
             styles.framedCard,
             hasWindowsTitleBar ? styles.framedCardBelowTitleBar : styles.framedCardMac,
@@ -174,10 +173,10 @@ export function DesktopContentFrame({
             cardStyle,
           ]
         : [styles.unframedFill, cardStyle],
-    [active, cardStyle, hasWindowsTitleBar, sidebarCollapsed],
+    [cardStyle, enabled, hasWindowsTitleBar, sidebarCollapsed],
   );
 
-  // Always keep a fixed 2-View tree depth regardless of whether `active` is true or false
+  // Always keep a fixed 2-View tree depth regardless of whether `enabled` is true or false
   // so navigating between workspace routes and /settings never unmounts/remounts the Navigator stack,
   // Agent Composer, or Terminal Emulator instances.
   return (
