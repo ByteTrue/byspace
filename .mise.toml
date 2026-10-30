@@ -1,5 +1,5 @@
 [vars]
-android_sdk_version = '{{ read_file(path=".tool-versions") | split(pat="android-sdk") | last | trim | split(pat="\n") | first | trim }}'
+android_sdk_version = "21.0"
 home_dir = "{{ get_env(name='HOME', default=get_env(name='USERPROFILE', default='')) }}"
 local_app_data = "{{ get_env(name='LOCALAPPDATA', default=vars.home_dir ~ '/AppData/Local') }}"
 sdk_root = "{% if os() == 'windows' %}{{ vars.local_app_data }}/mise/installs/android-sdk/{{ vars.android_sdk_version }}{% else %}{{ vars.home_dir }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}{% endif %}"

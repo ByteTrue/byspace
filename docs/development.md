@@ -10,7 +10,7 @@ Main pushes route through the same path filters as pull requests (`.github/ci-pa
 
 ## Prerequisites
 
-- Node.js (see `.tool-versions` for exact version)
+- Node.js (see `.github/workflows/ci.yml` `node-version` for exact version)
 - npm workspaces (comes with Node)
 
 ## Running the dev server
