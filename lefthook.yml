@@ -9,6 +9,9 @@ pre-commit:
       run: npm run format:check:files -- {staged_files}
     - name: lint
       glob: "*.{js,jsx,ts,tsx}"
+      # Same as ignorePatterns in .oxlintrc.json: oxlint exits non-zero when every passed path is ignored.
+      exclude:
+        - "design/references/**"
       run: npm run lint -- {staged_files}
     - name: typecheck
       run: npm run typecheck

@@ -16,6 +16,9 @@
     "**/*.gen.ts",
     "**/*.gen.tsx",
     "packages/app/public/schemas/*.json",
-    "archive/**"
+    "archive/**",
+    "design/references/**",
+    "design/sheet-assets/**",
+    "design/component-sheet.html"
   ]
 }

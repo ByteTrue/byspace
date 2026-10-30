@@ -1,0 +1,2733 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>BySpace 组件样板页 · v1</title>
+    <!--
+  源文件。build-sheet.py 把字体、截图、图标占位符换成内嵌数据，产出 component-sheet.html。
+  数值出处：design/references/shadcn/（commit b8d7baa），风格 nova、底色 neutral；注释里写了对应的 cn-* 类。
+-->
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url({{font:geist}}) format("woff2");
+        font-weight: 100 900;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Inter";
+        src: url({{font:inter}}) format("woff2");
+        font-weight: 100 900;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        src: url({{font:geist-mono}}) format("woff2");
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      /* ---------- 样板页自身的外壳（不属于评审对象） ---------- */
+      :root {
+        --sheet-bg: #ececec;
+        --sheet-ink: #1f1f1f;
+        --sheet-mute: #707070;
+        --sheet-line: #d6d6d6;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--sheet-bg);
+        color: var(--sheet-ink);
+        font:
+          400 13px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        padding: 24px 28px 64px;
+      }
+      .top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px 24px;
+        margin-bottom: 18px;
+      }
+      .top h1 {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .top p {
+        color: var(--sheet-mute);
+        max-width: 820px;
+      }
+      .picker {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        white-space: nowrap;
+      }
+      .picker span {
+        color: var(--sheet-mute);
+        margin-right: 4px;
+      }
+      .picker button {
+        font: inherit;
+        border: 1px solid var(--sheet-line);
+        background: #fff;
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      .picker button[aria-pressed="true"] {
+        background: #1f1f1f;
+        color: #fff;
+        border-color: #1f1f1f;
+      }
+      section {
+        margin-top: 28px;
+      }
+      section > h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+      section > h2 small {
+        font-weight: 400;
+        color: var(--sheet-mute);
+        margin-left: 8px;
+      }
+      .item {
+        display: grid;
+        grid-template-columns: 56px 300px 1fr 1fr;
+        background: #fff;
+        border: 1px solid var(--sheet-line);
+        border-radius: 10px;
+        margin-bottom: 12px;
+        overflow: hidden;
+      }
+      .item > .no {
+        padding: 14px 0 0 14px;
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .item > .note {
+        padding: 14px 16px;
+        border-right: 1px solid var(--sheet-line);
+      }
+      .item > .note h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .item > .note p {
+        color: #4a4a4a;
+        margin-bottom: 6px;
+      }
+      .item > .note .now {
+        color: #8a3b12;
+      }
+      .item > .note code {
+        font:
+          12px "SF Mono",
+          Menlo,
+          Consolas,
+          monospace;
+        background: #f3f3f3;
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+      .item > .note .src {
+        color: var(--sheet-mute);
+        font-size: 12px;
+      }
+      .pane {
+        padding: 16px 18px 18px;
+        min-width: 0;
+        overflow-x: auto;
+      }
+      .pane.bg-light {
+        background: #fff;
+      }
+      .pane.bg-dark {
+        background: #0a0a0a;
+      }
+      .cap {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+        color: #8c8c8c;
+      }
+      .bg-dark .cap {
+        color: #7a7a7a;
+      }
+      .shot {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+        border: 1px solid var(--sheet-line);
+      }
+      .bg-dark .shot {
+        border-color: #2a2a2a;
+      }
+      .now-row .pane .cap {
+        color: #8a3b12;
+      }
+      .now-row {
+        grid-template-columns: 56px 300px 1fr;
+      }
+      .now-row > .no,
+      .now-row > .note {
+        grid-row: span 2;
+      }
+      .now-row > .pane {
+        grid-column: 3;
+      }
+      /* 窄屏（BySpace 文件面板、手机）：说明在上，浅色深色各占一整行 */
+      @media (max-width: 1100px) {
+        body {
+          padding: 16px 12px 48px;
+        }
+        .item {
+          grid-template-columns: 44px 1fr;
+        }
+        .item > .note {
+          border-right: 0;
+          border-bottom: 1px solid var(--sheet-line);
+        }
+        .item > .pane {
+          grid-column: 1/-1;
+        }
+        .now-row > .no,
+        .now-row > .note {
+          grid-row: auto;
+        }
+      }
+
+      /* ---------- 被评审的组件：shadcn nova + neutral ---------- */
+      .byx {
+        --background: oklch(1 0 0);
+        --foreground: oklch(0.145 0 0);
+        --card: oklch(1 0 0);
+        --popover: oklch(1 0 0);
+        --primary: oklch(0.205 0 0);
+        --primary-foreground: oklch(0.985 0 0);
+        --secondary: oklch(0.97 0 0);
+        --secondary-foreground: oklch(0.205 0 0);
+        --muted: oklch(0.97 0 0);
+        --muted-foreground: oklch(0.556 0 0);
+        --accent: oklch(0.97 0 0);
+        --accent-foreground: oklch(0.205 0 0);
+        --destructive: oklch(0.577 0.245 27.325);
+        --border: oklch(0.922 0 0);
+        --input: oklch(0.922 0 0);
+        --ring: oklch(0.708 0 0);
+        --sidebar: oklch(0.985 0 0);
+        --sidebar-accent: oklch(0.97 0 0);
+        --sidebar-border: oklch(0.922 0 0);
+        --success: oklch(0.627 0.17 149);
+        --warning: oklch(0.705 0.16 70);
+        --radius: 0.625rem;
+        --r-sm: calc(var(--radius) * 0.6);
+        --r-md: calc(var(--radius) * 0.8);
+        --r-lg: var(--radius);
+        --r-xl: calc(var(--radius) * 1.4);
+        --shadow-xs: 0 1px 2px 0 rgb(0 0 0/0.05);
+        --shadow-sm: 0 1px 3px 0 rgb(0 0 0/0.1), 0 1px 2px -1px rgb(0 0 0/0.1);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0/0.1), 0 2px 4px -2px rgb(0 0 0/0.1);
+        --font-sans:
+          "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei UI", sans-serif;
+        --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        color: var(--foreground);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.43;
+        font-feature-settings: normal;
+      }
+      .byx.dark {
+        --background: oklch(0.145 0 0);
+        --foreground: oklch(0.985 0 0);
+        --card: oklch(0.205 0 0);
+        --popover: oklch(0.205 0 0);
+        --primary: oklch(0.922 0 0);
+        --primary-foreground: oklch(0.205 0 0);
+        --secondary: oklch(0.269 0 0);
+        --secondary-foreground: oklch(0.985 0 0);
+        --muted: oklch(0.269 0 0);
+        --muted-foreground: oklch(0.708 0 0);
+        --accent: oklch(0.269 0 0);
+        --accent-foreground: oklch(0.985 0 0);
+        --destructive: oklch(0.704 0.191 22.216);
+        --border: oklch(1 0 0/10%);
+        --input: oklch(1 0 0/15%);
+        --ring: oklch(0.556 0 0);
+        --sidebar: oklch(0.205 0 0);
+        --sidebar-accent: oklch(0.269 0 0);
+        --sidebar-border: oklch(1 0 0/10%);
+        --success: oklch(0.723 0.19 150);
+        --warning: oklch(0.795 0.16 75);
+      }
+      body[data-font="inter"] .byx {
+        --font-sans:
+          "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei UI", sans-serif;
+      }
+      body[data-font="system"] .byx {
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC",
+          "Microsoft YaHei UI", sans-serif;
+      }
+      .byx.surface {
+        background: var(--background);
+        border-radius: 8px;
+        padding: 2px;
+      }
+      .bg-dark .byx.surface {
+        background: transparent;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .lbl {
+        font: 11px/1.2 var(--font-sans);
+        color: var(--muted-foreground);
+        margin-top: 4px;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .i.sm {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* 按钮 cn-button + variant + size（nova）*/
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        background-clip: padding-box;
+        border-radius: var(--r-lg);
+        font: 500 14px/1 var(--font-sans);
+        height: 32px;
+        padding: 0 10px;
+        cursor: default;
+        transition:
+          background-color 0.15s,
+          color 0.15s,
+          box-shadow 0.15s;
+        outline: none;
+      }
+      .btn.sm {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12.8px;
+        gap: 4px;
+        border-radius: min(var(--r-md), 12px);
+      }
+      .btn.xs {
+        height: 24px;
+        padding: 0 8px;
+        font-size: 12px;
+        gap: 4px;
+        border-radius: min(var(--r-md), 10px);
+      }
+      .btn.icon {
+        width: 32px;
+        padding: 0;
+      }
+      .btn.icon.sm {
+        width: 28px;
+      }
+      .btn.icon.xs {
+        width: 24px;
+      }
+      .btn.default {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .btn.default:hover,
+      .btn.default.h {
+        background: color-mix(in oklch, var(--primary) 80%, transparent);
+      }
+      .btn.outline {
+        border-color: var(--border);
+        background: var(--background);
+        color: var(--foreground);
+      }
+      .btn.outline:hover,
+      .btn.outline.h {
+        background: var(--muted);
+      }
+      .dark .btn.outline {
+        border-color: var(--input);
+        background: color-mix(in oklch, var(--input) 30%, transparent);
+      }
+      .dark .btn.outline:hover,
+      .dark .btn.outline.h {
+        background: color-mix(in oklch, var(--input) 50%, transparent);
+      }
+      .btn.secondary {
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+      }
+      .btn.secondary:hover,
+      .btn.secondary.h {
+        background: color-mix(in oklch, var(--secondary), var(--foreground) 5%);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--foreground);
+      }
+      .btn.ghost:hover,
+      .btn.ghost.h {
+        background: var(--muted);
+      }
+      .dark .btn.ghost:hover,
+      .dark .btn.ghost.h {
+        background: color-mix(in oklch, var(--muted) 50%, transparent);
+      }
+      .btn.destructive {
+        background: color-mix(in oklch, var(--destructive) 10%, transparent);
+        color: var(--destructive);
+      }
+      .btn.destructive:hover,
+      .btn.destructive.h {
+        background: color-mix(in oklch, var(--destructive) 20%, transparent);
+      }
+      .btn:active,
+      .btn.p {
+        transform: translateY(1px);
+      }
+      .btn:focus-visible,
+      .btn.f {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+      }
+      .btn[disabled],
+      .btn.d {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .btn .i {
+        width: 16px;
+        height: 16px;
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* 输入框 cn-input / cn-select-trigger / cn-textarea */
+      .input {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        width: 220px;
+        border: 1px solid var(--input);
+        border-radius: var(--r-lg);
+        background: transparent;
+        padding: 0 10px;
+        font: 400 14px var(--font-sans);
+        color: var(--foreground);
+        outline: none;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .dark .input {
+        background: color-mix(in oklch, var(--input) 30%, transparent);
+      }
+      .input::placeholder,
+      .input .ph {
+        color: var(--muted-foreground);
+      }
+      .input:focus-visible,
+      .input.f {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+      }
+      .input.err {
+        border-color: var(--destructive);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 20%, transparent);
+      }
+      .input.d {
+        opacity: 0.5;
+        background: color-mix(in oklch, var(--input) 50%, transparent);
+      }
+      .input.num {
+        width: 96px;
+        justify-content: flex-end;
+        font-variant-numeric: tabular-nums;
+      }
+      .select {
+        justify-content: space-between;
+        gap: 6px;
+        width: auto;
+        min-width: 140px;
+        padding: 0 8px 0 10px;
+        cursor: default;
+      }
+      .select .i {
+        color: var(--muted-foreground);
+        width: 16px;
+        height: 16px;
+      }
+      .dark .select:hover,
+      .dark .select.h {
+        background: color-mix(in oklch, var(--input) 50%, transparent);
+      }
+      .select.sm {
+        height: 28px;
+        border-radius: min(var(--r-md), 10px);
+      }
+
+      /* 分段 cn-tabs-list(default) / cn-tabs-trigger */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 3px;
+        border-radius: var(--r-lg);
+        background: var(--muted);
+        color: var(--muted-foreground);
+      }
+      .seg > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 100%;
+        padding: 2px 6px;
+        border-radius: var(--r-md);
+        border: 1px solid transparent;
+        font: 500 14px var(--font-sans);
+        color: color-mix(in oklch, var(--foreground) 60%, transparent);
+        white-space: nowrap;
+      }
+      .seg > span:hover {
+        color: var(--foreground);
+      }
+      .seg > span.on {
+        background: var(--background);
+        color: var(--foreground);
+        box-shadow: var(--shadow-sm);
+      }
+      .dark .seg > span.on {
+        border-color: var(--input);
+        background: color-mix(in oklch, var(--input) 30%, transparent);
+      }
+      .seg.sm {
+        height: 28px;
+      }
+      .seg.sm > span {
+        font-size: 12.8px;
+      }
+
+      /* 开关 cn-switch（default 32x18.4） */
+      .sw {
+        position: relative;
+        display: inline-block;
+        width: 32px;
+        height: 18.4px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: var(--input);
+        flex: none;
+        transition: background-color 0.15s;
+      }
+      .dark .sw {
+        background: color-mix(in oklch, var(--input) 80%, transparent);
+      }
+      .sw::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--background);
+        transition: transform 0.15s;
+      }
+      .dark .sw::after {
+        background: var(--foreground);
+      }
+      .sw.on {
+        background: var(--primary);
+      }
+      .sw.on::after {
+        transform: translateX(14px);
+      }
+      .dark .sw.on::after {
+        background: var(--primary-foreground);
+      }
+      .sw.f {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+      }
+      .sw.d {
+        opacity: 0.5;
+      }
+      .cb {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid var(--input);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .dark .cb {
+        background: color-mix(in oklch, var(--input) 30%, transparent);
+      }
+      .cb.on {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .cb .i {
+        width: 12px;
+        height: 12px;
+        stroke-width: 3;
+      }
+
+      /* 菜单 cn-dropdown-menu-content / item / label / separator / shortcut */
+      .menu {
+        width: 220px;
+        padding: 4px;
+        border-radius: var(--r-lg);
+        background: var(--popover);
+        color: var(--foreground);
+        box-shadow:
+          var(--shadow-md),
+          0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+      }
+      .menu .ml {
+        padding: 4px 6px;
+        font: 500 12px var(--font-sans);
+        color: var(--muted-foreground);
+      }
+      .menu .mi {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border-radius: var(--r-md);
+        font: 400 14px var(--font-sans);
+        height: 30px;
+      }
+      .menu .mi .i {
+        color: var(--muted-foreground);
+      }
+      .menu .mi.h {
+        background: var(--accent);
+        color: var(--accent-foreground);
+      }
+      .menu .mi.h .i {
+        color: var(--accent-foreground);
+      }
+      .menu .mi.danger {
+        color: var(--destructive);
+      }
+      .menu .mi.danger .i {
+        color: var(--destructive);
+      }
+      .menu .mi.danger.h {
+        background: color-mix(in oklch, var(--destructive) 10%, transparent);
+      }
+      .menu .mi kbd {
+        margin-left: auto;
+        font: 400 12px var(--font-sans);
+        letter-spacing: 0.1em;
+        color: var(--muted-foreground);
+      }
+      .menu .sep {
+        height: 1px;
+        margin: 4px -4px;
+        background: var(--border);
+      }
+
+      /* 提示 cn-tooltip-content / 快捷键 cn-kbd */
+      .tip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--r-md);
+        padding: 6px 12px;
+        font: 400 12px var(--font-sans);
+        background: var(--foreground);
+        color: var(--background);
+      }
+      .tip.k {
+        padding-right: 6px;
+      }
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 20px;
+        min-width: 20px;
+        padding: 0 4px;
+        border-radius: var(--r-sm);
+        background: var(--muted);
+        color: var(--muted-foreground);
+        font: 500 12px var(--font-sans);
+      }
+      .tip .kbd {
+        background: color-mix(in oklch, var(--background) 20%, transparent);
+        color: var(--background);
+      }
+
+      /* 徽标 cn-badge */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 20px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font: 500 12px var(--font-sans);
+        white-space: nowrap;
+      }
+      .badge.secondary {
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+      }
+      .badge.outline {
+        border-color: var(--border);
+        color: var(--foreground);
+      }
+      .badge.default {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .badge.destructive {
+        background: color-mix(in oklch, var(--destructive) 10%, transparent);
+        color: var(--destructive);
+      }
+      .badge .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+
+      /* 弹窗 cn-dialog-content */
+      .dialog {
+        width: 380px;
+        max-width: 100%;
+        border-radius: var(--r-xl);
+        background: var(--popover);
+        padding: 16px;
+        box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+      }
+      .dialog h4 {
+        font: 500 16px/1.4 var(--font-sans);
+        margin-bottom: 6px;
+      }
+      .dialog p {
+        font-size: 14px;
+        color: var(--muted-foreground);
+      }
+      .dialog .foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin: 16px -16px -16px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        background: color-mix(in oklch, var(--muted) 50%, transparent);
+        border-radius: 0 0 var(--r-xl) var(--r-xl);
+      }
+
+      /* 卡片 + 行（设置页）cn-card / cn-item */
+      .card {
+        width: 100%;
+        max-width: 560px;
+        border-radius: var(--r-xl);
+        background: var(--card);
+        box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+        overflow: hidden;
+      }
+      .card .r {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 16px;
+        min-height: 56px;
+      }
+      .card .r + .r {
+        border-top: 1px solid var(--border);
+      }
+      .card .r .t {
+        flex: 1;
+        min-width: 0;
+      }
+      .card .r .t b {
+        display: block;
+        font: 400 14px/1.4 var(--font-sans);
+      }
+      .card .r .t span {
+        display: block;
+        font: 400 13px/1.4 var(--font-sans);
+        color: var(--muted-foreground);
+      }
+
+      /* 侧栏 cn-sidebar-* */
+      .sb {
+        width: 280px;
+        border-radius: 8px;
+        background: var(--sidebar);
+        padding: 8px;
+        border: 1px solid var(--sidebar-border);
+      }
+      .sb .gl {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 8px;
+        font: 500 12px var(--font-sans);
+        color: color-mix(in oklch, var(--foreground) 70%, transparent);
+      }
+      .sb .gl .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 2px;
+      }
+      .sb .gl .acts .btn {
+        color: var(--muted-foreground);
+      }
+      .sb .pj {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 8px;
+        font: 500 14px var(--font-sans);
+      }
+      .av {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font: 600 10px var(--font-sans);
+        flex: none;
+      }
+      .sb .mb {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 8px 0 32px;
+        border-radius: var(--r-md);
+        font: 400 14px var(--font-sans);
+        color: var(--foreground);
+      }
+      .sb .mb .st {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--muted-foreground);
+        opacity: 0.5;
+        position: absolute;
+        left: 13px;
+      }
+      .sb .mb .st.run {
+        background: var(--success);
+        opacity: 1;
+      }
+      .sb .mb .st.need {
+        background: var(--warning);
+        opacity: 1;
+      }
+      .sb .mb.h {
+        background: var(--sidebar-accent);
+      }
+      .sb .mb.on {
+        background: var(--sidebar-accent);
+        font-weight: 500;
+      }
+      .sb .mb.on::before {
+        content: "";
+        position: absolute;
+        left: -6px;
+        top: 8px;
+        bottom: 8px;
+        width: 2px;
+        border-radius: 2px;
+        background: var(--foreground);
+      }
+      .sb .mb .meta {
+        margin-left: auto;
+        font: 400 12px var(--font-sans);
+        color: var(--muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+      .sb .mb .kb {
+        margin-left: auto;
+        color: var(--muted-foreground);
+      }
+
+      /* 顶栏 + 标签栏 */
+      .chrome {
+        width: 100%;
+        border-radius: 8px;
+        background: var(--background);
+        box-shadow: 0 0 0 1px var(--border);
+        overflow: hidden;
+      }
+      .chrome .hd {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 8px 0 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      .chrome .hd .ttl {
+        font: 500 14px var(--font-sans);
+      }
+      .chrome .hd .proj {
+        font: 400 14px var(--font-sans);
+        color: var(--muted-foreground);
+      }
+      .chrome .hd .acts {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .grp {
+        display: inline-flex;
+        align-items: stretch;
+      }
+      .grp .btn {
+        border-radius: 0;
+      }
+      .grp .btn:first-child {
+        border-radius: min(var(--r-md), 12px) 0 0 min(var(--r-md), 12px);
+      }
+      .grp .btn:last-child {
+        border-radius: 0 min(var(--r-md), 12px) min(var(--r-md), 12px) 0;
+        border-left-width: 0;
+      }
+      .chrome .tb {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        height: 40px;
+        padding: 0 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .chrome .tab {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        font: 500 14px var(--font-sans);
+        color: color-mix(in oklch, var(--foreground) 60%, transparent);
+      }
+      .chrome .tab .i {
+        width: 15px;
+        height: 15px;
+      }
+      .chrome .tab:hover,
+      .chrome .tab.h {
+        color: var(--foreground);
+      }
+      .chrome .tab.on {
+        color: var(--foreground);
+      }
+      .chrome .tab.on::after {
+        content: "";
+        position: absolute;
+        left: 6px;
+        right: 6px;
+        bottom: -1px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--foreground);
+      }
+      .chrome .tab .x {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        margin-right: -4px;
+        color: var(--muted-foreground);
+        visibility: hidden;
+      }
+      .chrome .tab.on .x,
+      .chrome .tab:hover .x,
+      .chrome .tab.h .x {
+        visibility: visible;
+      }
+      .chrome .tab .x:hover {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .chrome .tb .add {
+        align-self: center;
+      }
+
+      /* 输入框（Composer）cn-input-group + textarea + block-end addon */
+      .composer {
+        width: 100%;
+        max-width: 640px;
+        border: 1px solid var(--input);
+        border-radius: var(--r-xl);
+        background: var(--background);
+        box-shadow: var(--shadow-xs);
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .dark .composer {
+        background: color-mix(in oklch, var(--input) 30%, transparent);
+      }
+      .composer.f {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+      }
+      .composer .ta {
+        min-height: 64px;
+        padding: 10px 12px 4px;
+        font: 400 14px/1.5 var(--font-sans);
+        color: var(--foreground);
+      }
+      .composer .ta .ph {
+        color: var(--muted-foreground);
+      }
+      .composer .ft {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 8px 8px;
+      }
+      .composer .ft .btn.ghost {
+        color: var(--muted-foreground);
+        font-weight: 400;
+      }
+      .composer .ft .send {
+        margin-left: auto;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        padding: 0;
+      }
+      .composer .ft .send.d {
+        opacity: 0.5;
+      }
+
+      /* 消息、工具调用、Markdown */
+      .chat {
+        width: 100%;
+        max-width: 640px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        font-size: 14px;
+      }
+      .bubble {
+        align-self: flex-end;
+        max-width: 80%;
+        padding: 8px 12px;
+        border-radius: var(--r-xl);
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+        line-height: 1.6;
+      }
+      .prose {
+        line-height: 1.65;
+        color: var(--foreground);
+      }
+      .prose p + p,
+      .prose p + ul,
+      .prose ul + p {
+        margin-top: 10px;
+      }
+      .prose h3 {
+        font: 600 15px/1.4 var(--font-sans);
+        margin: 4px 0 6px;
+      }
+      .prose ul {
+        padding-left: 20px;
+      }
+      .prose li {
+        margin: 2px 0;
+      }
+      .prose li::marker {
+        color: var(--muted-foreground);
+      }
+      .prose code {
+        font: 400 0.86em var(--font-mono);
+        background: var(--muted);
+        border-radius: var(--r-sm);
+        padding: 2px 5px;
+      }
+      .prose a {
+        color: var(--foreground);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-color: color-mix(in oklch, var(--foreground) 35%, transparent);
+      }
+      .prose blockquote {
+        border-left: 2px solid var(--border);
+        padding-left: 12px;
+        color: var(--muted-foreground);
+      }
+      .code {
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        overflow: hidden;
+        background: color-mix(in oklch, var(--muted) 50%, transparent);
+      }
+      .code .ch {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 6px 0 12px;
+        font: 400 12px var(--font-sans);
+        color: var(--muted-foreground);
+        border-bottom: 1px solid var(--border);
+      }
+      .code .ch .btn {
+        margin-left: auto;
+        color: var(--muted-foreground);
+      }
+      .code pre {
+        margin: 0;
+        padding: 10px 12px;
+        font: 400 12.5px/1.6 var(--font-mono);
+        color: var(--foreground);
+        overflow: auto;
+      }
+      .code .k {
+        color: oklch(0.55 0.15 300);
+      }
+      .code .s {
+        color: oklch(0.55 0.13 150);
+      }
+      .code .c {
+        color: var(--muted-foreground);
+      }
+      .dark .code .k {
+        color: oklch(0.75 0.13 300);
+      }
+      .dark .code .s {
+        color: oklch(0.78 0.13 150);
+      }
+      .tools {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .tool {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px;
+        padding: 0 8px;
+        margin: 0 -8px;
+        border-radius: var(--r-md);
+        font: 400 13px var(--font-sans);
+        color: var(--muted-foreground);
+      }
+      .tool .i {
+        width: 14px;
+        height: 14px;
+      }
+      .tool b {
+        font-weight: 500;
+        color: var(--foreground);
+      }
+      .tool .meta {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+      }
+      .tool .add {
+        color: var(--success);
+      }
+      .tool .del {
+        color: var(--destructive);
+      }
+      .tool.h {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .tool.open {
+        background: var(--muted);
+      }
+      .tool-body {
+        margin: 2px 0 6px 22px;
+        border-left: 1px solid var(--border);
+        padding: 6px 0 6px 12px;
+        font: 400 12.5px/1.6 var(--font-mono);
+        color: var(--muted-foreground);
+      }
+      .ask {
+        border: 1px solid var(--border);
+        border-radius: var(--r-xl);
+        padding: 12px 14px;
+        background: var(--card);
+        box-shadow: var(--shadow-xs);
+      }
+      .ask h4 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 500 14px var(--font-sans);
+      }
+      .ask h4 .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--warning);
+      }
+      .ask p {
+        font-size: 13px;
+        color: var(--muted-foreground);
+        margin: 4px 0 12px 16px;
+      }
+      .ask .row {
+        margin-left: 16px;
+        gap: 8px;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 28px 12px;
+        text-align: center;
+      }
+      .empty .ico {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--r-lg);
+        display: grid;
+        place-items: center;
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .empty h4 {
+        font: 500 16px var(--font-sans);
+      }
+      .empty p {
+        font-size: 14px;
+        color: var(--muted-foreground);
+        max-width: 300px;
+      }
+
+      /* 滚动条与选中文字 */
+      .scroll {
+        height: 120px;
+        width: 240px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 8px 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--muted-foreground);
+      }
+      .scroll::-webkit-scrollbar {
+        width: 10px;
+      }
+      .scroll::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border: 3px solid transparent;
+        border-radius: 10px;
+        background-clip: padding-box;
+      }
+      .scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .byx ::selection {
+        background: color-mix(in oklch, var(--foreground) 15%, transparent);
+      }
+
+      /* 色板 */
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        width: 100%;
+      }
+      .swatches div {
+        border-radius: var(--r-md);
+        padding: 8px 8px 6px;
+        font: 400 11px/1.3 var(--font-sans);
+        min-height: 54px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+      }
+      .type .l {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 5px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .type .l:last-child {
+        border: 0;
+      }
+      .type .l span:first-child {
+        width: 92px;
+        flex: none;
+        font: 400 11px var(--font-sans);
+        color: var(--muted-foreground);
+      }
+      .radii {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+      }
+      .radii div {
+        width: 56px;
+        height: 40px;
+        border: 1px solid var(--foreground);
+        opacity: 0.8;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        font: 400 11px/1.8 var(--font-sans);
+        color: var(--muted-foreground);
+      }
+      .shadows {
+        display: flex;
+        gap: 16px;
+      }
+      .shadows div {
+        width: 96px;
+        height: 56px;
+        border-radius: var(--r-lg);
+        background: var(--card);
+        display: grid;
+        place-items: center;
+        font: 400 11px var(--font-sans);
+        color: var(--muted-foreground);
+      }
+    </style>
+  </head>
+  <body data-font="geist">
+    {{icons}}
+    <div class="top">
+      <div>
+        <h1>BySpace 组件样板页 · v1</h1>
+        <p>
+          每一项：左边是说明（<span style="color: #8a3b12">橙字是现在的问题</span>），右边是照
+          shadcn/ui 做的浅色和深色。布局不动，只看组件本身。回复按编号就行，比如「B2
+          按钮再小一点」「C3 选中竖条去掉」。
+        </p>
+      </div>
+      <div class="picker">
+        <span>字体</span><button data-f="geist" aria-pressed="true">Geist</button
+        ><button data-f="inter">Inter</button><button data-f="system">系统字体</button>
+      </div>
+    </div>
+
+    <section>
+      <h2>现状 <small>开发版 BySpace（localhost:8081）的截图，供对照</small></h2>
+      <div class="item now-row">
+        <div class="no">N1</div>
+        <div class="note">
+          <h3>侧栏</h3>
+          <p class="now">字号偏大、行间距松，项目名和工作区行层级不分；选中的竖条粗。</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <img class="shot" src="{{shot:light-sidebar}}" width="320" alt="现状侧栏 浅色" />
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <img class="shot" src="{{shot:dark-sidebar}}" width="320" alt="现状侧栏 深色" />
+        </div>
+      </div>
+      <div class="item now-row">
+        <div class="no">N2</div>
+        <div class="note">
+          <h3>顶栏和标签栏</h3>
+          <p class="now">项目名是灰块；按钮各自一套圆角和边框；选中标签是灰色胶囊。</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <img class="shot" src="{{shot:light-tabs}}" width="1112" alt="现状顶栏 浅色" />
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <img class="shot" src="{{shot:dark-tabs}}" width="1112" alt="现状顶栏 深色" />
+        </div>
+      </div>
+      <div class="item now-row">
+        <div class="no">N3</div>
+        <div class="note">
+          <h3>输入框</h3>
+          <p class="now">没输入内容时发送按钮整个消失；底栏选择器像散落的文字。</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <img class="shot" src="{{shot:light-composer}}" width="840" alt="现状输入框 浅色" />
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <img class="shot" src="{{shot:dark-composer}}" width="840" alt="现状输入框 深色" />
+        </div>
+      </div>
+      <div class="item now-row">
+        <div class="no">N4</div>
+        <div class="note">
+          <h3>设置卡片</h3>
+          <p class="now">同一张卡片里下拉框、输入框、分段、按钮四种底色和高度。</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <img class="shot" src="{{shot:light-settings}}" width="708" alt="现状设置卡片 浅色" />
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <img class="shot" src="{{shot:dark-settings}}" width="708" alt="现状设置卡片 深色" />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>A 基础设定 <small>改 styles/theme.ts，全局生效</small></h2>
+      <div class="item">
+        <div class="no">A1</div>
+        <div class="note">
+          <h3>颜色</h3>
+          <p>
+            纯中性灰，没有色偏；强调色就是近黑（深色下近白），不另加彩色。状态色只用在状态点和增删行数上。
+          </p>
+          <p class="now">现在：浅色带一点暖灰，强调色和正文同色，边框几乎看不见。</p>
+          <p class="src">neutral 主题 · themes.ts</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="swatches">
+              <div style="background: var(--background)">background</div>
+              <div style="background: var(--sidebar)">sidebar</div>
+              <div style="background: var(--muted)">muted / hover</div>
+              <div style="background: var(--border)">border</div>
+              <div style="background: var(--muted-foreground); color: var(--background)">
+                muted-fg
+              </div>
+              <div style="background: var(--foreground); color: var(--background)">foreground</div>
+              <div style="background: var(--primary); color: var(--primary-foreground)">
+                primary
+              </div>
+              <div style="background: var(--ring); color: var(--background)">ring</div>
+              <div style="background: var(--destructive); color: #fff">destructive</div>
+              <div style="background: var(--success); color: #fff">success</div>
+              <div style="background: var(--warning); color: #000">warning</div>
+              <div style="background: var(--card)">card</div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="swatches">
+              <div style="background: var(--background)">background</div>
+              <div style="background: var(--sidebar)">sidebar</div>
+              <div style="background: var(--muted)">muted / hover</div>
+              <div style="background: var(--border)">border</div>
+              <div style="background: var(--muted-foreground); color: var(--background)">
+                muted-fg
+              </div>
+              <div style="background: var(--foreground); color: var(--background)">foreground</div>
+              <div style="background: var(--primary); color: var(--primary-foreground)">
+                primary
+              </div>
+              <div style="background: var(--ring); color: var(--background)">ring</div>
+              <div style="background: var(--destructive); color: #fff">destructive</div>
+              <div style="background: var(--success); color: #000">success</div>
+              <div style="background: var(--warning); color: #000">warning</div>
+              <div style="background: var(--card)">card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">A2</div>
+        <div class="note">
+          <h3>字体、字号、字重</h3>
+          <p>
+            界面文字 14px，辅助信息 12–13px，代码 12.5px。字重只用两档：400 正文、500
+            标题和按钮。右上角可以切换 Geist、Inter 和系统字体对比。
+          </p>
+          <p class="now">现在：系统字体，500 和 400 混用没有规律，看起来忽粗忽细。</p>
+          <p class="src">shadcn 默认 Geist；字重取 cn-button、cn-card-title</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx type">
+            <div class="l">
+              <span>标题 16 / 500</span
+              ><span style="font: 500 16px var(--font-sans)">New workspace</span>
+            </div>
+            <div class="l">
+              <span>界面 14 / 400</span><span>Port the composer into the web shell</span>
+            </div>
+            <div class="l">
+              <span>标签 14 / 500</span
+              ><span style="font-weight: 500">Commit · Settings · New Agent</span>
+            </div>
+            <div class="l">
+              <span>辅助 13 / 400</span
+              ><span style="font-size: 13px; color: var(--muted-foreground)"
+                >Updated 2 minutes ago · 14 files</span
+              >
+            </div>
+            <div class="l">
+              <span>小字 12 / 500</span
+              ><span style="font: 500 12px var(--font-sans); color: var(--muted-foreground)"
+                >Workspaces · Today · 3 running</span
+              >
+            </div>
+            <div class="l">
+              <span>代码 12.5 mono</span
+              ><span style="font: 400 12.5px var(--font-mono)">npm run typecheck · exit 0</span>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark type">
+            <div class="l">
+              <span>标题 16 / 500</span
+              ><span style="font: 500 16px var(--font-sans)">New workspace</span>
+            </div>
+            <div class="l">
+              <span>界面 14 / 400</span><span>Port the composer into the web shell</span>
+            </div>
+            <div class="l">
+              <span>标签 14 / 500</span
+              ><span style="font-weight: 500">Commit · Settings · New Agent</span>
+            </div>
+            <div class="l">
+              <span>辅助 13 / 400</span
+              ><span style="font-size: 13px; color: var(--muted-foreground)"
+                >Updated 2 minutes ago · 14 files</span
+              >
+            </div>
+            <div class="l">
+              <span>小字 12 / 500</span
+              ><span style="font: 500 12px var(--font-sans); color: var(--muted-foreground)"
+                >Workspaces</span
+              >
+            </div>
+            <div class="l">
+              <span>代码 12.5 mono</span
+              ><span style="font: 400 12.5px var(--font-mono)">npm run typecheck · exit 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">A3</div>
+        <div class="note">
+          <h3>圆角、阴影、焦点</h3>
+          <p>
+            圆角一个基准 10px，按比例推出 6 / 8 / 10 / 14。阴影很轻，只给浮层和输入框。键盘焦点是
+            3px 半透明灰色光圈。
+          </p>
+          <p class="now">现在：圆角 6、8、12、16 各处随意用；部分控件没有可见的焦点样式。</p>
+          <p class="src">--radius 0.625rem · globals.css</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="radii">
+              <div style="border-radius: var(--r-sm)">6</div>
+              <div style="border-radius: var(--r-md)">8</div>
+              <div style="border-radius: var(--r-lg)">10</div>
+              <div style="border-radius: var(--r-xl)">14</div>
+            </div>
+            <div class="shadows">
+              <div
+                style="
+                  box-shadow:
+                    var(--shadow-xs),
+                    0 0 0 1px var(--border);
+                "
+              >
+                xs 输入框
+              </div>
+              <div
+                style="
+                  box-shadow:
+                    var(--shadow-md),
+                    0 0 0 1px var(--border);
+                "
+              >
+                md 浮层
+              </div>
+            </div>
+            <div class="row">
+              <span class="btn outline f">焦点光圈</span
+              ><span class="input f" style="width: 160px"
+                ><span class="ph">焦点中的输入框</span></span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="radii">
+              <div style="border-radius: var(--r-sm)">6</div>
+              <div style="border-radius: var(--r-md)">8</div>
+              <div style="border-radius: var(--r-lg)">10</div>
+              <div style="border-radius: var(--r-xl)">14</div>
+            </div>
+            <div class="shadows">
+              <div
+                style="
+                  box-shadow:
+                    var(--shadow-xs),
+                    0 0 0 1px var(--border);
+                "
+              >
+                xs 输入框
+              </div>
+              <div
+                style="
+                  box-shadow:
+                    var(--shadow-md),
+                    0 0 0 1px var(--border);
+                "
+              >
+                md 浮层
+              </div>
+            </div>
+            <div class="row">
+              <span class="btn outline f">焦点光圈</span
+              ><span class="input f" style="width: 160px"
+                ><span class="ph">焦点中的输入框</span></span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>B 基础组件 <small>改 components/ui/，每个组件列出所有状态；鼠标可以直接悬停试</small></h2>
+      <div class="item">
+        <div class="no">B1</div>
+        <div class="note">
+          <h3>按钮：五种用途</h3>
+          <p>
+            主要（每页最多一个）、描边（行内操作，比如
+            Commit）、次要、透明（图标按钮和顶栏）、危险（只在确认框里出现）。
+          </p>
+          <p class="now">现在：次要按钮是一块实心灰，描边按钮边框很淡，两者看起来差不多。</p>
+          <p class="src">cn-button-variant-*</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx row">
+            <span class="btn default">Create workspace</span
+            ><span class="btn outline"
+              ><svg class="i"><use href="#git-commit-horizontal" /></svg>Commit</span
+            ><span class="btn secondary">Cancel</span><span class="btn ghost">Load more</span
+            ><span class="btn destructive">Remove host</span>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark row">
+            <span class="btn default">Create workspace</span
+            ><span class="btn outline"
+              ><svg class="i"><use href="#git-commit-horizontal" /></svg>Commit</span
+            ><span class="btn secondary">Cancel</span><span class="btn ghost">Load more</span
+            ><span class="btn destructive">Remove host</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B2</div>
+        <div class="note">
+          <h3>按钮：状态</h3>
+          <p>默认、悬停、按下（下沉 1px）、键盘焦点、禁用（半透明）、加载中。</p>
+          <p class="src">cn-button · active:translate-y-px</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="row">
+              <span class="stack"
+                ><span class="btn outline">Commit</span><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="btn outline h">Commit</span><span class="lbl">悬停</span></span
+              ><span class="stack"
+                ><span class="btn outline h p">Commit</span><span class="lbl">按下</span></span
+              ><span class="stack"
+                ><span class="btn outline f">Commit</span><span class="lbl">焦点</span></span
+              ><span class="stack"
+                ><span class="btn outline d">Commit</span><span class="lbl">禁用</span></span
+              ><span class="stack"
+                ><span class="btn outline d"
+                  ><svg class="i spin"><use href="#loader" /></svg>Saving...</span
+                ><span class="lbl">加载</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="btn default">Save</span><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="btn default h">Save</span><span class="lbl">悬停</span></span
+              ><span class="stack"
+                ><span class="btn default f">Save</span><span class="lbl">焦点</span></span
+              ><span class="stack"
+                ><span class="btn default d">Save</span><span class="lbl">禁用</span></span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="row">
+              <span class="stack"
+                ><span class="btn outline">Commit</span><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="btn outline h">Commit</span><span class="lbl">悬停</span></span
+              ><span class="stack"
+                ><span class="btn outline h p">Commit</span><span class="lbl">按下</span></span
+              ><span class="stack"
+                ><span class="btn outline f">Commit</span><span class="lbl">焦点</span></span
+              ><span class="stack"
+                ><span class="btn outline d">Commit</span><span class="lbl">禁用</span></span
+              ><span class="stack"
+                ><span class="btn outline d"
+                  ><svg class="i spin"><use href="#loader" /></svg>Saving...</span
+                ><span class="lbl">加载</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="btn default">Save</span><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="btn default h">Save</span><span class="lbl">悬停</span></span
+              ><span class="stack"
+                ><span class="btn default f">Save</span><span class="lbl">焦点</span></span
+              ><span class="stack"
+                ><span class="btn default d">Save</span><span class="lbl">禁用</span></span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B3</div>
+        <div class="note">
+          <h3>按钮：尺寸和图标按钮</h3>
+          <p>
+            32（页面默认）、28（行内和顶栏）、24（很挤的地方）。图标按钮是同样高度的正方形，默认透明，悬停才出底色。
+          </p>
+          <p class="now">现在：28、32、44 三档，行内按钮偏大；图标按钮各处尺寸不一。</p>
+          <p class="src">cn-button-size-*</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="row">
+              <span class="btn outline">32 默认</span><span class="btn outline sm">28 行内</span
+              ><span class="btn outline xs">24 紧凑</span>
+            </div>
+            <div class="row">
+              <span class="btn ghost icon"
+                ><svg class="i"><use href="#plus" /></svg></span
+              ><span class="btn ghost icon sm h"
+                ><svg class="i"><use href="#history" /></svg></span
+              ><span class="btn ghost icon sm"
+                ><svg class="i"><use href="#panel-right" /></svg></span
+              ><span class="btn ghost icon xs"
+                ><svg class="i sm"><use href="#ellipsis" /></svg></span
+              ><span class="btn outline icon sm"
+                ><svg class="i"><use href="#github" /></svg></span
+              ><span class="lbl">悬停的是第二个</span>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="row">
+              <span class="btn outline">32 默认</span><span class="btn outline sm">28 行内</span
+              ><span class="btn outline xs">24 紧凑</span>
+            </div>
+            <div class="row">
+              <span class="btn ghost icon"
+                ><svg class="i"><use href="#plus" /></svg></span
+              ><span class="btn ghost icon sm h"
+                ><svg class="i"><use href="#history" /></svg></span
+              ><span class="btn ghost icon sm"
+                ><svg class="i"><use href="#panel-right" /></svg></span
+              ><span class="btn ghost icon xs"
+                ><svg class="i sm"><use href="#ellipsis" /></svg></span
+              ><span class="btn outline icon sm"
+                ><svg class="i"><use href="#github" /></svg></span
+              ><span class="lbl">悬停的是第二个</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B4</div>
+        <div class="note">
+          <h3>输入框和下拉框</h3>
+          <p>
+            输入框、数字框、下拉框外观一致：透明底、1px
+            边框、同样高度和圆角；焦点时边框变深加光圈，出错时变红。
+          </p>
+          <p class="now">
+            现在：输入框是深灰凹槽，下拉框没边框，数字框又是另一种灰，同一行里三种样子。
+          </p>
+          <p class="src">cn-input · cn-select-trigger</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="row">
+              <span class="stack"
+                ><span class="input"><span class="ph">Search workspaces</span></span
+                ><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="input f">feat/web-rewrite</span><span class="lbl">焦点</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="input err">feat/</span><span class="lbl">出错</span></span
+              ><span class="stack"
+                ><span class="input d"><span class="ph">Disabled</span></span
+                ><span class="lbl">禁用</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="input select"
+                  >System<svg class="i"><use href="#chevron-down" /></svg></span
+                ><span class="lbl">下拉框</span></span
+              ><span class="stack"
+                ><span class="input select sm"
+                  >Steer<svg class="i"><use href="#chevron-down" /></svg></span
+                ><span class="lbl">行内 28</span></span
+              ><span class="stack"
+                ><span class="input num">10000</span><span class="lbl">数字</span></span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="row">
+              <span class="stack"
+                ><span class="input"><span class="ph">Search workspaces</span></span
+                ><span class="lbl">默认</span></span
+              ><span class="stack"
+                ><span class="input f">feat/web-rewrite</span><span class="lbl">焦点</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="input err">feat/</span><span class="lbl">出错</span></span
+              ><span class="stack"
+                ><span class="input d"><span class="ph">Disabled</span></span
+                ><span class="lbl">禁用</span></span
+              >
+            </div>
+            <div class="row">
+              <span class="stack"
+                ><span class="input select"
+                  >System<svg class="i"><use href="#chevron-down" /></svg></span
+                ><span class="lbl">下拉框</span></span
+              ><span class="stack"
+                ><span class="input select sm"
+                  >Steer<svg class="i"><use href="#chevron-down" /></svg></span
+                ><span class="lbl">行内 28</span></span
+              ><span class="stack"
+                ><span class="input num">10000</span><span class="lbl">数字</span></span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B5</div>
+        <div class="note">
+          <h3>分段选择</h3>
+          <p>浅灰底槽，选中的那段是浮起的白块（深色下是带边框的深块）。</p>
+          <p class="now">现在：底槽透明，没选中的选项像悬空的文字。</p>
+          <p class="src">cn-tabs-list default · cn-tabs-trigger</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="seg">
+              <span>Hide</span><span class="on">With window</span><span>Show</span>
+            </div>
+            <div class="seg sm">
+              <span class="on">30 min</span><span>1 h</span><span>6 h</span><span>24 h</span>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="seg">
+              <span>Hide</span><span class="on">With window</span><span>Show</span>
+            </div>
+            <div class="seg sm">
+              <span class="on">30 min</span><span>1 h</span><span>6 h</span><span>24 h</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B6</div>
+        <div class="note">
+          <h3>开关和复选框</h3>
+          <p>开关 32×18：关是浅灰，开是近黑（深色下近白），焦点有光圈。复选框 16px，选中实心。</p>
+          <p class="src">cn-switch · cn-checkbox</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx row">
+            <span class="stack"><span class="sw"></span><span class="lbl">关</span></span
+            ><span class="stack"><span class="sw on"></span><span class="lbl">开</span></span
+            ><span class="stack"><span class="sw on f"></span><span class="lbl">焦点</span></span
+            ><span class="stack"><span class="sw on d"></span><span class="lbl">禁用</span></span>
+            <span class="stack"><span class="cb"></span><span class="lbl">未选</span></span
+            ><span class="stack"
+              ><span class="cb on"
+                ><svg class="i"><use href="#check" /></svg></span
+              ><span class="lbl">已选</span></span
+            >
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark row">
+            <span class="stack"><span class="sw"></span><span class="lbl">关</span></span
+            ><span class="stack"><span class="sw on"></span><span class="lbl">开</span></span
+            ><span class="stack"><span class="sw on f"></span><span class="lbl">焦点</span></span
+            ><span class="stack"><span class="sw on d"></span><span class="lbl">禁用</span></span>
+            <span class="stack"><span class="cb"></span><span class="lbl">未选</span></span
+            ><span class="stack"
+              ><span class="cb on"
+                ><svg class="i"><use href="#check" /></svg></span
+              ><span class="lbl">已选</span></span
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B7</div>
+        <div class="note">
+          <h3>菜单</h3>
+          <p>
+            白底浮层，1px 细边加中等阴影；条目 30px 高，悬停是浅灰块；危险项红字；快捷键靠右浅色。
+          </p>
+          <p class="now">现在：外框圆角偏大，条目高度和内边距各菜单不一。</p>
+          <p class="src">cn-dropdown-menu-*</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="menu">
+              <div class="ml">Workspace</div>
+              <div class="mi">
+                <svg class="i"><use href="#pencil" /></svg>Rename<kbd>⌘R</kbd>
+              </div>
+              <div class="mi h">
+                <svg class="i"><use href="#copy" /></svg>Copy path<kbd>⇧⌘C</kbd>
+              </div>
+              <div class="mi">
+                <svg class="i"><use href="#folder-open" /></svg>Open in Finder
+              </div>
+              <div class="sep"></div>
+              <div class="mi danger">
+                <svg class="i"><use href="#archive" /></svg>Archive
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="menu">
+              <div class="ml">Workspace</div>
+              <div class="mi">
+                <svg class="i"><use href="#pencil" /></svg>Rename<kbd>⌘R</kbd>
+              </div>
+              <div class="mi h">
+                <svg class="i"><use href="#copy" /></svg>Copy path<kbd>⇧⌘C</kbd>
+              </div>
+              <div class="mi">
+                <svg class="i"><use href="#folder-open" /></svg>Open in Finder
+              </div>
+              <div class="sep"></div>
+              <div class="mi danger">
+                <svg class="i"><use href="#archive" /></svg>Archive
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B8</div>
+        <div class="note">
+          <h3>提示气泡、快捷键、徽标</h3>
+          <p>
+            提示气泡是反色小块（浅色界面里是黑底白字），延迟出现。快捷键是浅灰小方块。徽标是胶囊，状态用小圆点。
+          </p>
+          <p class="now">现在：提示气泡是白底带边框，大圆角，点击后会一直挂着。</p>
+          <p class="src">cn-tooltip-content · cn-kbd · cn-badge</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="row">
+              <span class="tip k">Toggle sidebar<span class="kbd">⌘B</span></span
+              ><span class="tip">Open in Cursor</span><span class="kbd">⌘</span
+              ><span class="kbd">K</span>
+            </div>
+            <div class="row">
+              <span class="badge secondary"
+                ><span class="dot" style="background: var(--success)"></span>Running</span
+              ><span class="badge secondary"
+                ><span class="dot" style="background: var(--warning)"></span>Needs input</span
+              ><span class="badge outline">PR #482</span><span class="badge default">Beta</span
+              ><span class="badge destructive">Failed</span>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="row">
+              <span class="tip k">Toggle sidebar<span class="kbd">⌘B</span></span
+              ><span class="tip">Open in Cursor</span><span class="kbd">⌘</span
+              ><span class="kbd">K</span>
+            </div>
+            <div class="row">
+              <span class="badge secondary"
+                ><span class="dot" style="background: var(--success)"></span>Running</span
+              ><span class="badge secondary"
+                ><span class="dot" style="background: var(--warning)"></span>Needs input</span
+              ><span class="badge outline">PR #482</span><span class="badge default">Beta</span
+              ><span class="badge destructive">Failed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">B9</div>
+        <div class="note">
+          <h3>确认框</h3>
+          <p>14px 圆角，细边不加重阴影；按钮靠右、按内容宽度，底栏一条浅灰。</p>
+          <p class="now">现在：桌面上两个按钮各占一半宽，像手机界面。</p>
+          <p class="src">cn-dialog-content · cn-dialog-footer</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="dialog">
+              <h4>Remove localhost?</h4>
+              <p>This disconnects the host from this device. Agents on it keep running.</p>
+              <div class="foot">
+                <span class="btn outline">Cancel</span><span class="btn destructive">Remove</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="dialog">
+              <h4>Remove localhost?</h4>
+              <p>This disconnects the host from this device. Agents on it keep running.</p>
+              <div class="foot">
+                <span class="btn outline">Cancel</span><span class="btn destructive">Remove</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>C 组合部件 <small>布局不动，换上 B 里的组件</small></h2>
+      <div class="item">
+        <div class="no">C1</div>
+        <div class="note">
+          <h3>设置卡片</h3>
+          <p>
+            同一张卡片里所有控件同一高度（28）、同一种外观；行与行之间一条细线；标题 14/400，说明 13
+            灰。
+          </p>
+          <p class="now">对照 N4。</p>
+          <p class="src">cn-card · cn-item</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="card">
+              <div class="r">
+                <div class="t">
+                  <b>Default send</b
+                  ><span>What happens when you press Enter while the agent is running</span>
+                </div>
+                <span class="input select sm"
+                  >Steer<svg class="i"><use href="#chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Theme</b><span>Match the system or pick one</span></div>
+                <span class="input select sm"
+                  >System<svg class="i"><use href="#chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Terminal scrollback</b><span>Lines kept per terminal</span></div>
+                <span class="input num" style="height: 28px; width: 84px">10000</span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Show in Dock</b></div>
+                <div class="seg sm">
+                  <span>Hide</span><span class="on">With window</span><span>Show</span>
+                </div>
+              </div>
+              <div class="r">
+                <div class="t"><b>Launch at login</b></div>
+                <span class="sw on"></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Updates</b><span>BySpace 0.23.6 · Stable</span></div>
+                <span class="btn outline sm">Check for updates</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="card">
+              <div class="r">
+                <div class="t">
+                  <b>Default send</b
+                  ><span>What happens when you press Enter while the agent is running</span>
+                </div>
+                <span class="input select sm"
+                  >Steer<svg class="i"><use href="#chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Theme</b><span>Match the system or pick one</span></div>
+                <span class="input select sm"
+                  >System<svg class="i"><use href="#chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Terminal scrollback</b><span>Lines kept per terminal</span></div>
+                <span class="input num" style="height: 28px; width: 84px">10000</span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Show in Dock</b></div>
+                <div class="seg sm">
+                  <span>Hide</span><span class="on">With window</span><span>Show</span>
+                </div>
+              </div>
+              <div class="r">
+                <div class="t"><b>Launch at login</b></div>
+                <span class="sw on"></span>
+              </div>
+              <div class="r">
+                <div class="t"><b>Updates</b><span>BySpace 0.23.6 · Stable</span></div>
+                <span class="btn outline sm">Check for updates</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C2</div>
+        <div class="note">
+          <h3>侧栏</h3>
+          <p>
+            行高 32，界面字号 14；项目名 500 粗，工作区行 400；悬停浅灰块，选中浅灰块加左侧 2px
+            细竖条。状态是 6px 小圆点（灰=空闲，绿=运行，黄=等你）。
+          </p>
+          <p class="now">对照 N1：现在竖条 3px 太粗，行距松，字号大。</p>
+          <p class="src">cn-sidebar-group-label · cn-sidebar-menu-button</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="sb">
+              <div class="gl">
+                Workspaces<span class="acts"
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#plus" /></svg></span
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#history" /></svg></span
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#sliders-horizontal" /></svg></span
+                ></span>
+              </div>
+              <div class="pj"><span class="av" style="background: #3d7ea6">B</span>byspace</div>
+              <div class="mb"><i class="st"></i>main</div>
+              <div class="mb on">
+                <i class="st need"></i>feat/web-rewrite<span class="meta">needs you</span>
+              </div>
+              <div class="mb h">
+                <i class="st run"></i>fix/tunnel-reconnect<span class="meta">4m</span>
+              </div>
+              <div class="pj" style="margin-top: 6px">
+                <span class="av" style="background: #8f7838">B</span>BySpace-WorkSpace
+              </div>
+              <div class="mb"><i class="st run"></i>Chief<span class="meta">12m</span></div>
+              <div class="pj" style="margin-top: 6px">
+                <span class="av" style="background: #388068">C</span>chat
+              </div>
+              <div class="mb"><i class="st"></i>chat</div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="sb">
+              <div class="gl">
+                Workspaces<span class="acts"
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#plus" /></svg></span
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#history" /></svg></span
+                  ><span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#sliders-horizontal" /></svg></span
+                ></span>
+              </div>
+              <div class="pj"><span class="av" style="background: #3d7ea6">B</span>byspace</div>
+              <div class="mb"><i class="st"></i>main</div>
+              <div class="mb on">
+                <i class="st need"></i>feat/web-rewrite<span class="meta">needs you</span>
+              </div>
+              <div class="mb h">
+                <i class="st run"></i>fix/tunnel-reconnect<span class="meta">4m</span>
+              </div>
+              <div class="pj" style="margin-top: 6px">
+                <span class="av" style="background: #8f7838">B</span>BySpace-WorkSpace
+              </div>
+              <div class="mb"><i class="st run"></i>Chief<span class="meta">12m</span></div>
+              <div class="pj" style="margin-top: 6px">
+                <span class="av" style="background: #388068">C</span>chat
+              </div>
+              <div class="mb"><i class="st"></i>chat</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C3</div>
+        <div class="note">
+          <h3>顶栏和标签栏</h3>
+          <p>
+            项目名去掉灰块，变成灰字。右侧按钮统一 28 高、同一种描边，Commit
+            和下拉箭头拼成一组。选中标签：文字变深加 2px
+            下划线；关闭按钮只在选中或悬停时出现，不遮文字。
+          </p>
+          <p class="now">对照 N2。</p>
+          <p class="src">cn-button-group · cn-tabs line</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="chrome">
+              <div class="hd">
+                <span class="ttl">main</span><span class="proj">byspace</span
+                ><span class="btn ghost icon xs"
+                  ><svg class="i sm"><use href="#ellipsis" /></svg
+                ></span>
+                <span class="acts"
+                  ><span class="grp"
+                    ><span class="btn outline sm"
+                      ><svg class="i"><use href="#play" /></svg></span
+                    ><span class="btn outline sm icon"
+                      ><svg class="i"><use href="#chevron-down" /></svg></span></span
+                  ><span class="btn outline sm icon"
+                    ><svg class="i"><use href="#github" /></svg></span
+                  ><span class="grp"
+                    ><span class="btn outline sm"
+                      ><svg class="i"><use href="#git-commit-horizontal" /></svg>Commit</span
+                    ><span class="btn outline sm icon"
+                      ><svg class="i"><use href="#chevron-down" /></svg></span></span
+                  ><span class="btn ghost icon sm"
+                    ><svg class="i"><use href="#panel-right" /></svg></span
+                ></span>
+              </div>
+              <div class="tb">
+                <span class="tab on"
+                  ><svg class="i"><use href="#square-pen" /></svg>New Agent<span class="x"
+                    ><svg class="i sm"><use href="#x" /></svg></span></span
+                ><span class="tab h"
+                  ><svg class="i"><use href="#bot" /></svg>Sidebar status rows<span class="x"
+                    ><svg class="i sm"><use href="#x" /></svg></span></span
+                ><span class="tab"
+                  ><svg class="i"><use href="#terminal" /></svg>zsh</span
+                ><span class="btn ghost icon xs add"
+                  ><svg class="i sm"><use href="#plus" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="chrome">
+              <div class="hd">
+                <span class="ttl">main</span><span class="proj">byspace</span
+                ><span class="btn ghost icon xs"
+                  ><svg class="i sm"><use href="#ellipsis" /></svg
+                ></span>
+                <span class="acts"
+                  ><span class="grp"
+                    ><span class="btn outline sm"
+                      ><svg class="i"><use href="#play" /></svg></span
+                    ><span class="btn outline sm icon"
+                      ><svg class="i"><use href="#chevron-down" /></svg></span></span
+                  ><span class="btn outline sm icon"
+                    ><svg class="i"><use href="#github" /></svg></span
+                  ><span class="grp"
+                    ><span class="btn outline sm"
+                      ><svg class="i"><use href="#git-commit-horizontal" /></svg>Commit</span
+                    ><span class="btn outline sm icon"
+                      ><svg class="i"><use href="#chevron-down" /></svg></span></span
+                  ><span class="btn ghost icon sm"
+                    ><svg class="i"><use href="#panel-right" /></svg></span
+                ></span>
+              </div>
+              <div class="tb">
+                <span class="tab on"
+                  ><svg class="i"><use href="#square-pen" /></svg>New Agent<span class="x"
+                    ><svg class="i sm"><use href="#x" /></svg></span></span
+                ><span class="tab h"
+                  ><svg class="i"><use href="#bot" /></svg>Sidebar status rows<span class="x"
+                    ><svg class="i sm"><use href="#x" /></svg></span></span
+                ><span class="tab"
+                  ><svg class="i"><use href="#terminal" /></svg>zsh</span
+                ><span class="btn ghost icon xs add"
+                  ><svg class="i sm"><use href="#plus" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C4</div>
+        <div class="note">
+          <h3>输入框（发消息）</h3>
+          <p>
+            14px 圆角，1px
+            边框加一点阴影，聚焦时出光圈。底栏选择器是透明按钮；发送按钮常驻右下角，没内容时半透明。
+          </p>
+          <p class="now">对照 N3。</p>
+          <p class="src">cn-input-group · cn-textarea · cn-input-group-addon block-end</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx col">
+            <div class="composer">
+              <div class="ta">
+                <span class="ph">Message the agent, tag @files, or use /commands and /skills</span>
+              </div>
+              <div class="ft">
+                <span class="btn ghost icon sm"
+                  ><svg class="i"><use href="#plus" /></svg></span
+                ><span class="btn ghost sm"
+                  ><svg class="i"><use href="#user" /></svg>No role<svg class="i sm">
+                    <use href="#chevron-down" /></svg></span
+                ><span class="btn ghost sm"
+                  >DeepSeek V4.1 Flash<svg class="i sm"><use href="#chevron-down" /></svg></span
+                ><span class="btn default send d"
+                  ><svg class="i"><use href="#arrow-up" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="composer f">
+              <div class="ta">Port the composer into packages/web</div>
+              <div class="ft">
+                <span class="btn ghost icon sm"
+                  ><svg class="i"><use href="#plus" /></svg></span
+                ><span class="btn ghost sm"
+                  ><svg class="i"><use href="#user" /></svg>No role<svg class="i sm">
+                    <use href="#chevron-down" /></svg></span
+                ><span class="btn ghost sm"
+                  >DeepSeek V4.1 Flash<svg class="i sm"><use href="#chevron-down" /></svg></span
+                ><span class="btn default send"
+                  ><svg class="i"><use href="#arrow-up" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark col">
+            <div class="composer">
+              <div class="ta">
+                <span class="ph">Message the agent, tag @files, or use /commands and /skills</span>
+              </div>
+              <div class="ft">
+                <span class="btn ghost icon sm"
+                  ><svg class="i"><use href="#plus" /></svg></span
+                ><span class="btn ghost sm"
+                  ><svg class="i"><use href="#user" /></svg>No role<svg class="i sm">
+                    <use href="#chevron-down" /></svg></span
+                ><span class="btn ghost sm"
+                  >DeepSeek V4.1 Flash<svg class="i sm"><use href="#chevron-down" /></svg></span
+                ><span class="btn default send d"
+                  ><svg class="i"><use href="#arrow-up" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="composer f">
+              <div class="ta">Port the composer into packages/web</div>
+              <div class="ft">
+                <span class="btn ghost icon sm"
+                  ><svg class="i"><use href="#plus" /></svg></span
+                ><span class="btn ghost sm"
+                  ><svg class="i"><use href="#user" /></svg>No role<svg class="i sm">
+                    <use href="#chevron-down" /></svg></span
+                ><span class="btn ghost sm"
+                  >DeepSeek V4.1 Flash<svg class="i sm"><use href="#chevron-down" /></svg></span
+                ><span class="btn default send"
+                  ><svg class="i"><use href="#arrow-up" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C5</div>
+        <div class="note">
+          <h3>对话：消息、工具调用、等你批准</h3>
+          <p>
+            用户消息是浅灰圆角气泡；agent
+            回复直接排在背景上。工具调用是一行灰字，悬停或展开时出浅灰底。等你批准的是一张细边卡片，黄点提示。
+          </p>
+          <p class="src">cn-bubble secondary · cn-item · cn-card</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="chat">
+              <div class="bubble">
+                Port the composer into packages/web and keep the send button visible when the input
+                is empty.
+              </div>
+              <div class="prose">
+                <p>
+                  The composer now lives in <code>packages/web/src/composer</code> and reads drafts
+                  from the session store.
+                </p>
+              </div>
+              <div class="tools">
+                <div class="tool">
+                  <svg class="i"><use href="#search" /></svg><b>Read</b> 3 files<span class="meta"
+                    >1.2s</span
+                  >
+                </div>
+                <div class="tool h">
+                  <svg class="i"><use href="#pencil" /></svg><b>Edited</b> Composer.tsx<span
+                    class="meta"
+                    ><span class="add">+86</span> <span class="del">−0</span></span
+                  >
+                </div>
+                <div class="tool open">
+                  <svg class="i"><use href="#terminal" /></svg><b>Ran</b> npm run typecheck<span
+                    class="meta"
+                    >exit 0 · 6.4s</span
+                  >
+                </div>
+                <div class="tool-body">tsgo --noEmit<br />Found 0 errors.</div>
+              </div>
+              <div class="ask">
+                <h4><span class="dot"></span>Allow git push origin feat/web-rewrite?</h4>
+                <p>Pushes 3 commits to origin. The agent is paused until you answer.</p>
+                <div class="row">
+                  <span class="btn outline sm">Deny</span
+                  ><span class="btn default sm">Allow once</span
+                  ><span class="btn ghost sm">Always allow</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="chat">
+              <div class="bubble">
+                Port the composer into packages/web and keep the send button visible when the input
+                is empty.
+              </div>
+              <div class="prose">
+                <p>
+                  The composer now lives in <code>packages/web/src/composer</code> and reads drafts
+                  from the session store.
+                </p>
+              </div>
+              <div class="tools">
+                <div class="tool">
+                  <svg class="i"><use href="#search" /></svg><b>Read</b> 3 files<span class="meta"
+                    >1.2s</span
+                  >
+                </div>
+                <div class="tool h">
+                  <svg class="i"><use href="#pencil" /></svg><b>Edited</b> Composer.tsx<span
+                    class="meta"
+                    ><span class="add">+86</span> <span class="del">−0</span></span
+                  >
+                </div>
+                <div class="tool open">
+                  <svg class="i"><use href="#terminal" /></svg><b>Ran</b> npm run typecheck<span
+                    class="meta"
+                    >exit 0 · 6.4s</span
+                  >
+                </div>
+                <div class="tool-body">tsgo --noEmit<br />Found 0 errors.</div>
+              </div>
+              <div class="ask">
+                <h4><span class="dot"></span>Allow git push origin feat/web-rewrite?</h4>
+                <p>Pushes 3 commits to origin. The agent is paused until you answer.</p>
+                <div class="row">
+                  <span class="btn outline sm">Deny</span
+                  ><span class="btn default sm">Allow once</span
+                  ><span class="btn ghost sm">Always allow</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C6</div>
+        <div class="note">
+          <h3>Markdown 和代码块</h3>
+          <p>
+            正文行高
+            1.65；行内代码是浅灰小块；代码块细边框、浅灰底、带文件名栏和复制按钮；链接下划线，不另加颜色；引用块一条细灰线。
+          </p>
+          <p class="src">shadcn 文档页的排版</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx">
+            <div class="chat">
+              <div class="prose">
+                <h3>What changed</h3>
+                <p>
+                  Both stores now hydrate from the <a>same daemon snapshot</a>, so switching hosts
+                  no longer drops the open tabs.
+                </p>
+                <ul>
+                  <li><code>Composer.tsx</code> holds the input, attachments and send.</li>
+                  <li>An empty input keeps a disabled send button.</li>
+                </ul>
+                <blockquote style="margin-top: 10px">
+                  I left the Expo screens untouched until the web shell can stand on its own.
+                </blockquote>
+              </div>
+              <div class="code">
+                <div class="ch">
+                  packages/web/src/composer/send.ts<span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#copy" /></svg
+                  ></span>
+                </div>
+                <pre><span class="k">export function</span> canSend(draft: Draft) {
+  <span class="c">// keep the button visible; disable it instead</span>
+  <span class="k">return</span> draft.text.trim() !== <span class="s">""</span> || draft.files.length &gt; 0
+}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark">
+            <div class="chat">
+              <div class="prose">
+                <h3>What changed</h3>
+                <p>
+                  Both stores now hydrate from the <a>same daemon snapshot</a>, so switching hosts
+                  no longer drops the open tabs.
+                </p>
+                <ul>
+                  <li><code>Composer.tsx</code> holds the input, attachments and send.</li>
+                  <li>An empty input keeps a disabled send button.</li>
+                </ul>
+                <blockquote style="margin-top: 10px">
+                  I left the Expo screens untouched until the web shell can stand on its own.
+                </blockquote>
+              </div>
+              <div class="code">
+                <div class="ch">
+                  packages/web/src/composer/send.ts<span class="btn ghost icon xs"
+                    ><svg class="i sm"><use href="#copy" /></svg
+                  ></span>
+                </div>
+                <pre><span class="k">export function</span> canSend(draft: Draft) {
+  <span class="c">// keep the button visible; disable it instead</span>
+  <span class="k">return</span> draft.text.trim() !== <span class="s">""</span> || draft.files.length &gt; 0
+}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="no">C7</div>
+        <div class="note">
+          <h3>空状态、滚动条、选中文字</h3>
+          <p>
+            空状态：小图标块加一句标题、一句说明，最多一个按钮。滚动条细、半透明、悬停才明显。选中文字是淡灰底，不用系统蓝。
+          </p>
+          <p class="src">cn-empty · cn-scroll-area</p>
+        </div>
+        <div class="pane bg-light">
+          <div class="cap">浅色</div>
+          <div class="byx row" style="align-items: flex-start">
+            <div class="empty">
+              <div class="ico">
+                <svg class="i"><use href="#history" /></svg>
+              </div>
+              <h4>No sessions yet</h4>
+              <p>Sessions you start appear here.</p>
+              <span class="btn outline sm">New agent</span>
+            </div>
+            <div class="scroll">
+              试着选中这段文字看颜色。Lines kept per terminal. The daemon keeps this many lines of
+              scrollback for each terminal. Older lines are dropped. Restarting the daemon clears
+              it. Raising it uses more memory on the host.
+            </div>
+          </div>
+        </div>
+        <div class="pane bg-dark">
+          <div class="cap">深色</div>
+          <div class="byx dark row" style="align-items: flex-start">
+            <div class="empty">
+              <div class="ico">
+                <svg class="i"><use href="#history" /></svg>
+              </div>
+              <h4>No sessions yet</h4>
+              <p>Sessions you start appear here.</p>
+              <span class="btn outline sm">New agent</span>
+            </div>
+            <div class="scroll">
+              试着选中这段文字看颜色。Lines kept per terminal. The daemon keeps this many lines of
+              scrollback for each terminal. Older lines are dropped. Restarting the daemon clears
+              it. Raising it uses more memory on the host.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>还没放进来的 <small>样板页没覆盖，下一版补，也可以直接告诉我先补哪个</small></h2>
+      <div class="item" style="grid-template-columns: 1fr">
+        <div class="note" style="border: 0">
+          <p>
+            文件树、Diff
+            顶栏、终端标签、历史列表行、定时任务卡片、首页四个入口卡片、新建工作区页、命令面板（⌘K）、通知横幅、权限请求以外的其他确认卡片。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      document.querySelectorAll(".picker button").forEach((b) =>
+        b.addEventListener("click", () => {
+          document.body.dataset.font = b.dataset.f;
+          document
+            .querySelectorAll(".picker button")
+            .forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        }),
+      );
+    </script>
+  </body>
+</html>
