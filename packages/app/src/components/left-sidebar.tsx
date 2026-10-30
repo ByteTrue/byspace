@@ -1028,10 +1028,11 @@ const styles = StyleSheet.create((theme) => ({
   // Yields to the buttons beside it rather than pushing them off the rail: at the sidebar's
   // 200pt minimum the four controls plus the title do not fit, and the title is the part whose
   // absence the rows below already make up for.
+  // shadcn/ui sidebar group label: 12px medium.
   workspacesSectionTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
     minWidth: 0,
   },

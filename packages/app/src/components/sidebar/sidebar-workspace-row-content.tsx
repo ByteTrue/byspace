@@ -96,7 +96,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   leadingProjectIconDataUri = null,
   serviceSummary = null,
   backdrop,
-  isHovered,
+  isSelected = false,
   isLoading,
   isCreating = false,
   shortcutNumber = null,
@@ -115,6 +115,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   /** The row's current background, so the project status badge can knock out of it. */
   backdrop: SidebarSurfaceBackdrop;
   isHovered: boolean;
+  isSelected?: boolean;
   isLoading: boolean;
   isCreating?: boolean;
   shortcutNumber?: number | null;
@@ -137,10 +138,10 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
-      isHovered && styles.workspaceBranchTextHovered,
+      isSelected && styles.workspaceBranchTextSelected,
       isCreating && styles.workspaceBranchTextCreating,
     ],
-    [isHovered, isCreating],
+    [isSelected, isCreating],
   );
 
   return (
@@ -520,17 +521,16 @@ const styles = StyleSheet.create((theme) => ({
   workspaceBranchText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    fontWeight: "400",
+    fontWeight: theme.fontWeight.normal,
     lineHeight: 20,
-    opacity: 0.76,
     flex: 1,
     minWidth: 0,
   },
-  workspaceBranchTextCreating: {
-    opacity: 0.92,
+  workspaceBranchTextSelected: {
+    fontWeight: theme.fontWeight.medium,
   },
-  workspaceBranchTextHovered: {
-    opacity: 1,
+  workspaceBranchTextCreating: {
+    opacity: 0.72,
   },
   statusDotNeedsInput: {
     backgroundColor: getStatusDotColor({ theme, bucket: "needs_input" }) ?? undefined,

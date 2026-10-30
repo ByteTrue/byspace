@@ -1132,6 +1132,7 @@ function WorkspaceRowInner({
                 serviceSummary={serviceSummary}
                 backdrop={backdrop}
                 isHovered={isHovered}
+                isSelected={selected}
                 isLoading={isArchiving || isCreating}
                 isCreating={isCreating}
                 shortcutNumber={shortcutNumber}
@@ -2563,10 +2564,10 @@ const styles = StyleSheet.create((theme) => ({
   workspaceListContainer: {},
   projectRow: {
     position: "relative",
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
+    minHeight: { xs: 36, md: 32 },
+    paddingVertical: { xs: theme.spacing[2], md: theme.spacing[1.5] },
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing[1],
     flexDirection: "row",
     alignItems: "center",
@@ -2605,9 +2606,9 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   projectTitle: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    fontWeight: "400",
+    fontWeight: theme.fontWeight.medium,
     minWidth: 0,
     flexShrink: 1,
   },
@@ -2705,12 +2706,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceRow: {
     position: "relative",
-    minHeight: 36,
+    minHeight: { xs: 36, md: 32 },
     marginBottom: theme.spacing[0.5],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: { xs: theme.spacing[2], md: theme.spacing[1.5] },
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[3],
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.md,
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
@@ -2758,9 +2759,9 @@ const styles = StyleSheet.create((theme) => ({
   selectedIndicator: {
     position: "absolute",
     left: 0,
-    top: 6,
-    bottom: 6,
-    width: 3,
+    top: 8,
+    bottom: 8,
+    width: 2,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foreground,
   },
