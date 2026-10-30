@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -277,7 +276,9 @@ func Run(version string, showMain bool, initialLink string) error {
 	var app *application.App
 	var quitting atomic.Bool
 	var appStarted atomic.Bool
-	var winMu sync.Mutex
+	// mainWin is read and mutated exclusively on the main UI thread (via InvokeAsync / InvokeSync)
+	// so it never deadlocks with Wails' main-thread tray/window callbacks (mirroring magpie's
+	// lightweight.go invariant: "never hold a lock on the main thread around InvokeSync").
 	var mainWin *application.WebviewWindow
 	var releasedWin atomic.Pointer[application.WebviewWindow]
 
@@ -331,21 +332,18 @@ func Run(version string, showMain bool, initialLink string) error {
 				syncDockPolicy(s, true)
 			},
 			func(rgb [3]uint8, dark bool) {
-				winMu.Lock()
-				w := mainWin
-				winMu.Unlock()
-				if w != nil {
-					tintWindowsTitleBar(w, rgb, dark)
-				}
+				application.InvokeAsync(func() {
+					if mainWin != nil {
+						tintWindowsTitleBar(mainWin, rgb, dark)
+					}
+				})
 			},
 			func() {
 				_ = openFolder(app, homeDir)
 			},
 			func(action string) {
 				application.InvokeAsync(func() {
-					winMu.Lock()
 					w := mainWin
-					winMu.Unlock()
 					if w == nil {
 						return
 					}
@@ -437,7 +435,6 @@ func Run(version string, showMain bool, initialLink string) error {
 		if prefs.WindowWidth >= 800 && prefs.WindowHeight >= 560 {
 			width, height = prefs.WindowWidth, prefs.WindowHeight
 		}
-		startHidden := hidden || runtime.GOOS == "windows"
 		winOpts, winBg := initialWindowsChrome(prefs)
 		w := app.Window.NewWithOptions(application.WebviewWindowOptions{
 			Name:             "main",
@@ -448,7 +445,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			MinWidth:         800,
 			MinHeight:        560,
 			Frameless:        runtime.GOOS == "windows",
-			Hidden:           startHidden,
+			Hidden:           hidden,
 			Mac:              mainMacWindowOptions(),
 			Windows:          winOpts,
 			BackgroundColour: winBg,
@@ -491,7 +488,6 @@ func Run(version string, showMain bool, initialLink string) error {
 			})
 
 			if runtime.GOOS == "windows" {
-				var shownOnce atomic.Bool
 				w.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
 					if frameOnlyResizeJS != "" {
 						w.ExecJS(frameOnlyResizeJS)
@@ -499,11 +495,6 @@ func Run(version string, showMain bool, initialLink string) error {
 					s := LoadDesktopSettings(homeDir)
 					if s.TitleBarColor != nil {
 						tintWindowsTitleBar(w, *s.TitleBarColor, s.TitleBarDark)
-					}
-					if !hidden && shownOnce.CompareAndSwap(false, true) {
-						application.InvokeAsync(func() {
-							w.Show().Focus()
-						})
 					}
 				})
 			} else if appStarted.Load() {
@@ -514,16 +505,12 @@ func Run(version string, showMain bool, initialLink string) error {
 	}
 
 	showMainWindow := func(targetURL string) {
-		winMu.Lock()
-		defer winMu.Unlock()
 		s := LoadDesktopSettings(homeDir)
 		setDock(ShouldShowInDock(s, true, false), true)
-		application.InvokeSync(func() {
+		application.InvokeAsync(func() {
 			if mainWin == nil {
 				mainWin = makeMainWindow(targetURL, false)
-				if runtime.GOOS != "windows" {
-					mainWin.Show().Focus()
-				}
+				mainWin.Show().Focus()
 				return
 			}
 			if targetURL != "" {
@@ -693,16 +680,12 @@ func Run(version string, showMain bool, initialLink string) error {
 		})
 		tray.SetMenu(menu)
 		tray.OnClick(func() {
-			winMu.Lock()
-			defer winMu.Unlock()
 			s := LoadDesktopSettings(homeDir)
-			application.InvokeSync(func() {
+			application.InvokeAsync(func() {
 				if mainWin == nil {
 					setDock(ShouldShowInDock(s, true, false), true)
 					mainWin = makeMainWindow("/", false)
-					if runtime.GOOS != "windows" {
-						mainWin.Show().Focus()
-					}
+					mainWin.Show().Focus()
 					return
 				}
 				if mainWin.IsVisible() {
@@ -757,7 +740,6 @@ func Run(version string, showMain bool, initialLink string) error {
 					}
 					on := LoadDesktopSettings(homeDir).Lightweight
 					var toClose *application.WebviewWindow
-					winMu.Lock()
 					application.InvokeSync(func() {
 						if mainWin == nil {
 							ticks = 0
@@ -776,7 +758,6 @@ func Run(version string, showMain bool, initialLink string) error {
 						releasedWin.Store(w)
 						toClose = w
 					})
-					winMu.Unlock()
 					if toClose != nil {
 						log.Println("byspace lightweight: released hidden main window WebView")
 						toClose.Close()
