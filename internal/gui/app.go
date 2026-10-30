@@ -78,8 +78,29 @@ func withDesktopSettingsAPI(
 	onTintTitleBar func([3]uint8, bool),
 	onOpenConfigFolder func(),
 	onWindowAction func(string),
+	onConfirmDialog func(title, message, confirmLabel, cancelLabel string) bool,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/_byspace/desktop/confirm" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			var req struct {
+				Title        string `json:"title"`
+				Message      string `json:"message"`
+				ConfirmLabel string `json:"confirmLabel"`
+				CancelLabel  string `json:"cancelLabel"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			confirmed := false
+			if onConfirmDialog != nil {
+				confirmed = onConfirmDialog(req.Title, req.Message, req.ConfirmLabel, req.CancelLabel)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"confirmed": confirmed})
+			return
+		}
 		if r.URL.Path == "/_byspace/desktop/settings" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
@@ -346,6 +367,52 @@ func Run(version string, showMain bool, initialLink string) error {
 						setDock(ShouldShowInDock(s, false, false), false)
 					}
 				})
+			},
+			func(title, message, confirmLabel, cancelLabel string) bool {
+				if app == nil {
+					return false
+				}
+				if strings.TrimSpace(confirmLabel) == "" {
+					confirmLabel = "OK"
+				}
+				if strings.TrimSpace(cancelLabel) == "" {
+					cancelLabel = "Cancel"
+				}
+				ch := make(chan bool, 1)
+				application.InvokeAsync(func() {
+					d := app.Dialog.Question().
+						SetTitle(title).
+						SetMessage(message)
+					winMu.Lock()
+					w := mainWin
+					winMu.Unlock()
+					if w != nil {
+						d.AttachToWindow(w)
+					}
+					confirmBtn := d.AddButton(confirmLabel)
+					confirmBtn.OnClick(func() {
+						select {
+						case ch <- true:
+						default:
+						}
+					})
+					cancelBtn := d.AddButton(cancelLabel)
+					cancelBtn.OnClick(func() {
+						select {
+						case ch <- false:
+						default:
+						}
+					})
+					d.SetDefaultButton(confirmBtn)
+					d.SetCancelButton(cancelBtn)
+					d.Show()
+				})
+				select {
+				case res := <-ch:
+					return res
+				case <-time.After(5 * time.Minute):
+					return false
+				}
 			},
 		)
 
