@@ -274,10 +274,11 @@ func Run(version string, showMain bool, initialLink string) error {
 			log.Printf("byspace gui: daemon supervisor warning: %v", err)
 		}
 		localToken := server.EnsureCLICredential(homeDir)
+		localHostname, _ := os.Hostname()
 		var uiHandler http.Handler = http.NotFoundHandler()
 		if baseUI != nil {
 			uiHandler = baseUI.
-				WithExplicitConnectionHint(sup.Addr, "BySpace").
+				WithExplicitConnectionHint(sup.Addr, localHostname).
 				WithLocalCredential(localToken)
 		}
 		assetHandler = withDesktopSettingsAPI(

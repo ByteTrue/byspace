@@ -1593,6 +1593,12 @@ export class HostRuntimeStore {
           }
         : connection;
     if (registryHasConnection(this.hosts, connectionWithHint)) {
+      if (hint.label && hint.label !== "BySpace") {
+        const matched = this.hosts.find((h) => registryHasConnection([h], connectionWithHint));
+        if (matched && matched.label === "BySpace") {
+          await this.renameHost(matched.serverId, hint.label);
+        }
+      }
       return true;
     }
 

@@ -270,7 +270,9 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 	hint := map[string]any{
 		"listen": host,
 		"useTls": useTLS,
-		"label":  label,
+	}
+	if strings.TrimSpace(label) != "" {
+		hint["label"] = strings.TrimSpace(label)
 	}
 	if credential != "" {
 		hint["password"] = credential
