@@ -440,5 +440,5 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   directorySpacer: { flex: 1, minWidth: 0 },
-  tooltip: { color: theme.colors.popoverForeground, fontSize: theme.fontSize.base },
+  tooltip: { color: theme.colors.tooltipForeground, fontSize: theme.fontSize.base },
 }));

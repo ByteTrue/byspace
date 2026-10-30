@@ -2175,7 +2175,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.base,
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
   },
   buttonDisabled: {
     opacity: 0.5,

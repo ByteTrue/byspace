@@ -2615,7 +2615,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[0.5],
   },
   projectPathTooltipLine: {
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.sm,
     lineHeight: 16,
   },
@@ -2694,7 +2694,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   projectActionTooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
   },
   projectActionTooltipShortcut: {},

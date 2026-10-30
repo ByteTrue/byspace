@@ -196,7 +196,7 @@ function preventAnchorNavigation(event: MouseEvent<HTMLAnchorElement>): void {
 
 const styles = StyleSheet.create((theme) => ({
   tooltipPath: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
   },

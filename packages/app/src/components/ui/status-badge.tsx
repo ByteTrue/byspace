@@ -30,22 +30,22 @@ export function StatusBadge({ label, variant = "muted", leading }: StatusBadgePr
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // shadcn/ui badge (secondary): a 20px pill, no border.
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderRadius: theme.borderRadius.base,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    alignSelf: "flex-start",
+    gap: theme.spacing[1],
+    minHeight: 20,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 2,
   },
   pillText: {
-    fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foreground,
   },
   pillTextSuccess: {
     color: theme.colors.statusSuccess,

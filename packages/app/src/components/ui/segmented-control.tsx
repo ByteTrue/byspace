@@ -110,9 +110,20 @@ function SegmentItem<T extends string>({
   currentValue: T;
   onValueChange: (value: T) => void;
 }) {
-  const labelStyle = useMemo(
-    () => [styles.label, labelSizeStyle, isSelected && styles.labelSelected],
-    [labelSizeStyle, isSelected],
+  const renderLabel = useCallback(
+    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
+      <Text
+        style={[
+          styles.label,
+          labelSizeStyle,
+          (isSelected || Boolean(hovered)) && styles.labelSelected,
+        ]}
+        numberOfLines={1}
+      >
+        {option.label}
+      </Text>
+    ),
+    [labelSizeStyle, isSelected, option.label],
   );
   const handlePress = useCallback(() => {
     if (!option.disabled && option.value !== currentValue) {
@@ -120,12 +131,10 @@ function SegmentItem<T extends string>({
     }
   }, [option.disabled, option.value, currentValue, onValueChange]);
   const pressableStyle = useCallback(
-    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+    () => [
       styles.segment,
       segmentSizeStyle,
       isSelected && styles.segmentSelected,
-      Boolean(hovered) && !isSelected && styles.segmentHover,
-      pressed && !isSelected && styles.segmentPressed,
       option.disabled && styles.segmentDisabled,
     ],
     [isSelected, option.disabled, segmentSizeStyle],
@@ -144,17 +153,17 @@ function SegmentItem<T extends string>({
       onPress={handlePress}
       style={pressableStyle}
     >
-      {option.icon ? (
-        <ThemedSegmentIcon
-          icon={option.icon}
-          iconSize={iconSize}
-          uniProps={isSelected ? selectedIconMapping : mutedIconMapping}
-        />
-      ) : null}
-      {hideLabels ? null : (
-        <Text style={labelStyle} numberOfLines={1}>
-          {option.label}
-        </Text>
+      {(state) => (
+        <>
+          {option.icon ? (
+            <ThemedSegmentIcon
+              icon={option.icon}
+              iconSize={iconSize}
+              uniProps={isSelected ? selectedIconMapping : mutedIconMapping}
+            />
+          ) : null}
+          {hideLabels ? null : renderLabel(state)}
+        </>
       )}
     </Pressable>
   );
@@ -164,11 +173,11 @@ const styles = StyleSheet.create((theme) => {
   const geometry = createControlGeometry(theme);
 
   return {
+    // shadcn/ui tabs (default variant): a muted track holding a raised selected trigger.
     container: {
       flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "transparent",
-      gap: theme.spacing[1],
+      alignItems: "stretch",
+      backgroundColor: theme.colors.surface2,
     },
     containerXs: {
       ...geometry.segmentedContainerXs,
@@ -184,7 +193,9 @@ const styles = StyleSheet.create((theme) => {
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
-      gap: theme.spacing[1],
+      gap: theme.spacing[1.5],
+      borderWidth: 1,
+      borderColor: "transparent",
     },
     segmentXs: {
       ...geometry.segmentedSegmentXs,
@@ -196,13 +207,9 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedSegmentMd,
     },
     segmentSelected: {
-      backgroundColor: theme.colors.surface3,
-    },
-    segmentHover: {
-      backgroundColor: theme.colors.surface2,
-    },
-    segmentPressed: {
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.segmentedThumb,
+      borderColor: theme.colors.segmentedThumbBorder,
+      ...theme.shadow.sm,
     },
     segmentDisabled: {
       opacity: theme.opacity[50],
@@ -213,7 +220,7 @@ const styles = StyleSheet.create((theme) => {
     },
     label: {
       color: theme.colors.foregroundMuted,
-      fontWeight: theme.fontWeight.normal,
+      fontWeight: theme.fontWeight.medium,
     },
     labelXs: {
       ...geometry.segmentedLabelXs,

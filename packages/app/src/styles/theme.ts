@@ -203,6 +203,16 @@ const darkStatusDotColors = {
   statusDotRunning: "#5caaf6",
 };
 
+/** `#rrggbb` plus an alpha, as `rgba()`. Theme builders derive translucent state fills from it. */
+export function withAlpha(hex: string, alpha: number): string {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) {
+    throw new Error(`withAlpha expects #rrggbb, got ${hex}`);
+  }
+  const [r, g, b] = match.slice(1).map((part) => Number.parseInt(part, 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export interface LightThemeConfig {
   surface0: string;
   surface1: string;
@@ -254,9 +264,29 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surface2,
-    surfaceSidebarSelected: tint.surface3,
+    // shadcn/ui sidebar: hover and active share sidebar-accent; the selected row adds its indicator.
+    surfaceSidebarSelected: tint.surface2,
     surfaceWorkspace: tint.surface0,
-    interactionHighlight: "rgba(0, 0, 0, 0.06)",
+    interactionHighlight: "rgba(0, 0, 0, 0.04)",
+
+    // Control chrome, after shadcn/ui: outline buttons and fields sit on `controlFill` behind a
+    // `borderAccent` (input) border; `focusRing` is the 3px ring at half the ring colour.
+    controlFill: tint.surface0,
+    controlFillHover: tint.surface2,
+    accentHover: withAlpha(tint.accent, 0.8),
+    destructiveSoft: withAlpha(tint.destructive, 0.1),
+    destructiveSoftHover: withAlpha(tint.destructive, 0.2),
+    focusRing: withAlpha(tint.ring, 0.5),
+    segmentedThumb: tint.surface0,
+    segmentedThumbBorder: "transparent",
+    switchTrackOff: tint.borderAccent,
+    switchThumbOff: tint.surface0,
+    switchThumbOn: tint.surface0,
+    tooltip: tint.foreground,
+    tooltipForeground: tint.surface0,
+    tooltipForegroundMuted: withAlpha(tint.surface0, 0.65),
+    tooltipKbd: withAlpha(tint.surface0, 0.2),
+    surfaceFooter: withAlpha(tint.surface2, 0.5),
 
     foreground: tint.foreground,
     foregroundMuted: tint.foregroundMuted,
@@ -284,7 +314,7 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     muted: tint.surface2,
     mutedForeground: tint.foregroundMuted,
     accentBorder: tint.borderAccent,
-    input: tint.surface2,
+    input: tint.borderAccent,
     ring: tint.ring,
 
     ...lightDiffColors,
@@ -305,28 +335,31 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
   };
 }
 
+// shadcn/ui `neutral` (design/references/shadcn/themes.ts), oklch converted to sRGB hex.
+// background/card -> surface0/1, muted/secondary/accent -> surface2, border/input -> surface3,
+// sidebar -> surfaceSidebar, primary -> accent.
 const lightSemanticColors = buildLightSemanticColors({
   surface0: "#ffffff",
   surface1: "#ffffff",
-  surface2: "#f0f1f3",
-  surface3: "#e5e7eb",
-  surface4: "#d6d9de",
+  surface2: "#f5f5f5",
+  surface3: "#e5e5e5",
+  surface4: "#d4d4d4",
   surfaceDiffEmpty: "#ffffff",
-  surfaceSidebar: "#f6f7f8",
-  foreground: "#201d1d",
-  foregroundMuted: "#646262",
-  foregroundExtraMuted: "#9a9898",
-  border: "rgba(15, 0, 0, 0.08)",
-  borderAccent: "rgba(15, 0, 0, 0.09)",
-  accent: "#201d1d",
-  accentBright: "#302c2c",
-  accentForeground: "#ffffff",
-  primary: "#18181b",
+  surfaceSidebar: "#fafafa",
+  foreground: "#0a0a0a",
+  foregroundMuted: "#737373",
+  foregroundExtraMuted: "#a1a1a1",
+  border: "#e5e5e5",
+  borderAccent: "#e5e5e5",
+  accent: "#171717",
+  accentBright: "#262626",
+  accentForeground: "#fafafa",
+  primary: "#171717",
   primaryForeground: "#fafafa",
-  destructive: "#ff3b30",
+  destructive: "#e7000b",
   terminalBlack: "#1a1a1e",
   terminalBrightBlack: "#3f3f46",
-  ring: "#201d1d",
+  ring: "#a1a1a1",
 });
 
 // ---------------------------------------------------------------------------
@@ -383,10 +416,28 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surface4: tint.surface4,
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
-    surfaceSidebarHover: tint.surface1,
+    surfaceSidebarHover: tint.surface2,
     surfaceSidebarSelected: tint.surface2,
-    surfaceWorkspace: tint.surface1,
-    interactionHighlight: "rgba(255, 255, 255, 0.08)",
+    surfaceWorkspace: tint.surface0,
+    interactionHighlight: "rgba(255, 255, 255, 0.06)",
+
+    // See the light builder. Dark fields and outline buttons are a white wash (input/30, input/50).
+    controlFill: "rgba(255, 255, 255, 0.045)",
+    controlFillHover: "rgba(255, 255, 255, 0.075)",
+    accentHover: withAlpha(tint.accent, 0.8),
+    destructiveSoft: withAlpha(tint.destructive, 0.2),
+    destructiveSoftHover: withAlpha(tint.destructive, 0.3),
+    focusRing: withAlpha(ring, 0.5),
+    segmentedThumb: "rgba(255, 255, 255, 0.045)",
+    segmentedThumbBorder: tint.borderAccent,
+    switchTrackOff: "rgba(255, 255, 255, 0.12)",
+    switchThumbOff: foreground,
+    switchThumbOn: tint.accentForeground ?? "#ffffff",
+    tooltip: foreground,
+    tooltipForeground: tint.surface0,
+    tooltipForegroundMuted: withAlpha(tint.surface0, 0.65),
+    tooltipKbd: withAlpha(tint.surface0, 0.2),
+    surfaceFooter: withAlpha(tint.surface2, 0.5),
 
     foreground,
     foregroundMuted: tint.foregroundMuted,
@@ -406,7 +457,7 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 
     // Legacy aliases (for gradual migration)
     background: tint.surface0,
-    popover: tint.surface2,
+    popover: tint.surface1,
     popoverForeground: foreground,
     primary: foreground,
     primaryForeground: tint.surface0,
@@ -415,7 +466,7 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     muted: tint.surface2,
     mutedForeground: tint.foregroundMuted,
     accentBorder: tint.borderAccent,
-    input: tint.surface2,
+    input: tint.borderAccent,
     ring,
 
     ...darkDiffColors,
@@ -440,25 +491,27 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// BySpace — clean terminal dark with elevated hierarchy (default)
+// BySpace (default) — shadcn/ui `neutral` dark. The sidebar (#171717) is lighter than the
+// workspace card (#0a0a0a), as in shadcn's inset sidebar; borders are white at 10% and 15%.
 const byspaceDarkColors = buildDarkSemanticColors({
-  surface0: "#0f1011",
-  surface1: "#18191b",
-  surface2: "#222426",
-  surface3: "#2d2f32",
-  surface4: "#3a3d41",
-  surfaceDiffEmpty: "#0f1011",
-  surfaceSidebar: "#0a0b0c",
-  foregroundMuted: "#8a8f96",
-  foregroundExtraMuted: "#62666c",
-  border: "#25272a",
-  borderAccent: "#2c2e32",
-  accent: "#ffffff",
-  accentBright: "#ffffff",
-  accentForeground: "#0f1011",
-  destructive: "#f85149",
-  terminalBlack: "#0f1011",
-  terminalBrightBlack: "#3a3d41",
+  surface0: "#0a0a0a",
+  surface1: "#171717",
+  surface2: "#262626",
+  surface3: "#333333",
+  surface4: "#404040",
+  surfaceDiffEmpty: "#0a0a0a",
+  surfaceSidebar: "#171717",
+  foregroundMuted: "#a1a1a1",
+  foregroundExtraMuted: "#737373",
+  border: "rgba(255, 255, 255, 0.1)",
+  borderAccent: "rgba(255, 255, 255, 0.15)",
+  accent: "#e5e5e5",
+  accentBright: "#fafafa",
+  accentForeground: "#171717",
+  destructive: "#ff6467",
+  terminalBlack: "#0a0a0a",
+  terminalBrightBlack: "#404040",
+  ring: "#737373",
 });
 
 // Zinc — neutral gray, no tint
@@ -548,6 +601,7 @@ export const SPACING = {
   1: 4,
   1.5: 6,
   2: 8,
+  2.5: 10,
   3: 12,
   4: 16,
   6: 24,
@@ -589,12 +643,13 @@ export const FONT_WEIGHT = {
   bold: "bold" as const,
 } as const;
 
+// shadcn/ui radius ladder from --radius 10px: sm 6 (base), md 8, lg 10, xl 14.
 export const BORDER_RADIUS = {
   none: 0,
   sm: 4,
   base: 6,
   md: 8,
-  lg: 12,
+  lg: 10,
   xl: 14,
   "2xl": 16,
   "3xl": 20,
@@ -616,10 +671,12 @@ export const OPACITY = {
 // Platform default font stacks — copied verbatim from constants/theme.ts `Fonts`
 // (sans -> ui, mono -> mono). These seed the dynamic `fontFamily` theme token and
 // are the fallback an empty user-supplied family resolves to at apply time.
+// Geist is self-hosted (public/fonts, declared in public/index.html); CJK falls through to the
+// platform UI faces.
 export const DEFAULT_UI_FONT_STACK: string = Platform.select({
   ios: "system-ui",
   default: "normal",
-  web: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  web: "Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', Roboto, system-ui, sans-serif",
 });
 
 export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
@@ -719,23 +776,24 @@ const pureBlackDarkColors = buildDarkSemanticColors({
 
 export const darkPureBlackTheme = buildDarkTheme(pureBlackDarkColors);
 
+// shadcn/ui shadow-xs, shadow-md, shadow-lg (first layer of each).
 const lightShadow = {
   sm: {
-    shadowColor: "rgba(0, 0, 0, 0.04)",
+    shadowColor: "rgba(0, 0, 0, 0.05)",
     shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 4,
+    shadowRadius: 2,
     elevation: 1,
   },
   md: {
-    shadowColor: "rgba(0, 0, 0, 0.06)",
+    shadowColor: "rgba(0, 0, 0, 0.1)",
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 16,
+    shadowRadius: 6,
     elevation: 3,
   },
   lg: {
-    shadowColor: "rgba(0, 0, 0, 0.08)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 28,
+    shadowColor: "rgba(0, 0, 0, 0.1)",
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 15,
     elevation: 6,
   },
 } as const;
@@ -771,7 +829,7 @@ export const THEME_OPTIONS = [
     group: "primary",
     unistylesName: "dark",
     theme: darkTheme,
-    swatch: "#2D8B62",
+    swatch: "#171717",
   },
   { name: "auto", group: "primary" },
   {

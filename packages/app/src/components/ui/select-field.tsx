@@ -348,8 +348,8 @@ const styles = StyleSheet.create((theme) => {
     trigger: {
       flexDirection: "row",
       alignItems: "center",
-      gap: theme.spacing[2],
-      backgroundColor: theme.colors.surface2,
+      gap: theme.spacing[1.5],
+      backgroundColor: theme.colors.controlFill,
     },
     triggerSm: {
       ...geometry.fieldControlSm,

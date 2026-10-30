@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#181B1A" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BySpace" />
@@ -15,7 +16,39 @@
     />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+      rel="preload"
+      href="/fonts/geist-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <title>%WEB_TITLE%</title>
+    <!-- Geist, the interface face (DEFAULT_UI_FONT_STACK in src/styles/theme.ts). Variable weight,
+         from @fontsource-variable/geist 5.3.0, SIL OFL 1.1 (public/fonts/OFL-Geist.txt). -->
+    <style>
+      @font-face {
+        font-family: "Geist";
+        font-style: normal;
+        font-display: swap;
+        font-weight: 100 900;
+        src: url("/fonts/geist-latin-ext-wght-normal.woff2") format("woff2");
+        unicode-range:
+          U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+          U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+          U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: "Geist";
+        font-style: normal;
+        font-display: swap;
+        font-weight: 100 900;
+        src: url("/fonts/geist-latin-wght-normal.woff2") format("woff2");
+        unicode-range:
+          U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+          U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+    </style>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* Keep the app shell fixed to the viewport. */
@@ -33,11 +66,11 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
-      /* Prevent white flash before React mounts */
+      /* Prevent white flash before React mounts: the dark shell is the sidebar colour. */
       @media (prefers-color-scheme: dark) {
         html,
         body {
-          background-color: #181b1a;
+          background-color: #171717;
         }
       }
       /* These styles make the root element full-height */
@@ -77,9 +110,11 @@
       *:focus {
         outline: none;
       }
+      /* shadcn/ui focus ring (ring/50, 3px, flush with the border). One translucent grey reads
+         on both the light and the dark surfaces, so it needs no theme variable. */
       *:focus-visible {
-        outline: 2px solid #20744a;
-        outline-offset: 2px;
+        outline: 3px solid rgba(161, 161, 161, 0.5);
+        outline-offset: 0;
       }
     </style>
   </head>

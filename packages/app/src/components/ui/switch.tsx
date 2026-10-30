@@ -54,10 +54,7 @@ function SwitchTrack({
   }));
 
   const trackStyle = useMemo(() => [styles.switchTrack, trackAnimatedStyle], [trackAnimatedStyle]);
-  const thumbStyle = useMemo(
-    () => [styles.switchThumb, styles.thumb, thumbAnimatedStyle],
-    [thumbAnimatedStyle],
-  );
+  const thumbStyle = useMemo(() => [styles.switchThumb, thumbAnimatedStyle], [thumbAnimatedStyle]);
 
   return (
     <Animated.View style={trackStyle}>
@@ -67,10 +64,10 @@ function SwitchTrack({
 }
 
 const ThemedSwitchTrack = withUnistyles(SwitchTrack, (theme: Theme) => ({
-  trackOffColor: theme.colors.surface3,
+  trackOffColor: theme.colors.switchTrackOff,
   trackOnColor: theme.colors.accent,
-  thumbOffColor: theme.colors.palette.white,
-  thumbOnColor: theme.colors.accentForeground,
+  thumbOffColor: theme.colors.switchThumbOff,
+  thumbOnColor: theme.colors.switchThumbOn,
 }));
 
 export function Switch({
@@ -131,13 +128,6 @@ const styles = StyleSheet.create((theme) => {
       width: switchGeometry.thumbSize,
       height: switchGeometry.thumbSize,
       borderRadius: switchGeometry.thumbSize / 2,
-    },
-    thumb: {
-      shadowColor: "rgba(0, 0, 0, 0.25)",
-      shadowOffset: { width: 0, height: 1 },
-      shadowRadius: 2,
-      shadowOpacity: 1,
-      elevation: 2,
     },
     disabled: {
       opacity: theme.opacity[50],

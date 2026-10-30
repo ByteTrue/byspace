@@ -75,14 +75,11 @@ function ButtonIcon({ loading, leftIcon, iconSize, iconColor }: ButtonIconProps)
 const ThemedButtonIcon = withUnistyles(ButtonIcon);
 
 const foregroundIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foreground });
-const foregroundMutedIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.foregroundMuted,
-});
 const accentForegroundIconMapping = (theme: Theme) => ({
   iconColor: theme.colors.accentForeground,
 });
-const destructiveForegroundIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.destructiveForeground,
+const destructiveIconMapping = (theme: Theme) => ({
+  iconColor: theme.colors.destructive,
 });
 
 const styles = StyleSheet.create((theme) => {
@@ -93,7 +90,7 @@ const styles = StyleSheet.create((theme) => {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: theme.spacing[2],
+      gap: theme.spacing[1.5],
       borderRadius: theme.borderRadius.lg,
       borderWidth: 1,
       borderColor: "transparent",
@@ -110,28 +107,41 @@ const styles = StyleSheet.create((theme) => {
     lg: {
       ...geometry.buttonLg,
     },
+    // shadcn/ui button variants: each one owns its rest and hover fill.
     default: {
       backgroundColor: theme.colors.accent,
-      borderColor: theme.colors.accent,
+    },
+    defaultHovered: {
+      backgroundColor: theme.colors.accentHover,
     },
     secondary: {
+      backgroundColor: theme.colors.surface2,
+    },
+    secondaryHovered: {
       backgroundColor: theme.colors.surface3,
-      borderColor: theme.colors.surface3,
     },
     outline: {
-      backgroundColor: "transparent",
-      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.controlFill,
+      borderColor: theme.colors.borderAccent,
+    },
+    outlineHovered: {
+      backgroundColor: theme.colors.controlFillHover,
     },
     ghost: {
       backgroundColor: "transparent",
-      borderColor: "transparent",
+    },
+    ghostHovered: {
+      backgroundColor: theme.colors.interactionHighlight,
     },
     destructive: {
-      backgroundColor: theme.colors.destructive,
-      borderColor: theme.colors.destructive,
+      backgroundColor: theme.colors.destructiveSoft,
     },
+    destructiveHovered: {
+      backgroundColor: theme.colors.destructiveSoftHover,
+    },
+    // The press sinks the button a pixel instead of fading it.
     pressed: {
-      opacity: 0.85,
+      transform: [{ translateY: 1 }],
     },
     disabled: {
       opacity: theme.opacity[50],
@@ -139,7 +149,7 @@ const styles = StyleSheet.create((theme) => {
     text: {
       color: theme.colors.foreground,
       ...geometry.buttonText,
-      fontWeight: theme.fontWeight.normal,
+      fontWeight: theme.fontWeight.medium,
     },
     textXs: {
       ...geometry.buttonTextXs,
@@ -148,13 +158,7 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.accentForeground,
     },
     textDestructive: {
-      color: theme.colors.destructiveForeground,
-    },
-    textGhost: {
-      color: theme.colors.foregroundMuted,
-    },
-    textGhostHovered: {
-      color: theme.colors.foreground,
+      color: theme.colors.destructive,
     },
   };
 });
@@ -187,16 +191,22 @@ export function Button({
   const isDisabled = disabled || loading;
 
   let variantStyle: ViewStyle;
+  let variantHoveredStyle: ViewStyle;
   if (variant === "default") {
     variantStyle = styles.default;
+    variantHoveredStyle = styles.defaultHovered;
   } else if (variant === "secondary") {
     variantStyle = styles.secondary;
+    variantHoveredStyle = styles.secondaryHovered;
   } else if (variant === "outline") {
     variantStyle = styles.outline;
+    variantHoveredStyle = styles.outlineHovered;
   } else if (variant === "ghost") {
     variantStyle = styles.ghost;
+    variantHoveredStyle = styles.ghostHovered;
   } else {
     variantStyle = styles.destructive;
+    variantHoveredStyle = styles.destructiveHovered;
   }
 
   let sizeStyle: ViewStyle;
@@ -209,7 +219,6 @@ export function Button({
   } else {
     sizeStyle = styles.md;
   }
-  const isGhostHovered = hovered && variant === "ghost";
 
   const handleHoverIn = useCallback(() => setHovered(true), []);
   const handleHoverOut = useCallback(() => setHovered(false), []);
@@ -219,11 +228,12 @@ export function Button({
       styles.base,
       sizeStyle,
       variantStyle,
-      pressed ? styles.pressed : null,
+      hovered && !isDisabled ? variantHoveredStyle : null,
+      pressed && !isDisabled ? styles.pressed : null,
       isDisabled ? styles.disabled : null,
       style,
     ],
-    [sizeStyle, variantStyle, isDisabled, style],
+    [sizeStyle, variantStyle, variantHoveredStyle, hovered, isDisabled, style],
   );
 
   const resolvedTextStyle = useMemo(
@@ -232,11 +242,9 @@ export function Button({
       size === "xs" ? styles.textXs : null,
       variant === "default" ? styles.textDefault : null,
       variant === "destructive" ? styles.textDestructive : null,
-      variant === "ghost" ? styles.textGhost : null,
       textStyle,
-      isGhostHovered ? styles.textGhostHovered : null,
     ],
-    [size, variant, textStyle, isGhostHovered],
+    [size, variant, textStyle],
   );
 
   const accessibilityState = useMemo(
@@ -249,10 +257,7 @@ export function Button({
       return accentForegroundIconMapping;
     }
     if (variant === "destructive") {
-      return destructiveForegroundIconMapping;
-    }
-    if (variant === "ghost") {
-      return isGhostHovered ? foregroundIconMapping : foregroundMutedIconMapping;
+      return destructiveIconMapping;
     }
     return foregroundIconMapping;
   }

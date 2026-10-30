@@ -1707,7 +1707,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.foregroundMuted,
   },
   newTabTooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
   },
   tooltipAgentContent: {
@@ -1715,7 +1715,7 @@ const styles = StyleSheet.create((theme) => ({
     maxWidth: 420,
   },
   agentTooltipTitle: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
   },
   tooltipAgentMetadata: {
@@ -1724,15 +1724,15 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   tooltipAgentId: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.tooltipForegroundMuted,
     fontSize: theme.fontSize.sm,
   },
   tooltipAgentSeparator: {
-    color: theme.colors.foregroundExtraMuted,
+    color: theme.colors.tooltipForegroundMuted,
     fontSize: theme.fontSize.sm,
   },
   tooltipAgentActivity: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.tooltipForegroundMuted,
     fontSize: theme.fontSize.sm,
   },
   menuItemHint: {

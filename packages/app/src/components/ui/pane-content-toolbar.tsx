@@ -198,6 +198,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
   },
 }));

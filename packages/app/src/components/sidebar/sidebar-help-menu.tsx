@@ -191,7 +191,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.base,
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
   },
   versionList: {
     gap: theme.spacing[1],

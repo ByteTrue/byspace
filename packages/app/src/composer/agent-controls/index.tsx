@@ -1978,7 +1978,7 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
   },
   tooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.4,
   },

@@ -461,7 +461,7 @@ const styles = StyleSheet.create((theme) => ({
     right: -TAB_GAP / 2 - TAB_DROP_INDICATOR_WIDTH / 2,
   },
   tooltipText: {
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
   },
 }));

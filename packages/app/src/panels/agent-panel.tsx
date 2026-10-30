@@ -2039,7 +2039,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   streamControlTooltipText: {
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.sm,
   },
   historySyncOverlay: {

@@ -275,16 +275,16 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 200,
   },
   tooltipTitle: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
   },
   tooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.4,
   },
   tooltipDetail: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.tooltipForegroundMuted,
     fontSize: theme.fontSize.sm,
     lineHeight: theme.fontSize.sm * 1.4,
   },

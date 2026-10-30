@@ -169,7 +169,7 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   tooltipText: {
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.sm,
   },
   combinedIcon: {

@@ -168,16 +168,10 @@ export function SkillSelectionSheet({
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
-        <Button
-          style={styles.footerButton}
-          variant="secondary"
-          onPress={handleDismiss}
-          disabled={isSaving}
-        >
+        <Button variant="secondary" onPress={handleDismiss} disabled={isSaving}>
           {t("common.actions.cancel")}
         </Button>
         <Button
-          style={styles.footerButton}
           variant="default"
           onPress={handleSave}
           loading={isSaving}
@@ -376,10 +370,8 @@ const styles = StyleSheet.create((theme) => ({
   footer: {
     flex: 1,
     flexDirection: "row",
-    gap: theme.spacing[3],
-  },
-  footerButton: {
-    flex: 1,
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
   },
   checkboxRow: {
     justifyContent: "flex-start",

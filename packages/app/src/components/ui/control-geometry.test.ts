@@ -2,23 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   buttonControlHeight,
   createControlGeometry,
+  DESKTOP_CONTROL_HEIGHTS,
   getControlInteractionPhase,
 } from "@/components/ui/control-geometry";
 import type { Theme } from "@/styles/theme";
 
 const theme = {
   borderRadius: {
-    md: 6,
-    lg: 8,
-    xl: 12,
+    base: 6,
+    md: 8,
+    lg: 10,
+    xl: 14,
     full: 9999,
   },
   borderWidth: {
     1: 1,
   },
   colors: {
-    accent: "#20744A",
-    borderAccent: "#2F3534",
+    borderAccent: "#e5e5e5",
+    ring: "#a1a1a1",
+    focusRing: "rgba(161, 161, 161, 0.5)",
   },
   fontSize: {
     xs: 10,
@@ -30,7 +33,9 @@ const theme = {
   },
   spacing: {
     0: 0,
+    1.5: 6,
     2: 8,
+    2.5: 10,
     3: 12,
     4: 16,
     6: 24,
@@ -38,29 +43,21 @@ const theme = {
 } as unknown as Theme;
 
 describe("control geometry", () => {
-  it("keeps resting control borders transparent while preserving border geometry", () => {
+  it("draws the input border at rest and the shadcn focus ring when active", () => {
     const geometry = createControlGeometry(theme);
 
-    expect(geometry.controlRest).toMatchObject({
+    expect(geometry.controlRest).toEqual({
       borderWidth: 1,
-      borderColor: "transparent",
+      borderColor: "#e5e5e5",
       outlineColor: "transparent",
       outlineWidth: 0,
     });
-  });
-
-  it("uses the shared hover border and active focus ring values", () => {
-    const geometry = createControlGeometry(theme);
-
-    expect(geometry.controlHover).toEqual({
-      borderColor: "#2F3534",
-    });
     expect(geometry.controlActive).toEqual({
-      borderColor: "#2F3534",
-      outlineColor: "#20744A",
-      outlineOffset: 1,
+      borderColor: "#a1a1a1",
+      outlineColor: "rgba(161, 161, 161, 0.5)",
+      outlineOffset: 0,
       outlineStyle: "solid",
-      outlineWidth: 2,
+      outlineWidth: 3,
     });
   });
 
@@ -76,85 +73,59 @@ describe("control geometry", () => {
   it("keeps field text sizing tied to control size", () => {
     const geometry = createControlGeometry(theme);
 
-    expect(geometry.fieldTextSm.fontSize).toBe(14);
-    expect(geometry.fieldTextSm.lineHeight).toBe(20);
-    expect(geometry.fieldTextMd.fontSize).toBe(14);
-    expect(geometry.fieldTextMd.lineHeight).toBe(20);
+    expect(geometry.fieldTextSm).toEqual({ fontSize: 14, lineHeight: 20 });
+    expect(geometry.fieldTextMd).toEqual({ fontSize: 14, lineHeight: 20 });
     expect(geometry.formTextInputSm.fontSize).toBe(14);
-    expect(geometry.formTextInputSm.lineHeight).toBe(20);
-    expect(geometry.formTextInputMd.fontSize).toBe(14);
     expect(geometry.formTextInputMd.lineHeight).toBe(20);
   });
 
-  it("derives field padding from content and border without changing the control height", () => {
+  it("derives field padding from content and border at both breakpoints", () => {
     const geometry = createControlGeometry(theme);
-    const borderWidth = theme.borderWidth[1];
+    const border = theme.borderWidth[1];
 
-    expect(geometry.fieldControlSm.minHeight).toBe(32);
-    expect(geometry.fieldControlSm.paddingVertical).toBe(5);
-    expect(
-      geometry.fieldTextSm.lineHeight +
-        geometry.fieldControlSm.paddingVertical * 2 +
-        borderWidth * 2,
-    ).toBe(geometry.fieldControlSm.minHeight);
-
-    expect(geometry.fieldControlMd.minHeight).toBe(44);
-    expect(geometry.fieldControlMd.paddingVertical).toBe(11);
-    expect(
-      geometry.fieldTextMd.lineHeight +
-        geometry.fieldControlMd.paddingVertical * 2 +
-        borderWidth * 2,
-    ).toBe(geometry.fieldControlMd.minHeight);
-
-    expect(geometry.formTextInputSm.paddingVertical).toBe(5);
-    expect(geometry.formTextInputMd.paddingVertical).toBe(11);
+    expect(geometry.fieldControlSm.minHeight).toEqual({ xs: 32, md: 28 });
+    expect(geometry.fieldControlMd.minHeight).toEqual({ xs: 44, md: 32 });
+    for (const control of [geometry.fieldControlSm, geometry.fieldControlMd]) {
+      for (const breakpoint of ["xs", "md"] as const) {
+        expect(
+          geometry.fieldTextSm.lineHeight + control.paddingVertical[breakpoint] * 2 + border * 2,
+        ).toBe(control.minHeight[breakpoint]);
+      }
+    }
   });
 
-  it("keeps segmented controls ghost with button-radius segments in a button-sized track", () => {
+  it("uses shadcn nova heights on desktop and touch heights on compact", () => {
     const geometry = createControlGeometry(theme);
 
-    expect(geometry.segmentedContainerXs.padding).toBe(0);
-    expect(geometry.segmentedContainerSm.padding).toBe(0);
-    expect(geometry.segmentedContainerMd.padding).toBe(0);
-    expect(geometry.segmentedSegmentXs.borderRadius).toBe(geometry.buttonXs.borderRadius);
-    expect(geometry.segmentedSegmentSm.borderRadius).toBe(geometry.buttonSm.borderRadius);
-    expect(geometry.segmentedSegmentMd.borderRadius).toBe(geometry.buttonMd.borderRadius);
-    expect(geometry.segmentedContainerXs.minHeight).toBe(geometry.buttonXs.minHeight);
-    expect(geometry.segmentedContainerSm.minHeight).toBe(geometry.buttonSm.minHeight);
-    expect(geometry.segmentedContainerMd.minHeight).toBe(geometry.buttonMd.minHeight);
-    expect(geometry.segmentedSegmentXs.minHeight).toBe(24);
-    expect(geometry.segmentedSegmentSm.minHeight).toBe(28);
-    expect(geometry.segmentedSegmentMd.minHeight).toBe(38);
+    expect(DESKTOP_CONTROL_HEIGHTS).toEqual({ xs: 24, sm: 28, md: 32, lg: 36 });
+    expect(geometry.buttonXs.minHeight).toEqual({ xs: buttonControlHeight.xs, md: 24 });
+    expect(geometry.buttonSm.minHeight).toEqual({ xs: buttonControlHeight.sm, md: 28 });
+    expect(geometry.buttonMd.minHeight).toEqual({ xs: buttonControlHeight.md, md: 32 });
+    expect(geometry.buttonLg.minHeight).toEqual({ xs: buttonControlHeight.lg, md: 36 });
   });
 
-  it("keeps one size contract across buttons and segmented controls", () => {
+  it("sizes a segmented track like the button of the same size, with inset segments", () => {
     const geometry = createControlGeometry(theme);
+    const sizes = [
+      [geometry.segmentedContainerXs, geometry.segmentedSegmentXs, geometry.buttonXs],
+      [geometry.segmentedContainerSm, geometry.segmentedSegmentSm, geometry.buttonSm],
+      [geometry.segmentedContainerMd, geometry.segmentedSegmentMd, geometry.buttonMd],
+    ] as const;
 
-    // xs is a genuinely smaller tier, not sm with a different font.
-    expect(geometry.buttonXs.minHeight).toBe(28);
-    expect(geometry.buttonSm.minHeight).toBe(32);
-    expect(geometry.buttonMd.minHeight).toBe(44);
-    expect(geometry.buttonXs.minHeight).toBe(buttonControlHeight.xs);
-    expect(geometry.buttonSm.minHeight).toBe(buttonControlHeight.sm);
-    expect(geometry.buttonMd.minHeight).toBe(buttonControlHeight.md);
+    for (const [container, segment, button] of sizes) {
+      expect(container.minHeight).toEqual(button.minHeight);
+      for (const breakpoint of ["xs", "md"] as const) {
+        expect(segment.minHeight[breakpoint]).toBe(
+          container.minHeight[breakpoint] - container.padding * 2,
+        );
+      }
+      // The selected segment nests inside the track, so its corner is one step tighter.
+      expect(segment.borderRadius).toBeLessThan(container.borderRadius);
+    }
 
     // Same size name means the same label size on every control kind.
-    expect(geometry.segmentedLabelXs.fontSize).toBe(12);
     expect(geometry.segmentedLabelXs.fontSize).toBe(geometry.buttonTextXs.fontSize);
-    expect(geometry.segmentedLabelSm.fontSize).toBe(14);
     expect(geometry.segmentedLabelSm.fontSize).toBe(geometry.buttonText.fontSize);
     expect(geometry.segmentedLabelMd.fontSize).toBe(geometry.buttonText.fontSize);
-
-    // Segments sit inside a track, so they run one padding step tighter than a
-    // standalone button of the same size — the gap between segments reads as the padding.
-    expect(geometry.segmentedSegmentXs.paddingHorizontal).toBeLessThan(
-      geometry.buttonXs.paddingHorizontal,
-    );
-    expect(geometry.segmentedSegmentSm.paddingHorizontal).toBeLessThan(
-      geometry.buttonSm.paddingHorizontal,
-    );
-    expect(geometry.segmentedSegmentMd.paddingHorizontal).toBeLessThan(
-      geometry.buttonMd.paddingHorizontal,
-    );
   });
 });

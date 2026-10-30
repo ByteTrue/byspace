@@ -137,7 +137,7 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "center",
   },
   tooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.sm,
   },
 }));

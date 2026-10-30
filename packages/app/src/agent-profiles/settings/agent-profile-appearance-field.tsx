@@ -288,7 +288,7 @@ const styles = StyleSheet.create((theme) => {
       alignItems: "center",
       justifyContent: "center",
       gap: theme.spacing[1],
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.controlFill,
     },
     triggerSm: { ...geometry.fieldControlSm },
     triggerMd: { ...geometry.fieldControlMd },

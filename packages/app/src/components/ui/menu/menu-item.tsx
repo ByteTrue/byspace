@@ -392,6 +392,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   labelText: {
     fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foregroundMuted,
   },
   // `border` sits between surface1 and surface2, which put it within a hair of the hover fill and
@@ -426,7 +427,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.base,
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
   },
   // The fill is inset from the surface's edges and rounded, so a hovered row reads as a chip
   // sitting inside the menu rather than a band across it.

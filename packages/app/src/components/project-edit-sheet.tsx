@@ -94,19 +94,12 @@ export function ProjectEditSheet({
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
-        <Button
-          variant="secondary"
-          size="md"
-          style={styles.footerButton}
-          onPress={handleClose}
-          disabled={isSaving}
-        >
+        <Button variant="secondary" size="md" onPress={handleClose} disabled={isSaving}>
           {t("common.actions.cancel")}
         </Button>
         <Button
           variant="default"
           size="md"
-          style={styles.footerButton}
           onPress={handleSubmit}
           disabled={!state.canSubmit}
           loading={isSaving}
@@ -279,8 +272,5 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: theme.spacing[2],
-  },
-  footerButton: {
-    minWidth: 112,
   },
 }));

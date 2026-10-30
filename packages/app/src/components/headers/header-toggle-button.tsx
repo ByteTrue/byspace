@@ -90,7 +90,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.base,
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
   },
   shortcut: {},
 }));

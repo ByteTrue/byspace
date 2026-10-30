@@ -227,9 +227,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   label: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
   },
   hintText: {
     color: theme.colors.foregroundMuted,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   errorText: {
-    color: theme.colors.palette.red[300],
+    color: theme.colors.destructive,
     fontSize: theme.fontSize.sm,
     lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
@@ -248,7 +248,7 @@ const formInputStyles = StyleSheet.create((theme) => {
 
   return {
     chrome: {
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.controlFill,
     },
     chromeSm: {
       ...geometry.fieldControlSm,

@@ -50,6 +50,9 @@ interface TooltipContextValue {
 
 const TooltipContext = createContext<TooltipContextValue | null>(null);
 
+/** True inside a tooltip, whose fill is inverted; nested chrome (key caps) reads it to invert too. */
+export const TooltipSurfaceContext = createContext(false);
+
 function useTooltipContext(componentName: string): TooltipContextValue {
   const ctx = useContext(TooltipContext);
   if (!ctx) {
@@ -524,7 +527,7 @@ export function TooltipContent({
           style={contentStyle}
           frameStyle={frameStyle}
         >
-          {children}
+          <TooltipSurfaceContext.Provider value={true}>{children}</TooltipSurfaceContext.Provider>
         </FloatingSurface>
       </View>,
       getOverlayRoot(),
@@ -544,7 +547,7 @@ export function TooltipContent({
           style={contentStyle}
           frameStyle={frameStyle}
         >
-          {children}
+          <TooltipSurfaceContext.Provider value={true}>{children}</TooltipSurfaceContext.Provider>
         </FloatingSurface>
       </Pressable>
     </Modal>
@@ -561,14 +564,13 @@ const styles = StyleSheet.create((theme) => ({
     left: 0,
     zIndex: OVERLAY_Z.tooltip,
   },
+  // shadcn/ui tooltip: an inverted chip (foreground fill, background text), no border or shadow.
+  // Callers colour their text with tooltipForeground / tooltipForegroundMuted.
   content: {
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.popover,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    ...theme.shadow.md,
+    paddingVertical: theme.spacing[1.5],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.tooltip,
     zIndex: 1000,
   },
 }));

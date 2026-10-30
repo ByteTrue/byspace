@@ -410,16 +410,10 @@ function OpenScheduleFormSheet({
   const footer = useMemo(
     () => (
       <View style={styles.footer}>
-        <Button
-          style={styles.footerButton}
-          variant="secondary"
-          onPress={onClose}
-          disabled={isSubmitting}
-        >
+        <Button variant="secondary" onPress={onClose} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button
-          style={styles.footerButton}
           variant="default"
           onPress={handleSubmitPress}
           disabled={!canSubmit}
@@ -1073,10 +1067,8 @@ const styles = StyleSheet.create((theme) => {
     footer: {
       flex: 1,
       flexDirection: "row",
-      gap: theme.spacing[3],
-    },
-    footerButton: {
-      flex: 1,
+      justifyContent: "flex-end",
+      gap: theme.spacing[2],
     },
     submitError: {
       color: theme.colors.palette.red[300],

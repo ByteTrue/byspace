@@ -310,7 +310,7 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
   errorTooltip: {
-    color: theme.colors.popoverForeground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
     maxWidth: 420,
   },

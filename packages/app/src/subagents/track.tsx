@@ -374,6 +374,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   tooltipText: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
   },
 }));

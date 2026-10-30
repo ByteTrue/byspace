@@ -425,7 +425,6 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
             <Button
               variant="secondary"
               size="sm"
-              style={FLEX_1_STYLE}
               onPress={handleCancelConfirm}
               disabled={isRemovingConnection}
             >
@@ -434,7 +433,6 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
             <Button
               variant="destructive"
               size="sm"
-              style={FLEX_1_STYLE}
               onPress={handleConfirmRemove}
               disabled={isRemovingConnection}
               testID="remove-connection-confirm"
@@ -1262,19 +1260,12 @@ function RemoveHostSection({
               : t("settings.host.daemon.remove.confirmMessage", { name: host.label })}
           </Text>
           <View style={styles.confirmActions}>
-            <Button
-              variant="secondary"
-              size="sm"
-              style={FLEX_1_STYLE}
-              onPress={handleCancel}
-              disabled={isRemoving}
-            >
+            <Button variant="secondary" size="sm" onPress={handleCancel} disabled={isRemoving}>
               {t("common.actions.cancel")}
             </Button>
             <Button
               variant="destructive"
               size="sm"
-              style={FLEX_1_STYLE}
               onPress={handleConfirmRemove}
               disabled={isRemoving}
               testID="remove-host-confirm"
@@ -1727,6 +1718,7 @@ const styles = StyleSheet.create((theme) => ({
   confirmActions: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: theme.spacing[2],
     marginTop: theme.spacing[4],
   },
@@ -1744,5 +1736,3 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
 }));
-
-const FLEX_1_STYLE = { flex: 1 };

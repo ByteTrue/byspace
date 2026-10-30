@@ -6,6 +6,7 @@ import {
   getNextThemePreference,
   lightTheme,
   THEME_OPTIONS,
+  withAlpha,
 } from "./theme";
 
 describe("Typography scale", () => {
@@ -55,7 +56,7 @@ describe("Pure black theme", () => {
 
   it("derives sidebar interaction surfaces from the surface scale", () => {
     expect(darkPureBlackTheme.colors.surfaceSidebar).toBe("#000000");
-    expect(darkPureBlackTheme.colors.surfaceSidebarHover).toBe(darkPureBlackTheme.colors.surface1);
+    expect(darkPureBlackTheme.colors.surfaceSidebarHover).toBe(darkPureBlackTheme.colors.surface2);
     expect(darkPureBlackTheme.colors.surfaceSidebarSelected).toBe(
       darkPureBlackTheme.colors.surface2,
     );
@@ -68,22 +69,64 @@ describe("Pure black theme", () => {
 });
 
 describe("Sidebar interaction surfaces", () => {
-  it("keeps Light selection distinct from the sidebar surface", () => {
-    expect(lightTheme.colors.surfaceSidebarHover).toBe(lightTheme.colors.surface2);
-    expect(lightTheme.colors.surfaceSidebarSelected).toBe(lightTheme.colors.surface3);
-    expect(lightTheme.colors.surfaceSidebarSelected).not.toBe(lightTheme.colors.surfaceSidebar);
+  // shadcn/ui sidebar: hover and the selected row share sidebar-accent; the selected row is told
+  // apart by its indicator bar, not by a darker fill.
+  it("uses one accent surface for hover and selection, distinct from the sidebar", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      expect(theme.colors.surfaceSidebarHover).toBe(theme.colors.surface2);
+      expect(theme.colors.surfaceSidebarSelected).toBe(theme.colors.surface2);
+      expect(theme.colors.surfaceSidebarSelected).not.toBe(theme.colors.surfaceSidebar);
+    }
+  });
+});
+
+describe("shadcn/ui neutral palette", () => {
+  it("maps the light neutral tokens", () => {
+    expect(lightTheme.colors).toMatchObject({
+      surface0: "#ffffff",
+      surface2: "#f5f5f5",
+      surfaceSidebar: "#fafafa",
+      foreground: "#0a0a0a",
+      foregroundMuted: "#737373",
+      border: "#e5e5e5",
+      input: "#e5e5e5",
+      accent: "#171717",
+      ring: "#a1a1a1",
+      focusRing: "rgba(161, 161, 161, 0.5)",
+    });
   });
 
-  it("derives Dark hover and selection from the first two raised surfaces", () => {
-    expect(darkTheme.colors.surfaceSidebarHover).toBe(darkTheme.colors.surface1);
-    expect(darkTheme.colors.surfaceSidebarSelected).toBe(darkTheme.colors.surface2);
+  it("maps the dark neutral tokens with the inset sidebar lighter than the workspace", () => {
+    expect(darkTheme.colors).toMatchObject({
+      surface0: "#0a0a0a",
+      surfaceSidebar: "#171717",
+      foreground: "#fafafa",
+      foregroundMuted: "#a1a1a1",
+      border: "rgba(255, 255, 255, 0.1)",
+      accent: "#e5e5e5",
+      accentForeground: "#171717",
+    });
+  });
+
+  it("inverts the tooltip against the surface", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      expect(theme.colors.tooltip).toBe(theme.colors.foreground);
+      expect(theme.colors.tooltipForeground).toBe(theme.colors.surface0);
+    }
+  });
+});
+
+describe("withAlpha", () => {
+  it("turns #rrggbb into rgba and rejects anything else", () => {
+    expect(withAlpha("#171717", 0.8)).toBe("rgba(23, 23, 23, 0.8)");
+    expect(() => withAlpha("rgba(0, 0, 0, 1)", 0.5)).toThrow();
   });
 });
 
 describe("Built-in light theme", () => {
   it("preserves its authored aliases and terminal contrast through the semantic builder", () => {
     expect(lightTheme.colors).toMatchObject({
-      primary: "#18181b",
+      primary: "#171717",
       primaryForeground: "#fafafa",
       destructiveForeground: "#ffffff",
       successForeground: "#ffffff",

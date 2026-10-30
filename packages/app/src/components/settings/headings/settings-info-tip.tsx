@@ -50,7 +50,7 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: -theme.spacing[1],
   },
   tooltipText: {
-    color: theme.colors.foreground,
+    color: theme.colors.tooltipForeground,
     fontSize: theme.fontSize.base,
     maxWidth: 280,
     lineHeight: theme.fontSize.base * 1.4,
