@@ -31,7 +31,7 @@ const ThemedCloseIcon = withUnistyles(X, (theme) => ({
  * which uses the AGCopilot / Feishu-style "半包" (L-shaped) frameless window shell
  * with a top titlebar strip above the rounded content card.
  */
-export function isWindowsWailsDesktop(): boolean {
+export function isWailsDesktopShell(): boolean {
   if (!isWeb || typeof window === "undefined") {
     return false;
   }
@@ -40,6 +40,14 @@ export function isWindowsWailsDesktop(): boolean {
     window.location?.hostname === "wails.localhost" ||
     "wails" in window;
   if (!isWailsOrigin) {
+    return false;
+  }
+  const ua = window.navigator?.userAgent ?? "";
+  return !/android|iphone|ipad|ipod/i.test(ua);
+}
+
+export function isWindowsWailsDesktop(): boolean {
+  if (!isWailsDesktopShell()) {
     return false;
   }
   const ua = window.navigator?.userAgent ?? "";
@@ -154,10 +162,11 @@ export function DesktopContentFrame({
   testID?: string;
   children: ReactNode;
 }) {
-  const hasWindowsTitleBar = enabled && isWindowsWailsDesktop();
+  const active = enabled && isWailsDesktopShell();
+  const hasWindowsTitleBar = active && isWindowsWailsDesktop();
   const resolvedCardStyle = useMemo(
     () =>
-      enabled
+      active
         ? [
             styles.framedCard,
             hasWindowsTitleBar ? styles.framedCardBelowTitleBar : styles.framedCardMac,
@@ -165,17 +174,12 @@ export function DesktopContentFrame({
             cardStyle,
           ]
         : [styles.unframedFill, cardStyle],
-    [cardStyle, enabled, hasWindowsTitleBar, sidebarCollapsed],
+    [active, cardStyle, hasWindowsTitleBar, sidebarCollapsed],
   );
 
-  if (!enabled) {
-    return (
-      <View style={resolvedCardStyle} testID={testID}>
-        {children}
-      </View>
-    );
-  }
-
+  // Always keep a fixed 2-View tree depth regardless of whether `active` is true or false
+  // so navigating between workspace routes and /settings never unmounts/remounts the Navigator stack,
+  // Agent Composer, or Terminal Emulator instances.
   return (
     <View style={styles.mainColumn}>
       {hasWindowsTitleBar ? (
