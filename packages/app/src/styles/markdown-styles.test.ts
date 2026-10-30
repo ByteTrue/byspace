@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createCompactMarkdownStyles, createMarkdownStyles } from "./markdown-styles";
+import {
+  createCompactMarkdownStyles,
+  createMarkdownStyles,
+  PROSE_LINE_HEIGHT,
+} from "./markdown-styles";
 import { darkTheme } from "./theme";
 
 describe("createMarkdownStyles", () => {
   it("uses the content size for conversation prose and list markers", () => {
     const styles = createMarkdownStyles(darkTheme);
-    const proseLineHeight = Math.round(darkTheme.fontSize.content * 1.4);
+    const proseLineHeight = Math.round(darkTheme.fontSize.content * PROSE_LINE_HEIGHT);
 
     expect(styles.body).toMatchObject({
       fontSize: darkTheme.fontSize.content,
@@ -124,18 +128,17 @@ describe("createMarkdownStyles", () => {
     expect(styles.heading3.lineHeight).toBeGreaterThan(styles.heading3.fontSize);
   });
 
-  it("keeps blockquotes quiet with a square left edge", () => {
+  it("draws blockquotes as a 2px rule with muted text and no box", () => {
     const styles = createMarkdownStyles(darkTheme);
 
     expect(styles.blockquote).toMatchObject({
-      backgroundColor: darkTheme.colors.surface1,
-      color: `${darkTheme.colors.foreground}cc`,
-      borderLeftColor: darkTheme.colors.surface2,
-      paddingTop: darkTheme.spacing[3],
+      color: darkTheme.colors.foregroundMuted,
+      borderLeftWidth: 2,
+      borderLeftColor: darkTheme.colors.border,
+      paddingTop: 0,
       paddingBottom: 0,
-      borderTopLeftRadius: 0,
-      borderBottomLeftRadius: 0,
     });
+    expect(styles.blockquote).not.toHaveProperty("backgroundColor");
     expect(styles.paragraph.marginBottom).toBe(darkTheme.spacing[3]);
     expect(styles.text).not.toHaveProperty("color");
   });

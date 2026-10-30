@@ -1914,17 +1914,21 @@ const stylesheet = StyleSheet.create((theme) => ({
 }));
 
 const permissionStyles = StyleSheet.create((theme) => ({
+  // shadcn/ui card: hairline frame, 14px radius, shadow-xs.
   container: {
     marginVertical: theme.spacing[3],
-    padding: theme.spacing[3],
-    borderRadius: theme.spacing[2],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: 14,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     gap: theme.spacing[2],
     backgroundColor: theme.colors.surface1,
     borderColor: theme.colors.border,
+    ...theme.shadow.sm,
   },
   title: {
     fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
     lineHeight: 22,
     color: theme.colors.foreground,
   },
@@ -1955,17 +1959,20 @@ const permissionStyles = StyleSheet.create((theme) => ({
     alignItems: "center",
     width: "100%",
   },
+  // Outline buttons (shadcn/ui), 28px on desktop.
   optionButton: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    minHeight: { xs: 36, md: 28 },
+    justifyContent: "center",
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2.5],
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
     borderWidth: theme.borderWidth[1],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.controlFill,
     borderColor: theme.colors.borderAccent,
   },
   optionButtonHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.controlFillHover,
   },
   optionButtonPressed: {
     opacity: 0.9,
@@ -1977,8 +1984,8 @@ const permissionStyles = StyleSheet.create((theme) => ({
   },
   optionText: {
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foreground,
   },
   optionTextPrimary: {
     color: theme.colors.foreground,

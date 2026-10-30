@@ -337,21 +337,14 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
   containerLastInGroup: {
     marginBottom: theme.spacing[4],
   },
+  // shadcn/ui-style secondary bubble: a muted fill, no border or shadow.
   bubble: {
-    backgroundColor: theme.colors.surface1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     minWidth: 0,
     flexShrink: 1,
-    ...theme.shadow.sm,
-    ...(isWeb
-      ? {
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02)",
-        }
-      : {}),
   },
   text: {
     color: theme.colors.foreground,
@@ -1107,12 +1100,16 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[4],
   },
   pressable: {
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
     overflow: "hidden",
+  },
+  // A hovered or expanded tool row sits on the muted fill.
+  pressableActive: {
+    backgroundColor: theme.colors.surface2,
   },
   pressablePressed: {
     opacity: 0.9,
@@ -1137,9 +1134,9 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     backgroundColor: "transparent",
   },
   label: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    fontWeight: theme.fontWeight.medium,
     flexShrink: 0,
   },
   labelActive: {
@@ -2732,9 +2729,10 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const pressableStyle = useMemo(
     () => [
       expandableBadgeStylesheet.pressable,
+      (isHovered || isExpanded) && isInteractive ? expandableBadgeStylesheet.pressableActive : null,
       isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
     ],
-    [isInteractive, isPressed],
+    [isExpanded, isHovered, isInteractive, isPressed],
   );
 
   const detailWrapperStyle = expandableBadgeStylesheet.detailWrapper;

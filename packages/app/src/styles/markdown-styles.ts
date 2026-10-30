@@ -22,6 +22,9 @@ function contentHeadingLineHeight(contentSize: number, tier: keyof typeof FONT_S
  * react-native-markdown-display builds its own parser with `typographer: true`,
  * which rewrites a literal `(c)` as ©.
  */
+/** Prose line height (shadcn/ui typography runs body copy at roughly 1.65). */
+export const PROSE_LINE_HEIGHT = 1.65;
+
 export function createMarkdownStyles(theme: Theme) {
   return {
     // =========================================================================
@@ -34,7 +37,7 @@ export function createMarkdownStyles(theme: Theme) {
       fontSize: theme.fontSize.content,
       // Prose line-height scales with the content size, not the
       // code-size-coupled lineHeight.diff token used by code/diff surfaces.
-      lineHeight: Math.round(theme.fontSize.content * 1.4),
+      lineHeight: Math.round(theme.fontSize.content * PROSE_LINE_HEIGHT),
       flexShrink: 1,
       minWidth: 0,
       width: "100%" as const,
@@ -66,7 +69,7 @@ export function createMarkdownStyles(theme: Theme) {
     heading1: {
       ...webSelectableTextStyle,
       fontSize: contentHeadingSize(theme.fontSize.content, "4xl"),
-      fontWeight: theme.fontWeight.bold,
+      fontWeight: theme.fontWeight.semibold,
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
@@ -79,7 +82,7 @@ export function createMarkdownStyles(theme: Theme) {
     heading2: {
       ...webSelectableTextStyle,
       fontSize: contentHeadingSize(theme.fontSize.content, "3xl"),
-      fontWeight: theme.fontWeight.bold,
+      fontWeight: theme.fontWeight.semibold,
       color: theme.colors.foreground,
       marginTop: theme.spacing[6],
       marginBottom: theme.spacing[3],
@@ -151,10 +154,12 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foregroundMuted,
     },
 
+    // shadcn/ui typography link: foreground text, underlined with a quiet decoration colour.
     link: {
       ...webSelectableTextStyle,
-      color: theme.colors.accentBright,
-      textDecorationLine: "none" as const,
+      color: theme.colors.foreground,
+      textDecorationLine: "underline" as const,
+      textDecorationColor: theme.colors.foregroundExtraMuted,
       flexShrink: 1,
       minWidth: 0,
       overflowWrap: "anywhere" as const,
@@ -162,8 +167,9 @@ export function createMarkdownStyles(theme: Theme) {
 
     blocklink: {
       ...webSelectableTextStyle,
-      color: theme.colors.accentBright,
-      textDecorationLine: "none" as const,
+      color: theme.colors.foreground,
+      textDecorationLine: "underline" as const,
+      textDecorationColor: theme.colors.foregroundExtraMuted,
       flexShrink: 1,
       minWidth: 0,
       overflowWrap: "anywhere" as const,
@@ -177,20 +183,24 @@ export function createMarkdownStyles(theme: Theme) {
       ...webSelectableTextStyle,
       backgroundColor: theme.colors.surface2,
       color: theme.colors.foreground,
-      paddingHorizontal: theme.spacing[1],
+      paddingHorizontal: 5,
       paddingVertical: 2,
-      borderRadius: theme.borderRadius.md,
+      borderRadius: theme.borderRadius.sm,
       borderWidth: 0,
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
     },
 
+    // Code blocks: a hairline frame on a half-muted fill.
     code_block: {
       ...webSelectableTextStyle,
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surfaceFooter,
       color: theme.colors.foreground,
-      padding: theme.spacing[3],
-      borderRadius: theme.borderRadius.md,
+      paddingVertical: theme.spacing[2.5],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.borderRadius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
       marginVertical: theme.spacing[2],
@@ -198,10 +208,11 @@ export function createMarkdownStyles(theme: Theme) {
 
     fence: {
       ...webSelectableTextStyle,
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surfaceFooter,
       color: theme.colors.foreground,
-      padding: theme.spacing[3],
-      borderRadius: theme.borderRadius.md,
+      paddingVertical: theme.spacing[2.5],
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: theme.borderRadius.lg,
       borderWidth: 1,
       borderColor: theme.colors.border,
       fontFamily: theme.fontFamily.mono,
@@ -237,7 +248,7 @@ export function createMarkdownStyles(theme: Theme) {
       borderRightWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface2,
-      fontWeight: theme.fontWeight.semibold,
+      fontWeight: theme.fontWeight.medium,
       color: theme.colors.foreground,
       fontSize: theme.fontSize.content,
       textAlign: "left" as const,
@@ -295,7 +306,7 @@ export function createMarkdownStyles(theme: Theme) {
       color: theme.colors.foregroundMuted,
       marginRight: 4,
       fontSize: theme.fontSize.content,
-      lineHeight: Math.round(theme.fontSize.content * 1.4),
+      lineHeight: Math.round(theme.fontSize.content * PROSE_LINE_HEIGHT),
     },
 
     ordered_list_icon: {
@@ -304,7 +315,7 @@ export function createMarkdownStyles(theme: Theme) {
       marginRight: 4,
       fontSize: theme.fontSize.content,
       fontWeight: theme.fontWeight.normal,
-      lineHeight: Math.round(theme.fontSize.content * 1.4),
+      lineHeight: Math.round(theme.fontSize.content * PROSE_LINE_HEIGHT),
       minWidth: 12,
     },
 
@@ -312,18 +323,15 @@ export function createMarkdownStyles(theme: Theme) {
     // BLOCKQUOTE
     // =========================================================================
 
+    // shadcn/ui typography blockquote: a 2px rule and muted text, no box.
     blockquote: {
-      backgroundColor: theme.colors.surface1,
-      color: `${theme.colors.foreground}cc`,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.surface2,
-      paddingHorizontal: theme.spacing[4],
-      paddingTop: theme.spacing[3],
+      color: theme.colors.foregroundMuted,
+      borderLeftWidth: 2,
+      borderLeftColor: theme.colors.border,
+      paddingLeft: theme.spacing[3],
+      paddingTop: 0,
       paddingBottom: 0,
       marginVertical: theme.spacing[3],
-      borderRadius: theme.borderRadius.md,
-      borderTopLeftRadius: 0,
-      borderBottomLeftRadius: 0,
     },
 
     // =========================================================================
@@ -370,7 +378,7 @@ export function createCompactMarkdownStyles(theme: Theme) {
     body: {
       ...baseStyles.body,
       fontSize: theme.fontSize.content,
-      lineHeight: Math.round(theme.fontSize.content * 1.4),
+      lineHeight: Math.round(theme.fontSize.content * PROSE_LINE_HEIGHT),
     },
 
     heading1: {
