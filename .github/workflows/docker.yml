@@ -66,7 +66,9 @@ jobs:
             test "$(git rev-list -n 1 "${REF_NAME}")" = "$release_sha"
             git fetch origin main --no-tags
             test "$release_sha" = "$(git rev-parse origin/main)"
-            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$release_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            code_sha="$(git log -n 1 --format=%H HEAD -- . ':!CHANGELOG.md' ':!package.json' ':!packages/*/package.json' ':!workers/*/package.json' ':!internal/cli/gui_android.go')"
+            test -n "$code_sha"
+            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$code_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
             if [[ "${REF_NAME}" != *-* ]]; then
               publish_latest=true
             fi
@@ -213,19 +215,12 @@ jobs:
           asset="$RUNNER_TEMP/BySpace-$VERSION-container.txt"
           printf 'image=%s\ndigest=%s\nplatforms=%s\nsource=%s\n' \
             "$image" "$digest" "$PLATFORMS" "${{ needs.setup.outputs.release_sha }}" > "$asset"
-          node scripts/write-sha256.mjs "$asset"
-          notes_file=".github/release/$RELEASE_TAG.md"
+          (cd "$RUNNER_TEMP" && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
           if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
-            if [[ -f "$notes_file" ]]; then
-              args+=(--notes-file "$notes_file")
-            else
-              args+=(--generate-notes)
-            fi
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG" --generate-notes)
             if [[ "$RELEASE_TAG" == *-* ]]; then
               args+=(--prerelease)
             fi
             gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
           fi
-          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset" "${{ needs.setup.outputs.release_sha }}"
-          scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256" "${{ needs.setup.outputs.release_sha }}"
+          gh release upload "$RELEASE_TAG" "$asset" "$asset.sha256" --clobber --repo "$GITHUB_REPOSITORY"

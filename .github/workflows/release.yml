@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       sha: ${{ steps.release.outputs.sha }}
       tag: ${{ steps.release.outputs.tag }}
@@ -34,16 +35,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
       - id: release
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
           SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
         run: |
           set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            git fetch origin main --no-tags
+            test "$sha" = "$(git rev-parse origin/main)"
+            code_sha="$(git log -n 1 --format=%H HEAD -- . ':!CHANGELOG.md' ':!package.json' ':!packages/*/package.json' ':!workers/*/package.json' ':!internal/cli/gui_android.go')"
+            test -n "$code_sha"
+            test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$code_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          fi
           {
-            echo "sha=$(git rev-parse HEAD)"
+            echo "sha=$sha"
             echo "tag=$SOURCE_REF"
             echo "version=$(node -p 'require("./package.json").version')"
             echo "publish=$SHOULD_PUBLISH"

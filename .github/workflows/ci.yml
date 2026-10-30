@@ -3,6 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "CHANGELOG.md"
+      - "package.json"
+      - "packages/*/package.json"
+      - "workers/*/package.json"
+      - "internal/cli/gui_android.go"
   pull_request:
     branches: [main]
   merge_group:
