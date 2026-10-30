@@ -307,7 +307,7 @@ function SkillTargetRow({
       testID={`skill-selection-target-${id}`}
     >
       <View style={boxStyle}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={12} strokeWidth={3} uniProps={checkedIconMapping} /> : null}
       </View>
       <View style={styles.targetText}>
         <Text style={settingsStyles.rowTitle}>{SKILL_TARGET_DIRS[id]}</Text>
@@ -359,7 +359,7 @@ function SkillCheckboxRow({
       aria-checked={checked}
     >
       <View style={boxStyle}>
-        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={12} strokeWidth={3} uniProps={checkedIconMapping} /> : null}
       </View>
       <Text style={settingsStyles.rowTitle}>{name}</Text>
     </Pressable>
@@ -384,12 +384,14 @@ const styles = StyleSheet.create((theme) => ({
   disabledRow: {
     opacity: theme.opacity[50],
   },
+  // shadcn/ui checkbox: 16px, 4px radius, input border; checked fills with the primary.
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 16,
+    height: 16,
     borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.controlFill,
     alignItems: "center",
     justifyContent: "center",
   },

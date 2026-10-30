@@ -116,6 +116,12 @@
         outline: 3px solid rgba(161, 161, 161, 0.5);
         outline-offset: 0;
       }
+
+      /* Selected text is a faint wash of the foreground, not the system blue. The variable is the
+         theme's foreground, published by Unistyles. */
+      ::selection {
+        background: color-mix(in srgb, var(--colors-foreground) 15%, transparent);
+      }
     </style>
   </head>
   <body>

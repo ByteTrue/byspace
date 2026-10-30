@@ -98,12 +98,14 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[3],
   },
+  // shadcn/ui checkbox: 16px, 4px radius, input border; checked fills with the primary.
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 16,
+    height: 16,
     borderRadius: theme.borderRadius.sm,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.controlFill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -547,7 +549,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         <View style={checkboxStyle}>
           {useTls ? (
             <View testID="direct-ssl-toggle-checked">
-              <Check size={14} color={theme.colors.accentForeground} />
+              <Check size={12} strokeWidth={3} color={theme.colors.accentForeground} />
             </View>
           ) : null}
         </View>
