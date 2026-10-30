@@ -9,7 +9,7 @@
 
 ### Added
 
-- Reorganized desktop settings to match Magpie's General and About layout: `Settings → General` now embeds `Open at login`, `Show in Dock` (`Hide | With window | Show`), `Lightweight mode`, and `Prevent sleep` (`Off | On | Screen on too`) with inline `SegmentedControl` pills, while `Settings → About` consolidates `Version` (with live download progress and check/download/restart actions), `Automatic updates`, `Check every` (`30 min | 1 h | 6 h | 24 h`, defaulting to 30 minutes), `Download updates automatically`, `Restart automatically`, `Config folder`, `Command line`, and `Daemon URL`
+- Reorganized desktop settings to match Magpie's General and About layout: `Settings → General` now embeds `Open at login`, `Show in Dock` (`Hide | With window | Show`), `Lightweight mode`, and `Prevent sleep` (`Off | On | Screen on too`) with inline `SegmentedControl` pills, while `Settings → About` consolidates `Version` (with live download progress and check/download/restart actions), `Automatic updates`, `Check every` (`30 min | 1 h | 6 h | 24 h`, defaulting to 6 hours), `Download updates automatically`, `Restart automatically`, `Config folder`, `Command line`, and `Daemon URL`
 - Wired live OS login-service inspection (`BuildServiceView`) and install/uninstall handling into `get_daemon_config_request` and `set_daemon_config_request` for headless hosts while hiding the duplicate `Service hosting` section when viewing the local host inside the desktop app
 
 ### Fixed

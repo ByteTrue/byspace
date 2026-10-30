@@ -24,15 +24,16 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read
     outputs:
-      full: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false' }}
+      full: ${{ steps.scope.outputs.release_fast != 'true' && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
       format: ${{ steps.filter.outputs.format != 'false' }}
       quality: ${{ steps.filter.outputs.quality != 'false' }}
-      go: ${{ steps.filter.outputs.go != 'false' }}
-      app: ${{ steps.filter.outputs.app != 'false' }}
-      sdk: ${{ steps.filter.outputs.sdk != 'false' }}
-      browser: ${{ steps.filter.outputs.browser != 'false' }}
-      relay: ${{ steps.filter.outputs.relay != 'false' }}
+      go: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.go != 'false' }}
+      app: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.app != 'false' }}
+      sdk: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.sdk != 'false' }}
+      browser: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.browser != 'false' }}
+      relay: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.relay != 'false' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -47,6 +48,27 @@ jobs:
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         with:
           filters: .github/ci-paths.yml
+
+      - name: Check if push only bumps release version atop already-green code SHA
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_fast=false
+          if [ "${{ github.event_name }}" = "push" ]; then
+            code_sha="$(git log -n 1 --format=%H HEAD -- . ':!CHANGELOG.md' ':!package.json' ':!package-lock.json' ':!packages/*/package.json' ':!workers/*/package.json')"
+            if [ -n "$code_sha" ] && [ "$code_sha" != "$(git rev-parse HEAD)" ]; then
+              # Verify package-lock.json only changed version strings, not dependencies
+              non_ver="$(git diff "$code_sha"..HEAD -- package-lock.json | grep -E '^[+-][^+-]' | grep -v '"version":' || true)"
+              if [ -z "$non_ver" ]; then
+                ok="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$code_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+                if [ -n "$ok" ]; then
+                  release_fast=true
+                fi
+              fi
+            fi
+          fi
+          echo "release_fast=$release_fast" >> "$GITHUB_OUTPUT"
 
       - name: Validate CI contracts
         run: >-

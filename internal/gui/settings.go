@@ -28,7 +28,7 @@ type DesktopSettings struct {
 	HideFromDock   bool      `json:"hideFromDock,omitempty"`
 	Lightweight    bool      `json:"lightweight"`
 	NoAutoUpdate   bool      `json:"noAutoUpdate"`
-	UpdateEvery    int       `json:"updateEvery,omitempty"` // minutes: 30 (default), 60, 360, 1440
+	UpdateEvery    int       `json:"updateEvery,omitempty"` // minutes: 30, 60, 360 (default, 6h), 1440
 	NoAutoDownload bool      `json:"noAutoDownload"`
 	AutoRestart    bool      `json:"autoRestart"`
 	WindowWidth    int       `json:"windowWidth,omitempty"`
@@ -58,12 +58,12 @@ func (s DesktopSettings) EffectiveDockMode() string {
 	return "show"
 }
 
-// EffectiveUpdateEvery returns the check interval in minutes (defaulting to 30 minutes).
+// EffectiveUpdateEvery returns the check interval in minutes (defaulting to 360 minutes / 6 hours, matching Magpie).
 func (s DesktopSettings) EffectiveUpdateEvery() int {
 	if slices.Contains(ValidUpdateEveries, s.UpdateEvery) {
 		return s.UpdateEvery
 	}
-	return 30
+	return 360
 }
 
 // LoadDesktopSettings reads $BYSPACE_HOME/desktop.json, returning defaults when absent.

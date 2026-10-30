@@ -564,7 +564,7 @@ export function DesktopAboutCardContent({
 
   const autoUpdateEnabled = !prefs.noAutoUpdate;
   const autoDownloadEnabled = !prefs.noAutoDownload;
-  const updateEveryVal = String(prefs.updateEvery ?? 30) as UpdateEveryStr;
+  const updateEveryVal = String(prefs.updateEvery ?? 360) as UpdateEveryStr;
   const isUpdateBusy = updState === "checking" || updState === "downloading";
   const actionVariant = resolveActionVariant(updState);
   const daemonSt = state?.daemonStatus;
