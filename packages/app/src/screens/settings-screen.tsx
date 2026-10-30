@@ -47,6 +47,7 @@ import {
   type HostProfile,
 } from "@/types/host-connection";
 import { BackHeader } from "@/components/headers/back-header";
+import { DesktopContentFrame } from "@/components/desktop-window-titlebar";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
@@ -1229,7 +1230,12 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           activeHostServerId={activeHostServerId}
           layout="desktop"
         />
-        <View style={desktopStyles.contentPane} testID="settings-detail-pane">
+        <DesktopContentFrame
+          enabled
+          sidebarCollapsed={false}
+          showCollapsedSidebarNav={false}
+          testID="settings-detail-pane"
+        >
           <ScreenHeader
             borderless={!detailHeader}
             left={desktopDetailHeaderLeft}
@@ -1238,7 +1244,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
             <View style={styles.content}>{content}</View>
           </ScrollView>
-        </View>
+        </DesktopContentFrame>
       </View>
       {addHostModals}
     </View>
@@ -1353,8 +1359,6 @@ const desktopStyles = StyleSheet.create((theme) => ({
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {
     width: SETTINGS_DESKTOP_SIDEBAR_WIDTH,
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
   scrollBody: {

@@ -11,9 +11,9 @@
       "type": "service",
       "command": "node ./scripts/dev-app.mjs"
     },
-    "ios-simulator": {
+    "desktop": {
       "type": "service",
-      "command": "node ./scripts/byspace-ios-simulator-service.mjs"
+      "command": "node ./scripts/dev-desktop.mjs"
     },
     "typecheck": {
       "command": "npm run typecheck"

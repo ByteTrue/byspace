@@ -1593,13 +1593,18 @@ export class HostRuntimeStore {
           }
         : connection;
     if (registryHasConnection(this.hosts, connectionWithHint)) {
-      if (hint.label && hint.label !== "BySpace") {
-        const matched = this.hosts.find((h) => registryHasConnection([h], connectionWithHint));
-        if (matched && matched.label === "BySpace") {
+      const matched = this.hosts.find((h) => registryHasConnection([h], connectionWithHint));
+      const existingCred =
+        matched?.connections[0]?.type === "directTcp" ? matched.connections[0].password : undefined;
+      if (hint.password && existingCred !== hint.password) {
+        // Fall through to probeAndUpsertConnection so a refreshed local CLI credential or a
+        // newly seeded dev home updates the stored connection and serverId.
+      } else {
+        if (hint.label && hint.label !== "BySpace" && matched && matched.label === "BySpace") {
           await this.renameHost(matched.serverId, hint.label);
         }
+        return true;
       }
-      return true;
     }
 
     try {

@@ -1,7 +1,17 @@
-import { useCallback, useState } from "react";
-import { Pressable, View, type PressableStateCallbackType } from "react-native";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  Pressable,
+  View,
+  type PressableStateCallbackType,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { Copy, Minus, Square, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { SidebarMenuToggle } from "@/components/headers/menu-header";
+import { SidebarNavMenu } from "@/components/sidebar/sidebar-nav-menu";
+import { HEADER_INNER_HEIGHT, WAILS_DRAG_DATA_SET } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 
 const ThemedMinusIcon = withUnistyles(Minus, (theme) => ({
   color: theme.colors.foreground,
@@ -15,10 +25,6 @@ const ThemedCopyIcon = withUnistyles(Copy, (theme) => ({
 const ThemedCloseIcon = withUnistyles(X, (theme) => ({
   color: theme.colors.foreground,
 }));
-import { SidebarMenuToggle } from "@/components/headers/menu-header";
-import { SidebarNavMenu } from "@/components/sidebar/sidebar-nav-menu";
-import { HEADER_INNER_HEIGHT, WAILS_DRAG_DATA_SET } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
 
 /**
  * Reports whether the app is running inside the Windows Wails desktop container,
@@ -66,7 +72,7 @@ const closeButtonStyle = ({
   pressed && styles.closeButtonPressed,
 ];
 
-export function DesktopWindowTitleBar({ sidebarCollapsed }: { sidebarCollapsed: boolean }) {
+export function DesktopWindowTitleBar({ showLeadingNav }: { showLeadingNav: boolean }) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   const handleMinimize = useCallback(() => {
@@ -85,7 +91,7 @@ export function DesktopWindowTitleBar({ sidebarCollapsed }: { sidebarCollapsed: 
   return (
     <View style={styles.titleBar} dataSet={WAILS_DRAG_DATA_SET} testID="desktop-window-titlebar">
       <View style={styles.leadingArea} dataSet={WAILS_DRAG_DATA_SET}>
-        {sidebarCollapsed ? (
+        {showLeadingNav ? (
           <View style={styles.collapsedNavCluster}>
             <SidebarMenuToggle host="titlebar" tooltipSide="bottom" />
             <SidebarNavMenu panelActive={false} />
@@ -127,7 +133,95 @@ export function DesktopWindowTitleBar({ sidebarCollapsed }: { sidebarCollapsed: 
   );
 }
 
+/**
+ * Shared global framed content card container used across both workspace routes and settings routes:
+ * - On macOS / web desktop: 6px inset on top, right, bottom (and left when no sidebar is adjacent),
+ *   wrapping the content in a 12px rounded card with a 1px border over the sidebar backdrop.
+ * - On Windows Wails desktop: renders the 36px L-frame top titlebar above the 12px rounded card.
+ */
+export function DesktopContentFrame({
+  enabled,
+  sidebarCollapsed,
+  showCollapsedSidebarNav = false,
+  cardStyle,
+  testID,
+  children,
+}: {
+  enabled: boolean;
+  sidebarCollapsed: boolean;
+  showCollapsedSidebarNav?: boolean;
+  cardStyle?: StyleProp<ViewStyle>;
+  testID?: string;
+  children: ReactNode;
+}) {
+  const hasWindowsTitleBar = enabled && isWindowsWailsDesktop();
+  const resolvedCardStyle = useMemo(
+    () =>
+      enabled
+        ? [
+            styles.framedCard,
+            hasWindowsTitleBar ? styles.framedCardBelowTitleBar : styles.framedCardMac,
+            sidebarCollapsed && styles.framedCardSidebarCollapsed,
+            cardStyle,
+          ]
+        : [styles.unframedFill, cardStyle],
+    [cardStyle, enabled, hasWindowsTitleBar, sidebarCollapsed],
+  );
+
+  if (!enabled) {
+    return (
+      <View style={resolvedCardStyle} testID={testID}>
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.mainColumn}>
+      {hasWindowsTitleBar ? (
+        <DesktopWindowTitleBar showLeadingNav={sidebarCollapsed && showCollapsedSidebarNav} />
+      ) : null}
+      <View style={resolvedCardStyle} testID={testID}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
+  mainColumn: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    flexDirection: "column",
+    backgroundColor: "transparent",
+  },
+  unframedFill: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+  },
+  framedCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    marginRight: 6,
+    marginBottom: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+    overflow: "hidden",
+  },
+  framedCardMac: {
+    marginTop: 6,
+  },
+  framedCardBelowTitleBar: {
+    marginTop: 0,
+  },
+  framedCardSidebarCollapsed: {
+    marginLeft: 6,
+  },
   titleBar: {
     height: HEADER_INNER_HEIGHT,
     minHeight: HEADER_INNER_HEIGHT,

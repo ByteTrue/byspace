@@ -33,7 +33,7 @@ import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import { ChangelogHost } from "@/changelog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
 import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
-import { DesktopWindowTitleBar, isWindowsWailsDesktop } from "@/components/desktop-window-titlebar";
+import { DesktopContentFrame } from "@/components/desktop-window-titlebar";
 import { LeftSidebar } from "@/components/left-sidebar";
 import {
   canDesktopAppSidebarShare,
@@ -449,40 +449,30 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   if (isWeb) {
     themedSidebarChrome = <AppearanceStyleBoundary>{sidebarChrome}</AppearanceStyleBoundary>;
   }
-  const hasWindowsTitleBar = !isCompactLayout && chromeEnabled && isWindowsWailsDesktop();
-  const isFramedDesktopCard = !isCompactLayout && chromeEnabled;
-  const contentCardStyle = useMemo(
-    () =>
-      isFramedDesktopCard
-        ? [
-            layoutStyles.framedCard,
-            hasWindowsTitleBar ? layoutStyles.framedCardBelowTitleBar : layoutStyles.framedCardMac,
-            !desktopSidebarVisible && layoutStyles.framedCardSidebarCollapsed,
-          ]
-        : flexStyle,
-    [desktopSidebarVisible, hasWindowsTitleBar, isFramedDesktopCard],
-  );
+  const isSettingsRoute = isSettingsPathname(pathname);
+  const frameInOuterShell = !isCompactLayout && !isSettingsRoute;
 
   const mainContentBody = usesCompactExplorerHost ? (
     <CompactExplorerSidebarHost
       enabled={chromeEnabled}
       presentation={explorerSidebarPresentation === "dock" ? "dock" : "overlay"}
     >
-      <View style={contentCardStyle}>{children}</View>
+      <View style={flexStyle}>{children}</View>
     </CompactExplorerSidebarHost>
   ) : (
-    <View style={contentCardStyle}>{children}</View>
+    <View style={flexStyle}>{children}</View>
   );
 
   const workspaceChrome = (
     <View style={rowStyle}>
       {!isCompactLayout ? themedSidebarChrome : null}
-      <View style={layoutStyles.mainColumn}>
-        {hasWindowsTitleBar ? (
-          <DesktopWindowTitleBar sidebarCollapsed={!desktopSidebarVisible} />
-        ) : null}
+      <DesktopContentFrame
+        enabled={frameInOuterShell}
+        sidebarCollapsed={!chromeEnabled || !desktopSidebarVisible}
+        showCollapsedSidebarNav={chromeEnabled}
+      >
         {mainContentBody}
-      </View>
+      </DesktopContentFrame>
     </View>
   );
 
@@ -624,21 +614,26 @@ function OfferLinkListener({
   return null;
 }
 
+const STANDALONE_ONBOARDING_ROUTES = new Set(["", "/", "/welcome", "/pair-scan"]);
+
+function isSettingsPathname(pathname: string): boolean {
+  return (
+    pathname === "/settings" || pathname.startsWith("/settings/") || pathname.endsWith("/settings")
+  );
+}
+
 function AppWithSidebar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hosts = useHosts();
   const storeReady = useStoreReady();
   const routeServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
-  const routeHasKnownHost =
-    routeServerId !== null && hosts.some((host) => host.serverId === routeServerId);
+  const hasInvalidHostParam =
+    routeServerId !== null && !hosts.some((host) => host.serverId === routeServerId);
   const shouldShowAppChrome =
     storeReady &&
-    (pathname === "/open-project" ||
-      pathname === "/new" ||
-      pathname === "/sessions" ||
-      pathname === "/schedules" ||
-      pathname === "/tunnels" ||
-      routeHasKnownHost);
+    !STANDALONE_ONBOARDING_ROUTES.has(pathname) &&
+    !isSettingsPathname(pathname) &&
+    !hasInvalidHostParam;
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;
 }
@@ -780,33 +775,5 @@ const layoutStyles = StyleSheet.create((theme) => ({
   surfaceFill: {
     flex: 1,
     backgroundColor: theme.colors.surfaceSidebar,
-  },
-  mainColumn: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    flexDirection: "column",
-    backgroundColor: "transparent",
-  },
-  framedCard: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    marginRight: 6,
-    marginBottom: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-    overflow: "hidden",
-  },
-  framedCardMac: {
-    marginTop: 6,
-  },
-  framedCardBelowTitleBar: {
-    marginTop: 0,
-  },
-  framedCardSidebarCollapsed: {
-    marginLeft: 6,
   },
 }));
