@@ -1,5 +1,4 @@
 import { StyleSheet } from "react-native-unistyles";
-import { isWeb } from "@/constants/platform";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
   section: {
@@ -26,24 +25,20 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
+  // shadcn/ui card: a hairline frame, no shadow; rows are 56px items split by the border colour.
   card: {
     backgroundColor: theme.colors.surface1,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
     overflow: "hidden",
-    ...theme.shadow.sm,
-    ...(isWeb
-      ? {
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
-        }
-      : {}),
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: theme.spacing[4],
+    minHeight: 56,
+    paddingVertical: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
   },
   rowBorder: {
