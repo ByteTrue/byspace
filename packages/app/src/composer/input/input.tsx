@@ -57,8 +57,9 @@ import {
   type EditingTextInputProps,
 } from "@/components/ui/text-input";
 
+// Placeholders sit at foregroundMuted, as everywhere else (docs/design.md).
 const ComposerTextInput = withUnistyles(EditingTextInput, (theme) => ({
-  placeholderTextColor: theme.colors.surface4,
+  placeholderTextColor: theme.colors.foregroundMuted,
 }));
 import { resolveSendTooltipLabel, resolveSubmitAccessibilityLabel } from "./labels";
 import {
@@ -624,8 +625,8 @@ function resolvePrimaryActionKind(input: {
 }): PrimaryActionKind {
   if (input.hasSendableContent || input.allowEmptySubmit) return "send";
   if (input.isAgentRunning) return "active";
-  if (input.isSubmitLoading) return "send";
-  return "none";
+  // The send button stays in place when there is nothing to send; it is disabled instead.
+  return "send";
 }
 
 function PrimaryAction({
@@ -729,6 +730,8 @@ interface SendButtonStateInput {
   disabled: boolean;
   isSubmitDisabled: boolean;
   isSubmitLoading: boolean;
+  hasSendableContent: boolean;
+  allowEmptySubmit: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
   defaultSendBehavior: "interrupt" | "steer" | "queue";
   isAgentRunning: boolean;
@@ -743,8 +746,10 @@ interface SendButtonStateOutput {
 function computeSendButtonState(input: SendButtonStateInput): SendButtonStateOutput {
   const canPressLoadingButton =
     input.isSubmitLoading && typeof input.onSubmitLoadingPress === "function";
+  const isEmpty = !input.hasSendableContent && !input.allowEmptySubmit;
   const isSendButtonDisabled =
-    input.disabled || (!canPressLoadingButton && (input.isSubmitDisabled || input.isSubmitLoading));
+    input.disabled ||
+    (!canPressLoadingButton && (input.isSubmitDisabled || input.isSubmitLoading || isEmpty));
   const defaultActionQueues = input.defaultSendBehavior === "queue" && input.isAgentRunning;
   return { canPressLoadingButton, isSendButtonDisabled, defaultActionQueues };
 }
@@ -1092,12 +1097,13 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       });
     }
 
+    const hasSendableContent = hasSendableComposerContent({
+      hasText: hasLiveText,
+      attachments,
+      hasExternalContent,
+    });
     const primaryActionKind = resolvePrimaryActionKind({
-      hasSendableContent: hasSendableComposerContent({
-        hasText: hasLiveText,
-        attachments,
-        hasExternalContent,
-      }),
+      hasSendableContent,
       allowEmptySubmit,
       isAgentRunning,
       isSubmitLoading,
@@ -1107,6 +1113,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         isSubmitDisabled,
         isSubmitLoading,
+        hasSendableContent,
+        allowEmptySubmit,
         onSubmitLoadingPress,
         defaultSendBehavior,
         isAgentRunning,
@@ -1170,11 +1178,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const inputWrapperCombinedStyle = useMemo(
       () => [
         styles.inputWrapper,
+        isInputFocused && !readOnly && styles.inputWrapperFocused,
         readOnly && styles.inputWrapperReadOnly,
         inputWrapperStyle,
         { opacity: surfacePresentation.input.opacity },
       ],
-      [inputWrapperStyle, readOnly, surfacePresentation.input.opacity],
+      [inputWrapperStyle, isInputFocused, readOnly, surfacePresentation.input.opacity],
     );
     // `withUnistyles` maps this component's `style` into a `.hash > *` child
     // rule, which ties on specificity with react-native-web's own
@@ -1307,25 +1316,30 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexShrink: 1,
     position: "relative",
   },
+  // shadcn/ui input group: an input-coloured border, shadow-xs, and the field focus ring.
   inputWrapper: {
     flexShrink: 1,
     flexDirection: "column",
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.controlFill,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.xl,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    ...theme.shadow.md,
+    ...theme.shadow.sm,
     ...(isWeb
       ? {
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)",
-          transitionProperty: "border-color, box-shadow",
-          transitionDuration: "200ms",
+          transitionProperty: "border-color",
+          transitionDuration: "150ms",
           transitionTimingFunction: "ease-in-out",
         }
       : {}),
+  },
+  // The composer holds focus nearly all the time, so focus only firms up the border; a permanent
+  // 3px ring would read as noise.
+  inputWrapperFocused: {
+    borderColor: theme.colors.ring,
   },
   // Dotted says "this surface is the same box, but there is nothing to type
   // into it" without swapping the border colour, which reads as an error state.
@@ -1404,7 +1418,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   sendButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.accent,
     alignItems: "center",
     justifyContent: "center",
