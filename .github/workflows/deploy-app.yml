@@ -38,9 +38,7 @@ jobs:
           else
             test "$GITHUB_REF" = refs/heads/main
           fi
-          code_sha="$(git log -n 1 --format=%H HEAD -- . ':!CHANGELOG.md' ':!package.json' ':!packages/*/package.json' ':!workers/*/package.json' ':!internal/cli/gui_android.go')"
-          test -n "$code_sha"
-          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$code_sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
           if [[ "$version" == *-* ]]; then
             echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
           else

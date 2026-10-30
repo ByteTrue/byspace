@@ -8,8 +8,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// DefaultVersion is populated via -ldflags on Android shared-library builds.
+var DefaultVersion = "dev"
+
 func init() {
 	application.RegisterAndroidMain(func() {
-		os.Exit(Main("0.23.3", os.Args[1:], os.Stdout, os.Stderr))
+		os.Exit(Main(DefaultVersion, os.Args[1:], os.Stdout, os.Stderr))
 	})
 }
