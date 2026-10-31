@@ -425,17 +425,16 @@ function WorkspaceRowText({
           <span
             className={cn(
               "shrink-0",
+              // The kebab takes the trailing slot: on hover or with its menu open, and always on a
+              // phone, where the kebab is always shown.
               hasKebab &&
-                "group-hover/workspace-row:invisible group-data-[state=menu-open]/workspace-row:invisible",
+                "group-hover/workspace-row:invisible group-data-[state=menu-open]/workspace-row:invisible max-md:hidden",
             )}
           >
             <WorkspaceTrailingContent workspace={workspace} trailing={sidebarWorkspaceTrailing} />
           </span>
         ) : null}
-        {/* Touch layouts always show the kebab, so they keep its width free. */}
-        {hasKebab && !hasTrailing ? (
-          <span className="w-4 shrink-0 md:hidden" aria-hidden="true" />
-        ) : null}
+        {hasKebab ? <span className="w-4 shrink-0 md:hidden" aria-hidden="true" /> : null}
       </span>
       <WorkspaceMetaRow
         currentBranch={workspace.currentBranch}

@@ -3,7 +3,6 @@ import { GitBranch, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
-import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
@@ -14,7 +13,7 @@ import { SidebarToggle } from "~/app/sidebar-toggle";
 import { Button } from "~/components/ui/button";
 import { SidebarContent, SidebarHeader } from "~/components/ui/sidebar";
 import { SidebarListSkeleton } from "~/sidebar/list-parts";
-import { SidebarNavMenu } from "~/sidebar/nav-menu";
+import { SidebarNavRows } from "~/sidebar/nav-menu";
 import { SidebarFooter } from "~/sidebar/sidebar-footer";
 import { SidebarWorkspaceList } from "~/sidebar/workspace-list";
 
@@ -24,10 +23,7 @@ const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL?.trim() 
 export function AppSidebar() {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const desktopVisible = useDesktopSidebarVisible();
-  const mobileOpen = usePanelStore((state) => state.mobilePanel.target === "agent-list");
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
-  const panelActive = isCompact ? mobileOpen : desktopVisible;
   // On a phone the sidebar is a sheet over the page, so it gets out of the way of any navigation.
   const closeOnNavigate = isCompact ? showMobileAgent : undefined;
   const trafficLightInset = useMacTrafficLightInset();
@@ -70,7 +66,6 @@ export function AppSidebar() {
         style={headerStyle}
       >
         {isCompact ? null : <SidebarToggle host="sidebar" />}
-        <SidebarNavMenu panelActive={panelActive} onBeforeNavigate={closeOnNavigate} />
         {isCompact ? (
           <Button
             variant="ghost"
@@ -88,6 +83,7 @@ export function AppSidebar() {
         className="gap-0 pt-0.5 pb-4"
         data-testid="sidebar-project-workspace-list-scroll"
       >
+        <SidebarNavRows onBeforeNavigate={closeOnNavigate} />
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarListSkeleton />
         ) : (
