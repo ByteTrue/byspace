@@ -7,7 +7,7 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "~/components/ui/context-menu";
+} from "~/components/adaptive-menu";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
@@ -16,7 +16,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "~/components/adaptive-menu";
 
 /**
  * The menu primitives an item list renders with. The same list shows in a kebab dropdown and a

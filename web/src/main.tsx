@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import {
@@ -20,8 +19,7 @@ bindExpoRouter(router);
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root is missing");
-createRoot(container).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>,
-);
+// No StrictMode: the shared packages/app code assumes an effect runs once per mount. Its form
+// models close in the cleanup of a hook that creates them once (useAgentProfileFormModel), so
+// StrictMode's extra mount/unmount in development leaves the agent profile form dead.
+createRoot(container).render(<RouterProvider router={router} />);

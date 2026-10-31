@@ -1,12 +1,14 @@
 // Override of packages/app/src/components/ui/button.tsx on shadcn's Button. Same props; `size`
 // md is shadcn's default (32px) and the variants map one to one.
-import type {
-  ComponentProps,
-  ComponentType,
-  CSSProperties,
-  PropsWithChildren,
-  ReactElement,
-  ReactNode,
+import {
+  useCallback,
+  type ComponentProps,
+  type ComponentType,
+  type CSSProperties,
+  type MouseEvent,
+  type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
 } from "react";
 import { Button as ShadButton } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
@@ -48,6 +50,7 @@ export function Button({
   disabled,
   loading = false,
   onPress,
+  onClick,
   testID,
   accessibilityLabel,
   accessibilityRole: _accessibilityRole,
@@ -72,12 +75,19 @@ export function Button({
     accessibilityHint?: string;
   }
 >) {
+  // A wrapping Slot (a tooltip trigger) passes its own onClick; both run.
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      onClick?.(event);
+      onPress?.();
+    },
+    [onClick, onPress],
+  );
   return (
     <ShadButton
       variant={variant}
       size={SIZE[size]}
       disabled={disabled || loading}
-      onClick={onPress}
       data-testid={testID}
       aria-label={accessibilityLabel}
       className={className}
@@ -88,6 +98,7 @@ export function Button({
       }
       type={type}
       {...props}
+      onClick={handleClick}
     >
       {loading ? <Spinner /> : renderLeftIcon(leftIcon, ICON_SIZE[size])}
       {children}

@@ -1,8 +1,12 @@
 // Override of packages/app/src/components/ui/context-menu.tsx: the right-click shape of the menu
 // engine. The trigger is the element itself (a tab chip, a row), so it renders a div that Radix
-// opens the menu from.
+// opens the menu from. On a phone the menu is a bottom sheet, opened by the context gesture (a long
+// press fires it on Android; iOS has none, and the row's kebab opens the same menu).
 import {
+  useCallback,
+  useMemo,
   useState,
+  type MouseEvent,
   type ComponentProps,
   type CSSProperties,
   type KeyboardEvent,
@@ -29,11 +33,15 @@ export {
 } from "@/components/ui/menu";
 export type { ActionStatus } from "@/components/ui/menu";
 
+/**
+ * Context menus use the mobile menu convention by default: long press opens a bottom sheet on a
+ * compact layout, while right click opens an anchored popover on a wide layout.
+ */
 export function ContextMenu({
-  compactMode: _compactMode,
+  compactMode = "sheet",
   ...props
 }: ComponentProps<typeof MenuRoot>): ReactElement {
-  return <MenuRoot {...props} kind="context" />;
+  return <MenuRoot {...props} compactMode={compactMode} kind="context" />;
 }
 
 export function ContextMenuContent(props: MenuSurfaceProps): ReactElement {
@@ -69,6 +77,33 @@ type ContextMenuTriggerProps = PropsWithChildren<
   }
 >;
 
+/** On a phone the sheet is not a Radix menu, so the trigger opens it from the context gesture. */
+function useSheetTrigger({
+  isSheet,
+  isEnabled,
+  setOpen,
+  style,
+}: {
+  isSheet: boolean;
+  isEnabled: boolean;
+  setOpen: (open: boolean) => void;
+  style: ContextMenuTriggerProps["style"];
+}) {
+  const triggerStyle = useMemo<CSSProperties | undefined>(() => {
+    const base = typeof style === "object" ? style : undefined;
+    // A long press on a phone opens the sheet, not the browser's link/image callout.
+    return isSheet ? { ...base, WebkitTouchCallout: "none" } : base;
+  }, [isSheet, style]);
+  const handleSheetContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      if (isEnabled) setOpen(true);
+    },
+    [isEnabled, setOpen],
+  );
+  return { triggerStyle, onContextMenu: isSheet ? handleSheetContextMenu : undefined };
+}
+
 export function ContextMenuTrigger({
   ref,
   triggerRef,
@@ -96,8 +131,9 @@ export function ContextMenuTrigger({
   onPointerLeave,
   ...props
 }: ContextMenuTriggerProps): ReactElement {
-  const { open } = useMenuContext("ContextMenuTrigger");
+  const { open, setOpen, presentation } = useMenuContext("ContextMenuTrigger");
   const [hovered, setHovered] = useState(false);
+
   const pressable = !contextOnly && !disabled && Boolean(onPress || onPressIn);
   const content =
     typeof children === "function" ? children({ pressed: false, hovered, open }) : children;
@@ -107,28 +143,40 @@ export function ContextMenuTrigger({
     onPressIn?.();
     onPress?.();
   };
+  const isSheet = presentation === "sheet";
+  const { triggerStyle, onContextMenu } = useSheetTrigger({
+    isSheet,
+    isEnabled: enabled && enabledOnWeb && !disabled,
+    setOpen,
+    style,
+  });
+  const element = (
+    <div
+      {...props}
+      ref={mergeRefs(ref, triggerRef)}
+      role={accessibilityRole === "button" || pressable ? "button" : undefined}
+      tabIndex={pressable ? 0 : undefined}
+      aria-label={accessibilityLabel}
+      aria-disabled={disabled || undefined}
+      data-testid={testID}
+      style={triggerStyle}
+      onContextMenu={onContextMenu}
+      onClick={composeHandlers(onClick, pressable && onPress ? () => onPress() : undefined)}
+      onPointerDown={composeHandlers(
+        onPointerDown,
+        pressable && onPressIn ? (event) => event.button === 0 && onPressIn() : undefined,
+      )}
+      onKeyDown={composeHandlers(onKeyDown, handleKeyDown)}
+      onPointerEnter={composeHandlers(onPointerEnter, () => setHovered(true))}
+      onPointerLeave={composeHandlers(onPointerLeave, () => setHovered(false))}
+    >
+      {content}
+    </div>
+  );
+  if (isSheet) return element;
   return (
     <RadixContextMenuTrigger asChild disabled={!enabled || !enabledOnWeb}>
-      <div
-        {...props}
-        ref={mergeRefs(ref, triggerRef)}
-        role={accessibilityRole === "button" || pressable ? "button" : undefined}
-        tabIndex={pressable ? 0 : undefined}
-        aria-label={accessibilityLabel}
-        aria-disabled={disabled || undefined}
-        data-testid={testID}
-        style={typeof style === "object" ? style : undefined}
-        onClick={composeHandlers(onClick, pressable && onPress ? () => onPress() : undefined)}
-        onPointerDown={composeHandlers(
-          onPointerDown,
-          pressable && onPressIn ? (event) => event.button === 0 && onPressIn() : undefined,
-        )}
-        onKeyDown={composeHandlers(onKeyDown, handleKeyDown)}
-        onPointerEnter={composeHandlers(onPointerEnter, () => setHovered(true))}
-        onPointerLeave={composeHandlers(onPointerLeave, () => setHovered(false))}
-      >
-        {content}
-      </div>
+      {element}
     </RadixContextMenuTrigger>
   );
 }

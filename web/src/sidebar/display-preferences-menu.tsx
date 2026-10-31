@@ -55,7 +55,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "~/components/adaptive-menu";
 import { ProjectIcon } from "~/sidebar/status-visuals";
 import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
 import { WorkspaceLabelDot } from "~/sidebar/workspace-labels-menu";
@@ -170,7 +170,7 @@ function RadioSubmenu<T extends string>({
   const current = options.find(([option]) => option === value)?.[2];
   const handleChange = useCallback((next: string) => onChange(next as T), [onChange]);
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub title={label}>
       <DropdownMenuSubTrigger data-testid={triggerTestId}>
         {TriggerIcon ? <TriggerIcon /> : null}
         {label}
@@ -206,7 +206,7 @@ type DisplayPreferences = ReturnType<typeof useSidebarDisplayPreferences>;
 function ShowSubmenu({ preferences }: { preferences: DisplayPreferences }) {
   const { t } = useTranslation();
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub title={t("sidebar.display.show.label")}>
       <DropdownMenuSubTrigger data-testid="sidebar-display-show">
         {t("sidebar.display.show.label")}
       </DropdownMenuSubTrigger>
@@ -258,7 +258,7 @@ function HostFilterSubmenu({ preferences }: { preferences: DisplayPreferences })
   const { t } = useTranslation();
   const hosts = useHosts();
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub title={t("sidebar.display.hostFilter.label")}>
       <DropdownMenuSubTrigger data-testid="sidebar-display-host-filter">
         {t("sidebar.display.hostFilter.label")}
         <FilterIndicator on={preferences.hostFilters.length > 0} />
@@ -296,7 +296,7 @@ function ProjectFilterSubmenu({ preferences }: { preferences: DisplayPreferences
   const iconTargets = useMemo(() => resolveSidebarProjectIconTargets(allProjects), [allProjects]);
   const iconByViewKey = useProjectIcons({ projects: iconTargets });
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub title={t("sidebar.display.projectFilter.label")}>
       <DropdownMenuSubTrigger data-testid="sidebar-display-project-filter">
         {t("sidebar.display.projectFilter.label")}
         <FilterIndicator on={resolvedProjectFilters.length > 0} />
@@ -346,7 +346,7 @@ function LabelFilterSubmenu({
     [preferences.clearLabelFilter],
   );
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub title={t("workspaceLabels.title")}>
       <DropdownMenuSubTrigger data-testid="sidebar-display-label-filter">
         {t("workspaceLabels.title")}
         <FilterIndicator on={labelFilterActive} />
@@ -405,7 +405,7 @@ export function SidebarDisplayPreferencesMenu() {
   const showLabelFilter = labels.length > 0 || hasActiveSidebarLabelFilter(preferences.labelFilter);
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu compactMode="sheet">
         <DropdownMenuTrigger asChild>
           <SidebarIconButton
             label={t("sidebar.display.trigger")}
@@ -419,6 +419,7 @@ export function SidebarDisplayPreferencesMenu() {
           align="end"
           className="w-60"
           data-testid="sidebar-display-preferences-content"
+          sheetTitle={t("sidebar.display.heading")}
         >
           <RadioSubmenu
             label={t("sidebar.display.grouping.label")}

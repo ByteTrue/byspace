@@ -1,9 +1,14 @@
 // Override of packages/app/src/components/ui/tooltip.tsx on shadcn's Tooltip. Same props; a
-// tooltip that is off for the current form factor never opens.
+// tooltip that is off for the current form factor never opens, and a hint never covers the menu or
+// picker its trigger has open.
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
+  useRef,
+  useState,
+  type RefObject,
   type ComponentProps,
   type CSSProperties,
   type PropsWithChildren,
@@ -21,6 +26,33 @@ import {
 /** True inside tooltip content, so nested text can pick tooltip colours. */
 export const TooltipSurfaceContext = createContext(false);
 const TooltipEnabledContext = createContext(true);
+const TooltipTriggerNodeContext = createContext<RefObject<HTMLElement | null> | null>(null);
+
+/** The trigger, or something inside it (a wrapped picker button), has its popup open. */
+function hasExpandedPopup(node: HTMLElement | null): boolean {
+  if (!node) return false;
+  return (
+    node.getAttribute("aria-expanded") === "true" ||
+    node.querySelector('[aria-expanded="true"]') !== null
+  );
+}
+
+/**
+ * A hint opens for a pointer over the trigger or for keyboard focus on it, not for focus a closing
+ * menu or dialog hands back to it.
+ */
+function canOpen(node: HTMLElement | null): boolean {
+  if (!node) return true;
+  if (hasExpandedPopup(node)) return false;
+  if (node.matches(":hover")) return true;
+  if (!node.contains(document.activeElement)) return true;
+  return node.matches(":focus-visible") || node.querySelector(":focus-visible") !== null;
+}
+
+function assignRef<T>(ref: Ref<T> | undefined, value: T) {
+  if (typeof ref === "function") ref(value);
+  else if (ref) (ref as { current: T }).current = value;
+}
 
 export function Tooltip({
   open,
@@ -40,16 +72,28 @@ export function Tooltip({
 }>): ReactElement {
   const isCompact = useIsCompactFormFactor();
   const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;
+  const triggerNodeRef = useRef<HTMLElement | null>(null);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen ?? false);
+  const isOpen = open ?? internalOpen;
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next && !canOpen(triggerNodeRef.current)) return;
+      setInternalOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
   return (
     <TooltipEnabledContext value={enabled}>
-      <ShadTooltip
-        open={enabled ? open : false}
-        defaultOpen={defaultOpen}
-        onOpenChange={onOpenChange}
-        delayDuration={delayDuration}
-      >
-        {children}
-      </ShadTooltip>
+      <TooltipTriggerNodeContext value={triggerNodeRef}>
+        <ShadTooltip
+          open={enabled && isOpen && !hasExpandedPopup(triggerNodeRef.current)}
+          onOpenChange={handleOpenChange}
+          delayDuration={delayDuration}
+        >
+          {children}
+        </ShadTooltip>
+      </TooltipTriggerNodeContext>
     </TooltipEnabledContext>
   );
 }
@@ -86,11 +130,19 @@ export function TooltipTrigger({
   accessibilityHint: _accessibilityHint,
   ...props
 }: TooltipTriggerProps): ReactElement {
+  const triggerNodeRef = useContext(TooltipTriggerNodeContext);
+  const setNode = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (triggerNodeRef) triggerNodeRef.current = node;
+      assignRef(ref, node);
+    },
+    [ref, triggerNodeRef],
+  );
   const content =
     typeof children === "function" ? children({ pressed: false, hovered: false }) : children;
   if (asChild) {
     return (
-      <ShadTooltipTrigger asChild ref={ref} {...props}>
+      <ShadTooltipTrigger asChild ref={setNode} {...props}>
         {content}
       </ShadTooltipTrigger>
     );
@@ -99,7 +151,7 @@ export function TooltipTrigger({
     <ShadTooltipTrigger asChild>
       <button
         type="button"
-        ref={ref}
+        ref={setNode}
         data-testid={testID}
         aria-label={accessibilityLabel}
         style={typeof style === "object" ? style : undefined}

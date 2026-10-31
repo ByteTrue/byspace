@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import type { ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import type { ToolCallIconComponent } from "@/utils/tool-call-icon";
-import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
+import { SnapDrawer } from "~/components/snap-drawer";
+import { DrawerTitle } from "~/components/ui/drawer";
 
 export interface ToolCallSheetData {
   toolName: string;
@@ -36,10 +37,8 @@ const SNAP_POINTS = [0.6, 0.95];
 export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
   const [sheetData, setSheetData] = useState<ToolCallSheetData | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [snap, setSnap] = useState<number | string | null>(SNAP_POINTS[0]);
   const openToolCall = useCallback((data: ToolCallSheetData) => {
     setSheetData(data);
-    setSnap(SNAP_POINTS[0]);
     setIsSheetOpen(true);
   }, []);
   const closeToolCall = useCallback(() => setIsSheetOpen(false), []);
@@ -53,19 +52,16 @@ export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
   return (
     <ToolCallSheetContext value={contextValue}>
       {children}
-      <Drawer
+      <SnapDrawer
         open={isSheetOpen}
         onOpenChange={setIsSheetOpen}
         snapPoints={SNAP_POINTS}
-        fadeFromIndex={0}
-        activeSnapPoint={snap}
-        setActiveSnapPoint={setSnap}
         onAnimationEnd={handleAnimationEnd}
+        aria-describedby={undefined}
+        className="bg-muted"
       >
-        <DrawerContent className="h-[95vh] bg-muted data-[vaul-drawer-direction=bottom]:max-h-[95vh]">
-          {sheetData ? <ToolCallSheetContent data={sheetData} onClose={closeToolCall} /> : null}
-        </DrawerContent>
-      </Drawer>
+        {sheetData ? <ToolCallSheetContent data={sheetData} onClose={closeToolCall} /> : null}
+      </SnapDrawer>
     </ToolCallSheetContext>
   );
 }

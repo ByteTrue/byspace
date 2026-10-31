@@ -1,10 +1,13 @@
-// Override of packages/app/src/agent-profiles/index.ts: the same barrel through `@/`.
-// shortcut: without the settings section, the profile editor and the profile glyph (React Native
-// views); the glyph moves with the model picker in batch 3 of step 3, the rest with settings in
-// step 4.
+// Override of packages/app/src/agent-profiles/index.ts: the same barrel through `@/`, so the web
+// glyph and editor apply.
+// shortcut: without the settings section (step 4 ports settings).
 export type { AgentProfile } from "@bytetrue/protocol/messages";
 export type { MaterializedAgentProfile } from "@/agent-profiles/internal/materialize-profile";
 export type { AgentProfileSeed } from "@/agent-profiles/internal/profile-form-model";
+export {
+  useAgentProfileEditor,
+  type AgentProfileEditorControls,
+} from "@/agent-profiles/agent-profile-editor";
 export { useAgentProfiles } from "@/agent-profiles/internal/use-agent-profiles";
 export {
   useAgentProfilePicker,
@@ -13,3 +16,4 @@ export {
   type AgentProfilePickerRow,
   type DraftAgentProfileControls,
 } from "@/agent-profiles/internal/use-agent-profile-picker";
+export { AgentProfileGlyph } from "@/agent-profiles/internal/agent-profile-glyph";

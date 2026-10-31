@@ -1,10 +1,12 @@
 // Override of packages/app/src/components/ui/menu (the menu engine). Same vocabulary — root,
 // trigger, surface, items, labels, hints, sub pages — rendered with shadcn's DropdownMenu or
-// ContextMenu, whichever root the items sit under.
+// ContextMenu, whichever root the items sit under. A menu with `compactMode="sheet"` on a phone is
+// a bottom sheet instead, showing one page at a time with a back button (docs/menus.md).
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ChangeEvent,
@@ -16,8 +18,9 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import invariant from "tiny-invariant";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { cn } from "cn";
 import { composeHandlers } from "~/lib/compose";
 import {
@@ -41,6 +44,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import {
+  MenuSheet,
+  MenuSheetHeader,
+  SHEET_LABEL,
+  SHEET_ROW,
+  SHEET_SEPARATOR,
+} from "~/components/sheet-menu";
 import { Spinner } from "~/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
@@ -74,6 +84,10 @@ export interface MenuContextValue {
   /** Runs an item's action, closing the menu first when the item asks for it. */
   selectItem: (onSelect: (() => void) | undefined, closeOnSelect: boolean) => void;
   presentation: MenuPresentation;
+  /** Sub pages pushed in a sheet, root first. A popover shows submenus as flyouts instead. */
+  path: readonly string[];
+  openSub: (id: string) => void;
+  goBack: () => void;
 }
 
 const MenuKindContext = createContext<MenuKind>("dropdown");
@@ -101,6 +115,7 @@ export function MenuRoot({
   open,
   defaultOpen,
   onOpenChange,
+  compactMode = "popover",
   kind = "dropdown",
   modal,
   children,
@@ -115,6 +130,9 @@ export function MenuRoot({
   const [internalOpen, setInternalOpen] = useState(defaultOpen ?? false);
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
+  const isCompact = useIsCompactFormFactor();
+  const presentation: MenuPresentation = isCompact && compactMode === "sheet" ? "sheet" : "popover";
+  const [path, setPath] = useState<readonly string[]>([]);
   const setOpen = useCallback(
     (next: boolean) => {
       if (!controlled) setInternalOpen(next);
@@ -122,6 +140,11 @@ export function MenuRoot({
     },
     [controlled, onOpenChange],
   );
+  useEffect(() => {
+    if (!isOpen) setPath([]);
+  }, [isOpen]);
+  const openSub = useCallback((id: string) => setPath((current) => [...current, id]), []);
+  const goBack = useCallback(() => setPath((current) => current.slice(0, -1)), []);
   const selectItem = useCallback(
     (onSelect: (() => void) | undefined, closeOnSelect: boolean) => {
       if (closeOnSelect) setOpen(false);
@@ -130,23 +153,27 @@ export function MenuRoot({
     [setOpen],
   );
   const value = useMemo<MenuContextValue>(
-    () => ({ open: isOpen, setOpen, selectItem, presentation: "popover" }),
-    [isOpen, selectItem, setOpen],
+    () => ({ open: isOpen, setOpen, selectItem, presentation, path, openSub, goBack }),
+    [goBack, isOpen, openSub, path, presentation, selectItem, setOpen],
   );
+  let root: ReactNode = (
+    <DropdownMenuRoot open={isOpen} onOpenChange={setOpen} modal={modal}>
+      {children}
+    </DropdownMenuRoot>
+  );
+  // Radix opens a context menu at the pointer and owns its open state.
+  if (kind === "context") {
+    root = (
+      <ContextMenuRoot onOpenChange={setOpen} modal={modal}>
+        {children}
+      </ContextMenuRoot>
+    );
+  }
+  // A sheet is not a Radix menu: its trigger, surface and rows read the open state themselves.
+  if (presentation === "sheet") root = children;
   return (
     <MenuKindContext value={kind}>
-      <MenuStateContext value={value}>
-        {kind === "context" ? (
-          // Radix opens a context menu at the pointer and owns its open state.
-          <ContextMenuRoot onOpenChange={setOpen} modal={modal}>
-            {children}
-          </ContextMenuRoot>
-        ) : (
-          <DropdownMenuRoot open={isOpen} onOpenChange={setOpen} modal={modal}>
-            {children}
-          </DropdownMenuRoot>
-        )}
-      </MenuStateContext>
+      <MenuStateContext value={value}>{root}</MenuStateContext>
     </MenuKindContext>
   );
 }
@@ -191,10 +218,30 @@ export function MenuTrigger({
   onPointerLeave,
   ...props
 }: MenuTriggerProps): ReactElement {
-  const { open } = useMenuContext("MenuTrigger");
+  const { open, setOpen, presentation } = useMenuContext("MenuTrigger");
   const [hovered, setHovered] = useState(false);
   const content =
     typeof children === "function" ? children({ pressed: false, hovered, open }) : children;
+  if (presentation === "sheet") {
+    return (
+      <button
+        type="button"
+        ref={ref}
+        data-testid={testID}
+        aria-label={accessibilityLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={typeof style === "object" ? style : undefined}
+        {...props}
+        onClick={composeHandlers(onClick, () => {
+          onPress?.();
+          setOpen(!open);
+        })}
+      >
+        {content}
+      </button>
+    );
+  }
   return (
     <DropdownMenuTrigger asChild>
       <button
@@ -243,6 +290,7 @@ export interface MenuSurfaceProps {
 export function MenuSurface({
   children,
   pages,
+  sheetTitle,
   side = "bottom",
   align = "start",
   offset = 4,
@@ -254,18 +302,31 @@ export function MenuSurface({
   className,
 }: MenuSurfaceProps): ReactElement {
   const kind = useContext(MenuKindContext);
+  const menu = useMenuContext("MenuSurface");
   const pageMap = useMemo(() => new Map((pages ?? []).map((page) => [page.id, page])), [pages]);
   const style = useMemo(
     () => ({ width, minWidth, maxWidth, maxHeight }),
     [maxHeight, maxWidth, minWidth, width],
   );
   const body = <MenuPagesContext value={pageMap}>{children}</MenuPagesContext>;
+  if (menu.presentation === "sheet") {
+    return (
+      <MenuSheetSurface sheetTitle={sheetTitle} pageMap={pageMap} testID={testID}>
+        {children}
+      </MenuSheetSurface>
+    );
+  }
   // Without a fixed width the surface sizes to its rows between min and max width, as the Expo
   // engine's did; shadcn's content otherwise takes the trigger's width.
   const surfaceClassName = cn(width === undefined && "w-max", className);
   if (kind === "context") {
     return (
-      <ContextMenuContent data-testid={testID} style={style} className={surfaceClassName}>
+      <ContextMenuContent
+        data-testid={testID}
+        style={style}
+        className={surfaceClassName}
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         {body}
       </ContextMenuContent>
     );
@@ -278,10 +339,49 @@ export function MenuSurface({
       data-testid={testID}
       style={style}
       className={surfaceClassName}
+      onCloseAutoFocus={keepFocusElsewhere}
     >
       {body}
     </DropdownMenuContent>
   );
+}
+
+/**
+ * A content-sized bottom sheet: the root page under its title, or a pushed sub page under its own
+ * title and a back button.
+ */
+function MenuSheetSurface({
+  children,
+  sheetTitle,
+  pageMap,
+  testID,
+}: {
+  children: ReactNode;
+  sheetTitle: string | undefined;
+  pageMap: ReadonlyMap<string, MenuPageDefinition>;
+  testID: string | undefined;
+}): ReactElement {
+  const menu = useMenuContext("MenuSurface");
+  const openPageId = menu.path.at(-1);
+  const openPage = openPageId ? pageMap.get(openPageId) : undefined;
+  const title = openPage?.title ?? sheetTitle;
+  return (
+    <MenuSheet open={menu.open} onOpenChange={menu.setOpen} title={title ?? ""} testID={testID}>
+      <MenuPagesContext value={pageMap}>
+        {title ? <MenuSheetHeader title={title} onBack={openPage ? menu.goBack : null} /> : null}
+        {openPage ? openPage.content : children}
+      </MenuPagesContext>
+    </MenuSheet>
+  );
+}
+
+/**
+ * A closing menu hands focus back to its trigger, unless what the menu did already moved focus
+ * (a "New agent" item focusing the new composer) — then focus stays there.
+ */
+function keepFocusElsewhere(event: Event) {
+  const active = document.activeElement;
+  if (active && active !== document.body) event.preventDefault();
 }
 
 export function useMenuSurface(_componentName: string) {
@@ -381,6 +481,28 @@ function WithMenuTooltip({
   );
 }
 
+/** The trailing slot: the caller's, else the selected check when it is not drawn up front. */
+function resolveTrail(
+  trailing: ReactElement | null | undefined,
+  showSelectedCheck: boolean,
+  selected: boolean | undefined,
+): ReactNode {
+  if (trailing) return trailing;
+  return !showSelectedCheck && selected === true ? SELECTED_ICON : null;
+}
+
+function itemStateClassName(
+  active: boolean,
+  muted: boolean,
+  className: string | undefined,
+): string {
+  return cn(
+    active && "bg-accent text-accent-foreground",
+    muted && "text-muted-foreground",
+    className,
+  );
+}
+
 export function MenuItem({
   children,
   description,
@@ -403,6 +525,7 @@ export function MenuItem({
   className,
 }: PropsWithChildren<MenuItemProps>): ReactElement {
   const kind = useContext(MenuKindContext);
+  const menu = useMenuContext("MenuItem");
   const Item = kind === "context" ? ContextMenuItem : DropdownMenuItem;
   const { label, lead, isPending, isSuccess } = resolveItemStatus({
     children,
@@ -412,8 +535,7 @@ export function MenuItem({
     pendingLabel,
     successLabel,
   });
-  const showCheckAtEnd = !showSelectedCheck && selected === true;
-  const trail = trailing ?? (showCheckAtEnd ? SELECTED_ICON : null);
+  const trail = resolveTrail(trailing, showSelectedCheck, selected);
   const handleSelect = useCallback(
     (event: Event) => {
       if (!closeOnSelect) event.preventDefault();
@@ -421,38 +543,123 @@ export function MenuItem({
     },
     [closeOnSelect, onSelect],
   );
+  const selectCheck = showSelectedCheck ? (
+    <span className="flex size-4 shrink-0 items-center justify-center">
+      {selected ? <Check /> : null}
+    </span>
+  ) : null;
+  const trailView = trail ? (
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+      {trail}
+    </span>
+  ) : null;
+  const itemBody = (
+    <MenuItemBody
+      label={label}
+      description={isPending || isSuccess ? undefined : description}
+      isSuccess={isSuccess}
+    />
+  );
+  const isDisabled = Boolean(disabled) || isPending || isSuccess;
+  const isDestructive = Boolean(destructive) && !isSuccess;
+  const stateClassName = itemStateClassName(active, muted, className);
+  if (menu.presentation === "sheet") {
+    return (
+      <SheetMenuItem
+        disabled={isDisabled}
+        destructive={isDestructive}
+        selected={selected}
+        onSelect={onSelect}
+        closeOnSelect={closeOnSelect}
+        testID={testID}
+        className={stateClassName}
+      >
+        {selectCheck}
+        {lead}
+        {itemBody}
+        {trailView}
+      </SheetMenuItem>
+    );
+  }
   return (
     <WithMenuTooltip tooltip={tooltip}>
       <Item
-        disabled={Boolean(disabled) || isPending || isSuccess}
-        variant={destructive && !isSuccess ? "destructive" : "default"}
+        disabled={isDisabled}
+        variant={isDestructive ? "destructive" : "default"}
         onSelect={handleSelect}
         data-testid={testID}
         aria-checked={selected}
-        className={cn(
-          active && "bg-accent text-accent-foreground",
-          muted && "text-muted-foreground",
-          className,
-        )}
+        className={stateClassName}
       >
-        {showSelectedCheck ? (
-          <span className="flex size-4 shrink-0 items-center justify-center">
-            {selected ? <Check /> : null}
-          </span>
-        ) : null}
+        {selectCheck}
         {lead}
-        <MenuItemBody
-          label={label}
-          description={isPending || isSuccess ? undefined : description}
-          isSuccess={isSuccess}
-        />
-        {trail ? (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-            {trail}
-          </span>
-        ) : null}
+        {itemBody}
+        {trailView}
       </Item>
     </WithMenuTooltip>
+  );
+}
+
+function SheetMenuItem({
+  disabled,
+  destructive,
+  selected,
+  onSelect,
+  closeOnSelect,
+  testID,
+  className,
+  children,
+}: PropsWithChildren<{
+  disabled: boolean;
+  destructive: boolean;
+  selected: boolean | undefined;
+  onSelect: (() => void) | undefined;
+  closeOnSelect: boolean;
+  testID: string | undefined;
+  className: string;
+}>) {
+  const { selectItem } = useMenuContext("MenuItem");
+  const handleClick = useCallback(
+    () => selectItem(onSelect, closeOnSelect),
+    [closeOnSelect, onSelect, selectItem],
+  );
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      aria-checked={selected}
+      data-testid={testID}
+      onClick={handleClick}
+      className={cn(SHEET_ROW, destructive && "text-destructive", className)}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SheetSubTrigger({
+  id,
+  disabled,
+  testID,
+  hasValue,
+  children,
+}: PropsWithChildren<{ id: string; disabled?: boolean; testID?: string; hasValue: boolean }>) {
+  const { openSub } = useMenuContext("MenuSubTrigger");
+  const handleClick = useCallback(() => openSub(id), [id, openSub]);
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      aria-haspopup="menu"
+      disabled={disabled}
+      data-testid={testID}
+      onClick={handleClick}
+      className={SHEET_ROW}
+    >
+      {children}
+      <ChevronRight className={cn("text-muted-foreground", !hasValue && "ml-auto")} />
+    </button>
   );
 }
 
@@ -473,7 +680,24 @@ export function MenuSubTrigger({
   testID?: string;
 }>): ReactElement {
   const kind = useContext(MenuKindContext);
+  const menu = useMenuContext("MenuSubTrigger");
   const page = useContext(MenuPagesContext).get(id);
+  const valueView = value ? (
+    <span className="ml-auto min-w-0 truncate pl-2 text-muted-foreground">{value}</span>
+  ) : null;
+  const indicatorView = indicator ? (
+    <span className="size-1.5 shrink-0 rounded-full bg-primary" data-testid="menu-sub-indicator" />
+  ) : null;
+  if (menu.presentation === "sheet") {
+    return (
+      <SheetSubTrigger id={id} disabled={disabled} testID={testID} hasValue={Boolean(value)}>
+        {leading}
+        <span className="truncate">{children}</span>
+        {valueView}
+        {indicatorView}
+      </SheetSubTrigger>
+    );
+  }
   const Sub = kind === "context" ? ContextMenuSub : DropdownMenuSub;
   const SubTrigger = kind === "context" ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
   const SubContent = kind === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
@@ -482,15 +706,8 @@ export function MenuSubTrigger({
       <SubTrigger disabled={disabled} data-testid={testID}>
         {leading}
         <span className="truncate">{children}</span>
-        {value ? (
-          <span className="ml-auto min-w-0 truncate pl-2 text-muted-foreground">{value}</span>
-        ) : null}
-        {indicator ? (
-          <span
-            className="size-1.5 shrink-0 rounded-full bg-primary"
-            data-testid="menu-sub-indicator"
-          />
-        ) : null}
+        {valueView}
+        {indicatorView}
       </SubTrigger>
       <SubContent>{page?.content}</SubContent>
     </Sub>
@@ -503,6 +720,14 @@ export function MenuLabel({
   className,
 }: PropsWithChildren<{ style?: unknown; testID?: string; className?: string }>): ReactElement {
   const kind = useContext(MenuKindContext);
+  const { presentation } = useMenuContext("MenuLabel");
+  if (presentation === "sheet") {
+    return (
+      <div data-testid={testID} className={cn(SHEET_LABEL, className)}>
+        {children}
+      </div>
+    );
+  }
   const Label = kind === "context" ? ContextMenuLabel : DropdownMenuLabel;
   return (
     <Label data-testid={testID} className={className}>
@@ -513,6 +738,9 @@ export function MenuLabel({
 
 export function MenuSeparator({ testID }: { style?: unknown; testID?: string }): ReactElement {
   const kind = useContext(MenuKindContext);
+  const { presentation } = useMenuContext("MenuSeparator");
+  if (presentation === "sheet")
+    return <div role="separator" data-testid={testID} className={SHEET_SEPARATOR} />;
   const Separator = kind === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   return <Separator data-testid={testID} />;
 }
