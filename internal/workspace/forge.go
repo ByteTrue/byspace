@@ -211,42 +211,278 @@ func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
 			"approvalsRequired": approvalsRequired,
 		}, nil
 	}
-	raw, err := runGH(ctx, cwd, "pr", "view", "--json", "number,title,url,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,updatedAt")
+	raw, err := currentGitHubPRView(ctx, cwd)
 	if err != nil || raw == "" {
 		return nil, nil
 	}
-	var data map[string]any
-	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+	var item gitHubPRViewItem
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
 		return nil, nil
 	}
-	num, _ := data["number"].(float64)
-	if num <= 0 {
-		return nil, nil
-	}
-	title, _ := data["title"].(string)
-	url, _ := data["url"].(string)
-	state, _ := data["state"].(string)
-	isDraft, _ := data["isDraft"].(bool)
-	headRef, _ := data["headRefName"].(string)
-	baseRef, _ := data["baseRefName"].(string)
-	updatedAt, _ := data["updatedAt"].(string)
-	if updatedAt == "" {
-		updatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
+	return gitHubPRStatus(item, time.Now()), nil
+}
 
-	return map[string]any{
-		"number":         int(num),
-		"title":          title,
-		"url":            url,
-		"state":          strings.ToLower(state),
-		"isDraft":        isDraft,
-		"headRefName":    headRef,
-		"baseRefName":    baseRef,
-		"updatedAt":      updatedAt,
-		"mergeable":      "UNKNOWN",
-		"reviewDecision": nil,
-		"checks":         []any{},
-	}, nil
+// The fields Node read for the current branch's PR (github-service.ts CURRENT_PR_STATUS_FIELDS).
+// statusCheckRollup is a separate field because a token without checks scope fails the whole
+// query when it is asked for; the status is then read without checks.
+const gitHubPRStatusBaseFields = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,headRepositoryOwner"
+
+func currentGitHubPRView(ctx context.Context, cwd string) (string, error) {
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := proc.CommandContext(cctx, "gh", "pr", "view", "--json", gitHubPRStatusBaseFields+",statusCheckRollup")
+	cmd.Dir = cwd
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		if !strings.Contains(strings.ToLower(errBuf.String()), "statuscheckrollup") {
+			return "", err
+		}
+		return runGH(ctx, cwd, "pr", "view", "--json", gitHubPRStatusBaseFields)
+	}
+	return strings.TrimSpace(out.String()), nil
+}
+
+type gitHubPRViewItem struct {
+	Number            int                     `json:"number"`
+	URL               string                  `json:"url"`
+	Title             string                  `json:"title"`
+	State             string                  `json:"state"`
+	IsDraft           bool                    `json:"isDraft"`
+	BaseRefName       string                  `json:"baseRefName"`
+	HeadRefName       string                  `json:"headRefName"`
+	MergedAt          string                  `json:"mergedAt"`
+	ReviewDecision    string                  `json:"reviewDecision"`
+	Mergeable         string                  `json:"mergeable"`
+	StatusCheckRollup []gitHubStatusCheckNode `json:"statusCheckRollup"`
+}
+
+type gitHubStatusCheckNode struct {
+	Typename     string `json:"__typename"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	Conclusion   string `json:"conclusion"`
+	DetailsURL   string `json:"detailsUrl"`
+	WorkflowName string `json:"workflowName"`
+	StartedAt    string `json:"startedAt"`
+	CompletedAt  string `json:"completedAt"`
+	Context      string `json:"context"`
+	State        string `json:"state"`
+	TargetURL    string `json:"targetUrl"`
+}
+
+// gitHubPRStatus is Node's toCurrentPullRequestStatus (github-service.ts): a merged PR reports
+// state "merged" and isMerged, checks come from the status check rollup, and the review decision
+// is mapped to the protocol's lowercase values.
+func gitHubPRStatus(item gitHubPRViewItem, now time.Time) map[string]any {
+	if item.URL == "" || item.Title == "" || item.Number <= 0 {
+		return nil
+	}
+	merged := strings.TrimSpace(item.MergedAt) != ""
+	state := strings.ToLower(strings.TrimSpace(item.State))
+	if merged {
+		state = "merged"
+	}
+	mergeable := item.Mergeable
+	if mergeable != "MERGEABLE" && mergeable != "CONFLICTING" {
+		mergeable = "UNKNOWN"
+	}
+	checks := gitHubPRChecks(item.StatusCheckRollup, now)
+	status := map[string]any{
+		"number":         item.Number,
+		"url":            item.URL,
+		"title":          item.Title,
+		"state":          state,
+		"baseRefName":    item.BaseRefName,
+		"headRefName":    item.HeadRefName,
+		"isMerged":       merged,
+		"isDraft":        item.IsDraft,
+		"mergeable":      mergeable,
+		"checks":         checks,
+		"checksStatus":   gitHubChecksStatus(checks),
+		"reviewDecision": gitHubReviewDecision(item.ReviewDecision),
+	}
+	if owner, name, ok := gitHubPRRepo(item.URL); ok {
+		status["repoOwner"] = owner
+		status["repoName"] = name
+	}
+	return status
+}
+
+// gitHubPRRepo reads owner/name from a PR URL's `/owner/name/pull/N` path, on any host, so a
+// GitHub Enterprise URL works too.
+func gitHubPRRepo(raw string) (string, string, bool) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", "", false
+	}
+	var parts []string
+	for _, part := range strings.Split(parsed.Path, "/") {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) < 3 || parts[2] != "pull" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+// gitHubPRChecks is Node's parseStatusCheckRollup: one check per name, the most recent run wins,
+// in the order the rollup first lists each name.
+func gitHubPRChecks(nodes []gitHubStatusCheckNode, now time.Time) []map[string]any {
+	checks := []map[string]any{}
+	index := map[string]int{}
+	recency := map[string]int64{}
+	for _, node := range nodes {
+		check, rank, ok := gitHubPRCheck(node, now)
+		if !ok {
+			continue
+		}
+		name, _ := check["name"].(string)
+		if at, seen := index[name]; seen {
+			if rank > recency[name] {
+				checks[at] = check
+				recency[name] = rank
+			}
+			continue
+		}
+		index[name] = len(checks)
+		recency[name] = rank
+		checks = append(checks, check)
+	}
+	return checks
+}
+
+func gitHubPRCheck(node gitHubStatusCheckNode, now time.Time) (map[string]any, int64, bool) {
+	switch node.Typename {
+	case "CheckRun":
+		if node.Name == "" {
+			return nil, 0, false
+		}
+		check := map[string]any{
+			"name":   node.Name,
+			"status": gitHubCheckRunStatus(node.Status, node.Conclusion),
+			"url":    nullableString(node.DetailsURL),
+		}
+		if strings.TrimSpace(node.WorkflowName) != "" {
+			check["workflow"] = node.WorkflowName
+		}
+		if duration, ok := gitHubCheckRunDuration(node, now); ok {
+			check["duration"] = duration
+		}
+		recency := parseCheckTime(node.CompletedAt)
+		if recency == 0 {
+			recency = parseCheckTime(node.StartedAt)
+		}
+		return check, recency, true
+	case "StatusContext":
+		if node.Context == "" {
+			return nil, 0, false
+		}
+		return map[string]any{
+			"name":   node.Context,
+			"status": gitHubStatusContextState(node.State),
+			"url":    nullableString(node.TargetURL),
+		}, parseCheckTime(node.StartedAt), true
+	}
+	return nil, 0, false
+}
+
+func parseCheckTime(value string) int64 {
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil || t.IsZero() || t.Year() < 1971 {
+		return 0
+	}
+	return t.UnixMilli()
+}
+
+func gitHubCheckRunStatus(status, conclusion string) string {
+	if status != "COMPLETED" {
+		return "pending"
+	}
+	switch conclusion {
+	case "SUCCESS":
+		return "success"
+	case "FAILURE", "TIMED_OUT", "ACTION_REQUIRED":
+		return "failure"
+	case "CANCELLED":
+		return "cancelled"
+	case "SKIPPED", "NEUTRAL":
+		return "skipped"
+	}
+	return "pending"
+}
+
+func gitHubStatusContextState(state string) string {
+	switch state {
+	case "SUCCESS":
+		return "success"
+	case "FAILURE", "ERROR":
+		return "failure"
+	}
+	return "pending"
+}
+
+// gitHubCheckRunDuration is how long a finished run took, or how long a running one has been
+// going, as "1h 2m 3s" (Node's formatCheckRunDuration).
+func gitHubCheckRunDuration(node gitHubStatusCheckNode, now time.Time) (string, bool) {
+	started := parseCheckTime(node.StartedAt)
+	if started <= 0 {
+		return "", false
+	}
+	ended := parseCheckTime(node.CompletedAt)
+	if ended <= 0 {
+		ended = now.UnixMilli()
+	}
+	if ended < started {
+		return "", false
+	}
+	total := (ended - started) / 1000
+	hours, minutes, seconds := total/3600, (total%3600)/60, total%60
+	var parts []string
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+	}
+	if seconds > 0 || len(parts) == 0 {
+		parts = append(parts, fmt.Sprintf("%ds", seconds))
+	}
+	return strings.Join(parts, " "), true
+}
+
+func gitHubChecksStatus(checks []map[string]any) string {
+	if len(checks) == 0 {
+		return "none"
+	}
+	pending := false
+	for _, check := range checks {
+		switch check["status"] {
+		case "failure":
+			return "failure"
+		case "pending":
+			pending = true
+		}
+	}
+	if pending {
+		return "pending"
+	}
+	return "success"
+}
+
+func gitHubReviewDecision(value string) any {
+	switch value {
+	case "APPROVED":
+		return "approved"
+	case "CHANGES_REQUESTED":
+		return "changes_requested"
+	case "REVIEW_REQUIRED":
+		return "pending"
+	}
+	return nil
 }
 
 // CreatePR runs `gh pr create` and returns (url, prNumber, error).
