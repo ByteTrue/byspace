@@ -1,6 +1,7 @@
 // Override of packages/app/src/components/ui/button.tsx on shadcn's Button. Same props; `size`
 // md is shadcn's default (32px) and the variants map one to one.
 import {
+  isValidElement,
   useCallback,
   type ComponentProps,
   type ComponentType,
@@ -26,9 +27,12 @@ const ICON_SIZE: Record<ButtonSize, number> = { xs: 12, sm: 14, md: 16, lg: 16 }
 
 function renderLeftIcon(leftIcon: LeftIcon | undefined, size: number): ReactNode {
   if (!leftIcon) return null;
-  if (typeof leftIcon === "object") return leftIcon;
+  // An element renders as is. lucide icons are forwardRef objects, not functions, so "is an object"
+  // would render the component itself as a child.
+  if (isValidElement(leftIcon)) return leftIcon;
   const fn = leftIcon as (color: string) => ReactElement;
   if (
+    typeof leftIcon === "function" &&
     !(leftIcon as { prototype?: { isReactComponent?: unknown } }).prototype?.isReactComponent &&
     fn.length > 0
   ) {

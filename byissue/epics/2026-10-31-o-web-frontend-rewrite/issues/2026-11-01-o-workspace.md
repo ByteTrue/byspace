@@ -212,3 +212,36 @@ Changes 视图和 Diff 面板换成旧版的 `ChangesSurface` 和 `diff-panel`�
 - 需要代码托管平台的部分：Changes 头部的 PR 链接、`gh`/`glab` 没装或没登录时的设置提示。PR 面板在第 7 批，到时一起看。
 - Diff 过大的提示没有触发过。
 - 从文件头拖文件到输入框：拖拽源两边一致，没有用脚本模拟拖放。
+
+### 2026-11-01 第 7 批：PR 面板和代码审查
+
+PR 面板换成旧版的 `PullRequestPane`（`overrides/git/pull-request-panel/pane.tsx`，用 `web/scripts/port/pull-request-pane.py` 生成）：刷新、检查详情、把评论/评审/讨论串/检查日志加入对话、Add all to chat、活动折叠状态、GitLab 的审批和流水线接入点都是旧版逻辑。网页版重写的：检查区（结果环、按状态分组、组折叠、超过约 8 行就在区内滚动）、分区和汇总小标、加载骨架、出错重试、无 PR 空状态、活动卡片（评论、评审、讨论串和回复、⋯ 菜单悬停才显示、手机上常显，`web/src/pull-request/activity-cards.tsx`）、GitLab 的审批徽标和流水线区（`overrides/git/forges/gitlab.view.tsx`）。
+
+「代码审查」部分：Diff 里的行内评审（第 6 批）写下评论后，输入框上方出现「Review N comments」附件，移除附件即清掉；这条链路用的是旧版共享代码，这一批验证过。
+
+顺带补上和修掉的：
+
+- **命令面板的「当前工作区」命令**：新前端之前没挂 `CommandCenterWorkspaceActions` 和 `WorkspaceRenameHost`（外壳那一步留到第 3 步的），现在 ⌘K 在工作区里有 Workspace actions（New agent、Commit、Pin to top 等），⌘K 搜 rename 能改名。副作用和旧版一样：打开工作区就开始查 PR 状态，手机上点开文件面板时 PR 页签立刻就在（之前要等 3 秒）。
+- **按钮的 `leftIcon` 传 lucide 图标会整个页面报错**：网页版 `Button` 把「是对象」当成「是元素」，而 lucide 图标是 forwardRef 对象，结果把组件本身当子节点渲染。改成判断 `isValidElement`（`overrides/components/ui/button.tsx`）。
+- **daemon：GitHub 的 PR 状态被客户端整条拒收**（`internal/workspace/forge.go`，单独提交）。Go 版 `GetPRStatus` 的 GitHub 分支是个桩：不返回协议必填的 `isMerged`，检查恒为空，`mergeable` 和 `reviewDecision` 写死。客户端按协议校验失败，整条 `checkout_pr_status_response` 丢弃，于是两个前端在 GitHub 仓库上都看不到任何 PR（Changes 头部没有 PR 链接、没有 PR 页签），合并后自动归档也读不到 `isMerged`。照 Node 的 `toCurrentPullRequestStatus` 重写：`gh pr view` 多取 `mergedAt` 和 `statusCheckRollup`（没有检查权限时退回不带检查的字段），合并判定、检查去重（同名取最新一次）、耗时、检查汇总、评审结论、仓库 owner/name 都按 Node。加了单元测试；`npm run audit` 通过（浏览器一项是 bsk 会话冲突，两项实际检查通过）。开发版 daemon（6778）已用新二进制重启，6777 没动。
+
+验证（8081 和 8082 同一个开发版 daemon；PR 用两个临时仓库的 worktree：分支名对上 ByteTrue/byspace#16，已合并、25 个检查、1 条评论；以及对上 cli/cli#14798，6 条评审；截图 95–108）：
+
+- Changes 头部出现 `#16` 链接，点开右侧 PR 页签：标题、Merged、仓库名、「18 successful, 7 skipped checks」，分组 18/7，组折叠和检查区折叠，点检查行打开对应的 Actions 页面，View 打开 PR 页面。
+- 评论卡片：悬停出 ⋯，菜单 Add to chat / Copy / Open on GitHub，Copy 拿到原文 Markdown，点卡片头折叠正文，Add to chat 后输入框出现「ByteTrue Comment」附件。
+- cli/cli#14798：4 张评审卡片的作者、动作（reviewed、approved 带绿勾）、时间、正文和 `<details>` 折叠块一致，点卡片头折叠。
+- 新建标签菜单里的 Pull request 打开 PR 标签页（标签名 `16`），内容和右侧面板一致。
+- 检查区标题行和旧版一样高（60px）；手机上文件面板的 PR 页签和旧版逐像素一致。
+- 深色主题；控制台没有错误；`npm run typecheck`、`npm run lint`、`vite build` 通过。
+
+已知差异：
+
+- 旧版评论正文里的长行会超出卡片右边被截掉，新版正常换行，所以新版卡片更高。
+- 旧版切换深色主题后评审卡片的折叠状态会复原，新版保留。
+
+没验到的：
+
+- 讨论串（代码行上的评审评论、Resolved/Outdated 标记、回复、整串加入对话）：Go daemon 的 PR 时间线只取评审和普通评论，不取讨论串（Node 用 GraphQL 的 `reviewThreads`），两个前端都显示不出来。daemon 的问题，记成待办，没在这一批改。
+- 检查日志加入对话（只有失败的检查有这个按钮，测试用的 PR 检查全部通过）。
+- GitLab 的审批徽标和流水线区（需要 GitLab 仓库和 `glab`）；`gh` 没装或没登录时 Changes 里的设置提示。
+- 无 PR 时手动打开 PR 页签的空状态、加载失败的重试页。

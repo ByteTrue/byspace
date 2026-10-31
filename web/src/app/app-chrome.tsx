@@ -5,6 +5,7 @@ import { useStoreReady } from "@/app/_layout";
 import { CommandCenter } from "@/command-center/command-center";
 import { CommandCenterProvider } from "@/command-center/provider";
 import { CommandCenterRootActions } from "@/command-center/root-registration";
+import { CommandCenterWorkspaceActions } from "@/command-center/workspace-registration";
 import { HostChooserModal } from "@/hosts/host-chooser";
 import {
   canDesktopAppSidebarShare,
@@ -14,6 +15,7 @@ import {
 } from "@/components/desktop-sidebar-layout";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
+import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -197,7 +199,9 @@ export function AppChrome() {
         </SidebarModelProvider>
         <WorktreeSetupCalloutSource />
         <CommandCenterRootActions />
+        <CommandCenterWorkspaceActions />
         <WorkspacePinShortcutHandler />
+        <WorkspaceRenameHost />
         <CommandCenter />
         <HostChooserModal />
       </DesktopSidebarVisibilityProvider>
