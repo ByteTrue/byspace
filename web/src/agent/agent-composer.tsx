@@ -112,8 +112,10 @@ export function AgentComposer({ serverId, agentId }: { serverId: string; agentId
 
   return (
     <div className="mx-auto w-full max-w-[820px] shrink-0 px-4 pb-4">
-      {/* BySpace: the composer is focused nearly all the time, so focus only darkens the border. */}
-      <InputGroup className="rounded-xl has-[[data-slot=input-group-control]:focus-visible]:ring-0">
+      {/* BySpace: the composer is focused nearly all the time, so focus only darkens the border.
+          The disabled send button must not grey out the whole group (InputGroup dims on any
+          disabled descendant). */}
+      <InputGroup className="rounded-xl has-disabled:bg-transparent has-disabled:opacity-100 has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:has-disabled:bg-input/30">
         <InputGroupTextarea
           value={text}
           onChange={handleChange}
