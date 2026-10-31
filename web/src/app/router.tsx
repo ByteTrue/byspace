@@ -4,12 +4,12 @@ import HostAgentRoute from "@/app/h/[serverId]/agent/[agentId]";
 import HostIndexRoute from "@/app/h/[serverId]/index";
 import HostOpenProjectRoute from "@/app/h/[serverId]/open-project";
 import HostSessionsRoute from "@/app/h/[serverId]/sessions";
+import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import LegacyHostSettingsRoute from "@/app/h/[serverId]/settings";
 import StartupIndexRoute from "@/app/index";
 import SettingsHostIndexRoute from "@/app/settings/hosts/[serverId]/index";
 import { Root } from "~/app/root";
 import { HostLayout, PendingPage, SettingsIndexRoute } from "~/app/routes";
-import { WorkspacePage } from "~/workspace/workspace-page";
 
 // One entry per file in packages/app/src/app, same paths, so links, bookmarks and pairing URLs
 // keep working. Pages that move in later steps of the rewrite render PendingPage until then.
@@ -46,7 +46,7 @@ export const router = createBrowserRouter([
         element: <HostLayout />,
         children: [
           { index: true, element: <HostIndexRoute /> },
-          { path: "workspace/:workspaceId", element: <WorkspacePage /> },
+          { path: "workspace/:workspaceId", element: <HostWorkspaceRoute /> },
           { path: "agent/:agentId", element: <HostAgentRoute /> },
           { path: "sessions", element: <HostSessionsRoute /> },
           { path: "open-project", element: <HostOpenProjectRoute /> },

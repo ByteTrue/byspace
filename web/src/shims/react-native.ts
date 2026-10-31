@@ -101,3 +101,32 @@ export const Alert = {
     buttons?.find((button) => button.style !== "cancel")?.onPress?.();
   },
 };
+
+// Types shared modules reference in their signatures. Loose on purpose: on the web these values
+// only pass through to overridden components, which read the CSS-compatible parts.
+export type ViewStyle = Record<string, unknown>;
+export type TextStyle = Record<string, unknown>;
+export type ImageStyle = Record<string, unknown>;
+export type StyleProp<T> = T | ReadonlyArray<StyleProp<T>> | null | undefined | false;
+export interface LayoutRectangle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+export interface LayoutChangeEvent {
+  nativeEvent: { layout: LayoutRectangle };
+}
+export interface GestureResponderEvent {
+  nativeEvent: unknown;
+  stopPropagation?: () => void;
+  preventDefault?: () => void;
+}
+export interface PressableStateCallbackType {
+  pressed: boolean;
+  hovered?: boolean;
+  focused?: boolean;
+}
+export type PressableProps = Record<string, unknown>;
+export type ViewProps = Record<string, unknown>;
+export type TextProps = Record<string, unknown>;

@@ -17,7 +17,9 @@
       "expo-localization": ["./src/shims/expo-localization.ts"],
       "expo-asset": ["./src/shims/expo-asset.ts"],
       "expo-linking": ["./src/shims/expo-linking.ts"],
-      "expo-clipboard": ["./src/shims/expo-clipboard.ts"]
+      "expo-clipboard": ["./src/shims/expo-clipboard.ts"],
+      "react-native-svg": ["./src/shims/react-native-svg.tsx"],
+      "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"]
     }
   },
   "include": ["src", "vite.config.ts"]

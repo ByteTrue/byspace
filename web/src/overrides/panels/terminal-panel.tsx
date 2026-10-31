@@ -1,0 +1,71 @@
+// Override of packages/app/src/panels/terminal-panel.tsx: same descriptor.
+// shortcut: the terminal moves in batch 4 of step 3.
+import { useQuery } from "@tanstack/react-query";
+import { Terminal } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { ListTerminalsResponse } from "@bytetrue/protocol/messages";
+import { deriveTerminalActivityStatusBucket } from "@bytetrue/protocol/terminal-activity";
+import { queryClient } from "@/data/query-client";
+import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import { buildTerminalsQueryKey } from "@/screens/workspace/terminals/state";
+import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
+import { PendingPanel } from "@/panels/pending-panel";
+
+type ListTerminalsPayload = ListTerminalsResponse["payload"];
+
+function trimNonEmpty(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function useTerminalPanelDescriptor(
+  target: { kind: "terminal"; terminalId: string },
+  context: { serverId: string; workspaceId: string },
+): PanelDescriptor {
+  const { t } = useTranslation();
+  const client = useSessionStore((state) => state.sessions[context.serverId]?.client ?? null);
+  const workspaceDirectory = useWorkspaceDirectory(context.serverId, context.workspaceId);
+  const terminalsQuery = useQuery(
+    {
+      queryKey: buildTerminalsQueryKey(
+        context.serverId,
+        workspaceDirectory,
+        context.workspaceId || null,
+      ),
+      enabled: Boolean(client && workspaceDirectory),
+      queryFn: async (): Promise<ListTerminalsPayload> => {
+        if (!client || !workspaceDirectory) throw new Error("Workspace directory not found");
+        return client.listTerminals(workspaceDirectory, undefined, {
+          workspaceId: context.workspaceId || undefined,
+        });
+      },
+      staleTime: 5_000,
+    },
+    queryClient,
+  );
+  const terminal =
+    terminalsQuery.data?.terminals.find((entry) => entry.id === target.terminalId) ?? null;
+  const label =
+    trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
+    t("workspace.tabs.fallback.terminal");
+  return {
+    label,
+    subtitle: t("workspace.tabs.fallback.terminal"),
+    tooltip: label,
+    titleState: terminalsQuery.isPending ? "loading" : "ready",
+    icon: Terminal,
+    statusBucket: deriveTerminalActivityStatusBucket(terminal?.activity),
+  };
+}
+
+function TerminalPanel() {
+  const { t } = useTranslation();
+  return <PendingPanel title={t("workspace.tabs.fallback.terminal")} />;
+}
+
+export const terminalPanelRegistration = definePanel("terminal", {
+  component: TerminalPanel,
+  useDescriptor: useTerminalPanelDescriptor,
+});

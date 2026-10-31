@@ -1,6 +1,7 @@
 // Override of packages/app/src/components/retained-panel.tsx: same API, rendered as a div. An
 // inactive panel stays mounted but is hidden and inert.
 import { createContext, memo, useContext, type CSSProperties, type ReactNode } from "react";
+import { cn } from "cn";
 
 const RetainedPanelActiveContext = createContext(true);
 
@@ -26,6 +27,7 @@ interface RetainedPanelProps {
   active: boolean;
   children: ReactNode;
   style?: CSSProperties;
+  className?: string;
   testID?: string;
 }
 
@@ -33,12 +35,13 @@ export const RetainedPanel = memo(function RetainedPanel({
   active,
   children,
   style,
+  className,
   testID,
 }: RetainedPanelProps) {
   return (
     <RetainedPanelActivity active={active}>
       <div
-        className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}
+        className={cn("flex min-h-0 min-w-0 flex-1 flex-col", className, !active && "hidden")}
         style={style}
         data-testid={testID}
         inert={!active}
