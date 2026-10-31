@@ -1,0 +1,103 @@
+// Transitional stand-in for `react-native` while web/ imports modules from packages/app/src.
+// It carries only the non-UI APIs those modules use, with react-native-web's semantics, and
+// deliberately no components: a shared module that renders React Native UI fails to build and
+// has to be overridden in src/overrides/. Deleted at the cutover.
+import { useSyncExternalStore } from "react";
+
+export type AppStateStatus = "active" | "background";
+type AppStateEvent = "change" | "focus" | "blur";
+
+function currentAppState(): AppStateStatus {
+  return document.visibilityState === "hidden" ? "background" : "active";
+}
+
+export const AppState = {
+  isAvailable: true,
+  get currentState(): AppStateStatus {
+    return currentAppState();
+  },
+  addEventListener(type: AppStateEvent, handler: (state: AppStateStatus) => void) {
+    const listener = () => handler(currentAppState());
+    if (type === "change") {
+      document.addEventListener("visibilitychange", listener);
+      return { remove: () => document.removeEventListener("visibilitychange", listener) };
+    }
+    window.addEventListener(type, listener);
+    return { remove: () => window.removeEventListener(type, listener) };
+  },
+};
+
+type PlatformSpec<T> = { web?: T; default?: T } & Record<string, T | undefined>;
+
+export type PlatformOSType = "ios" | "android" | "macos" | "windows" | "web" | "native";
+
+export const Platform = {
+  // Typed like React Native's union so shared `Platform.OS === "ios"` checks still compile.
+  OS: "web" as PlatformOSType,
+  Version: 0,
+  isTV: false,
+  isTesting: false,
+  select<T>(spec: PlatformSpec<T>): T {
+    return ("web" in spec ? spec.web : spec.default) as T;
+  },
+};
+
+function subscribeResize(onChange: () => void) {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+let lastDimensions = { width: 0, height: 0, scale: 1, fontScale: 1 };
+function readDimensions() {
+  const { innerWidth: width, innerHeight: height, devicePixelRatio: scale } = window;
+  if (
+    width !== lastDimensions.width ||
+    height !== lastDimensions.height ||
+    scale !== lastDimensions.scale
+  ) {
+    lastDimensions = { width, height, scale, fontScale: 1 };
+  }
+  return lastDimensions;
+}
+
+export function useWindowDimensions() {
+  return useSyncExternalStore(subscribeResize, readDimensions, readDimensions);
+}
+
+const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
+function subscribeColorScheme(onChange: () => void) {
+  const query = darkQuery();
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const readColorScheme = () => (darkQuery().matches ? "dark" : "light");
+
+export function useColorScheme(): "light" | "dark" {
+  return useSyncExternalStore(subscribeColorScheme, readColorScheme, readColorScheme);
+}
+
+export const Keyboard = {
+  dismiss() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  },
+  addListener() {
+    return { remove() {} };
+  },
+  isVisible() {
+    return false;
+  },
+};
+
+interface AlertButton {
+  text?: string;
+  style?: "default" | "cancel" | "destructive";
+  onPress?: () => void;
+}
+
+export const Alert = {
+  alert(title: string, message?: string, buttons?: AlertButton[]) {
+    window.alert(message ? `${title}\n\n${message}` : title);
+    buttons?.find((button) => button.style !== "cancel")?.onPress?.();
+  },
+};
