@@ -18,9 +18,15 @@
       "expo-asset": ["./src/shims/expo-asset.ts"],
       "expo-linking": ["./src/shims/expo-linking.ts"],
       "expo-clipboard": ["./src/shims/expo-clipboard.ts"],
+      "expo/dom": ["./src/shims/expo__dom.ts"],
       "react-native-svg": ["./src/shims/react-native-svg.tsx"],
       "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"]
     }
   },
-  "include": ["src", "vite.config.ts", "../packages/app/src/types/turndown-plugin-gfm.d.ts"]
+  "include": [
+    "src",
+    "vite.config.ts",
+    "../packages/app/src/types/turndown-plugin-gfm.d.ts",
+    "../packages/app/src/types/xterm-addon-ligatures.d.ts"
+  ]
 }

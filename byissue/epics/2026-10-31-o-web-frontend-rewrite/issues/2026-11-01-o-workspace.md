@@ -114,3 +114,31 @@ Markdown：markdown-it 的输出转成和旧版一样的节点树（`web/src/mar
 
 - 手机上长按侧栏行打开菜单：两边的代码都靠浏览器的 contextmenu 事件（Android 长按会触发，iOS 不会，iOS 上用行尾的 ⋯），无头浏览器模拟不了长按，需要真机确认。
 - 附件菜单的「粘贴图片」读系统剪贴板，要浏览器授权，无头浏览器里没测；直接往输入框粘贴图片测过。
+
+### 2026-11-01 第 4 批：终端
+
+终端面板和终端窗格换成旧版的 `TerminalPanel` 和 `TerminalPane`（`overrides/panels/terminal-panel.tsx`、`overrides/components/terminal-pane.tsx`，用 `web/scripts/port/terminal-pane.py` 从旧版生成）：连接流、断线重连后回放、尺寸认领、焦点、按键和修饰键、粘贴文字和图片、复制、本地文件链接、手机按键行都是旧版逻辑。xterm 本体（`components/terminal-emulator.tsx`）是旧版原文件：它是 Expo 的 `"use dom"` 组件，在浏览器里本来就是普通组件，新前端补了 `expo/dom` 的替身（`web/src/shims/expo__dom.ts`，`useDOMImperativeHandle` 就是 `useImperativeHandle`）就能直接用。网页版重写的只有窗格外框、断开提示、加载遮罩、出错行、手机按键行和「粘贴」「复制」按钮。
+
+旧版窗格里有两段在网页上本来就不起作用，没有搬：跟随系统键盘高度的内边距（`react-native-keyboard-controller` 在网页上不报告键盘，浏览器自己会为屏幕键盘缩小页面），和有选区时屏蔽手机侧滑打开面板（新前端的手机外壳没有侧滑手势）。
+
+验证（8081 和 8082 同一个开发版 daemon，「Coding task」工作区，截图 53–60）：
+
+- 新标签菜单 → Terminal：起出 shell，提示符、`echo`、带颜色和粗体的输出、`ls -la` 正常。
+- `seq 1 300` 长输出后滚轮上翻、回到底部；`sleep 30` 后 Ctrl+C 打断；`clear`。
+- 窗口从 1440×900 改到 1100×760，`tput cols; tput lines` 两边都是 105 和 48。
+- 双击选词、拖选，⌘C 复制，剪贴板内容正确；⌘V 粘贴后回车执行。
+- 输出里的 `web/src/main.tsx:5` 悬停出下划线，⌘ 点击打开文件标签（文件面板在第 5 批）。
+- 往终端粘贴图片：上传后把图片路径打进命令行，两边一致。
+- 切到别的标签再切回来，内容还在；深色主题；关闭终端标签先确认再关。
+- 手机：终端加两行按键（Esc、Tab、Ctrl、方向键、Shift、键盘开关、Alt、粘贴、Enter），Ctrl 按下后高亮。
+- 控制台没有错误；`npm run typecheck`、`npm run lint` 通过。
+
+已知差异：
+
+- 终端字体：旧版终端里的文字是界面字体 Geist，不等宽，`ls -la` 的列对不齐。原因是旧版 `appearance/apply-root-font.web.ts` 给 `#root` 下所有元素强制设了界面字体，盖掉了 xterm 自己给行设的字体。新前端没有这条全局规则，终端用设置里的等宽字体（默认 JetBrains Mono，没有就 SF Mono、Menlo），列是对齐的。这是旧版的毛病，没有照搬。
+- 关闭终端的确认：旧版网页用浏览器自带的 `confirm` 弹窗，新版用第 2 步做的确认对话框。
+
+没验到的：
+
+- 新标签菜单里的终端配置（Claude Code、Codex、OpenCode、Pi）会在终端里启动真实的 agent 命令行，没点；它们走的是同一个终端窗格，区别只在启动命令。
+- 往终端拖文件在桌面客户端里的表现：两边的代码只认文件对象上的本机路径（`file.path`），浏览器里拖进去两边都没有反应（测过）；Wails 客户端里有没有这个字段要在客户端里确认。

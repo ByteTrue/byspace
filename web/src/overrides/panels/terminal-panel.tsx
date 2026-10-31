@@ -1,21 +1,28 @@
-// Override of packages/app/src/panels/terminal-panel.tsx: same descriptor.
-// shortcut: the terminal moves in batch 4 of step 3.
+// Override of packages/app/src/panels/terminal-panel.tsx: same descriptor and pane, DOM view.
+// Generated from the Expo file by web/scripts/port/terminal-pane.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Terminal } from "lucide-react";
+import invariant from "tiny-invariant";
 import type { ListTerminalsResponse } from "@bytetrue/protocol/messages";
 import { deriveTerminalActivityStatusBucket } from "@bytetrue/protocol/terminal-activity";
-import { queryClient } from "@/data/query-client";
+import { TerminalPane } from "@/components/terminal-pane";
+import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import { queryClient } from "@/data/query-client";
 import { buildTerminalsQueryKey } from "@/screens/workspace/terminals/state";
+import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
-import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-import { PendingPanel } from "@/panels/pending-panel";
+import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-store-hooks";
 
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 
 function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -36,7 +43,9 @@ function useTerminalPanelDescriptor(
       ),
       enabled: Boolean(client && workspaceDirectory),
       queryFn: async (): Promise<ListTerminalsPayload> => {
-        if (!client || !workspaceDirectory) throw new Error("Workspace directory not found");
+        if (!client || !workspaceDirectory) {
+          throw new Error("Workspace directory not found");
+        }
         return client.listTerminals(workspaceDirectory, undefined, {
           workspaceId: context.workspaceId || undefined,
         });
@@ -50,6 +59,7 @@ function useTerminalPanelDescriptor(
   const label =
     trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
     t("workspace.tabs.fallback.terminal");
+
   return {
     label,
     subtitle: t("workspace.tabs.fallback.terminal"),
@@ -61,8 +71,42 @@ function useTerminalPanelDescriptor(
 }
 
 function TerminalPanel() {
-  const { t } = useTranslation();
-  return <PendingPanel title={t("workspace.tabs.fallback.terminal")} />;
+  const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
+  const { isWorkspaceFocused, isPaneFocused } = usePaneFocus();
+  const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
+    workspaceDirectory: w.workspaceDirectory,
+    isGitCheckout: w.projectKind === "git",
+  }));
+  const workspaceDirectory = workspaceFields?.workspaceDirectory || null;
+  const isGitCheckout = workspaceFields?.isGitCheckout ?? false;
+  const openCompactFileExplorer = usePanelStore((state) => state.openCompactFileExplorer);
+  const handleOpenFileExplorer = useCallback(() => {
+    if (!workspaceDirectory) {
+      return;
+    }
+    openCompactFileExplorer({ serverId, cwd: workspaceDirectory, isGit: isGitCheckout });
+  }, [isGitCheckout, openCompactFileExplorer, serverId, workspaceDirectory]);
+  invariant(target.kind === "terminal", "TerminalPanel requires terminal target");
+
+  if (!workspaceDirectory) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-4">
+        <span>Workspace directory not found.</span>
+      </div>
+    );
+  }
+
+  return (
+    <TerminalPane
+      serverId={serverId}
+      cwd={workspaceDirectory}
+      terminalId={target.terminalId}
+      isWorkspaceFocused={isWorkspaceFocused}
+      isPaneFocused={isPaneFocused}
+      onOpenFileExplorer={handleOpenFileExplorer}
+      onOpenWorkspaceFile={openFileInWorkspace}
+    />
+  );
 }
 
 export const terminalPanelRegistration = definePanel("terminal", {

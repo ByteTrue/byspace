@@ -12,10 +12,16 @@ const appSrc = path.resolve(webRoot, "../packages/app/src");
 const shimsDir = path.join(webSrc, "shims");
 
 // Every file in src/shims/ stands in for the package it is named after (react-native.ts,
-// expo-router.tsx, ...). The react-native shim has no components, so a shared module that
-// renders React Native UI fails to build and has to be overridden in src/overrides/.
+// expo-router.tsx, ...; `__` is a `/`, so expo__dom.ts is expo/dom). The react-native shim has no
+// components, so a shared module that renders React Native UI fails to build and has to be
+// overridden in src/overrides/.
 const shimAliases = fs.readdirSync(shimsDir).map((file) => ({
-  find: new RegExp(`^${file.replace(/\.tsx?$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+  find: new RegExp(
+    `^${file
+      .replace(/\.tsx?$/, "")
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("__", "/")}$`,
+  ),
   replacement: path.join(shimsDir, file),
 }));
 
