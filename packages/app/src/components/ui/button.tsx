@@ -79,7 +79,7 @@ const accentForegroundIconMapping = (theme: Theme) => ({
   iconColor: theme.colors.accentForeground,
 });
 const destructiveIconMapping = (theme: Theme) => ({
-  iconColor: theme.colors.destructive,
+  iconColor: theme.colors.destructiveSoftForeground,
 });
 
 const styles = StyleSheet.create((theme) => {
@@ -158,7 +158,7 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.accentForeground,
     },
     textDestructive: {
-      color: theme.colors.destructive,
+      color: theme.colors.destructiveSoftForeground,
     },
   };
 });

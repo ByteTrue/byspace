@@ -80,6 +80,49 @@ describe("Sidebar interaction surfaces", () => {
   });
 });
 
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map(
+      (index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255,
+    );
+    const linear = channels.map((channel) =>
+      channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+    );
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Composites an `rgba(r, g, b, a)` token over an opaque `#rrggbb` surface. */
+function flatten(rgba: string, surface: string): string {
+  const [r, g, b, a] = (rgba.match(/[\d.]+/g) ?? []).map(Number);
+  const base = [1, 3, 5].map((index) => Number.parseInt(surface.slice(index, index + 2), 16));
+  return `#${[r, g, b]
+    .map((channel, index) => Math.round(a * channel + (1 - a) * base[index]))
+    .map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+describe("text contrast", () => {
+  it("keeps muted text at 4.5:1 or better on every surface it sits on", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const { foregroundMuted, surface0, surface2, surfaceSidebar } = theme.colors;
+      for (const surface of [surface0, surface2, surfaceSidebar]) {
+        expect(contrastRatio(foregroundMuted, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("keeps destructive button text at 4.5:1 or better on its tinted fill", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const { destructiveSoft, destructiveSoftForeground, popover } = theme.colors;
+      const fill = flatten(destructiveSoft, popover);
+      expect(contrastRatio(destructiveSoftForeground, fill)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe("shadcn/ui neutral palette", () => {
   it("maps the light neutral tokens", () => {
     expect(lightTheme.colors).toMatchObject({
@@ -87,7 +130,7 @@ describe("shadcn/ui neutral palette", () => {
       surface2: "#f5f5f5",
       surfaceSidebar: "#fafafa",
       foreground: "#0a0a0a",
-      foregroundMuted: "#737373",
+      foregroundMuted: "#6e6e6e",
       border: "#e5e5e5",
       input: "#e5e5e5",
       accent: "#171717",
