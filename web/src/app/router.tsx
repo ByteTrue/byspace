@@ -1,19 +1,16 @@
-import { createBrowserRouter, Outlet } from "react-router";
-import { AppProviders } from "~/app/providers";
-import { DebugHome } from "~/app/debug-home";
+import { createBrowserRouter } from "react-router";
+import { AppShell } from "~/app/app-shell";
+import { HomePage } from "~/app/home-page";
+import { WorkspacePage } from "~/workspace/workspace-page";
 
-function Root() {
-  return (
-    <AppProviders>
-      <Outlet />
-    </AppProviders>
-  );
-}
-
+// Paths match packages/app/src/app (Expo Router) so links, bookmarks and pairing URLs keep working.
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Root />,
-    children: [{ index: true, element: <DebugHome /> }],
+    element: <AppShell />,
+    children: [
+      { index: true, element: <HomePage /> },
+      { path: "h/:serverId/workspace/:workspaceId", element: <WorkspacePage /> },
+    ],
   },
 ]);

@@ -12,6 +12,7 @@ pre-commit:
       # Same as ignorePatterns in .oxlintrc.json: oxlint exits non-zero when every passed path is ignored.
       exclude:
         - "design/references/**"
+        - "web/src/components/ui/**"
       run: npm run lint -- {staged_files}
     - name: typecheck
       run: npm run typecheck

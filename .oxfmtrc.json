@@ -19,6 +19,8 @@
     "archive/**",
     "design/references/**",
     "design/sheet-assets/**",
-    "design/component-sheet.html"
+    "design/component-sheet.html",
+    "web/src/components/ui/**",
+    "web/src/styles/shadcn-tailwind.css"
   ]
 }

@@ -2,7 +2,7 @@
 import { CheckCircle2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 export type ToastVariant = "default" | "info" | "success" | "warning" | "error";
 

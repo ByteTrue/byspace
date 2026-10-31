@@ -3,7 +3,13 @@
   "options": {
     "typeAware": false
   },
-  "ignorePatterns": [".dev/**", "archive/**", "design/references/**"],
+  "ignorePatterns": [
+    ".dev/**",
+    "archive/**",
+    "design/references/**",
+    "web/src/components/ui/**",
+    "web/src/styles/shadcn-tailwind.css"
+  ],
   "plugins": ["react", "react-perf", "unicorn", "typescript", "oxc", "import", "promise"],
   "categories": {
     "correctness": "error",
