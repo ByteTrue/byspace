@@ -260,9 +260,12 @@ export function MenuSurface({
     [maxHeight, maxWidth, minWidth, width],
   );
   const body = <MenuPagesContext value={pageMap}>{children}</MenuPagesContext>;
+  // Without a fixed width the surface sizes to its rows between min and max width, as the Expo
+  // engine's did; shadcn's content otherwise takes the trigger's width.
+  const surfaceClassName = cn(width === undefined && "w-max", className);
   if (kind === "context") {
     return (
-      <ContextMenuContent data-testid={testID} style={style} className={className}>
+      <ContextMenuContent data-testid={testID} style={style} className={surfaceClassName}>
         {body}
       </ContextMenuContent>
     );
@@ -274,7 +277,7 @@ export function MenuSurface({
       sideOffset={offset}
       data-testid={testID}
       style={style}
-      className={className}
+      className={surfaceClassName}
     >
       {body}
     </DropdownMenuContent>

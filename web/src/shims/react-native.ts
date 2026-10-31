@@ -114,6 +114,16 @@ export interface LayoutRectangle {
   width: number;
   height: number;
 }
+/**
+ * The image load event as shared code reads it: React Native puts the size in `source`; on the
+ * web the browser's own event carries the image as `target`.
+ */
+export interface ImageLoadEvent {
+  nativeEvent: {
+    source?: { width: number; height: number; uri?: string };
+    target?: EventTarget | null;
+  };
+}
 export interface LayoutChangeEvent {
   nativeEvent: { layout: LayoutRectangle };
 }

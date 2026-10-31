@@ -19,12 +19,28 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function AgentComposer({ serverId, agentId }: { serverId: string; agentId: string }) {
+export function AgentComposer({
+  serverId,
+  agentId,
+  value,
+  onChangeText,
+  onSent,
+}: {
+  serverId: string;
+  agentId: string;
+  /** Controlled text (the agent's draft); without it the box keeps its own. */
+  value?: string;
+  onChangeText?: (text: string) => void;
+  /** After a message is handed to the daemon; a controlled caller clears its draft here. */
+  onSent?: () => void;
+}) {
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { settings } = useAppSettings();
   const toast = useToast();
-  const [text, setText] = useState("");
+  const [ownText, setOwnText] = useState("");
+  const text = value ?? ownText;
+  const setText = onChangeText ?? setOwnText;
   const isRunning = useSessionStore(
     (state) => selectAgentTurnPresentation(state.sessions[serverId], agentId).isActive,
   );
@@ -43,7 +59,8 @@ export function AgentComposer({ serverId, agentId }: { serverId: string; agentId
   const send = useCallback(async () => {
     if (!client || !canSend) return;
     const message = text;
-    setText("");
+    if (onSent) onSent();
+    else setText("");
     let activeTurnBehavior: "steer" | "interrupt" | undefined;
     if (isRunning) {
       activeTurnBehavior =
@@ -76,7 +93,9 @@ export function AgentComposer({ serverId, agentId }: { serverId: string; agentId
     client,
     hasPendingPermission,
     isRunning,
+    onSent,
     serverId,
+    setText,
     settings.sendBehavior,
     text,
     toast,
@@ -92,9 +111,12 @@ export function AgentComposer({ serverId, agentId }: { serverId: string; agentId
     })?.catch((error: unknown) => toast.error(errorMessage(error)));
   }, [agentId, client, isCancelling, isConnected, isRunning, toast]);
 
-  const handleChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
-    setText(event.target.value);
-  }, []);
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setText(event.target.value);
+    },
+    [setText],
+  );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {

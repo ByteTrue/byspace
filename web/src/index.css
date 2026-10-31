@@ -209,68 +209,232 @@
   }
 }
 
-/* BySpace: agent prose (docs/design.md, design/component-sheet.html C6). */
+/* BySpace: markdown, the values of packages/app/src/styles/markdown-styles.ts. The body is a
+   column so block margins add up as they did in React Native instead of collapsing; text keeps
+   React Native Web's pre-wrap, so a soft break is a line break. */
 @layer components {
   .markdown {
-    @apply leading-[1.65] wrap-break-word;
-    font-size: var(--content-font-size);
+    --md-size: var(--content-font-size);
+    --md-line: round(calc(var(--md-size) * 1.65), 1px);
+    --md-code-size: var(--code-font-size);
+    /* React Native Web views are positioned; a diagram's hidden measuring box relies on it. */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    color: var(--foreground);
+    font-size: var(--md-size);
+    line-height: var(--md-line);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
   }
-  .markdown > * + * {
-    @apply mt-3;
+  .markdown .md-p {
+    margin: 0 0 12px;
   }
-  .markdown h1,
-  .markdown h2,
-  .markdown h3,
-  .markdown h4 {
-    @apply mt-5 font-semibold tracking-tight;
+  .markdown :is(h1, h2, h3, h4, h5, h6) {
+    --md-heading-size: round(calc(var(--md-size) * var(--md-heading-scale)), 1px);
+    font-size: var(--md-heading-size);
+    line-height: round(calc(var(--md-heading-size) * 1.3), 1px);
+    font-weight: 600;
+    color: var(--foreground);
   }
   .markdown h1 {
-    @apply text-xl;
+    --md-heading-scale: calc(26 / 14);
+    margin: 24px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
   }
   .markdown h2 {
-    @apply text-lg;
+    --md-heading-scale: calc(22 / 14);
+    margin: 24px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
   }
   .markdown h3 {
-    @apply text-base;
+    --md-heading-scale: calc(20 / 14);
+    margin: 16px 0 8px;
   }
-  .markdown ul {
-    @apply list-disc pl-5;
+  .markdown h4 {
+    --md-heading-scale: calc(18 / 14);
+    margin: 16px 0 8px;
   }
-  .markdown ol {
-    @apply list-decimal pl-5;
+  .markdown h5 {
+    --md-heading-scale: calc(16 / 14);
+    margin: 12px 0 4px;
   }
-  .markdown li + li {
-    @apply mt-1;
+  .markdown h6 {
+    --md-heading-scale: calc(16 / 14);
+    margin: 12px 0 4px;
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
-  .markdown li::marker {
-    @apply text-muted-foreground;
+  .markdown strong {
+    font-weight: 500;
+  }
+  .markdown s {
+    color: var(--muted-foreground);
   }
   .markdown a {
-    @apply underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground;
+    color: var(--foreground);
+    text-decoration-line: underline;
+    text-decoration-color: var(--ring);
+    cursor: pointer;
   }
   .markdown :not(pre) > code {
-    @apply rounded-sm bg-muted px-[5px] py-0.5 font-mono;
-    font-size: var(--code-font-size);
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: var(--md-code-size);
   }
   .markdown pre {
-    @apply overflow-x-auto rounded-lg border bg-muted/50 px-3 py-2.5 font-mono leading-relaxed;
-    font-size: var(--code-font-size);
+    position: relative;
+    margin: 12px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: color-mix(in oklab, var(--muted) 50%, transparent);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: var(--md-code-size);
+    line-height: round(calc(var(--md-code-size) * 1.45), 1px);
+    white-space: pre-wrap;
+  }
+  .markdown pre.md-code-block {
+    margin: 8px 0;
   }
   .markdown blockquote {
-    @apply border-l-2 pl-3 text-muted-foreground;
-  }
-  .markdown table {
-    @apply block overflow-x-auto border-collapse text-sm;
-  }
-  .markdown th,
-  .markdown td {
-    @apply border px-3 py-1.5 text-left;
-  }
-  .markdown th {
-    @apply bg-muted font-medium;
+    display: flex;
+    flex-direction: column;
+    margin: 12px 0;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+    color: var(--muted-foreground);
   }
   .markdown hr {
-    @apply border-border;
+    margin: 10px 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .markdown :is(ul, ol) {
+    width: 100%;
+    padding-left: 0;
+    list-style: none;
+  }
+  .markdown li {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 4px;
+  }
+  .markdown .md-marker {
+    margin-right: 4px;
+    color: var(--muted-foreground);
+    font-weight: 400;
+  }
+  .markdown .md-marker-ordered {
+    min-width: 12px;
+  }
+  .markdown .md-li-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .markdown .md-table {
+    margin: 12px 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .markdown table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+  .markdown tr {
+    border-bottom: 1px solid var(--border);
+  }
+  .markdown :is(th, td) {
+    padding: 8px;
+    border-right: 1px solid var(--border);
+    color: var(--foreground);
+    text-align: left;
+    vertical-align: top;
+  }
+  .markdown th {
+    border-bottom: 1px solid var(--border);
+    background: var(--muted);
+    font-weight: 500;
+  }
+  .markdown .md-image {
+    max-width: 100%;
+    margin: 8px 0;
+    border-radius: var(--radius-md);
+  }
+  /* Plan cards and review comments (createCompactMarkdownStyles). */
+  .markdown-compact .md-p {
+    margin-bottom: 8px;
+  }
+  .markdown-compact h1 {
+    --md-heading-scale: calc(20 / 14);
+    margin: 16px 0 8px;
+  }
+  .markdown-compact h2 {
+    --md-heading-scale: calc(18 / 14);
+    margin: 12px 0 8px;
+  }
+  .markdown-compact h3 {
+    --md-heading-scale: calc(16 / 14);
+    margin: 12px 0 4px;
+  }
+  .markdown-compact pre {
+    padding: 8px;
+  }
+}
+
+/* BySpace: monospace text in tool-call details (packages/app tool-call-details `scrollText`). */
+@layer components {
+  .tool-code {
+    font-family: var(--font-mono);
+    font-size: var(--code-font-size);
+    line-height: 18px;
+    color: var(--muted-foreground);
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+}
+
+/* BySpace: the running tool call's shimmer (packages/app message.tsx): a white peak swept along a
+   transparent copy of the label and summary. The track ends come from the measured text. */
+@layer components {
+  .tool-call-shimmer {
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.45) 24%,
+      #ffffff 40%,
+      #ffffff 60%,
+      rgba(255, 255, 255, 0.45) 76%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation-name: byspace-toolcall-shimmer;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes byspace-toolcall-shimmer {
+    0% {
+      background-position: var(--byspace-shimmer-start, -200px) 0;
+    }
+    100% {
+      background-position: var(--byspace-shimmer-end, 200px) 0;
+    }
   }
 }
 

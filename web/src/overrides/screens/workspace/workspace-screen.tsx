@@ -1,6 +1,8 @@
 // Override of packages/app/src/screens/workspace/workspace-screen.tsx. The logic is the Expo
 // file's, unchanged; the view is DOM and Tailwind. Keep the two in step until the cutover deletes
 // packages/app.
+// Generated from the Expo file by web/scripts/port/workspace-screen.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import { Spinner } from "~/components/ui/spinner";
 import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import { getOpenAgentTabLabel } from "@bytetrue/protocol/agent-labels";

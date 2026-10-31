@@ -1,5 +1,7 @@
 // Override of packages/app/src/components/split-container.tsx. The drag-and-drop, split, resize,
 // maximize and explorer-dock logic is the Expo file's; the view is DOM and Tailwind.
+// Generated from the Expo file by web/scripts/port/split-container.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import {
   Fragment,
   useCallback,

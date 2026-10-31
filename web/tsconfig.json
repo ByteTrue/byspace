@@ -22,5 +22,5 @@
       "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"]
     }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../packages/app/src/types/turndown-plugin-gfm.d.ts"]
 }

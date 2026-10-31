@@ -1,15 +1,70 @@
-// Override of packages/app/src/panels/provider-subagent-panel.tsx: same descriptor.
-// shortcut: the subagent transcript moves with the conversation in batch 2 of step 3.
+// Override of packages/app/src/panels/provider-subagent-panel.tsx: same logic, DOM view.
+// Generated from the Expo file by web/scripts/port/provider-subagent-panel.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import invariant from "tiny-invariant";
+import { useShallow } from "zustand/react/shallow";
+import { AgentStreamView } from "@/agent-stream/view";
 import { getProviderIcon } from "@/components/provider-icons";
+import {
+  resolveComposerTrackControlClearance,
+  resolveComposerTrackTailClearance,
+} from "@/composer/pill-styles";
+import { ComposerTrackBar } from "@/composer/tracks";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
+import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
+import { useSubagentsForParent } from "@/subagents/select";
+import { SubagentsTrack } from "@/subagents/track";
 import {
   providerSubagentKey,
   providerSubagentLifecycleStatus,
+  refreshProviderSubagents,
   useProviderSubagentStore,
 } from "@/subagents/provider-store";
+import { useTranslation } from "react-i18next";
+import type { PendingPermission } from "@/types/shared";
+import type { StreamItem } from "@/types/stream";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
-import { PendingPanel } from "@/panels/pending-panel";
+import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
+import type { TurnPresentation } from "@/timeline/turn-liveness";
+
+const EMPTY_PERMISSIONS = new Map<string, PendingPermission>();
+const EMPTY_STREAM_ITEMS: StreamItem[] = [];
+const NOOP_SUBAGENT = () => undefined;
+
+function resolveChildTrackClearance(childCount: number, isCompact: boolean) {
+  if (childCount === 0) return { tail: 0, controls: 0 };
+  return {
+    tail: resolveComposerTrackTailClearance(isCompact),
+    controls: resolveComposerTrackControlClearance(isCompact),
+  };
+}
+
+function ProviderSubagentChildTrack({
+  serverId,
+  rows,
+  onOpenProviderSubagent,
+}: {
+  serverId: string;
+  rows: ReturnType<typeof useSubagentsForParent>;
+  onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <ComposerTrackBar>
+      <SubagentsTrack
+        serverId={serverId}
+        rows={rows}
+        onOpenSubagent={NOOP_SUBAGENT}
+        onOpenProviderSubagent={onOpenProviderSubagent}
+        onArchiveSubagent={NOOP_SUBAGENT}
+      />
+    </ComposerTrackBar>
+  );
+}
 
 function formatProviderLabel(provider: string): string {
   return provider
@@ -53,7 +108,173 @@ function useProviderSubagentDescriptor(
 }
 
 function ProviderSubagentPanel() {
-  return <PendingPanel title="Subagent" />;
+  const { t } = useTranslation();
+  const { serverId, target, openFileInWorkspace, openTab } = usePaneContext();
+  invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");
+  const key = providerSubagentKey(serverId, target.parentAgentId, target.subagentId);
+  const streamId = `provider:${encodeURIComponent(target.parentAgentId)}:${encodeURIComponent(target.subagentId)}`;
+  const { descriptor, timeline } = useProviderSubagentStore(
+    useShallow((state) => ({
+      descriptor: state.descriptors.get(key) ?? null,
+      timeline: state.timelines.get(key) ?? null,
+    })),
+  );
+  const parent = useSessionStore(
+    (state) =>
+      state.sessions[serverId]?.agents.get(target.parentAgentId) ??
+      state.sessions[serverId]?.agentDetails.get(target.parentAgentId) ??
+      null,
+  );
+  const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
+  const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
+  // COMPAT(providerSubagents): added in v0.2.11, remove after 2027-01-12.
+  const supported = serverInfo?.features?.providerSubagents === true;
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const isCompact = useIsCompactFormFactor();
+  const childRows = useSubagentsForParent({
+    serverId,
+    parentAgentId: target.parentAgentId,
+    providerParentSubagentId: target.subagentId,
+  });
+  const childTrackClearance = resolveChildTrackClearance(childRows.length, isCompact);
+  const openProviderChild = useCallback(
+    (parentAgentId: string, subagentId: string) => {
+      openTab({ kind: "provider_subagent", parentAgentId, subagentId });
+    },
+    [openTab],
+  );
+
+  useEffect(() => {
+    if (!client || !supported) return;
+    void refreshProviderSubagents(client, serverId, target.parentAgentId).catch(() => undefined);
+  }, [client, serverId, supported, target.parentAgentId]);
+
+  useEffect(() => {
+    if (!client || !supported) return;
+    void client
+      .fetchProviderSubagentTimeline(target.parentAgentId, target.subagentId, {
+        direction: "tail",
+        limit: TIMELINE_FETCH_PAGE_SIZE,
+      })
+      .then((payload) => {
+        useProviderSubagentStore.getState().replaceTimeline(serverId, payload);
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [client, serverId, supported, target.parentAgentId, target.subagentId]);
+
+  const loadOlder = useCallback((): boolean => {
+    if (!client || !supported || isLoadingOlder || !timeline?.hasOlder || !timeline.epoch) {
+      return false;
+    }
+    const firstSeq = timeline.rows.size ? Math.min(...timeline.rows.keys()) : null;
+    if (firstSeq === null) return false;
+    setIsLoadingOlder(true);
+    void client
+      .fetchProviderSubagentTimeline(target.parentAgentId, target.subagentId, {
+        direction: "before",
+        cursor: { epoch: timeline.epoch, seq: firstSeq },
+        limit: TIMELINE_FETCH_PAGE_SIZE,
+      })
+      .then((payload) => {
+        useProviderSubagentStore.getState().replaceTimeline(serverId, payload);
+        return undefined;
+      })
+      .catch(() => undefined)
+      .finally(() => setIsLoadingOlder(false));
+    return true;
+  }, [
+    client,
+    isLoadingOlder,
+    serverId,
+    supported,
+    target.parentAgentId,
+    target.subagentId,
+    timeline,
+  ]);
+  const firstTimelineSeq = timeline?.rows.size ? Math.min(...timeline.rows.keys()) : null;
+  const progressKey =
+    timeline?.epoch && firstTimelineSeq !== null ? `${timeline.epoch}:${firstTimelineSeq}` : null;
+  const subtitle = descriptor?.subtitle?.trim();
+
+  const streamContext = useMemo<AgentScreenAgent>(
+    () => ({
+      serverId,
+      id: streamId,
+      provider: descriptor?.provider ?? parent?.provider,
+      status: descriptor ? providerSubagentLifecycleStatus(descriptor.status) : "initializing",
+      cwd: descriptor?.cwd ?? parent?.cwd ?? "",
+      workspaceId: parent?.workspaceId,
+      projectPlacement: parent?.projectPlacement,
+    }),
+    [descriptor, parent, serverId, streamId],
+  );
+  const historyPagination = useMemo(
+    () => ({
+      hasOlder: timeline?.hasOlder === true,
+      isLoadingOlder,
+      progressKey,
+      onLoadOlder: loadOlder,
+    }),
+    [isLoadingOlder, loadOlder, progressKey, timeline?.hasOlder],
+  );
+  const turnPresentation = useMemo<TurnPresentation>(
+    () => ({
+      isActive: descriptor?.status === "running",
+      isCancelling: false,
+      startedAt: null,
+      turnId: null,
+    }),
+    [descriptor?.status],
+  );
+
+  if (serverInfo && !supported) {
+    return (
+      <div
+        className="flex flex-1 flex-col items-center justify-center p-6"
+        data-testid="provider-subagent-panel-unsupported"
+      >
+        <span className="text-center text-sm text-muted-foreground">
+          {t("message.actions.forkUnavailable")}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col" data-testid="provider-subagent-panel">
+      {subtitle ? (
+        <div className="border-b px-3 py-1">
+          <span
+            className="block truncate text-xs text-muted-foreground"
+            data-testid="provider-subagent-pane-subtitle"
+          >
+            {subtitle}
+          </span>
+        </div>
+      ) : null}
+      <AgentStreamView
+        agentId={streamId}
+        serverId={serverId}
+        context={streamContext}
+        streamItems={timeline?.tail ?? EMPTY_STREAM_ITEMS}
+        streamHead={timeline?.head ?? EMPTY_STREAM_ITEMS}
+        turnPresentation={turnPresentation}
+        pendingPermissions={EMPTY_PERMISSIONS}
+        isAuthoritativeHistoryReady
+        onOpenWorkspaceFile={openFileInWorkspace}
+        readOnly
+        historyPagination={historyPagination}
+        bottomOverlayTailClearance={childTrackClearance.tail}
+        bottomOverlayControlClearance={childTrackClearance.controls}
+      />
+      <ProviderSubagentChildTrack
+        serverId={serverId}
+        rows={childRows}
+        onOpenProviderSubagent={openProviderChild}
+      />
+    </div>
+  );
 }
 
 export const providerSubagentPanelRegistration = definePanel("provider_subagent", {
