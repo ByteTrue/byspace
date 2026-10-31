@@ -1,5 +1,6 @@
-// Override of packages/app/src/components/sidebar-callout.tsx: the same callout card (title, body,
-// up to two actions, optional dismiss) on shadcn's Card and Button.
+// Override of packages/app/src/components/sidebar-callout.tsx: the card the sidebar shows above its
+// footer (worktree setup hints and the like). Same props, testIDs and geometry: a full-width band
+// under a hairline, actions sharing the row.
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -29,7 +30,7 @@ export interface SidebarCalloutProps {
 }
 
 export function SidebarCalloutDescriptionText({ children }: { children: ReactNode }) {
-  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
+  return <p className="text-xs text-muted-foreground">{children}</p>;
 }
 
 export function SidebarCallout({
@@ -43,37 +44,34 @@ export function SidebarCallout({
 }: SidebarCalloutProps) {
   const { t } = useTranslation();
   const visibleActions = (actions ?? []).slice(0, 2);
-  const hasHeader = title != null || icon != null;
   const hasDescription = description != null && description !== "";
-
   return (
     <div
       role="alert"
       data-testid={testID}
       className={cn(
-        "flex flex-col gap-2 rounded-lg border bg-background p-3 text-sm shadow-xs",
-        variant === "error" && "border-destructive/40",
+        "flex w-full flex-col gap-2 border-t px-4 py-3",
+        variant === "error" && "border-destructive",
       )}
     >
-      {hasHeader || onDismiss ? (
+      {title != null || icon != null || onDismiss ? (
         <div className="flex items-start gap-2">
-          {hasHeader ? (
-            <div className="flex min-w-0 flex-1 items-start gap-2">
-              {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
-              {title ? <p className="line-clamp-2 font-medium">{title}</p> : null}
-            </div>
-          ) : null}
+          {icon ? <span className="mt-0.5 shrink-0">{icon}</span> : null}
+          {title ? (
+            <p className="line-clamp-2 min-w-0 flex-1 text-sm">{title}</p>
+          ) : (
+            <span className="flex-1" />
+          )}
           {onDismiss ? (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="-mt-1 -mr-1 ml-auto text-muted-foreground"
-              data-testid={testID ? `${testID}-dismiss` : undefined}
-              aria-label={t("sidebarCallout.dismiss")}
+            <button
+              type="button"
               onClick={onDismiss}
+              aria-label={t("sidebarCallout.dismiss")}
+              data-testid={testID ? `${testID}-dismiss` : undefined}
+              className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
             >
-              <X />
-            </Button>
+              <X className="size-3.5" />
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -82,16 +80,15 @@ export function SidebarCallout({
       ) : null}
       {hasDescription && typeof description !== "string" ? <div>{description}</div> : null}
       {visibleActions.length > 0 ? (
-        <div className="flex gap-2" data-testid={testID ? `${testID}-actions` : undefined}>
+        <div className="mt-2 flex gap-2" data-testid={testID ? `${testID}-actions` : undefined}>
           {visibleActions.map((action, index) => (
             <Button
               key={action.label}
-              size="sm"
+              className="h-auto flex-1 py-2 text-xs"
               variant={action.variant === "primary" ? "default" : "outline"}
-              className="flex-1"
               disabled={action.disabled}
-              data-testid={action.testID ?? (testID ? `${testID}-action-${index}` : undefined)}
               onClick={action.onPress}
+              data-testid={action.testID ?? (testID ? `${testID}-action-${index}` : undefined)}
             >
               {action.label}
             </Button>

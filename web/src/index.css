@@ -37,6 +37,16 @@
   --color-destructive: var(--destructive);
   /* BySpace: text on a destructive tint (see --destructive-text below). */
   --color-destructive-text: var(--destructive-text);
+  /* BySpace: status colours from packages/app/src/styles/theme.ts. The plain ones colour
+     metadata (check icons, PR state, diff counts); the dot ones are the louder row status dots. */
+  --color-status-success: var(--status-success);
+  --color-status-danger: var(--status-danger);
+  --color-status-warning: var(--status-warning);
+  --color-status-merged: var(--status-merged);
+  --color-status-dot-success: var(--status-dot-success);
+  --color-status-dot-danger: var(--status-dot-danger);
+  --color-status-dot-warning: var(--status-dot-warning);
+  --color-status-dot-running: var(--status-dot-running);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -103,6 +113,14 @@
   --destructive: oklch(0.577 0.245 27.325);
   /* BySpace: destructive on its 10% tint is 4.01:1; red-700 clears 4.5:1. */
   --destructive-text: #b91c1c;
+  --status-success: #3e704a;
+  --status-danger: #9d433b;
+  --status-warning: #7b5d39;
+  --status-merged: #7347af;
+  --status-dot-success: #299f51;
+  --status-dot-danger: #f12e2f;
+  --status-dot-warning: #b37824;
+  --status-dot-running: #268ae0;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -139,6 +157,14 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-text: var(--destructive);
+  --status-success: #6cb17b;
+  --status-danger: #d8847b;
+  --status-warning: #c09664;
+  --status-merged: #a890d5;
+  --status-dot-success: #35c264;
+  --status-dot-danger: #f7796d;
+  --status-dot-warning: #db932e;
+  --status-dot-running: #5caaf6;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -172,6 +198,10 @@
   body,
   #root {
     height: 100%;
+  }
+  /* BySpace: menu icons in the muted colour, as packages/app's menus draw them. */
+  [data-slot*="menu-"] > svg:not([class*="text-"]) {
+    color: var(--muted-foreground);
   }
   /* BySpace: selected text is a faint wash of the foreground, not the system blue. */
   ::selection {
@@ -274,4 +304,21 @@
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent) transparent;
   }
+}
+
+/* BySpace: the running ring. Every ring shares one timeline (see StatusRing), so rings across the
+   sidebar turn in step. */
+@layer components {
+  @keyframes status-ring-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+/* BySpace: on a phone the sidebar covers the whole screen, as packages/app's compact panel does,
+   instead of shadcn's 18rem sheet. Unlayered so it wins over the sheet's width utilities. */
+[data-slot="sidebar"][data-mobile="true"] {
+  width: 100%;
+  max-width: none;
 }

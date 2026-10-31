@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useStoreReady } from "@/app/_layout";
+import { CommandCenter } from "@/command-center/command-center";
+import { CommandCenterProvider } from "@/command-center/provider";
+import { CommandCenterRootActions } from "@/command-center/root-registration";
+import { HostChooserModal } from "@/hosts/host-chooser";
 import {
   canDesktopAppSidebarShare,
   resolveDesktopAppContentMinimum,
@@ -148,41 +152,48 @@ export function AppChrome() {
   const framed = !isSettingsRoute;
 
   return (
-    <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
-      <SidebarModelProvider active={sidebarActive}>
-        <SidebarProvider
-          open={desktopSidebarVisible}
-          onOpenChange={ignoreOpenChange}
-          style={providerStyle}
-          className="h-svh"
-        >
-          <MobileSidebarSync />
-          {framed ? (
-            <Sidebar variant="inset" data-testid="left-sidebar">
-              {chromeEnabled ? <AppSidebar /> : null}
-              {chromeEnabled && !isCompactLayout ? (
-                <SidebarResizeHandle
-                  width={visibleSidebarWidth}
-                  viewportWidth={viewportWidth}
-                  onPreview={setDraftWidth}
-                />
-              ) : null}
-            </Sidebar>
-          ) : null}
-          {framed ? (
-            <SidebarInset className="min-h-0 overflow-hidden">
-              <Outlet />
-            </SidebarInset>
-          ) : (
-            <main className="min-h-0 flex-1 overflow-hidden">
-              <Outlet />
-            </main>
-          )}
-        </SidebarProvider>
-        <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
-      </SidebarModelProvider>
-      <WorktreeSetupCalloutSource />
-      <WorkspacePinShortcutHandler />
-    </DesktopSidebarVisibilityProvider>
+    <CommandCenterProvider>
+      <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
+        <SidebarModelProvider active={sidebarActive}>
+          <SidebarProvider
+            open={desktopSidebarVisible}
+            onOpenChange={ignoreOpenChange}
+            style={providerStyle}
+            className="h-svh"
+          >
+            <MobileSidebarSync />
+            {framed ? (
+              <Sidebar variant="inset" className="p-0" data-testid="left-sidebar">
+                {chromeEnabled ? <AppSidebar /> : null}
+                {chromeEnabled && !isCompactLayout ? (
+                  <SidebarResizeHandle
+                    width={visibleSidebarWidth}
+                    viewportWidth={viewportWidth}
+                    onPreview={setDraftWidth}
+                  />
+                ) : null}
+              </Sidebar>
+            ) : null}
+            {/* BySpace: packages/app's framed card — 6px from the window, 12px radius, a 1px
+                border instead of shadcn's 8px margin and shadow. */}
+            {framed ? (
+              <SidebarInset className="min-h-0 overflow-hidden md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-[12px] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1.5">
+                <Outlet />
+              </SidebarInset>
+            ) : (
+              <main className="min-h-0 flex-1 overflow-hidden">
+                <Outlet />
+              </main>
+            )}
+          </SidebarProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
+        </SidebarModelProvider>
+        <WorktreeSetupCalloutSource />
+        <CommandCenterRootActions />
+        <WorkspacePinShortcutHandler />
+        <CommandCenter />
+        <HostChooserModal />
+      </DesktopSidebarVisibilityProvider>
+    </CommandCenterProvider>
   );
 }

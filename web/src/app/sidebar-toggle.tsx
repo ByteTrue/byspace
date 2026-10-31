@@ -52,11 +52,14 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-sm"
+          // packages/app's large header control: 28px on desktop, 32px on a phone.
+          size={isCompact ? "icon" : "icon-sm"}
           data-testid="menu-button"
           aria-label={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
           aria-expanded={isOpen}
-          className="text-muted-foreground"
+          // As packages/app's leadingToggle: pulled 2px left so the glyph sits on the rows' 16px icon rail.
+          // aria-expanded reports the sidebar's state; it must not paint the ghost button's open look.
+          className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground md:-ml-0.5 dark:aria-expanded:hover:bg-muted/50"
           onClick={toggle}
         >
           {isCompact ? <MobileMenuIcon /> : <PanelLeft strokeWidth={1.5} />}

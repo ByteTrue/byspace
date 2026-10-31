@@ -8,6 +8,8 @@ import { queryClient } from "@/data/query-client";
 import { I18nProvider } from "@/i18n/provider";
 import { KeyboardActionDispatcherProvider } from "@/keyboard/keyboard-action-dispatcher-context";
 import { AppChrome } from "~/app/app-chrome";
+import { ConfirmDialogHost } from "~/app/confirm-dialog-host";
+import { KeyboardShortcutsDialog } from "~/app/keyboard-shortcuts-dialog";
 import {
   DraftFlushOnBackground,
   FaviconStatusSync,
@@ -15,6 +17,7 @@ import {
   OfferLinkListener,
   PushNotificationRouter,
 } from "~/app/global-listeners";
+import { PendingDialogsHost } from "~/app/pending-dialogs";
 import { RootErrorBoundary } from "~/app/root-error-boundary";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
@@ -58,6 +61,9 @@ export function Root() {
       <RuntimeProviders>
         <TooltipProvider delayDuration={300}>
           <AppChrome />
+          <ConfirmDialogHost />
+          <KeyboardShortcutsDialog />
+          <PendingDialogsHost />
         </TooltipProvider>
       </RuntimeProviders>
     </RootProviders>

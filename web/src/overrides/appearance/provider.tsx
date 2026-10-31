@@ -1,8 +1,9 @@
 // Override of packages/app/src/appearance/provider.tsx. The Expo version patches Unistyles themes;
 // here the same settings land on <html>: `dark` plus a variant class pick the palette
 // (index.css, styles/themes.css), and CSS variables carry the type settings.
-import { type ReactNode, useEffect, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect } from "react";
 import { DEFAULT_UI_BASE_FONT_SIZE, useAppSettings, type AppSettings } from "@/hooks/use-settings";
+import { useResolvedColorScheme } from "~/app/color-scheme";
 
 const DARK_VARIANT_CLASSES: Partial<Record<AppSettings["theme"], string>> = {
   zinc: "theme-zinc",
@@ -12,14 +13,6 @@ const DARK_VARIANT_CLASSES: Partial<Record<AppSettings["theme"], string>> = {
   pureBlack: "theme-pure-black",
 };
 
-const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
-function subscribeSystemScheme(onChange: () => void) {
-  const query = darkQuery();
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-const readSystemDark = () => darkQuery().matches;
-
 function setOptionalProperty(name: string, value: string) {
   if (value) document.documentElement.style.setProperty(name, value);
   else document.documentElement.style.removeProperty(name);
@@ -27,19 +20,17 @@ function setOptionalProperty(name: string, value: string) {
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { settings, isLoading } = useAppSettings();
-  const systemDark = useSyncExternalStore(subscribeSystemScheme, readSystemDark, readSystemDark);
-  // Until settings load, follow the system, which is also the default preference.
+  const scheme = useResolvedColorScheme();
   const theme = isLoading ? "auto" : settings.theme;
 
   useEffect(() => {
     const root = document.documentElement;
-    const dark = theme === "auto" ? systemDark : theme !== "light";
-    root.classList.toggle("dark", dark);
+    root.classList.toggle("dark", scheme === "dark");
     for (const [name, className] of Object.entries(DARK_VARIANT_CLASSES)) {
       root.classList.toggle(className, theme === name);
     }
-    root.style.colorScheme = dark ? "dark" : "light";
-  }, [systemDark, theme]);
+    root.style.colorScheme = scheme;
+  }, [scheme, theme]);
 
   useEffect(() => {
     if (isLoading) return;
