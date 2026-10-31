@@ -105,6 +105,11 @@ export const Alert = {
 // Types shared modules reference in their signatures. Loose on purpose: on the web these values
 // only pass through to overridden components, which read the CSS-compatible parts.
 export type ViewStyle = Record<string, unknown>;
+/**
+ * On the web a View ref is the DOM element (shared `.web` hooks type their refs this way). A type
+ * only: rendering `<View>` still fails the typecheck, as the shim has no components.
+ */
+export type View = HTMLElement;
 export type TextStyle = Record<string, unknown>;
 export type ImageStyle = Record<string, unknown>;
 export type StyleProp<T> = T | ReadonlyArray<StyleProp<T>> | null | undefined | false;

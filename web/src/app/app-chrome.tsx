@@ -1,3 +1,4 @@
+import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useStoreReady } from "@/app/_layout";
@@ -150,6 +151,14 @@ export function AppChrome() {
   // Settings own their split layout and run full-bleed; every other desktop route sits in the
   // inset card (the frame stays when the sidebar is closed), compact layouts never frame.
   const framed = !isSettingsRoute;
+  // On a phone the explorer is a sheet over the page instead of a docked pane.
+  const content = isCompactLayout ? (
+    <CompactExplorerSidebarHost enabled={chromeEnabled}>
+      <Outlet />
+    </CompactExplorerSidebarHost>
+  ) : (
+    <Outlet />
+  );
 
   return (
     <CommandCenterProvider>
@@ -178,12 +187,10 @@ export function AppChrome() {
                 border instead of shadcn's 8px margin and shadow. */}
             {framed ? (
               <SidebarInset className="min-h-0 overflow-hidden md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-[12px] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1.5">
-                <Outlet />
+                {content}
               </SidebarInset>
             ) : (
-              <main className="min-h-0 flex-1 overflow-hidden">
-                <Outlet />
-              </main>
+              <main className="min-h-0 flex-1 overflow-hidden">{content}</main>
             )}
           </SidebarProvider>
           <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />

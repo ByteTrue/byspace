@@ -142,3 +142,43 @@ Markdown：markdown-it 的输出转成和旧版一样的节点树（`web/src/mar
 
 - 新标签菜单里的终端配置（Claude Code、Codex、OpenCode、Pi）会在终端里启动真实的 agent 命令行，没点；它们走的是同一个终端窗格，区别只在启动命令。
 - 往终端拖文件在桌面客户端里的表现：两边的代码只认文件对象上的本机路径（`file.path`），浏览器里拖进去两边都没有反应（测过）；Wails 客户端里有没有这个字段要在客户端里确认。
+
+### 2026-11-01 第 5 批：文件
+
+文件树换成旧版的 `FileExplorerPane`（`overrides/components/file-explorer-pane.tsx`，用 `web/scripts/port/file-explorer.py` 生成）：列目录、展开和恢复展开状态、排序、隐藏文件、刷新、新建文件和文件夹、重命名、Duplicate、删除、复制路径、下载、加入对话、拖进输入框都是旧版逻辑。旧版树用 FlatList 只渲染可见附近的行，新版一次画出全部行；桌面上用第 1 批的叠加滚动条。
+
+文件标签换成旧版的 `FilePane`（`overrides/file-pane/pane.tsx`，用 `web/scripts/port/file-pane.py` 生成）：读取、实时更新、编辑自动保存、磁盘冲突、重新加载和覆盖是旧版逻辑；源码视图和编辑器（CodeMirror）、HTML 预览本来就是旧版的网页文件（`.web.tsx`），原样用。网页版重写的是文件栏（大小、行数、保存状态、Vim 模式、光标、预览/源码切换）、冲突提示条、Markdown 预览外框，以及分段切换控件（`components/ui/segmented-control`，后面设置页也用）。
+
+手机上的文件面板：旧版点右上角的面板按钮会从右侧滑出整屏面板（Changes、Files、PR 页签），新前端之前点了没有反应，是第 1 批漏掉的。这批补上 `CompactExplorerSidebarHost` 和 `CompactExplorerSidebar` 的网页版：整屏 sheet，页签和关闭按钮同旧版；Changes 页签先显示「本步后面的批次迁移」（第 6 批），PR 页签同（第 7 批）。旧版的侧滑手势没有搬，和左侧栏一样用按钮或 Esc 关闭。`mobile-panels/provider` 有了网页版：当前面板直接读面板 store，旧版那套依赖 reanimated 和手势的实现不进新前端。
+
+下载走旧版 `download-store` 的浏览器下载分支；它引用的 `expo-file-system`、`expo-sharing` 换成网页替身，网页上走不到。
+
+顺带修的共享问题：
+
+- 右键菜单触发器丢掉了调用方的 `onContextMenu`，文件行右键时没有先选中该行。
+- 手机上内层触发器已经打开菜单时，外层触发器（树的空白区域）又打开一个。
+- 图片查看器的「缩小」「还原」在不可用时没有变淡（第 2 批漏的）。
+- 菜单项打开的就地输入框（新建、重命名）拿不到焦点：Radix 菜单关闭时先拉住焦点再还给触发器。输入框改为在菜单关闭后取焦点，焦点被关闭中的菜单拉走不算离开输入框。
+
+验证（8081 和 8082 同一个开发版 daemon，「Coding task」工作区就是本仓库，截图 61–74）：
+
+- 文件树：根目录列表一致；展开 web、src；排序 Name → Modified → Size → Name；隐藏文件开关；行高 30px，与旧版一致。
+- 右键文件行，菜单项一致；树的空白处右键只有 New file、New folder。
+- Copy relative path 得到 `web/src/main.tsx`；Download 触发浏览器下载 `main.tsx`；文件行可拖（`draggable`），文件夹不可拖，两边一致。
+- README.md 显示 Markdown 预览，切到 Source 是 CodeMirror 源码；vitest.config.ts 是带高亮的源码；index.html 是 HTML 预览（页面里的脚本被预览的 CSP 拦下，两边控制台都有这条，属预期）；hero-mockup.png 是图片查看器，缩放按钮状态一致。
+- 写操作（在仓库根目录建临时文件，做完删除）：工具栏和空白处右键新建文件，新建后自动打开；源码视图里输入后出现未保存点，自动存盘后磁盘内容一致；有未保存修改时外部改写磁盘，出现「Changed on disk」提示条，Reload 确认后读回磁盘内容；重命名、Duplicate（生成 `… copy.md`）、删除（确认对话框）；新建文件夹再删除。两边逐条一致，结束后仓库里没有残留。
+- 深色主题。
+- 手机：面板按钮打开整屏面板，Files 页签的树，点 README.md 打开预览并收起面板；文件行的菜单以底部 sheet 打开（用 contextmenu 事件模拟长按）。
+- 控制台没有新增错误；`npm run typecheck`、`npm run lint` 通过。
+
+已知差异：
+
+- 右键菜单靠近右边缘时，旧版贴着点击位置往里挪，新版（Radix）翻到点击位置左边。
+- 重命名输入框聚焦时，旧版有浏览器默认的焦点框，新版没有。
+- 记一个两边一致的行为：没有未保存修改时文件在磁盘上被改写，3 秒内编辑器都没有换成新内容。
+
+没验到的：
+
+- 手机上真实长按：无头浏览器的触摸长按两边都不出菜单。新版靠 contextmenu 事件，Android 浏览器长按会发，iOS 不发，需要真机确认（同第 3 批的侧栏）。
+- 从文件树拖文件到输入框：拖拽源两边一致，没有用脚本模拟拖放。
+- 编辑器的 Vim 键位：在设置里打开，设置页在第 4 步，没测。

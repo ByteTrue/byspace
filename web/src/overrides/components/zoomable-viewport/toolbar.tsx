@@ -72,7 +72,12 @@ export const ViewportToolbar = memo(function ViewportToolbar({
               size: "small",
               compact: isCompact,
               disabled: action.disabled,
-              className: cn("bg-muted", visible ? "pointer-events-auto opacity-100" : "opacity-0"),
+              // Shown, a disabled button keeps the chrome's dimmed look.
+              className: cn(
+                "bg-muted",
+                !visible && "opacity-0",
+                visible && !action.disabled && "pointer-events-auto opacity-100",
+              ),
             })}
           >
             <Icon size={iconSize} />

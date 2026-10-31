@@ -19,6 +19,9 @@
       "expo-linking": ["./src/shims/expo-linking.ts"],
       "expo-clipboard": ["./src/shims/expo-clipboard.ts"],
       "expo/dom": ["./src/shims/expo__dom.ts"],
+      "expo-file-system": ["./src/shims/expo-file-system.ts"],
+      "expo-file-system/legacy": ["./src/shims/expo-file-system__legacy.ts"],
+      "expo-sharing": ["./src/shims/expo-sharing.ts"],
       "react-native-svg": ["./src/shims/react-native-svg.tsx"],
       "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"]
     }

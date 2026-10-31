@@ -96,6 +96,8 @@ function useSheetTrigger({
   }, [isSheet, style]);
   const handleSheetContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
+      // A trigger inside this one (a row in a list) already opened its own menu.
+      if (event.defaultPrevented) return;
       event.preventDefault();
       if (isEnabled) setOpen(true);
     },
@@ -129,6 +131,7 @@ export function ContextMenuTrigger({
   onKeyDown,
   onPointerEnter,
   onPointerLeave,
+  onContextMenu: onContextMenuProp,
   ...props
 }: ContextMenuTriggerProps): ReactElement {
   const { open, setOpen, presentation } = useMenuContext("ContextMenuTrigger");
@@ -160,7 +163,7 @@ export function ContextMenuTrigger({
       aria-disabled={disabled || undefined}
       data-testid={testID}
       style={triggerStyle}
-      onContextMenu={onContextMenu}
+      onContextMenu={composeHandlers(onContextMenuProp, onContextMenu)}
       onClick={composeHandlers(onClick, pressable && onPress ? () => onPress() : undefined)}
       onPointerDown={composeHandlers(
         onPointerDown,

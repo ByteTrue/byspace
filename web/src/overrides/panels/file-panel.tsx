@@ -1,10 +1,14 @@
-// Override of packages/app/src/panels/file-panel.tsx: same descriptor.
-// shortcut: the file preview and editor move in batch 5 of step 3.
+// Override of packages/app/src/panels/file-panel.tsx: same descriptor and pane, DOM view.
+// Generated from the Expo file by web/scripts/port/file-pane.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import { useMemo } from "react";
-import { createMaterialFileIcon } from "@/components/material-file-icon";
+import invariant from "tiny-invariant";
+import { useTranslation } from "react-i18next";
+import { FilePane } from "@/file-pane/pane";
 import { usePaneContext } from "@/panels/pane-context";
 import { definePanel } from "@/panels/panel-registry";
-import { PendingPanel } from "@/panels/pending-panel";
+import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
+import { createMaterialFileIcon } from "@/components/material-file-icon";
 
 function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
   const fileName = target.path.split("/").findLast(Boolean) ?? target.path;
@@ -20,8 +24,25 @@ function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
 }
 
 function FilePanel() {
-  const { target } = usePaneContext();
-  return <PendingPanel title={target.kind === "file" ? target.path : "File"} />;
+  const { t } = useTranslation();
+  const { serverId, workspaceId, target, fileNavigationRevision } = usePaneContext();
+  const workspaceDirectory = useWorkspaceDirectory(serverId, workspaceId);
+  invariant(target.kind === "file", "FilePanel requires file target");
+  if (!workspaceDirectory) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-4">
+        <span>{t("panels.file.directoryMissing")}</span>
+      </div>
+    );
+  }
+  return (
+    <FilePane
+      serverId={serverId}
+      workspaceRoot={workspaceDirectory}
+      location={target}
+      navigationRevision={fileNavigationRevision ?? 0}
+    />
+  );
 }
 
 export const filePanelRegistration = definePanel("file", {
