@@ -53,8 +53,33 @@ function sharedAppSource(): Plugin {
   };
 }
 
+/**
+ * Transitional: shared modules load images Metro-style, `require("../x.png")`. Rewrite each to an
+ * imported asset URL wrapped as `{ uri }`, the shape Expo's web runtime hands those calls back.
+ */
+function metroAssetRequires(): Plugin {
+  return {
+    name: "byspace-metro-asset-requires",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.startsWith(appSrc) || !code.includes("require(")) return null;
+      const imports: string[] = [];
+      const transformed = code.replace(
+        /require\("([^"]+\.(?:png|jpe?g|gif|webp|svg))"\)/g,
+        (_match, assetPath: string) => {
+          const name = `__metroAsset${imports.length}`;
+          imports.push(`import ${name} from ${JSON.stringify(assetPath)};`);
+          return `{ uri: ${name} }`;
+        },
+      );
+      if (imports.length === 0) return null;
+      return { code: `${imports.join("\n")}\n${transformed}`, map: null };
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [sharedAppSource(), react(), tailwindcss()],
+  plugins: [sharedAppSource(), metroAssetRequires(), react(), tailwindcss()],
   resolve: {
     extensions: EXTENSIONS,
     alias: [{ find: /^~\//, replacement: `${webSrc}/` }, ...shimAliases],
@@ -72,5 +97,6 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 8082,
     strictPort: true,
+    // Shims are discovered when the config loads; restart the dev server after adding one.
   },
 }));

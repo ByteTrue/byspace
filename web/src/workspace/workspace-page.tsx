@@ -1,14 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { Navigate, useParams } from "react-router";
 import { useShallow } from "zustand/shallow";
 import { selectWorkspaceAgents } from "@/hooks/sidebar-workspaces-view-model";
 import { useSessionStore } from "@/stores/session-store";
 import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import { AgentComposer } from "~/agent/agent-composer";
 import { AgentConversation } from "~/agent/agent-conversation";
-import { HomePage } from "~/app/home-page";
-import { Separator } from "~/components/ui/separator";
-import { SidebarTrigger } from "~/components/ui/sidebar";
+import { SidebarToggle } from "~/app/sidebar-toggle";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
 export function WorkspacePage() {
@@ -56,13 +54,12 @@ export function WorkspacePage() {
     [workspaceId],
   );
 
-  if (!workspaceId) return <HomePage />;
+  if (!workspaceId) return <Navigate to="/" replace />;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <SidebarTrigger />
-        <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
+        <SidebarToggle host="content" />
         <span className="truncate text-sm font-medium">{workspace?.name ?? "Workspace"}</span>
         {workspace ? (
           <span className="truncate text-sm text-muted-foreground">

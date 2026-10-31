@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "./styles/shadcn-tailwind.css";
 @import "@fontsource-variable/geist";
+@import "./styles/themes.css";
 
 /*
  * This is what `shadcn init --base radix --preset nova` (shadcn 4.23.0) generates, with
@@ -14,13 +15,9 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  /* BySpace: CJK and platform fallbacks after Geist. */
-  --font-sans:
-    "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
-    "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
-  --font-mono:
-    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, "Liberation Mono", "Courier New", monospace;
+  /* BySpace: the font stacks are variables so the appearance settings can replace them. */
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,7 +60,31 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * BySpace: `md` is the app's compact breakpoint (720px, as in packages/app), and the text scale
+ * follows the interface font size setting (--ui-font-scale, 1 at the default 14px) while spacing
+ * stays put, the same split the Expo app makes.
+ */
+@theme {
+  --breakpoint-md: 45rem;
+  --text-xs: calc(0.75rem * var(--ui-font-scale, 1));
+  --text-sm: calc(0.875rem * var(--ui-font-scale, 1));
+  --text-base: calc(1rem * var(--ui-font-scale, 1));
+  --text-lg: calc(1.125rem * var(--ui-font-scale, 1));
+  --text-xl: calc(1.25rem * var(--ui-font-scale, 1));
+  --text-2xl: calc(1.5rem * var(--ui-font-scale, 1));
+}
+
 :root {
+  /* BySpace: default stacks; Geist first, then CJK and platform faces. */
+  --app-font-sans:
+    "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --app-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", Consolas, "Liberation Mono",
+    "Microsoft YaHei UI", monospace;
+  --content-font-size: 15px;
+  --code-font-size: 12px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -161,7 +182,8 @@
 /* BySpace: agent prose (docs/design.md, design/component-sheet.html C6). */
 @layer components {
   .markdown {
-    @apply text-sm leading-[1.65] wrap-break-word;
+    @apply leading-[1.65] wrap-break-word;
+    font-size: var(--content-font-size);
   }
   .markdown > * + * {
     @apply mt-3;
@@ -197,10 +219,12 @@
     @apply underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground;
   }
   .markdown :not(pre) > code {
-    @apply rounded-sm bg-muted px-[5px] py-0.5 font-mono text-[0.8125rem];
+    @apply rounded-sm bg-muted px-[5px] py-0.5 font-mono;
+    font-size: var(--code-font-size);
   }
   .markdown pre {
-    @apply overflow-x-auto rounded-lg border bg-muted/50 px-3 py-2.5 font-mono text-[0.8125rem] leading-relaxed;
+    @apply overflow-x-auto rounded-lg border bg-muted/50 px-3 py-2.5 font-mono leading-relaxed;
+    font-size: var(--code-font-size);
   }
   .markdown blockquote {
     @apply border-l-2 pl-3 text-muted-foreground;
@@ -217,5 +241,37 @@
   }
   .markdown hr {
     @apply border-border;
+  }
+}
+
+/* BySpace: the startup splash, the logo with a highlight sweeping across it. */
+@layer components {
+  .splash-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--foreground) 0%,
+      color-mix(in oklab, var(--foreground) 55%, transparent) 40%,
+      var(--foreground) 50%,
+      color-mix(in oklab, var(--foreground) 55%, transparent) 60%,
+      var(--foreground) 100%
+    );
+    background-size: 336px 96px;
+    animation: splash-shimmer 1.8s linear infinite;
+  }
+  @keyframes splash-shimmer {
+    from {
+      background-position: -216px 0;
+    }
+    to {
+      background-position: 216px 0;
+    }
+  }
+}
+
+/* BySpace: thin scrollbars that recede until hovered. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent) transparent;
   }
 }

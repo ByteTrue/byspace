@@ -15,7 +15,9 @@
       "lucide-react-native": ["./src/shims/lucide-react-native.ts"],
       "expo-constants": ["./src/shims/expo-constants.ts"],
       "expo-localization": ["./src/shims/expo-localization.ts"],
-      "expo-asset": ["./src/shims/expo-asset.ts"]
+      "expo-asset": ["./src/shims/expo-asset.ts"],
+      "expo-linking": ["./src/shims/expo-linking.ts"],
+      "expo-clipboard": ["./src/shims/expo-clipboard.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]
