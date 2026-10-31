@@ -1,50 +1,13 @@
 package workspace
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
-
-// A review and a comment must arrive in the same shape: the client discriminates on `kind` and
-// would otherwise render a review as an empty comment.
-func TestDecodeGitHubReviews(t *testing.T) {
-	raw := `[
-	  {"id":1,"user":{"login":"alice","avatar_url":"https://a/x.png","html_url":"https://github.com/alice"},
-	   "body":"LGTM","submitted_at":"2026-01-02T03:04:05Z","html_url":"https://github.com/pull/1#r1","state":"APPROVED"},
-	  {"id":2,"user":{"login":"bob"},"body":"please fix","submitted_at":"2026-01-03T00:00:00Z","state":"CHANGES_REQUESTED"}
-	]`
-	items := decodeGitHubReviews(raw)
-	if len(items) != 2 {
-		t.Fatalf("got %d items", len(items))
-	}
-	if items[0]["kind"] != "review" || items[0]["reviewState"] != "approved" {
-		t.Fatalf("approved review: %+v", items[0])
-	}
-	if items[1]["reviewState"] != "changes_requested" {
-		t.Fatalf("changes requested: %+v", items[1])
-	}
-	// createdAt must be epoch milliseconds, not the raw string: the client sorts numerically.
-	if created, ok := items[0]["createdAt"].(int64); !ok || created <= 0 {
-		t.Fatalf("createdAt = %v", items[0]["createdAt"])
-	}
-	if items[0]["author"] != "alice" || items[0]["avatarUrl"] != "https://a/x.png" {
-		t.Fatalf("author fields: %+v", items[0])
-	}
-}
-
-func TestDecodeGitHubComments(t *testing.T) {
-	raw := `[{"id":5,"user":{"login":"carol"},"body":"note","created_at":"2026-02-01T00:00:00Z","html_url":"u"}]`
-	items := decodeGitHubComments(raw)
-	if len(items) != 1 || items[0]["kind"] != "comment" || items[0]["body"] != "note" {
-		t.Fatalf("%+v", items)
-	}
-	if _, hasReviewState := items[0]["reviewState"]; hasReviewState {
-		t.Fatal("a comment must not carry reviewState: the schema rejects it")
-	}
-}
 
 // A long thread that stops at the limit without saying so looks like the conversation ended.
 func TestSortAndLimitTimelineReportsTruncation(t *testing.T) {
@@ -106,49 +69,111 @@ func TestParseUnixOrISO(t *testing.T) {
 	}
 }
 
-// End to end through the real gh invocation path, with a stub `gh` on PATH.
-func TestPullRequestTimelineUsesGH(t *testing.T) {
+// End to end through the real gh invocation path, with a stub `gh` on PATH: the GraphQL query Node
+// sent, mapped the way Node's toPullRequestTimeline mapped it. Review threads are the comments on
+// code lines; they carry their review id and location so the client nests them under the review.
+func TestPullRequestTimelineUsesGitHubGraphQL(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stub uses a shell script")
 	}
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "gh")
-	script := `#!/bin/sh
-case "$*" in
-  *reviews*) echo '[{"id":1,"user":{"login":"alice"},"body":"ok","state":"APPROVED","submitted_at":"2026-01-01T00:00:00Z"}]' ;;
-  *comments*) echo '[{"id":2,"user":{"login":"bob"},"body":"hi","created_at":"2026-01-02T00:00:00Z"}]' ;;
-  *) echo '[]' ;;
-esac
-`
-	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+	argsFile := filepath.Join(dir, "args")
+	payload := `{"data":{"repository":{"pullRequest":{"number":7,
+	  "reviews":{"nodes":[
+	    {"id":"PRR_1","state":"APPROVED","body":"ok","bodyHTML":"","url":"u1","submittedAt":"2026-01-01T00:00:00Z","author":{"login":"alice","url":"https://github.com/alice","avatarUrl":"a.png"}},
+	    {"id":"PRR_2","state":"DISMISSED","body":"  ","bodyHTML":"","url":"u2","submittedAt":"2026-01-01T00:00:01Z","author":null}
+	  ],"pageInfo":{"hasNextPage":false}},
+	  "comments":{"nodes":[
+	    {"id":"IC_1","body":"hi","bodyHTML":"","url":"u3","createdAt":"2026-01-02T00:00:00Z","author":{"login":"bob","url":"","avatarUrl":""}}
+	  ],"pageInfo":{"hasNextPage":false}},
+	  "reviewThreads":{"nodes":[
+	    {"id":"PRRT_1","path":"main.go","line":12,"startLine":null,"isResolved":true,"isOutdated":false,
+	     "comments":{"nodes":[
+	       {"id":"PRRC_1","body":"rename this","bodyHTML":"","url":"u4","createdAt":"2026-01-01T00:00:00Z","author":{"login":"alice","url":"","avatarUrl":""},"pullRequestReview":{"id":"PRR_1"}},
+	       {"id":"PRRC_2","body":"done","bodyHTML":"","url":"u5","createdAt":"2026-01-03T00:00:00Z","author":{"login":"carol","url":"","avatarUrl":""},"pullRequestReview":null}
+	     ],"pageInfo":{"hasNextPage":true}}}
+	  ],"pageInfo":{"hasNextPage":false}}}}}}`
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argsFile + "\ncat <<'EOF'\n" + payload + "\nEOF\n"
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	// A .git directory makes DetectForge resolve to github.
-	repo := filepath.Join(dir, "repo")
-	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(repo, ".git", "config"),
-		[]byte("[remote \"origin\"]\n\turl = https://github.com/acme/repo.git\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	items, truncated, err := PullRequestTimeline(t.Context(), "github", repo, 7, 50)
+	items, truncated, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 7, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if truncated {
-		t.Fatal("unexpected truncation")
+	args, _ := os.ReadFile(argsFile)
+	for _, want := range []string{"graphql", "owner=acme", "name=repo", "number=7", "reviewThreads(first: 100)"} {
+		if !strings.Contains(string(args), want) {
+			t.Fatalf("gh args missing %q:\n%s", want, args)
+		}
 	}
-	if len(items) != 2 {
-		t.Fatalf("got %d items: %+v", len(items), items)
+	// A thread comment past the first page makes the timeline incomplete.
+	if !truncated {
+		t.Fatal("expected truncated: the thread has more comments")
 	}
-	if items[0]["kind"] != "review" || items[1]["kind"] != "comment" {
-		t.Fatalf("kinds: %v, %v", items[0]["kind"], items[1]["kind"])
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item["id"].(string))
 	}
-	if !strings.Contains(items[0]["body"].(string), "ok") {
-		t.Fatalf("body: %v", items[0]["body"])
+	// The blank dismissed review is dropped; same-time items order by id.
+	if got := strings.Join(ids, ","); got != "PRRC_1,PRR_1,IC_1,PRRC_2" {
+		t.Fatalf("order = %s", got)
+	}
+	threadComment := items[0]
+	if threadComment["kind"] != "comment" || threadComment["reviewId"] != "PRR_1" {
+		t.Fatalf("thread comment: %+v", threadComment)
+	}
+	location, _ := threadComment["location"].(map[string]any)
+	if location["path"] != "main.go" || location["line"] != 12 || location["threadId"] != "PRRT_1" ||
+		location["isResolved"] != true || location["isOutdated"] != false {
+		t.Fatalf("location: %+v", location)
+	}
+	if _, hasStart := location["startLine"]; hasStart {
+		t.Fatal("a null startLine is left out")
+	}
+	if items[1]["reviewState"] != "approved" || items[1]["author"] != "alice" || items[1]["authorUrl"] != "https://github.com/alice" {
+		t.Fatalf("review: %+v", items[1])
+	}
+	if items[2]["authorUrl"] != nil {
+		t.Fatalf("an empty author url is null: %+v", items[2])
+	}
+}
+
+func TestPullRequestTimelineClassifiesFailures(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub uses a shell script")
+	}
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho 'GraphQL: Could not resolve to a PullRequest with the number of 999.' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, _, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 999, 50)
+	var classified *TimelineError
+	if !errors.As(err, &classified) || classified.Kind != "not_found" {
+		t.Fatalf("err = %#v", err)
+	}
+	_, _, err = PullRequestTimeline(t.Context(), "github", dir, "acme", "@etc/passwd", 1, 50)
+	if !errors.As(err, &classified) || !strings.Contains(classified.Message, "invalid PR identity") {
+		t.Fatalf("an invalid identity never reaches gh: %#v", err)
+	}
+}
+
+// An image pasted into a comment links to github.com/user-attachments, which only loads with the
+// viewer's GitHub session; the rendered HTML has the same image on GitHub's proxy.
+func TestNormalizeGitHubTimelineBodyUsesProxiedImages(t *testing.T) {
+	body := "see ![shot](https://github.com/user-attachments/assets/abc) and <img src=\"https://github.com/user-attachments/assets/def\" width=10>"
+	html := `<p>see <img src="https://private-user-images.githubusercontent.com/1.png?jwt=a&amp;b"> and <img src="https://camo.githubusercontent.com/2"></p>`
+	want := "see ![shot](https://private-user-images.githubusercontent.com/1.png?jwt=a&b) and <img src=\"https://camo.githubusercontent.com/2\" width=10>"
+	if got := normalizeGitHubTimelineBody(body, html); got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+	// Images that do not pair up leave the body as written.
+	if got := normalizeGitHubTimelineBody(body, `<img src="https://camo.githubusercontent.com/2">`); got != body {
+		t.Fatalf("unpaired images changed the body: %q", got)
 	}
 }

@@ -2881,15 +2881,25 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 
 	mp, err := s.ensureAgentLoaded(req.AgentID)
 	if err != nil {
+		// Node's shape for an agent that cannot be loaded (session.ts): every required field present
+		// and empty. Leaving out agent/window/cursors/hasOlder/hasNewer made the client reject the
+		// response as invalid and retry it forever instead of showing the error.
 		_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
 			"requestId":   req.RequestID,
 			"agentId":     req.AgentID,
+			"agent":       nil,
 			"direction":   direction,
 			"projection":  projection,
-			"epoch":       s.epoch,
+			"epoch":       "",
 			"reset":       false,
 			"staleCursor": false,
 			"gap":         false,
+			"window":      map[string]any{"minSeq": 0, "maxSeq": 0, "nextSeq": 0},
+			"startCursor": nil,
+			"endCursor":   nil,
+			"hasOlder":    false,
+			"hasNewer":    false,
+			"mergeWindow": req.MergeWindow,
 			"entries":     []any{},
 			"error":       err.Error(),
 		})

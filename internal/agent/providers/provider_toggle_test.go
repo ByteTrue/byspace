@@ -62,3 +62,19 @@ func TestScriptedProviderAppearsOnce(t *testing.T) {
 		t.Fatalf("%q appears %d times in the catalog, want exactly 1", MockProviderID, count)
 	}
 }
+
+// An agent created with the scripted provider must resume after a daemon restart.
+//
+// Resuming checks IsKnownProvider, which only knew the built-ins and ACP presets: a development
+// build created `mock` agents fine and then refused to load every one of them after a restart
+// ("references unavailable provider"). A shipped build still does not know `mock`.
+func TestScriptedProviderIsKnownOnlyInADevelopmentBuild(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
+	if !IsKnownProvider(MockProviderID) {
+		t.Fatal("a development build must resume mock agents")
+	}
+	t.Setenv("BYSPACE_NODE_ENV", "production")
+	if IsKnownProvider(MockProviderID) {
+		t.Fatal("a shipped build has no mock provider")
+	}
+}

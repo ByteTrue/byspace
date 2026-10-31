@@ -30,10 +30,20 @@ const (
 	AttentionReasonError      = "error"
 )
 
-// markAgentAttention flags an agent as needing the user's attention.
+// markAgentAttention flags an agent as needing the user's attention and notifies the user.
 //
 // The caller holds no lock: this takes s.mu itself.
 func (s *Server) markAgentAttention(agentID, reason, timestamp string) bool {
+	return s.setAgentAttention(agentID, reason, timestamp, true)
+}
+
+// markAgentUnread is the user's "Mark as unread": the finished flag without a notification.
+// Node's markAgentUnread never broadcasts attention; only a real turn ending does.
+func (s *Server) markAgentUnread(agentID string) bool {
+	return s.setAgentAttention(agentID, AttentionReasonFinished, "", false)
+}
+
+func (s *Server) setAgentAttention(agentID, reason, timestamp string, notify bool) bool {
 	s.mu.Lock()
 	mp, live := s.agents[agentID]
 	if !live || mp == nil {
@@ -58,9 +68,11 @@ func (s *Server) markAgentAttention(agentID, reason, timestamp string) bool {
 
 	_ = s.store.UpsertAgent(rec)
 	s.broadcastAgentUpdate(rec)
-	// A user who is not looking at the app needs the push; notifyAttention consults the
-	// presence policy so a client that is already showing this agent gets nothing.
-	s.notifyAttention(rec.ID, reason, pushTitleFor(reason), pushBodyFor(rec))
+	if notify {
+		// A user who is not looking at the app needs the push; notifyAttention consults the
+		// presence policy so a client that is already showing this agent gets nothing.
+		s.notifyAttention(rec.ID, reason, pushTitleFor(reason), pushBodyFor(rec))
+	}
 	return true
 }
 
@@ -161,16 +173,31 @@ func (s *Server) workspaceAttentionCandidates(workspaceID string) []store.AgentR
 
 // firstMarkableAgent picks the agent a "mark unread" request should flag.
 //
-// A workspace can hold several agents; Node marks one (the most recently active finished one),
-// which is what the sidebar's badge represents.
+// A workspace can hold several agents; Node (handleWorkspaceMarkUnreadRequest) marks one: the
+// most recently updated finished conversation root, ties broken by id. A subagent is never the
+// one marked — its finished turn is not the workspace's.
 func (s *Server) firstMarkableAgent(workspaceID string) (store.AgentRecord, bool) {
+	agents, err := s.store.ListAgents()
+	if err != nil {
+		return store.AgentRecord{}, false
+	}
+	byID := make(map[string]store.AgentRecord, len(agents))
+	for _, rec := range agents {
+		byID[rec.ID] = rec
+	}
 	var best store.AgentRecord
 	found := false
-	for _, rec := range s.workspaceAttentionCandidates(workspaceID) {
+	for _, rec := range agents {
+		if rec.WorkspaceID != workspaceID || rec.ArchivedAt != nil {
+			continue
+		}
+		if root := resolveWorkspaceRootAgent(rec, byID); root == nil || root.ID != rec.ID {
+			continue
+		}
 		if !s.canMarkUnread(rec) {
 			continue
 		}
-		if !found || lastActivityOf(rec) > lastActivityOf(best) {
+		if !found || rec.UpdatedAt > best.UpdatedAt || (rec.UpdatedAt == best.UpdatedAt && rec.ID < best.ID) {
 			best = rec
 			found = true
 		}

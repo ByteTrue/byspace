@@ -102,20 +102,27 @@ func TestClearAgentAttention(t *testing.T) {
 	}
 }
 
-// A workspace can hold several agents; the mark applies to the most recently active finished one.
-func TestFirstMarkableAgentPicksMostRecent(t *testing.T) {
+// A workspace can hold several agents; as in Node, the mark applies to the most recently updated
+// finished conversation root, never to a subagent.
+func TestFirstMarkableAgentPicksMostRecentRoot(t *testing.T) {
 	srv := attentionServer(t)
-	putAgent(t, srv, "older", "w1", "idle", func(r *store.AgentRecord) {
-		r.LastActivityAt = "2026-01-01T00:00:00Z"
+	putAgent(t, srv, "a-older", "w1", "idle", func(r *store.AgentRecord) {
+		r.UpdatedAt = "2026-01-01T00:00:00Z"
 	})
-	putAgent(t, srv, "newer", "w1", "idle", func(r *store.AgentRecord) {
-		r.LastActivityAt = "2026-01-05T00:00:00Z"
+	putAgent(t, srv, "z-newer", "w1", "idle", func(r *store.AgentRecord) {
+		r.UpdatedAt = "2026-01-05T00:00:00Z"
 	})
-	putAgent(t, srv, "other-ws", "w2", "idle", nil)
+	putAgent(t, srv, "child", "w1", "idle", func(r *store.AgentRecord) {
+		r.UpdatedAt = "2026-01-09T00:00:00Z"
+		r.Labels = map[string]string{ParentAgentIDLabel: "z-newer"}
+	})
+	putAgent(t, srv, "other-ws", "w2", "idle", func(r *store.AgentRecord) {
+		r.UpdatedAt = "2026-01-09T00:00:00Z"
+	})
 
 	rec, ok := srv.firstMarkableAgent("w1")
-	if !ok || rec.ID != "newer" {
-		t.Fatalf("expected newer, got %+v ok=%v", rec.ID, ok)
+	if !ok || rec.ID != "z-newer" {
+		t.Fatalf("expected z-newer, got %+v ok=%v", rec.ID, ok)
 	}
 }
 

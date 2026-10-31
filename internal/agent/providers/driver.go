@@ -830,8 +830,16 @@ func IsKnownProvider(id string) bool {
 			return true
 		}
 	}
-	_, ok := ACPPresets[id]
-	return ok
+	if _, ok := ACPPresets[id]; ok {
+		return true
+	}
+	// A development build serves `mock`; its agents must resume after a restart like any other.
+	for _, spec := range registeredTestProviders() {
+		if spec.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // stringOption reads a string out of a provider options map.

@@ -88,7 +88,7 @@ func TestGitCheckoutStatusAndCommits(t *testing.T) {
 		t.Fatalf("unexpected commits: %+v (%v)", commits, err)
 	}
 
-	diffFiles, err := GetWorkingDiff(ctx, tmp)
+	diffFiles, err := GetWorkingDiff(ctx, tmp, false)
 	if err != nil || len(diffFiles) != 1 || diffFiles[0].Path != "README.md" || len(diffFiles[0].Hunks) != 1 {
 		t.Fatalf("unexpected working diff: %+v (%v)", diffFiles, err)
 	}

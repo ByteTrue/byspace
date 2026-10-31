@@ -628,13 +628,13 @@ func (s *Server) handleWorkspaceAttention(ctx context.Context, sink frameSink, m
 		var markedID any
 		var errText any
 		if rec, ok := s.firstMarkableAgent(req.WorkspaceID); ok {
-			if s.markAgentAttention(rec.ID, AttentionReasonFinished, "") {
+			if s.markAgentUnread(rec.ID) {
 				markedID = rec.ID
 			} else {
-				errText = "Agent is no longer finished and read"
+				errText = "Agent is no longer finished and read: " + rec.ID
 			}
 		} else {
-			errText = "No finished agent to mark in this workspace"
+			errText = "Workspace has no finished agent to mark unread: " + req.WorkspaceID
 		}
 		_ = sendSessionMsg(ctx, sink, "workspace.mark_unread.response", map[string]any{
 			"requestId":     req.RequestID,

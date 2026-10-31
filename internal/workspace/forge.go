@@ -16,7 +16,13 @@ import (
 )
 
 func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	out, _, err := runForgeCLIWithStderr(ctx, 5*time.Second, bin, cwd, args...)
+	return out, err
+}
+
+// runForgeCLIWithStderr also returns stderr, which is where the forge CLIs say why they failed.
+func runForgeCLIWithStderr(ctx context.Context, timeout time.Duration, bin, cwd string, args ...string) (string, string, error) {
+	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := proc.CommandContext(cctx, bin, args...)
 	if cwd != "" {
@@ -26,9 +32,9 @@ func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, 
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", errBuf.String(), err
 	}
-	return strings.TrimSpace(out.String()), nil
+	return strings.TrimSpace(out.String()), errBuf.String(), nil
 }
 
 func runGH(ctx context.Context, cwd string, args ...string) (string, error) {
@@ -228,20 +234,15 @@ func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
 const gitHubPRStatusBaseFields = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,headRepositoryOwner"
 
 func currentGitHubPRView(ctx context.Context, cwd string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	cmd := proc.CommandContext(cctx, "gh", "pr", "view", "--json", gitHubPRStatusBaseFields+",statusCheckRollup")
-	cmd.Dir = cwd
-	var out, errBuf bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errBuf
-	if err := cmd.Run(); err != nil {
-		if !strings.Contains(strings.ToLower(errBuf.String()), "statuscheckrollup") {
+	out, stderr, err := runForgeCLIWithStderr(ctx, 5*time.Second, "gh", cwd,
+		"pr", "view", "--json", gitHubPRStatusBaseFields+",statusCheckRollup")
+	if err != nil {
+		if !strings.Contains(strings.ToLower(stderr), "statuscheckrollup") {
 			return "", err
 		}
 		return runGH(ctx, cwd, "pr", "view", "--json", gitHubPRStatusBaseFields)
 	}
-	return strings.TrimSpace(out.String()), nil
+	return out, nil
 }
 
 type gitHubPRViewItem struct {
@@ -1189,7 +1190,10 @@ func headRepositoryName(owner, httpsURL, sshURL string) string {
 //
 // `truncated` is reported rather than silently dropping: a long thread that stops at the limit
 // without saying so looks like the conversation ended.
-func PullRequestTimeline(ctx context.Context, forge, cwd string, number, limit int) ([]map[string]any, bool, error) {
+//
+// owner and name identify the GitHub repository (the GraphQL query needs them); the other forges
+// resolve the repository from cwd.
+func PullRequestTimeline(ctx context.Context, forge, cwd, owner, name string, number, limit int) ([]map[string]any, bool, error) {
 	if number <= 0 {
 		return nil, false, fmt.Errorf("pull request number must be positive")
 	}
@@ -1225,18 +1229,7 @@ func PullRequestTimeline(ctx context.Context, forge, cwd string, number, limit i
 		if _, err := exec.LookPath("gh"); err != nil {
 			return nil, false, fmt.Errorf("gh is not installed")
 		}
-		// Reviews and comments are separate endpoints; the panel wants one thread.
-		reviewsRaw, reviewsErr := runGH(ctx, cwd, "api",
-			fmt.Sprintf("repos/{owner}/{repo}/pulls/%s/reviews?per_page=%s", numberArg, limitArg))
-		commentsRaw, commentsErr := runGH(ctx, cwd, "api",
-			fmt.Sprintf("repos/{owner}/{repo}/issues/%s/comments?per_page=%s", numberArg, limitArg))
-		if reviewsErr != nil && commentsErr != nil {
-			return nil, false, reviewsErr
-		}
-		items := make([]map[string]any, 0, limit)
-		items = append(items, decodeGitHubReviews(reviewsRaw)...)
-		items = append(items, decodeGitHubComments(commentsRaw)...)
-		return sortAndLimitTimeline(items, limit)
+		return gitHubPullRequestTimeline(ctx, cwd, owner, name, number)
 	}
 }
 
@@ -1251,69 +1244,6 @@ func sortAndLimitTimeline(items []map[string]any, limit int) ([]map[string]any, 
 		return items[:limit], true, nil
 	}
 	return items, false, nil
-}
-
-func decodeGitHubReviews(raw string) []map[string]any {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	var reviews []map[string]any
-	if json.Unmarshal([]byte(raw), &reviews) != nil {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(reviews))
-	for _, review := range reviews {
-		user, _ := review["user"].(map[string]any)
-		author, _ := user["login"].(string)
-		avatar, _ := user["avatar_url"].(string)
-		profile, _ := user["html_url"].(string)
-		reviewState := "commented"
-		if state, ok := review["state"].(string); ok {
-			switch strings.ToUpper(state) {
-			case "APPROVED":
-				reviewState = "approved"
-			case "CHANGES_REQUESTED":
-				reviewState = "changes_requested"
-			}
-		}
-		out = append(out, map[string]any{
-			"id":          fmt.Sprintf("review-%v", review["id"]),
-			"kind":        "review",
-			"author":      firstNonEmpty(author, "unknown"),
-			"authorUrl":   nullableString(profile),
-			"avatarUrl":   nullableString(avatar),
-			"body":        stringOr(review["body"], ""),
-			"createdAt":   parseUnixOrISO(review["submitted_at"]),
-			"url":         stringOr(review["html_url"], ""),
-			"reviewState": reviewState,
-		})
-	}
-	return out
-}
-
-func decodeGitHubComments(raw string) []map[string]any {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	var comments []map[string]any
-	if json.Unmarshal([]byte(raw), &comments) != nil {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(comments))
-	for _, comment := range comments {
-		user, _ := comment["user"].(map[string]any)
-		out = append(out, map[string]any{
-			"id":        fmt.Sprintf("comment-%v", comment["id"]),
-			"kind":      "comment",
-			"author":    firstNonEmpty(stringOr(user["login"], ""), "unknown"),
-			"authorUrl": nullableString(stringOr(user["html_url"], "")),
-			"avatarUrl": nullableString(stringOr(user["avatar_url"], "")),
-			"body":      stringOr(comment["body"], ""),
-			"createdAt": parseUnixOrISO(comment["created_at"]),
-			"url":       stringOr(comment["html_url"], ""),
-		})
-	}
-	return out
 }
 
 func decodeGitLabNotes(raw string, limit int) ([]map[string]any, bool, error) {

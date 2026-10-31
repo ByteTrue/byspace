@@ -19,6 +19,8 @@ import (
 var selfLockingMethods = map[string]bool{
 	"attentionIsFocused":   true,
 	"markAgentAttention":   true,
+	"markAgentUnread":      true,
+	"setAgentAttention":    true,
 	"clearAgentAttention":  true,
 	"canMarkUnread":        true,
 	"firstMarkableAgent":   true,

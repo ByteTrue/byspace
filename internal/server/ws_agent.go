@@ -701,16 +701,17 @@ func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink
 // an empty Changes pane no matter which mode was selected — and a branch full of commits looked like it had no changes.
 func (s *Server) checkoutDiffFiles(ctx context.Context, cwd string, compare map[string]any) []workspace.ParsedDiffFile {
 	mode, _ := compare["mode"].(string)
+	ignoreWhitespace, _ := compare["ignoreWhitespace"].(bool)
 	if strings.TrimSpace(mode) == "base" {
 		baseRef, _ := compare["baseRef"].(string)
-		files, err := workspace.GetBaseDiff(ctx, cwd, baseRef)
+		files, err := workspace.GetBaseDiff(ctx, cwd, baseRef, ignoreWhitespace)
 		if err == nil {
 			return files
 		}
 		// A failed base diff falls back to the working diff rather than an empty pane: showing the uncommitted
 		// changes is closer to the truth than showing nothing at all.
 	}
-	files, _ := workspace.GetWorkingDiff(ctx, cwd)
+	files, _ := workspace.GetWorkingDiff(ctx, cwd, ignoreWhitespace)
 	if files == nil {
 		return []workspace.ParsedDiffFile{}
 	}

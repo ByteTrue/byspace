@@ -43,7 +43,7 @@ func TestGetWorkingDiffReportsRenamedFileContents(t *testing.T) {
 	dir := newDiffRepo(t)
 	runGitTest(t, dir, "mv", "src/rename-source.ts", "src/zz-renamed.ts")
 
-	files, err := GetWorkingDiff(context.Background(), dir)
+	files, err := GetWorkingDiff(context.Background(), dir, false)
 	if err != nil {
 		t.Fatalf("GetWorkingDiff: %v", err)
 	}
@@ -99,5 +99,43 @@ func TestDiscardPathsRemovesUntrackedFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "zz-untracked.txt")); !os.IsNotExist(err) {
 		t.Fatalf("the untracked file still exists: %v", err)
+	}
+}
+
+// "Hide whitespace" is git's -w: a file whose only change is whitespace leaves the diff, and the
+// other files keep theirs. The flag never reached git, so the toggle changed nothing.
+func TestGetWorkingDiffHidesWhitespaceOnlyChanges(t *testing.T) {
+	dir := newDiffRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, "spaces.txt"), []byte("a b\nc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "real.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGitTest(t, dir, "add", "-A")
+	runGitTest(t, dir, "commit", "-q", "-m", "more")
+	if err := os.WriteFile(filepath.Join(dir, "spaces.txt"), []byte("a  b\nc  \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "real.txt"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	paths := func(ignoreWhitespace bool) map[string]bool {
+		files, err := GetWorkingDiff(context.Background(), dir, ignoreWhitespace)
+		if err != nil {
+			t.Fatalf("GetWorkingDiff: %v", err)
+		}
+		out := map[string]bool{}
+		for _, f := range files {
+			out[f.Path] = true
+		}
+		return out
+	}
+	if all := paths(false); !all["spaces.txt"] || !all["real.txt"] {
+		t.Fatalf("without the flag both files change: %v", all)
+	}
+	if hidden := paths(true); hidden["spaces.txt"] || !hidden["real.txt"] {
+		t.Fatalf("with the flag only real.txt changes: %v", hidden)
 	}
 }

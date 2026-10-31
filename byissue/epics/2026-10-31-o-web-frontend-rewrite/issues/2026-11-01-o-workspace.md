@@ -205,7 +205,7 @@ Changes 视图和 Diff 面板换成旧版的 `ChangesSurface` 和 `diff-panel`�
 已知差异：
 
 - 丢弃改动的确认：旧版网页是浏览器自带的 `confirm`，新版是确认对话框（同第 4 批关闭终端）。
-- 隐藏空白（Hide whitespace）两边都没有效果：按钮状态会变，Diff 不变。原因在 daemon：`internal/server/ws_agent.go` 的 `checkoutDiffFiles` 只读比较模式和 baseRef，协议里的 `ignoreWhitespace` 没传给 git。不是前端问题，没在这一批改。
+- 隐藏空白（Hide whitespace）两边都没有效果：按钮状态会变，Diff 不变。原因在 daemon：`internal/server/ws_agent.go` 的 `checkoutDiffFiles` 只读比较模式和 baseRef，协议里的 `ignoreWhitespace` 没传给 git。不是前端问题，没在这一批改。（2026-11-01 已在[快改](../../../issues/2026-11-01-x-ff-daemon-fixes-from-web-rewrite.md)修好，两边都生效。）
 
 没验到的：
 
@@ -241,7 +241,7 @@ PR 面板换成旧版的 `PullRequestPane`（`overrides/git/pull-request-panel/p
 
 没验到的：
 
-- 讨论串（代码行上的评审评论、Resolved/Outdated 标记、回复、整串加入对话）：Go daemon 的 PR 时间线只取评审和普通评论，不取讨论串（Node 用 GraphQL 的 `reviewThreads`），两个前端都显示不出来。daemon 的问题，记成待办，没在这一批改。
+- 讨论串（代码行上的评审评论、Resolved/Outdated 标记、回复、整串加入对话）：Go daemon 的 PR 时间线只取评审和普通评论，不取讨论串（Node 用 GraphQL 的 `reviewThreads`），两个前端都显示不出来。daemon 的问题，记成待办，没在这一批改。（2026-11-01 已在[快改](../../../issues/2026-11-01-x-ff-daemon-fixes-from-web-rewrite.md)改成 Node 的 GraphQL 查询，cli/cli#14798 的讨论串两边都能显示、折叠、加入对话。）
 - 检查日志加入对话（只有失败的检查有这个按钮，测试用的 PR 检查全部通过）。
 - GitLab 的审批徽标和流水线区（需要 GitLab 仓库和 `glab`）；`gh` 没装或没登录时 Changes 里的设置提示。
 - 无 PR 时手动打开 PR 页签的空状态、加载失败的重试页。

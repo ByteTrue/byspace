@@ -10,7 +10,7 @@
 - 模型（`internal/agent/providers/mock_provider.go`）：Ten second stream 最适合截图；One minute、Five minute、Thirty minute stream 是长时间流，调滚动用；Bursty stream 按不均匀的节奏吐字，调流式平滑度用。
 - 指令句，不分大小写（`internal/agent/providers/mock_directives.go`）：`emit a synthetic plan approval` 出一张等你批准的计划卡；`emit a synthetic questions` 出问题表单；另有 `notification`、`custom message`、`todowrite`、`turn failure` 几种同样句式；`free-write` 或 `text-only` 只出正文。
 - 坑：
-  - 开发版 daemon 重启后，之前用 Mock 模型建的 agent 再打开会报 `Response validation failed for fetch_agent_timeline_response`；真实提供方的 agent 不受影响（2026-10-31 实测）。要验界面就新开一个 agent 标签：标签栏的「+」→ Agent → 选 Mock 模型。
+  - 开发版 daemon 重启后，Mock 模型建的 agent 能照常打开（2026-11-01 前打不开，已在 [快改](../issues/2026-11-01-x-ff-daemon-fixes-from-web-rewrite.md) 修好）。新开 agent：标签栏的「+」→ Agent → 选 Mock 模型。
   - 工作区里已经有 agent 时，输入框的模型选择器显示当前模型名，不再是「Select model」，脚本要按当前文字去点。
   - 页面里有一个 `aria-hidden` 的隐藏 textarea（量高度用），找输入框要排除它：`textarea:not([aria-hidden="true"])`。
   - 用 Playwright 新开浏览器上下文直接打开工作区地址，会落到首页。切浅色深色在同一个页面上调 `page.emulateMedia({ colorScheme })`，不要新开上下文。

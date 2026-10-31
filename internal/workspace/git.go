@@ -805,11 +805,22 @@ func extractDiffFilePath(lines []string) string {
 	return "unknown"
 }
 
+// diffArgs builds a `git diff` invocation; ignoreWhitespace is the Changes pane's "Hide whitespace",
+// which Node passed to git as -w (checkout-git.ts buildGitDiffArgs). Git then leaves out files whose
+// only change is whitespace.
+func diffArgs(ignoreWhitespace bool, extra ...string) []string {
+	args := []string{"diff", "--no-color"}
+	if ignoreWhitespace {
+		args = append(args, "-w")
+	}
+	return append(args, extra...)
+}
+
 // GetWorkingDiff computes modified and untracked files with full unified diff hunks against HEAD.
-func GetWorkingDiff(ctx context.Context, cwd string) ([]ParsedDiffFile, error) {
-	patch, err := runGit(ctx, cwd, "diff", "--no-color", "HEAD")
+func GetWorkingDiff(ctx context.Context, cwd string, ignoreWhitespace bool) ([]ParsedDiffFile, error) {
+	patch, err := runGit(ctx, cwd, diffArgs(ignoreWhitespace, "HEAD")...)
 	if err != nil {
-		patch, _ = runGit(ctx, cwd, "diff", "--no-color")
+		patch, _ = runGit(ctx, cwd, diffArgs(ignoreWhitespace)...)
 	}
 	files := ParseUnifiedDiff(patch)
 
@@ -820,7 +831,7 @@ func GetWorkingDiff(ctx context.Context, cwd string) ([]ParsedDiffFile, error) {
 		if files[i].OldPath == "" || len(files[i].Hunks) > 0 {
 			continue
 		}
-		perPath, perPathErr := runGit(ctx, cwd, "diff", "--no-color", "HEAD", "--", files[i].Path)
+		perPath, perPathErr := runGit(ctx, cwd, diffArgs(ignoreWhitespace, "HEAD", "--", files[i].Path)...)
 		if perPathErr != nil {
 			continue
 		}
@@ -1871,7 +1882,7 @@ func ResolveDiffBaseRef(ctx context.Context, cwd string) string {
 //
 // Untracked files are deliberately excluded: they are not part of any commit, so including them would make the
 // committed view disagree with what the branch actually contains.
-func GetBaseDiff(ctx context.Context, cwd, baseRef string) ([]ParsedDiffFile, error) {
+func GetBaseDiff(ctx context.Context, cwd, baseRef string, ignoreWhitespace bool) ([]ParsedDiffFile, error) {
 	base := strings.TrimSpace(baseRef)
 	if base == "" {
 		base = ResolveDiffBaseRef(ctx, cwd)
@@ -1881,7 +1892,7 @@ func GetBaseDiff(ctx context.Context, cwd, baseRef string) ([]ParsedDiffFile, er
 		// present the whole repository as this branch's work.
 		return []ParsedDiffFile{}, nil
 	}
-	patch, err := runGit(ctx, cwd, "diff", "--no-color", base+"...HEAD")
+	patch, err := runGit(ctx, cwd, diffArgs(ignoreWhitespace, base+"...HEAD")...)
 	if err != nil {
 		return nil, err
 	}

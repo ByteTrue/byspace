@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -504,21 +505,33 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			cwd = base.Cwd
 		}
 		prNumber := prTimelineReq.PrNumber
-		if prNumber <= 0 {
+		owner, name := prTimelineReq.RepoOwner, prTimelineReq.RepoName
+		if prNumber <= 0 || owner == "" || name == "" {
 			// Fall back to the PR of the current branch rather than returning an empty thread
 			// the UI would render as "no discussion yet".
 			if pr, prErr := workspace.GetPRStatus(ctx, cwd); prErr == nil && pr != nil {
-				if n, ok := pr["number"].(int); ok {
+				if n, ok := pr["number"].(int); ok && prNumber <= 0 {
 					prNumber = n
+				}
+				if owner == "" {
+					owner, _ = pr["repoOwner"].(string)
+				}
+				if name == "" {
+					name, _ = pr["repoName"].(string)
 				}
 			}
 		}
 
 		items, truncated, timelineErr := workspace.PullRequestTimeline(
-			ctx, workspace.DetectForge(ctx, cwd), cwd, prNumber, 50)
+			ctx, workspace.DetectForge(ctx, cwd), cwd, owner, name, prNumber, 50)
 		var timelineErrObj any
 		if timelineErr != nil {
-			timelineErrObj = checkoutErr(timelineErr.Error())
+			var classified *workspace.TimelineError
+			if errors.As(timelineErr, &classified) {
+				timelineErrObj = map[string]any{"kind": classified.Kind, "message": classified.Message}
+			} else {
+				timelineErrObj = checkoutErr(timelineErr.Error())
+			}
 			items = []map[string]any{}
 		} else if items == nil {
 			items = []map[string]any{}
