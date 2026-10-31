@@ -245,3 +245,25 @@ PR 面板换成旧版的 `PullRequestPane`（`overrides/git/pull-request-panel/p
 - 检查日志加入对话（只有失败的检查有这个按钮，测试用的 PR 检查全部通过）。
 - GitLab 的审批徽标和流水线区（需要 GitLab 仓库和 `glab`）；`gh` 没装或没登录时 Changes 里的设置提示。
 - 无 PR 时手动打开 PR 页签的空状态、加载失败的重试页。
+
+### 2026-11-01 第 8 批：其余面板
+
+范围里的三样：新建标签启动器第 1 批已经做完；插件面板在旧版里就是空的（`plugins/workspace-panels/panel.ts` 注册的是 `null`，没有任何插件面板），不用做；剩下安装脚本面板。
+
+安装脚本面板换成旧版的 `SetupPanel`（`overrides/panels/setup-panel.tsx`，用 `web/scripts/port/setup-panel.py` 生成）：拉取安装状态、正在跑的那条自动展开、手动折叠后不再自动展开、`\r` 进度输出只留最后一段、外部 PR 检出的工作区被拦下时的提示和「运行」按钮，都是旧版逻辑。公共的 `Alert` 换成 shadcn 的 Alert（`overrides/components/ui/alert.tsx`，接口不变），设置页等其他地方以后也用它。
+
+有意改的一处：失败命令下面的错误卡片，旧版在深色主题下也是浅粉底红字，在一片深色里很刺眼；新版深色主题下用深红底浅红字，浅色主题不变。
+
+验证（临时仓库 `zz-diff-repo` 加了 `byspace.json` 的安装命令后建了两个 worktree：`zz-setup-ok` 三条命令都成功，含一条带 `\r` 的进度输出；`zz-setup-fail` 第二条命令写 stderr 后 `exit 3`；建完已从 main 去掉安装命令；截图 109–111）：
+
+- ⌘K 搜 setup 出现 Show setup，回车打开 Setup 标签。
+- 成功的：三行命令和耗时（1s、19ms、2s），最后一条自动展开显示 `setup done`；进度输出那条只显示最后的 `progress 100%`。
+- 失败的：第一行绿勾、第二行红色叹号并自动展开，日志是 stdout 和 stderr 两行，下面是错误卡片「setup command failed: …」；没跑到的第三条不显示，和旧版一致。
+- 点行展开和收起；行高 36px、失败那项 143px，和旧版一致；深色主题。
+- 控制台没有错误；`npm run typecheck`、`npm run lint` 通过。
+
+没验到的：
+
+- 安装正在跑时的实时刷新（两个 worktree 截图时都已跑完）。
+- 外部 PR 检出被拦下的提示（需要从别人的 fork 检出 PR）。
+- 手机上的安装脚本面板（手机没有 ⌘K，要从标签切换里打开，没做）。
