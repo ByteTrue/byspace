@@ -79,7 +79,11 @@ const ERROR_BUTTON =
 // The tree draws its own overlay thumb on desktop, so the native bar is hidden there.
 const HIDE_NATIVE_SCROLLBAR = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-/** A FlatList render callback's argument; the tree renders every row (no windowing). */
+/**
+ * A FlatList render callback's argument.
+ * shortcut: the tree renders every row (the Expo FlatList windowed them); window it with
+ * @tanstack/react-virtual if huge directories get slow.
+ */
 interface ListRenderItemInfo<T> {
   item: T;
   index: number;

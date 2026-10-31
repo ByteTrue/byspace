@@ -3,7 +3,7 @@
 // The tab state, PR availability and the panes are the Expo file's. Not ported: the swipe gestures
 // (the phone shell's sheets close with the button or Escape, like the left sidebar) and the native
 // tablet's docked explorer, which the web never uses.
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUnistyles } from "react-native-unistyles";
@@ -12,7 +12,8 @@ import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-pane
 import { PullRequestTabIcon } from "@/git/pull-request-panel/tab-icon";
 import { formatPrTabLabel } from "@/git/pull-request-panel/tab-label";
 import { useIsMobilePanelActive } from "@/mobile-panels/provider";
-import { PendingPanel } from "@/panels/pending-panel";
+import { ChangesSurface } from "@/git/diff-pane";
+import { changesStateSchema, defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { PullRequestContent } from "@/panels/pull-request";
 import { usePullRequestPanelAvailability } from "@/panels/pull-request-availability";
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
@@ -229,8 +230,13 @@ function ExplorerSidebarContent({
       <div className="flex min-h-0 flex-1 flex-col" data-testid="explorer-content-area">
         {mountedTabIds.has("changes") ? (
           <RetainedPanel active={resolvedTab === "changes"}>
-            {/* shortcut: the Changes view moves in batch 6 of step 3. */}
-            <PendingPanel title={t("workspace.tabs.explorerSidebar.changes")} />
+            <ChangedFilesPane
+              serverId={serverId}
+              workspaceId={workspaceId}
+              workspaceRoot={workspaceRoot}
+              isOpen={isOpen}
+              onOpenFile={onOpenFile}
+            />
           </RetainedPanel>
         ) : null}
         {mountedTabIds.has("files") ? (
@@ -255,6 +261,34 @@ function ExplorerSidebarContent({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function ChangedFilesPane({
+  serverId,
+  workspaceId,
+  workspaceRoot,
+  isOpen,
+  onOpenFile,
+}: Pick<
+  SidebarContentProps,
+  "serverId" | "workspaceId" | "workspaceRoot" | "isOpen" | "onOpenFile"
+>) {
+  const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
+  const [changesState, setChangesState] = useState<ChangesState>(() =>
+    changesStateSchema.parse(defaultChangesState),
+  );
+  return (
+    <ChangesSurface
+      serverId={serverId}
+      workspaceId={workspaceId}
+      cwd={workspaceRoot}
+      enabled={isOpen}
+      onOpenFile={onOpenFile}
+      onAddToChat={canAddToChat ? addFile : undefined}
+      state={changesState}
+      onStateChange={setChangesState}
+    />
   );
 }
 

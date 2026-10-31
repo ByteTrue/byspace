@@ -11,6 +11,7 @@ import {
   type RefObject,
   type ComponentProps,
   type CSSProperties,
+  type PointerEvent,
   type PropsWithChildren,
   type ReactElement,
   type ReactNode,
@@ -27,6 +28,16 @@ import {
 export const TooltipSurfaceContext = createContext(false);
 const TooltipEnabledContext = createContext(true);
 const TooltipTriggerNodeContext = createContext<RefObject<HTMLElement | null> | null>(null);
+/**
+ * A press on the trigger closes the hint and keeps it closed until the pointer leaves, as the Expo
+ * tooltip does. The press closes it directly: Radix compares a close against the `open` prop, which
+ * has not caught up yet when the pointer opened the hint a moment before the press.
+ */
+interface TooltipPress {
+  pressedRef: RefObject<boolean>;
+  press: () => void;
+}
+const TooltipPressContext = createContext<TooltipPress | null>(null);
 
 /** The trigger, or something inside it (a wrapped picker button), has its popup open. */
 function hasExpandedPopup(node: HTMLElement | null): boolean {
@@ -73,10 +84,23 @@ export function Tooltip({
   const isCompact = useIsCompactFormFactor();
   const enabled = isCompact ? enabledOnMobile : enabledOnDesktop;
   const triggerNodeRef = useRef<HTMLElement | null>(null);
+  const pressedRef = useRef(false);
   const [internalOpen, setInternalOpen] = useState(defaultOpen ?? false);
   const isOpen = open ?? internalOpen;
+  const press = useMemo<TooltipPress>(
+    () => ({
+      pressedRef,
+      press: () => {
+        pressedRef.current = true;
+        setInternalOpen(false);
+        onOpenChange?.(false);
+      },
+    }),
+    [onOpenChange],
+  );
   const handleOpenChange = useCallback(
     (next: boolean) => {
+      if (next && pressedRef.current) return;
       if (next && !canOpen(triggerNodeRef.current)) return;
       setInternalOpen(next);
       onOpenChange?.(next);
@@ -86,13 +110,15 @@ export function Tooltip({
   return (
     <TooltipEnabledContext value={enabled}>
       <TooltipTriggerNodeContext value={triggerNodeRef}>
-        <ShadTooltip
-          open={enabled && isOpen && !hasExpandedPopup(triggerNodeRef.current)}
-          onOpenChange={handleOpenChange}
-          delayDuration={delayDuration}
-        >
-          {children}
-        </ShadTooltip>
+        <TooltipPressContext value={press}>
+          <ShadTooltip
+            open={enabled && isOpen && !hasExpandedPopup(triggerNodeRef.current)}
+            onOpenChange={handleOpenChange}
+            delayDuration={delayDuration}
+          >
+            {children}
+          </ShadTooltip>
+        </TooltipPressContext>
       </TooltipTriggerNodeContext>
     </TooltipEnabledContext>
   );
@@ -128,9 +154,27 @@ export function TooltipTrigger({
   accessibilityRole: _accessibilityRole,
   accessibilityState: _accessibilityState,
   accessibilityHint: _accessibilityHint,
+  onPointerDown,
+  onPointerLeave,
   ...props
 }: TooltipTriggerProps): ReactElement {
   const triggerNodeRef = useContext(TooltipTriggerNodeContext);
+  const press = useContext(TooltipPressContext);
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLButtonElement>) => {
+      onPointerDown?.(event);
+      press?.press();
+    },
+    [onPointerDown, press],
+  );
+  const handlePointerLeave = useCallback(
+    (event: PointerEvent<HTMLButtonElement>) => {
+      onPointerLeave?.(event);
+      if (press) press.pressedRef.current = false;
+      onHoverOut?.();
+    },
+    [onHoverOut, onPointerLeave, press],
+  );
   const setNode = useCallback(
     (node: HTMLButtonElement | null) => {
       if (triggerNodeRef) triggerNodeRef.current = node;
@@ -142,7 +186,13 @@ export function TooltipTrigger({
     typeof children === "function" ? children({ pressed: false, hovered: false }) : children;
   if (asChild) {
     return (
-      <ShadTooltipTrigger asChild ref={setNode} {...props}>
+      <ShadTooltipTrigger
+        asChild
+        ref={setNode}
+        {...props}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={handlePointerLeave}
+      >
         {content}
       </ShadTooltipTrigger>
     );
@@ -157,8 +207,9 @@ export function TooltipTrigger({
         style={typeof style === "object" ? style : undefined}
         onClick={onPress}
         onPointerEnter={onHoverIn}
-        onPointerLeave={onHoverOut}
         {...props}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={handlePointerLeave}
       >
         {content}
       </button>

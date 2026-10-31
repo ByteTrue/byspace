@@ -26,7 +26,7 @@ created: 2026-11-01
 
 ## 验证
 
-- 每批做完和旧版 8081 并排截图对照，浅色深色各一张，截图放 `screenshots/web-step3/`。
+- 每批做完和旧版 8081 并排截图对照，浅色深色各一张，挑出来的放 `screenshots/web-step3/`；全部对照截图（拼图、原图、裁图和生成脚本）放 `screenshots/对照全集/`，留作以后调布局的参考，不删。
 - 每批涉及的操作逐项在浏览器里做一遍，结果写进执行记录。
 - 关键元素带上旧版的 `data-testid`。
 - `npm run typecheck`、`npm run lint`、`npm run format:check` 通过。
@@ -182,3 +182,33 @@ Markdown：markdown-it 的输出转成和旧版一样的节点树（`web/src/mar
 - 手机上真实长按：无头浏览器的触摸长按两边都不出菜单。新版靠 contextmenu 事件，Android 浏览器长按会发，iOS 不发，需要真机确认（同第 3 批的侧栏）。
 - 从文件树拖文件到输入框：拖拽源两边一致，没有用脚本模拟拖放。
 - 编辑器的 Vim 键位：在设置里打开，设置页在第 4 步，没测。
+
+### 2026-11-01 第 6 批：Diff
+
+Changes 视图和 Diff 面板换成旧版的 `ChangesSurface` 和 `diff-panel`（`overrides/git/diff-pane.tsx`、`overrides/panels/diff-panel.tsx`，用 `web/scripts/port/diff-pane.py` 生成）：分支和 PR 行、Uncommitted/Committed 模式、工具栏（刷新、选项菜单、全部折叠、分栏、空白、换行）、改动树（文件夹折叠、单子目录压缩）、提交列表、丢弃改动、Duplicate、复制路径、下载、加入对话、打开文件和在旁边打开都是旧版逻辑。画布 Diff（`git/diff-document/index.tsx`、`surface.web.tsx`）本来就是旧版的网页文件，用 `web/scripts/port/diff-document.py` 复制过来，只改两处：引用走 `@/`，好让文件头和评审用网页版；包住画布的右键触发器改成纵向 flex（旧版是 React Native 的 View）。绘制、点击定位、选区、横向滚动、吸顶文件头都没动。
+
+网页版重写的：文件行（改动树里的行，以及画布文件头上面那层透明的点击层）、文件夹行、提交列表和提交行、分支切换、树栏（拖左边缘调宽，松手才存）、工具栏标签按钮、改动类型图标、Diff 过大提示、行内评审（行上的「+」、评论列表、输入框，⌘Enter 保存，Esc 取消）。改动树一次画出全部行（旧版 FlatList 只画可见附近的），和第 5 批的文件树一样。手机上文件面板的 Changes 页签换成真的 Changes 视图（第 5 批是占位）。
+
+顺带修的共享问题：提示气泡在点击后又弹出来。点 Diff 的分栏按钮后，新标题「Switch to unified diff」的提示一直挂着：指针移入时提示刚打开，紧接着的按下要关它，而 Radix 拿关闭请求和 `open` 属性比较，属性还没跟上，于是没关。改成按下时直接关掉，并且在指针离开前不再打开，和旧版提示气泡一样。
+
+验证（8081 和 8082 同一个开发版 daemon；未提交改动用「Coding task」工作区，也就是本仓库；提交相关的用一个临时仓库的 worktree `zz-feature`，比 main 多两个提交、外加一处未提交改动；截图 75–94）：
+
+- 改动树：行数一致；文件夹收起展开；文件右键菜单 8 项一致；模式菜单（Uncommitted、Committed main -> base）；选项菜单（Open Diff tab、Inline diff）；分支切换的分支列表一致。
+- 点树里的文件打开 Diff 标签并定位到该文件；文件头悬停；文件头右键菜单 7 项一致。
+- 行内评审：悬停一行出现「+」，点开输入，⌘Enter 保存后评论显示在该行下面，再删除，两边一致。
+- 分栏和切回、全部折叠和展开、自动换行（长行折成 3 行）、选项菜单的 Open Diff tab、刷新（进行中按钮不可点）、右键 Open to the side（右侧新开一个窗格）、深色主题。
+- 提交列表：两个提交的 sha、标题、时间，标题行 34px、提交行 26px，和旧版一致；点提交打开 `adb751c` 的提交 Diff，里面的分栏切换；Committed 模式的改动树是 `src/farewell.ts`、`items.ts`、`greet.ts`；打开 Inline diff 后侧栏改动树下面直接显示 Diff。
+- 右键 Open file 打开文件标签；Discard changes 弹确认，确认后磁盘上的文件恢复、改动树更新。
+- 手机：文件面板的 Changes 页签（分支、模式、Diff、提交列表），点提交打开提交 Diff。
+- 控制台没有错误；`npm run typecheck`、`npm run lint`、`vite build` 通过。
+
+已知差异：
+
+- 丢弃改动的确认：旧版网页是浏览器自带的 `confirm`，新版是确认对话框（同第 4 批关闭终端）。
+- 隐藏空白（Hide whitespace）两边都没有效果：按钮状态会变，Diff 不变。原因在 daemon：`internal/server/ws_agent.go` 的 `checkoutDiffFiles` 只读比较模式和 baseRef，协议里的 `ignoreWhitespace` 没传给 git。不是前端问题，没在这一批改。
+
+没验到的：
+
+- 需要代码托管平台的部分：Changes 头部的 PR 链接、`gh`/`glab` 没装或没登录时的设置提示。PR 面板在第 7 批，到时一起看。
+- Diff 过大的提示没有触发过。
+- 从文件头拖文件到输入框：拖拽源两边一致，没有用脚本模拟拖放。

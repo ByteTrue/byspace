@@ -1,7 +1,5 @@
-// Override of packages/app/src/review/index.ts.
-// shortcut: the inline review surface (packages/app/src/review/surface.tsx, React Native) moves
-// with the diff views in batch 6 of step 3; until then this barrel exports the store and geometry
-// only, which is all the web build reaches.
+// Override of packages/app/src/review/index.ts: the same exports, through `@/` so the web surface
+// (review/surface.tsx) replaces the Expo one.
 export {
   buildReviewAttachmentSnapshot,
   buildReviewDraftKey,
@@ -24,3 +22,13 @@ export {
   type InlineReviewActions,
   type InlineReviewEditorState,
 } from "@/review/geometry";
+
+export {
+  getInlineReviewThreadViewportStyle,
+  groupInlineReviewCommentsByTarget,
+  InlineReviewAddButton,
+  InlineReviewEditor,
+  InlineReviewThread,
+  SMALL_ACTION_HIT_SLOP,
+  useInlineReviewController,
+} from "@/review/surface";
