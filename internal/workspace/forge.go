@@ -15,8 +15,13 @@ import (
 	"time"
 )
 
+// forgeCommandTimeout bounds one gh/glab/tea invocation: Node's GITHUB_COMMAND_TIMEOUT_MS,
+// GLAB_COMMAND_TIMEOUT_MS and TEA_COMMAND_TIMEOUT_MS, all 30 seconds. Go had 5, so a merge or a
+// PR status read on a slow network failed where Node waited. The auth probe keeps its own 10s.
+const forgeCommandTimeout = 30 * time.Second
+
 func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, error) {
-	out, _, err := runForgeCLIWithStderr(ctx, 5*time.Second, bin, cwd, args...)
+	out, _, err := runForgeCLIWithStderr(ctx, forgeCommandTimeout, bin, cwd, args...)
 	return out, err
 }
 
@@ -234,7 +239,7 @@ func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
 const gitHubPRStatusBaseFields = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,headRepositoryOwner"
 
 func currentGitHubPRView(ctx context.Context, cwd string) (string, error) {
-	out, stderr, err := runForgeCLIWithStderr(ctx, 5*time.Second, "gh", cwd,
+	out, stderr, err := runForgeCLIWithStderr(ctx, forgeCommandTimeout, "gh", cwd,
 		"pr", "view", "--json", gitHubPRStatusBaseFields+",statusCheckRollup")
 	if err != nil {
 		if !strings.Contains(strings.ToLower(stderr), "statuscheckrollup") {

@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // The GitHub pull request timeline, ported from Node's getPullRequestTimeline (github-service.ts):
@@ -177,7 +176,7 @@ func gitHubPullRequestTimeline(ctx context.Context, cwd, owner, name string, num
 	if !gitHubRepoSegmentRe.MatchString(owner) || !gitHubRepoSegmentRe.MatchString(name) {
 		return nil, false, &TimelineError{Kind: "unknown", Message: "Pull request timeline request has invalid PR identity"}
 	}
-	out, stderr, err := runForgeCLIWithStderr(ctx, 30*time.Second, "gh", cwd,
+	out, stderr, err := runForgeCLIWithStderr(ctx, forgeCommandTimeout, "gh", cwd,
 		"api", "graphql", "-f", "query="+gitHubTimelineQuery,
 		"-F", "owner="+owner, "-F", "name="+name, "-F", "number="+strconv.Itoa(number))
 	if err != nil {

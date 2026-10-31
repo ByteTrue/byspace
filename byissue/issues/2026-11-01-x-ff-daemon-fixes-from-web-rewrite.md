@@ -13,6 +13,7 @@ created: 2026-11-01
 - **PR 面板没有代码行上的评审讨论串**：GitHub 时间线只取了评审和普通评论。改成 Node 的 GraphQL 查询（评审、评论、讨论串各前 100 条），讨论串评论带所属评审和位置（文件、行、已解决、已过时），客户端把它挂在对应评审下面；评审状态、空的已撤销评审不显示、评论里 GitHub 附件图片换成可直接显示的代理地址、按时间再按 id 排序、截断和错误分类（not_found / forbidden）都按 Node。`internal/workspace/github_timeline.go`（新）、`forge.go`、`internal/server/ws_git_system.go`。
 - **打不开的 agent 让客户端无限重试**：`fetch_agent_timeline_response` 出错时漏了 `agent`、`window`、游标、`hasOlder`、`hasNewer`，客户端判为非法回包、不断重发。按 Node 的出错回包补齐。`internal/server/server.go`。
 - **开发版 daemon 重启后 Mock 模型的 agent 打不开**：恢复 agent 时判断提供方是否存在，漏了开发版才有的 `mock`。`internal/agent/providers/driver.go`。
+- **gh / glab / tea 命令 5 秒超时**：Node 是 30 秒（认证探测 10 秒，Go 本来就对）。网络慢时合并 PR、读 PR 状态会在 5 秒后失败。统一改成 30 秒。`internal/workspace/forge.go`。
 - **「标为未读」**：daemon 对没有已完成 agent 的工作区报错，这和 Node 一致，不是 bug。但和 Node 有两处不同，一并改了：手动标为未读会触发「agent 完成」推送（Node 只在真正跑完时推送），挑哪个 agent 的规则也不同（Node 只挑会话根 agent、不挑子 agent，按更新时间取最新）。`internal/server/agent_attention.go`、`ws_project.go`。
 
 验证：
@@ -24,5 +25,4 @@ created: 2026-11-01
 
 顺手发现：
 
-- 所有 `gh`/`glab` 调用都是 5 秒超时（`internal/workspace/forge.go` 的 `runForgeCLI`），Node 是 30 秒；网络慢时 PR 状态可能读不到。这次只把时间线查询改成 30 秒。
 - 工作区菜单在没有可标记的 agent 时也显示「Mark as unread」，点了报错。旧版新版一样，是前端问题。
