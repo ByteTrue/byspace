@@ -224,8 +224,10 @@
     outline: 3px solid rgba(161, 161, 161, 0.5);
     outline-offset: 0;
   }
+  /* BySpace: grayscale text smoothing, as packages/app's public/index.html. Without it macOS draws
+     every glyph a little heavier than the old app. */
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
   html {
     @apply font-sans;

@@ -1,14 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { GitBranch, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
 import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
+import { useImportSession } from "@/hooks/use-import-session";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { cn } from "cn";
-import { PendingDialog } from "~/app/pending-dialogs";
 import { SidebarToggle } from "~/app/sidebar-toggle";
 import { Button } from "~/components/ui/button";
 import { SidebarContent, SidebarHeader } from "~/components/ui/sidebar";
@@ -40,14 +40,16 @@ export function AppSidebar() {
   } = useSidebarModel();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const openAddProject = useOpenAddProject();
-  // shortcut: the import-session sheet moves in step 4 of the rewrite epic.
-  const [importOpen, setImportOpen] = useState(false);
+  const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
   const addProject = useCallback(() => {
     closeOnNavigate?.();
     openAddProject();
   }, [closeOnNavigate, openAddProject]);
-  const importSession = useCallback(() => setImportOpen(true), []);
-  const closeImport = useCallback(() => setImportOpen(false), []);
+  // As packages/app's sidebar: on a phone the drawer closes before the sheet opens.
+  const importSession = useCallback(() => {
+    closeOnNavigate?.();
+    openImportSession();
+  }, [closeOnNavigate, openImportSession]);
   const headerStyle = useMemo(
     () => (trafficLightInset > 0 ? { paddingLeft: 12 + trafficLightInset } : undefined),
     [trafficLightInset],
@@ -118,12 +120,7 @@ export function AppSidebar() {
         </div>
       ) : null}
       <SidebarFooter onBeforeNavigate={closeOnNavigate} onImportSession={importSession} />
-      <PendingDialog
-        open={importOpen}
-        title={t("importSession.title")}
-        step={4}
-        onClose={closeImport}
-      />
+      {importSessionSheet}
     </>
   );
 }

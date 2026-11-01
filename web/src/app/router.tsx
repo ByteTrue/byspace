@@ -6,6 +6,10 @@ import HostOpenProjectRoute from "@/app/h/[serverId]/open-project";
 import HostSessionsRoute from "@/app/h/[serverId]/sessions";
 import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import NewWorkspaceRoute from "@/app/new";
+import OpenProjectRoute from "@/app/open-project";
+import PairScanRoute from "@/app/pair-scan";
+import SessionsRoute from "@/app/sessions";
+import WelcomeRoute from "@/app/welcome";
 import LegacyHostSettingsRoute from "@/app/h/[serverId]/settings";
 import StartupIndexRoute from "@/app/index";
 import SettingsHostIndexRoute from "@/app/settings/hosts/[serverId]/index";
@@ -24,11 +28,11 @@ export const router = createBrowserRouter([
     element: <Root />,
     children: [
       { index: true, element: <StartupIndexRoute /> },
-      { path: "welcome", element: <PendingPage title="Welcome" step={4} /> },
-      { path: "pair-scan", element: <PendingPage title="Pair a device" step={4} /> },
+      { path: "welcome", element: <WelcomeRoute /> },
+      { path: "pair-scan", element: <PairScanRoute /> },
       { path: "new", element: <NewWorkspaceRoute /> },
-      { path: "open-project", element: <PendingPage title="Open a project" step={4} /> },
-      { path: "sessions", element: <PendingPage title="History" step={4} /> },
+      { path: "open-project", element: <OpenProjectRoute /> },
+      { path: "sessions", element: <SessionsRoute /> },
       { path: "schedules", element: <PendingPage title="Schedules" step={4} /> },
       { path: "tunnels", element: <PendingPage title="Tunnels" step={4} /> },
       { path: "settings", element: <SettingsIndexRoute /> },

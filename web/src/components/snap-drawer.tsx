@@ -2,7 +2,15 @@
 // the first, can be dragged to the others, and sizes its content to the snap it rests at, so a
 // footer or the end of a list stays on screen instead of below it. vaul measures snap points from a
 // drawer whose top is the top of the screen, so the drawer itself is full height.
-import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type FocusEvent,
+  type ReactNode,
+} from "react";
 import { cn } from "cn";
 import { Drawer, DrawerContent } from "~/components/ui/drawer";
 
@@ -14,6 +22,7 @@ export function SnapDrawer({
   className,
   bodyClassName,
   children,
+  onFocusCapture,
   ...contentProps
 }: Omit<ComponentProps<typeof DrawerContent>, "children" | "onAnimationEnd"> & {
   open: boolean;
@@ -32,6 +41,21 @@ export function SnapDrawer({
   const fraction = typeof snap === "number" ? snap : (snapPoints[0] ?? 1);
   const points = useMemo(() => [...snapPoints], [snapPoints]);
   const bodyStyle = useMemo(() => ({ height: `calc(${fraction * 100}dvh - 1.5rem)` }), [fraction]);
+  // packages/app's sheet (keyboardBehavior="extend") rises to its top snap point when a text field
+  // takes focus, so the field stays above the keyboard.
+  const handleFocusCapture = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      onFocusCapture?.(event);
+      const target = event.target;
+      const isTextField =
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable ||
+        (target instanceof HTMLInputElement &&
+          !["checkbox", "radio", "button", "submit", "range", "file"].includes(target.type));
+      if (isTextField) setSnap(snapPoints.at(-1) ?? null);
+    },
+    [onFocusCapture, snapPoints],
+  );
   return (
     <Drawer
       open={open}
@@ -44,6 +68,7 @@ export function SnapDrawer({
     >
       <DrawerContent
         {...contentProps}
+        onFocusCapture={handleFocusCapture}
         className={cn(
           "h-full data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-none",
           className,

@@ -13,20 +13,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 const MAC_TOGGLE_KEYS = ["mod", "B"];
 const OTHER_TOGGLE_KEYS = ["mod", "."];
 
-/** packages/app's compact menu glyph: two 16px lines and a short 8px one, 1.5px thick. */
+/**
+ * packages/app's compact menu glyph: two 16px lines and a short 8px one, 1.5px thick, spread over
+ * 12px. Boxes rather than an SVG, as packages/app draws it: the browser snaps a box's edges to device
+ * pixels, so the middle line (at 5.25px) stays as sharp as the others instead of blurring.
+ */
 function MobileMenuIcon() {
   return (
-    <svg
-      width="16"
-      height="12"
-      viewBox="0 0 16 12"
-      aria-hidden="true"
-      className="text-muted-foreground"
-    >
-      <rect y="0" width="16" height="1.5" rx="0.75" fill="currentColor" />
-      <rect y="5.25" width="16" height="1.5" rx="0.75" fill="currentColor" />
-      <rect y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor" />
-    </svg>
+    <span aria-hidden="true" className="flex h-3 w-4 flex-col items-start justify-between">
+      <span className="h-[1.5px] w-4 rounded-full bg-muted-foreground" />
+      <span className="h-[1.5px] w-4 rounded-full bg-muted-foreground" />
+      <span className="h-[1.5px] w-2 rounded-full bg-muted-foreground" />
+    </span>
   );
 }
 

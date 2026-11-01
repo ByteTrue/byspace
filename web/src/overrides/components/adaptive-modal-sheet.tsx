@@ -81,7 +81,9 @@ export function SheetHeaderView({
           <div className="flex items-center justify-center">{header.leading}</div>
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-sm font-medium text-foreground">{header.title}</span>
+          <span className="truncate text-sm leading-[normal] font-medium text-foreground">
+            {header.title}
+          </span>
           {header.subtitle}
         </div>
         {header.actions ? <div className="flex items-center gap-2">{header.actions}</div> : null}
