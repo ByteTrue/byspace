@@ -46,8 +46,7 @@ interface SkillSelectionSheetProps {
 
 type AgentSkillTargetsStatus = NonNullable<AgentSkillsStatus["targets"]>;
 
-const CHECK_ROW =
-  "w-full justify-start gap-3 text-left outline-none focus-visible:bg-muted disabled:opacity-50";
+const CHECK_ROW = "w-full justify-start gap-3 text-left disabled:opacity-50";
 const BOX = "flex size-4 shrink-0 items-center justify-center rounded-[4px] border";
 
 function isSkillSelected(draft: SkillSelection, name: string): boolean {

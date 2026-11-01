@@ -137,7 +137,7 @@ replace_between('''  return (
         onClick={{handlePress}}
         aria-expanded={{showDetail}}
         className={{cn(
-          "flex w-full items-center gap-2 bg-card px-3 py-2 text-left outline-none focus-visible:bg-accent active:opacity-80",
+          "flex w-full items-center gap-2 bg-card px-3 py-2 text-left active:opacity-80",
           showDetail && "border-b",
           !isExpandable && "cursor-default",
         )}}

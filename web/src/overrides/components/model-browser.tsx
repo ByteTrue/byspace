@@ -427,9 +427,14 @@ function ModelBrowserRow({
       aria-selected={selectionIndicator ? selected : undefined}
       data-testid={testID}
       className={cn(
-        "flex min-h-9 w-full items-center gap-2 py-2 text-left outline-none focus-visible:bg-muted",
+        "flex min-h-9 w-full items-center gap-2 py-2 text-left",
         ROW_INSET,
-        tone === "elevated" ? "hover:bg-accent active:bg-accent" : "hover:bg-muted active:bg-muted",
+        // packages/app fills a hovered or pressed row with surface1 (surface2 when elevated):
+        // bg-card in the dark theme. In the light theme surface1 is white, so rows keep the
+        // visible muted fill, as the combobox rows do (step 4 batch 2).
+        tone === "elevated"
+          ? "hover:bg-accent active:bg-accent"
+          : "hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card",
       )}
     >
       <span className="flex w-4 shrink-0 items-center justify-center">{leadingSlot}</span>
@@ -585,7 +590,7 @@ function ModelRow({
         aria-selected={isSelected}
         data-testid={`model-row-${row.provider}-${row.modelId}`}
         className={cn(
-          "flex min-h-9 w-full items-center gap-2 py-2 text-left outline-none hover:bg-muted focus-visible:bg-muted active:bg-muted",
+          "flex min-h-9 w-full items-center gap-2 py-2 text-left hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card",
           ROW_INSET,
         )}
       >

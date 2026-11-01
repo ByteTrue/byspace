@@ -206,11 +206,7 @@ export function ComposerTrackRow({
       onKeyDown={handleKeyDown}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className={cn(
-        ROW,
-        "cursor-pointer outline-none focus-visible:bg-muted",
-        hovered && "bg-muted",
-      )}
+      className={cn(ROW, "cursor-pointer", hovered && "bg-muted")}
     >
       {content(hovered)}
     </div>

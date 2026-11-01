@@ -98,7 +98,9 @@ export function ExplorerSidebarDock({
             onReorderTabs={handleReorderTabs}
             trailingAccessory={headerAction}
           />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border" />
+          {/* Above the tab rail (its sortable items are z-1 flex items), so the separator covers
+              the lower pixel of the active tab's 2px underline, as in packages/app. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-px bg-border" />
         </div>
         <div className="flex min-h-0 flex-1 flex-col bg-sidebar">
           <WorkspacePanelHost

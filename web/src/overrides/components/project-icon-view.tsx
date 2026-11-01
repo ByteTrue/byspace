@@ -30,19 +30,19 @@ export function ProjectIconView({
       ...box,
       borderRadius: projectIconRadius(size),
       backgroundColor: identityColor(deriveIdentityColorName(projectViewKey)),
-      ...textStyle,
     }),
-    [box, size, projectViewKey, textStyle],
+    [box, size, projectViewKey],
   );
   if (iconDataUri) {
     return <img src={iconDataUri} alt="" className="shrink-0 object-contain" style={box} />;
   }
   return (
-    <span
-      className="flex shrink-0 items-center justify-center leading-none text-white"
-      style={fallbackStyle}
-    >
-      {initial}
+    <span className="flex shrink-0 items-center justify-center" style={fallbackStyle}>
+      {/* Its own line box, centred, as packages/app's Text in the square: the initial sits
+          where it does there (a box-height line put it half a pixel higher). */}
+      <span className="leading-[normal] text-white" style={textStyle}>
+        {initial}
+      </span>
     </span>
   );
 }

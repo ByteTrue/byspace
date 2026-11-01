@@ -172,7 +172,7 @@ replace_between('  return (\n    <View style={styles.root} testID="pr-pane">', "
         <button
           type="button"
           onClick={handleOpenPrUrl}
-          className="group/pr-header flex w-full flex-col gap-2 p-4 text-left outline-none focus-visible:bg-sidebar-accent"
+          className="group/pr-header flex w-full flex-col gap-2 p-4 text-left"
         >
           <span className="text-sm leading-[22px] text-foreground" data-testid="pr-pane-title">
             {data.title}

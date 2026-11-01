@@ -125,7 +125,7 @@ function LinkRow({
       onClick={open}
       onKeyDown={handleKeyDown}
       data-testid={testID}
-      className={cn(className, "cursor-pointer outline-none hover:bg-card focus-visible:bg-card")}
+      className={cn(className, "cursor-pointer hover:bg-card")}
     >
       {children}
     </div>

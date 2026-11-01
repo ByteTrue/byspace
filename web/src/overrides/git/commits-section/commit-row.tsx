@@ -30,7 +30,7 @@ export const CommitRow = memo(function CommitRow({
       type="button"
       data-testid={`commit-row-${commit.shortSha}`}
       onClick={handlePress}
-      className="flex w-full items-center gap-2 px-2 py-1 text-left outline-none hover:bg-sidebar-accent focus-visible:bg-sidebar-accent active:bg-sidebar-accent"
+      className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-sidebar-accent active:bg-sidebar-accent"
     >
       <CommitGraphNode commit={commit} isFirst={isFirst} isLast={isLast} />
       <span className="flex min-w-0 flex-1 items-center gap-1">

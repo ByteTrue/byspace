@@ -136,7 +136,7 @@ export function CommitsSection({
         data-testid="commits-section-header"
         aria-expanded={!collapsed}
         onClick={handleToggleSection}
-        className="flex w-full shrink-0 items-center gap-2 py-2 pr-3 pl-2 text-left outline-none focus-visible:bg-accent"
+        className="flex w-full shrink-0 items-center gap-2 py-2 pr-3 pl-2 text-left"
       >
         <span
           className={cn(

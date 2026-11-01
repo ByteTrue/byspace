@@ -367,7 +367,7 @@ rep('''    <FileDropZone style={styles.container}>
         <div className="w-full" style={CONTENT_WIDTH_STYLE}>
           <KeyboardTranslateView>
             <div className="mb-8 pr-4 pl-6">
-              <h1 className="text-xl font-normal text-foreground">{t("newWorkspace.title")}</h1>
+              <h1 className="text-xl leading-[normal] font-normal text-foreground">{t("newWorkspace.title")}</h1>
             </div>''')
 rep('''            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
           </KeyboardTranslateView>

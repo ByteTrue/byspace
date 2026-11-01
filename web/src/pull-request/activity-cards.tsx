@@ -49,7 +49,7 @@ const COPY_MENU_ICON = <Copy size={14} className="text-muted-foreground" />;
 const OPEN_MENU_ICON = <ExternalLink size={14} className="text-muted-foreground" />;
 const CARD = "mx-3 mb-3 overflow-hidden rounded-lg border bg-sidebar";
 const ROW_HEADER =
-  "flex min-h-9 cursor-pointer items-center gap-2 px-3 py-2 outline-none hover:bg-sidebar-accent focus-visible:bg-sidebar-accent";
+  "flex min-h-9 cursor-pointer items-center gap-2 px-3 py-2 hover:bg-sidebar-accent";
 
 function handleMarkdownLinkPress(url: string): boolean {
   void openExternalUrl(url);

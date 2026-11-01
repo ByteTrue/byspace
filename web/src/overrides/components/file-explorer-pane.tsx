@@ -355,7 +355,7 @@ function TreeRowItem({
         className={cn(
           workspaceTreeRowClassNames.row,
           workspaceTreeRowClassNames.hoverable,
-          "cursor-pointer outline-none focus-visible:bg-sidebar-accent",
+          "cursor-pointer",
           isSelected && workspaceTreeRowClassNames.active,
         )}
         aria-selected={isSelected}
@@ -1134,7 +1134,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           type="button"
           onClick={handleSortCycle}
           data-testid="files-sort-trigger"
-          className="ml-2 flex h-6 items-center justify-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:bg-sidebar-accent"
+          className="ml-2 flex h-6 items-center justify-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:bg-sidebar-accent"
         >
           <span data-testid="files-sort-label">{currentSortLabel}</span>
           <ChevronDown size={12} />

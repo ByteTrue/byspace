@@ -87,17 +87,18 @@ function headerClassName(input: {
 }): string {
   const { showsBodyState, canvasRendered, isHovered, isSelected, interactive } = input;
   // Over the canvas the painted header shows hover and press; the hit layer stays clear.
-  if (canvasRendered) return "relative z-2 flex h-7 min-w-0 items-center outline-none";
+  // No outline-none: keyboard focus draws the app-wide outline, as on packages/app's Pressable.
+  if (canvasRendered) return "relative z-2 flex h-7 min-w-0 items-center";
   if (showsBodyState) {
     return cn(
-      "relative z-2 flex h-7 min-w-0 items-center outline-none",
+      "relative z-2 flex h-7 min-w-0 items-center",
       isHovered && "bg-muted",
       interactive && "active:bg-muted",
     );
   }
   return cn(
     workspaceTreeRowClassNames.row,
-    "relative z-2 min-w-0 gap-1 outline-none",
+    "relative z-2 min-w-0 gap-1",
     (isHovered || isSelected) && workspaceTreeRowClassNames.active,
     interactive && "active:bg-sidebar-accent",
   );

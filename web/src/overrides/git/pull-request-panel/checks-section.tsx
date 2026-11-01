@@ -87,7 +87,7 @@ export function ChecksSection({
         onClick={onToggle}
         aria-expanded={open}
         aria-label={summary.detail ? `${summary.headline}. ${summary.detail}` : summary.headline}
-        className="flex w-full items-center gap-2 p-3 text-left outline-none hover:bg-sidebar-accent focus-visible:bg-sidebar-accent"
+        className="flex w-full items-center gap-2 p-3 text-left hover:bg-sidebar-accent"
       >
         <ChecksRing summary={summary} size={ICON_SIZE.lg} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -154,7 +154,7 @@ function CheckGroup({
         type="button"
         onClick={handlePress}
         aria-expanded={!collapsed}
-        className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-left outline-none focus-visible:bg-sidebar-accent"
+        className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-left"
       >
         <span className="text-xs font-medium text-muted-foreground">{group.label}</span>
         <Chevron size={ICON_SIZE.xs} className="shrink-0 text-muted-foreground" />
@@ -216,10 +216,7 @@ function CheckRow({
       onClick={open}
       onKeyDown={handleKeyDown}
       data-testid="pr-pane-check-row"
-      className={cn(
-        sectionKitClassNames.checkRow,
-        "cursor-pointer outline-none hover:bg-sidebar-accent focus-visible:bg-sidebar-accent",
-      )}
+      className={cn(sectionKitClassNames.checkRow, "cursor-pointer hover:bg-sidebar-accent")}
     >
       <CheckPresentationIcon presentation={classifyCheck(check)} size={14} />
       <span className={sectionKitClassNames.checkName}>{check.name}</span>

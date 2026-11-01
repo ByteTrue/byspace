@@ -81,7 +81,7 @@ export function DiffFolderRow({
           className={cn(
             workspaceTreeRowClassNames.row,
             workspaceTreeRowClassNames.hoverable,
-            "cursor-pointer outline-none focus-visible:bg-sidebar-accent",
+            "cursor-pointer",
             isSelected && workspaceTreeRowClassNames.active,
           )}
           accessibilityRole="button"

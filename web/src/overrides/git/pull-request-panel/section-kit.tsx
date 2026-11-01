@@ -54,7 +54,7 @@ export function Section({
         aria-label={accessibilityLabel}
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left outline-none focus-visible:bg-sidebar-accent"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
         <Chevron size={14} className="shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
