@@ -284,6 +284,9 @@ type Server struct {
 	// for that would stall every other request.
 	providerCatalogMu sync.Mutex
 	providerCatalogs  map[string]*providerCatalog
+	// streamCoalescer merges provider token deltas so one frame per window leaves the daemon
+	// instead of one frame per token. See stream_coalescer.go for why the relay bills this.
+	streamCoalescer *streamCoalescer
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -432,6 +435,22 @@ func New(opts Options) (*Server, error) {
 	// The daemon ships the skills, so after an update every installed copy is stale until someone
 	// re-saves the selection — and the user has no reason to do that.
 	srv.autoUpdateInstalledSkills()
+
+	srv.streamCoalescer = newStreamCoalescer(func(agentID, provider, turnID string, seq int, item sdk.TimelineItem) {
+		srv.broadcastSessionMsg("agent_stream", map[string]any{
+			"agentId":   agentID,
+			"provider":  provider,
+			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+			"seq":       seq,
+			"epoch":     srv.epoch,
+			"event": map[string]any{
+				"type":     "timeline",
+				"provider": provider,
+				"turnId":   turnID,
+				"item":     item,
+			},
+		})
+	})
 	return srv, nil
 }
 
@@ -442,6 +461,12 @@ func (s *Server) Store() *store.Store  { return s.store }
 
 // Close shuts down any live Pi agent subprocesses and PTY sessions.
 func (s *Server) Close() error {
+	// Anything merged but not yet sent would be lost with the daemon: a message's tail must not
+	// depend on how long the daemon stayed up.
+	if s.streamCoalescer != nil {
+		s.streamCoalescer.flushAll()
+	}
+
 	// The shared `opencode serve` process outlives individual agents, so it is stopped here rather
 	// than in an agent's Close. Without this the daemon exits and leaves an orphaned server holding a
 	// port until the machine restarts.
@@ -3331,6 +3356,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+
+		// Ordering barrier: a structural event must not overtake text that is still merged.
+		if streamBarrierEvents[evType] && s.streamCoalescer != nil {
+			s.streamCoalescer.flush(rec.ID)
+		}
 		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
 
 		// A host tool call is the provider asking the daemon to run one of its own tools. Answered
@@ -3399,6 +3429,15 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				if own := s.submittedPromptSeq(rec.ID, item.ClientMessageID); own != 0 && own != seq {
 					break
 				}
+			}
+			// Text and reasoning deltas are merged: forwarding each one made a single answer cost
+			// over a thousand relay frames (and a thousand billed Durable Object requests).
+			if item, ok := ev["item"].(sdk.TimelineItem); ok && s.streamCoalescer != nil && coalescableStreamTypes[item.Type] {
+				s.streamCoalescer.add(rec.ID, rec.Provider, turnID, seq, item)
+				break
+			}
+			if s.streamCoalescer != nil {
+				s.streamCoalescer.flush(rec.ID)
 			}
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,

@@ -237,13 +237,16 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 	if !sawToolCall {
 		t.Fatal("expected a tool_call timeline item, got none")
 	}
-	if len(textDeltas) < 2 {
-		t.Fatalf("expected token-level streaming (>=2 assistant deltas), got %d: %v", len(textDeltas), textDeltas)
+	if len(textDeltas) == 0 {
+		t.Fatal("expected assistant text frames, got none")
 	}
 	joined := strings.Join(textDeltas, "")
 	if !strings.Contains(joined, "Today is 2026-10-20") {
 		t.Fatalf("expected assembled assistant text, got %q", joined)
 	}
+	// Not one frame per token any more: deltas merge inside the coalescing window, and the client
+	// concatenates the chunks. The ceiling on frames per turn is TestStreamFramesAreCoalesced's
+	// subject; what matters here is that nothing was dropped in the merge.
 
 	// Sequence numbers must be strictly increasing so the client's gap detection never
 	// drops a delta as a duplicate.

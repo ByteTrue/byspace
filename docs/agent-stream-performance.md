@@ -15,6 +15,13 @@ provider deltas (every provider streams incrementally)
   → paced reveal (app, per assistant/reasoning item) → markdown blocks → paint
 ```
 
+The Go daemon implements the coalescer in `internal/server/stream_coalescer.go`, and it is not
+only a smoothness knob: over the relay every websocket frame is one billed Durable Object
+request, and the free plan allows 100,000 per day. Measured on pi 1.4, a 200-word answer arrives
+as ~1,230 deltas (245 text, 985 thinking) at ~140/s, so forwarding each delta costs a normal
+session millions of requests. Node always merged them; the Go port did not, and one afternoon of
+ordinary use reached 2.26M.
+
 Every provider delivers incremental text, so there is no provider that needs special handling: Claude via `includePartialMessages`, Codex via `agent_message_delta`, ACP agents via `agent_message_chunk`, Pi and OMP via `text_delta`.
 
 ## Why the reveal is paced
