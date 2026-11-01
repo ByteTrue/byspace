@@ -21,7 +21,7 @@ import {
   OfferLinkListener,
   PushNotificationRouter,
 } from "~/app/global-listeners";
-import { PendingDialogsHost } from "~/app/pending-dialogs";
+import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { RootErrorBoundary } from "~/app/root-error-boundary";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
@@ -68,7 +68,7 @@ export function Root() {
           <DownloadToast />
           <ConfirmDialogHost />
           <KeyboardShortcutsDialog />
-          <PendingDialogsHost />
+          <AddProjectFlowHost />
           <ProviderSettingsHost />
           <ChangelogHost />
           <AppDiagnosticHost />

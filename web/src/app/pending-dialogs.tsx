@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useAddProjectFlowStore } from "@/stores/add-project-flow-store";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -45,20 +44,5 @@ export function PendingDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** The app-wide dialogs packages/app's root layout mounts, as notices until their step lands. */
-export function PendingDialogsHost() {
-  const { t } = useTranslation();
-  const addProjectRequest = useAddProjectFlowStore((state) => state.request);
-  const closeAddProject = useAddProjectFlowStore((state) => state.close);
-  return (
-    <PendingDialog
-      open={addProjectRequest !== null}
-      title={t("sidebar.actions.addProject")}
-      step={4}
-      onClose={closeAddProject}
-    />
   );
 }

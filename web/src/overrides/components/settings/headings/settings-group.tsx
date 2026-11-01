@@ -24,7 +24,7 @@ export function SettingsGroup({
     <div className="mb-8 flex flex-col" style={style} data-testid={testID}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-foreground">{title}</span>
+          <span className="text-sm leading-[normal] text-foreground">{title}</span>
           {info ? (
             <SettingsInfoTip
               title={title}

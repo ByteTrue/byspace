@@ -102,9 +102,9 @@ created: 2026-11-01
 - 新建标签的输入框一打开就获得焦点。旧版代码也要求自动聚焦，但它的菜单在网页上没聚焦成功。
 - 标签颜色在浅色主题下用浅色主题那套颜色，原因同第 3 步记录的配置颜色色块（旧版浅色主题实际画的是深色主题的颜色）。
 
-**发现但没修的 daemon 问题**
+**发现的 daemon 问题**
 
-- 重命名或删除标签后，用到这个标签的工作区不会收到更新：侧栏上的标签当场消失，刷新才回来（旧版新版一样）。Go 的 `store.UpdateLabel`、`DeleteLabel` 改写了 `workspaces.json`，处理函数却只推了标签目录的帧；Node 在提交后为每个改到的工作区发 upsert。Go 的重命名还缺 Node 的几条校验：标签不存在时报错（Go 会直接新建）、改成另一个已有标签的名字时报错、按归一化后的 key 匹配。已记待办，下次 daemon 快改一起修。
+- 重命名或删除标签后，用到这个标签的工作区不会收到更新，侧栏上的标签当场消失、刷新才回来（旧版新版一样）。第 3 批已修，见下面第 3 批的「顺带修的 daemon 问题」。
 
 **没验到的**
 
@@ -113,3 +113,41 @@ created: 2026-11-01
 - 后台服务、重启、移除主机、移除连接只验到确认框能弹出和取消，没有真的执行（会影响开发版 daemon）。
 - 配对设备的二维码没有用手机扫；真实提供方的安装没有点（只验了列表和搜索）；用量页只看了开发版里有的提供方。
 - 手机上弹出键盘时面板被推到键盘上方，需要真机。
+
+### 第 3 批：项目和添加项目（2026-11-01）
+
+**做了什么**
+
+- 主机设置里的项目列表、项目设置页、编辑项目换成旧版的移植。项目设置包括默认隔离方式和起始分支、设置 agent 卡片、worktree 的 setup 和 teardown 脚本、脚本列表（新建、编辑、作为服务运行、删除）、保存；编辑项目是名称和图标（选图片、图片或网站地址、Use automatic）。占位的 `PendingSettingsPage` 删掉了。
+- 侧栏「Add project」打开的添加项目流程换成旧版的移植：选方式、搜目录、从 GitHub 克隆（搜仓库、选存放位置）、新建目录（选父目录、填名称）。页面栈、查询和提交都是旧版逻辑；旧版的 React Native `Modal` 换成 Radix 的 Dialog（焦点限制在弹窗里、背后的页面不滚动、Esc 回上一页、第一页按 Esc 关闭），尺寸位置照旧版。`PendingDialogsHost` 删掉了。
+- 工作区标签在第 2 批已经移植（标签管理、标签子菜单、色板），这批只修了它背后的 daemon 问题。
+- 生成脚本：`web/scripts/port/` 新增 `projects-screen.py`、`project-settings-screen.py`、`project-edit-sheet.py`、`add-project-flow.py`。
+
+**怎么验证的**
+
+和旧版 8081 并排（同一个开发版 daemon），截图和脚本在 `screenshots/对照全集/步骤4-第3批-项目/`，挑出来的在 `screenshots/web-step4/b3-*`：
+
+- 布局：项目列表、两个项目（有脚本、没脚本）的设置页全长，编辑项目、隔离方式和起始分支下拉、新建脚本（含必填错误）、脚本菜单、编辑脚本，添加项目的选方式、搜目录、新建目录名称页；桌面浅色深色、手机。逐个文字元素比位置、字号、字重、颜色，再把文字设成透明逐像素比（`_脚本/pixdiff.js`）。设置页和弹窗为 0 处差异，只剩菜单阴影和手机面板上沿的亚像素抗锯齿；添加项目面板的差异见下面的有意差异。
+- 操作（`_脚本/b3-interact.js`，每步做完改回原值，新旧两边结果一致）：隔离方式改成 New worktree、起始分支改成 main，刷新后都还在；编辑项目改名后标题跟着变，清空名称恢复原名；worktree setup 脚本保存后刷新还在；新建脚本空着保存显示两个必填错误，填好并打开「作为服务运行」后列表出现「zz-dev service · echo hi」，保存刷新还在，删除经确认后保存刷新消失；设置 agent 跳到新建工作区页、输入框里是 project-setup 提示。
+- 编辑项目的图标：填图片地址保存后，设置页标题和另一个标签页的侧栏当场换成新图标（不用刷新），再打开编辑出现 Use automatic，选它保存后恢复（`_脚本/probe-icon-live.js`）。侧栏里 byspace 项目显示仓库自带的 `assets/logo.svg`。
+- 添加项目：方向键移动选中行、回车进入、Esc 回上一页、返回按钮、点遮罩关闭、Tab 不离开弹窗；搜目录选一个已有项目，跳到它的新建工作区页；新建目录名称为空时报「Enter a directory name」，填名称后显示完整路径，回车建出目录并跳到新建工作区页；从 GitHub 克隆：不输入列出自己的仓库，搜 octocat/Hello-World 有结果，选 /tmp 后克隆成功并跳到新建工作区页（`_脚本/probe-github-clone.js`，新旧各克隆一次，测完从侧栏移除项目并删目录）。
+- 标签：改名后侧栏的标签当场变成新名字，删除后当场消失；改成另一个已有标签的名字时，标签管理显示「A label with that name already exists」（`_脚本/label-fixture.js`、`probe-label-collision.js`）。
+
+**顺带修的 daemon 问题**（新旧前端都受影响，照 Node 版改；Go 测试和 `npm run audit` 通过，开发版 daemon 6778 已换新二进制重启，6777 没动）
+
+1. 重命名、删除标签后工作区收不到更新（第 2 批记的问题）。store 的改名、删除返回改到的工作区，处理函数为每个发 workspace upsert。照 Node 补上校验，以 `rpc_error` 带 code 返回：名称为空、标签不存在（Go 原来会直接新建一个蓝色标签）、改成另一个已有标签的名字（只改大小写可以）。标签按归一化后的 key 匹配，大小写和空白不同算同一个标签。给工作区加标签时：工作区不存在报错；加一个已有的标签沿用目录里的名字和颜色（Go 原来会把目录里的颜色改掉）；去掉一个不存在的标签不再新建它。`internal/store/store.go`、`internal/server/ws_project.go`。
+2. 添加项目的「Clone from GitHub」一直显示「Unable to search GitHub repositories」：Go 返回的是 gh 的原始字段，缺协议要求的 `id`、`visibility`、`cloneUrl`，客户端整条拒收。照 Node 改：不输入时 `gh repo list`，有输入时 `gh search repos`（按更新时间倒序），`cloneUrl` 按 gh 配置的 `git_protocol` 选 SSH 或 HTTPS；gh 没装、没登录、命令失败分别回 `unavailable`、`unauthenticated`、`error`（Go 原来把失败都当成空结果）。`internal/workspace/forge.go`、`internal/server/ws_git_system.go`。
+3. 从 GitHub 克隆总是失败（exit status 128）：客户端传的是存放的父目录，Go 直接克隆到父目录本身，目录不空 git 就拒绝。照 Node 改成克隆到「父目录/仓库名」：目标已存在时报错；先克隆到父目录下的临时目录，成功后再改名，失败不留残余；失败信息带上 git 的输出。`internal/server/ws_git_system.go`。
+4. 项目图标：Go 存自定义图标时不记录 revision，`project.icon.get` 只返回自定义图标，描述里只在有自定义图标时带 `projectIconRevision`。结果是编辑项目里永远没有 Use automatic；改了图标侧栏不更新；仓库自带的 favicon、logo 在侧栏从来不显示，所有项目都是字母方块。照 Node 改：自定义图标校验后存原始字节（512 KB 以内、PNG/JPEG/GIF/WebP/ICO、正方形且不超过 1024），每次保存一个新 revision；项目描述总是带当前图标的 revision（自定义或自动，按图标内容算）；`project.icon.get` 返回实际使用的图标；改图标后重新广播项目和它的工作区；移除项目时删掉它的自定义图标。自动查找也按 Node 改了：查找的目录和顺序、跳过的目录（含 `src`、`lib`、测试目录）、只看 32 KB 以内的正方形图片、按文件内容判断类型、ICO 取最大的 PNG 帧。`internal/workspace/projecticon/detect.go`、`internal/store/project_icon.go`（新）、`internal/server/server.go`、`ws_project.go`。旧的自定义图标（`projects/icons/<id>.json`）不再读取，之前设过的自定义图标需要重新设。
+
+**有意和旧版不同**
+
+- 添加项目面板里键盘选中和悬停的行有灰底（muted），理由同第 2 批的下拉框：旧版用 `surface1`，浅色主题下和面板一样白，看不出选中了哪一行。
+- 添加项目面板的文字用外观设置里的界面字体。旧版这个面板没指定字体，落到浏览器的系统字体，不跟外观设置走；因为字体不同，每行文字高 1px，三行的面板整体高 6px。
+- 关闭添加项目面板不再触发 React 的「Cannot update a component while rendering a different component」警告。旧版在 setState 的更新函数里调了关闭回调。
+
+**没验到的**
+
+- 从 GitHub 克隆只测了公开仓库、HTTPS；SSH、私有仓库、gh 没登录时的提示没测（开发机的 gh 已登录，协议是 https）。
+- 编辑项目选本地图片要用系统文件选择框，没测；图片地址和 Use automatic 测了。
+- 选主机那一页：开发版只有一台主机，不出现。
