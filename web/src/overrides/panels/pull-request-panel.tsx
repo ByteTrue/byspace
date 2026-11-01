@@ -6,8 +6,11 @@ import { formatPrTabLabel } from "@/git/pull-request-panel/tab-label";
 import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
 import { PullRequestContent, usePullRequestData } from "@/panels/pull-request";
-import { CenteredMessage } from "@/panels/pending-panel";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
+
+function CenteredMessage({ children }: { children: string }) {
+  return <div className="flex flex-1 items-center justify-center p-4 text-sm">{children}</div>;
+}
 
 const pullRequestPanelPresentation = {
   label: (t) => t("panels.pullRequest.label"),

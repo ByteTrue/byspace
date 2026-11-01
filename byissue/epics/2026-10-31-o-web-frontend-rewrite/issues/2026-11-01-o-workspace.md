@@ -267,3 +267,24 @@ PR 面板换成旧版的 `PullRequestPane`（`overrides/git/pull-request-panel/p
 - 安装正在跑时的实时刷新（两个 worktree 截图时都已跑完）。
 - 外部 PR 检出被拦下的提示（需要从别人的 fork 检出 PR）。
 - 手机上的安装脚本面板（手机没有 ⌘K，要从标签切换里打开，没做）。
+
+### 2026-11-01 第 9 批：新建工作区页（上次汇报漏掉）
+
+第 8 批收尾时我报「第 3 步做完了」，但新建工作区页（`/new`）还是占位页。它不在本事项开头的分批清单里，可占位页上写着属于第 3 步，汇报前也没有核对占位页，于是漏了。逐个检查了新前端剩下的占位：只剩第 4 步的页面和弹窗，第 3 步没有别的遗漏。
+
+新建工作区页换成旧版的 `NewWorkspaceScreen`（`overrides/screens/new-workspace-screen.tsx`，用 `web/scripts/port/new-workspace-screen.py` 生成）：选项目、主机、隔离方式（本地或新 worktree）、起始分支和 PR、启动方式（对话或终端配置），以及创建工作区、首条消息、草稿、离开页面后在后台继续创建，都是旧版逻辑。另外写了网页版的主机选择（`components/hosts/host-picker.tsx`）、启动方式菜单（`new-workspace-launch/launch-control.tsx`）、项目图标（`components/project-icon-view.tsx`）和主机状态点。路由直接用旧版的 `app/new.tsx`。
+
+顺带：
+
+- 侧栏的项目图标之前把用户上传的图标也切了圆角。旧版的规则是上传的图标不切角，只有自动生成的首字母方块有圆角，已改回（`web/src/sidebar/status-visuals.tsx`）。
+- 删掉不再使用的 `PendingPanel`（第 3 步的面板都已迁完）。
+
+验证（截图 112–119）：
+
+- 桌面：页面布局和旧版一致；项目列表 7 项一致，选 zz-diff-repo 后隔离方式出现「New worktree」，选中后出现起始分支；分支列表（main、zz-setup-fail、zz-setup-ok、zz-feature、fix/…）和搜索 fix 的结果两边一致；启动方式菜单的对话、终端、4 个终端配置、Manage profiles 一致，切到终端后输入框变成终端提示、提交按钮换成终端那个；悬停、输入、深色。
+- 手机：布局一致；项目和启动方式都是底部面板。新版项目面板底部固定显示「Add project」，旧版手机上这一项在面板外看不到。
+- 两边控制台都没有错误。
+
+和旧版的小差别，没改：终端配置后面的命令预览新版是等宽字体，旧版代码写的也是等宽，但旧版网页实际显示成普通字体；菜单打开时旧版高亮当前选中项，新版不高亮，这是共享菜单的行为，所有菜单都这样。
+
+没验到的：真正提交创建工作区（会建真实的 worktree 和 agent），留到第 4 步之后在临时仓库里一起验；多台主机时的主机选择（开发环境只有一台）。

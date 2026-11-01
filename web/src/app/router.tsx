@@ -5,6 +5,7 @@ import HostIndexRoute from "@/app/h/[serverId]/index";
 import HostOpenProjectRoute from "@/app/h/[serverId]/open-project";
 import HostSessionsRoute from "@/app/h/[serverId]/sessions";
 import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
+import NewWorkspaceRoute from "@/app/new";
 import LegacyHostSettingsRoute from "@/app/h/[serverId]/settings";
 import StartupIndexRoute from "@/app/index";
 import SettingsHostIndexRoute from "@/app/settings/hosts/[serverId]/index";
@@ -21,7 +22,7 @@ export const router = createBrowserRouter([
       { index: true, element: <StartupIndexRoute /> },
       { path: "welcome", element: <PendingPage title="Welcome" step={4} /> },
       { path: "pair-scan", element: <PendingPage title="Pair a device" step={4} /> },
-      { path: "new", element: <PendingPage title="New workspace" step={3} /> },
+      { path: "new", element: <NewWorkspaceRoute /> },
       { path: "open-project", element: <PendingPage title="Open a project" step={4} /> },
       { path: "sessions", element: <PendingPage title="History" step={4} /> },
       { path: "schedules", element: <PendingPage title="Schedules" step={4} /> },

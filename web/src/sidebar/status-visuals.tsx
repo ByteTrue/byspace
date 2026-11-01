@@ -134,20 +134,20 @@ export function ProjectIcon({
   projectViewKey: string;
   size?: number;
 }) {
-  const box = useMemo(
-    () => ({ width: size, height: size, borderRadius: Math.round(size * 0.25) }),
-    [size],
-  );
+  // A user-uploaded icon is sized but never rounded (it is someone's mark); only the generated
+  // initial square gets the corner radius, as in packages/app's ProjectIconView.
+  const box = useMemo(() => ({ width: size, height: size }), [size]);
   const placeholderStyle = useMemo(
     () => ({
       ...box,
+      borderRadius: Math.round(size * 0.25),
       backgroundColor: identityColor(deriveIdentityColorName(projectViewKey)),
       fontSize: Math.round(size * 0.62),
     }),
     [box, projectViewKey, size],
   );
   if (iconDataUri) {
-    return <img src={iconDataUri} alt="" className="shrink-0 object-cover" style={box} />;
+    return <img src={iconDataUri} alt="" className="shrink-0 object-contain" style={box} />;
   }
   const initial = projectIconPlaceholderLabelFromDisplayName(displayName).charAt(0).toUpperCase();
   return (
