@@ -1,3 +1,4 @@
+import * as Clipboard from "expo-clipboard";
 import {
   useCallback,
   useMemo,
@@ -78,7 +79,7 @@ function CopyableInfoRow({
 }) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
-    void navigator.clipboard.writeText(copyValue);
+    void Clipboard.setStringAsync(copyValue);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [copyValue]);

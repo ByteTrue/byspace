@@ -1,7 +1,5 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useChangelogStore } from "@/changelog/internal/changelog-store";
-import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useAddProjectFlowStore } from "@/stores/add-project-flow-store";
 import { Button } from "~/components/ui/button";
 import {
@@ -55,30 +53,12 @@ export function PendingDialogsHost() {
   const { t } = useTranslation();
   const addProjectRequest = useAddProjectFlowStore((state) => state.request);
   const closeAddProject = useAddProjectFlowStore((state) => state.close);
-  const changelogVisible = useChangelogStore((state) => state.visible);
-  const closeChangelog = useChangelogStore((state) => state.close);
-  const diagnosticVisible = useAppDiagnosticStore((state) => state.visible);
-  const closeDiagnostic = useAppDiagnosticStore((state) => state.close);
   return (
-    <>
-      <PendingDialog
-        open={addProjectRequest !== null}
-        title={t("sidebar.actions.addProject")}
-        step={4}
-        onClose={closeAddProject}
-      />
-      <PendingDialog
-        open={changelogVisible}
-        title={t("sidebar.help.whatsNew")}
-        step={4}
-        onClose={closeChangelog}
-      />
-      <PendingDialog
-        open={diagnosticVisible}
-        title={t("sidebar.help.diagnostics")}
-        step={4}
-        onClose={closeDiagnostic}
-      />
-    </>
+    <PendingDialog
+      open={addProjectRequest !== null}
+      title={t("sidebar.actions.addProject")}
+      step={4}
+      onClose={closeAddProject}
+    />
   );
 }

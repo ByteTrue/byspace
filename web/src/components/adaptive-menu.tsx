@@ -283,7 +283,7 @@ function SheetSubTrigger({
       onClick={handleClick}
     >
       {children}
-      <ChevronRight className="ml-auto text-muted-foreground" />
+      <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
     </button>
   );
 }

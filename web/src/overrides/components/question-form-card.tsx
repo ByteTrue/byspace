@@ -81,7 +81,7 @@ function QuestionOptionRow({
           className={cn(
             "mt-0.5 flex size-[18px] shrink-0 items-center justify-center border",
             multiSelect ? "rounded-md" : "rounded-full",
-            isSelected ? "border-primary" : "border-ring",
+            isSelected ? "border-primary" : "border-extra-muted-foreground",
             isSelected && multiSelect && "bg-primary",
           )}
         >

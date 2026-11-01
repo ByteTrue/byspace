@@ -36,11 +36,11 @@ function VersionRow({
 }) {
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground"
+      className="flex items-center justify-between gap-2 px-3 text-xs leading-[normal] text-muted-foreground"
       data-testid={testId}
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="shrink-0 tabular-nums">{version}</span>
+      <span className="shrink-0">{version}</span>
     </div>
   );
 }
@@ -81,6 +81,7 @@ export function SidebarHelpMenu() {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <SidebarIconButton
+          fill={false}
           label={t("sidebar.help.trigger")}
           tooltipSide="top"
           data-testid="sidebar-help"
@@ -92,7 +93,7 @@ export function SidebarHelpMenu() {
         side="top"
         align="end"
         sideOffset={8}
-        className="w-70"
+        className="menu-icons-sm w-70"
         data-testid="sidebar-help-menu"
       >
         <DropdownMenuLabel>{t("sidebar.help.sectionHelp")}</DropdownMenuLabel>
@@ -113,22 +114,29 @@ export function SidebarHelpMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t("sidebar.help.reportIssue")}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={openDiscord} data-testid="sidebar-help-discord">
-          <DiscordIcon />
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <DiscordIcon className="size-3.5" />
+          </span>
           {t("sidebar.help.discord")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={openGithubIssue} data-testid="sidebar-help-github">
-          <ForgeIcon iconKind="github" className="size-3.5" />
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <ForgeIcon iconKind="github" className="size-3.5" />
+          </span>
           {t("sidebar.help.github")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <VersionRow
-          label={t("sidebar.help.appName")}
-          version={formatVersionWithPrefix(resolveAppVersion())}
-          testId="sidebar-help-version"
-        />
-        {hosts.map((host) => (
-          <HostVersionRow key={host.serverId} host={host} />
-        ))}
+        {/* packages/app's versionList: the version rows as one block, 4px apart, 8px above and below. */}
+        <div className="flex flex-col gap-1 py-2">
+          <VersionRow
+            label={t("sidebar.help.appName")}
+            version={formatVersionWithPrefix(resolveAppVersion())}
+            testId="sidebar-help-version"
+          />
+          {hosts.map((host) => (
+            <HostVersionRow key={host.serverId} host={host} />
+          ))}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -100,8 +100,9 @@ const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 20;
 const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
 const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 
-const SPLIT_RIGHT_ICON = <Columns2 />;
-const SPLIT_DOWN_ICON = <Rows2 />;
+// packages/app draws these toolbar glyphs extra-muted (extraMutedColorMapping), on hover too.
+const SPLIT_RIGHT_ICON = <Columns2 className="text-extra-muted-foreground" />;
+const SPLIT_DOWN_ICON = <Rows2 className="text-extra-muted-foreground" />;
 const TAB_SCROLL_PADDING_STYLE = {
   paddingLeft: TAB_ROW_PADDING_HORIZONTAL,
   paddingRight: TAB_ROW_PADDING_HORIZONTAL,
@@ -174,7 +175,7 @@ function WorkspaceNewTabButton({
         testID="workspace-new-tab-button"
         className={placement === "inline" ? "size-6" : undefined}
       >
-        <Plus size={14} />
+        <Plus size={14} className="text-extra-muted-foreground" />
       </ToolbarButton>
       <WorkspaceNewTabMenuContent
         serverId={serverId}
@@ -245,7 +246,11 @@ function WorkspacePaneToolbarActions({
           testID={paneMaximized ? "workspace-restore-pane" : "workspace-maximize-pane"}
           onPress={onTogglePaneMaximized}
         >
-          {paneMaximized ? <Minimize size={14} /> : <Maximize size={14} />}
+          {paneMaximized ? (
+            <Minimize size={14} className="text-extra-muted-foreground" />
+          ) : (
+            <Maximize size={14} className="text-extra-muted-foreground" />
+          )}
         </ToolbarButton>
       ) : null}
       {splitActionsVisible && onSplitRight && onSplitDown ? (
@@ -255,7 +260,7 @@ function WorkspacePaneToolbarActions({
             label={t("workspace.git.actions.moreActions")}
             testID="workspace-split-pane-menu"
           >
-            <Ellipsis size={14} />
+            <Ellipsis size={14} className="text-extra-muted-foreground" />
           </ToolbarButton>
           <DropdownMenuContent
             side="bottom"

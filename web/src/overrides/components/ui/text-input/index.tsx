@@ -8,6 +8,7 @@ import {
   useImperativeHandle,
   useRef,
   type ChangeEvent,
+  type FocusEvent,
   type KeyboardEvent,
   type SyntheticEvent,
   type TextareaHTMLAttributes,
@@ -51,7 +52,30 @@ export interface EditingTextInputProps extends Omit<
   autoCorrect?: boolean | "on" | "off";
   /** Visible lines of a multiline field (React Native's name for `rows`). */
   numberOfLines?: number;
+  /** Selects the whole value when the field gains focus. */
+  selectTextOnFocus?: boolean;
+  /** React Native's keyboard hint; maps to `inputMode` when that is not given. */
+  keyboardType?:
+    | "default"
+    | "number-pad"
+    | "numeric"
+    | "decimal-pad"
+    | "email-address"
+    | "url"
+    | "phone-pad";
+  /** React Native's placeholder colour; the stylesheet colours placeholders on the web. */
+  placeholderTextColor?: string;
 }
+
+const KEYBOARD_INPUT_MODE = {
+  default: undefined,
+  "number-pad": "numeric",
+  numeric: "numeric",
+  "decimal-pad": "decimal",
+  "email-address": "email",
+  url: "url",
+  "phone-pad": "tel",
+} as const;
 
 function toAutoCorrect(value: boolean | "on" | "off" | undefined): "on" | "off" | undefined {
   if (value === true) return "on";
@@ -77,6 +101,9 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
       variant: _variant,
       autoCorrect,
       numberOfLines,
+      selectTextOnFocus,
+      keyboardType,
+      placeholderTextColor: _placeholderTextColor,
       ...props
     },
     ref,
@@ -157,8 +184,19 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
       getNativeRef: () => inputRef.current,
     }));
 
+    const { onFocus } = props;
+    const handleFocus = useCallback(
+      (event: FocusEvent<FieldElement>) => {
+        onFocus?.(event);
+        if (selectTextOnFocus) event.currentTarget.select();
+      },
+      [onFocus, selectTextOnFocus],
+    );
+
     const shared = {
       ...props,
+      inputMode: props.inputMode ?? (keyboardType ? KEYBOARD_INPUT_MODE[keyboardType] : undefined),
+      onFocus: selectTextOnFocus ? handleFocus : onFocus,
       ref: inputRef,
       defaultValue: initialTextRef.current,
       onChange: handleChange,

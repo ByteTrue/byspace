@@ -43,7 +43,7 @@ const PREVIEW_STYLE = {
 
 function pillColorClass(hasAttention: boolean, isActive: boolean): string {
   if (hasAttention) return "bg-foreground";
-  return isActive ? "bg-ring" : "bg-input";
+  return isActive ? "bg-extra-muted-foreground" : "bg-input";
 }
 
 function usePrefersReducedMotion() {

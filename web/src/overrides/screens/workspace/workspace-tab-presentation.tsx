@@ -184,13 +184,16 @@ export function WorkspaceTabOptionRow({
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    <div
-      className={cn("mx-1 mb-1 flex min-h-9 items-center gap-2 px-1 py-1", active && "bg-muted")}
-    >
+    // packages/app highlights the row, and the hovered/pressed press area, with surface1 (card):
+    // the same white as the sheet in light, a step lighter in dark.
+    <div className={cn("mx-1 mb-1 flex min-h-9 items-center gap-2 px-1 py-1", active && "bg-card")}>
       <button
         type="button"
         onClick={onPress}
-        className="group/option flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left hover:bg-muted active:bg-muted"
+        className={cn(
+          "group/option flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left hover:bg-card active:bg-card",
+          active && "bg-card",
+        )}
       >
         <span className="flex w-4 items-center justify-center">
           <WorkspaceTabIcon
@@ -199,7 +202,7 @@ export function WorkspaceTabOptionRow({
             backdrop="surface0"
           />
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+        <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
           {presentation.titleState === "loading" ? t("workspace.tabs.loading") : presentation.label}
         </span>
       </button>

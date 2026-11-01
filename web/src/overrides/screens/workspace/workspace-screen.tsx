@@ -7,7 +7,6 @@ import { Spinner } from "~/components/ui/spinner";
 import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import { getOpenAgentTabLabel } from "@bytetrue/protocol/agent-labels";
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -33,7 +32,7 @@ import { HostBadge } from "@/hosts/host-badge";
 import { resolveHostBadgeWithoutProjectContext } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useLocalDaemonServerId, useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "~/components/ui/drawer";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SplitContainer } from "@/components/split-container";
 import { RetainedPanel } from "@/components/retained-panel";
@@ -370,12 +369,6 @@ function getFallbackTabOptionDescription(
   return tab.target.path;
 }
 
-interface ComboboxOption {
-  id: string;
-  label: string;
-  description?: string;
-}
-
 interface MobileWorkspaceTabSwitcherProps {
   tabs: WorkspaceTabDescriptor[];
   activeTabKey: string;
@@ -629,6 +622,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
 }: MobileWorkspaceTabSwitcherProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const tabIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     tabs.forEach((tab, index) => {
@@ -704,10 +698,11 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
     ],
   );
 
-  // The phone switcher is a bottom drawer, as packages/app's Combobox sheet is on compact layouts.
+  // The phone switcher is packages/app's Combobox, which is a bottom sheet on compact layouts.
   return (
     <div className="flex items-center border-b bg-background" data-testid="workspace-tabs-row">
       <button
+        ref={anchorRef}
         type="button"
         data-testid="workspace-tab-switcher-trigger"
         aria-label={t("workspace.tabs.switcher.trigger", { count: tabs.length })}
@@ -724,28 +719,18 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
-      <Drawer open={isOpen} onOpenChange={setIsOpen}>
-        <DrawerContent data-testid="workspace-tab-switcher">
-          <DrawerHeader className="text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
-            <DrawerTitle>{t("workspace.tabs.switcher.title")}</DrawerTitle>
-          </DrawerHeader>
-          <div className="max-h-[60vh] overflow-y-auto pb-4">
-            {tabSwitcherOptions.map((option) => (
-              <Fragment key={option.id}>
-                {renderTabOption({
-                  option,
-                  selected: option.id === activeTabKey,
-                  active: false,
-                  onPress: () => {
-                    onSelectSwitcherTab(option.id);
-                    setIsOpen(false);
-                  },
-                })}
-              </Fragment>
-            ))}
-          </div>
-        </DrawerContent>
-      </Drawer>
+      <Combobox
+        options={tabSwitcherOptions}
+        value={activeTabKey}
+        onSelect={onSelectSwitcherTab}
+        searchable={false}
+        title={t("workspace.tabs.switcher.title")}
+        searchPlaceholder={t("workspace.tabs.switcher.searchPlaceholder")}
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        anchorRef={anchorRef}
+        renderOption={renderTabOption}
+      />
     </div>
   );
 });
@@ -919,7 +904,7 @@ function WorkspaceHeaderProjectRow({
         </span>
       ) : null}
       {showProject && hostBadge ? (
-        <span className="shrink-0 text-xs text-muted-foreground/70">·</span>
+        <span className="shrink-0 text-xs text-extra-muted-foreground">·</span>
       ) : null}
       {hostBadge ? <HostBadge badge={hostBadge} /> : null}
     </span>
@@ -981,7 +966,7 @@ function WorkspaceHeaderTitleBar({
     <div className="flex min-w-0 flex-1 shrink items-center gap-1 overflow-hidden md:gap-2">
       {isLoading ? (
         <div className={HEADER_TITLE_TEXT_GROUP}>
-          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-muted-foreground/25" />
+          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-(--surface-3) opacity-25" />
         </div>
       ) : (
         <div className={HEADER_TITLE_TEXT_GROUP}>

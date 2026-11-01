@@ -145,7 +145,7 @@ function CreateLabelForm({
   );
 
   return (
-    <div className="flex w-56 flex-col gap-2 p-1.5">
+    <div className="flex w-full flex-col gap-2 px-2.5 py-1.5">
       <Input
         autoFocus
         value={name}
@@ -251,7 +251,7 @@ export function WorkspaceLabelsSubmenu({
         <Tag />
         {t("workspaceLabels.title")}
       </kit.SubTrigger>
-      <kit.SubContent className="w-56">
+      <kit.SubContent className="menu-icons-sm">
         {snapshot.rows.map((row) => (
           <LabelRow
             key={row.name.toLocaleLowerCase()}
@@ -268,7 +268,7 @@ export function WorkspaceLabelsSubmenu({
             <Plus />
             {t("workspaceLabels.create")}
           </kit.SubTrigger>
-          <kit.SubContent>
+          <kit.SubContent className="menu-icons-sm">
             <CreateLabelForm
               serverId={serverId}
               workspaceId={workspaceId}

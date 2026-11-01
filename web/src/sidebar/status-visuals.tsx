@@ -1,8 +1,8 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react";
 import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { deriveIdentityColorName, identityColor } from "@/styles/identity-colors";
+import { ProjectIconView } from "@/components/project-icon-view";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { getProjectStatusBadgeContent } from "@/utils/project-status-badge-content";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -85,7 +85,7 @@ export function WorkspaceStatusIndicator({
   if (bucket === "needs_input") {
     return (
       <span className={slot} data-testid="workspace-status-indicator-needs_input">
-        <CircleAlert className="size-3 fill-status-dot-warning text-sidebar" />
+        <CircleAlert className="size-3 fill-status-dot-warning text-background" />
       </span>
     );
   }
@@ -99,7 +99,7 @@ export function WorkspaceStatusIndicator({
   if (bucket === "done") {
     return reserveIdleSpace ? (
       <span className={slot} data-testid="workspace-status-indicator-done">
-        <span className="size-1.5 rounded-full bg-sidebar-border" />
+        <span className="size-1.5 rounded-full bg-extra-muted-foreground opacity-30" />
       </span>
     ) : null;
   }
@@ -113,7 +113,9 @@ export function WorkspaceStatusIndicator({
       {dot ? (
         <span
           className={cn(
-            "absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-2 ring-sidebar",
+            // packages/app's statusDotOverlay: an 8px dot with a 1px border in the page colour at
+            // the bottom-right of a 16x20 slot, i.e. 2px below this 16px one.
+            "absolute right-0 -bottom-0.5 size-2 rounded-full border border-background",
             dot,
           )}
         />
@@ -122,7 +124,14 @@ export function WorkspaceStatusIndicator({
   );
 }
 
-/** A project's icon, or its initial on the project's identity colour. */
+// packages/app's callers size the initial themselves: 9px in the project row, 8px in the
+// display-preferences project filter.
+const PROJECT_INITIAL_STYLE: Record<number, CSSProperties> = {
+  16: { fontSize: 9 },
+  14: { fontSize: 8 },
+};
+
+/** A project's icon, or its initial on the project's identity colour (packages/app's ProjectIconView). */
 export function ProjectIcon({
   iconDataUri,
   displayName,
@@ -134,29 +143,14 @@ export function ProjectIcon({
   projectViewKey: string;
   size?: number;
 }) {
-  // A user-uploaded icon is sized but never rounded (it is someone's mark); only the generated
-  // initial square gets the corner radius, as in packages/app's ProjectIconView.
-  const box = useMemo(() => ({ width: size, height: size }), [size]);
-  const placeholderStyle = useMemo(
-    () => ({
-      ...box,
-      borderRadius: Math.round(size * 0.25),
-      backgroundColor: identityColor(deriveIdentityColorName(projectViewKey)),
-      fontSize: Math.round(size * 0.62),
-    }),
-    [box, projectViewKey, size],
-  );
-  if (iconDataUri) {
-    return <img src={iconDataUri} alt="" className="shrink-0 object-contain" style={box} />;
-  }
-  const initial = projectIconPlaceholderLabelFromDisplayName(displayName).charAt(0).toUpperCase();
   return (
-    <span
-      className="flex shrink-0 items-center justify-center font-semibold text-white"
-      style={placeholderStyle}
-    >
-      {initial}
-    </span>
+    <ProjectIconView
+      iconDataUri={iconDataUri}
+      initial={projectIconPlaceholderLabelFromDisplayName(displayName).charAt(0).toUpperCase()}
+      projectViewKey={projectViewKey}
+      size={size}
+      textStyle={PROJECT_INITIAL_STYLE[size]}
+    />
   );
 }
 
@@ -166,7 +160,7 @@ function ProjectStatusBadgeGlyph({
   badge: NonNullable<ReturnType<typeof getProjectStatusBadgeContent>>;
 }) {
   if (badge.kind === "alert")
-    return <CircleAlert className="size-3 fill-status-dot-warning text-sidebar" />;
+    return <CircleAlert className="size-3 fill-status-dot-warning text-background" />;
   if (badge.bucket === "running") return <StatusRing className="size-2.5" />;
   return (
     <span

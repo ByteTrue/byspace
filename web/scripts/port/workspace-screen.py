@@ -27,8 +27,6 @@ rep('import { ChevronDown } from "lucide-react-native";\n', 'import { ChevronDow
 rep('import { useSafeAreaInsets } from "react-native-safe-area-context";\n', "")
 rep('import { StyleSheet, withUnistyles } from "react-native-unistyles";\n', "")
 rep('import type { Theme } from "@/styles/theme";\n', "")
-rep('import { Combobox, type ComboboxOption } from "@/components/ui/combobox";\n',
-    'import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "~/components/ui/drawer";\n')
 rep('''import {
   FloatingPanelPortalHost,
   FloatingPanelPortalHostNameProvider,
@@ -37,12 +35,6 @@ rep('''import {
 rep('import { useVisibleAgentIds } from "./visible-agent-ids";', 'import { useVisibleAgentIds } from "@/screens/workspace/visible-agent-ids";')
 rep('import { isWeb } from "@/constants/platform";\n', "")
 
-rep('''import {
-  memo,
-  useCallback,''', '''import {
-  Fragment,
-  memo,
-  useCallback,''')
 # ---- module constants ----
 rep('''const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -52,14 +44,6 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 ''', "")
 rep('const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";\n', "")
 
-# ComboboxOption type (the Expo Combobox is not loaded on the web)
-rep('''interface MobileWorkspaceTabSwitcherProps {''', '''interface ComboboxOption {
-  id: string;
-  label: string;
-  description?: string;
-}
-
-interface MobileWorkspaceTabSwitcherProps {''')
 
 # ---- mobile active tab trigger ----
 rep('''          <View style={styles.switcherTriggerIcon} testID="workspace-active-tab-icon">
@@ -89,6 +73,7 @@ rep('''function switcherTriggerStyle({ pressed }: { pressed?: boolean }) {
 rep('''  const [isOpen, setIsOpen] = useState(false);
   const anchorRef = useRef<View>(null);
   const tabIndexByKey''', '''  const [isOpen, setIsOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const tabIndexByKey''')
 rep('''      const tab = tabByKey.get(option.id);
       if (!tab) {
@@ -143,10 +128,11 @@ rep('''  return (
         renderOption={renderTabOption}
       />
     </View>
-  );''', '''  // The phone switcher is a bottom drawer, as packages/app's Combobox sheet is on compact layouts.
+  );''', '''  // The phone switcher is packages/app's Combobox, which is a bottom sheet on compact layouts.
   return (
     <div className="flex items-center border-b bg-background" data-testid="workspace-tabs-row">
       <button
+        ref={anchorRef}
         type="button"
         data-testid="workspace-tab-switcher-trigger"
         aria-label={t("workspace.tabs.switcher.trigger", { count: tabs.length })}
@@ -163,28 +149,18 @@ rep('''  return (
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
-      <Drawer open={isOpen} onOpenChange={setIsOpen}>
-        <DrawerContent data-testid="workspace-tab-switcher">
-          <DrawerHeader className="text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
-            <DrawerTitle>{t("workspace.tabs.switcher.title")}</DrawerTitle>
-          </DrawerHeader>
-          <div className="max-h-[60vh] overflow-y-auto pb-4">
-            {tabSwitcherOptions.map((option) => (
-              <Fragment key={option.id}>
-                {renderTabOption({
-                  option,
-                  selected: option.id === activeTabKey,
-                  active: false,
-                  onPress: () => {
-                    onSelectSwitcherTab(option.id);
-                    setIsOpen(false);
-                  },
-                })}
-              </Fragment>
-            ))}
-          </div>
-        </DrawerContent>
-      </Drawer>
+      <Combobox
+        options={tabSwitcherOptions}
+        value={activeTabKey}
+        onSelect={onSelectSwitcherTab}
+        searchable={false}
+        title={t("workspace.tabs.switcher.title")}
+        searchPlaceholder={t("workspace.tabs.switcher.searchPlaceholder")}
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        anchorRef={anchorRef}
+        renderOption={renderTabOption}
+      />
     </div>
   );''')
 
@@ -255,7 +231,7 @@ rep('''  return (
         </span>
       ) : null}
       {showProject && hostBadge ? (
-        <span className="shrink-0 text-xs text-muted-foreground/70">·</span>
+        <span className="shrink-0 text-xs text-extra-muted-foreground">·</span>
       ) : null}
       {hostBadge ? <HostBadge badge={hostBadge} /> : null}
     </span>
@@ -282,7 +258,7 @@ rep('''  return (
     <div className="flex min-w-0 flex-1 shrink items-center gap-1 overflow-hidden md:gap-2">
       {isLoading ? (
         <div className={HEADER_TITLE_TEXT_GROUP}>
-          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-muted-foreground/25" />
+          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-(--surface-3) opacity-25" />
         </div>
       ) : (
         <div className={HEADER_TITLE_TEXT_GROUP}>

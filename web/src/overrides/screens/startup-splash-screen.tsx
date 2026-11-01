@@ -1,5 +1,6 @@
 // Override of packages/app/src/screens/startup-splash-screen.tsx: the same splash (logo shimmer
 // while hosts connect, an error page with recovery actions) in shadcn/ui.
+import * as Clipboard from "expo-clipboard";
 import { useCallback, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react";
@@ -27,7 +28,7 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
   const { t } = useTranslation();
   const splashError = bootstrapState?.splashError ?? null;
   const copyLogs = useCallback(() => {
-    void navigator.clipboard.writeText(splashError ?? "");
+    void Clipboard.setStringAsync(splashError ?? "");
   }, [splashError]);
   const openIssue = useCallback(() => void openExternalUrl(GITHUB_ISSUE_URL), []);
   const openDocs = useCallback(() => void openExternalUrl(DOCS_URL), []);

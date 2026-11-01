@@ -168,6 +168,15 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
   );
 }
 
+/**
+ * packages/app centres the card in an overlay padded 24px on every side, so a percentage height
+ * is of the viewport less 48px; here the card is fixed to the viewport, so the inset is put back.
+ */
+function insetPercent(height: number | string | undefined): number | string | undefined {
+  if (typeof height !== "string" || !height.endsWith("%")) return height;
+  return `calc((100% - 3rem) * ${Number.parseFloat(height) / 100})`;
+}
+
 export interface AdaptiveModalSheetProps {
   header: SheetHeader;
   visible: boolean;
@@ -241,7 +250,7 @@ export function AdaptiveModalSheet({
     [onClose],
   );
   const desktopStyle = useMemo(
-    () => ({ maxWidth: desktopMaxWidth ?? 520, height: desktopHeight }),
+    () => ({ maxWidth: desktopMaxWidth ?? 520, height: insetPercent(desktopHeight) }),
     [desktopHeight, desktopMaxWidth],
   );
   const handleDrawerAnimationEnd = useCallback((open: boolean) => {
@@ -314,7 +323,7 @@ export function AdaptiveModalSheet({
         />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[85%] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc((100%-3rem)*0.85)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
           style={desktopStyle}
         >
           <DialogPrimitive.Title className="sr-only">{header.title}</DialogPrimitive.Title>

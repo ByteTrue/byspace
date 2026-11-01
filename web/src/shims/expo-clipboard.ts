@@ -1,7 +1,29 @@
 // Transitional stand-in for `expo-clipboard`, backed by the async Clipboard API. Deleted at the cutover.
+// As expo-clipboard's web module: when the Clipboard API is missing or refuses (no permission, an
+// insecure origin, a sandboxed frame), copy through a hidden textarea and report whether that
+// worked. It never rejects, so callers that do not catch do not raise an unhandled rejection.
+function copyWithTextarea(text: string): boolean {
+  const field = document.createElement("textarea");
+  field.textContent = text;
+  document.body.appendChild(field);
+  field.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+  }
+}
+
 export async function setStringAsync(text: string): Promise<boolean> {
-  await navigator.clipboard.writeText(text);
-  return true;
+  try {
+    if (!navigator.clipboard) return copyWithTextarea(text);
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return copyWithTextarea(text);
+  }
 }
 
 export async function getStringAsync(): Promise<string> {

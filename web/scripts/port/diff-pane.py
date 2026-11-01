@@ -40,7 +40,7 @@ def check_leftovers(state, needles):
 HEADER = """// Generated from the Expo file by web/scripts/port/diff-pane.py.
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
 """
-EXTRA_MUTED = "text-muted-foreground/70"
+EXTRA_MUTED = "text-extra-muted-foreground"
 
 # ---------------------------------------------------------------- git/diff-pane.tsx
 pane = {"name": "diff-pane", "s": (APP / "git/diff-pane.tsx").read_text(encoding="utf-8")}

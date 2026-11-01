@@ -23,7 +23,8 @@
       "expo-file-system/legacy": ["./src/shims/expo-file-system__legacy.ts"],
       "expo-sharing": ["./src/shims/expo-sharing.ts"],
       "react-native-svg": ["./src/shims/react-native-svg.tsx"],
-      "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"]
+      "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"],
+      "@react-navigation/native": ["./src/shims/@react-navigation__native.ts"]
     }
   },
   "include": [

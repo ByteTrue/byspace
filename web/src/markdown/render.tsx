@@ -80,7 +80,8 @@ export const DEFAULT_MARKDOWN_RULES: Record<string, MarkdownRule> = {
       {children}
     </s>
   ),
-  hardbreak: (node) => <br key={node.key} {...copyTag("br")} />,
+  // packages/app's hardbreak is an 8px-tall full-width block: a new line plus 8px.
+  hardbreak: (node) => <span key={node.key} className="md-hardbreak" {...copyTag("br")} />,
   // A soft break is a line break here too: the Expo renderer emitted "\n" into pre-wrapped text.
   softbreak: (node) => <Fragment key={node.key}>{"\n"}</Fragment>,
   code_inline: (node) => (

@@ -111,7 +111,7 @@ export function TreeRail({ children, testID, width, onWidthChange, minimumWidth 
           role="separator"
           aria-orientation="vertical"
           data-testid={testID ? `${testID}-resize-handle` : "tree-rail-resize-handle"}
-          className="absolute inset-y-0 -left-[5px] z-10 w-2.5 cursor-col-resize after:absolute after:inset-y-0 after:left-[4px] after:w-0.5 after:bg-transparent after:transition-colors after:delay-100 hover:after:bg-border active:after:bg-ring"
+          className="absolute inset-y-0 -left-[5px] z-10 w-2.5 cursor-col-resize after:absolute after:inset-y-0 after:left-[5px] after:w-px after:bg-transparent after:transition-colors after:duration-0 hover:after:bg-foreground/25 hover:after:delay-100"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

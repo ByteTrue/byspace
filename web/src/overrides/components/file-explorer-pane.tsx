@@ -251,7 +251,7 @@ function EntryNameInputRow({
           autoCorrect="off"
           spellCheck={false}
           data-testid="file-explorer-name-input"
-          className="min-w-0 flex-1 bg-transparent p-0 text-sm leading-[18px] text-foreground outline-none placeholder:text-muted-foreground/70"
+          className="min-w-0 flex-1 bg-transparent p-0 text-sm leading-[18px] text-foreground outline-none placeholder:text-extra-muted-foreground"
         />
       </div>
     </div>
@@ -1148,7 +1148,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-file"
                 onPress={handleNewFileAtRoot}
               >
-                <FilePlus size={iconSize} className="text-muted-foreground/70" />
+                <FilePlus size={iconSize} className="text-extra-muted-foreground" />
               </ToolbarButton>
               <ToolbarButton
                 label={t("workspace.fileActions.newFolder")}
@@ -1156,7 +1156,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-folder"
                 onPress={handleNewFolderAtRoot}
               >
-                <FolderPlus size={iconSize} className="text-muted-foreground/70" />
+                <FolderPlus size={iconSize} className="text-extra-muted-foreground" />
               </ToolbarButton>
             </>
           ) : null}
@@ -1168,9 +1168,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
             onPress={handleToggleHiddenFiles}
           >
             {showHiddenFiles ? (
-              <Eye size={iconSize} className="text-muted-foreground/70" />
+              <Eye size={iconSize} className="text-extra-muted-foreground" />
             ) : (
-              <EyeOff size={iconSize} className="text-muted-foreground/70" />
+              <EyeOff size={iconSize} className="text-extra-muted-foreground" />
             )}
           </ToolbarButton>
           <ToolbarButton
@@ -1186,9 +1186,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           >
             <span className="flex size-4 items-center justify-center">
               {isRefreshFetching ? (
-                <Spinner className="size-3.5 text-muted-foreground/70" />
+                <Spinner className="size-3.5 text-extra-muted-foreground" />
               ) : (
-                <RotateCw size={iconSize} className="text-muted-foreground/70" />
+                <RotateCw size={iconSize} className="text-extra-muted-foreground" />
               )}
             </span>
           </ToolbarButton>

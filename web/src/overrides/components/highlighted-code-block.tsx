@@ -1,6 +1,7 @@
 // Override of packages/app/src/components/highlighted-code-block.tsx: a fenced code block with
 // @bytetrue/highlight colours and a copy button that shows on hover (always on a phone). The box
 // is the `.markdown pre` style; `variant` picks the fence or indented-block margins.
+import * as Clipboard from "expo-clipboard";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -78,7 +79,7 @@ function CopyButton({ getCode }: { getCode: () => string }) {
   const handleClick = useCallback(async () => {
     const content = getCode();
     if (!content) return;
-    await navigator.clipboard.writeText(content);
+    await Clipboard.setStringAsync(content);
     setCopied(true);
     if (resetRef.current) clearTimeout(resetRef.current);
     resetRef.current = setTimeout(() => {

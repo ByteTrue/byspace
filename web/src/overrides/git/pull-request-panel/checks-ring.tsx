@@ -24,7 +24,7 @@ const STROKE: Record<CheckPresentation, string> = {
   pending: "stroke-status-warning",
   manual: "stroke-muted-foreground",
   success: "stroke-status-success",
-  ignored: "stroke-muted-foreground/70",
+  ignored: "stroke-extra-muted-foreground",
 };
 
 interface RingSegment {

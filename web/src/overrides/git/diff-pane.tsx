@@ -196,7 +196,7 @@ interface ChangesSurfaceProps {
   onStateChange?: (state: ChangesState) => void;
 }
 
-const EXTRA_MUTED_ICON = "text-muted-foreground/70";
+const EXTRA_MUTED_ICON = "text-extra-muted-foreground";
 const noopStateChange = () => {};
 const DIFF_OPTIONS_WHITESPACE_ICON = <Pilcrow size={14} className="text-muted-foreground" />;
 const DIFF_OPTIONS_WRAP_ICON = <WrapText size={14} className="text-muted-foreground" />;

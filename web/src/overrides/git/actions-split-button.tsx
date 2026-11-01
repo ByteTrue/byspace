@@ -173,9 +173,9 @@ export function GitActionsSplitButton({
               <DropdownMenuTrigger
                 testID="changes-primary-cta-caret"
                 accessibilityLabel={t("workspace.git.actions.moreOptions")}
-                className="flex w-8 items-center justify-center border-l text-muted-foreground/70 hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
+                className="flex w-8 items-center justify-center border-l text-extra-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
               >
-                <ChevronDown size={16} />
+                <ChevronDown size={16} className="text-extra-muted-foreground" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" testID="changes-primary-cta-menu">
                 {gitActions.secondary.map((action, index) => (

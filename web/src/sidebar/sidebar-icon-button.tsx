@@ -10,6 +10,7 @@ export function SidebarIconButton({
   shortcutKeys,
   tooltipSide = "bottom",
   active = false,
+  fill = true,
   className,
   children,
   ...props
@@ -18,6 +19,8 @@ export function SidebarIconButton({
   shortcutKeys?: ShortcutKey[][] | null;
   tooltipSide?: "top" | "bottom";
   active?: boolean;
+  /** packages/app's footer buttons only darken their glyph on hover; header buttons also fill. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
@@ -32,6 +35,7 @@ export function SidebarIconButton({
           className={cn(
             "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground [&_svg]:size-4",
             active && "text-sidebar-foreground",
+            !fill && "hover:bg-transparent data-[state=open]:bg-transparent",
             className,
           )}
           {...props}

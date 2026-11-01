@@ -247,7 +247,7 @@ export function CompactModelSheet({
             {shortModelLabel(rootBrowser.triggerLabel)}
           </span>
           {thinkingLabel ? (
-            <span className="shrink-0 text-muted-foreground/70">{thinkingLabel}</span>
+            <span className="shrink-0 text-extra-muted-foreground">{thinkingLabel}</span>
           ) : null}
         </span>
       </ComboboxTrigger>

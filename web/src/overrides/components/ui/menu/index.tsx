@@ -93,6 +93,9 @@ export interface MenuContextValue {
 const MenuKindContext = createContext<MenuKind>("dropdown");
 const MenuStateContext = createContext<MenuContextValue | null>(null);
 const MenuPagesContext = createContext<ReadonlyMap<string, MenuPageDefinition>>(new Map());
+// The surface's minimum width: packages/app's flyouts took it (MenuFlyout's minWidth), not the
+// surface's width; they size to their rows.
+const MenuSurfaceMinWidthContext = createContext<CSSProperties["minWidth"]>(undefined);
 
 export function useMenuContext(componentName: string): MenuContextValue {
   const value = useContext(MenuStateContext);
@@ -308,7 +311,11 @@ export function MenuSurface({
     () => ({ width, minWidth, maxWidth, maxHeight }),
     [maxHeight, maxWidth, minWidth, width],
   );
-  const body = <MenuPagesContext value={pageMap}>{children}</MenuPagesContext>;
+  const body = (
+    <MenuSurfaceMinWidthContext value={minWidth}>
+      <MenuPagesContext value={pageMap}>{children}</MenuPagesContext>
+    </MenuSurfaceMinWidthContext>
+  );
   if (menu.presentation === "sheet") {
     return (
       <MenuSheetSurface sheetTitle={sheetTitle} pageMap={pageMap} testID={testID}>
@@ -412,8 +419,8 @@ export interface MenuItemProps {
   className?: string;
 }
 
-const SUCCESS_ICON = <Check className="text-status-success" />;
-const SELECTED_ICON = <Check className="text-muted-foreground" />;
+const SUCCESS_ICON = <Check className="size-4 text-status-success" />;
+const SELECTED_ICON = <Check className="size-4 text-muted-foreground" />;
 const PENDING_ICON = <Spinner />;
 
 /** The row's label and leading glyph for its action status: pending and success swap both. */
@@ -457,7 +464,7 @@ function MenuItemBody({
     <span className="flex min-w-0 flex-1 flex-col">
       <span className={cn("truncate", isSuccess && "text-status-success")}>{label}</span>
       {description ? (
-        <span className="line-clamp-2 text-xs text-muted-foreground">{description}</span>
+        <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{description}</span>
       ) : null}
     </span>
   );
@@ -545,7 +552,7 @@ export function MenuItem({
   );
   const selectCheck = showSelectedCheck ? (
     <span className="flex size-4 shrink-0 items-center justify-center">
-      {selected ? <Check /> : null}
+      {selected ? <Check className="size-4" /> : null}
     </span>
   ) : null;
   const trailView = trail ? (
@@ -658,7 +665,7 @@ function SheetSubTrigger({
       className={SHEET_ROW}
     >
       {children}
-      <ChevronRight className={cn("text-muted-foreground", !hasValue && "ml-auto")} />
+      <ChevronRight className={cn("size-3.5 text-muted-foreground", !hasValue && "ml-auto")} />
     </button>
   );
 }
@@ -682,11 +689,16 @@ export function MenuSubTrigger({
   const kind = useContext(MenuKindContext);
   const menu = useMenuContext("MenuSubTrigger");
   const page = useContext(MenuPagesContext).get(id);
+  const surfaceMinWidth = useContext(MenuSurfaceMinWidthContext);
+  const flyoutStyle = useMemo(() => ({ minWidth: surfaceMinWidth }), [surfaceMinWidth]);
   const valueView = value ? (
-    <span className="ml-auto min-w-0 truncate pl-2 text-muted-foreground">{value}</span>
+    <span className="-mr-0.5 ml-auto min-w-0 truncate pl-2 text-muted-foreground">{value}</span>
   ) : null;
   const indicatorView = indicator ? (
-    <span className="size-1.5 shrink-0 rounded-full bg-primary" data-testid="menu-sub-indicator" />
+    <span
+      className="-mr-0.5 size-1.5 shrink-0 rounded-full bg-primary"
+      data-testid="menu-sub-indicator"
+    />
   ) : null;
   if (menu.presentation === "sheet") {
     return (
@@ -709,7 +721,7 @@ export function MenuSubTrigger({
         {valueView}
         {indicatorView}
       </SubTrigger>
-      <SubContent>{page?.content}</SubContent>
+      <SubContent style={flyoutStyle}>{page?.content}</SubContent>
     </Sub>
   );
 }
@@ -754,7 +766,7 @@ export function MenuHint({
   return (
     <div
       data-testid={testID}
-      className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs text-muted-foreground"
+      className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground"
     >
       <span className="min-w-0 shrink">{children}</span>
       {trailing}

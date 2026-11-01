@@ -92,14 +92,17 @@ const TRAILING: ReadonlyArray<[SidebarTrailingChoice, Icon, string]> = [
 /** Marks a submenu whose filter is narrowing the list, so it shows from the root without opening it. */
 function FilterIndicator({ on }: { on: boolean }) {
   return on ? (
-    <span className="ml-auto size-1.5 rounded-full bg-primary" aria-hidden="true" />
+    <span className="-mr-0.5 ml-auto size-1.5 rounded-full bg-primary" aria-hidden="true" />
   ) : null;
 }
 
 /** The current choice beside a submenu's label, pushed right against its chevron. */
 function SubValue({ children }: { children: string }) {
   return (
-    <span className="min-w-0 flex-1 truncate text-right text-muted-foreground">{children}</span>
+    // -mr-0.5: packages/app keeps 6px between a submenu's value and its chevron (the row gap is 8).
+    <span className="-mr-0.5 min-w-0 flex-1 truncate text-right text-muted-foreground">
+      {children}
+    </span>
   );
 }
 
@@ -176,7 +179,7 @@ function RadioSubmenu<T extends string>({
         {label}
         {showValue && current ? <SubValue>{t(current)}</SubValue> : null}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
+      <DropdownMenuSubContent className="menu-icons-sm">
         <DropdownMenuRadioGroup value={value} onValueChange={handleChange}>
           {options.map(([option, ItemIcon, labelKey]) => (
             <DropdownMenuRadioItem key={option} value={option} data-testid={optionTestId(option)}>
@@ -210,7 +213,7 @@ function ShowSubmenu({ preferences }: { preferences: DisplayPreferences }) {
       <DropdownMenuSubTrigger data-testid="sidebar-display-show">
         {t("sidebar.display.show.label")}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
+      <DropdownMenuSubContent className="menu-icons-sm">
         {SIDEBAR_ROW_ITEMS.map((item) => {
           const [ItemIcon, labelKey] = ROW_ITEMS[item];
           return (
@@ -263,7 +266,7 @@ function HostFilterSubmenu({ preferences }: { preferences: DisplayPreferences })
         {t("sidebar.display.hostFilter.label")}
         <FilterIndicator on={preferences.hostFilters.length > 0} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-56">
+      <DropdownMenuSubContent className="menu-icons-sm">
         <ActionToggleItem
           checked={preferences.hostFilters.length === 0}
           onSelect={preferences.clearHostFilters}
@@ -301,7 +304,7 @@ function ProjectFilterSubmenu({ preferences }: { preferences: DisplayPreferences
         {t("sidebar.display.projectFilter.label")}
         <FilterIndicator on={resolvedProjectFilters.length > 0} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-80 w-60 overflow-y-auto">
+      <DropdownMenuSubContent className="menu-icons-sm max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto">
         <ActionToggleItem
           checked={resolvedProjectFilters.length === 0}
           onSelect={preferences.clearProjectFilters}
@@ -351,7 +354,7 @@ function LabelFilterSubmenu({
         {t("workspaceLabels.title")}
         <FilterIndicator on={labelFilterActive} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-56">
+      <DropdownMenuSubContent className="menu-icons-sm">
         {labels.map((label) => (
           <ToggleItem
             key={workspaceLabelKey(label.name)}
@@ -417,7 +420,7 @@ export function SidebarDisplayPreferencesMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-60"
+          className="menu-icons-sm w-[232px]"
           data-testid="sidebar-display-preferences-content"
           sheetTitle={t("sidebar.display.heading")}
         >

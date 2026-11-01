@@ -9,6 +9,8 @@ import { I18nProvider } from "@/i18n/provider";
 import { KeyboardActionDispatcherProvider } from "@/keyboard/keyboard-action-dispatcher-context";
 import { AppChrome } from "~/app/app-chrome";
 import { DownloadToast } from "@/components/download-toast";
+import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
+import { ChangelogHost } from "@/changelog";
 import { ConfirmDialogHost } from "~/app/confirm-dialog-host";
 import { KeyboardShortcutsDialog } from "~/app/keyboard-shortcuts-dialog";
 import {
@@ -66,6 +68,8 @@ export function Root() {
           <ConfirmDialogHost />
           <KeyboardShortcutsDialog />
           <PendingDialogsHost />
+          <ChangelogHost />
+          <AppDiagnosticHost />
         </TooltipProvider>
       </RuntimeProviders>
     </RootProviders>

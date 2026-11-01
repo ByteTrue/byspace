@@ -28,7 +28,7 @@ import {
   type WorkspaceServiceSummary,
 } from "@/components/sidebar/workspace-meta-row/service-summary";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
-import { formatDiffCount } from "@/git/file-header-presentation";
+import { DiffStat } from "@/components/diff-stat";
 import type { PrHint } from "@/git/pr-hint";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
@@ -265,8 +265,13 @@ function MetaItem({
           <span className="truncate">{item.name}</span>
           {item.kind === "project" && item.cue ? (
             <>
-              <span aria-hidden="true">·</span>
-              <span className="truncate" data-testid="sidebar-workspace-project-cue">
+              <span aria-hidden="true" className="text-extra-muted-foreground">
+                ·
+              </span>
+              <span
+                className="truncate text-extra-muted-foreground"
+                data-testid="sidebar-workspace-project-cue"
+              >
                 {item.cue}
               </span>
             </>
@@ -330,7 +335,11 @@ export function WorkspaceMetaRow({
     <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
       {items.map((item, index) => (
         <Fragment key={item.kind}>
-          {index > 0 ? <span aria-hidden="true">·</span> : null}
+          {index > 0 ? (
+            <span aria-hidden="true" className="text-extra-muted-foreground">
+              ·
+            </span>
+          ) : null}
           <MetaItem item={item} hostBadge={hostBadge} />
         </Fragment>
       ))}
@@ -338,20 +347,14 @@ export function WorkspaceMetaRow({
   );
 }
 
-export function DiffStat({ additions, deletions }: { additions: number; deletions: number }) {
-  return (
-    <span className="flex shrink-0 items-center gap-1 font-mono text-xs tabular-nums">
-      <span className="text-status-success">+{formatDiffCount(additions)}</span>
-      <span className="text-status-danger">-{formatDiffCount(deletions)}</span>
-    </span>
-  );
-}
+// packages/app's DiffStat, which the sidebar and the hover card share with the Changes pane.
+export { DiffStat };
 
 function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {
   const label = useCompactTimeAgo(enteredAt);
   return (
     <span
-      className="shrink-0 text-xs text-muted-foreground tabular-nums"
+      className="h-5 shrink-0 text-xs leading-5 text-extra-muted-foreground"
       data-testid="sidebar-workspace-timestamp"
     >
       {label}

@@ -609,7 +609,9 @@ function ComboboxSheet({
       {header ? null : (
         <>
           <div className="px-6 pb-2">
-            <span className="text-sm font-medium text-foreground">{title}</span>
+            <span className="block text-sm leading-[normal] font-medium text-foreground">
+              {title}
+            </span>
           </div>
           {stickyHeader}
           {search ? <SearchInput {...search} /> : null}
@@ -617,7 +619,9 @@ function ComboboxSheet({
       )}
       {scrollBody ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className={cn("px-2 pt-1 pb-8", bodyClassName)}>{children}</div>
+          {/* packages/app asks for 8px sides, 4 top and 32 bottom here, but gorhom's web scroll
+              view drops that contentContainerStyle, so its rows sit at the sheet's edges. */}
+          <div className={bodyClassName}>{children}</div>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -697,8 +701,10 @@ function ComboboxPopover({
           <PopoverPrimitive.Content
             side={placement === "top-start" ? "top" : "bottom"}
             align="start"
-            sideOffset={4}
-            collisionPadding={8}
+            // packages/app's floating middleware: 5px from the anchor on the web, 16px from the
+            // window edges.
+            sideOffset={5}
+            collisionPadding={16}
             role="dialog"
             data-testid="combobox-desktop-container"
             onKeyDown={onKeyDown}

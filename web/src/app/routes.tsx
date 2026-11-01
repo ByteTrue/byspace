@@ -7,6 +7,7 @@ import { useHostRegistryStatus, useHosts } from "@/runtime/host-runtime";
 import { buildSettingsSectionRoute } from "@/utils/host-routes";
 import { hrefToPath } from "~/shims/expo-router";
 import { PlaceholderPage } from "~/app/placeholder-page";
+import SettingsScreen from "@/screens/settings-screen";
 
 /** packages/app/src/app/h/[serverId]/_layout.tsx: an unknown host redirects, a known one scopes its leaves. */
 export function HostLayout() {
@@ -30,10 +31,12 @@ export function HostLayout() {
 }
 
 /** packages/app/src/app/settings/index.tsx: desktop opens General, compact shows the section list. */
+const SETTINGS_ROOT_VIEW = { kind: "root" as const };
+
 export function SettingsIndexRoute() {
   const isCompact = useIsCompactFormFactor();
   if (!isCompact) return <Navigate to={hrefToPath(buildSettingsSectionRoute("general"))} replace />;
-  return <PlaceholderPage title="Settings" step={4} />;
+  return <SettingsScreen view={SETTINGS_ROOT_VIEW} />;
 }
 
 /** A page that has not moved yet, behind the same host-registry wait as its Expo route. */

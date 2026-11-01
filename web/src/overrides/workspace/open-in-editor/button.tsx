@@ -174,7 +174,7 @@ export function WorkspaceOpenInEditorButton({
             <DropdownMenuTrigger
               testID="workspace-open-in-editor-caret"
               accessibilityLabel={t("workspace.git.openInEditor.chooseEditor")}
-              className="flex w-8 items-center justify-center border-l text-muted-foreground/70 hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
+              className="flex w-8 items-center justify-center border-l text-extra-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
             >
               <ChevronDown size={16} />
             </DropdownMenuTrigger>

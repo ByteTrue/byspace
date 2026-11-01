@@ -170,7 +170,9 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
             <div key={group.id} className="flex flex-col gap-1">
               {group.label ? (
                 <div className="mb-1 flex items-center justify-between px-0.5">
-                  <span className="text-xs leading-6 text-muted-foreground/70">{group.label}</span>
+                  <span className="text-xs leading-6 text-extra-muted-foreground">
+                    {group.label}
+                  </span>
                   {group.accessory ? (
                     <button
                       type="button"
@@ -179,7 +181,7 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
                       data-testid="workspace-new-tab-edit-terminal-profiles"
                       className="-m-1 flex size-6 items-center justify-center rounded-md outline-none hover:bg-accent"
                     >
-                      <Pencil className="size-3 text-muted-foreground opacity-50" />
+                      <Pencil className="size-3 text-extra-muted-foreground opacity-50" />
                     </button>
                   ) : null}
                 </div>

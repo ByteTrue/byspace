@@ -9,6 +9,10 @@ import NewWorkspaceRoute from "@/app/new";
 import LegacyHostSettingsRoute from "@/app/h/[serverId]/settings";
 import StartupIndexRoute from "@/app/index";
 import SettingsHostIndexRoute from "@/app/settings/hosts/[serverId]/index";
+import SettingsSectionRoute from "@/app/settings/[section]";
+import SettingsHostSectionRoute from "@/app/settings/hosts/[serverId]/[hostSection]";
+import SettingsHostProjectsRoute from "@/app/settings/hosts/[serverId]/projects/index";
+import SettingsHostProjectDetailRoute from "@/app/settings/hosts/[serverId]/projects/[projectId]";
 import { Root } from "~/app/root";
 import { HostLayout, PendingPage, SettingsIndexRoute } from "~/app/routes";
 
@@ -28,19 +32,19 @@ export const router = createBrowserRouter([
       { path: "schedules", element: <PendingPage title="Schedules" step={4} /> },
       { path: "tunnels", element: <PendingPage title="Tunnels" step={4} /> },
       { path: "settings", element: <SettingsIndexRoute /> },
-      { path: "settings/:section", element: <PendingPage title="Settings" step={4} /> },
+      { path: "settings/:section", element: <SettingsSectionRoute /> },
       { path: "settings/hosts/:serverId", element: <SettingsHostIndexRoute /> },
       {
         path: "settings/hosts/:serverId/:hostSection",
-        element: <PendingPage title="Host settings" step={4} />,
+        element: <SettingsHostSectionRoute />,
       },
       {
         path: "settings/hosts/:serverId/projects",
-        element: <PendingPage title="Projects" step={4} />,
+        element: <SettingsHostProjectsRoute />,
       },
       {
         path: "settings/hosts/:serverId/projects/:projectId",
-        element: <PendingPage title="Project settings" step={4} />,
+        element: <SettingsHostProjectDetailRoute />,
       },
       {
         path: "h/:serverId",

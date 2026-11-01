@@ -49,7 +49,7 @@ export function SidebarResizeHandle({
       data-testid="left-sidebar-resize-handle"
       role="separator"
       aria-orientation="vertical"
-      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-sidebar-border active:after:bg-sidebar-ring"
+      className="absolute inset-y-0 -right-[5px] z-20 w-2.5 cursor-col-resize after:absolute after:inset-y-0 after:left-[5px] after:w-px after:bg-transparent after:transition-colors after:duration-0 hover:after:bg-foreground/25 hover:after:delay-100"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

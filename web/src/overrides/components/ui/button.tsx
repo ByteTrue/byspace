@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button as ShadButton } from "~/components/ui/button";
+import { cn } from "cn";
 import { Spinner } from "~/components/ui/spinner";
 
 type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive";
@@ -23,6 +24,26 @@ type LeftIcon =
   | null;
 
 const SIZE = { xs: "xs", sm: "sm", md: "default", lg: "lg" } as const;
+// packages/app's buttons: 14px text at every size but xs (shadcn's sm is 0.8rem), and below md the
+// touch heights 28 / 32 / 44 / 44 instead of shadcn's 24 / 28 / 32 / 36 (control-geometry.ts).
+const PHONE_HEIGHT: Record<ButtonSize, string> = {
+  xs: "max-md:h-7",
+  sm: "max-md:h-8",
+  md: "max-md:h-11",
+  lg: "max-md:h-11",
+};
+// A caller that sizes the button itself (as packages/app's style overrides did) keeps that size.
+const CALLER_HEIGHT = /(^|\s)(h|size|min-h)-/;
+
+function sizeClassName(size: ButtonSize, className: string | undefined): string {
+  return cn(
+    // packages/app's buttons keep 6px between icon and label at every size; shadcn's xs and sm use 4.
+    "gap-1.5",
+    size === "sm" && "text-sm",
+    !(className && CALLER_HEIGHT.test(className)) && PHONE_HEIGHT[size],
+    className,
+  );
+}
 const ICON_SIZE: Record<ButtonSize, number> = { xs: 12, sm: 14, md: 16, lg: 16 };
 
 function renderLeftIcon(leftIcon: LeftIcon | undefined, size: number): ReactNode {
@@ -94,7 +115,7 @@ export function Button({
       disabled={disabled || loading}
       data-testid={testID}
       aria-label={accessibilityLabel}
-      className={className}
+      className={sizeClassName(size, className)}
       style={
         style && typeof style === "object" && !Array.isArray(style)
           ? (style as CSSProperties)

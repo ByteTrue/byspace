@@ -34,7 +34,8 @@ function DrawerOverlay({
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        // BySpace: packages/app's bottom sheets dim with plain black at 0.45 (gorhom's backdrop).
+        "fixed inset-0 z-50 bg-black/45 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -44,12 +45,19 @@ function DrawerOverlay({
 
 function DrawerContent({
   className,
+  handleClassName,
+  overlayClassName,
   children,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Content>) {
+}: React.ComponentProps<typeof DrawerPrimitive.Content> & {
+  /** BySpace: restyles the grab handle (packages/app's menu sheets use a wider, lighter one). */
+  handleClassName?: string
+  /** BySpace: restyles the dimming (packages/app's tool call sheets use 0.5). */
+  overlayClassName?: string
+}) {
   return (
     <DrawerPortal data-slot="drawer-portal">
-      <DrawerOverlay />
+      <DrawerOverlay className={overlayClassName} />
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
@@ -58,7 +66,14 @@ function DrawerContent({
         )}
         {...props}
       >
-        <div className="mx-auto mt-4 hidden h-1 w-[100px] shrink-0 rounded-full bg-muted group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
+        {/* BySpace: @gorhom/bottom-sheet's handle as packages/app drew it: 30x4 in zinc-600, 10px
+            below the sheet's top edge (9 under this 1px border) and 10px above the content. */}
+        <div
+          className={cn(
+            "mx-auto mt-[9px] mb-2.5 hidden h-1 w-[30px] shrink-0 rounded-full bg-[#52525b] group-data-[vaul-drawer-direction=bottom]/drawer-content:block",
+            handleClassName
+          )}
+        />
         {children}
       </DrawerPrimitive.Content>
     </DrawerPortal>

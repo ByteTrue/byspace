@@ -3,6 +3,7 @@
 // and route choice). Same mutations, restart model and test IDs. The panel is a popover rather
 // than a menu: its rows hold several buttons each, which a menu's single-item focus model hides
 // from the keyboard.
+import * as Clipboard from "expo-clipboard";
 import {
   createContext,
   useCallback,
@@ -519,7 +520,7 @@ export function WorkspaceScriptsButton({
   );
   const handleCopyUrl = useCallback(
     (url: string, label: string) => {
-      void navigator.clipboard.writeText(url);
+      void Clipboard.setStringAsync(url);
       toast.copied(label);
     },
     [toast],
@@ -560,7 +561,7 @@ export function WorkspaceScriptsButton({
                   {t("workspace.scripts.title")}
                 </span>
               )}
-              {ghost ? null : <ChevronDown size={16} className="text-muted-foreground/70" />}
+              {ghost ? null : <ChevronDown size={16} className="text-extra-muted-foreground" />}
             </span>
           </button>
         </PopoverTrigger>

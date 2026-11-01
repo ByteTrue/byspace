@@ -59,6 +59,7 @@ export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
         onAnimationEnd={handleAnimationEnd}
         aria-describedby={undefined}
         className="bg-muted"
+        overlayClassName="bg-black/50"
       >
         {sheetData ? <ToolCallSheetContent data={sheetData} onClose={closeToolCall} /> : null}
       </SnapDrawer>

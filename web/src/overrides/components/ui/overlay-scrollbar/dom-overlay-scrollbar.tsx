@@ -153,7 +153,10 @@ export function DomOverlayScrollbar({
         data-testid="workspace-overlay-scrollbar-grab"
       >
         <div
-          className={cn("h-full rounded-full", active ? "bg-muted-foreground" : "bg-ring")}
+          className={cn(
+            "h-full rounded-full",
+            active ? "bg-muted-foreground" : "bg-extra-muted-foreground",
+          )}
           style={thumbStyle}
           data-testid="workspace-overlay-scrollbar-thumb"
         />

@@ -50,6 +50,11 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
+  /* BySpace: packages/app's foregroundExtraMuted, a step below muted (timestamps, chevrons, icons). */
+  --color-extra-muted-foreground: var(--extra-muted-foreground);
+  /* BySpace: packages/app's interactionHighlight, the translucent hover/open fill of icon controls
+     and ghost buttons; translucent, so it reads the same on every surface. */
+  --color-interaction-highlight: var(--interaction-highlight);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
@@ -86,13 +91,14 @@
 }
 
 :root {
-  /* BySpace: default stacks; Geist first, then CJK and platform faces. */
+  /* BySpace: the default stacks of packages/app/src/styles/theme.ts (DEFAULT_UI_FONT_STACK,
+     DEFAULT_MONO_FONT_STACK); Geist is "Geist Variable" here, the name @fontsource registers. */
   --app-font-sans:
     "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
-    "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+    "PingFang SC", "Microsoft YaHei UI", Roboto, system-ui, sans-serif;
   --app-font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", Consolas, "Liberation Mono",
-    "Microsoft YaHei UI", monospace;
+    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
   --content-font-size: 15px;
   --code-font-size: 12px;
   --background: oklch(1 0 0);
@@ -108,6 +114,8 @@
   --muted: oklch(0.97 0 0);
   /* BySpace: #6e6e6e instead of oklch(0.556 0 0) (#737373, 4.35:1 on muted); clears 4.5:1. */
   --muted-foreground: #6e6e6e;
+  --extra-muted-foreground: #a1a1a1;
+  --interaction-highlight: rgba(0, 0, 0, 0.04);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -153,6 +161,8 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
+  --extra-muted-foreground: #737373;
+  --interaction-highlight: rgba(255, 255, 255, 0.06);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
@@ -200,7 +210,10 @@
     height: 100%;
   }
   /* BySpace: menu icons in the muted colour, as packages/app's menus draw them. */
-  [data-slot*="menu-"] > svg:not([class*="text-"]) {
+  [data-slot*="menu-"]:not([data-slot="dropdown-menu-trigger"]):not(
+      [data-slot="context-menu-trigger"]
+    )
+    > svg:not([class*="text-"]) {
     color: var(--muted-foreground);
   }
   /* BySpace: selected text is a faint wash of the foreground, not the system blue. */
@@ -330,13 +343,21 @@
     align-items: flex-start;
     margin-bottom: 4px;
   }
+  /* margin-left: react-native-markdown-display's own list-icon default (10px), which packages/app's
+     styles never overrode, so every list in the Expo app sat 10px in per level. */
   .markdown .md-marker {
+    margin-left: 10px;
     margin-right: 4px;
     color: var(--muted-foreground);
     font-weight: 400;
   }
   .markdown .md-marker-ordered {
     min-width: 12px;
+  }
+  .markdown .md-hardbreak {
+    display: block;
+    width: 100%;
+    height: 8px;
   }
   .markdown .md-li-content {
     flex: 1;
@@ -485,4 +506,17 @@
 [data-slot="sidebar"][data-mobile="true"] {
   width: 100%;
   max-width: none;
+}
+
+/* BySpace: packages/app's sidebar menus pass 14px icons (ICON_SIZE.sm) where the workspace's menus
+   pass 16px; a sidebar menu surface carries this class. Unlayered, so it beats the menu item's
+   default icon size. The icon stays centred in the row's 16px leading slot. */
+.menu-icons-sm [role^="menuitem"] > svg[width="24"]:not([class*="size-"]) {
+  width: 14px;
+  height: 14px;
+}
+.menu-icons-sm
+  [role^="menuitem"]
+  > svg[width="24"]:first-of-type:not(.ml-auto):not([class*="size-"]) {
+  margin-inline: 1px;
 }

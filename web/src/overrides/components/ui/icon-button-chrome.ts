@@ -34,9 +34,11 @@ export function iconButtonChromeClassName({
   let frame = "size-8 md:size-7";
   if (size === "small") frame = compact ? "size-8" : "size-5";
   return cn(
-    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+    // As packages/app's chrome: hovered, pressed, open or active fills with the interaction
+    // highlight; the glyph keeps the colour its caller gave it.
+    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-highlight focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
     frame,
-    active && "bg-accent text-foreground",
+    active && "bg-interaction-highlight",
     disabled && "pointer-events-none opacity-50",
     className,
   );

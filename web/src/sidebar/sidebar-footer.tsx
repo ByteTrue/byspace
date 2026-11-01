@@ -51,7 +51,7 @@ export function SidebarFooter({
             data-testid="sidebar-add-project"
             className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2"
           >
-            <FolderPlus className="size-4 shrink-0" />
+            <FolderPlus className="size-3.5 shrink-0" />
             <span className="truncate">{t("sidebar.actions.addProject")}</span>
           </button>
         </TooltipTrigger>
@@ -62,6 +62,7 @@ export function SidebarFooter({
       </Tooltip>
       <SidebarHostPicker onAddHost={addHost} onOpenHostSettings={openHostSettings}>
         <SidebarIconButton
+          fill={false}
           label={t("sidebar.actions.hosts")}
           tooltipSide="top"
           data-testid="sidebar-hosts-trigger"
@@ -70,6 +71,7 @@ export function SidebarFooter({
         </SidebarIconButton>
       </SidebarHostPicker>
       <SidebarIconButton
+        fill={false}
         label={t("importSession.title")}
         tooltipSide="top"
         onClick={onImportSession}
@@ -79,6 +81,7 @@ export function SidebarFooter({
       </SidebarIconButton>
       <SidebarHelpMenu />
       <SidebarIconButton
+        fill={false}
         label={t("sidebar.actions.settings")}
         shortcutKeys={settingsKeys}
         tooltipSide="top"
