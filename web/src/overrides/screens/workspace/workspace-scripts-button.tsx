@@ -546,7 +546,7 @@ export function WorkspaceScriptsButton({
               "flex items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
               ghost
                 ? "size-8 rounded-lg hover:bg-muted aria-expanded:bg-muted"
-                : "h-8 rounded-md border bg-background px-3 shadow-xs hover:bg-muted aria-expanded:bg-muted md:h-7 md:px-2 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+                : "h-8 rounded-md border bg-background px-3 hover:bg-muted aria-expanded:bg-muted md:h-7 md:px-2 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
             )}
           >
             <span className="flex items-center justify-center gap-1.5 md:gap-1">

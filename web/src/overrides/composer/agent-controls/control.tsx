@@ -40,7 +40,9 @@ function triggerClassName({
 }): string {
   if (isSheet) {
     return cn(
-      "-mx-1 flex min-h-11 min-w-0 items-center gap-2 rounded-2xl bg-muted/50 px-4 hover:bg-muted",
+      // packages/app's sheet row: a surface1 card with a 16px radius, surface2 while hovered,
+      // pressed or open
+      "-mx-1 flex min-h-11 min-w-0 items-center gap-2 rounded-[16px] bg-card px-4 hover:bg-muted active:bg-muted",
       open && "bg-muted",
       disabled && "opacity-50",
       className,

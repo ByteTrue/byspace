@@ -58,7 +58,8 @@ export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
         snapPoints={SNAP_POINTS}
         onAnimationEnd={handleAnimationEnd}
         aria-describedby={undefined}
-        className="bg-muted"
+        // packages/app's ToolCallSheetModal: surface2 with the lg (10px) radius
+        className="bg-muted data-[vaul-drawer-direction=bottom]:rounded-t-[10px]"
         overlayClassName="bg-black/50"
       >
         {sheetData ? <ToolCallSheetContent data={sheetData} onClose={closeToolCall} /> : null}

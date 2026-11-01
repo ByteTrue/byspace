@@ -1,17 +1,67 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { FolderPlus, Import, Server, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { HostPicker } from "@/components/hosts/host-picker";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { openHostOverview } from "@/navigation/settings-navigation";
+import { useHosts } from "@/runtime/host-runtime";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { router } from "expo-router";
 import { Shortcut } from "~/components/shortcut";
 import { SidebarFooter as SidebarFooterFrame } from "~/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { SidebarHelpMenu } from "~/sidebar/help-menu";
-import { SidebarHostPicker } from "~/sidebar/host-picker";
 import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
+
+function sidebarHostOptionTestID(serverId: string): string {
+  return `sidebar-host-row-${serverId}`;
+}
+
+/** packages/app's SidebarHostsButton: the shared host picker, opening upwards from the footer. */
+function SidebarHostsButton({
+  onAddHost,
+  onOpenHostSettings,
+}: {
+  onAddHost: () => void;
+  onOpenHostSettings: (serverId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const hosts = useHosts();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const handleOpen = useCallback(() => setIsOpen(true), []);
+  return (
+    <HostPicker
+      hosts={hosts}
+      value=""
+      onSelect={onOpenHostSettings}
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      anchorRef={triggerRef}
+      includeAddHost
+      onAddHost={onAddHost}
+      showActiveConnection
+      onOpenHostSettings={onOpenHostSettings}
+      searchable
+      desktopPlacement="top-start"
+      desktopMinWidth={240}
+      addHostTestID="sidebar-host-add"
+      hostOptionTestID={sidebarHostOptionTestID}
+    >
+      <SidebarIconButton
+        ref={triggerRef}
+        fill={false}
+        label={t("sidebar.actions.hosts")}
+        tooltipSide="top"
+        onClick={handleOpen}
+        data-testid="sidebar-hosts-trigger"
+      >
+        <Server />
+      </SidebarIconButton>
+    </HostPicker>
+  );
+}
 
 /** packages/app's SidebarFooter: Add project on the left, hosts, import, help and settings on the right. */
 export function SidebarFooter({
@@ -60,16 +110,7 @@ export function SidebarFooter({
           <Shortcut chord={newAgentKeys} />
         </TooltipContent>
       </Tooltip>
-      <SidebarHostPicker onAddHost={addHost} onOpenHostSettings={openHostSettings}>
-        <SidebarIconButton
-          fill={false}
-          label={t("sidebar.actions.hosts")}
-          tooltipSide="top"
-          data-testid="sidebar-hosts-trigger"
-        >
-          <Server />
-        </SidebarIconButton>
-      </SidebarHostPicker>
+      <SidebarHostsButton onAddHost={addHost} onOpenHostSettings={openHostSettings} />
       <SidebarIconButton
         fill={false}
         label={t("importSession.title")}

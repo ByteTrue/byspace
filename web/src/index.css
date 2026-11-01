@@ -80,6 +80,17 @@
  * follows the interface font size setting (--ui-font-scale, 1 at the default 14px) while spacing
  * stays put, the same split the Expo app makes.
  */
+/*
+ * BySpace: shadows are packages/app's theme.shadow (sm / md / lg), which are shadcn's first layers
+ * in light and darker, wider ones in every dark theme. xs and sm both mean the Expo `sm`.
+ */
+@theme inline {
+  --shadow-xs: var(--app-shadow-sm);
+  --shadow-sm: var(--app-shadow-sm);
+  --shadow-md: var(--app-shadow-md);
+  --shadow-lg: var(--app-shadow-lg);
+}
+
 @theme {
   --breakpoint-md: 45rem;
   --text-xs: calc(0.75rem * var(--ui-font-scale, 1));
@@ -91,6 +102,9 @@
 }
 
 :root {
+  --app-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --app-shadow-md: 0 4px 6px 0 rgba(0, 0, 0, 0.1);
+  --app-shadow-lg: 0 10px 15px 0 rgba(0, 0, 0, 0.1);
   /* BySpace: the default stacks of packages/app/src/styles/theme.ts (DEFAULT_UI_FONT_STACK,
      DEFAULT_MONO_FONT_STACK); Geist is "Geist Variable" here, the name @fontsource registers. */
   --app-font-sans:
@@ -149,6 +163,9 @@
 }
 
 .dark {
+  --app-shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+  --app-shadow-md: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+  --app-shadow-lg: 0 12px 24px 0 rgba(0, 0, 0, 0.4);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -196,6 +213,16 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  /* BySpace: packages/app's focus ring (its public/index.html): nothing on a mouse focus, and on a
+     keyboard focus or in a text field a 3px ring of one translucent grey, flush with the border.
+     A component that draws its own ring says outline-none. */
+  *:focus {
+    outline: none;
+  }
+  *:focus-visible {
+    outline: 3px solid rgba(161, 161, 161, 0.5);
+    outline-offset: 0;
   }
   body {
     @apply bg-background text-foreground;

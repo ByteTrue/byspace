@@ -21,7 +21,7 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-2" data-testid={testID}>
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-sm leading-[normal] font-medium text-foreground">{label}</span>
       {children}
       {error ? (
         <span
@@ -62,7 +62,15 @@ export const FormTextInput = forwardRef<
       multiline={multiline}
       className={formInputClassName(
         size,
-        cn(multiline && "h-auto min-h-16 py-2 md:h-auto", className),
+        // packages/app's multiline field keeps the size's padding (sm 5 / 3, md 11 / 5) and grows
+        // by 20px lines.
+        cn(
+          multiline &&
+            (size === "sm"
+              ? "h-auto py-[5px] leading-5 md:h-auto md:py-[3px]"
+              : "h-auto py-[11px] leading-5 md:h-auto md:py-[5px]"),
+          className,
+        ),
       )}
       {...props}
     />

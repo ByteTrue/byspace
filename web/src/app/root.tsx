@@ -11,8 +11,9 @@ import { AppChrome } from "~/app/app-chrome";
 import { DownloadToast } from "@/components/download-toast";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
 import { ChangelogHost } from "@/changelog";
+import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { ConfirmDialogHost } from "~/app/confirm-dialog-host";
-import { KeyboardShortcutsDialog } from "~/app/keyboard-shortcuts-dialog";
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import {
   DraftFlushOnBackground,
   FaviconStatusSync,
@@ -68,6 +69,7 @@ export function Root() {
           <ConfirmDialogHost />
           <KeyboardShortcutsDialog />
           <PendingDialogsHost />
+          <ProviderSettingsHost />
           <ChangelogHost />
           <AppDiagnosticHost />
         </TooltipProvider>

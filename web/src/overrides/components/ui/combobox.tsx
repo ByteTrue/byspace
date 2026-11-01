@@ -118,7 +118,7 @@ export function SearchInput({
       <Search size={16} className="shrink-0 text-muted-foreground" />
       <AdaptiveTextInput
         ref={inputRef}
-        className="h-10 min-w-0 flex-1 bg-transparent text-sm"
+        className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none"
         placeholder={placeholder}
         resetKey={resetKey}
         onChangeText={onChangeText}

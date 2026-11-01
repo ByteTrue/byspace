@@ -145,7 +145,7 @@ export function GitActionsSplitButton({
       {primary ? (
         <div
           className={cn(
-            "flex items-stretch overflow-hidden rounded-md border bg-background shadow-xs dark:border-input dark:bg-input/30",
+            "flex items-stretch overflow-hidden rounded-md border bg-background dark:border-input dark:bg-input/30",
             CONTROL_HEIGHT,
           )}
         >

@@ -86,9 +86,12 @@ export function SelectFieldTrigger({
     <span
       data-testid={testID}
       className={cn(
-        "pointer-events-none flex w-full items-center gap-1.5 border border-input bg-transparent transition-colors group-hover/select:border-ring/60 group-focus-visible/select:border-ring group-focus-visible/select:ring-3 group-focus-visible/select:ring-ring/50 dark:bg-input/30",
+        // packages/app's control phases (control-geometry.ts): hover keeps the rest border; open,
+        // pressed or focused (by any means, not only the keyboard) draw the ring border and the 3px
+        // focus ring.
+        "pointer-events-none flex w-full items-center gap-1.5 border border-input bg-transparent transition-colors group-focus/select:border-ring group-focus/select:ring-3 group-focus/select:ring-ring/50 group-active/select:border-ring group-active/select:ring-3 group-active/select:ring-ring/50 dark:bg-input/30",
         size === "sm" ? "h-8 rounded-md px-2.5 md:h-7" : "h-11 rounded-lg px-3 md:h-8 md:px-2.5",
-        active && "border-ring",
+        active && "border-ring ring-3 ring-ring/50",
         disabled && "opacity-50",
       )}
     >

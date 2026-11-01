@@ -2,7 +2,9 @@
 // one stable component per colour.
 import type { WorkspaceLabelColor } from "@bytetrue/protocol/workspace-labels";
 import type { CommandCenterIcon } from "@/command-center/contributions";
-import { WorkspaceLabelDot } from "~/sidebar/workspace-labels-menu";
+// Through `@/` so the dot is the ported swatch: TypeScript resolves the Expo file's relative
+// `./swatch` to the Expo original.
+import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 
 const cache = new Map<WorkspaceLabelColor, CommandCenterIcon>();
 

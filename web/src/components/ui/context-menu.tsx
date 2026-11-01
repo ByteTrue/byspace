@@ -84,9 +84,11 @@ function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
   )
 }
 
+// BySpace: 8px inside the window and the md shadow, as DropdownMenuContent.
 function ContextMenuContent({
   className,
   ref,
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -97,6 +99,7 @@ function ContextMenuContent({
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         ref={focusFirstRef}
+        collisionPadding={collisionPadding}
         className={cn("z-50 max-h-(--radix-context-menu-content-available-height) min-w-[180px] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
         {...props}
       />
@@ -156,13 +159,15 @@ function ContextMenuSubContent({
   // BySpace: a flyout overlaps its parent menu by 6px, as packages/app's did (SUBMENU_OVERLAP 5 from
   // the row's full-width wrapper), so the pointer never crosses a gap. The row is inset 5px, hence -1.
   sideOffset = -1,
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
   return (
     <ContextMenuPrimitive.SubContent
       data-slot="context-menu-sub-content"
       sideOffset={sideOffset}
-      className={cn("z-50 min-w-[180px] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-lg duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+      collisionPadding={collisionPadding}
+      className={cn("z-50 min-w-[180px] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
       {...props}
     />
   )

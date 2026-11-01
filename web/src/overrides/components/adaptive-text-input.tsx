@@ -37,7 +37,9 @@ export const AdaptiveTextInput = forwardRef<EditingTextInputHandle, AdaptiveText
         {...props}
         ref={setInputRef}
         initialValue={initialValue}
-        className={cn("text-foreground outline-none placeholder:text-muted-foreground", className)}
+        // No outline-none: like packages/app's TextInput, the field shows the app's focus ring
+        // unless its caller turns it off.
+        className={cn("text-foreground placeholder:text-muted-foreground", className)}
       />
     );
   },

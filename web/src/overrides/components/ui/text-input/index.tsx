@@ -14,6 +14,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import type { NativePastedFile } from "@/composer/native-pasted-image";
+import { cn } from "cn";
 
 export interface EditingTextInputHandle {
   focus(): void;
@@ -207,7 +208,16 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
       "data-testid": testID,
       autoCorrect: toAutoCorrect(autoCorrect),
     };
-    if (multiline) return <textarea rows={numberOfLines ?? props.rows} {...shared} />;
+    if (multiline) {
+      // react-native-web's multiline TextInput has no resize grip
+      return (
+        <textarea
+          rows={numberOfLines ?? props.rows}
+          {...shared}
+          className={cn("resize-none", props.className)}
+        />
+      );
+    }
     return <input {...shared} type={type} />;
   },
 );

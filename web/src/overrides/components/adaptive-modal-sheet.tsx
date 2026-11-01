@@ -97,10 +97,10 @@ export function SheetHeaderView({
         ) : null}
       </div>
       {search ? (
-        <div className="flex items-center gap-2 px-6 pb-3">
+        <div className="flex items-center gap-2 px-6 pb-3" data-sheet-search="">
           <Search size={ICON_SIZE.md} className="shrink-0 text-muted-foreground" />
           <AdaptiveTextInput
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm"
+            className="min-w-0 flex-1 bg-transparent py-2 text-sm leading-[normal] outline-none"
             placeholder={search.placeholder ?? t("common.actions.search")}
             resetKey={search.resetKey}
             onChangeText={search.onChange}
@@ -151,7 +151,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <Search size={ICON_SIZE.sm} className="shrink-0 text-muted-foreground" />
           <AdaptiveTextInput
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm"
+            className="min-w-0 flex-1 bg-transparent py-2 text-sm leading-[normal] outline-none"
             placeholder={header.search.placeholder ?? t("common.actions.search")}
             resetKey={header.search.resetKey}
             onChangeText={header.search.onChange}
@@ -253,6 +253,24 @@ export function AdaptiveModalSheet({
     () => ({ maxWidth: desktopMaxWidth ?? 520, height: insetPercent(desktopHeight) }),
     [desktopHeight, desktopMaxWidth],
   );
+  // On open packages/app focuses an autoFocus header search, and otherwise shows no focus at all.
+  // Radix's own open focus takes the first button (the close X), and after a menu or the keyboard
+  // the browser draws its ring, so the card itself takes focus instead (Tab still reaches the X).
+  // A field the body focuses itself is already focused by now, and Radix leaves it there.
+  const autoFocusSearch = Boolean(header.search?.autoFocus);
+  const handleOpenAutoFocus = useCallback(
+    (event: Event) => {
+      if (!(event.currentTarget instanceof HTMLElement)) return;
+      const field = autoFocusSearch
+        ? event.currentTarget.querySelector<HTMLElement>(
+            "[data-sheet-search] input, [data-sheet-search] textarea",
+          )
+        : null;
+      event.preventDefault();
+      (field ?? event.currentTarget).focus();
+    },
+    [autoFocusSearch],
+  );
   const handleDrawerAnimationEnd = useCallback((open: boolean) => {
     if (!open) onDismissRef.current?.();
   }, []);
@@ -317,20 +335,25 @@ export function AdaptiveModalSheet({
   return (
     <DialogPrimitive.Root open={visible} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
+        {/* The card sits inside the overlay (Radix's "scrollable overlay" shape), as packages/app's
+            card sits inside its overlay view: the testID names both, so a test can reach the
+            card's controls through it and the overlay still covers the page. */}
         <DialogPrimitive.Overlay
           className="fixed inset-0 z-50 bg-black/50 duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
           data-testid={testID}
-        />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc((100%-3rem)*0.85)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
-          style={desktopStyle}
         >
-          <DialogPrimitive.Title className="sr-only">{header.title}</DialogPrimitive.Title>
-          <SheetHeaderView header={header} onClose={onClose} />
-          {body}
-          {footerView}
-        </DialogPrimitive.Content>
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            onOpenAutoFocus={handleOpenAutoFocus}
+            className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc((100%-3rem)*0.85)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+            style={desktopStyle}
+          >
+            <DialogPrimitive.Title className="sr-only">{header.title}</DialogPrimitive.Title>
+            <SheetHeaderView header={header} onClose={onClose} />
+            {body}
+            {footerView}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );

@@ -235,7 +235,10 @@ function HoverCardBody({ workspace }: { workspace: SidebarWorkspaceEntry }) {
   return (
     <>
       <div className="flex items-center gap-2 px-3 pb-2">
-        <p className="min-w-0 flex-1 text-sm" data-testid="hover-card-workspace-name">
+        <p
+          className="min-w-0 flex-1 text-sm leading-[normal]"
+          data-testid="hover-card-workspace-name"
+        >
           {workspace.name}
         </p>
       </div>
@@ -316,11 +319,14 @@ export function WorkspaceHoverCard({
       <HoverCardTrigger asChild onFocus={preventFocusOpen}>
         {children}
       </HoverCardTrigger>
+      {/* packages/app's card: 4px right of the row, top-aligned, kept 8px inside the window; a 1px
+          borderAccent border, a 10px radius and its own 0 4px 8px black 20% shadow in every theme. */}
       <HoverCardContent
         side="right"
         align="start"
-        sideOffset={8}
-        className="w-[260px] p-0 pt-2"
+        sideOffset={4}
+        collisionPadding={8}
+        className="w-[260px] rounded-[10px] border border-input p-0 pt-2 shadow-[0_4px_8px_rgba(0,0,0,0.2)] ring-0"
         data-testid="workspace-hover-card"
       >
         <HoverCardBody workspace={workspace} />

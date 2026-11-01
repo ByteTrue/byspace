@@ -35,7 +35,7 @@ export function OverviewToolCallGroupSheet({
   return (
     <Drawer open={visible} onOpenChange={handleOpenChange}>
       <DrawerContent
-        className="h-[60vh] bg-muted data-[vaul-drawer-direction=bottom]:max-h-[95vh]"
+        className="h-[60vh] bg-muted data-[vaul-drawer-direction=bottom]:max-h-[95vh] data-[vaul-drawer-direction=bottom]:rounded-t-[10px]"
         overlayClassName="bg-black/50"
       >
         <div className="flex min-h-0 flex-1 flex-col bg-muted" data-testid="tool-call-group-sheet">

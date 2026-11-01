@@ -54,8 +54,8 @@ const DESKTOP_MODEL_ROW_HEIGHT = 40;
 
 const ICON_BUTTON =
   "flex size-6 shrink-0 items-center justify-center rounded-full outline-none hover:bg-accent active:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50";
-/** Rows line up with the header's indent: 12px in a popover, 24px in a phone sheet. */
-const ROW_INSET = "px-6 md:px-3";
+/** packages/app's web rows: 12px in a popover and in a phone sheet alike (24px is its native inset). */
+const ROW_INSET = "px-3";
 
 function ProviderSettingsAction({
   accessibilityLabel,
@@ -664,7 +664,7 @@ function SectionHeading({ label, action }: { label: string; action?: ReactNode }
   return (
     <div className={cn("relative flex items-center gap-2 pt-2 pb-1", ROW_INSET)}>
       <span className="flex-1 text-xs text-muted-foreground">{label}</span>
-      {action ? <div className="absolute top-1 right-6 md:right-3">{action}</div> : null}
+      {action ? <div className="absolute top-1 right-3">{action}</div> : null}
     </div>
   );
 }

@@ -32,9 +32,10 @@ export function MenuSheet({
       <DrawerContent
         data-testid={testID}
         aria-describedby={undefined}
-        className="bg-background"
-        // packages/app's menu sheets: a 36px handle in surface2 (menu-surface.tsx)
-        handleClassName="w-9 bg-muted"
+        // packages/app's menu sheets (menu-surface.tsx): a 14px radius and a 1px border (its bottom
+        // edge sits below the screen there), and a 36px handle in surface2, 10px below the sheet's edge
+        className="border border-b-0 bg-background data-[vaul-drawer-direction=bottom]:rounded-t-[14px]"
+        handleClassName="mt-[9px] w-9 bg-muted"
       >
         <DrawerTitle className="sr-only">{title}</DrawerTitle>
         <div

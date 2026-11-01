@@ -40,7 +40,7 @@ export function ProviderUsageCard({
         <span className={cn("flex", tones.muted)}>
           <Icon size={14} color="currentColor" />
         </span>
-        <span className={cn("min-w-0 shrink truncate text-sm", tones.strong)}>
+        <span className={cn("min-w-0 shrink truncate text-sm leading-[normal]", tones.strong)}>
           {usage.displayName}
         </span>
         {usage.planLabel ? <StatusBadge label={usage.planLabel} variant="muted" /> : null}
@@ -53,7 +53,7 @@ export function ProviderUsageCard({
                 usage.status === "error" && "bg-status-danger",
               )}
             />
-            <span className={cn("text-xs", tones.muted)}>{status}</span>
+            <span className={cn("text-xs leading-[normal]", tones.muted)}>{status}</span>
           </span>
         ) : null}
       </div>
@@ -73,14 +73,16 @@ export function ProviderUsageCard({
       {details.length > 0 ? (
         <div className="flex flex-col gap-1">
           {details.map((detail) => (
-            <div key={detail.id} className="flex justify-between gap-2 text-xs">
+            <div key={detail.id} className="flex justify-between gap-2 text-xs leading-[normal]">
               <span className={cn("min-w-0 shrink truncate", tones.muted)}>{detail.label}</span>
               <span className={cn("truncate", tones.strong)}>{detail.value}</span>
             </div>
           ))}
         </div>
       ) : null}
-      {footer ? <span className={cn("truncate text-xs", tones.muted)}>{footer}</span> : null}
+      {footer ? (
+        <span className={cn("truncate text-xs leading-[normal]", tones.muted)}>{footer}</span>
+      ) : null}
     </div>
   );
 }

@@ -32,8 +32,17 @@ const PHONE_HEIGHT: Record<ButtonSize, string> = {
   md: "max-md:h-11",
   lg: "max-md:h-11",
 };
+// packages/app's horizontal padding where it differs from shadcn's: md and lg widen to 16 / 24 on
+// a phone, and lg is 12 on a desktop (shadcn's lg keeps md's 10).
+const PADDING: Record<ButtonSize, string | null> = {
+  xs: null,
+  sm: null,
+  md: "max-md:px-4",
+  lg: "px-3 max-md:px-6",
+};
 // A caller that sizes the button itself (as packages/app's style overrides did) keeps that size.
 const CALLER_HEIGHT = /(^|\s)(h|size|min-h)-/;
+const CALLER_PADDING = /(^|\s)(p|px|pl|pr)-/;
 
 function sizeClassName(size: ButtonSize, className: string | undefined): string {
   return cn(
@@ -41,6 +50,7 @@ function sizeClassName(size: ButtonSize, className: string | undefined): string 
     "gap-1.5",
     size === "sm" && "text-sm",
     !(className && CALLER_HEIGHT.test(className)) && PHONE_HEIGHT[size],
+    !(className && CALLER_PADDING.test(className)) && PADDING[size],
     className,
   );
 }

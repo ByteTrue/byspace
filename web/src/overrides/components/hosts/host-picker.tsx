@@ -103,7 +103,8 @@ export function HostPickerOption({
         tabIndex={-1}
         onClick={handleSettingsPress}
         aria-label={`Open ${label} settings`}
-        className="flex rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+        // packages/app: the bare 14px gear, no padding (its 8px hit slop is invisible), no hover tint
+        className="flex text-muted-foreground"
       >
         <Settings size={ICON_SIZE.sm} />
       </span>

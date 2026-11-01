@@ -55,11 +55,14 @@ function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
   )
 }
 
+// BySpace: every menu surface stays 8px inside the window (packages/app's menu-anchor EDGE_PADDING)
+// and draws the md shadow, submenus too.
 function DropdownMenuContent({
   className,
   ref,
   align = "start",
   sideOffset = 4,
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   const focusFirstRef = useFocusFirstMenuItem(ref)
@@ -69,6 +72,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         ref={focusFirstRef}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         align={align}
         className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-[180px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
         {...props}
@@ -267,13 +271,15 @@ function DropdownMenuSubContent({
   // BySpace: a flyout overlaps its parent menu by 6px, as packages/app's did (SUBMENU_OVERLAP 5 from
   // the row's full-width wrapper), so the pointer never crosses a gap. The row is inset 5px, hence -1.
   sideOffset = -1,
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       sideOffset={sideOffset}
-      className={cn("z-50 min-w-[180px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-lg duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+      collisionPadding={collisionPadding}
+      className={cn("z-50 min-w-[180px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
       {...props}
     />
   )

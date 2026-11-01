@@ -1,16 +1,15 @@
-// Override of packages/app/src/components/rename-modal.tsx: the same rename dialog contract
-// (validation, inline errors, stays open on failure, testIDs) on shadcn's Dialog.
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+// Override of packages/app/src/components/rename-modal.tsx: the rename dialog (hosts, workspaces, tabs); DOM view.
+// Generated from the Expo file by web/scripts/port/rename-modal.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+  AdaptiveModalSheet,
+  AdaptiveTextInput,
+  type SheetHeader,
+} from "@/components/adaptive-modal-sheet";
+import { Button } from "@/components/ui/button";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 
 export interface AdaptiveRenameModalProps {
   visible: boolean;
@@ -41,13 +40,23 @@ export function AdaptiveRenameModal({
   const [draft, setDraft] = useState(initialValue);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<EditingTextInputHandle>(null);
 
   useEffect(() => {
     if (!visible) return;
     setDraft(initialValue);
     setError(null);
     setIsPending(false);
+  }, [visible, initialValue]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const timeout = setTimeout(() => {
+      const node = inputRef.current;
+      if (!node) return;
+      node.focus();
+    }, 50);
+    return () => clearTimeout(timeout);
   }, [visible, initialValue]);
 
   const computeError = useCallback(
@@ -58,107 +67,98 @@ export function AdaptiveRenameModal({
     [validate, t],
   );
 
-  const handleChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setDraft(event.target.value);
+  const handleChange = useCallback((value: string) => {
+    setDraft(value);
     setError(null);
   }, []);
 
-  const handleSubmit = useCallback(
-    async (event?: FormEvent) => {
-      event?.preventDefault();
-      if (isPending || draft === initialValue) return;
-      const validationError = computeError(draft);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-      try {
-        setIsPending(true);
-        await onSubmit(draft);
-        setIsPending(false);
-        onClose();
-      } catch (err) {
-        setIsPending(false);
-        setError(
-          err instanceof Error && err.message ? err.message : t("common.errors.unableToSave"),
-        );
-      }
-    },
-    [isPending, draft, initialValue, computeError, onSubmit, onClose, t],
-  );
+  const handleSubmit = useCallback(async () => {
+    if (isPending) return;
+    const value = draft;
+    if (value === initialValue) return;
+    const validationError = computeError(value);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    try {
+      setIsPending(true);
+      await onSubmit(value);
+      setIsPending(false);
+      onClose();
+    } catch (err) {
+      setIsPending(false);
+      const message =
+        err instanceof Error && err.message ? err.message : t("common.errors.unableToSave");
+      setError(message);
+    }
+  }, [isPending, draft, initialValue, computeError, onSubmit, onClose, t]);
 
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open && !isPending) onClose();
-    },
-    [isPending, onClose],
-  );
+  const handleCancel = useCallback(() => {
+    if (isPending) return;
+    onClose();
+  }, [isPending, onClose]);
 
-  const handleOpenAutoFocus = useCallback(
-    (event: Event) => {
-      event.preventDefault();
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(0, initialValue.length);
-    },
-    [initialValue.length],
-  );
+  const handleSubmitVoid = useCallback(() => {
+    void handleSubmit();
+  }, [handleSubmit]);
 
   const submitDisabled = isPending || draft === initialValue || computeError(draft) !== null;
+  const inputTestID = testID ? `${testID}-input` : undefined;
+  const errorTestID = testID ? `${testID}-error` : undefined;
+  const submitTestID = testID ? `${testID}-submit` : undefined;
+  const cancelTestID = testID ? `${testID}-cancel` : undefined;
+  const sheetHeader = useMemo<SheetHeader>(() => ({ title }), [title]);
 
   return (
-    <Dialog open={visible} onOpenChange={handleOpenChange}>
-      <DialogContent
-        data-testid={testID}
-        className="sm:max-w-sm"
-        onOpenAutoFocus={handleOpenAutoFocus}
-      >
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Input
-              ref={inputRef}
-              value={draft}
-              onChange={handleChange}
-              placeholder={placeholder}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              disabled={isPending}
-              maxLength={maxLength}
-              aria-invalid={error ? true : undefined}
-              data-testid={testID ? `${testID}-input` : undefined}
-            />
-            {error ? (
-              <p
-                className="text-sm text-destructive-text"
-                data-testid={testID ? `${testID}-error` : undefined}
-              >
-                {error}
-              </p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isPending}
-              data-testid={testID ? `${testID}-cancel` : undefined}
-            >
-              {t("common.actions.cancel")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={submitDisabled}
-              data-testid={testID ? `${testID}-submit` : undefined}
-            >
-              {isPending ? t("renameModal.saving") : (submitLabel ?? t("renameModal.rename"))}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <AdaptiveModalSheet
+      visible={visible}
+      onClose={handleCancel}
+      header={sheetHeader}
+      testID={testID}
+    >
+      <div className="flex flex-col gap-3 pb-2">
+        <AdaptiveTextInput
+          ref={inputRef}
+          initialValue={initialValue}
+          onChangeText={handleChange}
+          placeholder={placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isPending}
+          maxLength={maxLength}
+          onSubmitEditing={handleSubmitVoid}
+          className="rounded-md border bg-background p-3 text-sm leading-[normal]"
+          testID={inputTestID}
+        />
+        {error ? (
+          <span className="text-sm leading-[normal] text-red-300" data-testid={errorTestID}>
+            {error}
+          </span>
+        ) : null}
+        <div className="flex flex-row items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-1"
+            onPress={handleCancel}
+            disabled={isPending}
+            testID={cancelTestID}
+          >
+            {t("common.actions.cancel")}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="flex-1"
+            onPress={handleSubmitVoid}
+            disabled={submitDisabled}
+            testID={submitTestID}
+          >
+            {isPending ? t("renameModal.saving") : (submitLabel ?? t("renameModal.rename"))}
+          </Button>
+        </div>
+      </div>
+    </AdaptiveModalSheet>
   );
 }

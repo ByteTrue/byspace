@@ -56,8 +56,49 @@ class Port:
         self.s = self.s.replace("</Text>", "</span>")
         self.s = re.sub(r"style=\{settingsStyles\.(\w+)\}", r"className={settingsStyles.\1}", self.s)
 
-    def check(self, extra: tuple[str, ...] = ()) -> None:
+    def dom_attrs(self) -> None:
+        """On DOM tags (div, span, button, p): testID → data-testid, accessibilityLabel → aria-label,
+        and drop accessibilityRole (the element already says what it is)."""
+        out = []
+        i = 0
+        s = self.s
+        tag_re = re.compile(r"<(div|span|button|p)(?=[\s>/])")
+        while True:
+            m = tag_re.search(s, i)
+            if not m:
+                out.append(s[i:])
+                break
+            out.append(s[i:m.start()])
+            j = m.end()
+            depth = 0
+            quote = None
+            while j < len(s):
+                c = s[j]
+                if quote:
+                    if c == quote:
+                        quote = None
+                elif c in "\"'`" and depth == 0:
+                    quote = c
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                elif c == ">" and depth == 0:
+                    break
+                j += 1
+            tag = s[m.start():j + 1]
+            tag = re.sub(r"(\s)testID=", r"\1data-testid=", tag)
+            tag = re.sub(r"(\s)accessibilityLabel=", r"\1aria-label=", tag)
+            tag = re.sub(r"\s+accessibilityRole=\"\w+\"", "", tag)
+            out.append(tag)
+            i = j + 1
+        self.s = "".join(out)
+
+    def check(self, extra: tuple[str, ...] = (), allow: tuple[str, ...] = ()) -> None:
+        """`allow` lists leftovers a port keeps on purpose (`react-native"` for the shim's Alert)."""
         for needle in (*LEFTOVERS, *extra):
+            if needle in allow:
+                continue
             if needle in self.s:
                 i = self.s.index(needle)
                 raise SystemExit(f"{self.rel}: leftover {needle!r}:\n{self.s[max(0, i - 300):i + 200]}")

@@ -137,7 +137,7 @@ export function WorkspaceOpenInEditorButton({
   if (!canResolveWorkspace || !primaryOption || targets.length === 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-1">
-      <div className="flex h-8 items-stretch overflow-hidden rounded-md border bg-background shadow-xs md:h-7 dark:border-input dark:bg-input/30">
+      <div className="flex h-8 items-stretch overflow-hidden rounded-md border bg-background md:h-7 dark:border-input dark:bg-input/30">
         <button
           type="button"
           data-testid="workspace-open-in-editor-primary"

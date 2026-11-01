@@ -1,24 +1,17 @@
-// Override of packages/app/src/projects/project-remove-modal.tsx: removing a project that lives on
-// several hosts, from one host or from all, on shadcn's Dialog. Same flow and testIDs.
-import { useCallback, useMemo, useState } from "react";
+// Override of packages/app/src/projects/project-remove-modal.tsx: removing a multi-host project from one host or all, on AdaptiveModalSheet; DOM view.
+// Generated from the Expo file by web/scripts/port/project-remove-modal.py.
+// After changing either file, rerun it and then npm run format:files; do not edit by hand.
+import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { Button } from "@/components/ui/button";
+import { HostStatusDot } from "@/components/host-status-dot";
 import { useToast } from "@/contexts/toast-context";
+import { useHosts, getHostRuntimeStore } from "@/runtime/host-runtime";
 import {
   getCurrentProjectRemoveReadinessForTargets,
   removeProjectFromHosts,
 } from "@/projects/project-remove";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
-import { HostStatusDot } from "~/components/host-status-dot";
-import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import { Spinner } from "~/components/ui/spinner";
 
 export interface ProjectRemoveModalHostItem {
   serverId: string;
@@ -34,33 +27,42 @@ export interface ProjectRemoveModalProps {
   testID?: string;
 }
 
-function HostRemoveRow({
-  host,
-  hostName,
-  isPending,
-  isRowPending,
-  onRemove,
-}: {
+interface ProjectRemoveHostRowProps {
   host: ProjectRemoveModalHostItem;
   hostName: string;
-  isPending: boolean;
   isRowPending: boolean;
+  isPending: boolean;
   onRemove: (host: ProjectRemoveModalHostItem) => void;
-}) {
+}
+
+function ProjectRemoveHostRow({
+  host,
+  hostName,
+  isRowPending,
+  isPending,
+  onRemove,
+}: ProjectRemoveHostRowProps) {
   const { t } = useTranslation();
-  const handleClick = useCallback(() => onRemove(host), [host, onRemove]);
+  const handlePress = useCallback(() => {
+    onRemove(host);
+  }, [host, onRemove]);
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2">
-      <HostStatusDot serverId={host.serverId} />
-      <span className="min-w-0 flex-1 truncate text-sm">{hostName}</span>
+    <div className="flex flex-row items-center justify-between gap-2 rounded-md border bg-background px-3 py-2">
+      <div className="flex flex-1 flex-row items-center gap-2">
+        <HostStatusDot serverId={host.serverId} />
+        <span className="shrink truncate text-sm leading-[normal] font-medium text-foreground">
+          {hostName}
+        </span>
+      </div>
       <Button
         variant="secondary"
         size="sm"
+        loading={isRowPending}
         disabled={isPending}
-        onClick={handleClick}
-        data-testid={`project-remove-host-button-${host.serverId}`}
+        onPress={handlePress}
+        testID={`project-remove-host-button-${host.serverId}`}
       >
-        {isRowPending ? <Spinner /> : null}
         {t("sidebar.project.confirmations.removeFromHost", { hostName })}
       </Button>
     </div>
@@ -79,27 +81,32 @@ export function ProjectRemoveModal({
   const toast = useToast();
   const allHosts = useHosts();
   const [pendingServerId, setPendingServerId] = useState<string | "all" | null>(null);
-  const hostNames = useMemo(
-    () => new Map(allHosts.map((host) => [host.serverId, host.label])),
-    [allHosts],
-  );
-  const isPending = pendingServerId !== null;
 
-  const remove = useCallback(
-    async (targets: readonly ProjectRemoveModalHostItem[], pendingKey: string) => {
-      setPendingServerId(pendingKey);
+  const hostMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const h of allHosts) {
+      map.set(h.serverId, h.label);
+    }
+    return map;
+  }, [allHosts]);
+
+  const handleRemoveSingleHost = useCallback(
+    async (host: ProjectRemoveModalHostItem) => {
+      setPendingServerId(host.serverId);
       try {
-        const readiness = getCurrentProjectRemoveReadinessForTargets(
-          targets.map((host) => ({ serverId: host.serverId, projectId: host.projectId })),
-        );
+        const readiness = getCurrentProjectRemoveReadinessForTargets([
+          { serverId: host.serverId, projectId: host.projectId },
+        ]);
         if (readiness.kind === "needs_host_update") {
           toast.error(t("sidebar.project.toasts.updateHostToRemove"));
           return;
         }
+
         const outcome = await removeProjectFromHosts({
           targets: readiness.targets,
           getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
         });
+
         if (outcome.kind === "host_disconnected") {
           toast.error(t("sidebar.project.toasts.hostDisconnected"));
           return;
@@ -120,68 +127,122 @@ export function ProjectRemoveModal({
     [onClose, t, toast],
   );
 
-  const removeFromHost = useCallback(
-    (host: ProjectRemoveModalHostItem) => void remove([host], host.serverId),
-    [remove],
-  );
-  const removeFromAllHosts = useCallback(() => void remove(hosts, "all"), [hosts, remove]);
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open && !isPending) onClose();
-    },
-    [isPending, onClose],
+  const handleRemoveAllHosts = useCallback(async () => {
+    setPendingServerId("all");
+    try {
+      const readiness = getCurrentProjectRemoveReadinessForTargets(
+        hosts.map((host) => ({ serverId: host.serverId, projectId: host.projectId })),
+      );
+      if (readiness.kind === "needs_host_update") {
+        toast.error(t("sidebar.project.toasts.updateHostToRemove"));
+        return;
+      }
+
+      const outcome = await removeProjectFromHosts({
+        targets: readiness.targets,
+        getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
+      });
+
+      if (outcome.kind === "host_disconnected") {
+        toast.error(t("sidebar.project.toasts.hostDisconnected"));
+        return;
+      }
+      if (outcome.kind === "failed") {
+        toast.error(t("sidebar.project.toasts.removeFailed"));
+        return;
+      }
+      onClose();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.project.toasts.removeFailed"),
+      );
+    } finally {
+      setPendingServerId(null);
+    }
+  }, [hosts, onClose, t, toast]);
+
+  const sheetHeader = useMemo<SheetHeader>(
+    () => ({ title: t("sidebar.project.confirmations.removeMultiHostTitle") }),
+    [t],
   );
 
+  const isPending = pendingServerId !== null;
+
+  const handleModalClose = useCallback(() => {
+    if (!isPending) {
+      onClose();
+    }
+  }, [isPending, onClose]);
+
+  const handleRemoveSingleHostVoid = useCallback(
+    (host: ProjectRemoveModalHostItem) => {
+      void handleRemoveSingleHost(host);
+    },
+    [handleRemoveSingleHost],
+  );
+
+  const handleRemoveAllHostsVoid = useCallback(() => {
+    void handleRemoveAllHosts();
+  }, [handleRemoveAllHosts]);
+
   return (
-    <Dialog open={visible} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="sm:max-w-md"
-        data-testid={testID ?? `project-remove-modal-${projectViewKey}`}
-      >
-        <DialogHeader>
-          <DialogTitle>{t("sidebar.project.confirmations.removeMultiHostTitle")}</DialogTitle>
-          <DialogDescription>
-            {t("sidebar.project.confirmations.removeMultiHostPrompt", { projectName })}
-          </DialogDescription>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
+    <AdaptiveModalSheet
+      visible={visible}
+      onClose={handleModalClose}
+      header={sheetHeader}
+      testID={testID ?? `project-remove-modal-${projectViewKey}`}
+    >
+      <div className="flex flex-col gap-3 pb-2">
+        <span className="text-sm leading-[normal] font-medium text-foreground">
+          {t("sidebar.project.confirmations.removeMultiHostPrompt", { projectName })}
+        </span>
+        <span className="text-xs leading-[normal] text-muted-foreground">
           {t("sidebar.project.confirmations.removeNote")}
-        </p>
-        <div className="flex flex-col divide-y rounded-lg border">
+        </span>
+
+        <div className="my-1 flex flex-col gap-2">
           {hosts.map((host) => {
-            const hostName = hostNames.get(host.serverId) ?? host.serverId;
+            const hostName = hostMap.get(host.serverId) ?? host.serverId;
+            const isRowPending = pendingServerId === host.serverId;
+
             return (
-              <HostRemoveRow
+              <ProjectRemoveHostRow
                 key={host.serverId}
                 host={host}
                 hostName={hostName}
+                isRowPending={isRowPending}
                 isPending={isPending}
-                isRowPending={pendingServerId === host.serverId}
-                onRemove={removeFromHost}
+                onRemove={handleRemoveSingleHostVoid}
               />
             );
           })}
         </div>
-        <DialogFooter>
+
+        <div className="mt-2 flex flex-col gap-2">
           <Button
-            variant="outline"
+            variant="destructive"
+            size="md"
+            loading={pendingServerId === "all"}
             disabled={isPending}
-            onClick={onClose}
-            data-testid="project-remove-cancel-button"
+            onPress={handleRemoveAllHostsVoid}
+            className="w-full"
+            testID="project-remove-all-hosts-button"
+          >
+            {t("sidebar.project.confirmations.removeFromAllHosts")}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={isPending}
+            onPress={handleModalClose}
+            className="w-full"
+            testID="project-remove-cancel-button"
           >
             {t("sidebar.project.confirmations.cancel")}
           </Button>
-          <Button
-            variant="destructive"
-            disabled={isPending}
-            onClick={removeFromAllHosts}
-            data-testid="project-remove-all-hosts-button"
-          >
-            {pendingServerId === "all" ? <Spinner /> : null}
-            {t("sidebar.project.confirmations.removeFromAllHosts")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </AdaptiveModalSheet>
   );
 }

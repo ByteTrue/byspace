@@ -58,8 +58,8 @@ import {
 } from "~/components/adaptive-menu";
 import { ProjectIcon } from "~/sidebar/status-visuals";
 import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
-import { WorkspaceLabelDot } from "~/sidebar/workspace-labels-menu";
-import { WorkspaceLabelManagerDialog } from "~/sidebar/workspace-label-manager";
+import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
+import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -363,7 +363,10 @@ function LabelFilterSubmenu({
             onToggle={preferences.toggleLabelFilter}
             testId={`sidebar-label-filter-option-${label.name}`}
           >
-            <WorkspaceLabelDot color={label.color} />
+            {/* packages/app's menu leading slot: the dot centred in a 16px box, on the icons' rail */}
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <WorkspaceLabelDot color={label.color} />
+            </span>
             <span className="truncate">{label.name}</span>
           </ToggleItem>
         ))}
@@ -373,7 +376,10 @@ function LabelFilterSubmenu({
           onToggle={preferences.toggleLabelFilter}
           testId="sidebar-label-filter-option-unlabelled"
         >
-          <Circle className="size-3" />
+          {/* packages/app's UNLABELLED_MARK: the dot's hollow stand-in, 11px, in the same slot */}
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <Circle size={11} className="text-muted-foreground" />
+          </span>
           {t("workspaceLabels.unlabelled")}
         </ToggleItem>
         {labelFilterActive ? (
@@ -452,7 +458,7 @@ export function SidebarDisplayPreferencesMenu() {
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      <WorkspaceLabelManagerDialog open={managerOpen} onClose={closeManager} />
+      <WorkspaceLabelManagerModal visible={managerOpen} onClose={closeManager} />
     </>
   );
 }

@@ -40,17 +40,20 @@ export function Switch({
         className,
       )}
     >
+      {/* packages/app's geometry (control-geometry.ts): a 32x18 track with 1px padding round a
+          16px thumb that travels 14px; the thumb is the page colour on light themes, the accent's
+          foreground on dark ones, and has no shadow. */}
       <span
         className={cn(
-          "flex h-[18.4px] w-8 items-center rounded-full border border-transparent p-px transition-colors duration-200",
+          "flex h-[18px] w-8 items-center rounded-full p-px transition-colors duration-200",
           value ? "bg-primary" : "bg-input dark:bg-input/80",
         )}
       >
         <span
           className={cn(
-            "size-4 rounded-full shadow-xs transition-transform duration-200",
+            "size-4 rounded-full transition-transform duration-200",
             value
-              ? "translate-x-[calc(100%-2px)] bg-primary-foreground"
+              ? "translate-x-3.5 bg-background dark:bg-primary-foreground"
               : "translate-x-0 bg-background dark:bg-foreground",
           )}
         />

@@ -553,8 +553,8 @@ export function CommandCenter() {
       onOpenChange={handleOpenChange}
       title={t("shell.commandCenter.placeholder")}
       description={t("shell.commandCenter.placeholder")}
-      // packages/app's panel: 640 wide, 560 tall, 48px below the top of the window.
-      className="top-12 h-[min(560px,calc(100vh-6rem))] sm:max-w-[640px]"
+      // packages/app's panel: 640 wide, 560 tall, 48px below the top of the window, a 10px radius.
+      className="top-12 h-[min(560px,calc(100vh-6rem))] rounded-[10px]! sm:max-w-[640px]"
     >
       <Command
         className="h-full"

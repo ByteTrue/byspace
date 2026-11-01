@@ -95,11 +95,13 @@ interface AlertButton {
   onPress?: () => void;
 }
 
+// react-native-web's Alert.alert does nothing, so packages/app on the web never showed these; the
+// forms that matter put the same error inline. A browser alert here would add a second, blocking
+// copy of it.
+// shortcut: errors that only ever went to Alert.alert (a failed provider toggle or removal, a
+// failed restart request) still show nothing; route them to a toast when that gets an imperative API.
 export const Alert = {
-  alert(title: string, message?: string, buttons?: AlertButton[]) {
-    window.alert(message ? `${title}\n\n${message}` : title);
-    buttons?.find((button) => button.style !== "cancel")?.onPress?.();
-  },
+  alert(_title: string, _message?: string, _buttons?: AlertButton[]) {},
 };
 
 // Types shared modules reference in their signatures. Loose on purpose: on the web these values
