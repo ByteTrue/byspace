@@ -6,8 +6,13 @@
   "build": {
     "command": "npm run build",
   },
+  // Hibernation moved the cost from billed duration to volume: every accepted socket and every
+  // frame that reaches the object is a Durable Object invocation, and Workers Logs writes one
+  // event per invocation. At 1% the free plan's 200,000 events/day stops being a ceiling, and a
+  // relay failure is still visible in the 1% that is kept.
   "observability": {
     "enabled": true,
+    "head_sampling_rate": 0.01,
   },
   // One hostname per channel. `app.byspace.cc.cd` serves the PWA and `wss://app.byspace.cc.cd/ws`
   // from the same origin, which is what a pairing offer assumes; a separate `relay.` hostname was a
@@ -70,6 +75,13 @@
         "binding": "ASSETS",
         "not_found_handling": "single-page-application",
         "run_worker_first": ["/ws", "/health"],
+      },
+      // Redeclared rather than inherited, for the same reason as the bindings above: a
+      // configuration key Wrangler does not carry into a named environment would leave the beta
+      // Worker on full ingestion while the stable one is sampled.
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.01,
       },
     },
   },
