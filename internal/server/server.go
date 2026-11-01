@@ -4285,10 +4285,15 @@ func newMessageID() string {
 	return "msg_" + hex.EncodeToString(b[:])
 }
 
+// newAgentID returns a random (version 4) UUID, as Node's agent manager does (randomUUID). The
+// protocol relies on it: a schedule's agent target and each run's agentId are validated as GUIDs,
+// so an id of another shape makes the client reject every schedule response that names the agent.
 func newAgentID() string {
-	var b [8]byte
+	var b [16]byte
 	_, _ = rand.Read(b[:])
-	return "agt_" + hex.EncodeToString(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func sendSessionMsg(ctx context.Context, sink frameSink, msgType string, payload any) error {

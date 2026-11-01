@@ -156,8 +156,8 @@ func TestServerDirectWebSocketAndPiAgentLifecycle(t *testing.T) {
 	}
 	created := readUntilSessionType(t, ctx, ws, "status", "agent_created")
 	agentID, _ := created["agentId"].(string)
-	if !strings.HasPrefix(agentID, "agt_") {
-		t.Fatalf("expected agt_ id, got %q", agentID)
+	if !guidPattern.MatchString(agentID) {
+		t.Fatalf("expected a UUID agent id, got %q", agentID)
 	}
 
 	// 3. Wait for Pi turn finish
