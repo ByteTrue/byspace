@@ -8,6 +8,7 @@ import { queryClient } from "@/data/query-client";
 import { I18nProvider } from "@/i18n/provider";
 import { KeyboardActionDispatcherProvider } from "@/keyboard/keyboard-action-dispatcher-context";
 import { AppChrome } from "~/app/app-chrome";
+import { DownloadToast } from "@/components/download-toast";
 import { ConfirmDialogHost } from "~/app/confirm-dialog-host";
 import { KeyboardShortcutsDialog } from "~/app/keyboard-shortcuts-dialog";
 import {
@@ -61,6 +62,7 @@ export function Root() {
       <RuntimeProviders>
         <TooltipProvider delayDuration={300}>
           <AppChrome />
+          <DownloadToast />
           <ConfirmDialogHost />
           <KeyboardShortcutsDialog />
           <PendingDialogsHost />
