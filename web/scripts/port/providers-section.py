@@ -12,7 +12,14 @@ TEXT_MUTED = "text-sm leading-[normal] text-muted-foreground"
 
 p = Port("screens/settings/providers-section.tsx")
 p.rep('''import { useCallback, useMemo, useRef, useState } from "react";''',
-      '''import { useCallback, useMemo, useRef, useState, type MouseEvent } from "react";''')
+      '''import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";''')
 p.rep('''import {
   Alert,
   Pressable,
@@ -60,6 +67,22 @@ p.rep('''        disabled={isRemoving}
         accessibilityLabel''')
 
 # ---- provider row ----
+# Enter and Space on the focused row press it, as on packages/app's Pressable.
+p.rep('''  const handlePress = useCallback(() => {
+    onPress(def.id);
+  }, [def.id, onPress]);''', '''  const handlePress = useCallback(() => {
+    onPress(def.id);
+  }, [def.id, onPress]);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) {
+        return;
+      }
+      event.preventDefault();
+      handlePress();
+    },
+    [handlePress],
+  );''')
 p.rep('''  const rowStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       settingsStyles.row,
@@ -83,6 +106,7 @@ p.between('''  return (
         "group/provider min-h-14 cursor-pointer gap-3 outline-none hover:bg-muted focus-visible:bg-muted active:bg-(--surface-3)",
       )}
       onClick={handlePress}
+      onKeyDown={handleKeyDown}
       aria-label={t("settings.providers.providerDetails", { name: def.label })}
     >
       <div className="flex flex-1 flex-row items-center gap-2">

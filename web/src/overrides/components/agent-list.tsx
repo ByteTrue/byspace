@@ -334,7 +334,7 @@ function SessionRow({
     <button
       type="button"
       className={cn(
-        "relative mb-0.5 flex w-full flex-row items-center overflow-hidden rounded-md px-3 py-2 text-left select-none [-webkit-touch-callout:none] hover:bg-muted active:bg-muted",
+        "relative mb-0.5 flex w-full flex-row items-center overflow-hidden rounded-sm px-3 py-2 text-left select-none [-webkit-touch-callout:none] hover:bg-muted active:bg-muted",
         isSelected && "bg-muted",
       )}
       onClick={handlePress}
@@ -452,7 +452,7 @@ function ArchiveActionSheet({
           className="fixed inset-0 z-50 flex flex-col justify-end outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0"
         >
           <div className="absolute inset-0 bg-black/35" onClick={onClose} />
-          <div className="relative flex flex-col gap-4 rounded-t-2xl bg-muted px-6 pt-4 pb-[max(env(safe-area-inset-bottom),24px)]">
+          <div className="relative flex flex-col gap-4 rounded-t-[16px] bg-muted px-6 pt-4 pb-[max(env(safe-area-inset-bottom),24px)]">
             <div className="h-1 w-10 self-center rounded-full bg-muted-foreground opacity-30" />
             <DialogPrimitive.Title className="text-center text-sm leading-[normal] font-semibold text-foreground">
               {title}

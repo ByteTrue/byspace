@@ -1,7 +1,7 @@
 // Override of packages/app/src/screens/settings/providers-section.tsx: the provider list and the add-provider section; DOM view.
 // Generated from the Expo file by web/scripts/port/providers-section.py.
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
-import { useCallback, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Alert } from "react-native";
@@ -183,6 +183,16 @@ function ProviderRow({
   const handlePress = useCallback(() => {
     onPress(def.id);
   }, [def.id, onPress]);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) {
+        return;
+      }
+      event.preventDefault();
+      handlePress();
+    },
+    [handlePress],
+  );
   const handleToggleValueChange = useCallback(
     (value: boolean) => {
       onToggleEnabled(def.id, value);
@@ -200,6 +210,7 @@ function ProviderRow({
         "group/provider min-h-14 cursor-pointer gap-3 outline-none hover:bg-muted focus-visible:bg-muted active:bg-(--surface-3)",
       )}
       onClick={handlePress}
+      onKeyDown={handleKeyDown}
       aria-label={t("settings.providers.providerDetails", { name: def.label })}
     >
       <div className="flex flex-1 flex-row items-center gap-2">

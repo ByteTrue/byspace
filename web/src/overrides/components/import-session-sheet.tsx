@@ -991,7 +991,7 @@ export function ImportSessionSheet({
           <button
             type="button"
             onClick={handleFilterOpen}
-            className="flex max-w-full flex-row items-center gap-1.5 self-start rounded-lg border bg-card px-3 py-1.5 text-muted-foreground hover:bg-muted active:bg-(--surface-3)"
+            className="flex max-w-full flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 text-muted-foreground hover:bg-muted active:bg-(--surface-3)"
             data-testid="import-session-filter-trigger"
             aria-label={`Filter: ${selectedProviderLabel}`}
           >
