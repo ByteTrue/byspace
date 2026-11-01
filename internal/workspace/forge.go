@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // forgeCommandTimeout bounds one gh/glab/tea invocation: Node's GITHUB_COMMAND_TIMEOUT_MS,
@@ -1458,11 +1459,131 @@ func CheckDetails(ctx context.Context, forge, cwd string, checkRunID int) (map[s
 
 	// Annotations explain *why* the check failed; the check run alone only says that it did.
 	annotationsRaw, annotationsErr := runGH(ctx, cwd, "api",
-		fmt.Sprintf("repos/{owner}/{repo}/check-runs/%d/annotations", checkRunID))
+		fmt.Sprintf("repos/{owner}/{repo}/check-runs/%d/annotations", checkRunID),
+		"-f", fmt.Sprintf("per_page=%d", checkAnnotationPageMax))
 	if annotationsErr == nil {
-		details["annotations"] = decodeCheckAnnotations(annotationsRaw)
+		annotations := decodeCheckAnnotations(annotationsRaw)
+		details["annotations"] = annotations
+		if len(annotations) >= checkAnnotationPageMax {
+			details["truncated"] = true
+		}
+	}
+
+	// Failing jobs carry the actual output. Without them the panel can only say "this check
+	// failed", which is the difference between a report and an error message.
+	if run.CheckSuite.WorkflowRunID != 0 {
+		failedJobs, truncated := fetchFailedCheckJobs(ctx, cwd, run.CheckSuite.WorkflowRunID)
+		if len(failedJobs) > 0 {
+			details["failedJobs"] = failedJobs
+		}
+		if truncated {
+			details["truncated"] = true
+		}
 	}
 	return details, nil
+}
+
+// Check-details limits, ported from github-service.ts. Each one bounds a different cost: how many
+// jobs are described, how many jobs are paged through, and how much log text rides the wire.
+const (
+	failedCheckJobLimit    = 5
+	actionsJobPageMax      = 100
+	checkAnnotationPageMax = 20
+	checkLogTailMaxLines   = 200
+	checkLogTailMaxBytes   = 16 * 1024
+)
+
+// fetchFailedCheckJobs reads a workflow run's failing jobs and the tail of each one's log.
+//
+// Returns the jobs (bounded by failedCheckJobLimit) and whether anything was left out, which the
+// panel shows as "truncated" — silently dropping the sixth failing job reads as "only five broke".
+func fetchFailedCheckJobs(ctx context.Context, cwd string, workflowRunID int64) ([]map[string]any, bool) {
+	raw, err := runGH(ctx, cwd, "api",
+		fmt.Sprintf("repos/{owner}/{repo}/actions/runs/%d/jobs", workflowRunID),
+		"-f", fmt.Sprintf("per_page=%d", actionsJobPageMax))
+	if err != nil {
+		return nil, false
+	}
+	var payload struct {
+		Jobs []struct {
+			ID         int64  `json:"id"`
+			Name       string `json:"name"`
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+			HTMLURL    string `json:"html_url"`
+		} `json:"jobs"`
+	}
+	if json.Unmarshal([]byte(raw), &payload) != nil {
+		return nil, false
+	}
+
+	truncated := len(payload.Jobs) >= actionsJobPageMax
+	failed := make([]struct {
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Conclusion string `json:"conclusion"`
+		HTMLURL    string `json:"html_url"`
+	}, 0, len(payload.Jobs))
+	for _, job := range payload.Jobs {
+		switch job.Conclusion {
+		case "failure", "cancelled", "timed_out", "action_required":
+			failed = append(failed, job)
+		}
+	}
+	if len(failed) > failedCheckJobLimit {
+		truncated = true
+		failed = failed[:failedCheckJobLimit]
+	}
+
+	out := make([]map[string]any, 0, len(failed))
+	for _, job := range failed {
+		logTail, logTruncated := checkLogTail(ctx, cwd, job.ID)
+		if logTruncated {
+			truncated = true
+		}
+		out = append(out, map[string]any{
+			"jobId":        job.ID,
+			"name":         job.Name,
+			"status":       nullableString(job.Status),
+			"conclusion":   nullableString(job.Conclusion),
+			"url":          nullableString(job.HTMLURL),
+			"logTail":      logTail,
+			"logTruncated": logTruncated,
+		})
+	}
+	return out, truncated
+}
+
+// checkLogTail returns the last lines of a job's log, capped by line count and byte size.
+func checkLogTail(ctx context.Context, cwd string, jobID int64) (string, bool) {
+	raw, err := runGH(ctx, cwd, "api", fmt.Sprintf("repos/{owner}/{repo}/actions/jobs/%d/logs", jobID))
+	if err != nil {
+		return "", false
+	}
+	lines := strings.Split(raw, "\n")
+	truncated := len(lines) > checkLogTailMaxLines
+	if truncated {
+		lines = lines[len(lines)-checkLogTailMaxLines:]
+	}
+	tail := strings.Join(lines, "\n")
+	if len(tail) > checkLogTailMaxBytes {
+		truncated = true
+		tail = utf8SuffixWithinBytes(tail, checkLogTailMaxBytes)
+	}
+	return tail, truncated
+}
+
+// utf8SuffixWithinBytes keeps the longest suffix that fits in maxBytes without splitting a rune.
+func utf8SuffixWithinBytes(value string, maxBytes int) string {
+	if len(value) <= maxBytes {
+		return value
+	}
+	start := len(value) - maxBytes
+	for start < len(value) && !utf8.RuneStart(value[start]) {
+		start++
+	}
+	return value[start:]
 }
 
 // decodeCheckAnnotations maps GitHub's annotation list onto the wire shape.

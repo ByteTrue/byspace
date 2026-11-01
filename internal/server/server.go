@@ -16,6 +16,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -110,6 +111,32 @@ type frameSink interface {
 type wsSink struct {
 	ws      *websocket.Conn
 	writeMu sync.Mutex
+	// pending is bytes handed to the connection but not yet flushed — Go's equivalent of the
+	// JavaScript `socket.bufferedAmount` the Node daemon used to decide when a slow client should
+	// get a snapshot instead of more output.
+	pending atomic.Int64
+}
+
+// Buffered reports bytes queued for this connection.
+func (w *wsSink) Buffered() int64 { return w.pending.Load() }
+
+// bufferedReporter is implemented by sinks that can report their write backlog. Sinks without it
+// (test doubles, adapters over another transport) report 0, which disables the backpressure gate
+// rather than failing it.
+type bufferedReporter interface{ Buffered() int64 }
+
+// sinkBuffered reports how much output a sink still owes the network, and whether the sink can
+// report it at all.
+//
+// The second return is the difference between "nothing is queued" and "this transport has no
+// backpressure signal" (a relay-multiplexed socket, a test double). Node treated the unknown case
+// as "assume behind": it fell back to a snapshot at the byte threshold unconditionally, because a
+// slow client on a transport without a signal would otherwise fall arbitrarily far behind.
+func sinkBuffered(sink frameSink) (int64, bool) {
+	if reporter, ok := sink.(bufferedReporter); ok {
+		return reporter.Buffered(), true
+	}
+	return 0, false
 }
 
 func (w *wsSink) SendText(ctx context.Context, text string) error {
@@ -117,6 +144,8 @@ func (w *wsSink) SendText(ctx context.Context, text string) error {
 	defer w.writeMu.Unlock()
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	w.pending.Add(int64(len(text)))
+	defer w.pending.Add(-int64(len(text)))
 	return w.ws.Write(wctx, websocket.MessageText, []byte(text))
 }
 
@@ -125,6 +154,8 @@ func (w *wsSink) SendBinary(ctx context.Context, data []byte) error {
 	defer w.writeMu.Unlock()
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	w.pending.Add(int64(len(data)))
+	defer w.pending.Add(-int64(len(data)))
 	return w.ws.Write(wctx, websocket.MessageBinary, data)
 }
 
@@ -145,6 +176,10 @@ type Server struct {
 	// disagreed: the client compares the epoch on a prompt index against the epoch it already holds
 	// from the timeline cursor, so the chat outline saw every index as stale and never rendered.
 	epoch string
+	// startedAt and metrics back the 30s `ws_runtime_metrics` line, which is the only instrument
+	// that says how many frames this daemon is sending and of what kind.
+	startedAt time.Time
+	metrics   *runtimeMetrics
 	// directory orders the app's directory replica: projects, workspaces and agents each get a
 	// sequence, and a deletion is remembered as a tombstone so a polling client can be told the row
 	// is gone. See internal/directorysync.
@@ -365,6 +400,8 @@ func New(opts Options) (*Server, error) {
 		serverID:              serverID,
 		version:               ver,
 		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
+		startedAt:             time.Now(),
+		metrics:               newRuntimeMetrics(),
 		directory:             directorysync.NewService(),
 		keyPair:               kp,
 		pubKeyB64:             pubB64,
@@ -451,6 +488,8 @@ func New(opts Options) (*Server, error) {
 			},
 		})
 	})
+	srv.startRuntimeMetrics()
+	srv.startBackgroundGitFetch()
 	return srv, nil
 }
 
@@ -845,6 +884,9 @@ func (a *e2eeSinkAdapter) Close(code websocket.StatusCode, reason string) error 
 	return a.raw.Close(code, reason)
 }
 
+// Buffered forwards the socket backlog so backpressure decisions work over the relay too.
+func (a *e2eeSinkAdapter) Buffered() int64 { return a.raw.Buffered() }
+
 type rawTransportAdapter struct {
 	ctx context.Context
 	raw *wsSink
@@ -861,6 +903,9 @@ func (r *rawTransportAdapter) SendBinary(data []byte) error {
 func (r *rawTransportAdapter) Close(code int, reason string) error {
 	return r.raw.Close(websocket.StatusCode(code), reason)
 }
+
+// Buffered forwards the socket backlog so backpressure decisions work over the relay too.
+func (r *rawTransportAdapter) Buffered() int64 { return r.raw.Buffered() }
 
 func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string) error {
 	u, err := url.Parse(relayWSURL)
@@ -1316,6 +1361,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	if err := json.Unmarshal(raw, &base); err != nil {
 		return
 	}
+	s.metrics.recordInbound(base.Type)
+	handleStart := time.Now()
+	defer func() { s.metrics.recordLatency(base.Type, time.Since(handleStart)) }()
 
 	// Every request is authorized before it is dispatched. The table says which semantic
 	// permission each operation needs; a connection that authenticated with a password but was
@@ -3783,6 +3831,15 @@ func (s *Server) broadcastSessionMsg(msgType string, payload any) {
 	ctx := context.Background()
 	for _, sink := range sinks {
 		_ = sendSessionMsg(ctx, sink, msgType, payload)
+	}
+	if s.metrics != nil {
+		// Sampled per sink, like Node's recordOutboundMessage(message, bufferedAmount): a slow
+		// client is only visible through the backlog on the socket that is actually behind.
+		buffered := int64(0)
+		if len(sinks) > 0 {
+			buffered, _ = sinkBuffered(sinks[len(sinks)-1])
+		}
+		s.metrics.recordOutbound(msgType, payload, buffered)
 	}
 }
 

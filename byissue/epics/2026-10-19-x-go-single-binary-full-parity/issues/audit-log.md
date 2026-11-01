@@ -1292,15 +1292,17 @@ Go 的 `sync.Mutex` 不可重入，于是 stdout 读循环**永久死锁**。
 
 已修：`agent-stream-coalescer.ts`（见上方 agent 批次的更正行）。
 
-以下**尚未修**，按后果排序列出，等排期：
+以下 5 条已全部处置（2026-11-01，见 `byissue/issues/2026-11-01-x-ff-cost-invariants-backfill.md`）：
 
-| Node 出处                                              | 不变量                                                                            | Go 现状                         | 不修会怎样                                                       |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------- |
-| `websocket/runtime-metrics.ts`                         | 30s 一次 `ws_runtime_metrics`：`eventLoopDelay`、`bufferedAmount`、队列与订阅计数 | 无输出（只有 CLI 引用该字符串） | 排查「谁在发帧/谁在堆积」时没有任何一手数据，只能靠猜            |
-| `terminal/terminal-restore.ts` + `websocket-server.ts` | `MAX_CLIENT_BUFFERED_BYTES`=4MB + 256KB 阈值决定何时回落到快照                    | 无 `bufferedAmount` 跟踪        | 慢客户端（手机网络）下无处可退，只能阻塞 pump                    |
-| `workspace-git-service.ts`                             | `BACKGROUND_GIT_FETCH_INTERVAL_MS`=180s 后台 fetch                                | 只有手动 `FetchRemote`          | 远端分支/PR 状态在客户端放着不刷新                               |
-| `services/github-service.ts`                           | `GITHUB_POLL_SLOW_INTERVAL_MS`=120s 慢轮询；`FAILED_CHECK_JOB_LIMIT`=5            | 无周期轮询                      | PR 检查状态要用户手动刷；若将来加轮询，缺页数上限会放大 API 消耗 |
-| `file-observer/internal/native-recursive.ts`           | `MAX_TRACKED_ENTRIES`=250000                                                      | 无上限                          | 超大仓库监视表无界增长                                           |
+| Node 出处                                     | 不变量                                                       | 处置                                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `websocket/runtime-metrics.ts`                | 30s 一次 `ws_runtime_metrics`                                | **已补**：`internal/server/runtime_metrics.go`，输出入站/出站类型 top、`agent_stream` 按 agent、buffered 分位、latency、goroutine/heap、ticker 漂移 |
+| `terminal-restore.ts` + `websocket-server.ts` | `MAX_CLIENT_BUFFERED_BYTES` 4MB + 256KB 阈值决定何时回落快照 | **已补**：`wsSink.pending` 记 backlog（等价 `bufferedAmount`），`terminalOutputOverflow` 两条件齐备才发快照；无背压信号的 transport 按"落后"处理    |
+| `workspace-git-service.ts`                    | 180s 后台 git fetch                                          | **已补**：`internal/server/background_fetch.go`，按 repo 去重、串行、复用 `GitNetworkTimeout`                                                       |
+| `github-service.ts`                           | 失败 job 上限 5、日志尾 200 行/16KB、分页上限                | **已补**：`workspace.CheckDetails` 现在真的取 failedJobs（此前恒为 `[]`）并置 `truncated`                                                           |
+| `file-observer/native-recursive.ts`           | `MAX_TRACKED_ENTRIES` 250,000                                | **N/A**：Go 没有原生 watcher / 条目表（1s 轮询，见 `decisions/004`），该上限无对应实体                                                              |
+
+仍未做：PR 状态的后台轮询与推送（需要 workspace payload 里的 `github` 段，属 web 重写期的契约决定），见 `byissue/issues/2026-11-01-o-forge-pr-status-push.md`。
 
 已判定、不算遗漏（有出处）：`watcher-liveness-canary.ts` 标 **DROPPED**；`git-metadata-event-rules.ts` 标「未接 watcher，1s 轮询替代」。
 

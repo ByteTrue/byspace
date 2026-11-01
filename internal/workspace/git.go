@@ -121,6 +121,11 @@ const gitLocalTimeout = 10 * time.Second
 // and reported it as an opaque context deadline. The node daemon allows 120s for a fetch.
 const gitNetworkTimeout = 120 * time.Second
 
+// GitNetworkTimeout exposes the remote-command budget to callers outside this package (the
+// daemon's background fetch), so they bound a stalled remote with the same number everything else
+// uses instead of inventing a second one.
+const GitNetworkTimeout = gitNetworkTimeout
+
 // gitNetworkCommands need the longer budget and must never block on a credential prompt.
 var gitNetworkCommands = map[string]bool{
 	"pull":      true,

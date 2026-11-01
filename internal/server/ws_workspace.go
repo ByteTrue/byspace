@@ -867,6 +867,10 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 	})
 	s.markTerminalDelivered(sink, req.TerminalID, currentRevision)
 	go func() {
+		// Bytes this client has been sent since its last snapshot. Node's
+		// outputBytesSinceSnapshot: it only decides anything at the moment backpressure appears, so
+		// it accumulates harmlessly while the client keeps draining.
+		var outputSinceSnapshot int64
 		for range signal {
 			for {
 				bufMu.Lock()
@@ -877,7 +881,22 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 					break
 				}
 				for _, ev := range batch {
+					outputSinceSnapshot += int64(len(ev.Data))
+					if terminalOutputOverflow(outputSinceSnapshot, sink) {
+						// The client is both far behind in produced output and backed up on the wire.
+						// Streaming more bytes to it only grows the queue, so replace it with the
+						// authoritative grid, exactly as Node does on output overflow.
+						if sess.VT() != nil {
+							_, snapFrame := sess.VT().SnapshotWithScrollback(slot, maxTerminalOverflowScrollbackLines)
+							_ = sink.SendBinary(context.Background(), snapFrame)
+							s.metrics.recordBinary("terminal_snapshot")
+						}
+						outputSinceSnapshot = 0
+						s.markTerminalDelivered(sink, req.TerminalID, ev.Revision)
+						continue
+					}
 					_ = sink.SendBinary(context.Background(), terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data))
+					s.metrics.recordBinary("terminal_output")
 					s.markTerminalDelivered(sink, req.TerminalID, ev.Revision)
 				}
 			}
@@ -969,6 +988,42 @@ func (s *Server) markTerminalDelivered(sink frameSink, terminalID string, revisi
 	}
 	byTerminal[terminalID] = revision
 	s.mu.Unlock()
+}
+
+// Terminal output backpressure limits, ported from terminal-restore.ts.
+//
+// Without them a client that stops draining (a phone on a bad network, a paused browser tab) is
+// fed every byte the pty produced, so the queue on the socket grows without bound and the pty
+// readers wait behind it. The gate only fires when the client is BOTH far behind in produced
+// output AND still backed up on the wire: a client that keeps draining reports ~0 buffered and
+// streams continuously past the byte threshold.
+const (
+	// maxTerminalOutputFrameBytes is how much output may accumulate before a snapshot is
+	// considered (MAX_TERMINAL_OUTPUT_FRAME_BYTES).
+	maxTerminalOutputFrameBytes = 256 * 1024
+	// maxClientBufferedBytes is the socket backlog that counts as "backed up"
+	// (MAX_CLIENT_BUFFERED_BYTES).
+	maxClientBufferedBytes = 4 * 1024 * 1024
+	// maxTerminalOverflowScrollbackLines bounds the replacement snapshot; Node uses the same 1000.
+	maxTerminalOverflowScrollbackLines = 1000
+)
+
+// terminalClientBehind reports whether this sink is too backed up to keep streaming output.
+//
+// A transport that cannot report backpressure (relay-multiplexed socket, test double) is treated as
+// behind, which is Node's `clientBufferedAmount === null` branch: assuming "fine" would let a slow
+// client on an unsignalled transport fall behind without bound.
+func terminalClientBehind(sink frameSink) bool {
+	buffered, known := sinkBuffered(sink)
+	return !known || buffered > maxClientBufferedBytes
+}
+
+// terminalOutputOverflow is the snapshot decision: the client is BOTH far behind in produced
+// output AND still backed up on the wire. Either condition alone is not enough — a draining client
+// passes the byte threshold and keeps streaming, and a briefly busy client that is up to date does
+// not need a grid redrawn under it.
+func terminalOutputOverflow(outputSinceSnapshot int64, sink frameSink) bool {
+	return outputSinceSnapshot > maxTerminalOutputFrameBytes && terminalClientBehind(sink)
 }
 
 // terminalRestorePlan is what a subscribe should deliver.
