@@ -26,7 +26,7 @@ export function ShowMoreRow({
       onClick={onToggle}
       aria-label={label}
       data-testid={testId}
-      className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2"
+      className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
     >
       <span className="flex size-4 items-center justify-center">
         <Icon className="size-3.5" />
@@ -51,7 +51,7 @@ export function PinnedSectionHeader({
       onClick={onToggle}
       aria-expanded={!collapsed}
       data-testid="sidebar-pinned-section-header"
-      className="group/pinned flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none ring-sidebar-ring hover:text-sidebar-foreground focus-visible:ring-2"
+      className="group/pinned flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-sidebar-foreground"
     >
       {t("sidebar.pinned.title")}
       <Chevron className="size-3 opacity-0 group-hover/pinned:opacity-100" />

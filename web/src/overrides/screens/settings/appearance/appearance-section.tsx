@@ -83,8 +83,7 @@ function sizeDraftToOverride(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const TRIGGER =
-  "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85";
+const TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
 const ROW_WITH_BORDER = "flex flex-row items-center justify-between border-t p-4";
 
 // ---------------------------------------------------------------------------
@@ -400,7 +399,7 @@ function FontFamilyRow({
         autoCapitalize="none"
         autoCorrect={false}
         spellCheck={false}
-        className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8 md:py-1 dark:bg-input/30 max-w-[380px] shrink grow text-left text-xs"
+        className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 max-w-[380px] shrink grow text-left text-xs"
         accessibilityLabel={accessibilityLabel}
       />
     </div>
@@ -441,7 +440,7 @@ function FontSizeRow({
           keyboardType="number-pad"
           inputMode="numeric"
           selectTextOnFocus
-          className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8 md:py-1 dark:bg-input/30 w-16 text-right text-sm"
+          className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 w-16 text-right text-sm"
           accessibilityLabel={accessibilityLabel}
         />
         <span className="text-sm text-muted-foreground">px</span>

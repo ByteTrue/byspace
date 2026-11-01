@@ -100,7 +100,7 @@ function SegmentItem<T extends string>({
       data-active={isSelected ? "" : undefined}
       onClick={handlePress}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-1.5 border border-transparent font-medium whitespace-nowrap text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex shrink-0 items-center justify-center gap-1.5 border border-transparent font-medium whitespace-nowrap text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50",
         "data-active:bg-background data-active:text-foreground data-active:shadow-sm dark:data-active:border-input dark:data-active:bg-input/30",
         SEGMENT[size],
       )}

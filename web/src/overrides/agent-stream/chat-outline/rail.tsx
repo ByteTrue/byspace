@@ -215,7 +215,7 @@ const ChatOutlineTick = memo(function ChatOutlineTick({
         onClick={handleClick}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        className="flex size-full items-center justify-start rounded-md pl-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex size-full items-center justify-start rounded-md pl-1"
       >
         <span
           className={cn(

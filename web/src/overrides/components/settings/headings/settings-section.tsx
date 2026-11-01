@@ -68,7 +68,7 @@ export function SettingsSection({
             aria-expanded={isExpanded}
             aria-label={title}
             onClick={handleToggle}
-            className="flex flex-1 items-center gap-2 text-left outline-none"
+            className="flex flex-1 items-center gap-2 text-left"
             data-testid={testID ? `${testID}-toggle` : undefined}
           >
             {header}

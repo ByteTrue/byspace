@@ -35,8 +35,7 @@ const ThemedPencil = withUnistyles(Pencil);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-const TRIGGER =
-  "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85";
+const TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
 
 function HostRenameButton({ host }: { host: HostProfile }) {
   const { t } = useTranslation();

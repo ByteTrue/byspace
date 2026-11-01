@@ -234,7 +234,9 @@ export function SelectField<TValue>({
         aria-label={`${label} (${displayLabel})`}
         aria-expanded={open}
         data-testid={triggerTestID}
-        className="group/select flex w-full outline-none"
+        // The global keyboard focus outline on the button and the ring on the field inside, both
+        // as packages/app's (a Pressable round the field).
+        className="group/select flex w-full"
       >
         <SelectFieldTrigger
           display={selectedDisplay}

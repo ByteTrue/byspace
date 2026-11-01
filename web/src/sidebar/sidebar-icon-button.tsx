@@ -33,9 +33,11 @@ export function SidebarIconButton({
           type="button"
           aria-label={label}
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground [&_svg]:size-4",
+            "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground [&_svg]:size-4",
             active && "text-sidebar-foreground",
-            !fill && "hover:bg-transparent data-[state=open]:bg-transparent",
+            // Square: with no fill the radius only shapes the keyboard focus outline, and
+            // packages/app's footer buttons have none.
+            !fill && "rounded-none hover:bg-transparent data-[state=open]:bg-transparent",
             className,
           )}
           {...props}

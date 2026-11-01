@@ -110,7 +110,7 @@ export function AppSidebar() {
       {DEV_BUILD_LABEL ? (
         <div className="flex shrink-0 px-2 pb-1.5">
           <span
-            className="flex min-w-0 items-center gap-1 rounded-sm bg-sidebar-accent px-1.5 py-0.5 text-xs text-muted-foreground"
+            className="flex min-w-0 items-center gap-1 rounded-[4px] bg-sidebar-accent px-1.5 py-0.5 text-xs text-muted-foreground"
             data-testid="dev-build-label"
             aria-label={`Development build: ${DEV_BUILD_LABEL}`}
           >

@@ -87,7 +87,7 @@ export function SidebarCallout({
               type="button"
               key={action.label}
               className={cn(
-                "min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:opacity-80 disabled:pointer-events-none disabled:opacity-50",
+                "min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs font-medium active:opacity-80 disabled:pointer-events-none disabled:opacity-50",
                 action.variant === "primary"
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-transparent text-foreground",

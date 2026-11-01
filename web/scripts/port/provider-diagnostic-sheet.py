@@ -9,8 +9,8 @@ from _port import Port  # noqa: E402
 
 MUTED = "text-sm leading-[normal] text-muted-foreground"
 ICON_BUTTON = (
-    "flex size-7 shrink-0 items-center justify-center rounded-full outline-none hover:bg-muted "
-    "active:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 "
+    "flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-muted "
+    "active:bg-muted disabled:opacity-50 "
     "disabled:hover:bg-transparent"
 )
 MODEL_ROW = "flex flex-row items-center gap-3 border-t px-4 py-2"

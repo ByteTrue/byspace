@@ -31,7 +31,7 @@ export function SidebarHeaderRow({ icon: Icon, label, onPress, testID }: Sidebar
         onClick={onPress}
         data-testid={testID}
         aria-label={label}
-        className="group/header-row relative flex min-h-[34px] items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className="group/header-row relative flex min-h-[34px] items-center gap-2 overflow-hidden rounded-sm px-2 py-1.5 text-left hover:bg-sidebar-accent"
       >
         <Icon
           size={ICON_SIZE.sm}

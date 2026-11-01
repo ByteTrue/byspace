@@ -4,9 +4,10 @@ theme, terminal scheme, detail level, chat outline, sidebar entries, fonts and s
 drafts, clamping and commit-on-blur are the Expo file's; the view is DOM."""
 from _port import Port
 
-TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85"
+TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85"
 ROW_WITH_BORDER = "flex flex-row items-center justify-between border-t p-4"
-INPUT = "min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8 md:py-1 dark:bg-input/30"
+# packages/app's plain TextInput: the border stays on focus and the app-wide outline draws.
+INPUT = "min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30"
 
 p = Port("screens/settings/appearance/appearance-section.tsx")
 p.rep('import { Text, View, type PressableStateCallbackType } from "react-native";\n', "")

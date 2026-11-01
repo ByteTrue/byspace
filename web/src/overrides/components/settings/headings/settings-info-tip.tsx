@@ -22,7 +22,7 @@ export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
           type="button"
           aria-label={t("settings.groupInfo", { title })}
           data-testid={testID}
-          className="-ml-1 flex rounded-sm p-1 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="-ml-1 flex rounded-none p-1 text-muted-foreground"
         >
           <Info size={ICON_SIZE.sm} />
         </button>

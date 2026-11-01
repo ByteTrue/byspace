@@ -99,7 +99,7 @@ export function SidebarFooter({
             onClick={run(() => openAddProject())}
             aria-label={t("sidebar.actions.addProject")}
             data-testid="sidebar-add-project"
-            className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2"
+            className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <FolderPlus className="size-3.5 shrink-0" />
             <span className="truncate">{t("sidebar.actions.addProject")}</span>

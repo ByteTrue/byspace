@@ -244,7 +244,7 @@ function AttachmentDropdown({
             disabled={isButtonDisabled}
             accessibilityLabel={addAttachmentLabel}
             testID="message-input-attach-button"
-            className="flex size-7 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
+            className="flex size-7 items-center justify-center rounded-sm hover:bg-muted disabled:opacity-50"
           >
             {renderAttachButtonIcon}
           </DropdownMenuTrigger>

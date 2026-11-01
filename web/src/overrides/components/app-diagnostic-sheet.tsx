@@ -161,7 +161,7 @@ export function AppDiagnosticSheet({
             type="button"
             onClick={handleCopyPress}
             disabled={!diagnostic}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 active:bg-muted disabled:pointer-events-none disabled:opacity-50"
+            className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50"
             aria-label={t("settings.diagnostics.app.copyAccessibility")}
           >
             <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
@@ -170,7 +170,7 @@ export function AppDiagnosticSheet({
             type="button"
             onClick={handleRefreshPress}
             disabled={loading}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 active:bg-muted disabled:pointer-events-none disabled:opacity-50 disabled:opacity-100"
+            className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50 disabled:opacity-100"
             aria-label={
               loading
                 ? t("settings.diagnostics.app.refreshingAccessibility")

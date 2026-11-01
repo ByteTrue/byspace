@@ -13,8 +13,7 @@ const ThemedLink2 = withUnistyles(Link2);
 const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
 const foregroundIconMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
-const OPTION =
-  "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+const OPTION = "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left";
 
 export interface AddHostMethodModalProps {
   visible: boolean;

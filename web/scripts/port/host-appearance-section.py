@@ -6,10 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from _port import Port  # noqa: E402
 
-TRIGGER = (
-    "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none "
-    "focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85"
-)
+TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85"
 TRIGGER_TEXT = "text-sm leading-[normal] text-foreground"
 
 p = Port("screens/settings/host-appearance-section.tsx")

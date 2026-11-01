@@ -49,7 +49,11 @@ import {
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
 import { smallIconButtonChromeFrameSize } from "@/components/ui/icon-button-chrome";
-import { ToolbarButton, ToolbarControls } from "@/components/ui/pane-content-toolbar";
+import {
+  paneContentToolbarTrailingPadding,
+  ToolbarButton,
+  ToolbarControls,
+} from "@/components/ui/pane-content-toolbar";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -81,11 +85,14 @@ import { cn } from "cn";
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING = 2;
-const PANE_SPLIT_ACTIONS_OUTER_MARGIN = 6;
+// As packages/app: the split menu's glyph sits on the pane's trailing glyph rail (3px margin).
+const PANE_SPLIT_ACTIONS_OUTER_MARGIN =
+  paneContentToolbarTrailingPadding(false) - PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING;
 const PANE_SPLIT_ACTIONS_RESERVED_WIDTH =
   smallIconButtonChromeFrameSize(false) +
   PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING * 2 +
   PANE_SPLIT_ACTIONS_OUTER_MARGIN;
+const PANE_SPLIT_ACTIONS_STYLE = { marginRight: PANE_SPLIT_ACTIONS_OUTER_MARGIN };
 const PANE_MAXIMIZE_ACTION_RESERVED_WIDTH = smallIconButtonChromeFrameSize(false) + 1;
 const TAB_CHIP_HORIZONTAL_PADDING = 10;
 const TAB_CHIP_GAP = 4;
@@ -173,7 +180,8 @@ function WorkspaceNewTabButton({
         label={t("workspace.tabs.actions.newTab")}
         shortcut={shortcutKeys}
         testID="workspace-new-tab-button"
-        className={placement === "inline" ? "size-6" : undefined}
+        // packages/app's inline button is buttonControlHeight.xs, 28px.
+        className={placement === "inline" ? "size-7" : undefined}
       >
         <Plus size={14} className="text-extra-muted-foreground" />
       </ToolbarButton>
@@ -226,7 +234,7 @@ function WorkspacePaneToolbarActions({
   const maximizeActionVisible = showMaximizeAction && Boolean(onTogglePaneMaximized);
   if (!showNewTabButton && !splitActionsVisible && !maximizeActionVisible) return null;
   return (
-    <ToolbarControls className="mr-1.5 px-0.5">
+    <ToolbarControls className="px-0.5" style={PANE_SPLIT_ACTIONS_STYLE}>
       {showNewTabButton ? (
         <WorkspaceNewTabButton
           placement="toolbar"
@@ -605,7 +613,7 @@ function TabCloseButton({
         onPointerEnter={handleEnter}
         onPointerLeave={handleLeave}
         onClick={handleClick}
-        className="flex size-[18px] items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="flex size-[18px] items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         {isClosingTab ? (
           <span className="size-3 animate-spin rounded-full border border-current border-t-transparent" />
@@ -878,7 +886,9 @@ function useLabelMeasurements(labels: WorkspaceTabLabel[]) {
       const key = element.dataset.key;
       const label = element.dataset.label;
       if (key === undefined || label === undefined) continue;
-      next.set(key, { label, width: Math.ceil(element.getBoundingClientRect().width) });
+      // offsetWidth, as packages/app's onLayout (react-native-web reports offsetWidth, a rounded
+      // width); the fractional width rounded up made tabs a pixel wider.
+      next.set(key, { label, width: element.offsetWidth });
     }
     setMeasurements((current) => {
       if (

@@ -31,7 +31,7 @@ export function ExternalLink({
       onClick={handlePress}
       aria-label={accessibilityLabel ?? label}
       data-testid={testID}
-      className="flex items-center gap-1 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="flex items-center gap-1 rounded-none text-xs text-muted-foreground hover:text-foreground"
     >
       {label}
       <ArrowUpRight size={12} />

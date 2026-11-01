@@ -47,7 +47,7 @@ export interface SheetHeader {
 
 const WEB_EXIT_DURATION_MS = 160;
 const ICON_BUTTON =
-  "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:text-foreground";
+  "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground active:text-foreground";
 
 export function SheetHeaderView({
   header,

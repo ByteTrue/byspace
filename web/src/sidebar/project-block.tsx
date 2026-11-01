@@ -128,8 +128,10 @@ function NewWorkspaceButton({
             projectName: displayName,
           })}
           data-testid={`sidebar-project-new-worktree-${projectViewKey}`}
+          // Not a Tab stop, as packages/app's (a Pressable without a role on the web).
+          tabIndex={-1}
           onClick={handleClick}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-border hover:text-sidebar-foreground focus-visible:ring-2"
+          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground"
         >
           <Plus className="size-3.5" />
         </button>
@@ -198,7 +200,7 @@ function ProjectHeaderRow({
       data-testid={`sidebar-project-row-${project.viewKey}`}
       data-state={menuOpen ? "menu-open" : undefined}
       className={cn(
-        "group/project-row mb-1 flex min-h-9 items-center gap-2 rounded-md px-2 py-2 text-sm text-sidebar-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent focus-visible:ring-2 md:min-h-8 md:py-1.5",
+        "group/project-row mb-1 flex min-h-9 items-center gap-2 rounded-md px-2 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent md:min-h-8 md:py-1.5",
         sortable?.isDragging && "bg-sidebar shadow-md",
       )}
     >
@@ -247,7 +249,7 @@ function ProjectHeaderRow({
               aria-label={t("sidebar.project.actions.menu")}
               data-testid={`sidebar-project-kebab-${project.viewKey}`}
               onClick={stopRowPress}
-              className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none ring-sidebar-ring hover:bg-sidebar-border hover:text-sidebar-foreground focus-visible:ring-2"
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground"
             >
               <EllipsisVertical className="size-3.5" />
             </DropdownMenuTrigger>

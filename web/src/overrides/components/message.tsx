@@ -1263,7 +1263,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         className={cn(
-          "overflow-hidden rounded-md border border-transparent px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          "overflow-hidden rounded-md border border-transparent px-2 py-1",
           isInteractive && cn("cursor-pointer", isActive && "bg-muted", isPressed && "opacity-90"),
         )}
       >

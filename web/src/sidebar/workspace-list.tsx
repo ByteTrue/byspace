@@ -208,7 +208,7 @@ function StatusGroupHeader({
       aria-label={`${group.label} group`}
       aria-expanded={!collapsed}
       data-testid={`sidebar-status-group-${group.key}`}
-      className="group/status-group flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent focus-visible:ring-2"
+      className="group/status-group flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent"
     >
       <span className="flex size-4 items-center justify-center">
         <span className="group-hover/status-group:hidden">

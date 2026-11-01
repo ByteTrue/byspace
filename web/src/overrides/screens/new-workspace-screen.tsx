@@ -230,7 +230,7 @@ const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pi
 // A picker-trigger badge: 28px tall, the same height the compact form's spacer reserves, so
 // toggling Isolation to Local hides the Base row without shifting the form.
 const BADGE =
-  "flex h-7 max-w-60 min-w-0 shrink items-center gap-1 overflow-hidden rounded-2xl px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 enabled:hover:bg-muted enabled:active:bg-background";
+  "flex h-7 max-w-60 min-w-0 shrink items-center gap-1 overflow-hidden rounded-2xl px-2 enabled:hover:bg-muted enabled:active:bg-background";
 // The badge's own padding is offset so the project icon lands on the title's left edge.
 const CENTERED_CONTENT_STYLE: CSSProperties = { paddingBottom: HEADER_INNER_HEIGHT + 24 };
 const CONTENT_WIDTH_STYLE: CSSProperties = { maxWidth: MAX_CONTENT_WIDTH };

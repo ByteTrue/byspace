@@ -163,7 +163,9 @@ export function GitActionsSplitButton({
               <span className="flex items-center gap-2 md:gap-1 [&_svg]:size-4">
                 {primary.icon}
                 {hideLabels ? null : (
-                  <span className="text-sm font-medium text-foreground">{primaryLabel}</span>
+                  <span className="text-sm leading-[21px] font-medium text-foreground">
+                    {primaryLabel}
+                  </span>
                 )}
               </span>
             )}

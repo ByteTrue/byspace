@@ -57,7 +57,8 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
           aria-expanded={isOpen}
           // As packages/app's leadingToggle: pulled 2px left so the glyph sits on the rows' 16px icon rail.
           // aria-expanded reports the sidebar's state; it must not paint the ghost button's open look.
-          className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-interaction-highlight md:-ml-0.5"
+          // No keyboard focus outline: packages/app's header controls set outlineWidth 0.
+          className="rounded-md text-muted-foreground outline-none aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-interaction-highlight md:-ml-0.5"
           onClick={toggle}
         >
           {/* packages/app's toggle glyph keeps its colour on hover; only the fill changes. */}

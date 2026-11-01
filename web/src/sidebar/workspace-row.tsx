@@ -32,6 +32,7 @@ import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pi
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -497,13 +498,17 @@ function WorkspaceRowKebab({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} compactMode="sheet">
       <DropdownMenuTrigger
         aria-label={t("sidebar.workspace.actions.menu")}
         data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
+        // packages/app renders it only while the row is hovered (always on phones), so on desktop
+        // it is not a Tab stop.
+        tabIndex={isCompact ? undefined : -1}
         // The scrim fades the title out under the button instead of cutting it off.
-        className="absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-muted-foreground opacity-0 outline-none ring-sidebar-ring before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-l before:from-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:ring-2 group-hover/workspace-row:opacity-100 data-[state=open]:opacity-100 max-md:bg-transparent max-md:opacity-100 max-md:before:hidden"
+        className="absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-muted-foreground opacity-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-l before:from-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/workspace-row:opacity-100 data-[state=open]:opacity-100 max-md:bg-transparent max-md:opacity-100 max-md:before:hidden"
       >
         <EllipsisVertical className="size-3.5" />
       </DropdownMenuTrigger>
@@ -593,7 +598,7 @@ function WorkspaceRowLink({
       data-active={selected}
       data-testid={`sidebar-workspace-row-${workspace.workspaceKey}`}
       className={cn(
-        "relative flex min-h-9 w-full min-w-0 items-start gap-2 rounded-md py-2 pr-3 pl-2 text-left text-sm text-sidebar-foreground outline-none ring-sidebar-ring transition-[background-color] hover:bg-sidebar-accent focus-visible:ring-2 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium md:min-h-8 md:py-1.5",
+        "relative flex min-h-9 w-full min-w-0 items-start gap-2 rounded-md py-2 pr-3 pl-2 text-left text-sm text-sidebar-foreground transition-[background-color] hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium md:min-h-8 md:py-1.5",
         // BySpace: the selected row carries a 2px bar on its left edge.
         "before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-foreground before:opacity-0 data-[active=true]:before:opacity-100",
         isHostDisconnected && "opacity-60",

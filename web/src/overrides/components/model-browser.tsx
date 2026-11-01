@@ -53,7 +53,7 @@ const DESKTOP_PROVIDER_VIEW_BASE_HEIGHT = 80;
 const DESKTOP_MODEL_ROW_HEIGHT = 40;
 
 const ICON_BUTTON =
-  "flex size-6 shrink-0 items-center justify-center rounded-full outline-none hover:bg-accent active:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50";
+  "flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-accent active:bg-muted";
 /** packages/app's web rows: 12px in a popover and in a phone sheet alike (24px is its native inset). */
 const ROW_INSET = "px-3";
 

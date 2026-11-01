@@ -35,8 +35,9 @@ export function iconButtonChromeClassName({
   if (size === "small") frame = compact ? "size-8" : "size-5";
   return cn(
     // As packages/app's chrome: hovered, pressed, open or active fills with the interaction
-    // highlight; the glyph keeps the colour its caller gave it.
-    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-highlight focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
+    // highlight; the glyph keeps the colour its caller gave it. No keyboard focus outline: the
+    // chrome sets outlineWidth 0 there.
+    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-highlight active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
     frame,
     active && "bg-interaction-highlight",
     disabled && "pointer-events-none opacity-50",

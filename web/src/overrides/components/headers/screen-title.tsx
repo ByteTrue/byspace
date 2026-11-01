@@ -13,7 +13,11 @@ interface ScreenTitleProps {
 export function ScreenTitle({ children, testID, style, className }: ScreenTitleProps) {
   return (
     <span
-      className={cn("min-w-0 shrink truncate text-sm font-medium text-foreground", className)}
+      className={cn(
+        // packages/app sets no line height (normal); text-sm alone would make the line 20px.
+        "min-w-0 shrink truncate text-sm leading-[normal] font-medium text-foreground",
+        className,
+      )}
       style={style}
       data-testid={testID}
     >

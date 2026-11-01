@@ -5,9 +5,10 @@ the compact list/detail layout. Routing, host scoping and every handler are the 
 view is DOM."""
 from _port import Port
 
-THEME_TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85"
-INPUT = "min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8 md:py-1 dark:bg-input/30"
-ITEM = "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring md:min-h-8"
+THEME_TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85"
+# packages/app's plain TextInput: the border stays on focus and the app-wide outline draws.
+INPUT = "min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30"
+ITEM = "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent md:min-h-8"
 INDICATOR = "pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground"
 LIST = "flex flex-col gap-1 p-2"
 GROUP_LABEL = "px-2 py-1 text-xs font-medium text-muted-foreground"
@@ -71,7 +72,7 @@ p.between('''function WhatsNewRow() {''', '''function normalizeVersion(''', '''f
       className={cn(
         settingsStyles.row,
         settingsStyles.rowBorder,
-        "group/whats-new w-full text-left outline-none focus-visible:bg-accent",
+        "group/whats-new w-full text-left",
       )}
       onClick={openChangelog}
       data-testid="settings-whats-new"

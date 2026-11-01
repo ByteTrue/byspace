@@ -20,7 +20,7 @@ function NavRow({ entry, onBeforeNavigate }: { entry: NavEntry; onBeforeNavigate
       aria-current={entry.isActive ? "page" : undefined}
       data-active={entry.isActive}
       data-testid={SIDEBAR_NAV_TEST_IDS[entry.id]}
-      className="relative flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-sidebar-foreground outline-none ring-sidebar-ring transition-[background-color] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-foreground before:opacity-0 hover:bg-sidebar-accent focus-visible:ring-2 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:before:opacity-100 md:min-h-8 md:py-1.5"
+      className="relative flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-sidebar-foreground transition-[background-color] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-foreground before:opacity-0 hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:before:opacity-100 md:min-h-8 md:py-1.5"
     >
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{entry.label}</span>

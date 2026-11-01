@@ -439,7 +439,7 @@ function ResolvedMobileActiveTabTrigger({
             <WorkspaceTabIcon presentation={presentation} active backdrop={backdrop} />
           </span>
 
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+          <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
             {presentation.titleState === "loading"
               ? t("workspace.tabs.loading")
               : presentation.label}
@@ -898,13 +898,13 @@ function WorkspaceHeaderProjectRow({
       {showProject ? (
         <span
           data-testid="workspace-header-subtitle"
-          className="min-w-0 shrink truncate text-sm text-muted-foreground"
+          className="min-w-0 shrink truncate text-sm leading-[normal] text-muted-foreground"
         >
           {subtitle}
         </span>
       ) : null}
       {showProject && hostBadge ? (
-        <span className="shrink-0 text-xs text-extra-muted-foreground">·</span>
+        <span className="shrink-0 text-xs leading-[normal] text-extra-muted-foreground">·</span>
       ) : null}
       {hostBadge ? <HostBadge badge={hostBadge} /> : null}
     </span>

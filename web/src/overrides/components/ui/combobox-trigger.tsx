@@ -51,7 +51,7 @@ export const ComboboxTrigger = forwardRef<HTMLButtonElement, ComboboxTriggerProp
         type="button"
         aria-label={accessibilityLabel}
         data-testid={testID}
-        className={cn("outline-none focus-visible:ring-2 focus-visible:ring-ring/50", className)}
+        className={className}
         {...props}
         onClick={handleClick}
       >

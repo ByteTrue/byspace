@@ -4,7 +4,7 @@ desktop and per-host checks with live progress, then shows the redacted report t
 collection is the Expo file's; the view is DOM."""
 from _port import Port
 
-ICON_BUTTON = "flex size-7 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 active:bg-muted disabled:pointer-events-none disabled:opacity-50"
+ICON_BUTTON = "flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50"
 
 p = Port("components/app-diagnostic-sheet.tsx")
 p.rep('import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";\n', "")

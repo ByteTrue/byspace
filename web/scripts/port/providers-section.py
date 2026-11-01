@@ -63,7 +63,7 @@ p.rep('''        disabled={isRemoving}
         style={triggerStyle}
         accessibilityRole="button"
         accessibilityLabel''', '''        disabled={isRemoving}
-        className="flex size-8 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 active:bg-(--surface-3) data-[state=open]:bg-muted"
+        className="flex size-8 items-center justify-center rounded-lg hover:bg-muted active:bg-(--surface-3) data-[state=open]:bg-muted"
         accessibilityLabel''')
 
 # ---- provider row ----
@@ -103,7 +103,7 @@ p.between('''  return (
       className={cn(
         settingsStyles.row,
         !isFirst && settingsStyles.rowBorder,
-        "group/provider min-h-14 cursor-pointer gap-3 outline-none hover:bg-muted focus-visible:bg-muted active:bg-(--surface-3)",
+        "group/provider min-h-14 cursor-pointer gap-3 hover:bg-muted active:bg-(--surface-3)",
       )}
       onClick={handlePress}
       onKeyDown={handleKeyDown}

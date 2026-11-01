@@ -18,10 +18,7 @@ CHECKBOX_OFF = "border-input bg-background dark:bg-input/30"
 CHECKBOX_ON = "border-primary bg-primary"
 
 # ---- add-host-method-modal.tsx ----
-OPTION = (
-    "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left outline-none "
-    "focus-visible:ring-2 focus-visible:ring-ring/50"
-)
+OPTION = "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left"
 p = Port("components/add-host-method-modal.tsx")
 p.rep('import { Pressable, Text, View } from "react-native";\n', "")
 p.rep('import { StyleSheet, withUnistyles } from "react-native-unistyles";\n',

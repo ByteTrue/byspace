@@ -149,9 +149,9 @@ function renderHostSettingsContent(
 // ---------------------------------------------------------------------------
 
 const THEME_TRIGGER =
-  "flex flex-row items-center gap-1 rounded-md border px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-85";
+  "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
 const SIDEBAR_ITEM =
-  "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring md:min-h-8";
+  "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent md:min-h-8";
 const SELECTED_INDICATOR =
   "pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground";
 
@@ -346,7 +346,7 @@ function GeneralSection({
             keyboardType="number-pad"
             inputMode="numeric"
             selectTextOnFocus
-            className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8 md:py-1 dark:bg-input/30 w-28 text-right text-sm"
+            className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 w-28 text-right text-sm"
             accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
           />
         </div>
@@ -423,7 +423,7 @@ function WhatsNewRow() {
       className={cn(
         settingsStyles.row,
         settingsStyles.rowBorder,
-        "group/whats-new w-full text-left outline-none focus-visible:bg-accent",
+        "group/whats-new w-full text-left",
       )}
       onClick={openChangelog}
       data-testid="settings-whats-new"

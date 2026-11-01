@@ -107,7 +107,7 @@ function ScriptRowActionButton({
           data-testid={testID}
           disabled={disabled}
           onClick={handleClick}
-          className="rounded-sm p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           <Icon size={size} fill={icon === "start" ? "transparent" : undefined} />
         </button>
@@ -543,7 +543,7 @@ export function WorkspaceScriptsButton({
             data-testid="workspace-scripts-button"
             aria-label={t("workspace.scripts.accessibility.trigger")}
             className={cn(
-              "flex items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "flex items-center justify-center",
               ghost
                 ? "size-8 rounded-lg hover:bg-muted aria-expanded:bg-muted"
                 : "h-8 rounded-md border bg-background px-3 hover:bg-muted aria-expanded:bg-muted md:h-7 md:px-2 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",

@@ -29,7 +29,7 @@ export const TOOLBAR_LABEL_TRIGGER_FRAME =
 /** The frame of a label button: highlighted on hover, press, and while its menu is open. */
 export const TOOLBAR_LABEL_TRIGGER_CLASS = cn(
   TOOLBAR_LABEL_TRIGGER_FRAME,
-  "group/toolbar-label outline-none hover:bg-interaction-highlight active:bg-interaction-highlight focus-visible:ring-3 focus-visible:ring-ring/50 data-[state=open]:bg-interaction-highlight",
+  "group/toolbar-label hover:bg-interaction-highlight active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
 );
 
 /** The label inside TOOLBAR_LABEL_TRIGGER_CLASS: muted until the button is highlighted. */
