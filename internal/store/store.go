@@ -791,172 +791,316 @@ func (s *Store) ListLabels() ([]LabelDefinition, error) {
 	return s.loadLabelCatalogLocked().Labels, nil
 }
 
-// SetWorkspaceLabelAssignment assigns or removes a label from a workspace and ensures the label exists in the catalog.
-func (s *Store) SetWorkspaceLabelAssignment(workspaceID string, lbl LabelDefinition, assigned bool) ([]string, error) {
+// LabelError is a label request the daemon refuses: Code is what the client shows a message for
+// (`rpc_error.code`), the same codes as Node's WorkspaceLabelError.
+type LabelError struct {
+	Code    string
+	Message string
+}
+
+func (e *LabelError) Error() string { return e.Message }
+
+// NormalizeLabelName collapses whitespace runs and trims, as the protocol's
+// normalizeWorkspaceLabelName.
+func NormalizeLabelName(name string) string {
+	return strings.Join(strings.Fields(name), " ")
+}
+
+// LabelKey is a label's identity: names that differ only in case or spacing are the same label
+// (the protocol's workspaceLabelKey). Matching by exact name let "Urgent" and "urgent" become two
+// labels, and a rename or delete miss the assignments spelled the other way.
+func LabelKey(name string) string {
+	return strings.ToLower(NormalizeLabelName(name))
+}
+
+func requireLabelName(raw string) (string, error) {
+	name := NormalizeLabelName(raw)
+	if name == "" {
+		return "", &LabelError{Code: "label_name_empty", Message: "Label name cannot be empty"}
+	}
+	return name, nil
+}
+
+// LabelAssignmentResult is what one assignment changed. Workspace is the rewritten record, nil
+// when the workspace already had that assignment.
+type LabelAssignmentResult struct {
+	Label           LabelDefinition
+	WorkspaceLabels []string
+	CatalogChanged  bool
+	Workspace       *WorkspaceRecord
+}
+
+// SetWorkspaceLabelAssignment assigns or removes a label on one workspace. Assigning a label the
+// catalog does not have creates it (the picker's "create" page commits this way); an existing
+// label keeps its catalog name and colour. Ported from Node's WorkspaceLabelService.setAssignment.
+func (s *Store) SetWorkspaceLabelAssignment(workspaceID string, lbl LabelDefinition, assigned bool) (LabelAssignmentResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if lbl.Color == "" {
-		lbl.Color = "blue"
+	name, err := requireLabelName(lbl.Name)
+	if err != nil {
+		return LabelAssignmentResult{}, err
 	}
+	workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	if err != nil {
+		return LabelAssignmentResult{}, err
+	}
+	index := -1
+	for i := range workspaces {
+		if workspaces[i].WorkspaceID == workspaceID {
+			index = i
+			break
+		}
+	}
+	if index == -1 || (workspaces[index].ArchivedAt != nil && *workspaces[index].ArchivedAt != "") {
+		return LabelAssignmentResult{}, &LabelError{Code: "workspace_not_found", Message: "Workspace not found"}
+	}
+
 	// The catalog file and the catalog object share a path, so every writer has to use the catalog
 	// shape. Reading it as a bare array returned nothing once anything else had written the
 	// generation, and the rewrite that followed dropped every label the array had not carried.
 	catalog := s.loadLabelCatalogLocked()
-	found := false
-	for i := range catalog.Labels {
-		if catalog.Labels[i].Name == lbl.Name {
-			catalog.Labels[i].Color = lbl.Color
-			found = true
+	key := LabelKey(name)
+	definition := LabelDefinition{Name: name, Color: lbl.Color}
+	existing := false
+	for _, label := range catalog.Labels {
+		if LabelKey(label.Name) == key {
+			definition = label
+			existing = true
 			break
 		}
 	}
-	if !found && lbl.Name != "" {
-		catalog.Labels = append(catalog.Labels, lbl)
+	next, workspaceChanged := updateAssignmentLabels(workspaces[index].Labels, key, definition.Name, assigned)
+	result := LabelAssignmentResult{Label: definition, WorkspaceLabels: next}
+	if result.WorkspaceLabels == nil {
+		result.WorkspaceLabels = []string{}
 	}
-	s.saveLabelCatalogLocked(catalog)
-
-	workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
-	if err != nil {
-		return []string{}, err
+	if !existing && assigned {
+		catalog.Labels = append(catalog.Labels, definition)
+		s.saveLabelCatalogLocked(catalog)
+		result.CatalogChanged = true
 	}
-	var updatedLabels []string
-	for i := range workspaces {
-		if workspaces[i].WorkspaceID == workspaceID {
-			cur := workspaces[i].Labels
-			next := make([]string, 0, len(cur)+1)
-			has := false
-			for _, name := range cur {
-				if name == lbl.Name {
-					has = true
-					if assigned {
-						next = append(next, name)
-					}
-				} else {
-					next = append(next, name)
-				}
-			}
-			if assigned && !has && lbl.Name != "" {
-				next = append(next, lbl.Name)
-			}
-			workspaces[i].Labels = next
-			updatedLabels = next
-			break
+	if workspaceChanged {
+		if len(next) == 0 {
+			next = nil
 		}
+		workspaces[index].Labels = next
+		workspaces[index].UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if err := writeJSONArray(s.workspacesPath(), workspaces); err != nil {
+			return LabelAssignmentResult{}, err
+		}
+		record := workspaces[index]
+		result.Workspace = &record
 	}
-	_ = writeJSONArray(s.workspacesPath(), workspaces)
-	if updatedLabels == nil {
-		updatedLabels = []string{}
-	}
-	return updatedLabels, nil
+	return result, nil
 }
 
-// UpdateLabel updates a label's name and/or color across the catalog and all workspaces.
-func (s *Store) UpdateLabel(name, newName, color string) (LabelDefinition, int, error) {
+// updateAssignmentLabels adds or removes the label with `key`; changed is false when the
+// workspace already had (or already lacked) it.
+func updateAssignmentLabels(current []string, key, displayName string, assigned bool) ([]string, bool) {
+	assignedIndex := -1
+	for i, label := range current {
+		if LabelKey(label) == key {
+			assignedIndex = i
+			break
+		}
+	}
+	if assigned {
+		if assignedIndex != -1 {
+			return current, false
+		}
+		return append(append([]string{}, current...), displayName), true
+	}
+	if assignedIndex == -1 {
+		return current, false
+	}
+	next := make([]string, 0, len(current)-1)
+	next = append(next, current[:assignedIndex]...)
+	return append(next, current[assignedIndex+1:]...), true
+}
+
+// rewriteLabelAssignments renames (to != "") or removes (to == "") the label with fromKey on every
+// workspace that carries it, and returns the rewritten records.
+func rewriteLabelAssignments(workspaces []WorkspaceRecord, fromKey, to string) []WorkspaceRecord {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var changed []WorkspaceRecord
+	for i := range workspaces {
+		labels := workspaces[i].Labels
+		has := false
+		for _, label := range labels {
+			if LabelKey(label) == fromKey {
+				has = true
+				break
+			}
+		}
+		if !has {
+			continue
+		}
+		next := make([]string, 0, len(labels))
+		for _, label := range labels {
+			if LabelKey(label) != fromKey {
+				next = append(next, label)
+			} else if to != "" {
+				next = append(next, to)
+			}
+		}
+		if len(next) == 0 {
+			next = nil
+		}
+		workspaces[i].Labels = next
+		workspaces[i].UpdatedAt = now
+		changed = append(changed, workspaces[i])
+	}
+	return changed
+}
+
+// LabelUpdateResult is what an edit changed. PreviousName is set when the name changed; Workspaces
+// are the records whose assignments the rename rewrote.
+type LabelUpdateResult struct {
+	Label        LabelDefinition
+	PreviousName string
+	Changed      bool
+	Workspaces   []WorkspaceRecord
+}
+
+// UpdateLabel renames and/or recolours a label; a nil field is left alone. Renaming onto another
+// label's name is refused rather than merged (a case-only edit of the same label passes), and a
+// recolour does not touch any workspace. Ported from Node's WorkspaceLabelService.update.
+func (s *Store) UpdateLabel(name string, newName, color *string) (LabelUpdateResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	targetName := strings.TrimSpace(newName)
-	if targetName == "" {
-		targetName = name
+	fromName, err := requireLabelName(name)
+	if err != nil {
+		return LabelUpdateResult{}, err
 	}
-	targetColor := strings.TrimSpace(color)
-	if targetColor == "" {
-		targetColor = "blue"
+	fromKey := LabelKey(fromName)
+	var target *string
+	if newName != nil {
+		normalized, err := requireLabelName(*newName)
+		if err != nil {
+			return LabelUpdateResult{}, err
+		}
+		target = &normalized
 	}
 
 	catalog := s.loadLabelCatalogLocked()
-	labels := catalog.Labels
-	updatedDef := LabelDefinition{Name: targetName, Color: targetColor}
-	found := false
-	for i := range labels {
-		if labels[i].Name == name {
-			if strings.TrimSpace(color) == "" {
-				updatedDef.Color = labels[i].Color
-			}
-			labels[i] = updatedDef
-			found = true
+	index := -1
+	for i := range catalog.Labels {
+		if LabelKey(catalog.Labels[i].Name) == fromKey {
+			index = i
 			break
 		}
 	}
-	if !found {
-		labels = append(labels, updatedDef)
+	if index == -1 {
+		return LabelUpdateResult{}, &LabelError{Code: "label_not_found", Message: "Label not found"}
 	}
-	catalog.Labels = labels
-	s.saveLabelCatalogLocked(catalog)
-
-	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
-	affected := 0
-	for i := range workspaces {
-		changed := false
-		for j, ln := range workspaces[i].Labels {
-			if ln == name {
-				workspaces[i].Labels[j] = targetName
-				changed = true
+	existing := catalog.Labels[index]
+	if target != nil && LabelKey(*target) != fromKey {
+		toKey := LabelKey(*target)
+		for _, label := range catalog.Labels {
+			if LabelKey(label.Name) == toKey {
+				return LabelUpdateResult{}, &LabelError{Code: "label_name_taken", Message: "A label with that name already exists"}
 			}
 		}
-		if changed {
-			affected++
+	}
+	nameChanged := target != nil && *target != existing.Name
+	colorChanged := color != nil && *color != existing.Color
+	if !nameChanged && !colorChanged {
+		return LabelUpdateResult{Label: existing}, nil
+	}
+	label := existing
+	if nameChanged {
+		label.Name = *target
+	}
+	if color != nil {
+		label.Color = *color
+	}
+
+	result := LabelUpdateResult{Label: label, Changed: true}
+	// Workspaces store names, so only a rename rewrites assignments; a recolour is catalog-only.
+	if nameChanged {
+		result.PreviousName = existing.Name
+		workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
+		if err != nil {
+			return LabelUpdateResult{}, err
+		}
+		result.Workspaces = rewriteLabelAssignments(workspaces, fromKey, label.Name)
+		if len(result.Workspaces) > 0 {
+			if err := writeJSONArray(s.workspacesPath(), workspaces); err != nil {
+				return LabelUpdateResult{}, err
+			}
 		}
 	}
-	if affected > 0 {
-		_ = writeJSONArray(s.workspacesPath(), workspaces)
-	}
-	return updatedDef, affected, nil
+	catalog.Labels[index] = label
+	s.saveLabelCatalogLocked(catalog)
+	return result, nil
 }
 
-// InspectLabelUsage counts how many workspaces currently carry the given label name.
-func (s *Store) InspectLabelUsage(name string) int {
+// InspectLabelUsage counts the workspaces that carry the label, for the delete confirmation.
+func (s *Store) InspectLabelUsage(name string) (int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	normalized, err := requireLabelName(name)
+	if err != nil {
+		return 0, err
+	}
+	key := LabelKey(normalized)
 	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
 	count := 0
 	for _, w := range workspaces {
-		for _, ln := range w.Labels {
-			if ln == name {
+		for _, label := range w.Labels {
+			if LabelKey(label) == key {
 				count++
 				break
 			}
 		}
 	}
-	return count
+	return count, nil
 }
 
-// DeleteLabel removes a label from the catalog and strips it from all workspaces.
-func (s *Store) DeleteLabel(name string) int {
+// LabelDeleteResult is what a delete changed: DeletedName is the catalog's name for the label ("" when
+// there was none to delete), Workspaces the records it was removed from.
+type LabelDeleteResult struct {
+	DeletedName string
+	Workspaces  []WorkspaceRecord
+}
+
+// DeleteLabel removes a label from the catalog and from every workspace that carries it. A label the
+// catalog does not have deletes nothing. Ported from Node's WorkspaceLabelService.delete.
+func (s *Store) DeleteLabel(name string) (LabelDeleteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	normalized, err := requireLabelName(name)
+	if err != nil {
+		return LabelDeleteResult{}, err
+	}
+	key := LabelKey(normalized)
 	catalog := s.loadLabelCatalogLocked()
-	nextLabels := make([]LabelDefinition, 0, len(catalog.Labels))
-	for _, l := range catalog.Labels {
-		if l.Name != name {
-			nextLabels = append(nextLabels, l)
+	index := -1
+	for i := range catalog.Labels {
+		if LabelKey(catalog.Labels[i].Name) == key {
+			index = i
+			break
 		}
 	}
-	catalog.Labels = nextLabels
+	if index == -1 {
+		return LabelDeleteResult{}, nil
+	}
+	result := LabelDeleteResult{DeletedName: catalog.Labels[index].Name}
+	workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	if err != nil {
+		return LabelDeleteResult{}, err
+	}
+	result.Workspaces = rewriteLabelAssignments(workspaces, key, "")
+	if len(result.Workspaces) > 0 {
+		if err := writeJSONArray(s.workspacesPath(), workspaces); err != nil {
+			return LabelDeleteResult{}, err
+		}
+	}
+	catalog.Labels = append(catalog.Labels[:index:index], catalog.Labels[index+1:]...)
 	s.saveLabelCatalogLocked(catalog)
-
-	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
-	affected := 0
-	for i := range workspaces {
-		next := make([]string, 0, len(workspaces[i].Labels))
-		removed := false
-		for _, ln := range workspaces[i].Labels {
-			if ln == name {
-				removed = true
-			} else {
-				next = append(next, ln)
-			}
-		}
-		if removed {
-			workspaces[i].Labels = next
-			affected++
-		}
-	}
-	if affected > 0 {
-		_ = writeJSONArray(s.workspacesPath(), workspaces)
-	}
-	return affected
+	return result, nil
 }
 
 // daemonPasswordHashKey is the config field that holds the bcrypt hash.
@@ -1314,38 +1458,6 @@ func (s *Store) CORSAllowedOrigins() []string {
 	}
 	for _, origin := range strings.Split(os.Getenv("BYSPACE_CORS_ORIGINS"), ",") {
 		add(origin)
-	}
-	return out
-}
-
-// SaveProjectIcon persists a custom project icon under $BYSPACE_HOME/projects/icons/<projectId>.json.
-func (s *Store) SaveProjectIcon(projectID string, icon map[string]any) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p := filepath.Join(s.homeDir, "projects", "icons", projectID+".json")
-	if icon == nil {
-		_ = os.Remove(p)
-		return nil
-	}
-	b, err := json.MarshalIndent(icon, "", "  ")
-	if err != nil {
-		return err
-	}
-	return home.WriteAtomic(p, append(b, '\n'), 0o600)
-}
-
-// LoadProjectIcon reads a custom project icon if present.
-func (s *Store) LoadProjectIcon(projectID string) map[string]any {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	p := filepath.Join(s.homeDir, "projects", "icons", projectID+".json")
-	b, err := os.ReadFile(p)
-	if err != nil {
-		return nil
-	}
-	var out map[string]any
-	if json.Unmarshal(b, &out) != nil {
-		return nil
 	}
 	return out
 }

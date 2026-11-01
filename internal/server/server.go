@@ -39,6 +39,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/webui"
 	"github.com/ByteTrue/byspace/internal/workspace"
 	"github.com/ByteTrue/byspace/internal/workspace/directorysync"
+	"github.com/ByteTrue/byspace/internal/workspace/projecticon"
 )
 
 const WSProtocolVersion = 1
@@ -298,6 +299,11 @@ type Server struct {
 	serviceProxyRoutes *serviceproxy.Proxy
 	// labelSubscribers are sinks that asked for incremental label updates.
 	labelSubscribers map[frameSink]bool
+
+	// projectIcons holds the icon snapshot behind the last projectIconRevision sent for each project
+	// (projectID -> store.ProjectIconSnapshot), so project.icon.get serves the bytes that revision
+	// names (Node's ProjectIconReader). Its own map, not s.mu: descriptors are built under s.mu.
+	projectIcons sync.Map
 	// setupRuns guards against two concurrent setup runs for one workspace.
 	setupRunsMu sync.Mutex
 	setupRuns   map[string]bool
@@ -2027,7 +2033,7 @@ func (s *Server) handleProjectList(ctx context.Context, sink frameSink, raw json
 		if p.ArchivedAt != nil {
 			continue
 		}
-		descriptors = append(descriptors, buildProjectDescriptor(p))
+		descriptors = append(descriptors, s.projectDescriptor(p))
 	}
 	var requestID string
 	if len(raw) > 0 {
@@ -2115,7 +2121,7 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 	if !sequenced {
 		for _, p := range projects {
 			if p.ArchivedAt == nil && wsCountByPrj[p.ProjectID] == 0 {
-				emptyProjects = append(emptyProjects, buildProjectDescriptor(p))
+				emptyProjects = append(emptyProjects, s.projectDescriptor(p))
 			}
 		}
 	}
@@ -4026,7 +4032,27 @@ func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[strin
 	}
 }
 
-func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
+// projectDescriptor is the project descriptor with its icon revision. The revision names the bytes
+// the project renders with (custom or found in the repository), so a client caches each icon once
+// and refetches only when the revision changes; it is recorded for project.icon.get (Node's
+// buildProjectDescriptor and ProjectIconReader).
+func (s *Server) projectDescriptor(p store.ProjectRecord) map[string]any {
+	snapshot := s.store.ProjectIconSnapshot(p)
+	s.projectIcons.Store(p.ProjectID, snapshot)
+	return buildProjectDescriptor(p, snapshot.Revision)
+}
+
+// projectIcon is the icon behind the revision last sent for the project, read fresh when none was.
+func (s *Server) projectIcon(p store.ProjectRecord) *projecticon.Icon {
+	if cached, ok := s.projectIcons.Load(p.ProjectID); ok {
+		return cached.(store.ProjectIconSnapshot).Icon
+	}
+	snapshot := s.store.ProjectIconSnapshot(p)
+	s.projectIcons.Store(p.ProjectID, snapshot)
+	return snapshot.Icon
+}
+
+func buildProjectDescriptor(p store.ProjectRecord, iconRevision string) map[string]any {
 	displayName := p.DisplayName
 	if p.CustomName != nil && strings.TrimSpace(*p.CustomName) != "" {
 		displayName = strings.TrimSpace(*p.CustomName)
@@ -4042,19 +4068,11 @@ func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
 		"projectCustomIconRevision": p.CustomIconRevision,
 		"projectRootPath":           p.RootPath,
 		"projectKind":               projectKind,
-		// projectIconRevision separates the built-in icon from a custom one so the sidebar
-		// knows whether to fetch /projects/icons/<id>.json. Optional (not nullable): only set
-		// when there is a custom icon, otherwise the key is omitted.
-		"projectIconRevision": nil,
+		"projectIconRevision":       iconRevision,
 		// No syncSeq here: the directory service stamps it, and only for a read that carried a
 		// cursor. A descriptor on its own (a create response, an announcement to a client that never
 		// sent one) must not claim a cursor position — two clients would then disagree about the same
 		// row, and the one that never asked for sequences would skip the next delta.
-	}
-	if p.CustomIconRevision != nil && strings.TrimSpace(*p.CustomIconRevision) != "" {
-		out["projectIconRevision"] = *p.CustomIconRevision
-	} else {
-		delete(out, "projectIconRevision")
 	}
 	if p.ProjectKey != nil {
 		out["projectKey"] = *p.ProjectKey

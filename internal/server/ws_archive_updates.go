@@ -18,7 +18,7 @@ func (s *Server) archiveRemovePayload(wsID, projectID string) map[string]any {
 	}
 	if prj, ok := s.projectForWorkspace(projectID); ok {
 		if s.projectHasNoActiveWorkspaces(projectID) {
-			payload["emptyProject"] = buildProjectDescriptor(prj)
+			payload["emptyProject"] = s.projectDescriptor(prj)
 		}
 	}
 	return payload

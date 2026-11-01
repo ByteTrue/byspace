@@ -561,13 +561,18 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 		t.Fatalf("unexpected download response (%d): %q", httpResp.StatusCode, string(dlBody))
 	}
 
-	// 8. Workspace label persistence
+	// 8. Workspace label persistence. The workspace has to exist: an assignment to an unknown one is
+	// refused (workspace_not_found), as in Node.
+	_, labelledWorkspace, err := srv.store.CreateWorkspaceForDirectory(workDir, "labelled", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	lblAssignReq, _ := json.Marshal(map[string]any{
 		"type": "session",
 		"message": map[string]any{
 			"type":        "workspace.label.assignment.set.request",
 			"requestId":   "req_lbl_1",
-			"workspaceId": "wks_test",
+			"workspaceId": labelledWorkspace.WorkspaceID,
 			"label":       map[string]any{"name": "core", "color": "green"},
 			"assigned":    true,
 		},

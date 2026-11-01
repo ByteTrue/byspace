@@ -629,67 +629,184 @@ func SetAutoMerge(ctx context.Context, cwd string, enabled bool, mergeMethod str
 	return err
 }
 
-// SearchGitHubRepos searches repositories accessible via `gh search repos`.
-func SearchGitHubRepos(ctx context.Context, query string, limit int) ([]map[string]any, bool) {
-	if _, err := exec.LookPath("gh"); err != nil {
-		return []map[string]any{}, false
+// GitHubRepositorySummary is one row of `workspace.github.search_repositories.response`
+// (GithubRepositorySchema). The shape is the wire contract: the port returned gh's own fields
+// (owner, url, isPrivate, no id or cloneUrl), the client rejected every response, and Add project ->
+// Clone from GitHub only ever said "Unable to search GitHub repositories".
+type GitHubRepositorySummary struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	NameWithOwner string  `json:"nameWithOwner"`
+	Description   *string `json:"description"`
+	Visibility    string  `json:"visibility"`
+	UpdatedAt     string  `json:"updatedAt"`
+	CloneURL      string  `json:"cloneUrl"`
+}
+
+// GitHubCLIErrorKind is how a failed `gh` call is reported: Node's GitHubCliMissingError,
+// GitHubAuthenticationError and GitHubCommandError.
+type GitHubCLIErrorKind string
+
+const (
+	GitHubCLIMissing         GitHubCLIErrorKind = "missing"
+	GitHubCLIUnauthenticated GitHubCLIErrorKind = "unauthenticated"
+	GitHubCLICommandFailed   GitHubCLIErrorKind = "command"
+)
+
+// GitHubCLIError is a failed `gh` call. Stderr carries what the command printed (or why it was
+// stopped) for a failed command.
+type GitHubCLIError struct {
+	Kind    GitHubCLIErrorKind
+	Stderr  string
+	message string
+}
+
+func (e *GitHubCLIError) Error() string { return e.message }
+
+// isGitHubAuthFailureText is Node's isAuthFailureText for gh.
+func isGitHubAuthFailureText(text string) bool {
+	normalized := strings.ToLower(text)
+	for _, marker := range []string{
+		"gh auth login",
+		"not logged into any github hosts",
+		"authentication failed",
+		"authentication required",
+		"bad credentials",
+		"http 401",
+	} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
 	}
-	if limit <= 0 || limit > 50 {
+	return false
+}
+
+// runGHClassified runs gh and classifies a failure as Node's forge CLI runner
+// (normalizeCliCommandError) did.
+func runGHClassified(ctx context.Context, cwd string, args ...string) (string, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return "", &GitHubCLIError{Kind: GitHubCLIMissing, message: "GitHub CLI (gh) is not installed or not in PATH"}
+	}
+	out, stderr, err := runForgeCLIWithStderr(ctx, forgeCommandTimeout, "gh", cwd, args...)
+	if err == nil {
+		return out, nil
+	}
+	if isGitHubAuthFailureText(stderr) || isGitHubAuthFailureText(err.Error()) {
+		return "", &GitHubCLIError{Kind: GitHubCLIUnauthenticated, Stderr: stderr, message: "GitHub CLI authentication failed"}
+	}
+	detail := stderr
+	if strings.TrimSpace(detail) == "" {
+		detail = err.Error()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && !exitErr.Exited() {
+			detail = fmt.Sprintf("gh was terminated before completing (timed out after %dms or exceeded the output limit)", forgeCommandTimeout.Milliseconds())
+		}
+	}
+	return "", &GitHubCLIError{
+		Kind:    GitHubCLICommandFailed,
+		Stderr:  detail,
+		message: "GitHub CLI command failed: gh " + strings.Join(args, " "),
+	}
+}
+
+// gitHubCloneProtocol is gh's configured git_protocol for github.com; an unset or unreadable value
+// is https (Node's resolveConfiguredCloneProtocol).
+func gitHubCloneProtocol(ctx context.Context, cwd string) (string, error) {
+	out, err := runGHClassified(ctx, cwd, "config", "get", "git_protocol", "--host", "github.com")
+	if err != nil {
+		var cliErr *GitHubCLIError
+		if errors.As(err, &cliErr) && cliErr.Kind == GitHubCLICommandFailed {
+			return "https", nil
+		}
+		return "", err
+	}
+	if strings.ToLower(strings.TrimSpace(out)) == "ssh" {
+		return "ssh", nil
+	}
+	return "https", nil
+}
+
+// SearchGitHubRepos lists the user's repositories (empty query) or searches GitHub, newest first,
+// as Node's GitHubService.searchRepositories. Errors are *GitHubCLIError when gh failed.
+func SearchGitHubRepos(ctx context.Context, home, query string, limit int) ([]GitHubRepositorySummary, error) {
+	if limit <= 0 {
 		limit = 20
 	}
-	args := []string{"repo", "list", "--limit", strconv.Itoa(limit), "--json", "nameWithOwner,name,owner,description,url,isPrivate,updatedAt,defaultBranchRef"}
-	if strings.TrimSpace(query) != "" {
-		args = []string{"search", "repos", query, "--limit", strconv.Itoa(limit), "--json", "fullName,name,owner,description,url,isPrivate,updatedAt,defaultBranch"}
+	query = strings.TrimSpace(query)
+	listing := query == ""
+	args := []string{"repo", "list", "--json", "id,name,nameWithOwner,description,isPrivate,updatedAt,sshUrl,url", "--limit", strconv.Itoa(limit)}
+	if !listing {
+		args = []string{"search", "repos", query, "--json", "id,name,fullName,description,isPrivate,updatedAt,url", "--sort", "updated", "--order", "desc", "--limit", strconv.Itoa(limit)}
 	}
-	raw, err := runGH(ctx, "", args...)
-	if err != nil || raw == "" {
-		return []map[string]any{}, true
+	stdout, err := runGHClassified(ctx, home, args...)
+	if err != nil {
+		return nil, err
 	}
-	var items []map[string]any
-	if json.Unmarshal([]byte(raw), &items) != nil {
-		return []map[string]any{}, true
+	protocol, err := gitHubCloneProtocol(ctx, home)
+	if err != nil {
+		return nil, err
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, it := range items {
-		fullName, _ := it["nameWithOwner"].(string)
-		if fullName == "" {
-			fullName, _ = it["fullName"].(string)
+	return parseGitHubRepositories(stdout, listing, protocol)
+}
+
+// parseGitHubRepositories maps `gh repo list` / `gh search repos` JSON to the wire rows (Node's
+// parseRepositoryList, parseRepositorySearch and normalizeRepositorySummary).
+func parseGitHubRepositories(stdout string, listing bool, protocol string) ([]GitHubRepositorySummary, error) {
+	if strings.TrimSpace(stdout) == "" {
+		stdout = "[]"
+	}
+	var items []struct {
+		ID            json.RawMessage `json:"id"`
+		Name          string          `json:"name"`
+		NameWithOwner string          `json:"nameWithOwner"`
+		FullName      string          `json:"fullName"`
+		Description   *string         `json:"description"`
+		IsPrivate     bool            `json:"isPrivate"`
+		UpdatedAt     string          `json:"updatedAt"`
+		SSHURL        string          `json:"sshUrl"`
+		URL           string          `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &items); err != nil {
+		return nil, fmt.Errorf("gh did not return valid JSON (%d bytes)", len(stdout))
+	}
+	out := make([]GitHubRepositorySummary, 0, len(items))
+	for _, item := range items {
+		id := strings.TrimSpace(strings.Trim(string(item.ID), `"`))
+		if id == "" || id == "null" {
+			return nil, fmt.Errorf("GitHub repository is missing an id")
 		}
-		name, _ := it["name"].(string)
-		ownerLogin := ""
-		if ownerMap, ok := it["owner"].(map[string]any); ok {
-			ownerLogin, _ = ownerMap["login"].(string)
-		}
-		if ownerLogin == "" && strings.Contains(fullName, "/") {
-			ownerLogin = strings.SplitN(fullName, "/", 2)[0]
-		}
-		if fullName == "" || name == "" || ownerLogin == "" {
-			continue
-		}
-		desc, _ := it["description"].(string)
-		url, _ := it["url"].(string)
-		isPriv, _ := it["isPrivate"].(bool)
-		updatedAt, _ := it["updatedAt"].(string)
-		defBranch := "main"
-		if dbMap, ok := it["defaultBranchRef"].(map[string]any); ok {
-			if bName, ok := dbMap["name"].(string); ok && bName != "" {
-				defBranch = bName
+		nameWithOwner, cloneURL := item.NameWithOwner, item.URL
+		if listing {
+			if protocol == "ssh" {
+				cloneURL = item.SSHURL
 			}
-		} else if bName, ok := it["defaultBranch"].(string); ok && bName != "" {
-			defBranch = bName
+		} else {
+			nameWithOwner = item.FullName
+			if protocol == "ssh" {
+				cloneURL = "git@github.com:" + item.FullName + ".git"
+			}
 		}
-		out = append(out, map[string]any{
-			"nameWithOwner": fullName,
-			"name":          name,
-			"owner":         ownerLogin,
-			"description":   desc,
-			"url":           url,
-			"isPrivate":     isPriv,
-			"updatedAt":     updatedAt,
-			"defaultBranch": defBranch,
+		nameWithOwner = strings.TrimSpace(nameWithOwner)
+		if !strings.Contains(nameWithOwner, "/") {
+			return nil, fmt.Errorf("GitHub repository is missing owner identity: %s", nameWithOwner)
+		}
+		// isPrivate, not visibility: `gh repo list --json visibility` needs gh 2.28, and the wire
+		// enum still gets a value an old client can parse.
+		visibility := "public"
+		if item.IsPrivate {
+			visibility = "private"
+		}
+		out = append(out, GitHubRepositorySummary{
+			ID:            id,
+			Name:          strings.TrimSpace(item.Name),
+			NameWithOwner: nameWithOwner,
+			Description:   item.Description,
+			Visibility:    visibility,
+			UpdatedAt:     item.UpdatedAt,
+			CloneURL:      strings.TrimSpace(cloneURL),
 		})
 	}
-	return out, true
+	return out, nil
 }
 
 // ForgeSearchItem is one row of `forge.search.response`.

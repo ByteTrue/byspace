@@ -7,11 +7,12 @@ import "testing"
 // that followed dropped everything the array had not carried.
 func TestSetWorkspaceLabelAssignmentKeepsEveryLabel(t *testing.T) {
 	st := New(t.TempDir())
-	if _, _, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", ""); err != nil {
+	_, workspace, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", "")
+	if err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
 
-	if _, err := st.SetWorkspaceLabelAssignment("ws_1", LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
+	if _, err := st.SetWorkspaceLabelAssignment(workspace.WorkspaceID, LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
 		t.Fatalf("assign urgent: %v", err)
 	}
 	// The assignment RPC is followed by the catalog push in the same handler, and that push is what
@@ -19,7 +20,7 @@ func TestSetWorkspaceLabelAssignmentKeepsEveryLabel(t *testing.T) {
 	st.MutateLabelCatalog(func(c *LabelCatalog) (map[string]any, bool) {
 		return map[string]any{"kind": "upsert"}, true
 	})
-	if _, err := st.SetWorkspaceLabelAssignment("ws_1", LabelDefinition{Name: "Frontend", Color: "sky"}, true); err != nil {
+	if _, err := st.SetWorkspaceLabelAssignment(workspace.WorkspaceID, LabelDefinition{Name: "Frontend", Color: "sky"}, true); err != nil {
 		t.Fatalf("assign frontend: %v", err)
 	}
 
@@ -38,17 +39,19 @@ func TestSetWorkspaceLabelAssignmentKeepsEveryLabel(t *testing.T) {
 
 func TestUpdateLabelKeepsTheOtherLabels(t *testing.T) {
 	st := New(t.TempDir())
-	if _, _, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", ""); err != nil {
+	_, workspace, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", "")
+	if err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
-	if _, err := st.SetWorkspaceLabelAssignment("ws_1", LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
+	if _, err := st.SetWorkspaceLabelAssignment(workspace.WorkspaceID, LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
 		t.Fatalf("assign urgent: %v", err)
 	}
-	if _, err := st.SetWorkspaceLabelAssignment("ws_1", LabelDefinition{Name: "Frontend", Color: "sky"}, true); err != nil {
+	if _, err := st.SetWorkspaceLabelAssignment(workspace.WorkspaceID, LabelDefinition{Name: "Frontend", Color: "sky"}, true); err != nil {
 		t.Fatalf("assign frontend: %v", err)
 	}
 
-	if _, _, err := st.UpdateLabel("Urgent", "Blocked", "amber"); err != nil {
+	blocked, amber := "Blocked", "amber"
+	if _, err := st.UpdateLabel("Urgent", &blocked, &amber); err != nil {
 		t.Fatalf("update label: %v", err)
 	}
 
@@ -67,11 +70,12 @@ func TestUpdateLabelKeepsTheOtherLabels(t *testing.T) {
 
 func TestLabelCatalogGenerationSurvivesAnAssignment(t *testing.T) {
 	st := New(t.TempDir())
-	if _, _, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", ""); err != nil {
+	_, workspace, err := st.CreateWorkspaceForDirectory(t.TempDir(), "ws_1", "")
+	if err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
 	before := st.LoadLabelCatalog()
-	if _, err := st.SetWorkspaceLabelAssignment("ws_1", LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
+	if _, err := st.SetWorkspaceLabelAssignment(workspace.WorkspaceID, LabelDefinition{Name: "Urgent", Color: "red"}, true); err != nil {
 		t.Fatalf("assign urgent: %v", err)
 	}
 	after := st.LoadLabelCatalog()

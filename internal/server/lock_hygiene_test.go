@@ -40,6 +40,7 @@ var selfLockingMethods = map[string]bool{
 	"refreshWorkspaceStatusBuckets": true,
 	"publishWorkspaceStatusChanges": true,
 	"broadcastWorkspaceUpsert":      true,
+	"broadcastWorkspaceRecords":     true,
 	"workspaceStatus":               true,
 	"HasActiveAgentWork":            true,
 }

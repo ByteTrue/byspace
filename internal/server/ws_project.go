@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/workspace/projecticon"
 	"net/http"
@@ -69,7 +69,7 @@ func (s *Server) handleProjectAdd(ctx context.Context, sink frameSink, raw json.
 		})
 		return
 	}
-	desc := buildProjectDescriptor(prj)
+	desc := s.projectDescriptor(prj)
 	_ = sendSessionMsg(ctx, sink, "project.add.response", map[string]any{
 		"requestId": req.RequestID,
 		"project":   desc,
@@ -88,7 +88,7 @@ func (s *Server) announceProject(prj store.ProjectRecord) {
 	if prj.ArchivedAt != nil {
 		return
 	}
-	s.broadcastProjectUpsert(buildProjectDescriptor(prj))
+	s.broadcastProjectUpsert(s.projectDescriptor(prj))
 }
 
 func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -177,7 +177,7 @@ func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSin
 	_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
 		"requestId":     req.RequestID,
 		"directoryPath": target,
-		"project":       buildProjectDescriptor(prj),
+		"project":       s.projectDescriptor(prj),
 		"error":         nil,
 		"errorCode":     nil,
 	})
@@ -203,7 +203,7 @@ func (s *Server) handleProjectRename(ctx context.Context, sink frameSink, raw js
 			_ = s.store.UpsertProject(p)
 			// The response only answers the caller. Without the broadcast the sidebar keeps the old name until a
 			// full refetch, so renaming a project looked like it did nothing.
-			s.broadcastProjectUpsert(buildProjectDescriptor(p))
+			s.broadcastProjectUpsert(s.projectDescriptor(p))
 			_ = sendSessionMsg(ctx, sink, "project.rename.response", map[string]any{
 				"requestId":  req.RequestID,
 				"projectId":  req.ProjectID,
@@ -240,6 +240,11 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 			found = true
 			break
 		}
+	}
+	// Node deletes the removed project's custom icon with it.
+	if found {
+		_ = s.store.RemoveProjectCustomIcon(req.ProjectID)
+		s.projectIcons.Delete(req.ProjectID)
 	}
 	workspaces, _ := s.store.ListWorkspaces()
 	removedWS := make([]string, 0)
@@ -282,31 +287,27 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
 	switch msgType {
 	case "project.icon.set.request":
+		// Ported from Node's handleProjectIconSetRequest: the bytes are validated and stored, the
+		// project gets a new custom-icon revision, and the project and its workspaces are re-announced
+		// so every client drops the icon it cached under the old revision.
 		var req struct {
-			RequestID string         `json:"requestId"`
-			ProjectID string         `json:"projectId"`
-			Source    map[string]any `json:"source"`
+			RequestID string `json:"requestId"`
+			ProjectID string `json:"projectId"`
+			Source    struct {
+				Type string `json:"type"`
+				Data string `json:"data"`
+			} `json:"source"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		srcType, _ := req.Source["type"].(string)
-		if srcType == "upload" {
-			dataStr, _ := req.Source["data"].(string)
-			_ = s.store.SaveProjectIcon(req.ProjectID, map[string]any{
-				"data":     dataStr,
-				"mimeType": "image/png",
+		updated, err := s.store.SetProjectCustomIcon(req.ProjectID, req.Source.Type == "automatic", req.Source.Data)
+		if err != nil {
+			_ = sendSessionMsg(ctx, sink, "project.icon.set.response", map[string]any{
+				"requestId": req.RequestID,
+				"projectId": req.ProjectID,
+				"accepted":  false,
+				"error":     err.Error(),
 			})
-		} else {
-			_ = s.store.SaveProjectIcon(req.ProjectID, nil)
-		}
-		// The icon shows in the sidebar and the project header; without the broadcast it changes only after a
-		// reload, which reads as the upload having failed.
-		if projects, listErr := s.store.ListProjects(); listErr == nil {
-			for _, project := range projects {
-				if project.ProjectID == req.ProjectID {
-					s.broadcastProjectUpsert(buildProjectDescriptor(project))
-					break
-				}
-			}
+			return
 		}
 		_ = sendSessionMsg(ctx, sink, "project.icon.set.response", map[string]any{
 			"requestId": req.RequestID,
@@ -314,13 +315,35 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			"accepted":  true,
 			"error":     nil,
 		})
+		s.broadcastProjectUpsert(s.projectDescriptor(updated))
+		workspaces, _ := s.store.ListWorkspaces()
+		for _, workspace := range workspaces {
+			if workspace.ProjectID == req.ProjectID && workspace.ArchivedAt == nil {
+				s.broadcastWorkspaceUpsert(workspace, updated)
+			}
+		}
 	case "project.icon.get.request":
 		var req struct {
 			RequestID string `json:"requestId"`
 			ProjectID string `json:"projectId"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		icon := s.store.LoadProjectIcon(req.ProjectID)
+		project, ok := s.projectByID(req.ProjectID)
+		if !ok {
+			_ = sendSessionMsg(ctx, sink, "project.icon.get.response", map[string]any{
+				"requestId": req.RequestID,
+				"projectId": req.ProjectID,
+				"icon":      nil,
+				"error":     store.ErrProjectNotFound.Error(),
+			})
+			return
+		}
+		// The effective icon (custom, or the one the repository ships), as Node's ProjectIconReader.
+		// Serving only custom icons left every project on its letter tile.
+		var icon any
+		if found := s.projectIcon(project); found != nil {
+			icon = found
+		}
 		_ = sendSessionMsg(ctx, sink, "project.icon.get.response", map[string]any{
 			"requestId": req.RequestID,
 			"projectId": req.ProjectID,
@@ -328,23 +351,15 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			"error":     nil,
 		})
 	case "project_icon_request":
+		// The pre-custom-icon lookup by directory: only the icon the directory ships, as in Node.
 		var req struct {
 			RequestID string `json:"requestId"`
 			Cwd       string `json:"cwd"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		var icon map[string]any
-		projects, _ := s.store.ListProjects()
-		for _, p := range projects {
-			if p.RootPath == req.Cwd {
-				icon = s.store.LoadProjectIcon(p.ProjectID)
-				break
-			}
-		}
-		// No custom icon: use the one the project already ships. A repository with
-		// `public/favicon.svg` should not show a placeholder until the user uploads something.
-		if icon == nil {
-			icon = detectShippedIcon(req.Cwd)
+		var icon any
+		if found := projecticon.Get(req.Cwd); found != nil {
+			icon = found
 		}
 		_ = sendSessionMsg(ctx, sink, "project_icon_response", map[string]any{
 			"requestId": req.RequestID,
@@ -353,6 +368,17 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			"error":     nil,
 		})
 	}
+}
+
+// projectByID returns the project record with this id, archived or not.
+func (s *Server) projectByID(projectID string) (store.ProjectRecord, bool) {
+	projects, _ := s.store.ListProjects()
+	for _, project := range projects {
+		if project.ProjectID == projectID {
+			return project, true
+		}
+	}
+	return store.ProjectRecord{}, false
 }
 
 func (s *Server) handleOpenProject(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -732,45 +758,52 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 			Assigned    bool                  `json:"assigned"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		wsLabels, _ := s.store.SetWorkspaceLabelAssignment(req.WorkspaceID, req.Label, req.Assigned)
+		result, err := s.store.SetWorkspaceLabelAssignment(req.WorkspaceID, req.Label, req.Assigned)
+		if err != nil {
+			sendLabelError(ctx, sink, req.RequestID, msgType, err)
+			return
+		}
 		// Assigning an unknown label creates it, which is how the picker's "create" page
 		// commits (one RPC, not two). The catalog must advance so other clients see the row.
-		if req.Assigned && req.Label.Name != "" {
-			s.pushLabelUpdate(req.Label.Name, req.Label, "upsert")
+		if result.CatalogChanged {
+			s.pushLabelUpdate("", result.Label, "upsert")
 		}
 		// The workspace now carries a different label set. Emitting the workspace is what makes the picker's
 		// checkbox and the sidebar's label chips change: the response only answers this caller, and the picker
 		// re-derives its checked state from the workspace record.
-		if workspaces, listErr := s.store.ListWorkspaces(); listErr == nil {
-			for _, workspace := range workspaces {
-				if workspace.WorkspaceID != req.WorkspaceID {
-					continue
-				}
-				if prj, ok := s.projectForWorkspace(workspace.ProjectID); ok {
-					s.broadcastWorkspaceUpsert(workspace, prj)
-				}
-				break
-			}
+		if result.Workspace != nil {
+			s.broadcastWorkspaceRecords([]store.WorkspaceRecord{*result.Workspace})
 		}
 		_ = sendSessionMsg(ctx, sink, "workspace.label.assignment.set.response", map[string]any{
 			"requestId":       req.RequestID,
-			"label":           req.Label,
-			"workspaceLabels": wsLabels,
+			"label":           result.Label,
+			"workspaceLabels": result.WorkspaceLabels,
 		})
 	case "workspace.label.update.request":
+		// Both fields are optional and an omitted one is left alone, so they are pointers: an empty
+		// string is a name the daemon must refuse, not "unchanged".
 		var req struct {
-			RequestID string `json:"requestId"`
-			Name      string `json:"name"`
-			NewName   string `json:"newName"`
-			Color     string `json:"color"`
+			RequestID string  `json:"requestId"`
+			Name      string  `json:"name"`
+			NewName   *string `json:"newName"`
+			Color     *string `json:"color"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		updatedDef, affected, _ := s.store.UpdateLabel(req.Name, req.NewName, req.Color)
-		s.pushLabelUpdate(req.Name, updatedDef, "upsert")
+		result, err := s.store.UpdateLabel(req.Name, req.NewName, req.Color)
+		if err != nil {
+			sendLabelError(ctx, sink, req.RequestID, msgType, err)
+			return
+		}
+		if result.Changed {
+			s.pushLabelUpdate(result.PreviousName, result.Label, "upsert")
+		}
+		// A rename rewrote the assignments; without the workspace frames every client kept showing
+		// the old chip (and then none, once the catalog frame removed the old name) until a reload.
+		s.broadcastWorkspaceRecords(result.Workspaces)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.update.response", map[string]any{
 			"requestId":              req.RequestID,
-			"label":                  updatedDef,
-			"affectedWorkspaceCount": affected,
+			"label":                  result.Label,
+			"affectedWorkspaceCount": len(result.Workspaces),
 		})
 	case "workspace.label.delete.request":
 		var req struct {
@@ -778,11 +811,18 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 			Name      string `json:"name"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		affected := s.store.DeleteLabel(req.Name)
-		s.pushLabelUpdate(req.Name, store.LabelDefinition{}, "remove")
+		result, err := s.store.DeleteLabel(req.Name)
+		if err != nil {
+			sendLabelError(ctx, sink, req.RequestID, msgType, err)
+			return
+		}
+		if result.DeletedName != "" {
+			s.pushLabelUpdate(result.DeletedName, store.LabelDefinition{}, "remove")
+		}
+		s.broadcastWorkspaceRecords(result.Workspaces)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.delete.response", map[string]any{
 			"requestId":              req.RequestID,
-			"affectedWorkspaceCount": affected,
+			"affectedWorkspaceCount": len(result.Workspaces),
 		})
 	case "workspace.label.delete.inspect.request":
 		var req struct {
@@ -790,7 +830,11 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 			Name      string `json:"name"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		affected := s.store.InspectLabelUsage(req.Name)
+		affected, err := s.store.InspectLabelUsage(req.Name)
+		if err != nil {
+			sendLabelError(ctx, sink, req.RequestID, msgType, err)
+			return
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.label.delete.inspect.response", map[string]any{
 			"requestId":              req.RequestID,
 			"affectedWorkspaceCount": affected,
@@ -1303,6 +1347,32 @@ func (s *Server) pushLabelUpdate(previousName string, label store.LabelDefinitio
 	}
 }
 
+// broadcastWorkspaceRecords emits a workspace upsert for each record a label change rewrote, as
+// Node's registry publishes every workspace a label mutation committed.
+func (s *Server) broadcastWorkspaceRecords(records []store.WorkspaceRecord) {
+	for _, workspace := range records {
+		if prj, ok := s.projectForWorkspace(workspace.ProjectID); ok {
+			s.broadcastWorkspaceUpsert(workspace, prj)
+		}
+	}
+}
+
+// sendLabelError answers a label request the store refused, as Node's emitWorkspaceLabelError:
+// an rpc_error whose code the client turns into a message ("A label with that name already exists").
+func sendLabelError(ctx context.Context, sink frameSink, requestID, requestType string, err error) {
+	code := "workspace_label_failed"
+	var labelErr *store.LabelError
+	if errors.As(err, &labelErr) {
+		code = labelErr.Code
+	}
+	_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+		"requestId":   requestID,
+		"requestType": requestType,
+		"code":        code,
+		"error":       err.Error(),
+	})
+}
+
 // archiveWorkspaceContents tears down everything that belongs to a workspace.
 //
 // Ported from archiveWorkspaceContents in workspace-archive-service.ts. Archiving only the
@@ -1421,39 +1491,6 @@ func ValidateProjectDirectoryName(name string) error {
 		return fmt.Errorf("directory name must not be an absolute path")
 	}
 	return nil
-}
-
-// detectShippedIcon returns a project's own favicon as an icon payload, or nil.
-//
-// The file is read and base64-encoded rather than served by path: the client renders the icon in
-// many places and a filesystem path would only work for a local connection.
-func detectShippedIcon(projectDir string) map[string]any {
-	if strings.TrimSpace(projectDir) == "" {
-		return nil
-	}
-	path := projecticon.Find(projectDir)
-	if path == "" {
-		return nil
-	}
-	mime := projecticon.MimeTypeFor(path)
-	if mime == "" {
-		return nil
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	// Icons are small; anything larger is not one, and shipping a megabyte per project through
-	// the directory listing would be worse than showing nothing.
-	const maxIconBytes = 512 * 1024
-	if len(raw) > maxIconBytes {
-		return nil
-	}
-	return map[string]any{
-		"data":     base64.StdEncoding.EncodeToString(raw),
-		"mimeType": mime,
-		"source":   "detected",
-	}
 }
 
 // pruneDownloadTokensLocked drops expired download tokens. Callers hold s.mu.

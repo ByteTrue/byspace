@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/ByteTrue/byspace/internal/proc"
@@ -21,6 +22,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
+	"github.com/ByteTrue/byspace/internal/workspace/projectkey"
 )
 
 // CheckoutErrorCode values the protocol accepts.
@@ -646,63 +648,36 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			Limit     int    `json:"limit"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		repos, available := workspace.SearchGitHubRepos(ctx, req.Query, req.Limit)
-		if !available {
-			_ = sendSessionMsg(ctx, sink, "workspace.github.search_repositories.response", map[string]any{
-				"status":       "unavailable",
-				"requestId":    req.RequestID,
-				"repositories": []any{},
-				"reason":       "gh_missing",
-				"available":    false,
-				"error":        "GitHub CLI (gh) is not installed",
-			})
-			return
-		}
-		_ = sendSessionMsg(ctx, sink, "workspace.github.search_repositories.response", map[string]any{
-			"status":       "success",
-			"requestId":    req.RequestID,
-			"repositories": repos,
-			"available":    true,
-			"error":        nil,
-		})
+		home, _ := os.UserHomeDir()
+		repos, err := workspace.SearchGitHubRepos(ctx, home, req.Query, req.Limit)
+		_ = sendSessionMsg(ctx, sink, "workspace.github.search_repositories.response", githubRepositorySearchPayload(req.RequestID, repos, err))
 
 	case "project.github.clone.request":
-		// `owner/repo` needs a protocol to become a URL; a full remote URL is used as-is.
-		// Reading only the repo meant an owner/repo name was passed to git verbatim, which
-		// git cannot clone, and the target directory fell back to a daemon-owned path.
-		cloneURL, cloneErr := resolveCloneURL(base.Repo, base.CloneProtocol)
-		if cloneErr != nil {
-			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
+		repo, checkoutPath, err := cloneGitHubProject(ctx, base.Repo, base.CloneProtocol, base.TargetDir)
+		if err != nil {
+			payload := map[string]any{
 				"requestId":    base.RequestID,
-				"repo":         base.Repo,
-				"checkoutPath": nil,
-				"project":      nil,
-				"error":        cloneErr.Error(),
-			})
-			return
-		}
-		repo := cloneURL
-		dst := expandUserPath(base.TargetDir)
-		if dst == "" {
-			dst = filepath.Join(s.homeDir, "clones", filepath.Base(repo))
-		}
-		if err := proc.CommandContext(ctx, "git", "clone", repo, dst).Run(); err != nil {
-			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
-				"requestId":    base.RequestID,
-				"repo":         repo,
+				"repo":         repo.DisplayName,
 				"checkoutPath": nil,
 				"project":      nil,
 				"error":        err.Error(),
-			})
+			}
+			if repo.DisplayName == "" {
+				payload["repo"] = base.Repo
+			}
+			if checkoutPath != "" {
+				payload["checkoutPath"] = checkoutPath
+			}
+			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", payload)
 			return
 		}
 		// Cloning registers a project; Node does not open a workspace for it either.
-		prj, err := s.store.FindOrCreateProjectForDirectory(dst)
+		prj, err := s.store.FindOrCreateProjectForDirectory(checkoutPath)
 		if err != nil {
 			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
 				"requestId":    base.RequestID,
-				"repo":         repo,
-				"checkoutPath": dst,
+				"repo":         repo.DisplayName,
+				"checkoutPath": checkoutPath,
 				"project":      nil,
 				"error":        err.Error(),
 			})
@@ -710,12 +685,82 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		}
 		_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
 			"requestId":    base.RequestID,
-			"repo":         repo,
-			"checkoutPath": dst,
-			"project":      buildProjectDescriptor(prj),
+			"repo":         repo.DisplayName,
+			"checkoutPath": checkoutPath,
+			"project":      s.projectDescriptor(prj),
 			"error":        nil,
 		})
 	}
+}
+
+// githubCloneTimeout is Node's clone timeout: a large repository on a slow link takes minutes.
+const githubCloneTimeout = 5 * time.Minute
+
+// cloneGitHubProject clones into <targetDirectory>/<repository name>, as Node's
+// handleProjectGithubCloneRequest: targetDirectory is the parent the user picked, the checkout must
+// not exist yet, and the clone goes to a staging directory that is renamed into place only once it
+// has finished, so a failed clone leaves nothing behind. The port cloned into the parent itself,
+// which git refuses for any non-empty directory, so every clone from Add project failed.
+func cloneGitHubProject(ctx context.Context, rawRepo, protocol, targetDirectory string) (cloneRepository, string, error) {
+	repo, err := normalizeCloneRepository(rawRepo, protocol)
+	if err != nil {
+		return cloneRepository{}, "", err
+	}
+	targetParent := expandUserPath(targetDirectory)
+	checkoutPath := filepath.Join(targetParent, repo.Name)
+	if rel, relErr := filepath.Rel(targetParent, checkoutPath); relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return repo, checkoutPath, errors.New("Resolved checkout path must stay inside the target directory")
+	}
+	if err := os.MkdirAll(targetParent, 0o755); err != nil {
+		return repo, checkoutPath, err
+	}
+	if _, err := os.Lstat(checkoutPath); err == nil {
+		return repo, checkoutPath, fmt.Errorf("Checkout path already exists: %s", checkoutPath)
+	} else if !os.IsNotExist(err) {
+		return repo, checkoutPath, err
+	}
+	staging, err := os.MkdirTemp(targetParent, ".byspace-clone-")
+	if err != nil {
+		return repo, checkoutPath, err
+	}
+	if err := runGitClone(ctx, targetParent, repo.CloneURL, staging); err != nil {
+		_ = os.RemoveAll(staging)
+		return repo, checkoutPath, err
+	}
+	if err := os.Rename(staging, checkoutPath); err != nil {
+		_ = os.RemoveAll(staging)
+		return repo, checkoutPath, err
+	}
+	return repo, checkoutPath, nil
+}
+
+// runGitClone runs `git clone`, reporting a failure as Node's runGitCommand does: the command,
+// the exit code and what git printed, which is the part the user can act on.
+func runGitClone(ctx context.Context, cwd, cloneURL, dst string) error {
+	cctx, cancel := context.WithTimeout(ctx, githubCloneTimeout)
+	defer cancel()
+	command := "git clone " + cloneURL + " " + dst
+	cmd := proc.CommandContext(cctx, "git", "clone", cloneURL, dst)
+	cmd.Dir = cwd
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		return nil
+	}
+	if errors.Is(cctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("Git command timed out after %dms: %s", githubCloneTimeout.Milliseconds(), command)
+	}
+	preview := strings.TrimSpace(stderr.String())
+	if preview == "" {
+		preview = "(no stderr)"
+	}
+	code := -1
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		code = exitErr.ExitCode()
+	}
+	return fmt.Errorf("Git command failed: %s (exit code: %d, signal: none)\n%s", command, code, preview)
 }
 
 func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
@@ -1722,38 +1767,53 @@ func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target s
 // validRepoSegment matches a GitHub owner or repository name.
 var validRepoSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
-// resolveCloneURL turns the request's `repo` into something git can clone.
-//
-// Ported from resolveGithubCloneTarget in session.ts. An `owner/repo` shorthand has no scheme,
-// so it needs the chosen protocol; a full remote URL is already complete. Validating the
-// segments matters because the value is interpolated into a URL passed to git.
-func resolveCloneURL(rawRepo, protocol string) (string, error) {
+// cloneRepository is what a clone request's `repo` resolves to: the directory name, the name the
+// response reports, and the URL git clones.
+type cloneRepository struct {
+	Name        string
+	DisplayName string
+	CloneURL    string
+}
+
+// normalizeCloneRepository is Node's normalizeCloneRepository. A complete git remote (what
+// parseGitRemoteLocation accepts) is cloned as given and named after its last path segment; an
+// `owner/repo` shorthand needs the chosen protocol to become a github.com URL. Validating the
+// segments matters because they become a path and are interpolated into a URL passed to git.
+func normalizeCloneRepository(rawRepo, protocol string) (cloneRepository, error) {
 	trimmed := strings.TrimSpace(rawRepo)
 	if trimmed == "" {
-		return "", fmt.Errorf("repository is required")
+		return cloneRepository{}, errors.New("Repository is required")
 	}
-	// A remote URL (https://…, git@host:…, ssh://…) is used verbatim.
-	if strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "git@") {
-		return trimmed, nil
+	if remote, ok := projectkey.ParseRemote(trimmed); ok {
+		segments := strings.FieldsFunc(remote.Path, func(r rune) bool { return r == '/' })
+		name := ""
+		if len(segments) > 0 {
+			name = segments[len(segments)-1]
+		}
+		if name == "" || !validRepoSegment.MatchString(name) {
+			return cloneRepository{}, errors.New("Repository name contains invalid characters")
+		}
+		return cloneRepository{Name: name, DisplayName: remote.Path, CloneURL: trimmed}, nil
 	}
 	parts := strings.Split(trimmed, "/")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("repository must use owner/repo format or be a git remote URL")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return cloneRepository{}, errors.New("Repository must use owner/repo format or a git remote URL")
 	}
 	owner := parts[0]
 	name := strings.TrimSuffix(parts[1], ".git")
 	if !validRepoSegment.MatchString(owner) || !validRepoSegment.MatchString(name) {
-		return "", fmt.Errorf("repository contains invalid characters")
+		return cloneRepository{}, errors.New("Repository contains invalid characters")
 	}
+	var cloneURL string
 	switch protocol {
 	case "ssh":
-		return fmt.Sprintf("git@github.com:%s/%s.git", owner, name), nil
+		cloneURL = fmt.Sprintf("git@github.com:%s/%s.git", owner, name)
 	case "https":
-		return fmt.Sprintf("https://github.com/%s/%s.git", owner, name), nil
+		cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", owner, name)
 	default:
-		// The client always sends one; refusing keeps an ambiguous name from becoming a path.
-		return "", fmt.Errorf("clone protocol is required for owner/repo repository names")
+		return cloneRepository{}, errors.New("Clone protocol is required for owner/repo repository names")
 	}
+	return cloneRepository{Name: name, DisplayName: owner + "/" + name, CloneURL: cloneURL}, nil
 }
 
 // sinkOwnerToken identifies the connection that owns a terminal's size.
@@ -1889,4 +1949,54 @@ func (s *Server) applyDaemonServicePatch(install bool) error {
 		daemon.LogPath(s.homeDir),
 	)
 	return err
+}
+
+// githubRepositorySearchPayload is Node's handleWorkspaceGithubSearchRepositoriesRequest answer: a
+// missing gh is `unavailable`, a signed-out gh `unauthenticated`, and any other failure `error` with
+// what gh printed. The port reported every failure as an empty success.
+func githubRepositorySearchPayload(requestID string, repos []workspace.GitHubRepositorySummary, err error) map[string]any {
+	if err == nil {
+		if repos == nil {
+			repos = []workspace.GitHubRepositorySummary{}
+		}
+		return map[string]any{
+			"status":       "success",
+			"requestId":    requestID,
+			"repositories": repos,
+			"available":    true,
+			"error":        nil,
+		}
+	}
+	var cliErr *workspace.GitHubCLIError
+	errors.As(err, &cliErr)
+	if cliErr != nil && cliErr.Kind == workspace.GitHubCLIMissing {
+		return map[string]any{
+			"status":       "unavailable",
+			"requestId":    requestID,
+			"repositories": []any{},
+			"reason":       "gh_missing",
+			"available":    false,
+			"error":        "GitHub CLI (gh) is not installed or not in PATH",
+		}
+	}
+	if cliErr != nil && cliErr.Kind == workspace.GitHubCLIUnauthenticated {
+		return map[string]any{
+			"status":       "unauthenticated",
+			"requestId":    requestID,
+			"repositories": []any{},
+			"available":    false,
+			"error":        "GitHub CLI is not authenticated. Run gh auth login on the host.",
+		}
+	}
+	message := err.Error()
+	if cliErr != nil && strings.TrimSpace(cliErr.Stderr) != "" {
+		message = strings.TrimSpace(cliErr.Stderr)
+	}
+	return map[string]any{
+		"status":       "error",
+		"requestId":    requestID,
+		"repositories": []any{},
+		"available":    true,
+		"error":        message,
+	}
 }
