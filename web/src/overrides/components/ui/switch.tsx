@@ -36,7 +36,9 @@ export function Switch({
       disabled={disabled}
       onClick={handleClick}
       className={cn(
-        "flex min-h-8 shrink-0 items-center justify-center outline-none md:min-h-7 disabled:opacity-50",
+        // A column like packages/app's Pressable: centred vertically, the track at the start when a
+        // column layout stretches the control (a form field), not in the middle.
+        "flex min-h-8 shrink-0 flex-col items-start justify-center outline-none md:min-h-7 disabled:opacity-50",
         className,
       )}
     >

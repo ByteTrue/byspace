@@ -118,7 +118,8 @@ export function SearchInput({
       <Search size={16} className="shrink-0 text-muted-foreground" />
       <AdaptiveTextInput
         ref={inputRef}
-        className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none"
+        // packages/app: 12px above and below one line of text.
+        className="min-w-0 flex-1 bg-transparent py-3 text-sm leading-[normal] outline-none"
         placeholder={placeholder}
         resetKey={resetKey}
         onChangeText={onChangeText}
@@ -173,8 +174,15 @@ export function ComboboxItem({
       aria-label={accessibilityLabel ?? label}
       className={cn(
         "flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left outline-none disabled:opacity-55",
-        elevated ? "hover:bg-accent active:bg-accent" : "hover:bg-muted active:bg-muted",
-        active && "bg-muted",
+        // packages/app fills the keyboard-active, hovered and pressed row with surface1 (surface2
+        // when elevated), the active fill winning. On light themes surface1 is the list's own white,
+        // so the selected row cannot be seen; there it takes muted instead (deliberate since step 4
+        // batch 2). Dark themes keep surface1 (card).
+        active && "bg-muted dark:bg-card",
+        !active &&
+          (elevated
+            ? "hover:bg-muted active:bg-muted"
+            : "hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card"),
       )}
     >
       {leading ? (
@@ -710,7 +718,9 @@ function ComboboxPopover({
             onKeyDown={onKeyDown}
             onInteractOutside={onInteractOutside}
             style={frameStyle}
-            className="z-50 flex flex-col overflow-hidden rounded-lg border bg-popover text-sm text-popover-foreground shadow-md outline-none duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+            // packages/app's desktop surface is surface0 (the page colour), not shadcn's popover
+            // colour, which is lighter on dark themes.
+            className="z-50 flex flex-col overflow-hidden rounded-lg border bg-background text-sm text-popover-foreground shadow-md outline-none duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
           >
             {header ? <InlineHeaderView header={header} /> : stickyHeader}
             {search ? <SearchInput {...search} autoFocus /> : null}

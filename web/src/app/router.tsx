@@ -7,6 +7,8 @@ import HostSessionsRoute from "@/app/h/[serverId]/sessions";
 import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import NewWorkspaceRoute from "@/app/new";
 import OpenProjectRoute from "@/app/open-project";
+import SchedulesRoute from "@/app/schedules";
+import TunnelsRoute from "@/app/tunnels";
 import PairScanRoute from "@/app/pair-scan";
 import SessionsRoute from "@/app/sessions";
 import WelcomeRoute from "@/app/welcome";
@@ -18,10 +20,10 @@ import SettingsHostSectionRoute from "@/app/settings/hosts/[serverId]/[hostSecti
 import SettingsHostProjectsRoute from "@/app/settings/hosts/[serverId]/projects/index";
 import SettingsHostProjectDetailRoute from "@/app/settings/hosts/[serverId]/projects/[projectId]";
 import { Root } from "~/app/root";
-import { HostLayout, PendingPage, SettingsIndexRoute } from "~/app/routes";
+import { HostLayout, SettingsIndexRoute } from "~/app/routes";
 
 // One entry per file in packages/app/src/app, same paths, so links, bookmarks and pairing URLs
-// keep working. Pages that move in later steps of the rewrite render PendingPage until then.
+// keep working.
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -33,8 +35,8 @@ export const router = createBrowserRouter([
       { path: "new", element: <NewWorkspaceRoute /> },
       { path: "open-project", element: <OpenProjectRoute /> },
       { path: "sessions", element: <SessionsRoute /> },
-      { path: "schedules", element: <PendingPage title="Schedules" step={4} /> },
-      { path: "tunnels", element: <PendingPage title="Tunnels" step={4} /> },
+      { path: "schedules", element: <SchedulesRoute /> },
+      { path: "tunnels", element: <TunnelsRoute /> },
       { path: "settings", element: <SettingsIndexRoute /> },
       { path: "settings/:section", element: <SettingsSectionRoute /> },
       { path: "settings/hosts/:serverId", element: <SettingsHostIndexRoute /> },

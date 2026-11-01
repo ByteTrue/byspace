@@ -103,7 +103,8 @@ function StateFrame({ children }: { children: ReactNode }) {
 
 function TextStack({ children }: { children: ReactNode }) {
   return (
-    <div className="flex max-w-[520px] flex-col items-center gap-2 text-center text-sm">
+    // packages/app's title and description set no line height (normal); its error text is 20px.
+    <div className="flex max-w-[520px] flex-col items-center gap-2 text-center text-sm leading-[normal]">
       {children}
     </div>
   );
@@ -160,7 +161,7 @@ function ArchivedWorkspaceRecovery({
         </p>
         <p className="text-muted-foreground">{description}</p>
         {recovery.error ? (
-          <p className="text-destructive-text" data-testid="workspace-recovery-error">
+          <p className="leading-5 text-destructive-text" data-testid="workspace-recovery-error">
             {recovery.error}
           </p>
         ) : null}
@@ -195,7 +196,7 @@ function WorkspaceRecoveryInspectionFailed({
     <StateFrame>
       <TextStack>
         <p className="text-foreground">{t("workspace.route.recovery.checkFailedTitle")}</p>
-        <p className="text-destructive-text">{state.error}</p>
+        <p className="leading-5 text-destructive-text">{state.error}</p>
       </TextStack>
       <Actions>
         <Button size="sm" variant="default" leftIcon={RETRY_ICON} onPress={onRetry}>
@@ -236,7 +237,7 @@ function WorkspaceUnreachable({
         {state.lastError ? (
           <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
             <TooltipTrigger asChild>
-              <p className="line-clamp-3 text-destructive-text">{state.lastError}</p>
+              <p className="line-clamp-3 leading-5 text-destructive-text">{state.lastError}</p>
             </TooltipTrigger>
             <TooltipContent side="top" offset={8} maxWidth={420}>
               {state.lastError}

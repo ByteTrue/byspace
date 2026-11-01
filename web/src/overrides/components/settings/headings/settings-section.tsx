@@ -42,7 +42,9 @@ export function SettingsSection({
   const handleToggle = useCallback(() => setIsExpanded((current) => !current), []);
 
   const header = (
-    <span className="flex shrink items-center gap-2">
+    // min-w-0 as packages/app's title row (a react-native-web View): on a phone a wide trailing slot
+    // squeezes the title instead of pushing the trailing controls out.
+    <span className="flex min-w-0 shrink items-center gap-2">
       <span className={settingsStyles.sectionHeaderTitle}>{title}</span>
       {info ? (
         <SettingsInfoTip title={title} info={info} testID={testID ? `${testID}-info` : undefined} />
