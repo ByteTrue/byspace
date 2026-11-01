@@ -105,6 +105,24 @@ socket 接收必须是 hibernation：
 
 和对话量无关，是**常驻连接**。修好 hibernation 后一整天 1 GB-s。
 
+## 第二个额度：requests，不是 duration
+
+2026-11-01 打穿的是**请求数**额度（免费层 10 万/天，00:00 UTC 重置），和 GB-s 是两个独立的上限。
+
+- **每条 WebSocket 消息 = 1 次 DO request。** 字节数不影响计数，所以拆帧越细越贵。
+- **WS 消息不经过 Worker。** `workersInvocationsAdaptive` 那小时只有 ~200 次，而 DO 请求是 33 万——
+  拿 Worker 指标判断 relay 是否异常会直接看反。看 `durableObjectsInvocationsAdaptiveGroups`。
+- 额度耗尽时**握手返回 502**（`stub.fetch` 直接抛），`/health` 仍 200。和 duration 耗尽的表现不同。
+
+实测常数（pi 1.4，一次 200 词回答，8.9 秒）：245 个 `text_delta` + 985 个 `thinking_delta`，
+约 **140 事件/秒**。daemon 若每事件发一帧，单次小回答就是 1,230 次 DO 请求；一个下午的
+agent 工作实测 226 万次。这就是 `internal/server/stream_coalescer.go` 存在的理由——它抄的是
+Node 的 `AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS = 60`（按 agent、text/reasoning 合并、
+tool_call 按 callId 就地覆盖）。
+
+**结论：daemon 侧的帧率是额度约束，不是渲染细节。** 60ms 窗口给出 ≤16.7 帧/秒/agent 的上限；
+免费层 10 万/天约等于 1.16 帧/秒，所以持续流式的重度使用仍会撞顶，付费层才是长期解。
+
 ## 一条更普适的教训
 
 「两边代码看起来一致」不等于一致。协议层比过（ping 间隔、超时、重连退避都一样），
