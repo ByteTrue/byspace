@@ -9,6 +9,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/proc"
 	"net/url"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -740,6 +741,11 @@ func SearchIssuesAndPullRequests(ctx context.Context, cwd, query string, limit i
 	if err != nil {
 		return []ForgeSearchItem{}, err
 	}
+	// A search that found nothing is an empty list: a nil slice marshals to null, which the client
+	// rejects, and the starting-ref picker then showed no pull requests at all.
+	if items == nil {
+		items = []ForgeSearchItem{}
+	}
 	for index := range items {
 		items[index].Forge = forge
 	}
@@ -770,52 +776,89 @@ func normalizeForgeSearchKinds(kinds []string) (issues, changeRequests bool) {
 	return issues, changeRequests
 }
 
+// searchGitHubItems is Node's GitHub searchIssuesAndPrs: change requests and issues are listed
+// independently, so one failing leaves the other's rows; the search fails only when every
+// requested list failed. A pasted github.com (or the repository's Enterprise host) issue or pull
+// request URL searches for its number.
 func searchGitHubItems(ctx context.Context, cwd, query, limitArg string, wantIssues, wantChangeRequests bool) ([]ForgeSearchItem, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, fmt.Errorf("gh is not installed")
 	}
-	var items []ForgeSearchItem
-	if wantChangeRequests {
-		args := []string{"pr", "list", "--limit", limitArg,
-			"--json", "number,title,url,state,body,labels,baseRefName,headRefName,updatedAt"}
+	query = normalizeGitHubSearchQuery(query, gitHubEnterpriseHost(ctx, cwd))
+	type list struct {
+		want     bool
+		kind     string
+		fields   string
+		withRefs bool
+	}
+	lists := []list{
+		{wantChangeRequests, "change_request", "number,title,url,state,body,labels,baseRefName,headRefName,updatedAt", true},
+		{wantIssues, "issue", "number,title,url,state,body,labels,updatedAt", false},
+	}
+	items := []ForgeSearchItem{}
+	var firstErr error
+	failed, requested := 0, 0
+	for _, l := range lists {
+		if !l.want {
+			continue
+		}
+		requested++
+		command := "pr"
+		if l.kind == "issue" {
+			command = "issue"
+		}
+		args := []string{command, "list", "--limit", limitArg, "--json", l.fields}
 		if trimmed := strings.TrimSpace(query); trimmed != "" {
 			args = append(args, "--search", trimmed)
 		}
 		raw, err := runGH(ctx, cwd, args...)
-		if err != nil {
-			return nil, err
+		var decoded []ForgeSearchItem
+		if err == nil {
+			decoded, err = decodeGitHubItems(raw, l.kind, l.withRefs)
 		}
-		decoded, err := decodeGitHubItems(raw, "change_request", true)
 		if err != nil {
-			return nil, err
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		items = append(items, decoded...)
 	}
-	if wantIssues {
-		args := []string{"issue", "list", "--limit", limitArg,
-			"--json", "number,title,url,state,body,labels,updatedAt"}
-		if trimmed := strings.TrimSpace(query); trimmed != "" {
-			args = append(args, "--search", trimmed)
-		}
-		raw, err := runGH(ctx, cwd, args...)
-		if err != nil {
-			// An issue search failing must not hide the change requests that did resolve, which
-			// are the rows the starting-ref picker actually shows.
-			if len(items) == 0 {
-				return nil, err
-			}
-			return items, nil
-		}
-		decoded, err := decodeGitHubItems(raw, "issue", false)
-		if err != nil {
-			if len(items) == 0 {
-				return nil, err
-			}
-			return items, nil
-		}
-		items = append(items, decoded...)
+	if requested > 0 && failed == requested {
+		return nil, firstErr
 	}
 	return items, nil
+}
+
+var gitHubComIssueOrPRURL = regexp.MustCompile(`(?i)^https?://github\.com/[^/\s]+/[^/\s]+/(?:pull|issues)/(\d+)(?:[/?#].*)?$`)
+
+// normalizeGitHubSearchQuery is Node's: an issue or pull request URL on github.com, or on the
+// repository's Enterprise host, becomes its number.
+func normalizeGitHubSearchQuery(query, enterpriseHost string) string {
+	trimmed := strings.TrimSpace(query)
+	if m := gitHubComIssueOrPRURL.FindStringSubmatch(trimmed); m != nil {
+		return m[1]
+	}
+	if enterpriseHost != "" {
+		pattern := regexp.MustCompile(`(?i)^https?://` + regexp.QuoteMeta(enterpriseHost) + `/[^/\s]+/[^/\s]+/(?:pull|issues)/(\d+)(?:[/?#].*)?$`)
+		if m := pattern.FindStringSubmatch(trimmed); m != nil {
+			return m[1]
+		}
+	}
+	return query
+}
+
+// gitHubEnterpriseHost is the origin remote's host when it is not github.com.
+//
+// shortcut: Node also resolves an ssh alias to its HostName and routes gh with GH_HOST; Go does
+// neither yet, so an aliased Enterprise remote only matches its alias. Port that with GHES routing.
+func gitHubEnterpriseHost(ctx context.Context, cwd string) string {
+	host := remoteHost(OriginRemoteURL(ctx, cwd))
+	if host == "" || host == "github.com" || host == "www.github.com" {
+		return ""
+	}
+	return host
 }
 
 func decodeGitHubItems(raw, kind string, withRefs bool) ([]ForgeSearchItem, error) {

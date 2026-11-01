@@ -41,22 +41,26 @@ type FileContent struct {
 }
 
 type FileVersion struct {
-	Status     string `json:"status"` // "ready" | "missing" | "error"
-	Cwd        string `json:"cwd"`
-	Path       string `json:"path"`
-	Size       int64  `json:"size,omitempty"`
+	Status string `json:"status"` // "ready" | "missing" | "error"
+	Cwd    string `json:"cwd"`
+	Path   string `json:"path"`
+	// Size is always sent: an empty file is size 0, and the protocol requires the number on a
+	// ready version. With omitempty an empty file's version failed validation and the file pane
+	// never loaded it.
+	Size       int64  `json:"size"`
 	ModifiedAt string `json:"modifiedAt,omitempty"`
 	Revision   string `json:"revision,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 
 type FileWriteResult struct {
-	Status     string       `json:"status"` // "written" | "conflict" | "error"
-	ModifiedAt string       `json:"modifiedAt,omitempty"`
-	Size       int64        `json:"size,omitempty"`
-	Revision   string       `json:"revision,omitempty"`
-	Version    *FileVersion `json:"version,omitempty"`
-	Error      string       `json:"error,omitempty"`
+	Status     string `json:"status"` // "written" | "conflict" | "error"
+	ModifiedAt string `json:"modifiedAt,omitempty"`
+	// Always sent, like FileVersion.Size: saving an emptied file is a write of size 0.
+	Size     int64        `json:"size"`
+	Revision string       `json:"revision,omitempty"`
+	Version  *FileVersion `json:"version,omitempty"`
+	Error    string       `json:"error,omitempty"`
 }
 
 var imageMimeByExt = map[string]string{
