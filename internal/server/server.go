@@ -3430,10 +3430,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					break
 				}
 			}
-			// Text and reasoning deltas are merged: forwarding each one made a single answer cost
-			// over a thousand relay frames (and a thousand billed Durable Object requests).
-			if item, ok := ev["item"].(sdk.TimelineItem); ok && s.streamCoalescer != nil && coalescableStreamTypes[item.Type] {
-				s.streamCoalescer.add(rec.ID, rec.Provider, turnID, seq, item)
+			// Text, reasoning and tool_call deltas are merged (tool_call by callId, last snapshot wins):
+			// forwarding each one made a single answer cost over a thousand relay frames, and every
+			// frame is a billed Durable Object request.
+			if item, ok := ev["item"].(sdk.TimelineItem); ok && s.streamCoalescer != nil &&
+				s.streamCoalescer.handle(rec.ID, rec.Provider, turnID, seq, item) {
 				break
 			}
 			if s.streamCoalescer != nil {

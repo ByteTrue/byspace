@@ -90,6 +90,7 @@ func (s *Server) cascadeArchiveChildren(parentID string) {
 		mp := s.agents[child.ID]
 		delete(s.agents, child.ID)
 		s.mu.Unlock()
+		s.streamCoalescer.forget(child.ID)
 		if mp != nil && mp.session != nil {
 			_ = mp.session.Close()
 		}

@@ -445,6 +445,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		mp := s.agents[agentID]
 		delete(s.agents, agentID)
 		s.mu.Unlock()
+		s.streamCoalescer.forget(agentID)
 		if mp != nil && mp.session != nil {
 			_ = mp.session.Close()
 		}
