@@ -288,6 +288,7 @@ export const FileHeader = memo(function FileHeader({
         onPointerUp={handlePressOut}
         onPointerCancel={handlePressOut}
         onContextMenu={interaction.select}
+        onLongPress={interaction.onLongPress}
         onPress={interaction.activate}
         accessibilityLabel={accessibilityLabel}
         aria-expanded={showsBodyState ? bodyVisible : undefined}

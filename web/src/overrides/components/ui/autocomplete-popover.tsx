@@ -1,20 +1,36 @@
 // Override of packages/app/src/components/ui/autocomplete-popover.tsx: the autocomplete list
 // floating above the composer input, as wide as it, never taller than the space above it. Focus
 // stays in the composer, which owns visibility and the keyboard.
-import type { ReactElement, RefObject } from "react";
-import { Popover as PopoverPrimitive } from "radix-ui";
+//
+// Placed as packages/app places it: by its bottom edge, OFFSET above the input, so a list that
+// grows or shrinks as results arrive keeps its bottom where it was; measured before the first paint,
+// so it never shows at a stale position; and under the phone's sidebar panel (z-40, below the
+// panels' z-50), as packages/app's portal host sits under it.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import type { CSSProperties, ReactElement, RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { SPACING } from "@/styles/theme";
 
 const OFFSET_FROM_ANCHOR = SPACING[3];
-// As wide as the input, never taller than the space above it.
-const CONTENT_STYLE = {
-  width: "var(--radix-popper-anchor-width)",
-  maxHeight: `calc(var(--radix-popper-available-height) - ${OFFSET_FROM_ANCHOR}px)`,
-};
 
-function preventDefault(event: Event) {
-  event.preventDefault();
+interface AnchorRect {
+  left: number;
+  top: number;
+  width: number;
+  viewportHeight: number;
+}
+
+function sameRect(a: AnchorRect | null, b: AnchorRect | null): boolean {
+  return (
+    a === b ||
+    (a !== null &&
+      b !== null &&
+      a.left === b.left &&
+      a.top === b.top &&
+      a.width === b.width &&
+      a.viewportHeight === b.viewportHeight)
+  );
 }
 
 export function AutocompletePopover({
@@ -38,33 +54,70 @@ export function AutocompletePopover({
   loadingText?: string;
   emptyText?: string;
 }): ReactElement | null {
-  if (!visible || (options.length > 0 && selectedIndex < 0)) return null;
-  return (
-    <PopoverPrimitive.Root open>
-      <PopoverPrimitive.Anchor virtualRef={anchorRef as RefObject<HTMLElement>} />
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content
-          side="top"
-          align="start"
-          sideOffset={OFFSET_FROM_ANCHOR}
-          avoidCollisions={false}
-          onOpenAutoFocus={preventDefault}
-          onCloseAutoFocus={preventDefault}
-          data-testid="composer-autocomplete-popover"
-          className="z-50 flex flex-col outline-none"
-          style={CONTENT_STYLE}
-        >
-          <Autocomplete
-            options={options}
-            selectedIndex={selectedIndex}
-            onSelect={onSelect}
-            isLoading={isLoading}
-            errorMessage={errorMessage}
-            loadingText={loadingText}
-            emptyText={emptyText}
-          />
-        </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
+  const shown = visible && (options.length === 0 || selectedIndex >= 0);
+  const [rect, setRect] = useState<AnchorRect | null>(null);
+
+  const measure = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!shown || !anchor) {
+      setRect(null);
+      return;
+    }
+    const box = anchor.getBoundingClientRect();
+    const next = {
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      viewportHeight: window.innerHeight,
+    };
+    setRect((previous) => (sameRect(previous, next) ? previous : next));
+  }, [anchorRef, shown]);
+
+  // Every render: the input grows as the draft wraps, which moves its top edge.
+  useLayoutEffect(measure);
+
+  useEffect(() => {
+    if (!shown) return undefined;
+    const anchor = anchorRef.current;
+    const observer = anchor ? new ResizeObserver(measure) : null;
+    if (anchor) observer?.observe(anchor);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [anchorRef, measure, shown]);
+
+  const style = useMemo<CSSProperties | null>(
+    () =>
+      rect
+        ? {
+            left: rect.left,
+            width: rect.width,
+            bottom: rect.viewportHeight - rect.top + OFFSET_FROM_ANCHOR,
+            maxHeight: `calc(${Math.max(0, rect.top - OFFSET_FROM_ANCHOR * 2)}px - env(safe-area-inset-top))`,
+          }
+        : null,
+    [rect],
+  );
+
+  if (!shown || !style) return null;
+  return createPortal(
+    <div
+      data-testid="composer-autocomplete-popover"
+      className="fixed z-40 flex flex-col outline-none"
+      style={style}
+    >
+      <Autocomplete
+        options={options}
+        selectedIndex={selectedIndex}
+        onSelect={onSelect}
+        isLoading={isLoading}
+        errorMessage={errorMessage}
+        loadingText={loadingText}
+        emptyText={emptyText}
+      />
+    </div>,
+    document.body,
   );
 }

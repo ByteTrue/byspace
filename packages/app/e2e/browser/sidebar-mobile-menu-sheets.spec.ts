@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
+import { gotoAppShell, BOTTOM_SHEET_BACKDROP } from "../support/helpers/app";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
@@ -8,7 +8,7 @@ import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
 async function closeMenuSheet(page: Page): Promise<void> {
-  const backdrop = page.getByRole("button", { name: "Bottom sheet backdrop" }).first();
+  const backdrop = page.locator(BOTTOM_SHEET_BACKDROP).first();
   await backdrop.click({ position: { x: 12, y: 12 } });
   await expect(backdrop).not.toBeVisible({ timeout: 10_000 });
 }
@@ -25,7 +25,7 @@ test("project and workspace kebabs open action sheets on compact layouts", async
       .getByTestId(`sidebar-project-kebab-${projectEquivalenceViewKey(seeded.projectKey)}`)
       .click();
 
-    await expect(page.getByRole("button", { name: "Bottom sheet backdrop" }).first()).toBeVisible({
+    await expect(page.locator(BOTTOM_SHEET_BACKDROP).first()).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByText("Project actions", { exact: true })).toBeVisible();
@@ -35,11 +35,12 @@ test("project and workspace kebabs open action sheets on compact layouts", async
       `sidebar-workspace-row-${getServerId()}:${seeded.workspaceId}`,
     );
     await workspaceRow.hover();
-    await workspaceRow
+    // Not scoped to the row: web/'s row is a link, so its kebab sits beside it.
+    await page
       .getByTestId(`sidebar-workspace-kebab-${getServerId()}:${seeded.workspaceId}`)
       .click();
 
-    await expect(page.getByRole("button", { name: "Bottom sheet backdrop" }).first()).toBeVisible({
+    await expect(page.locator(BOTTOM_SHEET_BACKDROP).first()).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByText("Workspace actions", { exact: true })).toBeVisible();

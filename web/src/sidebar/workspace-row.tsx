@@ -508,10 +508,10 @@ function WorkspaceRowKebab({
         aria-label={t("sidebar.workspace.actions.menu")}
         data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
         // packages/app renders it only while the row is hovered (always on phones), so on desktop
-        // it is not a Tab stop.
+        // it is not a Tab stop, and out of hover it is hidden rather than transparent.
         tabIndex={isCompact ? undefined : -1}
         // The scrim fades the title out under the button instead of cutting it off.
-        className="absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-muted-foreground opacity-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-l before:from-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/workspace-row:opacity-100 data-[state=open]:opacity-100 max-md:bg-transparent max-md:opacity-100 max-md:before:hidden"
+        className="invisible absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-muted-foreground before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-l before:from-sidebar-accent hover:text-sidebar-foreground group-hover/workspace-row:visible data-[state=open]:visible max-md:visible max-md:bg-transparent max-md:before:hidden"
       >
         <EllipsisVertical className="size-3.5" />
       </DropdownMenuTrigger>
@@ -599,6 +599,9 @@ function WorkspaceRowLink({
       aria-current={selected ? "page" : undefined}
       aria-disabled={isArchiving || undefined}
       data-active={selected}
+      // What the e2e helpers read for selection (packages/app's row carried aria-selected, which a
+      // link does not take; aria-current is the link's).
+      data-selected={selected ? "true" : "false"}
       data-testid={`sidebar-workspace-row-${workspace.workspaceKey}`}
       className={cn(
         "relative flex min-h-9 w-full min-w-0 items-start gap-2 rounded-md py-2 pr-3 pl-2 text-left text-sm text-sidebar-foreground transition-[background-color] hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium md:min-h-8 md:py-1.5",

@@ -22,6 +22,7 @@ import {
   useState,
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
+  useLayoutEffect,
 } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
@@ -387,10 +388,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => {
+  // Before the page paints, not after: keys typed as soon as the page shows must land in the
+  // input, and a late reset would wipe the first of them.
+  useLayoutEffect(() => {
     inputRef.current?.replaceText(pageInputValueRef.current);
-    const timer = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(timer);
+    inputRef.current?.focus();
   }, [page.kind]);
 
   const searchesDirectories =
@@ -776,10 +778,14 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     },
     [handleKey],
   );
-  // Focus the dialog itself rather than its first button; the page effect then focuses the input.
+  // The input, not the first button. On a later page the page effect has focused it already; on
+  // open it could not, as the portal mounts the content after that effect ran.
   const handleOpenAutoFocus = useCallback((event: Event) => {
     event.preventDefault();
-    if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+    const dialog = event.currentTarget;
+    if (!(dialog instanceof HTMLElement) || dialog.contains(document.activeElement)) return;
+    inputRef.current?.focus();
+    if (!dialog.contains(document.activeElement)) dialog.focus();
   }, []);
   const handleOpenChange = useCallback(
     (open: boolean) => {

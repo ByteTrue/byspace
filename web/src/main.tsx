@@ -27,4 +27,7 @@ if (!container) throw new Error("#root is missing");
 // No StrictMode: the shared packages/app code assumes an effect runs once per mount. Its form
 // models close in the cleanup of a hook that creates them once (useAgentProfileFormModel), so
 // StrictMode's extra mount/unmount in development leaves the agent profile form dead.
-createRoot(container).render(<RouterProvider router={router} />);
+// No transitions: a navigation renders the new screen at once, as expo-router did. In a transition
+// the URL changed first and the screen a beat later, so a shortcut pressed in between (pin, close
+// tab...) still acted on the previous screen.
+createRoot(container).render(<RouterProvider router={router} useTransitions={false} />);

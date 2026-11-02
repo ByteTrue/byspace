@@ -92,7 +92,11 @@ const TRAILING: ReadonlyArray<[SidebarTrailingChoice, Icon, string]> = [
 /** Marks a submenu whose filter is narrowing the list, so it shows from the root without opening it. */
 function FilterIndicator({ on }: { on: boolean }) {
   return on ? (
-    <span className="-mr-0.5 ml-auto size-1.5 rounded-full bg-primary" aria-hidden="true" />
+    <span
+      className="-mr-0.5 ml-auto size-1.5 rounded-full bg-primary"
+      aria-hidden="true"
+      data-testid="menu-sub-indicator"
+    />
   ) : null;
 }
 

@@ -4,6 +4,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
+import { stopContextMenu } from "./menu-events"
 
 // BySpace: geometry follows packages/app's menu engine (components/ui/menu/menu-item.tsx,
 // menu-overlay.tsx), so menus measure the same as in the Expo app: a 1px-bordered surface at least
@@ -89,6 +90,9 @@ function ContextMenuContent({
   className,
   ref,
   collisionPadding = 8,
+  side = "bottom",
+  sideOffset = 4,
+  align = "start",
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -96,11 +100,23 @@ function ContextMenuContent({
   const focusFirstRef = useFocusFirstMenuItem(ref)
   return (
     <ContextMenuPrimitive.Portal>
+      {/* BySpace: placed as packages/app places a context menu, 4px below the pointer and
+          starting at it (flipping above when it does not fit), instead of Radix's 2px to the
+          right of it. transition-none: shadcn's duration-100 sets a transition duration over the
+          default transition-property `all`, so the transform origin glides from the centre to
+          the corner Radix computes and the opening zoom drifts sideways; packages/app's surfaces
+          scale from a fixed corner. The same holds for every surface below. No slide-in either:
+          packages/app's menus fade and scale in place, and a menu sliding in under the pointer
+          takes the release of the right click as a press on its first item. */}
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         ref={focusFirstRef}
         collisionPadding={collisionPadding}
-        className={cn("z-50 max-h-(--radix-context-menu-content-available-height) min-w-[180px] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+        side={side}
+        sideOffset={sideOffset}
+        align={align}
+        onContextMenu={stopContextMenu}
+        className={cn("z-50 max-h-(--radix-context-menu-content-available-height) min-w-[180px] transition-none origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95", className )}
         {...props}
       />
     </ContextMenuPrimitive.Portal>
@@ -165,9 +181,10 @@ function ContextMenuSubContent({
   return (
     <ContextMenuPrimitive.SubContent
       data-slot="context-menu-sub-content"
+      onContextMenu={stopContextMenu}
       sideOffset={sideOffset}
       collisionPadding={collisionPadding}
-      className={cn("z-50 min-w-[180px] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+      className={cn("z-50 min-w-[180px] transition-none origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95", className )}
       {...props}
     />
   )

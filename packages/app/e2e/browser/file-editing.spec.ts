@@ -8,6 +8,7 @@ import {
 } from "../support/helpers/file-explorer";
 import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-gate";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { onceConfirm } from "../support/helpers/confirm-dialog";
 
 const APP_SETTINGS_KEY = "@byspace:app-settings";
 
@@ -443,7 +444,7 @@ test.describe("CodeMirror workspace file editing", () => {
     await replaceEditorText(page, "const discarded = 7;\n");
     await writeFile(sourcePath, "const diskWins = 8;\n", "utf8");
     await expect(page.getByTestId("file-conflict-alert")).toBeVisible();
-    page.once("dialog", (dialog) => dialog.accept());
+    void onceConfirm(page, (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Reload", exact: true }).click();
     await expect(editor(page)).toContainText("const diskWins = 8;");
 
@@ -493,7 +494,7 @@ test.describe("CodeMirror workspace file editing", () => {
     await expect(page.getByTestId("workspace-tab-modified-file_draft.ts")).toBeVisible();
 
     let closePrompt = "";
-    page.once("dialog", async (dialog) => {
+    const answered = onceConfirm(page, async (dialog) => {
       closePrompt = dialog.message();
       await dialog.dismiss();
     });
@@ -503,6 +504,7 @@ test.describe("CodeMirror workspace file editing", () => {
       .first()
       .click({ button: "right" });
     await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+    await answered;
     expect(closePrompt).toContain("Closing it will discard the draft.");
 
     await expect(page.getByTestId("file-source-editor")).toBeVisible();

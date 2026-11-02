@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Dialog, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import {
@@ -21,6 +21,7 @@ import {
   waitForSidebarHydration,
   waitForWorkspaceInSidebar,
 } from "../support/helpers/workspace-ui";
+import { onceConfirm, type ConfirmPrompt } from "../support/helpers/confirm-dialog";
 
 async function seedRiskyWorktree(
   client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>,
@@ -69,13 +70,14 @@ async function clickArchiveAndAnswerWarning(
   page: Page,
   workspaceId: string,
   answer: "accept" | "dismiss",
-): Promise<Dialog> {
-  let warning: Dialog | undefined;
-  page.once("dialog", (dialog) => {
+): Promise<ConfirmPrompt> {
+  let warning: ConfirmPrompt | undefined;
+  const answered = onceConfirm(page, async (dialog) => {
     warning = dialog;
-    void (answer === "accept" ? dialog.accept() : dialog.dismiss());
+    await (answer === "accept" ? dialog.accept() : dialog.dismiss());
   });
   await clickArchiveWorkspaceMenuItem(page, workspaceId);
+  await answered;
   if (!warning) {
     throw new Error("Expected an archive confirmation dialog, but none was shown.");
   }

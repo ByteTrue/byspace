@@ -36,10 +36,18 @@ export async function expectRunningAgentChrome(page: Page, title: string): Promi
 }
 
 export async function expectAgentReadyToInterrupt(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Stop agent", exact: true })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByRole("button", { name: "Canceling agent", exact: true })).toHaveCount(0);
+  // includeHidden: a modal open over the composer (the image lightbox) hides the page behind it
+  // from the accessibility tree in web/, and the composer still has to show the agent running.
+  await expect(
+    page
+      .getByRole("button", { name: "Stop agent", exact: true, includeHidden: true })
+      .filter({ visible: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page
+      .getByRole("button", { name: "Canceling agent", exact: true, includeHidden: true })
+      .filter({ visible: true }),
+  ).toHaveCount(0);
 }
 
 export async function expectVisibleAgentSurfacesIdle(page: Page): Promise<void> {

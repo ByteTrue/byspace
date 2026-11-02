@@ -1,7 +1,15 @@
 // Override of packages/app/src/components/adaptive-modal-sheet.tsx: a dialog on desktop and a
 // bottom drawer on a phone, with the same header (back, leading icon, title, actions, close,
 // search), body and footer strip.
-import { useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+  type ComponentProps,
+} from "react";
 import { ArrowLeft, Search, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useTranslation } from "react-i18next";
@@ -10,7 +18,8 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
 import { SnapDrawer } from "~/components/snap-drawer";
-import { DrawerTitle } from "~/components/ui/drawer";
+import { Drawer as DrawerPrimitive } from "vaul";
+import { useRestoreFocusToOpener } from "~/hooks/use-restore-focus-to-opener";
 
 export { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/adaptive-text-input";
 
@@ -49,20 +58,43 @@ const WEB_EXIT_DURATION_MS = 160;
 const ICON_BUTTON =
   "flex shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground active:text-foreground";
 
+/** A Radix (or vaul) dialog title: it labels the dialog through the visible header text. */
+export type SheetTitleSlot = React.ComponentType<{ asChild?: boolean; children: React.ReactNode }>;
+
+/** The desktop card. Focus returns to the opener on close, as packages/app's overlays did. */
+function DesktopSheetContent(props: ComponentProps<typeof DialogPrimitive.Content>) {
+  const restoreFocus = useRestoreFocusToOpener(props.onCloseAutoFocus);
+  return (
+    <DialogPrimitive.Content
+      aria-describedby={undefined}
+      {...props}
+      onCloseAutoFocus={restoreFocus}
+    />
+  );
+}
+
 export function SheetHeaderView({
   header,
   onClose,
   showCloseButton = true,
   testID,
+  Title,
 }: {
   header: SheetHeader;
   onClose: () => void;
   showCloseButton?: boolean;
   testID?: string;
+  /** Makes the visible title the dialog's title, so the text is on the page once. */
+  Title?: SheetTitleSlot;
 }) {
   const { t } = useTranslation();
   const back = header.back;
   const search = header.search;
+  const title = (
+    <span className="truncate text-sm leading-[normal] font-medium text-foreground">
+      {header.title}
+    </span>
+  );
   return (
     <div className="shrink-0 border-b" data-testid={testID}>
       <div className="flex items-center gap-2 px-6 py-4">
@@ -81,9 +113,7 @@ export function SheetHeaderView({
           <div className="flex items-center justify-center">{header.leading}</div>
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-sm leading-[normal] font-medium text-foreground">
-            {header.title}
-          </span>
+          {Title ? <Title asChild>{title}</Title> : title}
           {header.subtitle}
         </div>
         {header.actions ? <div className="flex items-center gap-2">{header.actions}</div> : null}
@@ -326,8 +356,7 @@ export function AdaptiveModalSheet({
         aria-describedby={undefined}
         className="bg-background"
       >
-        <DrawerTitle className="sr-only">{header.title}</DrawerTitle>
-        <SheetHeaderView header={header} onClose={onClose} />
+        <SheetHeaderView header={header} onClose={onClose} Title={DrawerPrimitive.Title} />
         {body}
         {footerView}
       </SnapDrawer>
@@ -339,22 +368,23 @@ export function AdaptiveModalSheet({
       <DialogPrimitive.Portal>
         {/* The card sits inside the overlay (Radix's "scrollable overlay" shape), as packages/app's
             card sits inside its overlay view: the testID names both, so a test can reach the
-            card's controls through it and the overlay still covers the page. */}
+            card's controls through it and the overlay still covers the page. As there, the sheet
+            appears at once and fades out over WEB_EXIT_DURATION_MS, covering the page until it
+            is gone and onDismiss reports it; the card runs an exit animation that changes nothing
+            only so Radix keeps it mounted under the fading overlay. */}
         <DialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-black/50 duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
+          className="fixed inset-0 z-50 bg-black/50 duration-160 data-closed:animate-out data-closed:fade-out-0"
           data-testid={testID}
         >
-          <DialogPrimitive.Content
-            aria-describedby={undefined}
+          <DesktopSheetContent
             onOpenAutoFocus={handleOpenAutoFocus}
-            className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc((100%-3rem)*0.85)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+            className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc((100%-3rem)*0.85)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none duration-160 data-closed:animate-out"
             style={desktopStyle}
           >
-            <DialogPrimitive.Title className="sr-only">{header.title}</DialogPrimitive.Title>
-            <SheetHeaderView header={header} onClose={onClose} />
+            <SheetHeaderView header={header} onClose={onClose} Title={DialogPrimitive.Title} />
             {body}
             {footerView}
-          </DialogPrimitive.Content>
+          </DesktopSheetContent>
         </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

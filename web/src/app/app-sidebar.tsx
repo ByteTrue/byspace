@@ -89,7 +89,12 @@ export function AppSidebar() {
       {/* overflow-x hidden as packages/app's list: it scrolls up and down only. */}
       <SidebarContent
         className="gap-0 overflow-x-hidden pb-4"
-        data-testid="sidebar-project-workspace-list-scroll"
+        // packages/app scrolls each grouping in its own list, so the id names the grouping.
+        data-testid={
+          groupMode === "project"
+            ? "sidebar-project-workspace-list-scroll"
+            : "sidebar-status-list-scroll"
+        }
       >
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarListSkeleton />

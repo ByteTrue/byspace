@@ -3,6 +3,7 @@ import { test, expect } from "../support/fixtures";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 import { renameModalInput, renameModalSubmit } from "../support/helpers/rename";
 import type { SeedDaemonClient } from "../support/helpers/seed-client";
+import { BOTTOM_SHEET_BACKDROP } from "../support/helpers/app";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -38,11 +39,9 @@ test.describe("Workspace session rename (compact tab switcher)", () => {
 
       // Open the sessions dropdown (a bottom sheet on compact).
       await page.getByRole("button", { name: /Switch tabs/ }).click();
-      await expect(page.getByRole("button", { name: "Bottom sheet backdrop" }).first()).toBeVisible(
-        {
-          timeout: 10_000,
-        },
-      );
+      await expect(page.locator(BOTTOM_SHEET_BACKDROP).first()).toBeVisible({
+        timeout: 10_000,
+      });
 
       // Open this session's "…" actions. Before the fix this tried to open a popover-Modal
       // that never surfaced over the sheet on native; it now opens as a stacked sheet.

@@ -73,7 +73,14 @@ export function MermaidFullscreenViewer({
     [onClose, t],
   );
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-background" role="dialog" aria-modal="true">
+    // data-state marks it an open layer for the shortcut engine (lib/overlay-root.ts), so Escape
+    // closes the viewer and does not also interrupt the agent behind it.
+    <div
+      className="fixed inset-0 z-50 bg-background"
+      role="dialog"
+      aria-modal="true"
+      data-state="open"
+    >
       <div
         ref={contentLayerRef}
         tabIndex={-1}

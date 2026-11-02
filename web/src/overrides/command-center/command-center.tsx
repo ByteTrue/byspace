@@ -610,13 +610,14 @@ export function CommandCenter() {
         {state.fileSearchError ? (
           <p
             aria-live="polite"
-            className="px-3 pt-2 text-xs text-destructive-text"
+            // packages/app's errorText: a bordered strip in the status danger colour.
+            className="border-b px-4 py-3 text-sm text-status-danger"
             data-testid="command-center-file-search-error"
           >
-            {state.fileSearchError}
+            {t("common.errors.error")}: {state.fileSearchError}
           </p>
         ) : null}
-        <CommandList className="max-h-none min-h-0 flex-1">
+        <CommandList className="max-h-none min-h-0 flex-1" data-testid="command-center-results">
           {state.rows.length === 0 && !state.fileSearchError && !state.fileSearchLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               {t("shell.commandCenter.noMatches")}

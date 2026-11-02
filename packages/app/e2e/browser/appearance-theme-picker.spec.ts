@@ -3,6 +3,7 @@ import { gotoAppShell } from "../support/helpers/app";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
 import { openSettingsSection } from "../support/helpers/settings";
+import { expectSidebarWorkspaceSelected } from "../support/helpers/workspace-ui";
 
 test("shows Pure black in the appearance picker", async ({ page }, testInfo) => {
   await page.goto("/settings");
@@ -34,7 +35,11 @@ test("keeps the selected workspace visible in Light", async ({ page }, testInfo)
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expectSidebarWorkspaceSelected({
+      page,
+      serverId: getServerId(),
+      workspaceId: workspace.workspaceId,
+    });
     // The shadcn sidebar accent (neutral-100) over the neutral-50 sidebar, with the 2px bar.
     await expect(row).toHaveCSS("background-color", "rgb(245, 245, 245)");
     await page.screenshot({
@@ -62,7 +67,11 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
-    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expectSidebarWorkspaceSelected({
+      page,
+      serverId: getServerId(),
+      workspaceId: workspace.workspaceId,
+    });
     await expect(row).toHaveCSS("background-color", "rgb(22, 22, 22)");
     await page.screenshot({
       path: testInfo.outputPath("pure-black-selected-workspace.png"),

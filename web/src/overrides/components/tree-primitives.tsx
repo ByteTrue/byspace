@@ -40,5 +40,6 @@ export const workspaceTreeRowClassNames = {
   row: "group/tree-row flex items-center justify-between py-1.5 pr-2",
   active: "bg-sidebar-accent",
   hoverable: "hover:bg-sidebar-accent active:bg-sidebar-accent",
-  name: "text-foreground/76 group-hover/tree-row:text-foreground",
+  // An opacity on the label, as in packages/app's tree-primitives.tsx, not a translucent colour.
+  name: "text-foreground opacity-76 group-hover/tree-row:opacity-100",
 } as const;

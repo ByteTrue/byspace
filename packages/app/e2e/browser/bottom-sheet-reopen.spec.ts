@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "../support/fixtures";
 import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { BOTTOM_SHEET_BACKDROP, BOTTOM_SHEET_HANDLE } from "../support/helpers/app";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -24,11 +25,11 @@ async function openMockAgentAtMobileBreakpoint(page: Page) {
 }
 
 function bottomSheetBackdrop(page: Page) {
-  return page.getByRole("button", { name: "Bottom sheet backdrop" }).first();
+  return page.locator(BOTTOM_SHEET_BACKDROP).first();
 }
 
 function bottomSheetHandle(page: Page) {
-  return page.getByRole("slider", { name: "Bottom sheet handle" }).first();
+  return page.locator(BOTTOM_SHEET_HANDLE).first();
 }
 
 async function expectBottomSheetOpen(page: Page) {

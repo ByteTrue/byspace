@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useParams } from "react-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostRouteProvider } from "@/navigation/host-route-context";
 import { resolveStartupRoute } from "@/navigation/host-runtime-bootstrap";
@@ -10,6 +11,8 @@ import SettingsScreen from "@/screens/settings-screen";
 /** packages/app/src/app/h/[serverId]/_layout.tsx: an unknown host redirects, a known one scopes its leaves. */
 export function HostLayout() {
   const { serverId } = useParams();
+  // A workspace covered by a pushed screen must not navigate the screen on top away.
+  const focused = useIsFocused();
   const hosts = useHosts();
   const hostRegistryStatus = useHostRegistryStatus();
   const routeServerId = serverId ?? null;
@@ -19,7 +22,7 @@ export function HostLayout() {
     hosts,
   });
   if (startupRoute.kind === "redirect")
-    return <Navigate to={hrefToPath(startupRoute.href)} replace />;
+    return focused ? <Navigate to={hrefToPath(startupRoute.href)} replace /> : null;
   if (!routeServerId) return <Outlet />;
   return (
     <HostRouteProvider serverId={routeServerId}>

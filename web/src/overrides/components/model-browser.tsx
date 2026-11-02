@@ -4,13 +4,16 @@
 import {
   type KeyboardEvent,
   useCallback,
+  useLayoutEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, ChevronRight, Pencil, Plus, Search, Settings } from "lucide-react";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
@@ -832,33 +835,124 @@ function ModelRowList({
   onEditProfile?: (profileId: string) => void;
   onEditProfiles?: () => void;
 }) {
-  const items = (
-    <>
-      {header}
-      {rows.map((row) => (
-        <SelectableModelRow
-          key={row.favoriteKey}
-          row={row}
-          serverId={serverId}
-          isSelected={row.provider === selectedProvider && row.modelId === selectedModel}
-          showProviderLabel={showProviderLabel}
-          onSelect={onSelect}
-          profiledRows={profiledLookup.get(`${row.provider}:${row.modelId}`) ?? EMPTY_PROFILE_ROWS}
-          onCreateProfile={onCreateProfile}
-          onEditProfile={onEditProfile}
-          onEditProfiles={onEditProfiles}
-        />
-      ))}
-    </>
+  const renderRow = useCallback(
+    (row: ProviderSelectionModelRow) => (
+      <SelectableModelRow
+        key={row.favoriteKey}
+        row={row}
+        serverId={serverId}
+        isSelected={row.provider === selectedProvider && row.modelId === selectedModel}
+        showProviderLabel={showProviderLabel}
+        onSelect={onSelect}
+        profiledRows={profiledLookup.get(`${row.provider}:${row.modelId}`) ?? EMPTY_PROFILE_ROWS}
+        onCreateProfile={onCreateProfile}
+        onEditProfile={onEditProfile}
+        onEditProfiles={onEditProfiles}
+      />
+    ),
+    [
+      onCreateProfile,
+      onEditProfile,
+      onEditProfiles,
+      onSelect,
+      profiledLookup,
+      selectedModel,
+      selectedProvider,
+      serverId,
+      showProviderLabel,
+    ],
   );
   if (scrolling === "independent") {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto pt-1 pb-8" data-testid="compact-model-list">
-        {items}
-      </div>
-    );
+    return <IndependentModelList rows={rows} renderRow={renderRow} header={header} />;
   }
-  return <div>{items}</div>;
+  return (
+    <div>
+      {header}
+      {rows.map(renderRow)}
+    </div>
+  );
+}
+
+// A model row's height before it is measured: one 36px line; rows with profiles measure taller.
+const ESTIMATED_MODEL_ROW_HEIGHT = 36;
+
+/**
+ * packages/app's FlatList: a host-wide catalog runs to hundreds of models, so only the rows in
+ * view (and a screen of overscan) are mounted.
+ */
+function IndependentModelList({
+  rows,
+  renderRow,
+  header,
+}: {
+  rows: ProviderSelectionModelRow[];
+  renderRow: (row: ProviderSelectionModelRow) => ReactElement;
+  header?: ReactElement;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  // Where the list starts inside the scroller, below the header.
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    setScrollMargin(listRef.current?.offsetTop ?? 0);
+  }, [header, rows]);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const estimateSize = useCallback(() => ESTIMATED_MODEL_ROW_HEIGHT, []);
+  const getItemKey = useCallback((index: number) => rows[index]?.favoriteKey ?? index, [rows]);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement,
+    estimateSize,
+    getItemKey,
+    scrollMargin,
+    overscan: 10,
+  });
+  const totalSize = virtualizer.getTotalSize();
+  const listStyle = useMemo(() => ({ height: totalSize }), [totalSize]);
+  return (
+    <div
+      ref={scrollRef}
+      className="relative min-h-0 flex-1 overflow-y-auto pt-1 pb-8"
+      data-testid="compact-model-list"
+    >
+      {header}
+      <div ref={listRef} className="relative" style={listStyle}>
+        {virtualizer.getVirtualItems().map((item) => {
+          const row = rows[item.index];
+          if (!row) return null;
+          return (
+            <VirtualModelRow
+              key={item.key}
+              index={item.index}
+              offset={item.start - scrollMargin}
+              measure={virtualizer.measureElement}
+            >
+              {renderRow(row)}
+            </VirtualModelRow>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function VirtualModelRow({
+  index,
+  offset,
+  measure,
+  children,
+}: {
+  index: number;
+  offset: number;
+  measure: (node: Element | null) => void;
+  children: ReactNode;
+}) {
+  const style = useMemo(() => ({ transform: `translateY(${offset}px)` }), [offset]);
+  return (
+    <div data-index={index} ref={measure} className="absolute top-0 left-0 w-full" style={style}>
+      {children}
+    </div>
+  );
 }
 
 function EmptyState({

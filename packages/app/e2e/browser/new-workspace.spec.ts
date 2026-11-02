@@ -108,8 +108,10 @@ async function startTrackingSidebarStatusGroups(page: import("@playwright/test")
       for (const group of groups) {
         const groupTestId = group.getAttribute("data-testid") ?? "";
         const bucket = groupTestId.replace("sidebar-status-group-", "");
+        // Headers only; each group's rows sit in its own rows container, whatever the nesting.
+        if (bucket.startsWith("rows-") || bucket.startsWith("show-more-")) continue;
         const label = group.textContent ?? "";
-        const block = group.parentElement?.parentElement;
+        const block = document.querySelector(`[data-testid="sidebar-status-group-rows-${bucket}"]`);
         if (!block) continue;
         const rows = block.querySelectorAll<HTMLElement>('[data-testid^="sidebar-workspace-row-"]');
         for (const row of rows) {

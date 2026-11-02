@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import type { SeededWorkspace } from "./seed-client";
-import { openCommandCenter } from "./command-center";
+import { openCommandCenter, commandCenterRows } from "./command-center";
 import { openAgentRoute, type MockAgentWorkspace } from "./mock-agent";
+import { isWebFrontend } from "./frontend";
 
 export interface CommandCenterAgentControlChoice {
   query: string;
@@ -28,8 +29,8 @@ export async function chooseCommandCenterAgentControl(input: {
   choice: string;
 }): Promise<void> {
   const panel = input.page.getByTestId("command-center-panel");
-  await panel.getByRole("textbox").fill(input.query);
-  const choice = panel.getByRole("button", { name: input.choice });
+  await panel.getByTestId("command-center-input").fill(input.query);
+  const choice = commandCenterRows(panel, { name: input.choice });
   await expect(choice).toBeVisible({ timeout: 30_000 });
   await choice.click();
 }
@@ -40,9 +41,10 @@ export async function expectCommandCenterAgentControlSelected(input: {
   choice: string;
 }): Promise<void> {
   const panel = input.page.getByTestId("command-center-panel");
-  await panel.getByRole("textbox").fill(input.query);
-  const choice = panel.getByRole("button", { name: input.choice });
-  await expect(choice).toHaveRole("button");
+  await panel.getByTestId("command-center-input").fill(input.query);
+  const choice = commandCenterRows(panel, { name: input.choice });
+  // A cmdk option in web/, a button in packages/app.
+  await expect(choice).toHaveRole(isWebFrontend ? "option" : "button");
   await expect(choice).toHaveAttribute("aria-pressed", "true");
 }
 

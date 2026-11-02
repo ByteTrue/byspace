@@ -1,7 +1,8 @@
 // Transitional stand-in for `expo-router` while web/ imports modules from packages/app/src.
 // Shared navigation code calls `router.push("/h/...")` with the same URL strings the Expo app
 // uses; this forwards them to React Router. Deleted at the cutover.
-import { Navigate, useLocation, useParams } from "react-router";
+import { createContext, useContext } from "react";
+import { Navigate, useLocation, useParams, type Location } from "react-router";
 
 interface HrefObject {
   pathname: string;
@@ -68,8 +69,19 @@ export function useRouter() {
   return router;
 }
 
+// The location on screen. React Router hands the workspace kept mounted under a pushed screen its own
+// location (~/app/workspace-layer.tsx); expo-router's usePathname and useGlobalSearchParams are
+// global there, so they read this one.
+const GlobalLocationContext = createContext<Location | null>(null);
+export const GlobalLocationProvider = GlobalLocationContext.Provider;
+
+function useGlobalLocation(): Location {
+  const local = useLocation();
+  return useContext(GlobalLocationContext) ?? local;
+}
+
 export function usePathname(): string {
-  return useLocation().pathname;
+  return useGlobalLocation().pathname;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -84,7 +96,15 @@ export function useLocalSearchParams<T extends SearchParams = SearchParams>(): T
   return { ...merged, ...params } as T;
 }
 
-export const useGlobalSearchParams = useLocalSearchParams;
+export function useGlobalSearchParams<T extends SearchParams = SearchParams>(): T {
+  const params = useParams();
+  const { search } = useGlobalLocation();
+  const merged: Record<string, string | undefined> = {};
+  new URLSearchParams(search).forEach((value, key) => {
+    merged[key] = value;
+  });
+  return { ...merged, ...params } as T;
+}
 
 export function Redirect({ href }: { href: Href }) {
   return <Navigate to={hrefToPath(href)} replace />;

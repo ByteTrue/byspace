@@ -22,7 +22,7 @@ export async function observeCommandCenterScroll(page: Page): Promise<void> {
 
     const discoverPanel = new MutationObserver(() => {
       const panel = document.querySelector<HTMLElement>('[data-testid="command-center-panel"]');
-      const firstResult = panel?.querySelector<HTMLElement>('[role="button"]');
+      const firstResult = panel?.querySelector<HTMLElement>('[role="option"], [role="button"]');
       if (!panel || !firstResult) return;
 
       let viewport = firstResult.parentElement;
@@ -58,6 +58,7 @@ export async function observeCommandCenterScroll(page: Page): Promise<void> {
 }
 
 import { openTopLevelNavMenu, topLevelNavItem } from "./sidebar-chrome";
+import { commandCenterRows } from "./command-center";
 
 export async function openCommandCenterWithKeyboard(page: Page): Promise<Locator> {
   await openTopLevelNavMenu(page);
@@ -94,24 +95,24 @@ export async function expectPrimaryCommandCenterActions(panel: Locator): Promise
   ] as const;
 
   for (const action of expectedActions) {
-    const row = panel.getByRole("button").filter({ hasText: action.title });
+    const row = commandCenterRows(panel).filter({ hasText: action.title });
     await expect(row).toBeVisible();
     if ("shortcut" in action) await expect(row).toContainText(action.shortcut);
   }
 
-  await expect(panel.getByRole("button").filter({ hasText: "Add project" })).toHaveCount(0);
-  await expect(panel.getByRole("button").filter({ hasText: "Home" })).toHaveCount(0);
+  await expect(commandCenterRows(panel).filter({ hasText: "Add project" })).toHaveCount(0);
+  await expect(commandCenterRows(panel).filter({ hasText: "Home" })).toHaveCount(0);
 
   const input = panel.getByTestId("command-center-input");
   await input.fill("add project");
-  await expect(panel.getByRole("button").filter({ hasText: "Add project" })).toBeVisible();
-  await expect(panel.getByRole("button").filter({ hasText: "Home" })).toHaveCount(0);
+  await expect(commandCenterRows(panel).filter({ hasText: "Add project" })).toBeVisible();
+  await expect(commandCenterRows(panel).filter({ hasText: "Home" })).toHaveCount(0);
   await input.fill("home");
-  await expect(panel.getByRole("button").filter({ hasText: "Home" })).toBeVisible();
-  await expect(panel.getByRole("button").filter({ hasText: "Add project" })).toHaveCount(0);
+  await expect(commandCenterRows(panel).filter({ hasText: "Home" })).toBeVisible();
+  await expect(commandCenterRows(panel).filter({ hasText: "Add project" })).toHaveCount(0);
   await input.fill("import");
-  await expect(panel.getByRole("button").filter({ hasText: "Import session" })).toBeVisible();
-  await expect(panel.getByRole("button").filter({ hasText: "Home" })).toHaveCount(0);
+  await expect(commandCenterRows(panel).filter({ hasText: "Import session" })).toBeVisible();
+  await expect(commandCenterRows(panel).filter({ hasText: "Home" })).toHaveCount(0);
   await input.fill("");
 }
 
@@ -121,8 +122,7 @@ export async function expectVisibleKeyboardNavigationNotToScroll(
 ): Promise<void> {
   for (let index = 0; index < 4; index += 1) await page.keyboard.press("ArrowDown");
 
-  const scrollSamples = await panel
-    .getByRole("button")
+  const scrollSamples = await commandCenterRows(panel)
     .first()
     .evaluate(async (firstResult) => {
       let viewport = firstResult.parentElement;

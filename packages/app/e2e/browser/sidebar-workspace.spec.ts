@@ -1,6 +1,6 @@
 import path from "node:path";
 import { test, expect } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
+import { gotoAppShell, BOTTOM_SHEET_BACKDROP } from "../support/helpers/app";
 import {
   closeMobileAgentSidebar,
   expectMobileAgentSidebarHidden,
@@ -14,7 +14,12 @@ import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { escapeRegex } from "../support/helpers/regex";
 import { openFilesPanel } from "../support/helpers/workspace-tabs";
-import { pinnedSidebar, openTopLevelNavMenu } from "../support/helpers/sidebar-chrome";
+import {
+  pinnedSidebar,
+  openTopLevelNavMenu,
+  topLevelNavItem,
+} from "../support/helpers/sidebar-chrome";
+import { isWebFrontend, NO_NAV_MENU_IN_WEB } from "../support/helpers/frontend";
 import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 const GITHUB_REMOTE_URL = "https://github.com/test-owner/test-repo.git";
@@ -272,9 +277,7 @@ test.describe("Workspace menu visibility", () => {
 
         await kebab.click();
         const menuItem = page.getByTestId(`sidebar-workspace-menu-copy-path-${workspaceKey}`);
-        await expect(
-          page.getByRole("button", { name: "Bottom sheet backdrop" }).first(),
-        ).toBeVisible({
+        await expect(page.locator(BOTTOM_SHEET_BACKDROP).first()).toBeVisible({
           timeout: 10_000,
         });
         await expect(page.getByText("Workspace actions", { exact: true })).toBeVisible();
@@ -295,7 +298,7 @@ test.describe("Workspace menu visibility", () => {
         });
 
         await page
-          .getByRole("button", { name: "Bottom sheet backdrop" })
+          .locator(BOTTOM_SHEET_BACKDROP)
           .first()
           .click({
             position: { x: 12, y: 12 },
@@ -307,6 +310,7 @@ test.describe("Workspace menu visibility", () => {
     });
 
     test("folds the top-level nav into a floating menu on the BySpace button", async ({ page }) => {
+      test.skip(isWebFrontend, NO_NAV_MENU_IN_WEB);
       await gotoAppShell(page);
       await openMobileAgentSidebar(page);
       await expectMobileAgentSidebarVisible(page);
@@ -357,6 +361,7 @@ test.describe("Workspace menu visibility", () => {
     });
 
     test("starts closed again the next time the panel opens", async ({ page }) => {
+      test.skip(isWebFrontend, NO_NAV_MENU_IN_WEB);
       await gotoAppShell(page);
       await openMobileAgentSidebar(page);
       await expectMobileAgentSidebarVisible(page);
@@ -532,6 +537,7 @@ test.describe("Half-screen desktop layout", () => {
   });
 
   test("floats the app menu above the workspace list", async ({ page }) => {
+    test.skip(isWebFrontend, NO_NAV_MENU_IN_WEB);
     await gotoAppShell(page);
 
     await expect(pinnedSidebar(page)).toBeVisible();
@@ -604,10 +610,12 @@ test.describe("Half-screen desktop layout", () => {
     await expect(pinnedSidebar(page)).toBeVisible();
 
     // The point of moving it out of the menu: one click, not two.
-    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    if (!isWebFrontend) {
+      await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    }
     await page.getByTestId("sidebar-sessions").click();
     await expect(page).toHaveURL(/\/sessions(?:$|\?)/, { timeout: 30_000 });
   });
@@ -615,6 +623,7 @@ test.describe("Half-screen desktop layout", () => {
   test("starts closed again after the pinned sidebar is collapsed and reopened", async ({
     page,
   }) => {
+    test.skip(isWebFrontend, NO_NAV_MENU_IN_WEB);
     await gotoAppShell(page);
     await expect(pinnedSidebar(page)).toBeVisible();
 
@@ -636,6 +645,23 @@ test.describe("Half-screen desktop layout", () => {
       "false",
     );
     await expect(page.getByTestId("sidebar-search")).toHaveCount(0);
+  });
+
+  test("lists Search, Schedules and Tunnels above the workspace list", async ({ page }) => {
+    test.skip(!isWebFrontend, "packages/app folds them into the BySpace menu");
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+    const list = page.getByTestId("sidebar-project-workspace-list-scroll");
+    const listTop = (await list.boundingBox())?.y ?? 0;
+    for (const testID of ["sidebar-search", "sidebar-schedules", "sidebar-tunnels"]) {
+      const row = topLevelNavItem(page, testID);
+      await expect(row).toBeVisible();
+      // Outside the scroller, so scrolling the workspaces never moves them.
+      expect(await list.locator(`[data-testid="${testID}"]`).count()).toBe(0);
+      expect((await row.boundingBox())!.y).toBeLessThan(listTop);
+    }
+    await topLevelNavItem(page, "sidebar-schedules").click();
+    await expect(page).toHaveURL(/\/schedules(?:$|\?)/, { timeout: 30_000 });
   });
 
   test("yields app navigation to the settings split", async ({ page }) => {

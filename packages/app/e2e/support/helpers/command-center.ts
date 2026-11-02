@@ -9,6 +9,17 @@ export async function openCommandCenter(page: Page): Promise<Locator> {
   return panel;
 }
 
+/**
+ * The command center's rows: options of its listbox in web/ (cmdk), buttons in packages/app.
+ * COMPAT(web-switch): drop the button half when packages/app is deleted.
+ */
+export function commandCenterRows(
+  panel: Locator,
+  options?: Parameters<Locator["getByRole"]>[1],
+): Locator {
+  return panel.getByRole("option", options).or(panel.getByRole("button", options));
+}
+
 export async function closeCommandCenter(page: Page): Promise<void> {
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-center-panel")).not.toBeVisible();

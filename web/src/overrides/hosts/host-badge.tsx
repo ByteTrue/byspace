@@ -19,7 +19,8 @@ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
       aria-label={badge.label}
       style={style}
     >
-      <Server size={HOST_BADGE_ICON_SIZE} className="shrink-0" />
+      {/* The colour as the glyph's stroke, as packages/app's badge draws it. */}
+      <Server size={HOST_BADGE_ICON_SIZE} color={color} className="shrink-0" />
       {badge.showLabel ? (
         <span className="min-w-0 shrink truncate text-xs leading-4">{badge.label}</span>
       ) : null}

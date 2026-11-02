@@ -373,9 +373,17 @@ function MenuSheetSurface({
   const openPage = openPageId ? pageMap.get(openPageId) : undefined;
   const title = openPage?.title ?? sheetTitle;
   return (
-    <MenuSheet open={menu.open} onOpenChange={menu.setOpen} title={title ?? ""} testID={testID}>
+    <MenuSheet
+      open={menu.open}
+      onOpenChange={menu.setOpen}
+      title={title ?? ""}
+      titleVisible={Boolean(title)}
+      testID={testID}
+    >
       <MenuPagesContext value={pageMap}>
-        {title ? <MenuSheetHeader title={title} onBack={openPage ? menu.goBack : null} /> : null}
+        {title ? (
+          <MenuSheetHeader title={title} onBack={openPage ? menu.goBack : null} asSheetTitle />
+        ) : null}
         {openPage ? openPage.content : children}
       </MenuPagesContext>
     </MenuSheet>

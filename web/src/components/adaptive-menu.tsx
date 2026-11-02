@@ -111,10 +111,11 @@ function SheetContent({
       open={sheet.open}
       onOpenChange={sheet.setOpen}
       title={sheetTitle ?? ""}
+      titleVisible={Boolean(sheetTitle)}
       testID={testID}
     >
       <div className={sheet.path.length > 0 ? "hidden" : "contents"}>
-        {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
+        {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} asSheetTitle /> : null}
         {children}
       </div>
       <div ref={sheet.setPageSlot} className="contents" />

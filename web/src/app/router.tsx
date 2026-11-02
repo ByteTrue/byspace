@@ -4,7 +4,6 @@ import HostAgentRoute from "@/app/h/[serverId]/agent/[agentId]";
 import HostIndexRoute from "@/app/h/[serverId]/index";
 import HostOpenProjectRoute from "@/app/h/[serverId]/open-project";
 import HostSessionsRoute from "@/app/h/[serverId]/sessions";
-import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import NewWorkspaceRoute from "@/app/new";
 import OpenProjectRoute from "@/app/open-project";
 import SchedulesRoute from "@/app/schedules";
@@ -21,6 +20,7 @@ import SettingsHostProjectsRoute from "@/app/settings/hosts/[serverId]/projects/
 import SettingsHostProjectDetailRoute from "@/app/settings/hosts/[serverId]/projects/[projectId]";
 import { Root } from "~/app/root";
 import { HostLayout, SettingsIndexRoute } from "~/app/routes";
+import { WORKSPACE_ROUTE } from "~/app/workspace-layer";
 
 // One entry per file in packages/app/src/app, same paths, so links, bookmarks and pairing URLs
 // keep working.
@@ -57,7 +57,8 @@ export const router = createBrowserRouter([
         element: <HostLayout />,
         children: [
           { index: true, element: <HostIndexRoute /> },
-          { path: "workspace/:workspaceId", element: <HostWorkspaceRoute /> },
+          // Rendered by the shell's WorkspaceLayer, which keeps it mounted under pushed screens.
+          WORKSPACE_ROUTE,
           { path: "agent/:agentId", element: <HostAgentRoute /> },
           { path: "sessions", element: <HostSessionsRoute /> },
           { path: "open-project", element: <HostOpenProjectRoute /> },

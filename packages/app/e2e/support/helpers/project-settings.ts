@@ -7,6 +7,7 @@ import { gotoAppShell, openSettings } from "./app";
 import { daemonWsRoutePattern } from "./daemon-port";
 import { getServerId } from "./server-id";
 import { buildProjectsSettingsRoute } from "@/utils/host-routes";
+import { onceConfirm } from "./confirm-dialog";
 
 type WebSocketMessage = string | Buffer;
 
@@ -242,7 +243,7 @@ export async function removeProjectScript(page: Page, scriptName: string): Promi
   // from the row's testID to avoid scoped locator unreliability.
   const id = (await row.getAttribute("data-testid"))!.replace("script-row-", "");
   await page.getByTestId(`script-row-menu-${id}`).click();
-  page.once("dialog", (dialog) => void dialog.accept());
+  void onceConfirm(page, (dialog) => void dialog.accept());
   await page.getByRole("menuitem", { name: "Remove" }).click();
 }
 

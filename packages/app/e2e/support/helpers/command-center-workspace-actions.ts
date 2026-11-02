@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
-import { openCommandCenter } from "./command-center";
+import { openCommandCenter, commandCenterRows } from "./command-center";
 import { expectAppRoute } from "./route-assertions";
 import type { SeededWorkspace } from "./seed-client";
 import { getServerId } from "./server-id";
@@ -10,7 +10,7 @@ import { expectTerminalTabOpen } from "./workspace-tabs";
 
 function action(panel: Locator, title: string): Locator {
   const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return panel.getByRole("button", { name: new RegExp(`^${escapedTitle}(?:\\s|$)`) });
+  return commandCenterRows(panel, { name: new RegExp(`^${escapedTitle}(?:\\s|$)`) });
 }
 
 export async function makeWorkspacePrimaryGitActionCommit(seeded: SeededWorkspace): Promise<void> {
@@ -56,7 +56,7 @@ export async function expectWorkspaceActionsAvailableThroughSearch(panel: Locato
   await expect(action(panel, "Home")).toBeVisible();
 
   await input.fill("git");
-  await expect.poll(() => panel.getByRole("button").count()).toBeGreaterThan(1);
+  await expect.poll(() => commandCenterRows(panel).count()).toBeGreaterThan(1);
 }
 
 export async function createTerminalFromCommandCenter(page: Page, panel: Locator): Promise<void> {

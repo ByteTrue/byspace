@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Drawer as DrawerPrimitive } from "vaul";
 import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
 
 /** A sheet row: 40px, inset 4px from the sheet edge, highlighted while pressed. */
@@ -17,6 +18,7 @@ export function MenuSheet({
   open,
   onOpenChange,
   title,
+  titleVisible = false,
   testID,
   children,
 }: {
@@ -24,20 +26,25 @@ export function MenuSheet({
   onOpenChange: (open: boolean) => void;
   /** Names the sheet for assistive tech; the visible headers are the pages' own. */
   title: string;
+  /** A page heading shows the title and names the sheet (MenuSheetHeader asSheetTitle). */
+  titleVisible?: boolean;
   testID?: string;
   children: ReactNode;
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
+      {/* The test id goes on the page (`<id>-content`) only, as packages/app's sheet carries it on
+          its scroll view and not on the sheet. */}
       <DrawerContent
-        data-testid={testID}
         aria-describedby={undefined}
         // packages/app's menu sheets (menu-surface.tsx): a 14px radius and a 1px border (its bottom
         // edge sits below the screen there), and a 36px handle in surface2, 10px below the sheet's edge
         className="border border-b-0 bg-background data-[vaul-drawer-direction=bottom]:rounded-t-[14px]"
         handleClassName="mt-[9px] w-9 bg-muted"
       >
-        <DrawerTitle className="sr-only">{title}</DrawerTitle>
+        {/* With a visible heading, the heading is the title (asSheetTitle), so its text is on the
+            page once, as in packages/app's sheets. */}
+        {titleVisible ? null : <DrawerTitle className="sr-only">{title}</DrawerTitle>}
         <div
           role="menu"
           // packages/app's MenuPage pads its rows 4px above and below, and the sheet adds 4px plus
@@ -56,11 +63,19 @@ export function MenuSheet({
 export function MenuSheetHeader({
   title,
   onBack,
+  asSheetTitle = false,
 }: {
   title: ReactNode;
   onBack: (() => void) | null;
+  /** Names the sheet: pair with MenuSheet's titleVisible. */
+  asSheetTitle?: boolean;
 }) {
   const { t } = useTranslation();
+  const titleText = (
+    <span className="min-w-0 shrink truncate text-sm leading-[normal] font-medium text-foreground">
+      {title}
+    </span>
+  );
   return (
     <div data-slot="menu-sheet-header" className="flex items-center gap-2 px-3 pt-1 pb-4">
       {onBack ? (
@@ -74,9 +89,11 @@ export function MenuSheetHeader({
           <ChevronLeft size={18} />
         </button>
       ) : null}
-      <span className="min-w-0 shrink truncate text-sm leading-[normal] font-medium text-foreground">
-        {title}
-      </span>
+      {asSheetTitle ? (
+        <DrawerPrimitive.Title asChild>{titleText}</DrawerPrimitive.Title>
+      ) : (
+        titleText
+      )}
     </div>
   );
 }

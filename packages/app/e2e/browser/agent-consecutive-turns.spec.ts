@@ -218,7 +218,7 @@ async function recordTurnFrames(page: Page, prompt: string): Promise<void> {
       };
     };
     const findImageAttachment = (row: Element | undefined) =>
-      row?.querySelector('[role="button"][aria-label="Open image attachment"]');
+      row?.querySelector(':is(button, [role="button"])[aria-label="Open image attachment"]');
     const findAgentTabState = () => {
       const agentTab = Array.from(
         document.querySelectorAll('[data-testid^="workspace-tab-agent_"]'),
@@ -229,7 +229,9 @@ async function recordTurnFrames(page: Page, prompt: string): Promise<void> {
       };
     };
     const countPrimaryActions = (composerRoot: Element | null | undefined) =>
-      Array.from(composerRoot?.querySelectorAll('[role="button"][aria-label]') ?? []).filter(
+      Array.from(
+        composerRoot?.querySelectorAll(':is(button, [role="button"])[aria-label]') ?? [],
+      ).filter(
         (candidate) =>
           /stop agent|canceling agent|interrupt agent|send message|send and interrupt|queue message/i.test(
             candidate.getAttribute("aria-label") ?? "",
@@ -253,7 +255,7 @@ async function recordTurnFrames(page: Page, prompt: string): Promise<void> {
       ).find((candidate) => isVisible(candidate));
       const composerRoot = composer?.closest('[data-testid="message-input-root"]');
       const interrupt = Array.from(
-        composerRoot?.querySelectorAll('[role="button"][aria-label]') ?? [],
+        composerRoot?.querySelectorAll(':is(button, [role="button"])[aria-label]') ?? [],
       ).find((candidate) =>
         /stop agent|canceling agent/i.test(candidate.getAttribute("aria-label") ?? ""),
       );
@@ -350,7 +352,9 @@ async function installActivityContinuityOracle(page: Page, prompt: string): Prom
         row: Array.from(document.querySelectorAll('[data-testid="user-message"]')).some(
           (candidate) => candidate.textContent?.includes(promptText),
         ),
-        stop: isVisible(document.querySelector('[role="button"][aria-label="Stop agent"]')),
+        stop: isVisible(
+          document.querySelector(':is(button, [role="button"])[aria-label="Stop agent"]'),
+        ),
         footer: isVisible(document.querySelector('[data-testid="turn-working-indicator"]')),
         tabProgress: isVisible(
           visibleAgentTab?.querySelector('[role="progressbar"][aria-label="Agent running"]') ??

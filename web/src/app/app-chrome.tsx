@@ -37,7 +37,9 @@ import {
 import { useWindowDimensions } from "react-native";
 import { AppSidebar } from "~/app/app-sidebar";
 import { SidebarResizeHandle } from "~/app/sidebar-resize-handle";
+import { WorkspaceLayer } from "~/app/workspace-layer";
 import { Sidebar, SidebarInset, SidebarProvider, useSidebar } from "~/components/ui/sidebar";
+import { cn } from "cn";
 
 // Routes that stand alone without app chrome, as in packages/app's root layout.
 const STANDALONE_ONBOARDING_ROUTES = new Set(["", "/", "/welcome", "/pair-scan"]);
@@ -171,12 +173,15 @@ function AppChromeContent() {
   // inset card (the frame stays when the sidebar is closed), compact layouts never frame.
   const framed = !isSettingsRoute;
   // On a phone the explorer is a sheet over the page instead of a docked pane.
-  const content = isCompactLayout ? (
-    <CompactExplorerSidebarHost enabled={chromeEnabled}>
+  const routed = (
+    <WorkspaceLayer>
       <Outlet />
-    </CompactExplorerSidebarHost>
+    </WorkspaceLayer>
+  );
+  const content = isCompactLayout ? (
+    <CompactExplorerSidebarHost enabled={chromeEnabled}>{routed}</CompactExplorerSidebarHost>
   ) : (
-    <Outlet />
+    routed
   );
 
   return (
@@ -204,13 +209,18 @@ function AppChromeContent() {
             ) : null}
             {/* BySpace: packages/app's framed card — 6px from the window, 12px radius, a 1px
                 border instead of shadcn's 8px margin and shadow. */}
-            {framed ? (
-              <SidebarInset className="min-h-0 overflow-hidden md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-[12px] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1.5">
-                {content}
-              </SidebarInset>
-            ) : (
-              <main className="min-h-0 flex-1 overflow-hidden">{content}</main>
-            )}
+            {/* One element for both, so a workspace covered by Settings stays mounted (the
+                workspace layer); Settings run full-bleed as a plain block. */}
+            <SidebarInset
+              className={cn(
+                "min-h-0 overflow-hidden",
+                framed
+                  ? "md:peer-data-[variant=inset]:m-1.5 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-[12px] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-1.5"
+                  : "block flex-1 bg-transparent",
+              )}
+            >
+              {content}
+            </SidebarInset>
           </SidebarProvider>
           <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
         </SidebarModelProvider>

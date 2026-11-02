@@ -9,6 +9,7 @@ import { getServerId } from "./server-id";
 import { withProjectOwnership } from "./project-ownership";
 import { switchWorkspaceViaSidebar } from "./workspace-ui";
 import type { SessionOutboundMessage } from "@bytetrue/protocol/messages";
+import { pressOutsideMenu } from "./menu-backdrop";
 
 type WorkspaceSetupDaemonClient = Pick<
   InternalDaemonClient,
@@ -296,7 +297,11 @@ export async function startWorkspaceScriptFromMenu(page: Page, scriptName: strin
 }
 
 export async function closeWorkspaceScriptsMenu(page: Page): Promise<void> {
-  await page.getByTestId("workspace-scripts-menu-backdrop").click();
+  await pressOutsideMenu(
+    page,
+    page.getByTestId("workspace-scripts-menu"),
+    page.getByTestId("workspace-scripts-menu-backdrop"),
+  );
 }
 
 export async function waitForWorkspaceSetupProgress(

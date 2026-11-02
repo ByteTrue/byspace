@@ -13,6 +13,7 @@ import {
 } from "./changes-pane-helpers";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { onceConfirm } from "../support/helpers/confirm-dialog";
 
 // Changes tree: ordering, context menus, revert and discard.
 test.afterEach(async () => {
@@ -194,7 +195,7 @@ test("changes context menus expose folder revert and restore a file after confir
 
   await tree.getByTestId("diff-tree-file-0-toggle").click({ button: "right" });
   const cancelledConfirmation = new Promise<string>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       const message = dialog.message();
       await dialog.dismiss();
       resolve(message);
@@ -209,7 +210,7 @@ test("changes context menus expose folder revert and restore a file after confir
 
   await tree.getByTestId("diff-tree-file-0-toggle").click({ button: "right" });
   const confirmation = new Promise<string>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       const message = dialog.message();
       await dialog.accept();
       resolve(message);
@@ -238,7 +239,7 @@ test("discarding a staged rename restores its source path", async ({ page }) => 
   const rowTestId = toggleTestId!.slice(0, -"-toggle".length);
   await renamedToggle.click({ button: "right" });
   const confirmation = new Promise<void>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       await dialog.accept();
       resolve();
     });
@@ -268,7 +269,7 @@ test("discarding an untracked file removes it from the working tree", async ({ p
   const rowTestId = toggleTestId!.slice(0, -"-toggle".length);
   await untrackedToggle.click({ button: "right" });
   const confirmation = new Promise<void>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       await dialog.accept();
       resolve();
     });
@@ -292,7 +293,7 @@ test("shows a revert error returned by the daemon", async ({ page }) => {
 
   await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
   const confirmation = new Promise<void>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       await dialog.accept();
       resolve();
     });

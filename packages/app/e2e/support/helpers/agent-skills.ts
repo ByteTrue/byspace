@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, type Dialog, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import type { DaemonClient as InternalDaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { AgentSkillSelection, AgentSkillTargets } from "@bytetrue/protocol/messages";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
@@ -16,6 +16,7 @@ import {
   openHostSection,
   selectSettingsHost,
 } from "./settings";
+import { onceConfirm, type ConfirmPrompt } from "./confirm-dialog";
 
 type AgentSkillsClient = Pick<
   InternalDaemonClient,
@@ -198,11 +199,11 @@ export async function toggleSkill(page: Page, name: string): Promise<void> {
 export function answerNextRemovalWarning(
   page: Page,
   answer: "accept" | "dismiss",
-): Promise<Dialog> {
+): Promise<ConfirmPrompt> {
   return new Promise((resolve) => {
-    page.once("dialog", (dialog) => {
+    void onceConfirm(page, async (dialog) => {
+      await (answer === "accept" ? dialog.accept() : dialog.dismiss());
       resolve(dialog);
-      void (answer === "accept" ? dialog.accept() : dialog.dismiss());
     });
   });
 }

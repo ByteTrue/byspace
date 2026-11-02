@@ -5,6 +5,7 @@ import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
 import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
+import { commandCenterRows } from "../support/helpers/command-center";
 
 // These actions used to be reachable only from the sidebar workspace ⋯ menu, the workspace header
 // menu, or an unlisted keybind. Rename was the worst of them: its dialog lived inside the sidebar
@@ -16,7 +17,7 @@ function workspaceRow(page: Page, workspaceId: string): Locator {
 
 function action(panel: Locator, title: string): Locator {
   const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return panel.getByRole("button", { name: new RegExp(`^${escaped}(?:\\s|$)`) });
+  return commandCenterRows(panel, { name: new RegExp(`^${escaped}(?:\\s|$)`) });
 }
 
 async function openWorkspace(page: Page, workspaceId: string): Promise<void> {

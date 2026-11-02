@@ -78,8 +78,8 @@
 
 /*
  * BySpace: `md` is the app's compact breakpoint (720px, as in packages/app), and the text scale
- * follows the interface font size setting (--ui-font-scale, 1 at the default 14px) while spacing
- * stays put, the same split the Expo app makes.
+ * follows the interface font size setting (--ui-text-*, set by the appearance provider) while
+ * spacing stays put, the same split the Expo app makes.
  */
 /*
  * BySpace: shadows are packages/app's theme.shadow (sm / md / lg), which are shadcn's first layers
@@ -157,12 +157,12 @@
 
 @theme {
   --breakpoint-md: 45rem;
-  --text-xs: calc(0.75rem * var(--ui-font-scale, 1));
-  --text-sm: calc(0.875rem * var(--ui-font-scale, 1));
-  --text-base: calc(1rem * var(--ui-font-scale, 1));
-  --text-lg: calc(1.125rem * var(--ui-font-scale, 1));
-  --text-xl: calc(1.25rem * var(--ui-font-scale, 1));
-  --text-2xl: calc(1.5rem * var(--ui-font-scale, 1));
+  --text-xs: var(--ui-text-xs, 12px);
+  --text-sm: var(--ui-text-sm, 14px);
+  --text-base: var(--ui-text-base, 16px);
+  --text-lg: var(--ui-text-lg, 18px);
+  --text-xl: var(--ui-text-xl, 20px);
+  --text-2xl: var(--ui-text-2xl, 24px);
   /* packages/app's text leaves have no line height of their own (react-native-web: `normal`), so
      neither do these. Tailwind's ratios also come out a hair under the pixel (12px x 1/0.75 is
      15.99...), which WebKit floors: every text-xs line in the desktop window and iOS Safari was
@@ -189,24 +189,25 @@
     Consolas, "Liberation Mono", "Courier New", monospace;
   --content-font-size: 15px;
   --code-font-size: 12px;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  /* BySpace: #6e6e6e instead of oklch(0.556 0 0) (#737373, 4.35:1 on muted); clears 4.5:1. */
+  /* shadcn neutral in sRGB hex, the values packages/app's theme.ts converted its oklch to. */
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  /* BySpace: #6e6e6e instead of #737373 (#737373, 4.35:1 on muted); clears 4.5:1. */
   --muted-foreground: #6e6e6e;
   --extra-muted-foreground: #a1a1a1;
   --interaction-highlight: rgba(0, 0, 0, 0.04);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #e7000b;
   /* BySpace: destructive on its 10% tint is 4.01:1; red-700 clears 4.5:1. */
   --destructive-text: #b91c1c;
   --status-success: #3e704a;
@@ -217,46 +218,46 @@
   --status-dot-danger: #f12e2f;
   --status-dot-warning: #b37824;
   --status-dot-running: #268ae0;
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #a1a1a1;
+  --chart-1: #d4d4d4;
+  --chart-2: #737373;
+  --chart-3: #525252;
+  --chart-4: #404040;
+  --chart-5: #262626;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #a1a1a1;
 }
 
 .dark {
   --app-shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
   --app-shadow-md: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
   --app-shadow-lg: 0 12px 24px 0 rgba(0, 0, 0, 0.4);
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
   --extra-muted-foreground: #737373;
   --interaction-highlight: rgba(255, 255, 255, 0.06);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #ff6467;
   --destructive-text: var(--destructive);
   --status-success: #6cb17b;
   --status-danger: #d8847b;
@@ -266,22 +267,22 @@
   --status-dot-danger: #f7796d;
   --status-dot-warning: #db932e;
   --status-dot-running: #5caaf6;
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #737373;
+  --chart-1: #d4d4d4;
+  --chart-2: #737373;
+  --chart-3: #525252;
+  --chart-4: #404040;
+  --chart-5: #262626;
+  --sidebar: #171717;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #1447e6;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #737373;
 }
 
 @layer base {

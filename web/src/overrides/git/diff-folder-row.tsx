@@ -78,6 +78,7 @@ export function DiffFolderRow({
         <ContextMenuTrigger
           onPress={handlePress}
           onContextMenu={handleSelect}
+          onLongPress={handleSelect}
           className={cn(
             workspaceTreeRowClassNames.row,
             workspaceTreeRowClassNames.hoverable,

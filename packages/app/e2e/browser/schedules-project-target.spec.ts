@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
+import { gotoAppShell, BOTTOM_SHEET_BACKDROP } from "../support/helpers/app";
 import {
   addFakeScheduleHostAndReload,
   buildFakeScheduleHostWorkspace,
@@ -114,7 +114,7 @@ async function openNewScheduleSheet(page: Page): Promise<void> {
 }
 
 function bottomSheetBackdrop(page: Page) {
-  return page.getByRole("button", { name: "Bottom sheet backdrop" }).first();
+  return page.locator(BOTTOM_SHEET_BACKDROP).first();
 }
 
 async function dismissScheduleSheetWithBackdrop(page: Page): Promise<void> {

@@ -319,7 +319,7 @@ test.describe("Agent stream UI", () => {
       await expect(toolCalls.first()).toHaveAttribute("aria-expanded", "false");
 
       const expandableToolCalls = page.locator(
-        '[data-testid="tool-call-badge"] [role="button"][aria-expanded]',
+        '[data-testid="tool-call-badge"] :is(button, [role="button"])[aria-expanded]',
       );
       await collapseAll.click();
       await expect.poll(() => areAllToolCallsCollapsed(expandableToolCalls)).toBe(true);

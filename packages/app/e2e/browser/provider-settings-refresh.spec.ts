@@ -2,6 +2,7 @@ import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "../support/fixtures";
 import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { BOTTOM_SHEET_HANDLE } from "../support/helpers/app";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -46,7 +47,7 @@ async function closeTopSheet(page: Page) {
     return;
   }
 
-  const handle = page.getByRole("slider", { name: "Bottom sheet handle" }).last();
+  const handle = page.locator(BOTTOM_SHEET_HANDLE).last();
   const handleBox = await handle.boundingBox();
   if (!handleBox) {
     throw new Error("Bottom sheet handle was not measurable");

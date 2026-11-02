@@ -87,7 +87,10 @@ export function SidebarProjectEmptyState({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-start gap-0.5 px-2 py-2">
+    <div
+      className="flex flex-col items-start gap-0.5 px-2 py-2"
+      data-testid="sidebar-project-empty-state"
+    >
       <Button variant="ghost" size="sm" onClick={onAddProject}>
         <Plus />
         {t("sidebar.actions.addProject")}

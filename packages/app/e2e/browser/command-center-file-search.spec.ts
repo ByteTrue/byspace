@@ -1,5 +1,5 @@
 import { expect, test } from "../support/fixtures";
-import { openCommandCenter } from "../support/helpers/command-center";
+import { openCommandCenter, commandCenterRows } from "../support/helpers/command-center";
 import {
   delayDirectorySuggestionResponses,
   expectOneLineTruncatedFileResult,
@@ -59,11 +59,11 @@ test("workspace file search stays geometrically stable through delayed loading a
 
     const panel = page.getByTestId("command-center-panel");
     await expect(panel).toBeVisible({ timeout: 30_000 });
-    await expect(panel.getByRole("button", { name: "Files" })).toBeVisible();
+    await expect(commandCenterRows(panel, { name: "Files" })).toBeVisible();
     await startCommandCenterLayoutObservation(page);
 
     await panel.getByTestId("command-center-input").fill(FILE_NAME);
-    const row = panel.getByRole("button", {
+    const row = commandCenterRows(panel, {
       name: `${FILE_NAME} ${FILE_DIRECTORY}`,
     });
     await expect(row).toBeVisible({ timeout: 30_000 });
@@ -124,8 +124,8 @@ test("unscoped command search keeps commands visible and reports file-search fai
     const panel = await openCommandCenter(page);
     await panel.getByTestId("command-center-input").fill("home");
 
-    await expect(panel.getByRole("button", { name: "Home", exact: true })).toBeVisible();
-    await expect(panel.getByRole("button", { name: /Home failure 08/ })).toBeVisible();
+    await expect(commandCenterRows(panel, { name: "Home", exact: true })).toBeVisible();
+    await expect(commandCenterRows(panel, { name: /Home failure 08/ })).toBeVisible();
     await expect(panel.getByTestId("command-center-file-search-error")).toHaveText(
       "Error: Test file search transport failure.",
     );

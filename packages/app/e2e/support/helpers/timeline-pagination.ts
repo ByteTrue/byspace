@@ -451,7 +451,8 @@ export async function rememberOlderHistoryLoadingOperation(
     const animated = candidates.find(
       (candidate) => getComputedStyle(candidate).animationName !== "none",
     );
-    if (!(animated instanceof HTMLElement)) {
+    // An HTML element in packages/app (react-native-web's spinner), the spinner's SVG in web/.
+    if (!(animated instanceof HTMLElement || animated instanceof SVGElement)) {
       throw new Error("Expected the older-history loader to contain an animated element");
     }
     animated.dataset.olderHistoryLoadingOperation = operationMarker;

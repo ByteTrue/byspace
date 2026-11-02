@@ -308,6 +308,7 @@ export function WorkspaceHoverCard({
   disabled?: boolean;
   children: ReactElement;
 }) {
+  const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const [open, setOpen] = useState(false);
   const handleOpenChange = useCallback((next: boolean) => setOpen(next && !disabled), [disabled]);
@@ -327,6 +328,9 @@ export function WorkspaceHoverCard({
         sideOffset={4}
         collisionPadding={8}
         className="w-[260px] rounded-[10px] border border-input p-0 pt-2 shadow-[0_4px_8px_rgba(0,0,0,0.2)] ring-0"
+        // packages/app's card is a menu named after its scripts list.
+        role="menu"
+        aria-label={t("workspace.hoverCard.scriptsAccessibility")}
         data-testid="workspace-hover-card"
       >
         <HoverCardBody workspace={workspace} />

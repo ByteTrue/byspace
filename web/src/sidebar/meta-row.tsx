@@ -134,17 +134,16 @@ export function CheckIndicator({
 
 export function HostBadge({ badge }: { badge: HostBadgeModel }) {
   const scheme = useResolvedColorScheme();
-  const colorStyle = useMemo(
-    () => (badge.color === "none" ? undefined : { color: identityForeground(badge.color, scheme) }),
-    [badge.color, scheme],
-  );
+  const color = badge.color === "none" ? undefined : identityForeground(badge.color, scheme);
+  const colorStyle = useMemo(() => (color ? { color } : undefined), [color]);
   return (
     <span
       className="flex min-w-0 shrink items-center gap-[3px]"
       data-testid={`host-badge-${badge.serverId}`}
       aria-label={badge.label}
     >
-      <Server className="size-3 shrink-0 text-muted-foreground" style={colorStyle} />
+      {/* The colour as the glyph's stroke, as packages/app's badge draws it. */}
+      <Server className="size-3 shrink-0 text-muted-foreground" color={color} />
       {badge.showLabel ? (
         <span className="truncate" style={colorStyle}>
           {badge.label}

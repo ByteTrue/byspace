@@ -14,6 +14,7 @@ import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { createTempGitRepo } from "../support/helpers/workspace";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { topLevelNavItem } from "../support/helpers/sidebar-chrome";
+import { onceConfirm } from "../support/helpers/confirm-dialog";
 
 function workspaceRowTestId(workspaceId: string): string {
   return `sidebar-workspace-row-${getServerId()}:${workspaceId}`;
@@ -45,7 +46,7 @@ async function removeProjectFromSidebar(page: Page, projectViewKey: string): Pro
 
   // Removing a project raises a browser confirm; accept it so the
   // user-confirmed removal proceeds deterministically.
-  page.once("dialog", (dialog) => void dialog.accept());
+  void onceConfirm(page, (dialog) => void dialog.accept());
 
   const removeItem = page.getByTestId(`sidebar-project-menu-remove-${projectViewKey}`);
   await expect(removeItem).toBeVisible({ timeout: 10_000 });

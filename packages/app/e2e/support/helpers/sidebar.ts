@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { getServerId } from "./server-id";
+import { onceConfirm } from "./confirm-dialog";
+import { pressOutsideMenu } from "./menu-backdrop";
 
 interface ContextMenuAnchor {
   x: number;
@@ -55,7 +57,12 @@ export async function showWorkspaceHoverCard(page: Page, workspaceId: string): P
 
 export async function closeWorkspaceContextMenu(page: Page, workspaceId: string): Promise<void> {
   const workspaceKey = `${getServerId()}:${workspaceId}`;
-  await page.getByTestId(`sidebar-workspace-context-menu-${workspaceKey}-backdrop`).click();
+  const menuTestID = `sidebar-workspace-context-menu-${workspaceKey}`;
+  await pressOutsideMenu(
+    page,
+    page.getByTestId(menuTestID),
+    page.getByTestId(`${menuTestID}-backdrop`),
+  );
 }
 
 export async function expectWorkspaceContextMenuOwnsAttention(page: Page): Promise<void> {
@@ -93,7 +100,12 @@ export async function openProjectContextMenu(page: Page, projectViewKey: string)
 }
 
 export async function closeProjectContextMenu(page: Page, projectViewKey: string): Promise<void> {
-  await page.getByTestId(`sidebar-project-context-menu-${projectViewKey}-backdrop`).click();
+  const menuTestID = `sidebar-project-context-menu-${projectViewKey}`;
+  await pressOutsideMenu(
+    page,
+    page.getByTestId(menuTestID),
+    page.getByTestId(`${menuTestID}-backdrop`),
+  );
 }
 
 export async function expectProjectContextMenuActions(
@@ -153,7 +165,7 @@ export async function pinWorkspaceFromSidebar(page: Page, workspaceId: string): 
 export async function archiveWorkspaceFromSidebar(page: Page, workspaceId: string): Promise<void> {
   // A clean workspace archives with no prompt. Managed worktree backing may raise
   // a browser confirm for unsynced work, so accept it when present.
-  page.once("dialog", (dialog) => void dialog.accept());
+  void onceConfirm(page, (dialog) => void dialog.accept());
   await clickArchiveWorkspaceMenuItem(page, workspaceId);
 }
 

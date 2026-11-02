@@ -7,6 +7,8 @@ import { openChangesPanel } from "../support/helpers/workspace-tabs";
 import { gotoWorkspace } from "../support/helpers/launcher";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
+import { onceConfirm } from "../support/helpers/confirm-dialog";
+import { pressOutsideMenu } from "../support/helpers/menu-backdrop";
 
 let workspace: SeededWorkspace;
 
@@ -280,7 +282,7 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await expect(menu).toBeVisible();
 
   const backdrop = page.getByTestId(/file-explorer-row-\d+-context-menu-backdrop$/);
-  await backdrop.click({ button: "right" });
+  await pressOutsideMenu(page, menu, backdrop, { button: "right" });
   await expect(menu).toBeHidden();
 
   await entry("created.txt").click({ button: "right" });
@@ -314,7 +316,7 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
     .evaluate((element) => getComputedStyle(element).color);
   await expect(deleteAction.locator("svg")).toHaveCSS("stroke", deleteLabelColor);
   const cancelledConfirmation = new Promise<string>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       const message = dialog.message();
       await dialog.dismiss();
       resolve(message);
@@ -326,7 +328,7 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
 
   await entry("renamed.txt").click({ button: "right" });
   const confirmation = new Promise<string>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       const message = dialog.message();
       await dialog.accept();
       resolve(message);
@@ -338,7 +340,7 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
 
   await entry("renamed-folder").click({ button: "right" });
   const folderConfirmation = new Promise<string>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       const message = dialog.message();
       await dialog.accept();
       resolve(message);
@@ -423,7 +425,7 @@ test("keeps an entry visible when deletion fails", async ({ page }) => {
     .getByText("README.md", { exact: true });
   await readme.click({ button: "right" });
   const confirmation = new Promise<void>((resolve) => {
-    page.once("dialog", async (dialog) => {
+    void onceConfirm(page, async (dialog) => {
       await dialog.accept();
       resolve();
     });

@@ -2,6 +2,7 @@ import { PARENT_AGENT_ID_LABEL } from "@bytetrue/protocol/agent-labels";
 import { expect, type Page } from "@playwright/test";
 import { daemonWsRoutePattern } from "./daemon-port";
 import type { SeededWorkspace } from "./seed-client";
+import { onceConfirm } from "./confirm-dialog";
 
 type WebSocketMessage = string | Buffer;
 
@@ -299,7 +300,7 @@ export async function detachSubagentFromTrack(page: Page, childId: string): Prom
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.hover();
 
-  page.once("dialog", (dialog) => {
+  void onceConfirm(page, (dialog) => {
     expect(dialog.message()).toContain("Detach subagent?");
     void dialog.accept();
   });

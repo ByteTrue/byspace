@@ -40,7 +40,9 @@ export function AttachmentLightbox({
     function handleKeydown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      event.stopPropagation();
+      // Immediate: the shortcut engine also listens on window, and when it runs after this
+      // listener the lightbox is already gone, so it would read the Escape as "interrupt agent".
+      event.stopImmediatePropagation();
       onClose();
     }
     window.addEventListener("keydown", handleKeydown, true);
@@ -67,6 +69,9 @@ export function AttachmentLightbox({
       className="fixed inset-0 z-50 outline-none"
       role="dialog"
       aria-modal="true"
+      // Marks it an open layer for the shortcut engine (lib/overlay-root.ts), as a Radix dialog is:
+      // Escape closes the lightbox and does not also interrupt the agent behind it.
+      data-state="open"
     >
       <button
         type="button"

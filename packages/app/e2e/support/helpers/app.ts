@@ -1,6 +1,17 @@
 import { expect, type Page } from "@playwright/test";
 import { escapeRegex } from "./regex";
 
+/**
+ * A bottom sheet's backdrop: gorhom's pressable backdrop in packages/app, the drawer overlay in web/.
+ * Found by its label, not its role: web/'s sheet is a Radix dialog, which hides everything outside
+ * the sheet (the overlay included) from the accessibility tree.
+ */
+export const BOTTOM_SHEET_BACKDROP = '[aria-label="Bottom sheet backdrop"]:visible';
+
+/** A bottom sheet's grab handle: gorhom's handle (a slider) in packages/app, the drawer's in web/. */
+export const BOTTOM_SHEET_HANDLE =
+  '[aria-label="Bottom sheet handle"]:visible, [data-slot="drawer-handle"]:visible';
+
 export const gotoAppShell = async (page: Page) => {
   await page.goto("/");
 };
@@ -49,8 +60,8 @@ export const setWorkingDirectory = async (page: Page, directory: string) => {
   const worktreePicker = page.getByTestId("worktree-attach-picker");
   const worktreeSheetTitle = page.getByText("Select worktree", { exact: true }).first();
   const closeBottomSheet = async () => {
-    const bottomSheetBackdrop = page.getByRole("button", { name: "Bottom sheet backdrop" }).first();
-    const bottomSheetHandle = page.getByRole("slider", { name: "Bottom sheet handle" }).first();
+    const bottomSheetBackdrop = page.locator(BOTTOM_SHEET_BACKDROP).first();
+    const bottomSheetHandle = page.locator(BOTTOM_SHEET_HANDLE).first();
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (!(await bottomSheetBackdrop.isVisible())) {
         return;

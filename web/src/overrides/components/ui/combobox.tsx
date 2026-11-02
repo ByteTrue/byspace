@@ -33,7 +33,7 @@ import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { cn } from "cn";
 import { SnapDrawer } from "~/components/snap-drawer";
-import { DrawerTitle } from "~/components/ui/drawer";
+import { Drawer as DrawerPrimitive } from "vaul";
 
 export type ComboboxOption = ComboboxOptionModel;
 export type ComboboxDesktopPlacement = "top-start" | "bottom-start";
@@ -92,6 +92,10 @@ export interface ComboboxProps {
 
 const DEFAULT_MAX_HEIGHT = 400;
 const MOBILE_SNAP_POINTS = [0.6, 0.9];
+
+function preventDismiss(event: Event): void {
+  event.preventDefault();
+}
 
 export function SearchInput({
   placeholder,
@@ -612,14 +616,17 @@ function ComboboxSheet({
       className="bg-background"
       bodyClassName="pb-[env(safe-area-inset-bottom)]"
     >
-      <DrawerTitle className="sr-only">{header?.title ?? title}</DrawerTitle>
-      {header ? <SheetHeaderView header={header} onClose={onClose} /> : null}
+      {header ? (
+        <SheetHeaderView header={header} onClose={onClose} Title={DrawerPrimitive.Title} />
+      ) : null}
       {header ? null : (
         <>
           <div className="px-6 pb-2">
-            <span className="block text-sm leading-[normal] font-medium text-foreground">
-              {title}
-            </span>
+            <DrawerPrimitive.Title asChild>
+              <span className="block text-sm leading-[normal] font-medium text-foreground">
+                {title}
+              </span>
+            </DrawerPrimitive.Title>
           </div>
           {stickyHeader}
           {search ? <SearchInput {...search} /> : null}
@@ -717,10 +724,15 @@ function ComboboxPopover({
             data-testid="combobox-desktop-container"
             onKeyDown={onKeyDown}
             onInteractOutside={onInteractOutside}
+            // packages/app's list closes on a press outside or Escape, not when focus leaves it: a
+            // dialog opened above it (shortcuts, ⌘K, provider settings) takes focus and the list
+            // is still there when it closes.
+            onFocusOutside={preventDismiss}
             style={frameStyle}
             // packages/app's desktop surface is surface0 (the page colour), not shadcn's popover
-            // colour, which is lighter on dark themes.
-            className="z-50 flex flex-col overflow-hidden rounded-lg border bg-background text-sm text-popover-foreground shadow-md outline-none duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+            // colour, which is lighter on dark themes; it fades in over 100ms without a zoom, and
+            // its size changes land at once (transition-none, see components/ui/context-menu.tsx).
+            className="z-50 flex flex-col overflow-hidden rounded-lg border bg-background text-sm text-popover-foreground shadow-md outline-none transition-none duration-100 data-open:animate-in data-open:fade-in-0"
           >
             {header ? <InlineHeaderView header={header} /> : stickyHeader}
             {search ? <SearchInput {...search} autoFocus /> : null}

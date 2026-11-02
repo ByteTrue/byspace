@@ -135,6 +135,16 @@ async function gateSecondToolCall(page: Page, agentId: string) {
   };
 }
 
+/** Running shimmers by their animation, whether it is set inline (packages/app) or by a class (web/). */
+async function countShimmers(locator: Locator): Promise<number> {
+  return locator.evaluate(
+    (root) =>
+      Array.from(root.querySelectorAll<HTMLElement>("*")).filter((element) =>
+        getComputedStyle(element).animationName.includes("byspace-toolcall-shimmer"),
+      ).length,
+  );
+}
+
 async function readShimmerEvidence(locator: Locator): Promise<ShimmerEvidence> {
   return locator.evaluate((root) => {
     const shimmer = Array.from(root.querySelectorAll<HTMLElement>("*")).find((element) =>
@@ -186,11 +196,11 @@ test("measures an overview heading that becomes loading after its idle mount", a
     if (!idleGroupHandle) {
       throw new Error("Expected the idle tool-call group to be mounted");
     }
-    await expect(group.locator('[style*="byspace-toolcall-shimmer"]')).toHaveCount(0);
+    await expect.poll(() => countShimmers(group)).toBe(0);
 
     await gate.waitForSecondRunning();
     gate.releaseSecondRunning();
-    await expect(group.locator('[style*="byspace-toolcall-shimmer"]')).not.toHaveCount(0);
+    await expect.poll(() => countShimmers(group)).not.toBe(0);
     const sameGroupNode = await group.evaluate(
       (node, previous) => node === previous,
       idleGroupHandle,

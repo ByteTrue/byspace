@@ -19,6 +19,7 @@ import {
   expectHostPageVisible,
   seedSavedSettingsHosts,
 } from "../support/helpers/settings";
+import { onceConfirm } from "../support/helpers/confirm-dialog";
 
 async function closeProviderSheet(page: Page) {
   const sheet = page.getByTestId("provider-settings-sheet");
@@ -119,7 +120,7 @@ test.describe("Settings host page", () => {
     await openSettingsHost(page, outdatedDaemon.serverId);
     await openHostSection(page, outdatedDaemon.serverId, "host");
 
-    page.once("dialog", (dialog) => dialog.accept());
+    void onceConfirm(page, (dialog) => dialog.accept());
     const updateButton = page.getByTestId("host-page-update-button");
     await updateButton.click();
 

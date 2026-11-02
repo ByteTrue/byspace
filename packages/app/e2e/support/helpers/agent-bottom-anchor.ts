@@ -204,7 +204,7 @@ export async function clickToolCallBesideScrollToBottomButton(page: Page): Promi
   expect(buttonBounds, "Expected visible scroll-to-bottom button bounds").not.toBeNull();
   const visibleButtonBounds = buttonBounds!;
 
-  const toolCalls = page.locator('[data-testid="tool-call-badge"] [role="button"]');
+  const toolCalls = page.locator('[data-testid="tool-call-badge"] :is(button, [role="button"])');
   const buttonCenterY = visibleButtonBounds.y + visibleButtonBounds.height / 2;
   const initialToolCalls = await readRenderedToolCalls(toolCalls);
   const initialCandidate = closestToolCallToY(initialToolCalls, buttonCenterY);

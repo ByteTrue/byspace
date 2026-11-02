@@ -82,8 +82,9 @@ function GitActionMenuItem({
   );
 }
 
-// 32px on a phone, the 28px header control height on desktop.
-const CONTROL_HEIGHT = "h-8 md:h-7";
+// packages/app's split button parts: 28px at every width (buttonControlHeight.xs below md,
+// HEADER_CONTROL_HEIGHT from md up).
+const CONTROL_HEIGHT = "h-7";
 
 export function GitActionsSplitButton({
   gitActions,

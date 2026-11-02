@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"
+import { stopContextMenu } from "./menu-events"
 
 // BySpace: geometry follows packages/app's menu engine (components/ui/menu/menu-item.tsx,
 // menu-overlay.tsx), so menus measure the same as in the Expo app: a 1px-bordered surface at least
@@ -55,6 +56,9 @@ function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
   )
 }
 
+// BySpace: no exit animation, as packages/app's menus on the web (menu-overlay.tsx passes no
+// `exiting` there): a closing menu stays mounted while it animates out, and its outside-press
+// handler would close a menu a quick press on the trigger had just reopened.
 // BySpace: every menu surface stays 8px inside the window (packages/app's menu-anchor EDGE_PADDING)
 // and draws the md shadow, submenus too.
 function DropdownMenuContent({
@@ -74,7 +78,9 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         align={align}
-        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-[180px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+        onContextMenu={stopContextMenu}
+        // BySpace: transition-none, see context-menu.tsx (the origin must not glide).
+        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-[180px] transition-none origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95", className )}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
@@ -277,9 +283,10 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
+      onContextMenu={stopContextMenu}
       sideOffset={sideOffset}
       collisionPadding={collisionPadding}
-      className={cn("z-50 min-w-[180px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+      className={cn("z-50 min-w-[180px] transition-none origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg border bg-popover px-0 py-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95", className )}
       {...props}
     />
   )

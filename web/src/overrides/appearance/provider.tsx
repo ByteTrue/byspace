@@ -20,6 +20,16 @@ function setOptionalProperty(name: string, value: string) {
   else document.documentElement.style.removeProperty(name);
 }
 
+// Tailwind's text steps in web/ (index.css) and their size at the default 14px interface.
+const UI_TEXT_STEPS = [
+  ["xs", 12],
+  ["sm", 14],
+  ["base", 16],
+  ["lg", 18],
+  ["xl", 20],
+  ["2xl", 24],
+] as const;
+
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { settings, isLoading } = useAppSettings();
   const scheme = useResolvedColorScheme();
@@ -44,10 +54,12 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     const root = document.documentElement;
-    root.style.setProperty(
-      "--ui-font-scale",
-      String(settings.uiBaseFontSize / DEFAULT_UI_BASE_FONT_SIZE),
-    );
+    // packages/app's scaleFontSize (appearance/apply.ts): each step scaled from 14px and rounded
+    // to a whole pixel, so a 12px interface makes the 12px step 10px, not 10.29px.
+    const ratio = settings.uiBaseFontSize / DEFAULT_UI_BASE_FONT_SIZE;
+    for (const [step, size] of UI_TEXT_STEPS) {
+      root.style.setProperty(`--ui-text-${step}`, `${Math.round(size * ratio)}px`);
+    }
     root.style.setProperty("--content-font-size", `${settings.contentFontSize}px`);
     root.style.setProperty("--code-font-size", `${settings.codeFontSize}px`);
     setOptionalProperty("--app-font-sans", settings.uiFontFamily.trim());

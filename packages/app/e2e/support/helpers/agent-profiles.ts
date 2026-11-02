@@ -6,6 +6,7 @@ import { connectDaemonClient } from "./daemon-client-loader";
 import { getServerId } from "./server-id";
 import { expectAppRoute } from "./route-assertions";
 import { openSettingsHost } from "./settings";
+import { waitForConfirm } from "./confirm-dialog";
 
 // ─── Daemon-side seeding ───────────────────────────────────────────────────
 
@@ -210,7 +211,7 @@ export async function moveAgentProfileDown(page: Page, name: string): Promise<vo
  * whole point of confirming.
  */
 export async function removeAgentProfile(page: Page, name: string): Promise<void> {
-  const dialogMessage = page.waitForEvent("dialog").then(async (dialog) => {
+  const dialogMessage = waitForConfirm(page).then(async (dialog) => {
     const message = dialog.message();
     await dialog.accept();
     return message;

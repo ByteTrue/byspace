@@ -12,6 +12,12 @@ function projectGroup(page: Page, projectName: string): Locator {
   return page.getByRole("group", { name: projectName, exact: true });
 }
 
+/** Workspace rows in a project block: links in web/, buttons in packages/app. */
+function workspaceRows(group: Locator): Locator {
+  // COMPAT(web-switch): drop the button half when packages/app is deleted.
+  return group.getByRole("link").or(group.getByRole("button"));
+}
+
 function projectGroupWithWorkspace(
   page: Page,
   projectName: string,
@@ -50,7 +56,7 @@ export async function expectProjectContainsWorkspaces(
   const group = projectGroup(page, input.projectName);
   await expect(group).toHaveCount(1, { timeout: PROJECT_VISIBILITY_TIMEOUT });
   for (const workspaceName of input.workspaceNames) {
-    await expect(group.getByRole("button").filter({ hasText: workspaceName })).toBeVisible({
+    await expect(workspaceRows(group).filter({ hasText: workspaceName })).toBeVisible({
       timeout: PROJECT_VISIBILITY_TIMEOUT,
     });
   }
@@ -93,10 +99,9 @@ export async function expectProjectWorkspaceCountForHost(
   input: { projectName: string; hostName: string; count: number },
 ): Promise<void> {
   const group = projectGroup(page, input.projectName);
-  await expect(group.getByRole("button").filter({ hasText: input.hostName })).toHaveCount(
-    input.count,
-    { timeout: PROJECT_VISIBILITY_TIMEOUT },
-  );
+  await expect(workspaceRows(group).filter({ hasText: input.hostName })).toHaveCount(input.count, {
+    timeout: PROJECT_VISIBILITY_TIMEOUT,
+  });
 }
 
 export async function renameProject(page: Page, name: string): Promise<void> {

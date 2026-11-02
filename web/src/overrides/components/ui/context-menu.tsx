@@ -152,6 +152,9 @@ export function ContextMenuTrigger({
   accessibilityHint: _accessibilityHint,
   onClick,
   onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   onKeyDown,
   onPointerEnter,
   onPointerLeave,
@@ -195,9 +198,10 @@ export function ContextMenuTrigger({
         composeHandlers(onPointerDown, longPress.onPointerDown),
         pressable && onPressIn ? (event) => event.button === 0 && onPressIn() : undefined,
       )}
-      onPointerMove={longPress.onPointerMove}
-      onPointerUp={longPress.onPointerUp}
-      onPointerCancel={longPress.onPointerCancel}
+      // Composed, not replaced: a tooltip around the trigger (a workspace tab) opens on pointermove.
+      onPointerMove={composeHandlers(onPointerMove, longPress.onPointerMove)}
+      onPointerUp={composeHandlers(onPointerUp, longPress.onPointerUp)}
+      onPointerCancel={composeHandlers(onPointerCancel, longPress.onPointerCancel)}
       onKeyDown={composeHandlers(onKeyDown, handleKeyDown)}
       onPointerEnter={composeHandlers(onPointerEnter, () => setHovered(true))}
       onPointerLeave={composeHandlers(
