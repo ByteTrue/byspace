@@ -98,7 +98,7 @@ export function SelectFieldTrigger({
       {leading}
       <span
         className={cn(
-          "min-w-0 flex-1 truncate text-left text-sm",
+          "min-w-0 flex-1 truncate text-left text-sm leading-5",
           isPlaceholder ? "text-muted-foreground" : "text-foreground",
         )}
       >

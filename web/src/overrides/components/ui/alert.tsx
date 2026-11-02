@@ -44,15 +44,30 @@ export function Alert({
   let resolvedIcon: ReactNode = icon ?? null;
   if (icon === undefined && variant !== "default") {
     const Icon = VARIANT_ICON[variant];
-    resolvedIcon = <Icon className={accent.text} />;
+    resolvedIcon = <Icon className={cn("size-3.5", accent.text)} />;
   }
   const hasDescription = description != null && description !== "";
   return (
-    <ShadAlert className={accent.border} data-testid={testID}>
+    // packages/app's Alert geometry: a 14px-radius hairline box on the page background, 12/16
+    // padding, a 14px icon 12px from the text, 4px between title and description (a margin: the
+    // icon spans two grid rows, so a row gap would pad an alert with no description).
+    <ShadAlert
+      className={cn(
+        "gap-y-0 rounded-[14px] bg-transparent px-4 py-3 has-[>svg]:gap-x-3",
+        accent.border,
+      )}
+      data-testid={testID}
+    >
       {resolvedIcon}
       {title ? <AlertTitle className={accent.text}>{title}</AlertTitle> : null}
       {hasDescription ? (
-        <AlertDescription className={cn(typeof description !== "string" && "flex flex-col gap-2")}>
+        <AlertDescription
+          className={cn(
+            "text-xs",
+            title && "mt-1",
+            typeof description !== "string" && "flex flex-col gap-2",
+          )}
+        >
           {description}
         </AlertDescription>
       ) : null}

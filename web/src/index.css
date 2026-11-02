@@ -163,6 +163,16 @@
   --text-lg: calc(1.125rem * var(--ui-font-scale, 1));
   --text-xl: calc(1.25rem * var(--ui-font-scale, 1));
   --text-2xl: calc(1.5rem * var(--ui-font-scale, 1));
+  /* packages/app's text leaves have no line height of their own (react-native-web: `normal`), so
+     neither do these. Tailwind's ratios also come out a hair under the pixel (12px x 1/0.75 is
+     15.99...), which WebKit floors: every text-xs line in the desktop window and iOS Safari was
+     1px short, and the rows below drifted. */
+  --text-xs--line-height: normal;
+  --text-sm--line-height: normal;
+  --text-base--line-height: normal;
+  --text-lg--line-height: normal;
+  --text-xl--line-height: normal;
+  --text-2xl--line-height: normal;
 }
 
 :root {

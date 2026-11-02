@@ -412,9 +412,12 @@ function WorkspaceRowText({
     (sidebarWorkspaceTrailing === "diff" && workspace.diffStat !== null) ||
     (sidebarWorkspaceTrailing === "timestamp" && workspace.statusEnteredAt !== null);
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+    // The meta line sits right under the title, as in packages/app (no gap between the two).
+    <span className="flex min-w-0 flex-1 flex-col">
       <span className="flex h-5 min-w-0 items-center gap-2">
-        <span className={cn("min-w-0 flex-1 truncate", isCreating && "text-muted-foreground")}>
+        <span
+          className={cn("min-w-0 flex-1 truncate leading-5", isCreating && "text-muted-foreground")}
+        >
           {title}
         </span>
         {isCreating ? (

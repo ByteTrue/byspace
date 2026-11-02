@@ -140,7 +140,7 @@ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
   );
   return (
     <span
-      className="flex min-w-0 shrink items-center gap-1"
+      className="flex min-w-0 shrink items-center gap-[3px]"
       data-testid={`host-badge-${badge.serverId}`}
       aria-label={badge.label}
     >
@@ -196,7 +196,7 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
         number: hint.number,
         context: presentation.changeRequestContext,
       })}
-      className="group/pr flex shrink-0 items-center gap-1 hover:text-foreground"
+      className="group/pr flex shrink-0 items-center gap-[3px] hover:text-foreground"
       onClick={open}
       onPointerDown={stopRowPress}
     >
@@ -214,7 +214,7 @@ function ChecksItem({ summary, label }: { summary: CheckSummary; label: boolean 
   const { t } = useTranslation();
   return (
     <span
-      className="flex shrink-0 items-center gap-1"
+      className="flex shrink-0 items-center gap-[3px]"
       aria-label={t(CHECK_STATE_ACCESSIBLE_KEYS[summary.state])}
       data-testid={`sidebar-workspace-checks-${summary.state}`}
     >
@@ -233,7 +233,7 @@ function ServiceItem({ summary }: { summary: WorkspaceServiceSummary }) {
   const unhealthy = summary.health === "unhealthy";
   return (
     <span
-      className="flex min-w-0 shrink items-center gap-1"
+      className="flex min-w-0 shrink items-center gap-[3px]"
       aria-label={t(workspaceServiceLabelKey(summary), { name: summary.name })}
       data-testid={unhealthy ? "workspace-service-unhealthy" : "workspace-service"}
     >
@@ -258,7 +258,7 @@ function MetaItem({
       const Icon = item.kind === "branch" ? GitBranch : Folder;
       return (
         <span
-          className="flex min-w-0 shrink items-center gap-1"
+          className="flex min-w-0 shrink items-center gap-[3px]"
           data-testid={`sidebar-workspace-${item.kind}`}
         >
           <Icon className="size-3 shrink-0" />
@@ -332,7 +332,8 @@ export function WorkspaceMetaRow({
   });
   if (items.length === 0) return null;
   return (
-    <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+    // packages/app's meta row: 6px between items and the dots, 3px inside an item.
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       {items.map((item, index) => (
         <Fragment key={item.kind}>
           {index > 0 ? (

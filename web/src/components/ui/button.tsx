@@ -18,9 +18,10 @@ const buttonVariants = cva(
           "border-border bg-background hover:bg-muted aria-expanded:bg-muted dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         // BySpace: hover fills follow packages/app's Button (components/ui/button.tsx): secondary
         // steps to surface3, ghost takes the translucent interaction highlight, and no variant
-        // recolours its label on hover.
+        // recolours its label on hover. Its secondary label is the foreground (#0a0a0a), not
+        // shadcn's secondary-foreground (#171717).
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-(--surface-3) aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary text-foreground hover:bg-(--surface-3) aria-expanded:bg-secondary aria-expanded:text-foreground",
         ghost:
           "hover:bg-interaction-highlight aria-expanded:bg-interaction-highlight",
         destructive:
