@@ -66,7 +66,6 @@ import * as Clipboard from "expo-clipboard";
 import { useUnistyles } from "react-native-unistyles";
 import { Keyboard as KeyboardIcon, KeyboardOff as KeyboardOffIcon } from "lucide-react";''')
 rep('import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";\n', "")
-rep('import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";\n', "")
 # Relative imports would bypass the web overrides; go through `@/`.
 rep('} from "./terminal-pane-focus-claim";', '} from "@/components/terminal-pane-focus-claim";')
 rep('import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";',
@@ -222,9 +221,6 @@ rep('''  const keyboardRefitTimeoutsRef = useRef<Array<ReturnType<typeof setTime
 rep('''  const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];
 ''', "", count=0) if False else None
 pane["s"] = pane["s"].replace("const TERMINAL_REFIT_DELAYS_MS = [0, 48, 144, 320];\n", "", 1)
-# selection on a phone: the web shell has no edge-swipe panel gestures to block
-rep('''  useBlockMobilePanelOpenGestures(isMobile && isWorkspaceFocused && isPaneFocused && hasSelection);
-''', "")
 
 # view
 rep('''  const containerStyle = useMemo(

@@ -7,7 +7,12 @@ Compact layouts have three mutually exclusive destinations:
 - `file-explorer` on the right
 
 They are one interaction, not two independent drawers. The implementation lives in
-`packages/app/src/mobile-panels/`.
+`packages/app/src/mobile-panels/`. The `web/` frontend runs the same `model.ts` and
+`gesture-intent.ts` on the DOM (`web/src/overrides/mobile-panels/`): a plain object instead of
+worklets, writing the position straight to the panel styles. Its gestures listen for touch events on
+the document and cancel the page scroll once the swipe is horizontal. On the web, packages/app's
+gesture-handler detectors (`touchAction: "auto"`) lose the touch to scrolling, so there only a mouse
+drag moves a panel.
 
 ## Ownership
 
