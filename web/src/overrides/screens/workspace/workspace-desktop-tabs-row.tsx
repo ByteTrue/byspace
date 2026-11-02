@@ -908,6 +908,16 @@ function useLabelMeasurements(labels: WorkspaceTabLabel[]) {
     // Web fonts can land after the first measure and change every width.
     void document.fonts?.ready.then(measure);
   }, [measure]);
+  useEffect(() => {
+    // A workspace covered by Settings or History is display: none (app/workspace-layer.tsx), so a
+    // tab opened meanwhile (History opening an archived agent) measures 0 and the track would keep
+    // waiting for it; measure again when the labels show.
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [measure]);
   const element = (
     <div
       ref={containerRef}
