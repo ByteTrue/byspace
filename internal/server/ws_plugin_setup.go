@@ -748,6 +748,13 @@ func (s *Server) workspaceDescriptor(ws store.WorkspaceRecord, prj store.Project
 	if runtime := s.checkoutGitRuntime(ws.Cwd); runtime != nil {
 		out["gitRuntime"] = runtime
 	}
+	// The sidebar's PR badge: the checkout's PR as the background poll last saw it.
+	if runtime, forge := s.prStatusRuntime(ws.Cwd); runtime != nil {
+		out["githubRuntime"] = runtime
+		if forge != "" {
+			out["forge"] = forge
+		}
+	}
 	return out
 }
 

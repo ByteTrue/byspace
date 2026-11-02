@@ -783,6 +783,12 @@ func (s *Server) runPlacementTick() {
 	s.reconcileAllWorkspacePlacements(ctx)
 	cancel()
 
+	// A branch switched or committed to from a terminal moves the checkout's PR lookup; this is
+	// where the daemon notices it for checkouts no diff pane is watching.
+	sctx, scancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	s.syncPRStatusTargets(sctx)
+	scancel()
+
 	// Checking for merged PRs rides the same slow tick: a forge call per workspace per minute would be
 	// abusive, and the user does not need archiving to happen faster than the sidebar refresh.
 	if s.autoArchiveEnabled() {

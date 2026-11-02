@@ -46,6 +46,14 @@ var selfLockingMethods = map[string]bool{
 	// The schedule runner's turn helpers lock to read and stamp the agent record.
 	"runScheduledTurn":   true,
 	"scheduledTurnError": true,
+	// The PR status poll reads the client list and re-sends workspaces.
+	"hasClients":                        true,
+	"notePRStatusClientsChanged":        true,
+	"notePRStatusWorkspaceTouched":      true,
+	"notePRStatusCheckoutChanged":       true,
+	"syncPRStatusTargets":               true,
+	"broadcastWorkspaceForCwd":          true,
+	"storeCheckoutGitRuntimeFromStatus": true,
 }
 
 // TestNoReentrantServerLocks parses every non-test file in this package and reports a call to a

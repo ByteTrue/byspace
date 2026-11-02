@@ -184,12 +184,14 @@ type Server struct {
 	// directory orders the app's directory replica: projects, workspaces and agents each get a
 	// sequence, and a deletion is remembered as a tombstone so a polling client can be told the row
 	// is gone. See internal/directorysync.
-	directory    *directorysync.Service
-	keyPair      e2ee.KeyPair
-	pubKeyB64    string
-	vapidKeys    home.VAPIDKeys
-	store        *store.Store
-	schedules    *schedule.Service
+	directory *directorysync.Service
+	keyPair   e2ee.KeyPair
+	pubKeyB64 string
+	vapidKeys home.VAPIDKeys
+	store     *store.Store
+	schedules *schedule.Service
+	// prStatus keeps the PR status of every live checkout fresh while a client is connected.
+	prStatus     *prStatusState
 	webUI        *webui.Handler
 	piCommand    string
 	piSessionDir string
@@ -443,6 +445,7 @@ func New(opts Options) (*Server, error) {
 	srv.skillsQueue.start()
 	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
 	srv.schedules = schedule.NewService(homeDir, srv.scheduleHooks())
+	srv.prStatus = newPRStatusState()
 	go func() {
 		pctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -512,6 +515,7 @@ func (s *Server) Close() error {
 	if s.schedules != nil {
 		s.schedules.Stop()
 	}
+	s.closePRStatus()
 	// Anything merged but not yet sent would be lost with the daemon: a message's tail must not
 	// depend on how long the daemon stayed up.
 	if s.streamCoalescer != nil {
@@ -991,6 +995,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 	s.mu.Lock()
 	s.clients[sink] = greeted
 	s.mu.Unlock()
+	s.notePRStatusClientsChanged()
 	defer func() {
 		s.mu.Lock()
 		delete(s.clients, sink)
@@ -998,6 +1003,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 		delete(s.selectiveTimeline, sink)
 		delete(s.terminalDelivered, sink)
 		s.mu.Unlock()
+		s.notePRStatusClientsChanged()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
 	}()
@@ -1830,6 +1836,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "checkout_commit_request":
 		s.handleCheckoutCommit(ctx, sink, raw)
+		s.notePRStatusCheckoutChanged(requestCwd(raw))
 
 	case "checkout.discard_changes.request":
 		s.handleCheckoutDiscardChanges(ctx, sink, raw)
@@ -1960,6 +1967,11 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"stash_save_request",
 		"stash_pop_request":
 		s.handleGitParityOps(ctx, sink, base.Type, raw)
+		switch base.Type {
+		case "checkout_switch_branch_request", "checkout.rename_branch.request", "checkout_push_request",
+			"checkout_pull_request", "checkout_merge_request", "checkout_merge_from_base_request", "checkout.refresh.request":
+			s.notePRStatusCheckoutChanged(requestCwd(raw))
+		}
 
 	case "checkout_pr_status_request",
 		"checkout_pr_create_request",
@@ -1974,6 +1986,11 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"workspace.github.search_repositories.request",
 		"project.github.clone.request":
 		s.handleForgeParityOps(ctx, sink, base.Type, raw)
+		switch base.Type {
+		case "checkout_pr_create_request", "checkout_pr_merge_request",
+			"checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
+			s.notePRStatusCheckoutChanged(requestCwd(raw))
+		}
 
 	case "subscribe_terminals_request",
 		"unsubscribe_terminals_request",
@@ -4645,6 +4662,8 @@ func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.Pr
 // and the sidebar would flash the new workspace in the Done group and then move it to Running.
 // Node emits the create update with `status: "running"` for the same reason.
 func (s *Server) broadcastWorkspaceUpsertStatus(ws store.WorkspaceRecord, prj store.ProjectRecord, status string) {
+	// A workspace created, archived or moved changes which checkouts have a PR to poll.
+	defer s.notePRStatusWorkspaceTouched(ws.Cwd, ws.ArchivedAt != nil)
 	if ws.ArchivedAt != nil {
 		s.broadcastWorkspaceRemoval(ws.WorkspaceID, prj.ProjectID)
 		return
@@ -5389,4 +5408,13 @@ func mergeProviderConfig(saved, draft map[string]any) map[string]any {
 		merged[key] = value
 	}
 	return merged
+}
+
+// requestCwd reads a request's cwd.
+func requestCwd(raw json.RawMessage) string {
+	var req struct {
+		Cwd string `json:"cwd"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	return req.Cwd
 }

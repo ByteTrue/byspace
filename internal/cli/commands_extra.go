@@ -44,6 +44,9 @@ func runHeartbeatCmd(cmd string, args []string, stdout io.Writer) error {
 			defaultAgentID = os.Getenv("BYSPACE_AGENT_ID")
 		}
 		agentID := fs.String("agent-id", defaultAgentID, "existing target agent ID")
+		// The Node CLI's --target: new-agent (the default for a schedule), self (the agent this runs
+		// in), or an agent id.
+		targetFlag := fs.String("target", "", "new-agent, self, or an agent ID")
 		// The flags the node CLI has on `schedule create`. --prompt is an alternative to the
 		// positional argument for a script that would rather not quote a long text; --run-now is
 		// how a user checks a new schedule without waiting for the first tick.
@@ -88,6 +91,22 @@ func runHeartbeatCmd(cmd string, args []string, stdout io.Writer) error {
 				"type":    "every",
 				"everyMs": interval.Milliseconds(),
 			}
+		}
+
+		switch targetValue := strings.TrimSpace(*targetFlag); targetValue {
+		case "":
+		case "new-agent":
+			*agentID = ""
+		case "self":
+			*agentID = os.Getenv("BYSPACE_AGENT_ID")
+			if strings.TrimSpace(*agentID) == "" {
+				return errors.New("--target self requires running inside a BySpace agent")
+			}
+		default:
+			*agentID = targetValue
+		}
+		if strings.TrimSpace(*agentID) != "" && (strings.TrimSpace(*targetProvider) != "" || strings.TrimSpace(*targetMode) != "" || strings.TrimSpace(*targetThinking) != "") {
+			return errors.New("--provider/--mode/--thinking can only be used with a new-agent target")
 		}
 
 		var target map[string]any
@@ -141,9 +160,10 @@ func runHeartbeatCmd(cmd string, args []string, stdout io.Writer) error {
 		if strings.TrimSpace(*name) != "" {
 			reqMsg["name"] = strings.TrimSpace(*name)
 		}
-		if *runNow {
-			reqMsg["runNow"] = true
-		}
+		// The protocol field is runOnCreate; `runNow` was not read, so --run-now did nothing. Sent
+		// either way: like the Node CLI, a schedule created here waits for its first slot unless
+		// asked to run now, interval cadences included.
+		reqMsg["runOnCreate"] = *runNow
 		if text := strings.TrimSpace(*expiresIn); text != "" {
 			duration, durationErr := duration.ParseDuration(text)
 			if durationErr != nil {

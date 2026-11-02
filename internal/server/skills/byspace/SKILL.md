@@ -122,7 +122,7 @@ byspace run --provider codex/gpt-5.4 --mode full-access --workspace <workspace-i
 byspace run --provider codex/gpt-5.4 --mode full-access --new-workspace worktree --worktree-mode branch-off --new-branch fix-x --base main "<prompt>"
 byspace send <agent-id> "<follow-up>"
 byspace ls
-byspace schedule create --cron "*/15 * * * *" "ping main build"
+byspace schedule create --provider codex/gpt-5.4 --cron "*/15 * * * *" "ping main build"
 byspace heartbeat create --cron "*/15 * * * *" "check the build"
 ```
 

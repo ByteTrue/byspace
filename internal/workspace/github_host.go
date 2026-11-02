@@ -22,10 +22,18 @@ import (
 // when the checkout's origin is an Enterprise host, and an SSH alias (Host github-work → HostName
 // ghe.acme.com) is resolved first so gh is pointed at the real host, not the alias.
 
-// remoteLocation is a parsed origin remote: Node's parseGitRemoteLocation, host and transport only.
+// remoteLocation is a parsed origin remote: Node's parseGitRemoteLocation.
 type remoteLocation struct {
 	transport string // "scp" | "ssh" | "http" | "https"
 	host      string
+	path      string // without surrounding slashes or a trailing .git
+}
+
+// normalizeRemotePath is Node's: surrounding slashes and a trailing .git go.
+func normalizeRemotePath(path string) string {
+	normalized := strings.Trim(strings.TrimSpace(path), "/")
+	normalized = strings.TrimSuffix(normalized, ".git")
+	return normalized
 }
 
 var (
@@ -50,17 +58,18 @@ func parseRemoteLocation(remote string) (remoteLocation, bool) {
 			return remoteLocation{}, false
 		}
 		host := normalizeRemoteHost(match[1])
-		if !validHostPattern.MatchString(host) || strings.Trim(match[2], "/") == "" {
+		path := normalizeRemotePath(match[2])
+		if !validHostPattern.MatchString(host) || path == "" {
 			return remoteLocation{}, false
 		}
-		return remoteLocation{transport: "scp", host: host}, true
+		return remoteLocation{transport: "scp", host: host, path: path}, true
 	}
 	scheme, rest, _ := strings.Cut(trimmed, "://")
 	transport := strings.ToLower(scheme)
 	if transport != "https" && transport != "http" && transport != "ssh" {
 		return remoteLocation{}, false
 	}
-	authority, _, _ := strings.Cut(rest, "/")
+	authority, rawPath, _ := strings.Cut(rest, "/")
 	if at := strings.LastIndex(authority, "@"); at >= 0 {
 		authority = authority[at+1:]
 	}
@@ -71,7 +80,9 @@ func parseRemoteLocation(remote string) (remoteLocation, bool) {
 	if !validHostPattern.MatchString(host) {
 		return remoteLocation{}, false
 	}
-	return remoteLocation{transport: transport, host: host}, true
+	rawPath, _, _ = strings.Cut(rawPath, "?")
+	rawPath, _, _ = strings.Cut(rawPath, "#")
+	return remoteLocation{transport: transport, host: host, path: normalizeRemotePath(rawPath)}, true
 }
 
 func isGitHubCloudHost(host string) bool {

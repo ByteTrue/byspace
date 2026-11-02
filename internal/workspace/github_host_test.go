@@ -14,13 +14,13 @@ import (
 
 func TestParseRemoteLocation(t *testing.T) {
 	cases := map[string]remoteLocation{
-		"git@github.com:org/repo.git":            {transport: "scp", host: "github.com"},
-		"git@Work-Alias:org/repo":                {transport: "scp", host: "work-alias"},
-		"ssh://git@ghe.acme.com:2222/org/repo":   {transport: "ssh", host: "ghe.acme.com"},
-		"https://GHE.acme.com./org/repo.git":     {transport: "https", host: "ghe.acme.com"},
-		"http://user:pw@git.example.com/a/b":     {transport: "http", host: "git.example.com"},
-		"https://github.com/ByteTrue/byspace":    {transport: "https", host: "github.com"},
-		"ssh://git@github-work/ByteTrue/byspace": {transport: "ssh", host: "github-work"},
+		"git@github.com:org/repo.git":            {transport: "scp", host: "github.com", path: "org/repo"},
+		"git@Work-Alias:org/repo":                {transport: "scp", host: "work-alias", path: "org/repo"},
+		"ssh://git@ghe.acme.com:2222/org/repo":   {transport: "ssh", host: "ghe.acme.com", path: "org/repo"},
+		"https://GHE.acme.com./org/repo.git":     {transport: "https", host: "ghe.acme.com", path: "org/repo"},
+		"http://user:pw@git.example.com/a/b":     {transport: "http", host: "git.example.com", path: "a/b"},
+		"https://github.com/ByteTrue/byspace/":   {transport: "https", host: "github.com", path: "ByteTrue/byspace"},
+		"ssh://git@github-work/ByteTrue/byspace": {transport: "ssh", host: "github-work", path: "ByteTrue/byspace"},
 	}
 	for remote, want := range cases {
 		got, ok := parseRemoteLocation(remote)

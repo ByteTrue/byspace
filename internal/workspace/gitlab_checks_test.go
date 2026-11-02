@@ -20,56 +20,53 @@ func stubForge(t *testing.T, name, script string) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
-// A blocked MR must not look ready: reporting an empty check list and zero approvals offers a
-// merge button the forge then rejects.
-func TestGitLabPRStatusIncludesPipelineAndApprovals(t *testing.T) {
+// The MR is the one for the checkout's branch, described the way Node did: an open MR's state is
+// "open", its checks are the pipeline's jobs with GitLab's own aggregate, and its approvals and
+// merge signals travel as the GitLab facts the merge controls read.
+func TestGitLabPRStatus(t *testing.T) {
 	stubForge(t, "glab", `#!/bin/sh
 case "$*" in
-  *pipelines*) echo '[{"id":11,"status":"failed","web_url":"https://gl/p/11"}]' ;;
-  *approvals*) echo '{"approved_by":[{"user":{"username":"a"}}],"approvals_required":2,"approvals_left":1}' ;;
-  *) echo '{"iid":7,"title":"Draft: wip","web_url":"https://gl/mr/7","state":"opened","source_branch":"feat","target_branch":"main"}' ;;
+  "mr list --all --source-branch main"*) echo '[{"iid":6,"title":"Old","web_url":"u6","state":"merged","source_branch":"main","target_branch":"dev","sha":"old"},{"iid":7,"title":"x","web_url":"u7","state":"opened","source_branch":"main","target_branch":"dev"}]' ;;
+  "mr view 7 -F json") echo '{"iid":7,"title":"Draft: wip","web_url":"https://gitlab.com/acme/repo/-/merge_requests/7","state":"opened","source_branch":"main","target_branch":"dev","draft":true,"detailed_merge_status":"not_approved","has_conflicts":false,"references":{"full":"acme/repo!7"},"head_pipeline":{"id":11,"status":"running","web_url":"https://gl/p/11"}}' ;;
+  "api projects/acme%2Frepo/merge_requests/7/approvals") echo '{"approved_by":[{"user":{"username":"a"}}],"approvals_required":2,"approvals_left":1}' ;;
+  "ci get --merge-request 7 --with-job-details -F json") echo '{"id":11,"status":"failed","jobs":[{"id":3,"name":"deploy","stage":"deploy","status":"manual","allow_failure":false},{"id":1,"name":"lint","stage":"test","status":"failed","allow_failure":true,"web_url":"https://gl/j/1"},{"id":2,"name":"unit","stage":"test","status":"failed"}]}' ;;
+  *) echo "unexpected: $*" >&2; exit 1 ;;
 esac
 `)
 	pr, err := GetPRStatus(t.Context(), gitlabRepo(t))
 	if err != nil || pr == nil {
 		t.Fatalf("status: %v %v", pr, err)
 	}
-	if pr["isMerged"] != false || pr["state"] != "opened" {
-		t.Fatalf("state: %+v", pr)
+	if pr["number"] != 7 || pr["state"] != "open" || pr["isMerged"] != false || pr["isDraft"] != true || pr["repoOwner"] != "acme" || pr["repoName"] != "repo" || pr["projectPath"] != "acme/repo" {
+		t.Fatalf("status: %+v", pr)
 	}
-	if pr["isDraft"] != true {
-		t.Fatalf("draft flag not read from the title prefix: %v", pr["isDraft"])
+	if pr["mergeable"] != "UNKNOWN" || pr["checksStatus"] != "failure" {
+		t.Fatalf("mergeable %v checksStatus %v", pr["mergeable"], pr["checksStatus"])
 	}
 	checks, _ := pr["checks"].([]map[string]any)
-	if len(checks) != 1 || checks[0]["status"] != "failure" {
-		t.Fatalf("checks: %+v", pr["checks"])
+	if len(checks) != 3 || checks[0]["name"] != "lint" || checks[0]["status"] != "success" || checks[2]["name"] != "deploy" || checks[2]["status"] != "pending" {
+		t.Fatalf("checks: %+v", checks)
 	}
-	if pr["approvals"] != 1 || pr["approvalsRequired"] != 2 {
-		t.Fatalf("approvals: %v/%v", pr["approvals"], pr["approvalsRequired"])
+	if traits, _ := checks[2]["traits"].([]string); len(traits) != 2 || traits[1] != "action_required" {
+		t.Fatalf("manual job traits: %v", checks[2]["traits"])
 	}
-	if pr["mergeable"] != "BLOCKED" {
-		t.Fatalf("an MR short of its approvals must be blocked, got %v", pr["mergeable"])
+	facts, _ := pr["forgeSpecific"].(map[string]any)
+	if facts["forge"] != "gitlab" || facts["approvalsGiven"] != 1 || facts["approvalsRequired"] != 2 || facts["detailedMergeStatus"] != "not_approved" || facts["pipelineId"] != int64(11) {
+		t.Fatalf("facts: %+v", facts)
 	}
 }
 
-// A forge that does not expose approvals must not make every MR look blocked.
-func TestGitLabPRStatusWithoutApprovalRequirement(t *testing.T) {
+// A merged or closed MR describes the checkout only while it is still on the MR's head commit.
+func TestGitLabPRStatusIgnoresOldMergeRequests(t *testing.T) {
 	stubForge(t, "glab", `#!/bin/sh
 case "$*" in
-  *pipelines*) echo '[]' ;;
-  *approvals*) echo '{"approved_by":[],"approvals_required":0,"approvals_left":0}' ;;
-  *) echo '{"iid":8,"title":"Ready","web_url":"u","state":"opened"}' ;;
+  "mr list"*) echo '[{"iid":6,"title":"Old","web_url":"u6","state":"merged","source_branch":"main","target_branch":"dev","sha":"not-the-head"}]' ;;
+  *) echo "unexpected: $*" >&2; exit 1 ;;
 esac
 `)
 	pr, err := GetPRStatus(t.Context(), gitlabRepo(t))
-	if err != nil || pr == nil {
-		t.Fatal(err)
-	}
-	if pr["approvalsRequired"] != 0 {
-		t.Fatalf("required: %v", pr["approvalsRequired"])
-	}
-	if pr["mergeable"] == "BLOCKED" {
-		t.Fatal("no approval requirement must not report blocked")
+	if err != nil || pr != nil {
+		t.Fatalf("status: %v %v", pr, err)
 	}
 }
 
@@ -84,25 +81,6 @@ func TestGitLabCheckStatusIsClosedEnum(t *testing.T) {
 		got := gitLabCheckStatus(status)
 		if !allowed[got] {
 			t.Fatalf("gitLabCheckStatus(%q) = %q, not in the protocol enum", status, got)
-		}
-	}
-}
-
-func TestIsGitLabDraft(t *testing.T) {
-	cases := []struct {
-		data map[string]any
-		want bool
-	}{
-		{map[string]any{"draft": true}, true},
-		{map[string]any{"work_in_progress": true}, true},
-		{map[string]any{"title": "Draft: x"}, true},
-		{map[string]any{"title": "[Draft] x"}, true},
-		{map[string]any{"title": "WIP: x"}, true},
-		{map[string]any{"title": "ready"}, false},
-	}
-	for _, tc := range cases {
-		if got := isGitLabDraft(tc.data); got != tc.want {
-			t.Fatalf("isGitLabDraft(%v) = %v", tc.data, got)
 		}
 	}
 }

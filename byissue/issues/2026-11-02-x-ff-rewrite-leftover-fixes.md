@@ -17,7 +17,8 @@ Daemon：
 - **GitLab、Gitea 的 PR 讨论**：照 Node 移植。GitLab 读 discussions（回复串、文件和行、已解决），Gitea 读评论、审查和每个审查的行内评论。原来只读平铺的评论。`internal/workspace/forge_timeline.go`。
 - **GitHub Enterprise**：`gh api` 原来总查 github.com。照 Node 给 gh 带 `GH_HOST`，SSH 别名先用 `ssh -G` 解析成真实主机，未登录的 Enterprise 主机报未认证。`internal/workspace/github_host.go`、`forge.go`、`forgeauth.go`。
 - **`byspace run --output-schema` 被忽略**：照 Node 传给 Codex（规范化后放进 `turn/start`）和 OpenCode（`json_schema` 格式）；其它提供方 Node 也不支持。`internal/agent/providers/output_schema.go`、`codex.go`、`opencode.go`、`internal/server/server.go`。
-- **CLI**：`schedule create` 需要 `--provider`，`heartbeat create` 只能在 agent 里用（同 Node CLI）；被 daemon 拒绝的请求显示原因，原来等到超时。`internal/cli/`。
+- **CLI**：`schedule create` 需要 `--provider`，`heartbeat create` 只能在 agent 里用（同 Node CLI）；`--run-now` 原来发成协议没有的字段、不生效，现在发 `runOnCreate`，不加时与 Node 一样等第一个时段；补上 Node 的 `--target`；被 daemon 拒绝的请求显示原因，原来等到超时。`internal/cli/`。
+- **侧栏 PR 徽标从没出现过**：Go 不发工作区的 `githubRuntime`，也没有 PR 状态的后台轮询。照 Node 补上，同时修了 GitLab MR 的状态（开着的 MR 被当成已关闭）、PR worktree 不写元数据（fork 的 PR 找不回来）。详见 [forge-pr-status-push](2026-11-01-o-forge-pr-status-push.md) 的「实现」一节。
 
 前端（旧版、新版）：
 
@@ -35,6 +36,8 @@ Daemon：
 
 没验到：GitLab、Gitea 的真实 PR（本机没有登录的账号）；GitHub Enterprise（没有主机）；output schema 接真实 Codex、OpenCode（会调用付费模型，本机没装 Codex）。
 
-byissue：定时任务事项写了实现和验证，等用户验收关闭。
+没做：Gitea 的 PR 状态（Node 有，Go 原来也没有），见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)。
+
+byissue：定时任务、PR 状态推送两个事项写了实现和验证，等用户验收关闭。
 
 顺手发现：Go CLI 的 `schedule` 子命令比 Node 少 `--target`，这次只让 `create` 的默认目标与 Node 一致。

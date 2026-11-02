@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -135,6 +136,38 @@ done
 	if code := Main("0.20.2-go", []string{"heartbeat", "create", "--addr", addr, "--cron", "*/10 * * * *", "check status"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "must run inside a BySpace agent") {
 		t.Fatalf("heartbeat outside an agent: code %d, %q", code, errOut.String())
 	}
+	// --run-now runs the schedule on creation; without it the schedule waits for its first slot.
+	for _, runNow := range []bool{false, true} {
+		args := []string{"schedule", "create", "--addr", addr, "--every", "1h", "--provider", "pi", "--json", "check later"}
+		if runNow {
+			args = append(args[:2], append([]string{"--run-now"}, args[2:]...)...)
+		}
+		out.Reset()
+		errOut.Reset()
+		if code := Main("0.20.2-go", args, &out, &errOut); code != 0 {
+			t.Fatalf("schedule create (run-now %v) failed: %s", runNow, errOut.String())
+		}
+		var created struct {
+			ID        string `json:"id"`
+			CreatedAt string `json:"createdAt"`
+			NextRunAt string `json:"nextRunAt"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &created); err != nil {
+			t.Fatalf("schedule create --json: %v %q", err, out.String())
+		}
+		if immediate := created.NextRunAt == created.CreatedAt; immediate != runNow {
+			t.Fatalf("run-now %v: createdAt %s nextRunAt %s", runNow, created.CreatedAt, created.NextRunAt)
+		}
+		out.Reset()
+		if code := Main("0.20.2-go", []string{"schedule", "delete", "--addr", addr, created.ID}, &out, &errOut); code != 0 {
+			t.Fatalf("schedule delete failed: %s", errOut.String())
+		}
+	}
+	errOut.Reset()
+	if code := Main("0.20.2-go", []string{"schedule", "create", "--addr", addr, "--cron", "0 9 * * *", "--target", "11111111-1111-4111-8111-111111111111", "--provider", "pi", "check status"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "only be used with a new-agent target") {
+		t.Fatalf("--target with --provider: code %d, %q", code, errOut.String())
+	}
+
 	// A request the daemon refuses reports the daemon's reason, not a timeout.
 	errOut.Reset()
 	started := time.Now()

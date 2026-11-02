@@ -61,35 +61,31 @@ func sameDiffStat(left, right *workspace.CheckoutDiffStat) bool {
 	return left.Additions == right.Additions && left.Deletions == right.Deletions
 }
 
-// broadcastWorkspaceForCwd re-sends the workspace that owns cwd, if any.
+// broadcastWorkspaceForCwd re-sends every live workspace on cwd: the facts it carries (diff stat,
+// git runtime, PR status) belong to the checkout, and several workspaces can share one.
 func (s *Server) broadcastWorkspaceForCwd(cwd string) {
 	workspaces, err := s.store.ListWorkspaces()
 	if err != nil {
-		return
-	}
-	var match *store.WorkspaceRecord
-	for i := range workspaces {
-		if workspaces[i].ArchivedAt != nil {
-			continue
-		}
-		if strings.TrimRight(workspaces[i].Cwd, "/") == strings.TrimRight(cwd, "/") {
-			match = &workspaces[i]
-			break
-		}
-	}
-	if match == nil {
 		return
 	}
 	projects, err := s.store.ListProjects()
 	if err != nil {
 		return
 	}
+	projectByID := make(map[string]store.ProjectRecord, len(projects))
 	for _, project := range projects {
-		if project.ProjectID != match.ProjectID || project.ArchivedAt != nil {
+		if project.ArchivedAt == nil {
+			projectByID[project.ProjectID] = project
+		}
+	}
+	target := strings.TrimRight(cwd, "/")
+	for _, ws := range workspaces {
+		if ws.ArchivedAt != nil || strings.TrimRight(ws.Cwd, "/") != target {
 			continue
 		}
-		s.broadcastWorkspaceUpsert(*match, project)
-		return
+		if project, ok := projectByID[ws.ProjectID]; ok {
+			s.broadcastWorkspaceUpsert(ws, project)
+		}
 	}
 }
 
@@ -180,4 +176,6 @@ func (s *Server) storeCheckoutGitRuntimeFromStatus(cwd string, status workspace.
 		return
 	}
 	s.broadcastWorkspaceForCwd(key)
+	// A new branch or commit can be a different PR.
+	s.notePRStatusWorkspaceTouched(key, false)
 }

@@ -1936,8 +1936,14 @@ func (s *Server) createWorktreeWorkspace(
 // change-request hint is written.
 func (s *Server) writeCreatedWorktreeMetadata(worktreePath string, intent workspace.WorktreeIntent, branch string) {
 	baseRefName := workspace.NormalizeBaseRefName(intent.BaseBranch)
-	if intent.Kind == workspace.IntentCheckoutBranch {
+	switch intent.Kind {
+	case workspace.IntentCheckoutBranch:
 		baseRefName = workspace.NormalizeBaseRefName(intent.BranchName)
+	case workspace.IntentCheckoutChangeRequest:
+		// A change request's base is the PR's base branch. Reading BaseBranch, which only
+		// branch-off sets, left every PR worktree without metadata, so its PR could not be found
+		// again once the branch was renamed or the head was a fork's.
+		baseRefName = workspace.NormalizeBaseRefName(intent.BaseRefName)
 	}
 	if baseRefName == "" {
 		return
@@ -1948,9 +1954,15 @@ func (s *Server) writeCreatedWorktreeMetadata(worktreePath string, intent worksp
 		BaseRef:     intent.BaseRef,
 	}
 	if intent.Kind == workspace.IntentCheckoutChangeRequest {
+		// The head's owner login, and only for a fork's PR: HeadRepository is "owner/name", and a
+		// same-repository PR has no owner to match.
+		headOwner := ""
+		if intent.IsCrossRepository {
+			headOwner, _, _ = strings.Cut(intent.HeadRepository, "/")
+		}
 		meta.ChangeRequestLookupTarget = &workspace.ChangeRequestLookupTarget{
 			HeadRef:             intent.HeadRef,
-			HeadRepositoryOwner: intent.HeadRepository,
+			HeadRepositoryOwner: headOwner,
 			ChangeRequestNumber: intent.ChangeRequestNumber,
 			LocalBranchName:     branch,
 		}

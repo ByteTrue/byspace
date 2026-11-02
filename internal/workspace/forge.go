@@ -46,6 +46,22 @@ func runForgeCLIWithStderr(ctx context.Context, timeout time.Duration, bin, cwd 
 	return runForgeCommand(ctx, timeout, bin, cwd, env, args...)
 }
 
+// runForgeCommandKeepingStdout is runForgeCommand that also returns stdout when the command fails.
+func runForgeCommandKeepingStdout(ctx context.Context, timeout time.Duration, bin, cwd string, env []string, args ...string) (string, string, error) {
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := proc.CommandContext(cctx, bin, args...)
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Env = env
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+	return strings.TrimSpace(out.String()), errBuf.String(), err
+}
+
 // runForgeCommand runs a forge CLI as is: env nil inherits the daemon's environment.
 func runForgeCommand(ctx context.Context, timeout time.Duration, bin, cwd string, env []string, args ...string) (string, string, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
@@ -215,83 +231,17 @@ func remoteHost(remote string) string {
 // GetPRStatus queries `gh pr view` (or `glab mr view`) for the active branch in cwd.
 // Returns (nil, nil) if the forge CLI is unavailable or no PR/MR exists for the current branch.
 func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
-	forge := DetectForge(ctx, cwd)
-	if forge == "gitlab" {
-		raw, err := runForgeCLI(ctx, "glab", cwd, "mr", "view", "-F", "json")
-		if err != nil || raw == "" {
-			return nil, nil
-		}
-		var data map[string]any
-		if json.Unmarshal([]byte(raw), &data) != nil {
-			return nil, nil
-		}
-		iid, _ := data["iid"].(float64)
-		if iid <= 0 {
-			return nil, nil
-		}
-		title, _ := data["title"].(string)
-		url, _ := data["web_url"].(string)
-		state, _ := data["state"].(string)
-		lowerState := strings.ToLower(state)
-
-		// A merge request's readiness is its pipeline and its approvals. Reporting an empty
-		// check list and zero approvals makes a blocked MR look ready — the panel would offer a
-		// merge button that the forge then rejects.
-		checks := fetchGitLabPipelineChecks(ctx, cwd, int(iid))
-		approvals, approvalsRequired := fetchGitLabApprovals(ctx, cwd, int(iid))
-		mergeable := "UNKNOWN"
-		if approvalsRequired > 0 {
-			if approvals >= approvalsRequired {
-				mergeable = "MERGEABLE"
-			} else {
-				mergeable = "BLOCKED"
-			}
-		}
-
-		return map[string]any{
-			"number":            int(iid),
-			"title":             title,
-			"url":               url,
-			"state":             lowerState,
-			"isDraft":           isGitLabDraft(data),
-			"headRefName":       data["source_branch"],
-			"baseRefName":       data["target_branch"],
-			"updatedAt":         time.Now().UTC().Format(time.RFC3339Nano),
-			"mergeable":         mergeable,
-			"reviewDecision":    nil,
-			"isMerged":          lowerState == "merged",
-			"checks":            checks,
-			"approvals":         approvals,
-			"approvalsRequired": approvalsRequired,
-		}, nil
-	}
-	raw, err := currentGitHubPRView(ctx, cwd)
-	if err != nil || raw == "" {
+	target := ResolvePRLookupTarget(ctx, cwd)
+	if target == nil {
 		return nil, nil
 	}
-	var item gitHubPRViewItem
-	if err := json.Unmarshal([]byte(raw), &item); err != nil {
-		return nil, nil
-	}
-	return gitHubPRStatus(item, time.Now()), nil
+	return CurrentPRStatus(ctx, cwd, DetectForge(ctx, cwd), *target)
 }
 
 // The fields Node read for the current branch's PR (github-service.ts CURRENT_PR_STATUS_FIELDS).
 // statusCheckRollup is a separate field because a token without checks scope fails the whole
 // query when it is asked for; the status is then read without checks.
 const gitHubPRStatusBaseFields = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,headRepositoryOwner"
-
-func currentGitHubPRView(ctx context.Context, cwd string) (string, error) {
-	out, stderr, err := runForgeCLIWithStderr(ctx, forgeCommandTimeout, "gh", cwd,
-		"pr", "view", "--json", gitHubPRStatusBaseFields+",statusCheckRollup")
-	if err != nil {
-		if !strings.Contains(strings.ToLower(stderr), "statuscheckrollup") {
-			return "", err
-		}
-		return runGH(ctx, cwd, "pr", "view", "--json", gitHubPRStatusBaseFields)
-	}
-	return out, nil
-}
 
 type gitHubPRViewItem struct {
 	Number            int                     `json:"number"`
@@ -305,6 +255,11 @@ type gitHubPRViewItem struct {
 	ReviewDecision    string                  `json:"reviewDecision"`
 	Mergeable         string                  `json:"mergeable"`
 	StatusCheckRollup []gitHubStatusCheckNode `json:"statusCheckRollup"`
+	// What tells candidates for the checkout's PR apart: the commit and the repository the head is in.
+	HeadRefOid          string `json:"headRefOid"`
+	HeadRepositoryOwner struct {
+		Login string `json:"login"`
+	} `json:"headRepositoryOwner"`
 }
 
 type gitHubStatusCheckNode struct {
@@ -325,8 +280,17 @@ type gitHubStatusCheckNode struct {
 // state "merged" and isMerged, checks come from the status check rollup, and the review decision
 // is mapped to the protocol's lowercase values.
 func gitHubPRStatus(item gitHubPRViewItem, now time.Time) map[string]any {
+	return gitHubPRStatusWithHeadRef(item, "", now)
+}
+
+// gitHubPRStatusWithHeadRef is gitHubPRStatus with the head branch to report when the response
+// leaves it out.
+func gitHubPRStatusWithHeadRef(item gitHubPRViewItem, fallbackHeadRef string, now time.Time) map[string]any {
 	if item.URL == "" || item.Title == "" || item.Number <= 0 {
 		return nil
+	}
+	if item.HeadRefName == "" {
+		item.HeadRefName = fallbackHeadRef
 	}
 	merged := strings.TrimSpace(item.MergedAt) != ""
 	state := strings.ToLower(strings.TrimSpace(item.State))
@@ -1686,76 +1650,8 @@ func decodeCheckAnnotations(raw string) []map[string]any {
 
 // fetchGitLabPipelineChecks reads the merge request's pipeline statuses.
 //
-// GitLab calls them pipelines, not checks; the panel renders both through the same check list,
-// so each pipeline becomes one entry with the name and status the API reports.
-func fetchGitLabPipelineChecks(ctx context.Context, cwd string, iid int) []map[string]any {
-	if _, err := exec.LookPath("glab"); err != nil {
-		return []map[string]any{}
-	}
-	raw, err := runForgeCLI(ctx, "glab", cwd, "api",
-		fmt.Sprintf("projects/:id/merge_requests/%d/pipelines", iid))
-	if err != nil || strings.TrimSpace(raw) == "" {
-		return []map[string]any{}
-	}
-	var pipelines []map[string]any
-	if json.Unmarshal([]byte(raw), &pipelines) != nil {
-		return []map[string]any{}
-	}
-	out := make([]map[string]any, 0, len(pipelines))
-	for _, pipeline := range pipelines {
-		// The protocol's status is a closed enum; an unknown GitLab state maps to "pending"
-		// rather than inventing a value the client would reject.
-		out = append(out, map[string]any{
-			"name":   fmt.Sprintf("pipeline #%v", pipeline["id"]),
-			"status": gitLabCheckStatus(stringOr(pipeline["status"], "")),
-			"url":    nullableString(stringOr(pipeline["web_url"], "")),
-		})
-	}
-	return out
-}
-
 // fetchGitLabApprovals returns (approved, required).
 //
-// A forge that does not expose approvals answers 0,0, which the caller treats as "no approval
-// requirement" rather than "blocked" — guessing blocked would hide a mergeable MR.
-func fetchGitLabApprovals(ctx context.Context, cwd string, iid int) (int, int) {
-	if _, err := exec.LookPath("glab"); err != nil {
-		return 0, 0
-	}
-	raw, err := runForgeCLI(ctx, "glab", cwd, "api",
-		fmt.Sprintf("projects/:id/merge_requests/%d/approvals", iid))
-	if err != nil || strings.TrimSpace(raw) == "" {
-		return 0, 0
-	}
-	var data struct {
-		ApprovedBy        []map[string]any `json:"approved_by"`
-		ApprovalsRequired int              `json:"approvals_required"`
-		ApprovalsLeft     int              `json:"approvals_left"`
-	}
-	if json.Unmarshal([]byte(raw), &data) != nil {
-		return 0, 0
-	}
-	required := data.ApprovalsRequired
-	if required == 0 {
-		required = len(data.ApprovedBy) + data.ApprovalsLeft
-	}
-	return len(data.ApprovedBy), required
-}
-
-// isGitLabDraft reads the draft flag, which lives in the title prefix or a dedicated field
-// depending on the GitLab version.
-func isGitLabDraft(data map[string]any) bool {
-	if draft, ok := data["draft"].(bool); ok {
-		return draft
-	}
-	if workInProgress, ok := data["work_in_progress"].(bool); ok {
-		return workInProgress
-	}
-	title := strings.ToLower(stringOr(data["title"], ""))
-	return strings.HasPrefix(title, "draft:") || strings.HasPrefix(title, "[draft]") ||
-		strings.HasPrefix(title, "wip:")
-}
-
 // gitLabCheckStatus maps a pipeline status onto the protocol's closed check-status enum.
 //
 // An unrecognised state maps to "pending" rather than inventing a value: the client rejects the
