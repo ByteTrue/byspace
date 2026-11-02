@@ -114,3 +114,46 @@ func TestProviderCatalogScopesByCwd(t *testing.T) {
 		t.Fatalf("dropping the project scope also cleared the host one: %#v", cached)
 	}
 }
+
+// Builds overlap whenever a providers edit lands during one. The build that started first must not
+// win by finishing last: it was probed from the config before the edit, and caching and
+// broadcasting it put back a provider list without the provider just added (an e2e caught the
+// added provider's row vanishing half a second after it appeared).
+func TestProviderCatalogDropsBuildsOvertakenByNewerOnes(t *testing.T) {
+	tmp := t.TempDir()
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "test", PiCommand: writeFaithfulFakePi(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	// The startup prebuild runs in the background; let it land so it cannot race this test.
+	srv.providerCatalogOrBuild(context.Background(), "")
+
+	older := srv.beginProviderCatalogBuild()
+	newer := srv.beginProviderCatalogBuild()
+	if !srv.commitProviderCatalog("", newer, &providerCatalog{hash: "psh_newer"}) {
+		t.Fatal("the newest build was rejected")
+	}
+	if srv.commitProviderCatalog("", older, &providerCatalog{hash: "psh_older"}) {
+		t.Fatal("a build that finished after a newer one replaced it")
+	}
+	if cached := srv.cachedProviderCatalog(""); cached == nil || cached.hash != "psh_newer" {
+		t.Fatalf("expected the newer catalog to stay cached, got %#v", cached)
+	}
+
+	// Scopes are independent: a workspace build is not stale because of a host one.
+	project := t.TempDir()
+	if !srv.commitProviderCatalog(project, older, &providerCatalog{hash: "psh_project"}) {
+		t.Fatal("a workspace build was rejected because of a newer host build")
+	}
+
+	// A providers edit makes every running build stale, even one that would be the newest.
+	running := srv.beginProviderCatalogBuild()
+	srv.invalidateProviderCatalogs()
+	if srv.commitProviderCatalog("", running, &providerCatalog{hash: "psh_before_edit"}) {
+		t.Fatal("a build started before a providers edit was cached after it")
+	}
+	if !srv.commitProviderCatalog("", srv.beginProviderCatalogBuild(), &providerCatalog{hash: "psh_after_edit"}) {
+		t.Fatal("a build started after the edit was rejected")
+	}
+}

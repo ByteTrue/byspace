@@ -87,7 +87,45 @@ func (s *Server) storeProviderCatalog(cwd string, catalog *providerCatalog) {
 	s.providerCatalogs[key] = catalog
 }
 
-// invalidateProviderCatalogs drops every scope.
+// rebuildProviderCatalog builds a fresh catalog and caches it, unless it went stale while it
+// probed: a build that started later already cached its catalog, or a providers edit happened. It
+// reports whether the catalog is current.
+//
+// Builds take a second or more, so two overlap whenever a config edit lands during one (adding a
+// provider right after removing one). Caching whichever finished last let the older catalog
+// overwrite the newer and broadcast a provider list without the provider just added. Node's
+// snapshot manager drops results from a superseded registry generation the same way.
+func (s *Server) rebuildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) (*providerCatalog, bool) {
+	ticket := s.beginProviderCatalogBuild()
+	catalog := s.buildProviderCatalog(ctx, cfg, cwd)
+	return catalog, s.commitProviderCatalog(cwd, ticket, catalog)
+}
+
+func (s *Server) beginProviderCatalogBuild() uint64 {
+	s.providerCatalogMu.Lock()
+	defer s.providerCatalogMu.Unlock()
+	s.providerCatalogSeq++
+	return s.providerCatalogSeq
+}
+
+// commitProviderCatalog caches the catalog a build produced if the build is still the newest for
+// its scope and started after the last providers edit.
+func (s *Server) commitProviderCatalog(cwd string, ticket uint64, catalog *providerCatalog) bool {
+	key := providerCatalogKey(cwd)
+	s.providerCatalogMu.Lock()
+	defer s.providerCatalogMu.Unlock()
+	if ticket <= s.providerCatalogFloor || ticket <= s.providerCatalogPublished[key] {
+		return false
+	}
+	if s.providerCatalogPublished == nil {
+		s.providerCatalogPublished = make(map[string]uint64)
+	}
+	s.providerCatalogPublished[key] = ticket
+	s.providerCatalogs[key] = catalog
+	return true
+}
+
+// invalidateProviderCatalogs drops every scope, and makes every build already running stale.
 //
 // A providers-config edit is global: the same entry decides availability, models and modes in the
 // host catalog and in every workspace-scoped one. Rebuilding only the host scope left the
@@ -97,6 +135,7 @@ func (s *Server) invalidateProviderCatalogs() {
 	s.providerCatalogMu.Lock()
 	defer s.providerCatalogMu.Unlock()
 	s.providerCatalogs = make(map[string]*providerCatalog)
+	s.providerCatalogFloor = s.providerCatalogSeq
 }
 
 // providerCatalogOrBuild returns the cached catalog, building one only when nothing is cached.
@@ -115,8 +154,12 @@ func (s *Server) providerCatalogOrBuild(ctx context.Context, cwd string) *provid
 			return catalog
 		}
 	}
-	catalog := s.buildProviderCatalog(ctx, s.store.LoadDaemonConfig(), cwd)
-	s.storeProviderCatalog(cwd, catalog)
+	catalog, current := s.rebuildProviderCatalog(ctx, s.store.LoadDaemonConfig(), cwd)
+	if !current {
+		if cached := s.cachedProviderCatalog(cwd); cached != nil {
+			return cached
+		}
+	}
 	return catalog
 }
 

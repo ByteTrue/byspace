@@ -327,6 +327,12 @@ type Server struct {
 	// for that would stall every other request.
 	providerCatalogMu sync.Mutex
 	providerCatalogs  map[string]*providerCatalog
+	// providerCatalogSeq numbers catalog builds as they start; providerCatalogPublished holds, per
+	// scope, the number of the build that is cached; providerCatalogFloor is the last number issued
+	// before a providers-config edit. A build at or below either is stale (provider_catalog.go).
+	providerCatalogSeq       uint64
+	providerCatalogPublished map[string]uint64
+	providerCatalogFloor     uint64
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -450,7 +456,7 @@ func New(opts Options) (*Server, error) {
 		// Build the catalog before anyone asks for it. Proving which providers are installed runs
 		// each CLI, and a client that asks first would otherwise wait for that probe — long enough
 		// for the app to submit a form while it still thinks no provider is selected.
-		srv.storeProviderCatalog("", srv.buildProviderCatalog(pctx, srv.store.LoadDaemonConfig(), ""))
+		srv.rebuildProviderCatalog(pctx, srv.store.LoadDaemonConfig(), "")
 	}()
 
 	// Nothing else drives file and git-diff subscriptions. Without this loop they are

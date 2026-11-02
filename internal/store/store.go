@@ -1349,7 +1349,15 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	}
 	// The removals produced this providers map; persisting the instruction too would replay it
 	// against whatever the user adds back later. The disk map is a separate graph from `cur`, so
-	// the edit has to happen here as well.
+	// the edit has to happen here as well: on the nested `agents.providers`, where providers are
+	// written, and on a flat copy an older build may have left. Dropping only the flat copy left
+	// the provider on disk, so the next load (a catalog rebuild, a restart) brought it back.
+	if removals, ok := patch["removeProviders"]; ok {
+		if nested, _ := agents["providers"].(map[string]any); nested != nil {
+			dropRemovedProviders(map[string]any{"providers": nested, "removeProviders": removals})
+			agentsTouched = true
+		}
+	}
 	dropRemovedProviders(daemon)
 	disk["daemon"] = daemon
 	if agentsTouched {
