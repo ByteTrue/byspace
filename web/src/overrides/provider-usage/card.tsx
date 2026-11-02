@@ -58,7 +58,7 @@ export function ProviderUsageCard({
         ) : null}
       </div>
       {usage.error ? (
-        <span className="line-clamp-3 text-xs leading-[17px] text-red-300">{usage.error}</span>
+        <span className="line-clamp-3 text-xs leading-[16.8px] text-red-300">{usage.error}</span>
       ) : null}
       {usage.windows.length > 0 || balances.length > 0 ? (
         <div className="flex flex-col gap-3">

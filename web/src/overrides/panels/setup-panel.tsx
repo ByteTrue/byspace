@@ -439,9 +439,7 @@ function SetupCommandRow({
         <span className="flex size-[18px] shrink-0 items-center justify-center">
           <CommandStatusIcon status={command.status} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm leading-[18px] text-foreground">
-          {command.command}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{command.command}</span>
         {command.durationMs != null ? (
           <span className="shrink-0 text-xs text-muted-foreground">
             {formatDuration(command.durationMs)}
@@ -473,7 +471,7 @@ function SetupCommandRow({
             </div>
           )}
           {hasError && errorMessage ? (
-            <div className="bg-red-100 p-3 text-sm leading-[18px] whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200">
+            <div className="bg-red-100 p-3 text-sm whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200">
               {errorMessage}
             </div>
           ) : null}
@@ -523,7 +521,7 @@ function TopLevelSetupError({
   if (!snapshotError) return null;
   if (commands.some((c) => c.status === "failed")) return null;
   return (
-    <div className="bg-red-100 p-3 text-sm leading-[18px] whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200">
+    <div className="bg-red-100 p-3 text-sm whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200">
       {snapshotError}
     </div>
   );

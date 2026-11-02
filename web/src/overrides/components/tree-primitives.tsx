@@ -37,7 +37,7 @@ export function TreeChevron({ expanded }: { expanded: boolean }) {
  */
 export const workspaceTreeRowClassNames = {
   // 30px like the Expo rows: 6px above and below an 18px line (Geist's normal line height).
-  row: "group/tree-row flex items-center justify-between py-1.5 pr-2 leading-[18px]",
+  row: "group/tree-row flex items-center justify-between py-1.5 pr-2",
   active: "bg-sidebar-accent",
   hoverable: "hover:bg-sidebar-accent active:bg-sidebar-accent",
   name: "text-foreground/76 group-hover/tree-row:text-foreground",

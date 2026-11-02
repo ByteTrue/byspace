@@ -34,14 +34,12 @@ export const CommitRow = memo(function CommitRow({
     >
       <CommitGraphNode commit={commit} isFirst={isFirst} isLast={isLast} />
       <span className="flex min-w-0 flex-1 items-center gap-1">
-        <span className="w-[70px] shrink-0 truncate font-mono text-xs leading-[18px] text-muted-foreground">
+        <span className="w-[70px] shrink-0 truncate font-mono text-xs text-muted-foreground">
           {commit.shortSha}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm leading-[18px] text-foreground">
-          {commit.subject}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{commit.subject}</span>
       </span>
-      <span className="shrink-0 text-xs leading-[18px] text-muted-foreground">
+      <span className="shrink-0 text-xs text-muted-foreground">
         {formatTimeAgo(new Date(commit.authorDate), now)}
       </span>
       <span className="flex size-4 shrink-0 items-center justify-center">

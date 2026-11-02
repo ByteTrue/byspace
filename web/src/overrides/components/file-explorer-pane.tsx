@@ -251,7 +251,7 @@ function EntryNameInputRow({
           autoCorrect="off"
           spellCheck={false}
           data-testid="file-explorer-name-input"
-          className="min-w-0 flex-1 bg-transparent p-0 text-sm leading-[18px] text-foreground outline-none placeholder:text-extra-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-extra-muted-foreground"
         />
       </div>
     </div>
@@ -355,7 +355,7 @@ function TreeRowItem({
         className={cn(
           workspaceTreeRowClassNames.row,
           workspaceTreeRowClassNames.hoverable,
-          "cursor-pointer",
+          "cursor-pointer outline-none focus-visible:bg-sidebar-accent",
           isSelected && workspaceTreeRowClassNames.active,
         )}
         aria-selected={isSelected}
@@ -374,7 +374,7 @@ function TreeRowItem({
           </span>
           <span
             className={cn(
-              "min-w-0 flex-1 truncate text-sm leading-[18px] select-none",
+              "min-w-0 flex-1 truncate text-sm select-none",
               workspaceTreeRowClassNames.name,
             )}
             data-testid={testID ? `${testID}-name` : undefined}
@@ -1134,7 +1134,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           type="button"
           onClick={handleSortCycle}
           data-testid="files-sort-trigger"
-          className="ml-2 flex h-6 items-center justify-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:bg-sidebar-accent"
+          className="ml-2 flex h-6 items-center justify-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:bg-sidebar-accent"
         >
           <span data-testid="files-sort-label">{currentSortLabel}</span>
           <ChevronDown size={12} />

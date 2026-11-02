@@ -95,7 +95,7 @@ export function DiffFolderRow({
             </span>
             <span
               className={cn(
-                "min-w-0 shrink truncate text-sm leading-[18px] select-none",
+                "min-w-0 shrink truncate text-sm select-none",
                 workspaceTreeRowClassNames.name,
               )}
               data-testid={testID ? `${testID}-name` : undefined}

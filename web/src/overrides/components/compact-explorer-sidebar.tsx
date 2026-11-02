@@ -1,9 +1,10 @@
 // Override of packages/app/src/components/compact-explorer-sidebar.tsx: the explorer on a phone — a
 // full-screen sheet from the right with the Changes, Files and pull request tabs and a close button.
-// The tab state, PR availability and the panes are the Expo file's. Not ported: the swipe gestures
-// (the phone shell's sheets close with the button or Escape, like the left sidebar) and the native
-// tablet's docked explorer, which the web never uses.
+// The tab state, PR availability and the panes are the Expo file's; the mobile panel runtime slides
+// it in and the swipes drag it (overrides/mobile-panels). Not ported: the native tablet's docked
+// explorer, which the web never uses.
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { shouldUseCompactExplorerKeyboardPadding } from "@/hooks/keyboard-shift-policy";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUnistyles } from "react-native-unistyles";
@@ -64,7 +65,13 @@ export function CompactExplorerSidebar({
     <RetainedPanelActivity active={isActive}>
       <MobilePanelOverlay
         panel="file-explorer"
-        className="flex flex-col bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] pb-[env(safe-area-inset-bottom)] text-sm text-sidebar-foreground"
+        className={cn(
+          "flex flex-col bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] text-sm text-sidebar-foreground",
+          // As packages/app: the bottom inset here, except on a repository's Changes tab, whose
+          // commits section pads itself (shouldUseCompactExplorerKeyboardPadding).
+          shouldUseCompactExplorerKeyboardPadding({ isGit, explorerTab }) &&
+            "pb-[env(safe-area-inset-bottom)]",
+        )}
         testID="compact-explorer-sidebar"
       >
         <ExplorerSidebarContent

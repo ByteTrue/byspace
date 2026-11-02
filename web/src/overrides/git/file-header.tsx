@@ -146,7 +146,7 @@ function FileHeaderContent({
         )}
         <span
           className={cn(
-            "min-w-0 shrink truncate text-sm leading-[18px] text-foreground",
+            "min-w-0 shrink truncate text-sm text-foreground",
             !showsBodyState && workspaceTreeRowClassNames.name,
           )}
           data-testid={testID ? `${testID}-name` : undefined}
@@ -154,7 +154,7 @@ function FileHeaderContent({
           {fileName}
         </span>
         {showDir ? (
-          <span className="min-w-0 flex-1 truncate text-sm leading-[18px] text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
             {directorySuffix(file.path)}
           </span>
         ) : (

@@ -146,14 +146,12 @@ export function CommitsSection({
         >
           <ThemedChevron size={14} uniProps={chevronColorMapping} />
         </span>
-        <span className="text-sm leading-[18px] text-foreground">
-          {t("workspace.git.diff.commits.title")}
-        </span>
+        <span className="text-sm text-foreground">{t("workspace.git.diff.commits.title")}</span>
         {commitCount === null ? (
           <span className="flex-1" />
         ) : (
           <span
-            className="flex-1 text-xs leading-[18px] text-muted-foreground"
+            className="flex-1 text-xs text-muted-foreground"
             aria-label={t("workspace.git.diff.commits.countLabel", { count: commitCount })}
           >
             {commitCount}

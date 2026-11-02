@@ -27,7 +27,7 @@ export function ProviderUsageTooltipSection({
     return (
       <>
         {DIVIDER}
-        <span className="text-xs leading-[17px] text-background/65">
+        <span className="text-xs leading-[16.8px] text-background/65">
           {providerUsageCopy.tooltipLoading}
         </span>
       </>
@@ -37,7 +37,7 @@ export function ProviderUsageTooltipSection({
     return (
       <>
         {DIVIDER}
-        <span className="text-xs leading-[17px] text-red-300">{view.message}</span>
+        <span className="text-xs leading-[16.8px] text-red-300">{view.message}</span>
       </>
     );
   }

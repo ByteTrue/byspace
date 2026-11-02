@@ -91,9 +91,7 @@ export function ChecksSection({
       >
         <ChecksRing summary={summary} size={ICON_SIZE.lg} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-sm leading-[18px] font-medium text-foreground">
-            {summary.headline}
-          </span>
+          <span className="truncate text-sm font-medium text-foreground">{summary.headline}</span>
           {summary.parts.length > 0 ? (
             <span
               className="truncate text-xs text-muted-foreground"

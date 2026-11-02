@@ -28,7 +28,7 @@ def replace_between(start_marker, end_marker, new):
 
 LOG_BOX = "max-h-[400px] overflow-y-auto p-3"
 LOG_TEXT = "font-mono text-[13px] leading-5 whitespace-pre-wrap break-words text-foreground select-text"
-ERROR_CARD = "bg-red-100 p-3 text-sm leading-[18px] whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200"
+ERROR_CARD = "bg-red-100 p-3 text-sm whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200"
 
 # ---------------------------------------------------------------- imports
 rep('import { CheckCircle2, ChevronRight, CircleAlert, SquareTerminal } from "lucide-react-native";',
@@ -145,7 +145,7 @@ replace_between('''  return (
         <span className="flex size-[18px] shrink-0 items-center justify-center">
           <CommandStatusIcon status={{command.status}} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm leading-[18px] text-foreground">
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
           {{command.command}}
         </span>
         {{command.durationMs != null ? (

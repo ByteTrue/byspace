@@ -292,7 +292,7 @@ rep('''  const handleKeyPress = useCallback(
           autoCorrect="off"
           spellCheck={false}
           data-testid="file-explorer-name-input"
-          className="min-w-0 flex-1 bg-transparent p-0 text-sm leading-[18px] text-foreground outline-none placeholder:text-extra-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-extra-muted-foreground"
         />
       </div>
     </div>
@@ -371,7 +371,7 @@ rep('''      <ContextMenuTrigger
           </span>
           <span
             className={cn(
-              "min-w-0 flex-1 truncate text-sm leading-[18px] select-none",
+              "min-w-0 flex-1 truncate text-sm select-none",
               workspaceTreeRowClassNames.name,
             )}
             data-testid={testID ? `${testID}-name` : undefined}
