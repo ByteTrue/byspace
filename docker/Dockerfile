@@ -23,6 +23,7 @@ COPY packages/protocol/package.json packages/protocol/
 COPY packages/client/package.json packages/client/
 COPY packages/app/package.json packages/app/
 COPY packages/relay/package.json packages/relay/
+COPY web/package.json web/
 
 RUN set -eux; \
     node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; delete pkg.scripts.postinstall; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \

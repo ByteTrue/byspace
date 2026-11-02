@@ -92,8 +92,8 @@ Do not:
 ## Quick start
 
 ```bash
-npm run dev                          # Start the Go dev daemon (runs make build first)
-npm run dev:app                      # Start Expo against the dev daemon
+npm run dev:daemon                   # Start the Go dev daemon (runs make build first)
+npm run dev:app                      # Start the web app (web/, Vite on 8082) against the dev daemon
 npm run cli -- ls -a -g              # List all agents
 npm run cli -- daemon status         # Check daemon status
 npm run test:go                      # Go tests

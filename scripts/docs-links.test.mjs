@@ -34,7 +34,7 @@ const SCANNED = [
 ];
 
 const EXTERNAL = /^(https?:|mailto:|tel:|#|data:)/;
-// Routes rendered by packages/app/scripts/build-public-docs.mjs (served from the
+// Routes rendered by scripts/build-public-docs.mjs (served from the
 // relay Worker assets) that have no 1:1 public-docs source file.
 // /download stays out: no directly downloadable artifacts exist (issue 074).
 const EXTERNAL_ROUTES = new Set(["/download"]);

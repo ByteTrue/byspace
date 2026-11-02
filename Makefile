@@ -91,10 +91,11 @@ release-linux-desktop:
 checksums:
 	@cd dist && (command -v sha256sum >/dev/null 2>&1 && sha256sum byspace-* || shasum -a 256 byspace-*) > SHA256SUMS
 
-## build-web: 导出 Expo Web，预压缩资产直接写进 internal/webui/dist 供 //go:embed
+## build-web: 构建 web/，预压缩资产直接写进 internal/webui/dist 供 //go:embed
+## 超过 1 MB 的 JS 只嵌 .br/.gz（internal/webui 在原文件缺失时直接发压缩版），二进制少十几 MB
 build-web:
 	npm run build:daemon-web-ui
-	find internal/webui/dist/_expo -name "*.js" -size +1M -delete
+	find internal/webui/dist/assets -name "*.js" -size +1M -delete
 	touch internal/webui/dist/.keep
 
 ## build-full: 打前端并嵌入单二进制

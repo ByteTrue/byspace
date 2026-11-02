@@ -16,22 +16,18 @@ Main pushes route through the same path filters as pull requests (`.github/ci-pa
 ## Running the dev server
 
 ```bash
-npm run dev:server
+npm run dev:daemon
 npm run dev:app
 ```
 
-Root checkout dev is intentionally split across terminals:
+Root checkout dev is split across two terminals:
 
-- `npm run dev:server` runs the daemon on `127.0.0.1:6778`.
-- `npm run dev:app` runs Expo on `http://localhost:8081` and connects to the dev daemon.
+- `npm run dev:daemon` builds `./bin/byspace` and runs the daemon on `127.0.0.1:6778` in development mode, so development-only providers such as Mock Load Test are available.
+- `npm run dev:app` (or `npm run dev`) runs the web app (`web/`, Vite) on `http://localhost:8082` and connects to the dev daemon. `npm run dev:expo` runs the old Expo app on `8081` until `packages/app` is deleted.
 
-so development-only providers such as Mock Load Test are available. Packaged
+The launcher passes the current Git branch as `EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL`, which the app shows in the titlebar row. Production builds leave it unset and show no label.
 
-The web dev launcher passes the current Git branch to Metro as the internal
-`EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL` setting.
-the titlebar row. Production builds leave the variable unset and show no label.
-
-`npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
+Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
 
 ## Worktree starting refs
 
@@ -149,21 +145,21 @@ When enabled, opening the daemon HTTP origin (for example `http://localhost:6777
 
 The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6777/` directly usually skips the Add Host step.
 
-Build the artifact for packaging or measurement with:
+Build the artifact with:
 
 ```bash
-npm run build:daemon-web-ui
+make build-web
 ```
 
-This exports the browser web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, `.json`, `.svg`, and `.map` files as `.br` and `.gz`.
+It runs `npm run build:daemon-web-ui`, which builds `web/` and copies `web/dist` into `internal/webui/dist` for the binary's `//go:embed`, precompressing `.html`, `.js`, `.css`, `.json`, `.svg`, and `.map` files as `.br` and `.gz`. It then deletes the raw copy of every JS file over 1 MB: `internal/webui` serves the compressed copy when the raw file is missing, and the raw copies are most of the binary's web weight.
 
-Measured size of the daemon web UI at v0.16.1, counting every file in the export; `gzip` and `brotli` count only the precompressed copies, so `raw` excludes them:
+Measured size of the daemon web UI at v0.23.6 (`web/`), counting every file in the build; `gzip` and `brotli` count only the precompressed copies, so `raw` excludes them:
 
-- raw: 19.41 MiB
-- gzip: 4.37 MiB
-- brotli: 3.22 MiB
+- raw: 13.29 MiB
+- gzip: 3.31 MiB
+- brotli: 2.87 MiB
 
-These grow with the app. `npm run build:daemon-web-ui` prints the current numbers on every run.
+What the binary embeds after `make build-web` drops the large raw JS is about 7.4 MiB. These grow with the app. `npm run build:daemon-web-ui` prints the current numbers on every run.
 
 ## Built workspace packages
 
@@ -299,19 +295,20 @@ Get the session ID from the agent JSON (`persistence.sessionId`), then:
 
 ## Testing with Playwright MCP
 
-Point Playwright MCP at the running Expo web target. For root checkout dev, `npm run dev:app` reserves `http://localhost:8081`. For BySpace-managed worktree app services, use the service URL or port shown by BySpace for that worktree.
+Point Playwright MCP at the running web app. For root checkout dev, `npm run dev:app` reserves `http://localhost:8082`. For BySpace-managed worktree app services, use the service URL or port shown by BySpace for that worktree.
 
 Do NOT use browser history (back/forward). Always navigate by clicking UI elements or using `browser_navigate` with the full URL — the app uses client-side routing and browser history breaks state.
 
 ## App web deploys
 
-`packages/app` exports a single-page Expo web app. The export in `dist/` is
-served by the hosted relay Worker (issue 073) from the same origin as the
-relay. Stable (`app.byspace.cc.cd`) is `packages/relay`; prerelease
-(`app-beta.byspace.cc.cd`) is `workers/relay`. Deploy them with
-`npm run deploy:hosted` (stable) and `npm run deploy:relay-go:beta` (beta) from
-the repo root; each builds the web export and runs `wrangler deploy` in its own
-directory. The Docker container serves the same shape from the Go relay.
+`web/` builds a single-page app into `web/dist`; the build also renders
+`public-docs/` and `CHANGELOG.md` into it (`scripts/build-public-docs.mjs`).
+The hosted relay Worker (`workers/relay`, issue 073) serves it from the same
+origin as the relay: stable on `app.byspace.cc.cd`, prerelease on
+`app-beta.byspace.cc.cd`. The Deploy App workflow deploys the channel matching
+each release tag; `npm run deploy:relay-go` and `npm run deploy:relay-go:beta`
+do the same by hand. The Docker container serves the same build from the Go
+relay.
 
 ## The Go relay Worker
 

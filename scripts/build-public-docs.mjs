@@ -1,7 +1,8 @@
 /**
- * Renders public-docs/ and CHANGELOG.md into the web export
- * (packages/app/dist/docs/ and dist/changelog.html) so the hosted relay
- * Worker serves them from the same origin as the app (issue 074).
+ * Renders public-docs/ and CHANGELOG.md into the web build (web/dist/docs/ and
+ * web/dist/changelog.html, or the directory given as the first argument) so the
+ * daemon and the hosted relay Worker serve them from the same origin as the
+ * app (issue 074).
  *
  * Inputs are trusted repo content; link forms in the wild (measured
  * 2026-10-10): "/docs/x" routes, absolute http(s), bare anchors, one
@@ -13,10 +14,10 @@ import { fileURLToPath } from "node:url";
 import MarkdownIt from "markdown-it";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(__dirname, "..", "..", "..");
+const REPO_ROOT = resolve(__dirname, "..");
 const DOCS_SRC = join(REPO_ROOT, "public-docs");
 const CHANGELOG_SRC = join(REPO_ROOT, "CHANGELOG.md");
-const OUT_ROOT = join(REPO_ROOT, "packages", "app", "dist");
+const OUT_ROOT = process.argv[2] ? resolve(process.argv[2]) : join(REPO_ROOT, "web", "dist");
 const OUT_DOCS = join(OUT_ROOT, "docs");
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
@@ -236,7 +237,9 @@ async function main() {
   });
   await writeFile(join(OUT_ROOT, "changelog.html"), clHtml);
 
-  console.log(`[docs] rendered ${written} pages -> packages/app/dist/docs + changangelog.html`);
+  console.log(
+    `[docs] rendered ${written} pages -> ${relative(REPO_ROOT, OUT_DOCS)} + changelog.html`,
+  );
 }
 
 main().catch((error) => {

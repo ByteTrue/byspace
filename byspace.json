@@ -9,7 +9,7 @@
     },
     "app": {
       "type": "service",
-      "command": "node ./scripts/dev-app.mjs"
+      "command": "node ./scripts/dev-web.mjs"
     },
     "desktop": {
       "type": "service",

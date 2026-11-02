@@ -66,10 +66,10 @@ jobs:
           cache: true
 
       - name: Typecheck
-        run: npm run typecheck --workspace=@bytetrue/app
+        run: npm run typecheck --workspace=@bytetrue/web
 
       - name: Build Web app
-        run: npm run build:web --workspace=@bytetrue/app
+        run: npm run build --workspace=@bytetrue/web
 
       # Both channels deploy the Go Worker. This used to branch: beta went to workers/relay and
       # stable stayed on packages/relay's TypeScript worker. The split existed because the Go relay

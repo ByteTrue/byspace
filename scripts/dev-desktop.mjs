@@ -28,9 +28,8 @@ configureDevBySpaceHome();
 process.env.BYSPACE_CORS_ORIGINS = process.env.BYSPACE_CORS_ORIGINS || "*";
 process.env.BYSPACE_NODE_ENV = process.env.BYSPACE_NODE_ENV || "development";
 
-// The dev window runs the new frontend (web/), served from web/dist through BYSPACE_WEB_DIR. Release
-// builds still embed the Expo export (`make build-web`) until the switch; point BYSPACE_WEB_DIR at
-// internal/webui/dist to see that one in the window.
+// The dev window serves web/dist through BYSPACE_WEB_DIR rather than the bundle embedded in the
+// binary, so a web/ change needs the web build below and no Go rebuild.
 process.env.BYSPACE_WEB_DIR = process.env.BYSPACE_WEB_DIR || resolve(rootDir, "web", "dist");
 
 const skipBuild = process.env.BYSPACE_SKIP_DEV_DESKTOP_BUILD === "1";

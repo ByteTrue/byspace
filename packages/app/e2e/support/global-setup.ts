@@ -209,13 +209,13 @@ function resolveStaticWebDir(repoRoot: string): string | null {
       return resolved;
     }
   }
-  if (process.env.CI) {
-    const prebuilt = path.join(repoRoot, "internal/webui/dist");
-    if (existsSync(path.join(prebuilt, "index.html"))) {
-      return prebuilt;
-    }
+  // The suite runs against web/'s build; E2E_USE_METRO=1 runs it against packages/app instead
+  // until that is deleted.
+  const web = path.join(repoRoot, "web/dist");
+  if (existsSync(path.join(web, "index.html"))) {
+    return web;
   }
-  return null;
+  throw new Error("web/dist is not built: run `npm run build --workspace=@bytetrue/web` first.");
 }
 
 async function startStaticWebServer(port: number, staticDir: string): Promise<http.Server> {

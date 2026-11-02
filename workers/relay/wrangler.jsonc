@@ -42,7 +42,7 @@
   // and never enter the wasm — run_worker_first keeps /ws and /health on the
   // relay script while the platform answers everything else.
   "assets": {
-    "directory": "../../packages/app/dist",
+    "directory": "../../web/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/ws", "/health"],
@@ -71,7 +71,7 @@
         },
       ],
       "assets": {
-        "directory": "../../packages/app/dist",
+        "directory": "../../web/dist",
         "binding": "ASSETS",
         "not_found_handling": "single-page-application",
         "run_worker_first": ["/ws", "/health"],

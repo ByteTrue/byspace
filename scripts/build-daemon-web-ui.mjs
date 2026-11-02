@@ -8,8 +8,7 @@ import { constants as zlibConstants, createBrotliCompress, createGzip } from "no
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
-const APP_DIR = path.join(REPO_ROOT, "packages", "app");
-const SOURCE_DIST = path.join(APP_DIR, "dist");
+const SOURCE_DIST = path.join(REPO_ROOT, "web", "dist");
 // The Node daemon used to serve this bundle from packages/server/dist. That package is now
 // archived; the Go binary embeds the bundle directly via //go:embed internal/webui/dist.
 const TARGET_DIST = path.join(REPO_ROOT, "internal", "webui", "dist");
@@ -41,9 +40,13 @@ function run(command, args, options) {
   });
 }
 
-async function exportBrowserWebApp() {
-  console.log("Exporting browser web app...");
-  await run("npm", ["run", "build:web", "--workspace=@bytetrue/app"], {
+async function buildWebApp() {
+  // web/ imports the workspace packages through their built dist/, which a fresh checkout (the
+  // release workflow, the Docker build) does not have yet.
+  console.log("Building workspace packages...");
+  await run("npm", ["run", "build:app-deps"], { cwd: REPO_ROOT });
+  console.log("Building the web app (web/)...");
+  await run("npm", ["run", "build", "--workspace=@bytetrue/web"], {
     cwd: REPO_ROOT,
   });
 }
@@ -126,11 +129,11 @@ async function measureBundle(dir) {
 }
 
 async function main() {
-  await exportBrowserWebApp();
+  await buildWebApp();
 
   const sourceStat = await stat(SOURCE_DIST).catch(() => null);
   if (!sourceStat?.isDirectory()) {
-    throw new Error(`Browser web export not found at ${SOURCE_DIST}`);
+    throw new Error(`Web app build not found at ${SOURCE_DIST}`);
   }
 
   await cleanTarget();
