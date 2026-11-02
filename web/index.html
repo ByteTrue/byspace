@@ -2,15 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow" />
     <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)" />
+    <!-- Installed to a home screen: full screen, the page under a translucent status bar (the
+         headers pad by the safe-area insets). As packages/app's public/index.html. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BySpace" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- On a phone the app locks zoom at runtime (useCompactWebViewportZoomLock). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- packages/app's favicon (Expo serves it as /favicon.ico); useFaviconStatus swaps it for the
          status icon once the app runs. -->
     <link rel="icon" type="image/png" href="../packages/app/assets/images/favicon.png" />
     <title>BySpace</title>
+    <!-- Before the bundle's CSS loads: the shell stays put (no rubber band, no pull to refresh)
+         and a dark system theme does not flash white. -->
+    <style>
+      html,
+      body {
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #171717;
+        }
+      }
+    </style>
   </head>
   <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

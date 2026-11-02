@@ -21,6 +21,7 @@ import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { DesktopSidebarVisibilityProvider } from "@/contexts/desktop-sidebar-visibility-context";
 import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
+import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useAppSettings } from "@/hooks/use-settings";
@@ -77,6 +78,9 @@ function MobileSidebarSync() {
 
 export function AppChrome() {
   const isCompactLayout = useIsCompactFormFactor();
+  // As packages/app's AppContainer: on a phone the page does not zoom (pinch, or iOS zooming into
+  // a focused field).
+  useCompactWebViewportZoomLock(isCompactLayout);
   // Phone panels slide and follow the finger; on a desktop the runtime only reports the panel.
   return (
     <MobilePanelsProvider enabled={isCompactLayout}>
