@@ -218,6 +218,9 @@ class MobilePanelsRuntime {
 
   start(x: number, y: number, target: EventTarget | null) {
     this.tracking = null;
+    // A touch swipe ends without a click, so a swallow still pending belongs to no click of this
+    // press; left set, it would eat the next tap.
+    this.suppressClick = false;
     if (!this.enabled) return;
     const kind = this.pickGesture(x, target);
     if (!kind) return;

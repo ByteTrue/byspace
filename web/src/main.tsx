@@ -4,6 +4,7 @@ import {
   installCryptoPolyfills,
   type CryptoPolyfillSources,
 } from "@/polyfills/install-crypto-polyfills";
+import { noteHistoryEntry } from "@/navigation/workspace-route-navigation";
 import { router } from "~/app/router";
 import { bindExpoRouter } from "~/shims/expo-router";
 import "./index.css";
@@ -16,6 +17,10 @@ installCryptoPolyfills(globalThis, {
   ) as CryptoPolyfillSources["expoGetRandomValues"],
 });
 bindExpoRouter(router);
+// Workspace navigation replaces the host entry and pops what sits above it, so it needs to know
+// which history entries are host-level.
+noteHistoryEntry(router.state.location.pathname);
+router.subscribe((state) => noteHistoryEntry(state.location.pathname));
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root is missing");

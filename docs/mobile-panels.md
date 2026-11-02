@@ -11,8 +11,10 @@ They are one interaction, not two independent drawers. The implementation lives 
 `gesture-intent.ts` on the DOM (`web/src/overrides/mobile-panels/`): a plain object instead of
 worklets, writing the position straight to the panel styles. Its gestures listen for touch events on
 the document and cancel the page scroll once the swipe is horizontal. On the web, packages/app's
-gesture-handler detectors (`touchAction: "auto"`) lose the touch to scrolling, so there only a mouse
-drag moves a panel.
+open detectors (`touchAction: "auto"`) lose a touch to the browser's panning, so its edge swipes only
+ever opened a panel with a mouse; its close detectors (`pan-y`) work by touch. On Android with gesture
+navigation the system back gesture owns both screen edges, so the open swipes need three-button
+navigation there.
 
 ## Ownership
 
