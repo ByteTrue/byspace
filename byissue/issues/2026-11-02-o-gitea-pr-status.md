@@ -21,3 +21,13 @@ Node 的实现在 `git show 20721fdcf^:archive/packages/server/src/services/gite
 ## 要做
 
 照 Node 移植，接进 `CurrentPRStatus` 的 `gitea` 分支（去掉那里的 `shortcut:` 注释），补 Go 测试（用假的 `tea` 脚本），`npm run audit`。本机没有 Gitea 账号，实测需要用户提供一个能登录的 Gitea/Forgejo/Codeberg 仓库。
+
+## 实现（2026-11-02，同一快改）
+
+照 Node 移植进 `internal/workspace/gitea_pr_status.go`，接到 `CurrentPRStatus` 的 `gitea` 分支（Gitea、Forgejo、Codeberg 都走这里），侧栏徽标与 PR 面板共用：
+
+- 找 PR：先翻开着的 PR（`tea pr list`，每页 50、最多 4 页），按 head 分支和 origin 的 owner 匹配；没有再查最近更新的 50 个（`tea api …/pulls?state=all&sort=recentupdate`），开着的优先，已结束的只在 head 提交还是 checkout 的 HEAD 时算；fork 的 PR 按 head 提交匹配。
+- 检查：`tea pr N` 拿 head 提交，读这个提交的合并状态（commit statuses）和 Actions 任务（最多 5 页 × 50）。Gitea 给自己的 Actions 作业镜像出来的 status 去掉（否则每个作业算两次），同一 workflow 只留最新一次执行，等待审批的运行标 `action_required`，`warning` 算失败；汇总同时看 status 和 Actions，一个失败的 Actions 运行不会因为合并状态是 success 而显示通过。任何一步失败都保留不带检查的 PR 状态，同 Node。
+- forgeSpecific：`{forge: "gitea", mergeable, hasMerged, ciStatus}`。
+
+验证：Go 测试用假的 `tea` 脚本覆盖开着的 PR、已合并 PR 按 head 提交匹配、镜像 status 去重、workflow 重跑取最新、审批等待、warning。本机没有能登录的 Gitea/Forgejo/Codeberg 账号，没有实测，需要你提供一个仓库才能验。

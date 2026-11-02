@@ -44,11 +44,11 @@ Go 侧：
 - 轮询：`internal/workspace/pr_status_poll.go`，照 Node 的 `github-service.ts`（retainCurrentPullRequestStatusPoll 与批量）和 `workspace-git-service.ts`（retainGenericForgePrStatusPoll）。检查在跑 20 秒、空闲 2 分钟、连续失败翻倍到 5 分钟；GitHub 目标对齐到 5 秒网格，同一主机一次 GraphQL 查 25 个；剩余额度降到 40% 时该主机暂停到额度重置；fork 改查父仓库；已结束 PR 的检查结果缓存；匹配不上或候选页满时退回单独查询。
 - 找 PR：`internal/workspace/github_pr_lookup.go`（Node 的 PullRequestStatusLookupTarget：worktree 元数据里记的 PR、分支跟踪配置、push 配置、HEAD 提交）和 `github_pr_current.go`（Node 的 resolveCurrentPullRequestView：`gh pr view <分支> --repo`，不是这个 checkout 的 PR 时列出该分支所有状态的 PR；开着的 PR 总算，已合并或关闭的只在 HEAD 还是它的 head 提交时算）。附带 Node 的合并信息查询（forgeSpecific），PR 面板的合并按钮读它，Go 原来不发。
 - GitLab 的 MR 状态照 Node 重写（`gitlab_pr_status.go`）：按源分支找 MR；开着的 MR 状态是 `open`（原来是 GitLab 原样的 `opened`，客户端当成已关闭）；检查是最新流水线的作业，汇总用 GitLab 自己的流水线状态；审批和合并信号放进 forgeSpecific。
-- 服务器：`internal/server/pr_status.go`。有客户端连着时轮询所有活着的 git 工作区，没有客户端时停。结果写进工作区描述的 `githubRuntime`，变了就推送；失败保留上一次成功的结果。在应用里提交、推送、切分支、建 PR、合并之后立刻重查；在终端里切分支、提交，打开着 Changes 面板时立刻发现，否则由每 5 分钟一次的放置检查发现（Node 用文件监听立刻发现；Go 的分支、改动统计也是这样延迟的，没有在这次改）。
+- 服务器：`internal/server/pr_status.go`。有客户端连着时轮询所有活着的 git 工作区，没有客户端时停。结果写进工作区描述的 `githubRuntime`，变了就推送；失败保留上一次成功的结果。在应用里提交、推送、切分支、建 PR、合并之后立刻重查；在终端里切分支、提交，2 秒内发现：Node 用文件监听，Go 每 2 秒读一次每个检出的 HEAD 和分支 ref 文件，变了才跑 git（`internal/server/head_watch.go`）；侧栏的分支名、改动统计原来也要等 5 分钟一次的放置检查，这次一起修了。
 - 顺带修掉：从 PR 建的 worktree 从不写元数据（`writeCreatedWorktreeMetadata` 读的是只有 branch-off 才设置的 BaseBranch），于是 fork 的 PR 找不回来；元数据里的 head owner 原来写成了「owner/仓库名」。
 
 验证：Go 测试（轮询间隔与退避、批量、额度暂停、fork 改查、检查缓存、释放即停、候选挑选、查找目标、GitLab MR、描述里的 PR 与推送、PR worktree 元数据）。开发版实测：用 cli/cli#14783（fork 的 PR）建 worktree，元数据记下 base `trunk` 和 owner `mrecachinas`，8081、8082 侧栏都出现「14783 · passed」徽标和悬停卡片的 Checks；PR 面板的状态带合并信息；两个前端都没有校验报错。其余测试工作区的 PR 都已合并且分支已经走过了 PR 的 head 提交，按 Node 的规则不再显示。
 
-没做：Gitea 的 PR 状态（Node 的 `gitea-service` 当前 PR 与提交状态、Actions 检查），Go 原来也没有，见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)；GitLab、GitHub Enterprise 没有真实账号与主机，未实测。
+Gitea 的 PR 状态 Go 原来也没有，已在同一快改移植，见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)。GitLab、Gitea、GitHub Enterprise 没有真实账号与主机，未实测。
 
 等用户验收后关闭。

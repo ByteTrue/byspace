@@ -1026,9 +1026,7 @@ func CurrentPRStatus(ctx context.Context, cwd, forge string, target PRLookupTarg
 	case "gitlab":
 		return currentGitLabMergeRequest(ctx, cwd, target)
 	case "gitea":
-		// shortcut: Gitea's PR status is not ported (Node's gitea-service loadCurrentPullRequestStatus
-		// and its commit-status and Actions checks); port both together.
-		return nil, nil
+		return currentGiteaPullRequest(ctx, cwd, target)
 	default:
 		return currentGitHubPullRequest(ctx, cwd, target)
 	}

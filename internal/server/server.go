@@ -499,6 +499,7 @@ func New(opts Options) (*Server, error) {
 	})
 	srv.startRuntimeMetrics()
 	srv.startBackgroundGitFetch()
+	srv.startHeadWatch()
 	// Last: recovering an interrupted run archives its workspace, which needs the rest of the
 	// server. Then the clock fires due schedules every second.
 	srv.schedules.Start()
