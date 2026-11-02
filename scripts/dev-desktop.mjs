@@ -28,10 +28,18 @@ configureDevBySpaceHome();
 process.env.BYSPACE_CORS_ORIGINS = process.env.BYSPACE_CORS_ORIGINS || "*";
 process.env.BYSPACE_NODE_ENV = process.env.BYSPACE_NODE_ENV || "development";
 
+// The dev window runs the new frontend (web/), served from web/dist through BYSPACE_WEB_DIR. Release
+// builds still embed the Expo export (`make build-web`) until the switch; point BYSPACE_WEB_DIR at
+// internal/webui/dist to see that one in the window.
+process.env.BYSPACE_WEB_DIR = process.env.BYSPACE_WEB_DIR || resolve(rootDir, "web", "dist");
+
 const skipBuild = process.env.BYSPACE_SKIP_DEV_DESKTOP_BUILD === "1";
 if (!skipBuild) {
   if (process.env.BYSPACE_SKIP_DEV_WEB_BUILD !== "1") {
-    execFileSync("make", ["build-web"], { cwd: rootDir, stdio: "inherit" });
+    execFileSync("npm", ["run", "build", "--workspace=@bytetrue/web"], {
+      cwd: rootDir,
+      stdio: "inherit",
+    });
   }
   execFileSync("make", ["build-app"], { cwd: rootDir, stdio: "inherit" });
 }
@@ -47,6 +55,7 @@ console.log("══════════════════════�
 console.log(`  Home:    ${process.env.BYSPACE_HOME}`);
 console.log(`  Daemon:  ${process.env.BYSPACE_LISTEN}`);
 console.log(`  Binary:  ${binary}`);
+console.log(`  Web UI:  ${process.env.BYSPACE_WEB_DIR}`);
 console.log("══════════════════════════════════════════════════════");
 
 await runDevChild(binary, ["app"], { cwd: rootDir, env: process.env });
