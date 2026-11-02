@@ -53,3 +53,16 @@ created: 2026-11-02
 - 手机上锁定缩放：旧版根布局调用 `useCompactWebViewportZoomLock`（窄屏时 `maximum-scale=1, user-scalable=no`，防止 iOS 点进输入框时自动放大），第 2 步移植根布局时漏了，加到 `AppChrome`。
 - 验证（`screenshots/对照全集/_脚本/第5步/pwa-probe.mjs`）：Chrome 的可安装性检查两边都没有错误，manifest 解析无错，运行后的全部 meta、link、外壳样式两边一致，JS 被拦下时深色主题的底色一致。
 - 没验：真机安装到主屏（iOS 的状态栏留边、Android 的安装提示），推送沿用第 4 步已验的部分。
+
+### 第 4 批：Android 客户端
+
+- 构建：`build/android/build.sh` 嵌的是 `internal/webui/dist`。对照时各打两个包：旧版用现在的 Expo 导出，新版把 `web/dist` 临时拷进 `internal/webui/dist` 再打，打完还原（脚本 `screenshots/对照全集/_脚本/第5步/android/build-two-apks.sh`；调试版用 `build-debug-apks.sh`，打开 WebView 调试，`adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>` 后 Playwright `connectOverCDP` 直接在应用的 WebView 里量）。正式打包第 6 步再切。
+- 模拟器：Pixel 尺寸（1080×2400，420dpi，CSS 视口 411×914），Android 16，WebView 133，三键导航；`adb reverse tcp:6778` 连开发版 daemon。
+- 走了一遍（`flow.py`、`welcome.py`，新旧各一遍逐张比截图）：清空数据后的欢迎页、Direct connection 表单和数字键盘、连上后的首页、侧栏、切换工作区、文件面板 Changes 和 Files、长按文件弹菜单、Copy path（系统剪贴板浮层）、Download（新旧都弹「Download complete」）、输入框弹出键盘时上移、返回键先收键盘再离开应用。除下面列的，截图与旧版一致。
+- 在 Android 上才出现、已修：
+  - 行高：旧版没给行高的文字在 Mac 上是 18px、Android 上 18.29px，新版有十几处写死 18px，文件树、Changes 树、提交列表、PR 检查、安装脚本面板每行矮 0.29px，第 10 行偏 3px。改成同旧版用 `normal`（规则写进 Epic 方案「样式」）。改后文件面板两个标签页的文字位置与旧版完全一致。
+  - 文件面板底部：Changes 标签页里 Commits 比旧版高一个导航栏（48px）——面板和提交区都留了底部安全区。旧版只有提交区留（`shouldUseCompactExplorerKeyboardPadding`），已改同。
+  - 手势结束后的下一次点按被吞掉（滑动关侧栏后菜单按钮没反应），已修。
+  - 长按文件行同时打开了行菜单和列表空白处的菜单（两个面板叠在一起），已修：长按归最里层的触发器。
+- 和旧版不同、有意保留：旧版的设置等滚动区在 Android 上右侧多出 8px 空白（全局的 `::-webkit-scrollbar { width: 8px }` 在这个 WebView 里变成占位的滚动条），内容左右不对称；新版用系统的悬浮滚动条，左右都是 16px。所以设置里的选择框值在新版靠右 8px。
+- 没验：真机（只在模拟器）；扫码配对（要摄像头）；推送（WebView 里没有 Web Push）；平板布局。

@@ -17,7 +17,7 @@ created: 2026-10-31
 - **技术栈：** Vite + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui（Radix）+ React Router + lucide-react。状态管理（Zustand）、请求缓存（TanStack Query）、多语言（i18next）、终端（xterm）、编辑器（CodeMirror）沿用现有的库。
 - **代码共享：** `web/` 里 `~/` 指向自己的 `web/src`，`@/` 指向 `packages/app/src`，和现版里的写法一样，共享模块内部的 `@/` 引用照常解析。`web/src/overrides/` 下有同名文件时，`@/` 优先解析到它（Vite 插件和 TypeScript 的 `paths` 用同一个顺序），用来替换依赖 React Native 界面的模块，对外接口不变。几个只用到非界面 API 的第三方包在 `web/` 里换成网页实现：`react-native` 只提供 `AppState`、`Platform` 这类接口，不提供任何界面组件；`expo-router` 的跳转接口转到 React Router；`lucide-react-native` 换成 `lucide-react`。共享模块一旦引到 React Native 的界面组件，构建会直接报错，这个模块就得覆盖或重写。
 - **地址和测试 ID 不变：** 页面地址照搬，配对链接、书签、PWA 不受影响；`data-testid` 照搬，现有 189 个 Playwright 端到端用例改个地址就能拿来验收新前端；有意改过的布局或交互，对应用例在切换时跟着改。
-- **样式：** shadcn/ui nova 风格加 neutral 底色，数值以 `design/component-sheet.html` 和 `docs/design.md` 为准，包括 [UI 美化 Epic](../2026-10-31-o-ui-style-refresh/spec.md) 里记下的三处有意偏离。
+- **样式：** shadcn/ui nova 风格加 neutral 底色，数值以 `design/component-sheet.html` 和 `docs/design.md` 为准，包括 [UI 美化 Epic](../2026-10-31-o-ui-style-refresh/spec.md) 里记下的三处有意偏离。旧版没给 `lineHeight` 的文字用 `normal`，不写在 Mac 上量到的像素值：Mac 上 Chromium 和 WebKit 把字体的上下高度各自取整（14px 的 Geist 是 18px），Android、Windows、Linux 不取整（18.29px），写死的行在那里每行矮一点、往下累积。
 - **预览和构建：** 开发时 Vite 跑在 8082，连开发版 daemon（6778）。构建产物在 `web/dist`，切换前不进 `internal/webui/dist`。
 
 ## 必须守住
