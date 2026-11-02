@@ -168,17 +168,10 @@ p.rep('''import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-''', '''import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent,
-  type ReactElement,
-} from "react";
+''', '''import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
+import { useLongPress } from "~/hooks/use-long-press";
 ''')
 p.rep('''import { Archive, ChevronRight } from "lucide-react-native";''',
       '''import { Archive, ChevronRight } from "lucide-react";''')
@@ -264,35 +257,10 @@ p.rep('''  const pressableStyle = useCallback(
   const archivedIcon = useMemo(
     () => <Archive size={theme.fontSize.sm} color={theme.colors.foregroundMuted} />,
     [theme.fontSize.sm, theme.colors.foregroundMuted],
-  );''', '''  const longPressTimerRef = useRef<number | null>(null);
-  const didLongPressRef = useRef(false);
-  const cancelLongPress = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-  useEffect(() => cancelLongPress, [cancelLongPress]);
-  const handlePointerDown = useCallback(
-    (event: PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) return;
-      cancelLongPress();
-      didLongPressRef.current = false;
-      longPressTimerRef.current = window.setTimeout(() => {
-        longPressTimerRef.current = null;
-        didLongPressRef.current = true;
-        onLongPress(agent);
-      }, LONG_PRESS_MS);
-    },
-    [agent, cancelLongPress, onLongPress],
-  );
-  const handlePress = useCallback(() => {
-    if (didLongPressRef.current) {
-      didLongPressRef.current = false;
-      return;
-    }
-    onPress(agent);
-  }, [onPress, agent]);
+  );''', '''  const handlePress = useCallback(() => onPress(agent), [onPress, agent]);
+  const handleLongPress = useCallback(() => onLongPress(agent), [onLongPress, agent]);
+  // Pressable's long press: held still for 500ms, and the click that releases it does not open.
+  const longPress = useLongPress(handleLongPress, LONG_PRESS_MS);
 
   const archivedIcon = useMemo(
     () => <Archive size={12} className="text-muted-foreground" />,
@@ -332,10 +300,7 @@ p.rep('''    <Pressable
         isSelected && "bg-muted",
       )}
       onClick={handlePress}
-      onPointerDown={handlePointerDown}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerCancel={cancelLongPress}
+      {...longPress}
       data-testid={`agent-row-${agent.serverId}-${agent.id}`}
     >
       {isSelected ? (

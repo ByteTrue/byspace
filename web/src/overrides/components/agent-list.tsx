@@ -1,17 +1,10 @@
 // Override of packages/app/src/components/agent-list.tsx: the History list (day sections, search marks, long press to archive); DOM view.
 // Generated from the Expo file by web/scripts/port/sessions-screen.py.
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent,
-  type ReactElement,
-} from "react";
+import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
+import { useLongPress } from "~/hooks/use-long-press";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -296,35 +289,10 @@ function SessionRow({
     [searchMatches],
   );
 
-  const longPressTimerRef = useRef<number | null>(null);
-  const didLongPressRef = useRef(false);
-  const cancelLongPress = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-  useEffect(() => cancelLongPress, [cancelLongPress]);
-  const handlePointerDown = useCallback(
-    (event: PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) return;
-      cancelLongPress();
-      didLongPressRef.current = false;
-      longPressTimerRef.current = window.setTimeout(() => {
-        longPressTimerRef.current = null;
-        didLongPressRef.current = true;
-        onLongPress(agent);
-      }, LONG_PRESS_MS);
-    },
-    [agent, cancelLongPress, onLongPress],
-  );
-  const handlePress = useCallback(() => {
-    if (didLongPressRef.current) {
-      didLongPressRef.current = false;
-      return;
-    }
-    onPress(agent);
-  }, [onPress, agent]);
+  const handlePress = useCallback(() => onPress(agent), [onPress, agent]);
+  const handleLongPress = useCallback(() => onLongPress(agent), [onLongPress, agent]);
+  // Pressable's long press: held still for 500ms, and the click that releases it does not open.
+  const longPress = useLongPress(handleLongPress, LONG_PRESS_MS);
 
   const archivedIcon = useMemo(() => <Archive size={12} className="text-muted-foreground" />, []);
   const showDesktopAttention =
@@ -338,10 +306,7 @@ function SessionRow({
         isSelected && "bg-muted",
       )}
       onClick={handlePress}
-      onPointerDown={handlePointerDown}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerCancel={cancelLongPress}
+      {...longPress}
       data-testid={`agent-row-${agent.serverId}-${agent.id}`}
     >
       {isSelected ? (

@@ -1,7 +1,7 @@
 // Override of packages/app/src/components/ui/context-menu.tsx: the right-click shape of the menu
 // engine. The trigger is the element itself (a tab chip, a row), so it renders a div that Radix
-// opens the menu from. On a phone the menu is a bottom sheet, opened by the context gesture (a long
-// press fires it on Android; iOS has none, and the row's kebab opens the same menu).
+// opens the menu from. On a phone the menu is a bottom sheet, opened by the context gesture or a
+// held touch (iOS Safari sends no contextmenu event).
 import {
   useCallback,
   useMemo,
@@ -16,6 +16,7 @@ import {
   type Ref,
 } from "react";
 import { ContextMenuTrigger as RadixContextMenuTrigger } from "~/components/ui/context-menu";
+import { useLongPress } from "~/hooks/use-long-press";
 import { composeHandlers, mergeRefs } from "~/lib/compose";
 import {
   MenuRoot,
@@ -77,18 +78,37 @@ type ContextMenuTriggerProps = PropsWithChildren<
   }
 >;
 
-/** On a phone the sheet is not a Radix menu, so the trigger opens it from the context gesture. */
+/**
+ * On a phone the sheet is not a Radix menu, so the trigger opens it from the context gesture or a
+ * held touch. packages/app's trigger forwards a long press too (a row selects itself).
+ */
 function useSheetTrigger({
   isSheet,
   isEnabled,
   setOpen,
   style,
+  onLongPress,
+  longPressDelayMs,
 }: {
   isSheet: boolean;
   isEnabled: boolean;
   setOpen: (open: boolean) => void;
   style: ContextMenuTriggerProps["style"];
+  onLongPress: (() => void) | undefined;
+  longPressDelayMs: number | undefined;
 }) {
+  // iOS Safari sends no contextmenu event, so a held touch is the only way to the sheet there.
+  const handleLongPress = useCallback(
+    (pointerType: string) => {
+      onLongPress?.();
+      if (isSheet && isEnabled && pointerType === "touch") setOpen(true);
+    },
+    [isEnabled, isSheet, onLongPress, setOpen],
+  );
+  const longPress = useLongPress(
+    onLongPress || isSheet ? handleLongPress : undefined,
+    longPressDelayMs,
+  );
   const triggerStyle = useMemo<CSSProperties | undefined>(() => {
     const base = typeof style === "object" ? style : undefined;
     // A long press on a phone opens the sheet, not the browser's link/image callout.
@@ -103,7 +123,11 @@ function useSheetTrigger({
     },
     [isEnabled, setOpen],
   );
-  return { triggerStyle, onContextMenu: isSheet ? handleSheetContextMenu : undefined };
+  return {
+    triggerStyle,
+    onContextMenu: isSheet ? handleSheetContextMenu : undefined,
+    longPress,
+  };
 }
 
 export function ContextMenuTrigger({
@@ -117,10 +141,10 @@ export function ContextMenuTrigger({
   enabled = true,
   enabledOnMobile: _enabledOnMobile,
   enabledOnWeb = true,
-  longPressDelayMs: _longPressDelayMs,
+  longPressDelayMs,
   onPress,
   onPressIn,
-  onLongPress: _onLongPress,
+  onLongPress,
   testID,
   accessibilityLabel,
   accessibilityRole,
@@ -147,11 +171,13 @@ export function ContextMenuTrigger({
     onPress?.();
   };
   const isSheet = presentation === "sheet";
-  const { triggerStyle, onContextMenu } = useSheetTrigger({
+  const { triggerStyle, onContextMenu, longPress } = useSheetTrigger({
     isSheet,
     isEnabled: enabled && enabledOnWeb && !disabled,
     setOpen,
     style,
+    onLongPress,
+    longPressDelayMs,
   });
   const element = (
     <div
@@ -166,12 +192,18 @@ export function ContextMenuTrigger({
       onContextMenu={composeHandlers(onContextMenuProp, onContextMenu)}
       onClick={composeHandlers(onClick, pressable && onPress ? () => onPress() : undefined)}
       onPointerDown={composeHandlers(
-        onPointerDown,
+        composeHandlers(onPointerDown, longPress.onPointerDown),
         pressable && onPressIn ? (event) => event.button === 0 && onPressIn() : undefined,
       )}
+      onPointerMove={longPress.onPointerMove}
+      onPointerUp={longPress.onPointerUp}
+      onPointerCancel={longPress.onPointerCancel}
       onKeyDown={composeHandlers(onKeyDown, handleKeyDown)}
       onPointerEnter={composeHandlers(onPointerEnter, () => setHovered(true))}
-      onPointerLeave={composeHandlers(onPointerLeave, () => setHovered(false))}
+      onPointerLeave={composeHandlers(
+        composeHandlers(onPointerLeave, longPress.onPointerLeave),
+        () => setHovered(false),
+      )}
     >
       {content}
     </div>
