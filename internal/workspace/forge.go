@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -28,13 +29,32 @@ func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, 
 }
 
 // runForgeCLIWithStderr also returns stderr, which is where the forge CLIs say why they failed.
+//
+// A gh call made for a checkout whose origin is a GitHub Enterprise host carries GH_HOST:
+// `gh api` and `gh api graphql` otherwise query github.com whatever the repository is.
 func runForgeCLIWithStderr(ctx context.Context, timeout time.Duration, bin, cwd string, args ...string) (string, string, error) {
+	var env []string
+	if bin == "gh" && cwd != "" {
+		host, err := gitHubRoutingHost(ctx, cwd)
+		if err != nil {
+			return "", err.Error(), err
+		}
+		if host != "" {
+			env = append(os.Environ(), "GH_HOST="+host)
+		}
+	}
+	return runForgeCommand(ctx, timeout, bin, cwd, env, args...)
+}
+
+// runForgeCommand runs a forge CLI as is: env nil inherits the daemon's environment.
+func runForgeCommand(ctx context.Context, timeout time.Duration, bin, cwd string, env []string, args ...string) (string, string, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := proc.CommandContext(cctx, bin, args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	cmd.Env = env
 	var out, errBuf bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
@@ -69,10 +89,24 @@ func OriginRemoteURL(ctx context.Context, cwd string) string {
 }
 
 // DetectForge inspects the origin remote URL to classify the git forge ("github", "gitlab", or "gitea").
+//
+// An SSH alias (`git@work:org/repo` with `Host work` → `HostName gitlab.example.com`) names no
+// forge; like Node's forge resolver, the alias is resolved through `ssh -G` and the real host is
+// classified.
 func DetectForge(ctx context.Context, cwd string) string {
 	remote := OriginRemoteURL(ctx, cwd)
 	if remote == "" {
 		return "github"
+	}
+	if forge, ok := forgeForHost(remoteHost(remote)); ok {
+		return forge
+	}
+	if location, ok := parseRemoteLocation(remote); ok {
+		if resolved := resolvedRemoteHost(ctx, location); resolved != location.host {
+			if forge, ok := forgeForHost(resolved); ok {
+				return forge
+			}
+		}
 	}
 	return ForgeForRemote(remote)
 }
@@ -106,21 +140,28 @@ var selfHostedHostHints = []struct {
 
 // ForgeForRemote resolves a forge from a git remote URL.
 func ForgeForRemote(remote string) string {
-	host := remoteHost(remote)
-	if host == "" {
-		return "github"
-	}
-	if forge, ok := forgeCloudHosts[host]; ok {
+	if forge, ok := forgeForHost(remoteHost(remote)); ok {
 		return forge
-	}
-	for _, hint := range selfHostedHostHints {
-		if strings.Contains(host, hint.fragment) {
-			return hint.forge
-		}
 	}
 	// A host we do not recognise: GitHub is the overwhelmingly common case, and the caller falls
 	// back to the forge CLI's own error if it is wrong.
 	return "github"
+}
+
+// forgeForHost classifies a host by the forges' own hosts, then by the self-hosted naming hints.
+func forgeForHost(host string) (string, bool) {
+	if host == "" {
+		return "", false
+	}
+	if forge, ok := forgeCloudHosts[host]; ok {
+		return forge, true
+	}
+	for _, hint := range selfHostedHostHints {
+		if strings.Contains(host, hint.fragment) {
+			return hint.forge, true
+		}
+	}
+	return "", false
 }
 
 // remoteHost extracts the host from any of git's remote URL shapes.
@@ -967,13 +1008,15 @@ func normalizeGitHubSearchQuery(query, enterpriseHost string) string {
 	return query
 }
 
-// gitHubEnterpriseHost is the origin remote's host when it is not github.com.
-//
-// shortcut: Node also resolves an ssh alias to its HostName and routes gh with GH_HOST; Go does
-// neither yet, so an aliased Enterprise remote only matches its alias. Port that with GHES routing.
+// gitHubEnterpriseHost is the origin remote's host when it is not github.com, with an SSH alias
+// resolved to the real host, so a pasted Enterprise URL matches an aliased checkout.
 func gitHubEnterpriseHost(ctx context.Context, cwd string) string {
-	host := remoteHost(OriginRemoteURL(ctx, cwd))
-	if host == "" || host == "github.com" || host == "www.github.com" {
+	location, ok := parseRemoteLocation(OriginRemoteURL(ctx, cwd))
+	if !ok {
+		return ""
+	}
+	host := resolvedRemoteHost(ctx, location)
+	if isGitHubCloudHost(host) || host == "www.github.com" {
 		return ""
 	}
 	return host
@@ -1354,42 +1397,26 @@ func headRepositoryName(owner, httpsURL, sshURL string) string {
 // chronological thread, so a review and a comment have to arrive in the same shape — the client
 // discriminates on `kind` and would otherwise render a review as an empty comment.
 //
-// `truncated` is reported rather than silently dropping: a long thread that stops at the limit
-// without saying so looks like the conversation ended.
+// `truncated` is reported rather than silently dropping: a long thread that stops at a page limit
+// without saying so looks like the conversation ended. Each forge pages as Node did.
 //
-// owner and name identify the GitHub repository (the GraphQL query needs them); the other forges
-// resolve the repository from cwd.
-func PullRequestTimeline(ctx context.Context, forge, cwd, owner, name string, number, limit int) ([]map[string]any, bool, error) {
+// owner and name identify the repository for GitHub and Gitea (their APIs address it by name);
+// GitLab resolves it from the merge request.
+func PullRequestTimeline(ctx context.Context, forge, cwd, owner, name string, number int) ([]map[string]any, bool, error) {
 	if number <= 0 {
 		return nil, false, fmt.Errorf("pull request number must be positive")
 	}
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	numberArg := strconv.Itoa(number)
-	limitArg := strconv.Itoa(limit)
-
 	switch forge {
 	case "gitlab":
-		if _, err := exec.LookPath("glab"); err != nil {
-			return nil, false, fmt.Errorf("glab is not installed")
-		}
-		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
-			fmt.Sprintf("projects/:id/merge_requests/%s/notes?per_page=%s&sort=asc", numberArg, limitArg))
-		if err != nil {
-			return nil, false, err
-		}
-		return decodeGitLabNotes(raw, limit)
+		result, err := gitLabPullRequestTimeline(ctx, cwd, number)
+		return result.items, result.truncated, err
 
 	case "gitea":
-		if _, err := exec.LookPath("tea"); err != nil {
-			return nil, false, fmt.Errorf("tea is not installed")
+		if !gitHubRepoSegmentRe.MatchString(owner) || !gitHubRepoSegmentRe.MatchString(name) {
+			return nil, false, &TimelineError{Kind: "unknown", Message: "Pull request timeline request has invalid PR identity"}
 		}
-		raw, err := runForgeCLI(ctx, "tea", cwd, "prs", numberArg, "--comments", "--output", "json")
-		if err != nil {
-			return nil, false, err
-		}
-		return decodeGiteaComments(raw, limit)
+		result, err := giteaPullRequestTimeline(ctx, cwd, owner, name, number)
+		return result.items, result.truncated, err
 
 	default:
 		if _, err := exec.LookPath("gh"); err != nil {
@@ -1397,75 +1424,6 @@ func PullRequestTimeline(ctx context.Context, forge, cwd, owner, name string, nu
 		}
 		return gitHubPullRequestTimeline(ctx, cwd, owner, name, number)
 	}
-}
-
-// sortAndLimitTimeline orders by creation time and reports whether anything was dropped.
-func sortAndLimitTimeline(items []map[string]any, limit int) ([]map[string]any, bool, error) {
-	sort.SliceStable(items, func(i, j int) bool {
-		ai, _ := items[i]["createdAt"].(int64)
-		aj, _ := items[j]["createdAt"].(int64)
-		return ai < aj
-	})
-	if len(items) > limit {
-		return items[:limit], true, nil
-	}
-	return items, false, nil
-}
-
-func decodeGitLabNotes(raw string, limit int) ([]map[string]any, bool, error) {
-	var notes []map[string]any
-	if json.Unmarshal([]byte(raw), &notes) != nil {
-		return nil, false, fmt.Errorf("could not read merge request notes")
-	}
-	out := make([]map[string]any, 0, len(notes))
-	for _, note := range notes {
-		author, _ := note["author"].(map[string]any)
-		body := stringOr(note["body"], "")
-		kind := "comment"
-		reviewState := ""
-		// GitLab models a review as a system note carrying the approval text.
-		if system, _ := note["system"].(bool); system && strings.Contains(strings.ToLower(body), "approved") {
-			kind = "review"
-			reviewState = "approved"
-		}
-		item := map[string]any{
-			"id":        fmt.Sprintf("note-%v", note["id"]),
-			"kind":      kind,
-			"author":    firstNonEmpty(stringOr(author["username"], ""), "unknown"),
-			"authorUrl": nullableString(stringOr(author["web_url"], "")),
-			"avatarUrl": nullableString(stringOr(author["avatar_url"], "")),
-			"body":      body,
-			"createdAt": parseUnixOrISO(note["created_at"]),
-			"url":       "",
-		}
-		if kind == "review" {
-			item["reviewState"] = reviewState
-		}
-		out = append(out, item)
-	}
-	return sortAndLimitTimeline(out, limit)
-}
-
-func decodeGiteaComments(raw string, limit int) ([]map[string]any, bool, error) {
-	var comments []map[string]any
-	if json.Unmarshal([]byte(raw), &comments) != nil {
-		return nil, false, fmt.Errorf("could not read pull request comments")
-	}
-	out := make([]map[string]any, 0, len(comments))
-	for _, comment := range comments {
-		user, _ := comment["user"].(map[string]any)
-		out = append(out, map[string]any{
-			"id":        fmt.Sprintf("comment-%v", comment["id"]),
-			"kind":      "comment",
-			"author":    firstNonEmpty(stringOr(user["login"], ""), "unknown"),
-			"authorUrl": nullableString(stringOr(user["html_url"], "")),
-			"avatarUrl": nullableString(stringOr(user["avatar_url"], "")),
-			"body":      stringOr(comment["body"], ""),
-			"createdAt": parseUnixOrISO(comment["created_at"]),
-			"url":       stringOr(comment["html_url"], ""),
-		})
-	}
-	return sortAndLimitTimeline(out, limit)
 }
 
 // parseUnixOrISO reads either an ISO timestamp or epoch seconds into epoch milliseconds.

@@ -66,7 +66,14 @@ p.write("how to add a host: direct connection or a pasted pairing link; DOM view
 
 # ---- add-host-modal.tsx ----
 p = Port("components/add-host-modal.tsx")
-p.rep('import { Alert, Pressable, Text, View } from "react-native";\n', 'import { Alert } from "react-native";\nimport { cn } from "cn";\n')
+p.rep('import { Alert, Pressable, Text, View } from "react-native";\n', 'import { cn } from "cn";\n')
+# The form shows the error inline. packages/app also raised a desktop alert, which on the web now
+# becomes a toast (the react-native shim): the same message twice. Keep the inline one only, as
+# the web build always had.
+p.sub(r"\n[ ]*if \(!isMobile\) \{\n[ ]*Alert\.alert\([^;]*\);\n[ ]*\}", "", count=1)
+p.rep("  const isMobile = useIsCompactFormFactor();\n", "")
+p.rep('import { useIsCompactFormFactor } from "@/constants/layout";\n', "")
+p.rep("    isMobile,\n", "")
 p.rep('import { StyleSheet, useUnistyles } from "react-native-unistyles";\n',
       'import { useUnistyles } from "react-native-unistyles";\n')
 p.rep('from "lucide-react-native";', 'from "lucide-react";')
@@ -295,7 +302,14 @@ p.write("the remote SSH host form; DOM view.", "add-host-modals.py")
 
 # ---- pair-link-modal.tsx ----
 p = Port("components/pair-link-modal.tsx")
-p.rep('import { Alert, Text, View } from "react-native";\n', 'import { Alert } from "react-native";\n')
+p.rep('import { Alert, Text, View } from "react-native";\n', "")
+# The form shows the error inline. packages/app also raised a desktop alert, which on the web now
+# becomes a toast (the react-native shim): the same message twice. Keep the inline one only, as
+# the web build always had.
+p.sub(r"\n[ ]*if \(!isMobile\) \{\n[ ]*Alert\.alert\([^;]*\);\n[ ]*\}", "", count=2)
+p.rep("  const isMobile = useIsCompactFormFactor();\n", "")
+p.rep('import { useIsCompactFormFactor } from "@/constants/layout";\n', "")
+p.rep("[daemons, handleClose, isMobile, isSaving,", "[daemons, handleClose, isSaving,")
 p.rep('import { StyleSheet, useUnistyles } from "react-native-unistyles";\n',
       'import { useUnistyles } from "react-native-unistyles";\n')
 p.rep('from "lucide-react-native";', 'from "lucide-react";')

@@ -116,12 +116,33 @@ done
 	// 7. byspace heartbeat create / list / delete
 	out.Reset()
 	errOut.Reset()
-	if code := Main("0.20.2-go", []string{"heartbeat", "create", "--addr", addr, "--cron", "*/10 * * * *", "--name", "Check CI", "check status"}, &out, &errOut); code != 0 {
+	if code := Main("0.20.2-go", []string{"schedule", "create", "--addr", addr, "--cron", "*/10 * * * *", "--name", "Check CI", "--provider", "pi", "check status"}, &out, &errOut); code != 0 {
 		t.Fatalf("heartbeat create failed (%d): %s", code, errOut.String())
 	}
 	schedID := strings.TrimSpace(out.String())
 	if schedID == "" {
 		t.Fatal("expected schedule ID from heartbeat create")
+	}
+
+	// A new-agent schedule names its provider, as the Node CLI requires; a heartbeat belongs to the
+	// agent the command runs in.
+	errOut.Reset()
+	if code := Main("0.20.2-go", []string{"schedule", "create", "--addr", addr, "--cron", "*/10 * * * *", "check status"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "Provider is required") {
+		t.Fatalf("create without a provider: code %d, %q", code, errOut.String())
+	}
+	t.Setenv("BYSPACE_AGENT_ID", "")
+	errOut.Reset()
+	if code := Main("0.20.2-go", []string{"heartbeat", "create", "--addr", addr, "--cron", "*/10 * * * *", "check status"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "must run inside a BySpace agent") {
+		t.Fatalf("heartbeat outside an agent: code %d, %q", code, errOut.String())
+	}
+	// A request the daemon refuses reports the daemon's reason, not a timeout.
+	errOut.Reset()
+	started := time.Now()
+	if code := Main("0.20.2-go", []string{"schedule", "create", "--addr", addr, "--cron", "61 * * * *", "--provider", "pi", "check status"}, &out, &errOut); code == 0 || !strings.Contains(errOut.String(), "Invalid cron minute value") {
+		t.Fatalf("create with a bad cron: code %d, %q", code, errOut.String())
+	}
+	if time.Since(started) > 5*time.Second {
+		t.Fatalf("the refused request took %s: it waited for a response that never comes", time.Since(started))
 	}
 
 	out.Reset()

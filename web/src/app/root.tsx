@@ -15,6 +15,7 @@ import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { ConfirmDialogHost } from "~/app/confirm-dialog-host";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import {
+  AlertToastBridge,
   DraftFlushOnBackground,
   FaviconStatusSync,
   HostSessionManager,
@@ -34,7 +35,10 @@ function RootProviders({ children }: { children: ReactNode }) {
       <I18nProvider>
         <RootErrorBoundary>
           <KeyboardActionDispatcherProvider>
-            <ToastProvider>{children}</ToastProvider>
+            <ToastProvider>
+              <AlertToastBridge />
+              {children}
+            </ToastProvider>
           </KeyboardActionDispatcherProvider>
         </RootErrorBoundary>
       </I18nProvider>

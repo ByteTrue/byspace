@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"io"
 	"net/http"
@@ -419,7 +420,8 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 		t.Fatalf("expected 1 probed Pi model, got %+v", modResp)
 	}
 
-	// 5. Schedule create with runOnCreate -> triggers Pi agent run and records output
+	// 5. Schedule create with runOnCreate -> the schedule clock fires it within a tick, starting a
+	// Pi agent and recording the run.
 	schedReq, _ := json.Marshal(map[string]any{
 		"type": "session",
 		"message": map[string]any{
@@ -449,19 +451,31 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 		t.Fatalf("expected schedule id in response: %+v", schedResp)
 	}
 
-	logsReq, _ := json.Marshal(map[string]any{
-		"type": "session",
-		"message": map[string]any{
-			"type":       "schedule/logs",
-			"requestId":  "req_sched_logs",
-			"scheduleId": schedID,
-		},
-	})
-	_ = ws.Write(ctx, websocket.MessageText, logsReq)
-	logsResp := readUntilSessionType(t, ctx, ws, "schedule/logs/response", "")
+	var logsResp map[string]any
+	for attempt := 0; attempt < 100; attempt++ {
+		logsReq, _ := json.Marshal(map[string]any{
+			"type": "session",
+			"message": map[string]any{
+				"type":       "schedule/logs",
+				"requestId":  fmt.Sprintf("req_sched_logs_%d", attempt),
+				"scheduleId": schedID,
+			},
+		})
+		_ = ws.Write(ctx, websocket.MessageText, logsReq)
+		logsResp = readUntilSessionType(t, ctx, ws, "schedule/logs/response", "")
+		if runs, _ := logsResp["runs"].([]any); len(runs) == 1 {
+			if run, _ := runs[0].(map[string]any); run["status"] != "running" {
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	runsList, _ := logsResp["runs"].([]any)
 	if len(runsList) != 1 {
 		t.Fatalf("expected 1 schedule run log, got %+v", logsResp)
+	}
+	if run, _ := runsList[0].(map[string]any); run["status"] == "running" {
+		t.Fatalf("the scheduled run never finished: %+v", run)
 	}
 
 	// 6. Parity RPCs: project.add, directory_suggestions, file.upload, skills, pairing offer

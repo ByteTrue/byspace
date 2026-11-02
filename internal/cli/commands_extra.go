@@ -19,7 +19,10 @@ import (
 	"golang.org/x/term"
 )
 
-func runHeartbeatCmd(args []string, stdout io.Writer) error {
+// runHeartbeatCmd runs `byspace heartbeat` and `byspace schedule`, which share their subcommands.
+// They differ in what `create` targets, as in the Node CLI: a heartbeat prompts the agent that
+// creates it (the agent the command runs in), a schedule starts a new agent each run.
+func runHeartbeatCmd(cmd string, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: byspace heartbeat <create|list|delete> [options]")
 	}
@@ -36,13 +39,18 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		name := fs.String("name", "", "schedule name")
 		maxRuns := fs.Int("max-runs", 0, "optional maximum number of runs")
 		cwd := fs.String("cwd", "", "working directory for target agent")
-		agentID := fs.String("agent-id", os.Getenv("BYSPACE_AGENT_ID"), "existing target agent ID")
+		defaultAgentID := ""
+		if cmd == "heartbeat" {
+			defaultAgentID = os.Getenv("BYSPACE_AGENT_ID")
+		}
+		agentID := fs.String("agent-id", defaultAgentID, "existing target agent ID")
 		// The flags the node CLI has on `schedule create`. --prompt is an alternative to the
 		// positional argument for a script that would rather not quote a long text; --run-now is
 		// how a user checks a new schedule without waiting for the first tick.
 		promptFlag := fs.String("prompt", "", "prompt text (instead of the positional argument)")
 		runNow := fs.Bool("run-now", false, "run once immediately after creating")
 		expiresIn := fs.String("expires-in", "", "stop scheduling after this duration (e.g. 7d)")
+		targetProvider := fs.String("provider", "", "provider (or provider/model) for a new target agent")
 		targetModel := fs.String("model", "", "model for a new target agent")
 		targetMode := fs.String("mode", "", "mode for a new target agent")
 		targetThinking := fs.String("thinking", "", "thinking level for a new target agent")
@@ -83,6 +91,9 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		}
 
 		var target map[string]any
+		if cmd == "heartbeat" && strings.TrimSpace(*agentID) == "" {
+			return errors.New("heartbeat commands must run inside a BySpace agent (or pass --agent-id); use `byspace schedule create` to start a new agent on a cadence")
+		}
 		if strings.TrimSpace(*agentID) != "" {
 			target = map[string]any{
 				"type":    "agent",
@@ -93,11 +104,15 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 			if workCwd == "" {
 				workCwd, _ = os.Getwd()
 			}
-			// No hardcoded provider: the daemon's default is the right answer when the user did not
-			// name one, and pinning "pi" here meant a schedule could never target another provider.
-			newAgentConfig := map[string]any{"cwd": workCwd}
-			if strings.TrimSpace(*targetModel) != "" {
-				newAgentConfig["model"] = strings.TrimSpace(*targetModel)
+			// The provider is required, as in the Node CLI: a schedule's runs start that provider,
+			// and the daemon refuses a new-agent target without one.
+			provider, model, providerErr := resolveScheduleProvider(*targetProvider, *targetModel)
+			if providerErr != nil {
+				return providerErr
+			}
+			newAgentConfig := map[string]any{"cwd": workCwd, "provider": provider}
+			if model != "" {
+				newAgentConfig["model"] = model
 			}
 			if strings.TrimSpace(*targetMode) != "" {
 				newAgentConfig["modeId"] = strings.TrimSpace(*targetMode)
@@ -695,4 +710,27 @@ func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS boo
 		}
 	}
 	return srv.BuildPairingOfferURL(relayEndpoint, useTLS, appURL)
+}
+
+// resolveScheduleProvider reads --provider (provider or provider/model) and --model, as the Node
+// CLI's resolveProviderAndModel does.
+func resolveScheduleProvider(providerFlag, modelFlag string) (string, string, error) {
+	provider := strings.TrimSpace(providerFlag)
+	model := strings.TrimSpace(modelFlag)
+	if provider == "" {
+		return "", "", errors.New("Provider is required. Pass --provider <provider> or --provider <provider>/<model>; `byspace provider ls` lists providers")
+	}
+	slash := strings.Index(provider, "/")
+	if slash == -1 {
+		return provider, model, nil
+	}
+	name := strings.TrimSpace(provider[:slash])
+	fromProvider := strings.TrimSpace(provider[slash+1:])
+	if name == "" || fromProvider == "" {
+		return "", "", errors.New("--provider must be <provider> or <provider>/<model>")
+	}
+	if model != "" && model != fromProvider {
+		return "", "", errors.New("--provider names a model and --model names another")
+	}
+	return name, fromProvider, nil
 }

@@ -355,6 +355,7 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 		// by hand is what left an archived agent with a permanent unread dot.
 		archived := store.BuildArchivedAgentRecord(*rec, now)
 		_ = s.store.UpsertAgent(archived)
+		s.noteAgentArchived(archived.ID)
 		// The archive has to reach every socket, not just the caller: the directory store on each
 		// client decides which workspace tabs to keep from the archived flag, so a silent write
 		// leaves the archived conversation open everywhere else.
@@ -828,23 +829,23 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 	switch msgType {
 	case "schedule/create":
 		var req struct {
-			RequestID   string           `json:"requestId"`
 			Name        *string          `json:"name"`
 			Prompt      string           `json:"prompt"`
 			Cadence     schedule.Cadence `json:"cadence"`
 			Target      schedule.Target  `json:"target"`
 			MaxRuns     *int             `json:"maxRuns"`
 			ExpiresAt   *string          `json:"expiresAt"`
-			RunOnCreate bool             `json:"runOnCreate"`
+			RunOnCreate *bool            `json:"runOnCreate"`
 		}
 		if err := json.Unmarshal(raw, &req); err != nil {
 			emitErr(err)
 			return
 		}
+		// A "self" target is the agent asking, which the request names.
 		if req.Target.Type == "self" {
-			req.Target.Type = "agent"
+			req.Target = schedule.Target{Type: "agent", AgentID: req.Target.AgentID}
 		}
-		created, err := s.schedules.Create(ctx, schedule.CreateInput{
+		created, err := s.schedules.Create(schedule.CreateInput{
 			Name:        req.Name,
 			Prompt:      req.Prompt,
 			Cadence:     req.Cadence,
@@ -858,7 +859,7 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 			return
 		}
 		_ = sendSessionMsg(ctx, sink, "schedule/create/response", map[string]any{
-			"requestId": req.RequestID,
+			"requestId": base.RequestID,
 			"schedule":  created.ToSummary(),
 			"error":     nil,
 		})
@@ -939,7 +940,9 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "schedule/run-once":
-		sched, err := s.schedules.RunOnce(ctx, schedID)
+		// The run belongs to the daemon, not to this connection: a client that goes away mid-run
+		// must not cancel the agent it started.
+		sched, err := s.schedules.RunOnce(context.WithoutCancel(ctx), schedID)
 		if err != nil {
 			emitErr(err)
 			return
@@ -951,48 +954,10 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "schedule/update":
-		var req struct {
-			ScheduleID     string            `json:"scheduleId"`
-			Name           *string           `json:"name"`
-			Prompt         *string           `json:"prompt"`
-			Cadence        *schedule.Cadence `json:"cadence"`
-			NewAgentConfig *struct {
-				Provider         *string `json:"provider"`
-				Model            *string `json:"model"`
-				ModeID           *string `json:"modeId"`
-				ThinkingOptionID *string `json:"thinkingOptionId"`
-				ArchiveOnFinish  *bool   `json:"archiveOnFinish"`
-				Isolation        *string `json:"isolation"`
-				Cwd              *string `json:"cwd"`
-			} `json:"newAgentConfig"`
-			MaxRuns   *int    `json:"maxRuns"`
-			ExpiresAt *string `json:"expiresAt"`
-		}
-		if err := json.Unmarshal(raw, &req); err != nil {
+		update, err := parseScheduleUpdate(raw, schedID)
+		if err != nil {
 			emitErr(err)
 			return
-		}
-		update := schedule.UpdateInput{
-			ID:        firstNonEmptyTrimmed(req.ScheduleID, schedID),
-			Name:      req.Name,
-			HasName:   req.Name != nil,
-			Prompt:    req.Prompt,
-			Cadence:   req.Cadence,
-			MaxRuns:   req.MaxRuns,
-			ExpiresAt: req.ExpiresAt,
-		}
-		// The patch is only meaningful for a new-agent target; a schedule bound to an existing agent
-		// has no config to edit, and applying one would invent knobs the run never reads.
-		if cfg := req.NewAgentConfig; cfg != nil {
-			update.Config = &schedule.TargetConfigPatch{
-				Provider:         cfg.Provider,
-				Model:            cfg.Model,
-				ModeID:           cfg.ModeID,
-				ThinkingOptionID: cfg.ThinkingOptionID,
-				ArchiveOnFinish:  cfg.ArchiveOnFinish,
-				Isolation:        cfg.Isolation,
-				Cwd:              cfg.Cwd,
-			}
 		}
 		sched, err := s.schedules.Update(update)
 		if err != nil {
@@ -1007,86 +972,106 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 	}
 }
 
-func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.StoredSchedule) (schedule.ExecutionResult, error) {
-	if sched.Target.Type == "agent" && sched.Target.AgentID != "" {
-		// A target that no longer exists is permanent: the schedule must complete rather than
-		// fail on every tick until it burns through its budget.
-		record, loadErr := s.store.GetAgent(sched.Target.AgentID)
-		if loadErr != nil || record == nil || record.ArchivedAt != nil {
-			return schedule.ExecutionResult{}, schedule.TargetGoneError{
-				Reason: "target agent " + sched.Target.AgentID + " was deleted or archived",
+// parseScheduleUpdate reads a schedule/update request. A field that is absent stays as it is and a
+// null one is cleared, so presence is read from the raw object rather than from pointers.
+func parseScheduleUpdate(raw json.RawMessage, schedID string) (schedule.UpdateInput, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return schedule.UpdateInput{}, err
+	}
+	update := schedule.UpdateInput{ID: schedID}
+	var err error
+	if value, ok := fields["name"]; ok {
+		if update.Name, err = decodeOptional[string](value); err != nil {
+			return update, err
+		}
+	}
+	if value, ok := fields["prompt"]; ok {
+		var prompt *string
+		if err := json.Unmarshal(value, &prompt); err != nil {
+			return update, err
+		}
+		if prompt == nil {
+			prompt = new(string)
+		}
+		update.Prompt = prompt
+	}
+	if value, ok := fields["cadence"]; ok && string(value) != "null" {
+		var cadence schedule.Cadence
+		if err := json.Unmarshal(value, &cadence); err != nil {
+			return update, err
+		}
+		update.Cadence = &cadence
+	}
+	if value, ok := fields["maxRuns"]; ok {
+		if update.MaxRuns, err = decodeOptional[int](value); err != nil {
+			return update, err
+		}
+	}
+	if value, ok := fields["expiresAt"]; ok {
+		if update.ExpiresAt, err = decodeOptional[string](value); err != nil {
+			return update, err
+		}
+	}
+	if value, ok := fields["newAgentConfig"]; ok && string(value) != "null" {
+		var config map[string]json.RawMessage
+		if err := json.Unmarshal(value, &config); err != nil {
+			return update, err
+		}
+		patch := &schedule.NewAgentConfigPatch{}
+		decodeString := func(key string) (*string, error) {
+			value, ok := config[key]
+			if !ok || string(value) == "null" {
+				return nil, nil
+			}
+			var text string
+			if err := json.Unmarshal(value, &text); err != nil {
+				return nil, err
+			}
+			return &text, nil
+		}
+		if patch.Provider, err = decodeString("provider"); err != nil {
+			return update, err
+		}
+		if patch.Cwd, err = decodeString("cwd"); err != nil {
+			return update, err
+		}
+		if patch.Isolation, err = decodeString("isolation"); err != nil {
+			return update, err
+		}
+		for key, into := range map[string]*schedule.Optional[string]{
+			"model":            &patch.Model,
+			"modeId":           &patch.ModeID,
+			"thinkingOptionId": &patch.ThinkingOptionID,
+		} {
+			if value, ok := config[key]; ok {
+				if *into, err = decodeOptional[string](value); err != nil {
+					return update, err
+				}
 			}
 		}
-		mp, err := s.ensureAgentLoaded(sched.Target.AgentID)
-		if err != nil {
-			return schedule.ExecutionResult{}, err
+		if value, ok := config["archiveOnFinish"]; ok && string(value) != "null" {
+			var archive bool
+			if err := json.Unmarshal(value, &archive); err != nil {
+				return update, err
+			}
+			patch.ArchiveOnFinish = &archive
 		}
-		if err := mp.session.Prompt(ctx, sched.Prompt, nil); err != nil {
-			return schedule.ExecutionResult{}, err
-		}
-		_ = mp.session.WaitForFinish(ctx)
-		agtID := sched.Target.AgentID
-		items := make([]sdk.TimelineItem, 0, len(mp.session.Timeline()))
-		for _, entry := range mp.session.Timeline() {
-			items = append(items, entry.Item)
-		}
-		out := scheduledRunOutput(mp.session.LastAssistantText(), items)
-		return schedule.ExecutionResult{
-			AgentID: &agtID,
-			Output:  out,
-		}, nil
+		update.NewAgentConfig = patch
 	}
+	return update, nil
+}
 
-	cwd, _ := os.Getwd()
-	if sched.Target.Config != nil && sched.Target.Config.Cwd != "" {
-		cwd = sched.Target.Config.Cwd
+// decodeOptional reads a field that is present: null clears it, anything else sets it.
+func decodeOptional[T any](value json.RawMessage) (schedule.Optional[T], error) {
+	if string(value) == "null" {
+		return schedule.Present[T](nil), nil
 	}
-	// The same permanence rule as a deleted agent: a cwd that no longer exists cannot host an
-	// agent, and retrying every tick fails identically.
-	if info, statErr := os.Stat(cwd); statErr != nil || !info.IsDir() {
-		return schedule.ExecutionResult{}, schedule.TargetGoneError{
-			Reason: "target directory " + cwd + " no longer exists",
-		}
+	var decoded T
+	if err := json.Unmarshal(value, &decoded); err != nil {
+		return schedule.Optional[T]{}, err
 	}
-	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
-	if err != nil {
-		return schedule.ExecutionResult{}, err
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	agentID := newAgentID()
-	rec := store.AgentRecord{
-		ID:          agentID,
-		Provider:    "pi",
-		Cwd:         cwd,
-		WorkspaceID: ws.WorkspaceID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Title:       sched.Name,
-		Labels:      map[string]string{},
-		LastStatus:  "idle",
-	}
-	mp, err := s.startOrGetPiAgent(rec)
-	if err != nil {
-		return schedule.ExecutionResult{}, err
-	}
-	_ = s.store.UpsertAgent(mp.record)
-	if err := mp.session.Prompt(ctx, sched.Prompt, nil); err != nil {
-		return schedule.ExecutionResult{AgentID: &agentID}, err
-	}
-	_ = mp.session.WaitForFinish(ctx)
-	out := mp.session.LastAssistantText()
-	wsID := ws.WorkspaceID
-	// A schedule that leaves the run's workspace open asks for inspection; anything else keeps the
-	// sidebar clean. Absent means archive, which is also what the runner does for a run with no
-	// agent of its own.
-	if sched.Target.Config == nil || sched.Target.Config.ArchiveOnFinish == nil || *sched.Target.Config.ArchiveOnFinish {
-		s.archiveWorkspaces(ctx, []string{wsID}, time.Now().UTC().Format(time.RFC3339Nano))
-	}
-	return schedule.ExecutionResult{
-		AgentID:     &agentID,
-		WorkspaceID: &wsID,
-		Output:      &out,
-	}, nil
+	return schedule.Present(&decoded), nil
 }
 
 func (s *Server) handleAgentPermissionResponse(ctx context.Context, _ frameSink, raw json.RawMessage) {

@@ -392,7 +392,7 @@ export function goEmitSites(root = ROOT, fnIndex = goFunctionIndex(root)) {
             seen.add(fn);
             const body = fnIndex.get(fn);
             if (!body) continue;
-            for (const km of body.matchAll(/"([A-Za-z][A-Za-z0-9_]*)":\s/g)) visible.add(km[1]);
+            for (const km of body.matchAll(BUILDER_KEY)) visible.add(km[1] ?? km[2]);
             for (const nested of body.matchAll(/(?:\bs\.|\b)([A-Za-z_]\w*)\(/g))
               queue.push(nested[1]);
           }
@@ -446,7 +446,7 @@ export function goEmitSites(root = ROOT, fnIndex = goFunctionIndex(root)) {
               seen.add(fn);
               const body = fnIndex.get(fn);
               if (!body) continue;
-              for (const km of body.matchAll(/"([A-Za-z][A-Za-z0-9_]*)":\s/g)) visible.add(km[1]);
+              for (const km of body.matchAll(BUILDER_KEY)) visible.add(km[1] ?? km[2]);
               for (const nm of body.matchAll(/\b(?:\w+\.)?([A-Za-z_]\w*)\(/g)) queue.push(nm[1]);
             }
             perSite.push({ type, keys, allKeys: visible, payloadText: payload });
@@ -463,6 +463,10 @@ export function goEmitSites(root = ROOT, fnIndex = goFunctionIndex(root)) {
 }
 
 const IDENT = /^\s*(?:"([A-Za-z_$][\w$]*)"|([A-Za-z_$][\w$]*))\s*([:,])/;
+
+// A key a builder sets: in a map literal (`"models": models`) or by index (`entry["models"] = models`,
+// which is how a builder adds a key only in some states).
+const BUILDER_KEY = /"([A-Za-z][A-Za-z0-9_]*)":\s|\w\["([A-Za-z][A-Za-z0-9_]*)"\]\s*=[^=]/g;
 
 /** 从一段 `map[string]any{...}` 文本里收集 key（含 builder 函数体）。 */
 export function keysOfInlineMap(payload, fnIndex) {

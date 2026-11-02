@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 浏览器端一致性地毯检查（bsk 驱动真实 Chrome）。
+ * 浏览器端一致性地毯检查（Playwright 驱动无头 Chromium）。
  *
  * 为什么需要它：`scripts/go-parity-audit.mjs` 只能证明「协议字段被解析了」。
  * 但「思考等级菜单列出了这个模型不支持的档位」「工具调用卡片根本没渲染」这类问题，
@@ -9,8 +9,8 @@
  * 用法：node scripts/browser-conformance.mjs [--base http://127.0.0.1:6778]
  *
  * 每项检查都会：
- *   1. 用 bsk 操作真实 UI；
- *   2. 对可访问性快照文本做断言；
+ *   1. 用 Playwright 操作真实 UI（无头 Chromium，不碰你自己的浏览器）；
+ *   2. 对可访问性快照文本（ariaSnapshot）做断言；
  *   3. 收集 console，任何 `Message validation failed` / `Response validation failed`
  *      都记为硬失败（这类错误意味着守护进程发的 payload 与协议不符）。
  *
@@ -18,6 +18,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { chromium } from "playwright";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -33,19 +34,8 @@ const BASE = (() => {
 
 const results = [];
 
-function bsk(args, { allowFailure = false } = {}) {
-  try {
-    return execFileSync("bsk", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (error) {
-    if (allowFailure) return `${error.stdout ?? ""}${error.stderr ?? ""}`;
-    throw new Error(`bsk ${args.join(" ")} failed: ${error.stderr || error.message}`, {
-      cause: error,
-    });
-  }
-}
-
 function sleep(ms) {
-  execFileSync("sleep", [String(ms / 1000)]);
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function record(name, ok, detail) {
@@ -64,24 +54,19 @@ function expectAbsent(name, snapshot, needles) {
   record(name, found.length === 0, found.length ? `unexpected: ${found.join(" | ")}` : "");
 }
 
-const session = (() => {
-  const out = bsk(["session", "start", "--json"]);
-  const match = out.match(/"session_id":\s*"([^"]+)"/);
-  if (!match) throw new Error(`could not start a bsk session: ${out}`);
-  return match[1];
-})();
+// The browser. Headless Chromium from the repo's Playwright: the check must run wherever the
+// audit runs, and it must not drive (or clear the storage of) the user's own browser. The page's
+// console is collected from the start so a validation error during boot is not missed.
+const browser = await chromium.launch();
+const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const consoleLines = [];
+page.on("console", (message) => consoleLines.push(message.text()));
+page.on("pageerror", (error) => consoleLines.push(String(error)));
 
-const observe = () => bsk(["observe", "--session", session]);
-const consoleText = () => bsk(["debug", "console", "--session", session], { allowFailure: true });
-const click = (ref) => bsk(["click", ref, "--session", session]);
-
-function refFor(snapshot, pattern) {
-  for (const line of snapshot.split("\n")) {
-    const m = line.match(/@(e\d+)\s+/);
-    if (m && pattern.test(line)) return `@${m[1]}`;
-  }
-  return null;
-}
+/** The page's accessibility tree as text, e.g. `- button "Close menu" [expanded]`. */
+const observe = () => page.locator("body").ariaSnapshot();
+const button = (name) => page.getByRole("button", { name }).first();
+const hasButton = async (name) => (await page.getByRole("button", { name }).count()) > 0;
 
 /** 直接从 daemon 读取 provider 快照——UI 只是它的投影。 */
 function queryProviderSnapshot() {
@@ -119,14 +104,12 @@ function queryProviderSnapshot() {
  * 侧栏的开合是浏览器恢复的状态，不是本脚本设置的，所以每个断言段之前都要先把它摆成
  * 已知状态，否则失败信息只是在报「侧栏没开」，和被测行为无关。
  */
-function ensureSidebarVisible() {
+async function ensureSidebarVisible() {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const snap = observe();
-    if (refFor(snap, /button "Close menu"/)) return snap;
-    const opener = refFor(snap, /button "Open menu"/);
-    if (!opener) return snap;
-    click(opener);
-    sleep(700);
+    if (await hasButton("Close menu")) return observe();
+    if (!(await hasButton("Open menu"))) return observe();
+    await button("Open menu").click();
+    await sleep(700);
   }
   return observe();
 }
@@ -260,24 +243,23 @@ setTimeout(() => { console.log(JSON.stringify({ ...out, timeout: true })); proce
  * and a leftover menu from the previous step covers it too. Both are dismissed the same way: Escape,
  * then the explicit close affordance when the snapshot still shows an overlay.
  */
-function dismissOverlays(snapshot) {
-  let current = snapshot;
+async function dismissOverlays() {
   for (let guard = 0; guard < 5; guard += 1) {
     // Two different things cover the composer here: the sidebar overlay on a compact layout (its
     // affordance is "Close menu") and the workspace actions sheet that opens on top of it (no close
     // button — Escape is the only way out). Handle both, and stop as soon as nothing is on top.
-    const closer = refFor(current, /button "(Close menu|Close|Done)"/);
-    const covered = /^\s*L\d+ (modal|dialog|sheet) /m.test(current);
-    if (!closer && !covered) break;
-    if (closer) {
-      click(closer);
+    const closer = /^(Close menu|Close|Done)$/;
+    const covered = (await page.getByRole("dialog").count()) > 0;
+    const hasCloser = await hasButton(closer);
+    if (!hasCloser && !covered) break;
+    if (hasCloser) {
+      await button(closer).click();
     } else {
-      bsk(["press", "Escape", "--session", session], { allowFailure: true });
+      await page.keyboard.press("Escape");
     }
-    sleep(700);
-    current = observe();
+    await sleep(700);
   }
-  return current;
+  return observe();
 }
 
 /**
@@ -355,9 +337,6 @@ record(
 record("Removing a project clears it from the directory", seq.removedProject, seq.removedDetail);
 
 try {
-  bsk(["debug", "start", "--session", session, "--name", "browser-conformance"], {
-    allowFailure: true,
-  });
   // Start from a clean host registry.
   //
   // The app boots from localStorage first and only then falls back to the daemon's same-origin
@@ -365,31 +344,30 @@ try {
   // earlier daemon on the same address (a temp home, a reset server-id) is kept and never
   // re-probed. The run then measures that stale record instead of the daemon under test, reporting
   // the empty sidebar it produces as four product failures.
-  bsk(["navigate", BASE, "--session", session], { allowFailure: true });
-  bsk(["evaluate", "localStorage.clear()", "--session", session], { allowFailure: true });
-  bsk(["navigate", BASE, "--session", session]);
-  sleep(2500);
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await sleep(2500);
   // The app restores the last route. When that route names a workspace the daemon no longer has — an archived one,
   // or a temp workspace a previous run created — the app shows "Workspace unavailable" and the composer never
   // appears, so every check downstream fails for a reason unrelated to what it measures. Back out and land on the
   // shell instead of reporting those failures.
   for (let guard = 0; guard < 3; guard += 1) {
-    const current = observe();
-    if (!current.includes("Workspace unavailable")) break;
-    const back = refFor(current, /button "Back"/);
-    if (!back) break;
-    click(back);
-    sleep(1500);
+    const current = await observe();
+    if (!current.includes("Workspace unavailable") || !(await hasButton("Back"))) break;
+    await button("Back").click();
+    await sleep(1500);
   }
 
   // ---------------------------------------------------------------- 侧边栏结构
-  let snap = ensureSidebarVisible();
+  let snap = await ensureSidebarVisible();
 
   expectContains("Sidebar lists the Chief home workspace", snap, ["BySpace-WorkSpace", "Chief"]);
 
-  // Chief 必须排在 byspace 之前（它是 daemon 自持的 home workspace）。
+  // Chief 必须排在 byspace 之前（它是 daemon 自持的 home workspace）。项目按钮的名字以图标字母开头，
+  // 有自定义图标的项目没有这个字母。
   const chiefIdx = snap.indexOf('button "Chief"');
-  const byspaceIdx = snap.indexOf('button "B byspace');
+  const byspaceIdx = snap.search(/button "(?:\S )?byspace\b/);
   record(
     "Chief is pinned above ordinary projects",
     chiefIdx >= 0 && byspaceIdx > chiefIdx,
@@ -400,17 +378,15 @@ try {
   expectAbsent("No stray +0 -0 on the home workspace", snap, ["+0 -0"]);
 
   // ---------------------------------------------------------------- Provider 目录
-  snap = ensureSidebarVisible();
-  const settingsRef = refFor(snap, /button "Settings"/);
-  if (!settingsRef) failFast("Open settings", "no Settings button in snapshot");
-  click(settingsRef);
-  sleep(1200);
-  snap = observe();
-  const agentsRef = refFor(snap, /button "Agents"/);
-  if (!agentsRef) failFast("Open Agents settings", "no Agents entry in settings sidebar");
-  click(agentsRef);
-  sleep(1500);
-  snap = observe();
+  await ensureSidebarVisible();
+  if (!(await hasButton("Settings"))) failFast("Open settings", "no Settings button in snapshot");
+  await button("Settings").click();
+  await sleep(1200);
+  if (!(await hasButton("Agents")))
+    failFast("Open Agents settings", "no Agents entry in settings sidebar");
+  await button("Agents").click();
+  await sleep(1500);
+  snap = await observe();
 
   const builtinProviders = ["Pi", "Claude", "Codex", "Copilot", "OpenCode", "Oh My Pi"];
   const missingProviders = builtinProviders.filter((p) => !snap.includes(p));
@@ -443,84 +419,77 @@ try {
 
   // ---------------------------------------------------------------- 思考等级菜单
   //
-  // 这一段的入口条件很脆：需要一个**空会话**的 composer。浏览器会恢复上次打开的路由
-  // （可能是刚刚的 settings 页），路径不同、渲染时机也不同。所以重试有限次，直到出现
-  // composer 为止，而不是假定一次点击就够。
   // The thinking button lives in a workspace composer and only exists once a model is chosen — it
   // lists the levels *that model* supports. So this walks to a workspace, clears whatever overlay
   // is on top, and picks the first model the catalog offers, which is the entry a user reaches too.
   //
-  // It navigates by route instead of clicking through the sidebar: from the empty-project screen a
-  // sidebar press does not move, and the "New tab → Agent" dance ended on that same screen with an
-  // overlay on top on every attempt.
-  let s2 = dismissOverlays(observe());
+  // It navigates inside the app (history push) instead of loading the URL: a cold load of a
+  // workspace URL lands on the home screen.
+  let s2 = await dismissOverlays();
   const workspaceRoute = openAWorkspaceRoute();
   if (workspaceRoute) {
-    bsk(["navigate", workspaceRoute, "--session", session], { allowFailure: true });
-    sleep(2800);
-    s2 = dismissOverlays(observe());
+    await page.evaluate((route) => {
+      history.pushState({}, "", new URL(route).pathname);
+      dispatchEvent(new PopStateEvent("popstate"));
+    }, workspaceRoute);
+    await sleep(2800);
+    s2 = await dismissOverlays();
   }
-  let chosenModelId = null;
-  if (/button "Select model \(Select model\)"/.test(s2)) {
-    click(refFor(s2, /button "Select model \(Select model\)"/));
-    sleep(1300);
-    const modelSnapshot = observe();
-    const firstModel = refFor(
-      modelSnapshot,
-      /button "[^"]+ [^"]*\/\S+ Create profile from this model"/,
-    );
-    if (firstModel) {
-      // The entry is labelled "<name> <provider>/<modelId>", and that id is what the provider
-      // catalog is keyed by — the check compares the rendered menu against the model's own
-      // declared levels, so it has to know which model got picked.
-      const entryLabel = modelSnapshot.match(
-        /button "([^"]+ [^"]*\/\S+) Create profile from this model"/,
-      );
-      chosenModelId = entryLabel ? entryLabel[1].split(/\s+/).pop() : null;
-      click(firstModel);
-      sleep(1600);
-      s2 = dismissOverlays(observe());
+  // The picker lists providers first ("Claude 15 models"); a provider opens its models, each
+  // labelled "<name> <description> Create profile from this model". The chosen model shows up as
+  // the composer button's label, which is matched back to the catalog to learn its declared levels.
+  let chosenModel = null;
+  if (await hasButton("Select model (Select model)")) {
+    await button("Select model (Select model)").click();
+    await sleep(1300);
+    const providerEntry = /^.+ \d+ models?$/;
+    if (await hasButton(providerEntry)) {
+      await button(providerEntry).click();
+      await sleep(1200);
+    }
+    const modelEntry = /^.+ Create profile from this model$/;
+    if (await hasButton(modelEntry)) {
+      await button(modelEntry).click();
+      await sleep(1600);
+      s2 = await dismissOverlays();
+      const selected = s2.match(/button "Select model \(([^)]+)\)"/)?.[1] ?? null;
+      chosenModel =
+        queryProviderSnapshot()
+          .flatMap((provider) => (Array.isArray(provider.models) ? provider.models : []))
+          .find((model) => model.label === selected || model.id === selected) ?? null;
     }
   }
-  const thinkingRef = refFor(s2, /button "Select thinking option/);
-  snap = s2;
-  if (!thinkingRef) {
-    const reachable = bsk(["observe", "--session", session], { allowFailure: true });
+  const thinkingName = /^Select thinking option/;
+  if (!(await hasButton(thinkingName))) {
     failFast(
       "Open thinking menu",
-      `no 'Select thinking option' button after 3 attempts\n` +
-        `unavailable screen: ${reachable.includes("Workspace unavailable")}\n` +
-        `--- snapshot ---\n${snap.slice(0, 900)}`,
+      `no 'Select thinking option' button\n` +
+        `unavailable screen: ${s2.includes("Workspace unavailable")}\n` +
+        `--- snapshot ---\n${s2.slice(0, 900)}`,
     );
   }
-  snap = observe();
 
   // composer 里的按钮文案是 "Select thinking option (…)"；气泡里的 "Thinking" 是折叠区，
   // 点它什么也不会发生。
-  click(thinkingRef);
-  sleep(700);
-  snap = observe();
+  await button(thinkingName).click();
+  await sleep(700);
+  snap = await observe();
 
   // The menu must list exactly what the selected model declares, not a fixed ladder: models differ
   // (one supports off/low/high/max, another low/medium/high/xhigh/max), and a hardcoded list either
   // invents a level the model rejects or hides one it accepts.
-  const declared = (() => {
-    if (!chosenModelId) return null;
-    const entry = queryProviderSnapshot().find(
-      (provider) =>
-        Array.isArray(provider.models) &&
-        provider.models.some((model) => model.id === chosenModelId),
-    );
-    const model = entry?.models?.find((candidate) => candidate.id === chosenModelId);
-    return model?.thinkingOptions?.map((option) => option.id) ?? null;
-  })();
+  const declared = chosenModel?.thinkingOptions?.map((option) => option.id) ?? null;
+  const chosenModelId = chosenModel?.id ?? null;
+  const entryRole = "(?:button|menuitem|menuitemradio|option)";
   const knownLabels = ["Off", "Minimal", "Low", "Medium", "High", "Extra high", "Max"];
-  const menuEntries = knownLabels.filter((lvl) => new RegExp(`button "${lvl}"`).test(snap));
+  const menuEntries = knownLabels.filter((lvl) => new RegExp(`${entryRole} "${lvl}"`).test(snap));
   // Any level label the menu shows that is not one of the protocol's names — a locally invented
   // word like "XHigh" rendered raw, or the old "Extra high" spelling drifting — is a mismatch
   // between the daemon's vocabulary and the app's.
   const unknownEntries = [
-    ...snap.matchAll(/button "(XHigh|Xhigh|Maximal|ExtraHigh|Off \(|Minimal \(|None)"/g),
+    ...snap.matchAll(
+      new RegExp(`${entryRole} "(XHigh|Xhigh|Maximal|ExtraHigh|Off \\(|Minimal \\(|None)"`, "g"),
+    ),
   ].map((match) => match[1]);
   record(
     "Thinking menu renders the levels the selected model declares",
@@ -535,7 +504,7 @@ try {
   console.log(`      thinking levels rendered: ${menuEntries.join(", ")}`);
 
   // ---------------------------------------------------------------- console 卫生
-  const consoleOutput = consoleText();
+  const consoleOutput = consoleLines.join("\n");
   const validationErrors = [
     "Message validation failed",
     "Response validation failed",
@@ -551,7 +520,7 @@ try {
     record("Browser conformance run", false, error.message);
   }
 } finally {
-  bsk(["session", "stop", session], { allowFailure: true });
+  await browser.close();
 }
 
 const failed = results.filter((r) => !r.ok);

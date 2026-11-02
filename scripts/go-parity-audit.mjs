@@ -312,11 +312,8 @@ if (isMain) {
     console.log(`\n== 解析了但从未使用 (${report.ignored.length}) — advisory，不阻断 ==`);
     for (const r of report.ignored) console.log(`  ${r.field} (${r.ident})`);
   }
-  const failed =
-    report.inbound.length +
-      report.outbound.length +
-      report.unrouted.length +
-      report.ignored.length >
-    0;
+  // 「解析了但从未使用」是提醒，不计入失败：它和上面三类一样打印出来，但 audit 的基线只管
+  // 入站缺口，算进退出码会让每次 audit 都以「有缺口」退出，真正的缺口反而被当成提醒放过。
+  const failed = report.inbound.length + report.outbound.length + report.unrouted.length > 0;
   process.exit(failed ? 1 : 0);
 }

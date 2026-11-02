@@ -136,14 +136,20 @@ function readBaseline() {
   }
 }
 
-/** 把「已知缺口」变成不许增长的上限，而不是可以一直挂着的提醒。 */
+/**
+ * 把「已知缺口」变成不许增长的上限，而不是可以一直挂着的提醒。
+ *
+ * 只有登记了基线的一步才能以提醒放行；其余各步失败就是失败。原来没有基线的一步返回 ok，
+ * 于是 Go 单测挂了、浏览器检查挂了都只算「提醒」，audit 照样「全部通过」。
+ */
 function checkBaseline(step, out, baseline) {
   const key = step.baseline;
-  if (!key) return { ok: true };
+  if (!key) return { ok: false };
   const limit = baseline[key];
-  if (typeof limit !== "number") return { ok: true };
+  if (typeof limit !== "number")
+    return { ok: false, reason: `scripts/audit-baseline.json 里没有 ${key}。` };
   const current = extractCount(step, out);
-  if (current === null) return { ok: true };
+  if (current === null) return { ok: false, reason: `${step.name} 没跑完，读不到缺口数。` };
   if (current > limit) {
     return {
       ok: false,

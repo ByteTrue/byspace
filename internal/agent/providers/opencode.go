@@ -35,11 +35,13 @@ type OpenCodeSession struct {
 	thinking            string
 	turnCounter         int
 	nextClientMessageID string
-	activeTurnID        string
-	timeline            []sdk.TimelineEntry
-	finishWaiters       []chan error
-	eventSubscribers    map[int]func(map[string]any)
-	nextSubID           int
+	// nextOutputSchema constrains the next reply (the prompt's json_schema format), then clears.
+	nextOutputSchema map[string]any
+	activeTurnID     string
+	timeline         []sdk.TimelineEntry
+	finishWaiters    []chan error
+	eventSubscribers map[int]func(map[string]any)
+	nextSubID        int
 }
 
 // StartOpenCodeSession starts or attaches to an OpenCode agent session.
@@ -136,6 +138,18 @@ func (s *OpenCodeSession) SetNextClientMessageID(id string) {
 	s.mu.Unlock()
 }
 
+// SetNextOutputSchema constrains the next reply to schema.
+func (s *OpenCodeSession) SetNextOutputSchema(schema any) error {
+	object, ok := schema.(map[string]any)
+	if !ok {
+		return errors.New("OpenCode structured outputs require a JSON object schema.")
+	}
+	s.mu.Lock()
+	s.nextOutputSchema = object
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *OpenCodeSession) LastError() string {
 	return ""
 }
@@ -208,6 +222,8 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		Item:      userMessage(message, clientMsgID),
 	})
 	sid := s.sessionID
+	outputSchema := s.nextOutputSchema
+	s.nextOutputSchema = nil
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)
@@ -221,9 +237,13 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 	go func() {
 		parts := []map[string]any{{"type": "text", "text": message}}
 		parts = append(parts, imageBlocksForOpenCode(images)...)
-		payload, _ := json.Marshal(map[string]any{
+		body := map[string]any{
 			"parts": parts,
-		})
+		}
+		if outputSchema != nil {
+			body["format"] = map[string]any{"type": "json_schema", "schema": outputSchema}
+		}
+		payload, _ := json.Marshal(body)
 		resp, err := s.httpClient.Post(s.baseURL+"/session/"+sid+"/message", "application/json", bytes.NewReader(payload))
 		var replyText string
 		if err == nil {

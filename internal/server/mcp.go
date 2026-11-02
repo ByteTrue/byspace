@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -116,7 +115,8 @@ func (s *Server) executeMCPRequestForAgent(ctx context.Context, req mcpRequest, 
 			}
 		}
 		args, _ := req.Params["arguments"].(map[string]any)
-		out, isErr := s.callMCPTool(ctx, name, args)
+		// The calling agent scopes the tools that act on "you": a heartbeat prompts its creator.
+		out, isErr := s.callMCPTool(withMCPCaller(ctx, agentID), name, args)
 		b, _ := json.MarshalIndent(out, "", "  ")
 		return map[string]any{
 			"jsonrpc": "2.0",
@@ -159,6 +159,11 @@ func mcpToolDef(name, desc string, props map[string]any, required ...string) map
 // mcpToolDefinitions returns the complete catalog of 37 BySpace orchestration MCP tools
 // matching packages/server/src/server/agent/tools/byspace-tools.ts.
 func mcpToolDefinitions() []map[string]any {
+	return append(mcpBaseToolDefinitions(), scheduleToolDefinitions()...)
+}
+
+// mcpBaseToolDefinitions are the tools other than schedules and heartbeats.
+func mcpBaseToolDefinitions() []map[string]any {
 	strProp := map[string]any{"type": "string"}
 	numProp := map[string]any{"type": "number"}
 	return []map[string]any{
@@ -195,19 +200,6 @@ func mcpToolDefinitions() []map[string]any {
 		mcpToolDef("capture_terminal", "Capture recent output lines from a PTY terminal.", map[string]any{"terminalId": strProp}, "terminalId"),
 		mcpToolDef("send_terminal_keys", "Send input characters/keys to a PTY terminal.", map[string]any{"terminalId": strProp, "keys": strProp}, "terminalId", "keys"),
 
-		// Schedules & Heartbeats
-		mcpToolDef("create_schedule", "Create a recurring scheduled agent run.", map[string]any{"name": strProp, "prompt": strProp, "cron": strProp, "everyMs": numProp, "cwd": strProp}, "prompt"),
-		mcpToolDef("create_heartbeat", "Create a recurring heartbeat schedule.", map[string]any{"name": strProp, "prompt": strProp, "cron": strProp, "everyMs": numProp, "cwd": strProp}, "prompt"),
-		mcpToolDef("delete_heartbeat", "Delete a heartbeat schedule by ID.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("list_schedules", "List all configured schedules and heartbeats.", map[string]any{}),
-		mcpToolDef("inspect_schedule", "Inspect a schedule by ID.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("pause_schedule", "Pause an active schedule.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("resume_schedule", "Resume a paused schedule.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("delete_schedule", "Delete a schedule by ID.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("update_schedule", "Update a schedule's configuration.", map[string]any{"scheduleId": strProp, "prompt": strProp, "name": strProp}, "scheduleId"),
-		mcpToolDef("schedule_logs", "Fetch run history logs for a schedule.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-		mcpToolDef("run_schedule_once", "Trigger an immediate execution of a schedule.", map[string]any{"scheduleId": strProp}, "scheduleId"),
-
 		// Providers & Models
 		mcpToolDef("list_providers", "List available agent providers.", map[string]any{}),
 		mcpToolDef("list_models", "List available models for a provider.", map[string]any{"provider": strProp}),
@@ -217,6 +209,9 @@ func mcpToolDefinitions() []map[string]any {
 }
 
 func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]any) (any, bool) {
+	if out, isErr, handled := s.callScheduleTool(ctx, name, args); handled {
+		return out, isErr
+	}
 	switch name {
 	case "create_workspace":
 		cwd, _ := args["cwd"].(string)
@@ -437,6 +432,7 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		rec.ArchivedAt = &now
 		rec.UpdatedAt = now
 		_ = s.store.UpsertAgent(*rec)
+		s.noteAgentArchived(agentID)
 		return map[string]any{"archived": true, "agentId": agentID}, false
 
 	case "kill_agent":
@@ -594,108 +590,6 @@ func (s *Server) callMCPTool(ctx context.Context, name string, args map[string]a
 		}
 		_ = sess.WriteInput([]byte(keys))
 		return map[string]any{"terminalId": tid, "sent": true}, false
-
-	case "create_schedule", "create_heartbeat":
-		prompt, _ := args["prompt"].(string)
-		sName, _ := args["name"].(string)
-		cronExpr, _ := args["cron"].(string)
-		everyMsF, _ := args["everyMs"].(float64)
-		cwd, _ := args["cwd"].(string)
-		if cwd == "" {
-			cwd, _ = os.Getwd()
-		}
-		cad := schedule.Cadence{Type: "every", EveryMs: 600000}
-		if cronExpr != "" {
-			cad = schedule.Cadence{Type: "cron", Expression: cronExpr, Timezone: "UTC"}
-		} else if everyMsF > 0 {
-			cad = schedule.Cadence{Type: "every", EveryMs: int64(everyMsF)}
-		}
-		var namePtr *string
-		if sName != "" {
-			namePtr = &sName
-		}
-		// CreateOrReplace, not Create: a model re-running "set up a nightly check" must not
-		// accumulate one schedule per call — the user asked for one and would get a dozen, all
-		// firing.
-		created, err := s.schedules.CreateOrReplace(ctx, schedule.CreateInput{
-			Name:    namePtr,
-			Prompt:  prompt,
-			Cadence: cad,
-			Target: schedule.Target{
-				Type:   "new-agent",
-				Config: &schedule.TargetConfig{Provider: "pi", Cwd: cwd},
-			},
-		})
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": created.ToSummary()}, false
-
-	case "list_schedules":
-		list, err := s.schedules.List()
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		out := make([]schedule.Summary, 0, len(list))
-		for _, item := range list {
-			out = append(out, item.ToSummary())
-		}
-		return map[string]any{"schedules": out}, false
-
-	case "inspect_schedule":
-		sid, _ := args["scheduleId"].(string)
-		sched, err := s.schedules.Inspect(sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": sched}, false
-
-	case "pause_schedule":
-		sid, _ := args["scheduleId"].(string)
-		sched, err := s.schedules.Pause(sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": sched.ToSummary()}, false
-
-	case "resume_schedule":
-		sid, _ := args["scheduleId"].(string)
-		sched, err := s.schedules.Resume(sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": sched.ToSummary()}, false
-
-	case "delete_schedule", "delete_heartbeat":
-		sid, _ := args["scheduleId"].(string)
-		if err := s.schedules.Delete(sid); err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"deleted": true, "scheduleId": sid}, false
-
-	case "update_schedule":
-		sid, _ := args["scheduleId"].(string)
-		sched, err := s.schedules.Inspect(sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": sched.ToSummary()}, false
-
-	case "schedule_logs":
-		sid, _ := args["scheduleId"].(string)
-		runs, err := s.schedules.Logs(sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"runs": runs}, false
-
-	case "run_schedule_once":
-		sid, _ := args["scheduleId"].(string)
-		sched, err := s.schedules.RunOnce(ctx, sid)
-		if err != nil {
-			return map[string]any{"error": err.Error()}, true
-		}
-		return map[string]any{"schedule": sched.ToSummary()}, false
 
 	case "list_providers":
 		return map[string]any{

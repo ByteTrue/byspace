@@ -55,8 +55,10 @@ const usageText = `byspace — single-binary AI coding agent host, desktop & mob
                                   print an agent's timeline transcript
   byspace wait [--addr host:port] [--timeout <ms>] <agent-id>
                                   wait for an agent's active turn to finish
+  byspace schedule <create|list|update|delete|...> [options]
+                                  start a new agent on a cadence (create needs --provider)
   byspace heartbeat <create|list|delete> [options]
-                                  manage scheduled Pi agent runs and heartbeats
+                                  prompt the agent this runs in on a cadence
   byspace worktree <create|list|archive> [options]
                                   create, list and archive git worktree workspaces
   byspace pair [--home <dir>] [--relay <host:port>] [--app-url <url>]
@@ -190,7 +192,7 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "heartbeat", "schedule":
-		if err := runHeartbeatCmd(rest, stdout); err != nil {
+		if err := runHeartbeatCmd(cmd, rest, stdout); err != nil {
 			fmt.Fprintf(stderr, "byspace %s: %v\n", cmd, err)
 			return 1
 		}
@@ -1766,6 +1768,15 @@ func waitSessionResp(ctx context.Context, ws *websocket.Conn, wantType, wantStat
 		}
 		if env.Message.Type == "status" && env.Message.Payload["status"] == "agent_create_failed" {
 			errMsg, _ := env.Message.Payload["error"].(string)
+			return nil, errors.New(errMsg)
+		}
+		// A request the daemon refused answers with rpc_error instead of its response type. Waiting
+		// for the response type then ran into the timeout and reported that instead of the reason.
+		if env.Message.Type == "rpc_error" {
+			errMsg, _ := env.Message.Payload["error"].(string)
+			if strings.TrimSpace(errMsg) == "" {
+				errMsg = "the daemon rejected the request"
+			}
 			return nil, errors.New(errMsg)
 		}
 		if env.Message.Type != wantType {

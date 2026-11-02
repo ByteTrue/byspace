@@ -41,7 +41,9 @@ type CodexSession struct {
 	thinking            string
 	turnCounter         int
 	nextClientMessageID string
-	activeTurnID        string
+	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
+	nextOutputSchema map[string]any
+	activeTurnID     string
 	// turnIDs is every turn the thread has run, in order. Rewind works in turns rather than messages, so
 	// resolving a message to a turn needs this list.
 	turnIDs []string
@@ -520,6 +522,19 @@ func (s *CodexSession) SetNextClientMessageID(id string) {
 	s.mu.Unlock()
 }
 
+// SetNextOutputSchema constrains the next turn's reply to schema, normalized the way Codex
+// structured outputs require.
+func (s *CodexSession) SetNextOutputSchema(schema any) error {
+	normalized, err := normalizeCodexOutputSchema(schema)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.nextOutputSchema = normalized
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *CodexSession) LastError() string {
 	return ""
 }
@@ -580,14 +595,20 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
 	s.appendItemLocked(userMessage(message, clientMsgID))
 	tid := s.threadID
+	outputSchema := s.nextOutputSchema
+	s.nextOutputSchema = nil
 	s.mu.Unlock()
 
 	input := []map[string]any{{"type": "text", "text": message}}
 	input = append(input, imageBlocksForCodex(images)...)
-	_, err := s.rpcCall(ctx, "turn/start", map[string]any{
+	params := map[string]any{
 		"threadId": tid,
 		"input":    input,
-	})
+	}
+	if outputSchema != nil {
+		params["outputSchema"] = outputSchema
+	}
+	_, err := s.rpcCall(ctx, "turn/start", params)
 	return err
 }
 

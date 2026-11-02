@@ -3,9 +3,7 @@
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { Link } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -35,7 +33,6 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
   const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
-  const isMobile = useIsCompactFormFactor();
 
   const offerUrlRef = useRef("");
   const inputRef = useRef<EditingTextInputHandle>(null);
@@ -73,9 +70,6 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     if (!parsed.ok) {
       const message = t(`pairing.link.errors.${parsed.errorKey}`);
       setErrorMessage(message);
-      if (!isMobile) {
-        Alert.alert(t("pairing.link.alert.failedTitle"), message);
-      }
       return;
     }
 
@@ -95,13 +89,10 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       const message =
         error instanceof Error ? error.message : t("pairing.link.errors.unableToPair");
       setErrorMessage(message);
-      if (!isMobile) {
-        Alert.alert(t("pairing.link.alert.failedTitle"), message);
-      }
     } finally {
       setIsSaving(false);
     }
-  }, [daemons, handleClose, isMobile, isSaving, onSaved, t, upsertDaemonFromOfferUrl]);
+  }, [daemons, handleClose, isSaving, onSaved, t, upsertDaemonFromOfferUrl]);
 
   const handleChangeOfferUrl = useCallback((next: string) => {
     offerUrlRef.current = next;

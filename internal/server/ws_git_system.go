@@ -525,7 +525,7 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		}
 
 		items, truncated, timelineErr := workspace.PullRequestTimeline(
-			ctx, workspace.DetectForge(ctx, cwd), cwd, owner, name, prNumber, 50)
+			ctx, workspace.DetectForge(ctx, cwd), cwd, owner, name, prNumber)
 		var timelineErrObj any
 		if timelineErr != nil {
 			var classified *workspace.TimelineError
@@ -1034,6 +1034,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			if rec != nil {
 				archived := store.BuildArchivedAgentRecord(*rec, now)
 				_ = s.store.UpsertAgent(archived)
+				s.noteAgentArchived(archived.ID)
 				// Closing a tab is an archive: other clients prune the same tab from this update, and a
 				// silent store write left the conversation open on every socket but the one that asked.
 				s.broadcastAgentUpdate(archived)

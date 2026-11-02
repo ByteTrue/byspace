@@ -127,7 +127,9 @@ func (g PiGenerator) Generate(ctx context.Context, seed string) (Result, error) 
 	}
 	defer sess.Close()
 
-	if err := sess.Prompt(ctx, g.prompt(), nil); err != nil {
+	// The seed goes after the instruction's "Material:" marker. Sending the instruction alone named
+	// every workspace and branch from no material at all ("Untitled coding task").
+	if err := sess.Prompt(ctx, g.prompt()+seed, nil); err != nil {
 		return Result{}, err
 	}
 	if err := sess.WaitForFinish(ctx); err != nil {

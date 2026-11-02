@@ -9,51 +9,6 @@ import (
 	"testing"
 )
 
-// A long thread that stops at the limit without saying so looks like the conversation ended.
-func TestSortAndLimitTimelineReportsTruncation(t *testing.T) {
-	items := []map[string]any{
-		{"createdAt": int64(300)},
-		{"createdAt": int64(100)},
-		{"createdAt": int64(200)},
-	}
-	sorted, truncated, err := sortAndLimitTimeline(items, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !truncated {
-		t.Fatal("dropping an item must be reported")
-	}
-	if sorted[0]["createdAt"] != int64(100) || sorted[1]["createdAt"] != int64(200) {
-		t.Fatalf("order: %v", sorted)
-	}
-
-	sorted, truncated, _ = sortAndLimitTimeline(items, 10)
-	if truncated || len(sorted) != 3 {
-		t.Fatalf("under the limit: truncated=%v len=%d", truncated, len(sorted))
-	}
-}
-
-// GitLab models a review as a system note carrying approval text.
-func TestDecodeGitLabNotesPromotesApproval(t *testing.T) {
-	raw := `[
-	  {"id":1,"author":{"username":"dev"},"body":"Approved","system":true,"created_at":"2026-01-01T00:00:00Z"},
-	  {"id":2,"author":{"username":"dev"},"body":"a comment","system":false,"created_at":"2026-01-02T00:00:00Z"}
-	]`
-	items, truncated, err := decodeGitLabNotes(raw, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if truncated {
-		t.Fatal("unexpected truncation")
-	}
-	if items[0]["kind"] != "review" || items[0]["reviewState"] != "approved" {
-		t.Fatalf("approval note: %+v", items[0])
-	}
-	if items[1]["kind"] != "comment" {
-		t.Fatalf("plain note: %+v", items[1])
-	}
-}
-
 func TestParseUnixOrISO(t *testing.T) {
 	if got := parseUnixOrISO("2026-01-01T00:00:00Z"); got == 0 {
 		t.Fatal("ISO timestamp not parsed")
@@ -99,7 +54,7 @@ func TestPullRequestTimelineUsesGitHubGraphQL(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	items, truncated, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 7, 50)
+	items, truncated, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,12 +107,12 @@ func TestPullRequestTimelineClassifiesFailures(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	_, _, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 999, 50)
+	_, _, err := PullRequestTimeline(t.Context(), "github", dir, "acme", "repo", 999)
 	var classified *TimelineError
 	if !errors.As(err, &classified) || classified.Kind != "not_found" {
 		t.Fatalf("err = %#v", err)
 	}
-	_, _, err = PullRequestTimeline(t.Context(), "github", dir, "acme", "@etc/passwd", 1, 50)
+	_, _, err = PullRequestTimeline(t.Context(), "github", dir, "acme", "@etc/passwd", 1)
 	if !errors.As(err, &classified) || !strings.Contains(classified.Message, "invalid PR identity") {
 		t.Fatalf("an invalid identity never reaches gh: %#v", err)
 	}

@@ -3,10 +3,8 @@
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
 import { ClipboardPaste, Copy } from "lucide-react";
 import * as Clipboard from "expo-clipboard";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -78,7 +76,6 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
   const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
-  const isMobile = useIsCompactFormFactor();
 
   const [relayEndpoint, setRelayEndpoint] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -130,15 +127,9 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     offerUrlRef.current = next;
   }, []);
 
-  const showError = useCallback(
-    (message: string) => {
-      setErrorMessage(message);
-      if (!isMobile) {
-        Alert.alert(t("pairing.link.alert.failedTitle"), message);
-      }
-    },
-    [isMobile, t],
-  );
+  const showError = useCallback((message: string) => {
+    setErrorMessage(message);
+  }, []);
 
   const handlePair = useCallback(async () => {
     if (isSaving) return;

@@ -397,10 +397,7 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		if spec.ID == "pi" && len(piModels) > 0 {
 			models = piModels
 		}
-		if !enabled {
-			models = []sdk.CatalogModel{}
-		}
-		entries = append(entries, map[string]any{
+		entries = append(entries, withCatalog(map[string]any{
 			"provider":      spec.ID,
 			"label":         spec.Label,
 			"status":        status,
@@ -408,10 +405,8 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 			"source":        "builtin",
 			"fetchedAt":     now,
 			"defaultModeId": spec.DefaultModeID,
-			"models":        models,
-			"modes":         spec.Modes,
 			"description":   spec.Description,
-		})
+		}, models, spec.Modes))
 	}
 
 	// The scripted providers follow the built-ins, matching node's registry which lists every registered
@@ -432,21 +427,15 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		if enabled {
 			status = "ready"
 		}
-		models := spec.Models
-		if !enabled {
-			models = []sdk.CatalogModel{}
-		}
-		entries = append(entries, map[string]any{
+		entries = append(entries, withCatalog(map[string]any{
 			"provider":    spec.ID,
 			"label":       spec.Label,
 			"status":      status,
 			"enabled":     enabled,
 			"source":      "builtin",
 			"fetchedAt":   now,
-			"models":      models,
-			"modes":       spec.Modes,
 			"description": spec.Description,
-		})
+		}, spec.Models, spec.Modes))
 	}
 
 	// Append user-added custom/plugin providers (e.g. Cursor, Kimi, Kiro, Trae, Z.AI, etc.)
@@ -487,19 +476,30 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		} else if binary := customProviderBinary(cfgMap, spec); binary != "" && !execres.IsCommandAvailable(context.Background(), binary) {
 			status = "unavailable"
 		}
-		entries = append(entries, map[string]any{
+		entries = append(entries, withCatalog(map[string]any{
 			"provider":    id,
 			"label":       label,
 			"status":      status,
-			"enabled":     true,
+			"enabled":     enabled,
 			"source":      "custom",
 			"fetchedAt":   now,
-			"models":      MergeProviderModels(id, cfgMap, runtimeModels),
-			"modes":       spec.Modes,
 			"description": desc,
-		})
+		}, MergeProviderModels(id, cfgMap, runtimeModels), spec.Modes))
 	}
 	return entries
+}
+
+// withCatalog adds a provider's models and modes when it is ready.
+//
+// Node publishes an unavailable provider (switched off, or its CLI not installed) without a
+// catalog: only a ready provider has fetched one. Listing the static models of a provider that
+// cannot run made the model picker offer them, and picking one silently did nothing.
+func withCatalog(entry map[string]any, models []sdk.CatalogModel, modes []ModeDefinition) map[string]any {
+	if entry["status"] == "ready" {
+		entry["models"] = models
+		entry["modes"] = modes
+	}
+	return entry
 }
 
 // BuildAvailableProviders builds the `providers` array for `list_available_providers_response`.

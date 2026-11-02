@@ -31,10 +31,19 @@ const LIST_MARKER_ATTRIBUTES = {
   [MARKDOWN_COPY_LIST_MARKER_ATTRIBUTE]: "true",
 };
 
-function cellAlignment(style: string | undefined): string | null {
-  return (
-    style?.match(/(?:^|;)\s*text-align\s*:\s*(left|right|center)/i)?.[1]?.toLowerCase() ?? null
-  );
+// A column's `:---:` / `---:` alignment. packages/app read it for copying only, so aligned columns
+// rendered left-aligned; the cell now applies it.
+type CellAlign = "left" | "right" | "center";
+
+const CELL_ALIGN_STYLES: Record<CellAlign, CSSProperties> = {
+  left: { textAlign: "left" },
+  right: { textAlign: "right" },
+  center: { textAlign: "center" },
+};
+
+function cellAlignment(style: string | undefined): CellAlign | null {
+  const align = style?.match(/(?:^|;)\s*text-align\s*:\s*(left|right|center)/i)?.[1]?.toLowerCase();
+  return align === "left" || align === "right" || align === "center" ? align : null;
 }
 
 function listSpacingStyle(node: MarkdownAstNode, parents: MarkdownAstNode[]): CSSProperties {
@@ -179,6 +188,7 @@ export const DEFAULT_MARKDOWN_RULES: Record<string, MarkdownRule> = {
     return (
       <th
         key={node.key}
+        style={align ? CELL_ALIGN_STYLES[align] : undefined}
         {...copyTag("th")}
         {...(align ? { [MARKDOWN_COPY_ALIGN_ATTRIBUTE]: align } : {})}
       >
@@ -191,6 +201,7 @@ export const DEFAULT_MARKDOWN_RULES: Record<string, MarkdownRule> = {
     return (
       <td
         key={node.key}
+        style={align ? CELL_ALIGN_STYLES[align] : undefined}
         {...copyTag("td")}
         {...(align ? { [MARKDOWN_COPY_ALIGN_ATTRIBUTE]: align } : {})}
       >

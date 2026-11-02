@@ -1,18 +1,20 @@
 package schedule
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	// Cron cadences carry an IANA time zone. Windows has no system zone database, so without the
+	// embedded copy every schedule with a time zone fails to compute its next run there.
+	_ "time/tzdata"
 )
 
-// Cron expression parsing, ported from @bytetrue/protocol/schedule/cron-expression.
-//
-// The previous implementation understood only "*/N" in the minute field and returned "next
-// minute" for everything else — so `0 9 * * *` fired every minute instead of once a day. A
-// schedule that fires 1440 times where the user asked for once is worse than one that refuses to
-// parse.
+// Cron expression parsing, ported from @bytetrue/protocol/schedule/cron-expression, and next-run
+// computation, ported from server/schedule/cron.ts. Error messages match Node's: the client shows
+// them as they come.
 
 type cronBounds struct {
 	min, max int
@@ -37,11 +39,16 @@ type parsedCron struct {
 	minute, hour, dayOfMonth, month, dayOfWeek cronMatcher
 }
 
+var (
+	cronRangePattern  = regexp.MustCompile(`^(\d+)-(\d+)$`)
+	cronNumberPattern = regexp.MustCompile(`^\d+$`)
+)
+
 // ParseCron parses a five-field cron expression.
 func ParseCron(expr string) (*parsedCron, error) {
 	fields := strings.Fields(strings.TrimSpace(expr))
 	if len(fields) != 5 {
-		return nil, fmt.Errorf("invalid cron expression %q: expected 5 fields, got %d", expr, len(fields))
+		return nil, errors.New("Cron expressions must have 5 fields")
 	}
 	matchers := make([]cronMatcher, 5)
 	for i, field := range fields {
@@ -61,45 +68,49 @@ func ParseCron(expr string) (*parsedCron, error) {
 }
 
 // parseCronField handles a comma-separated list of `*`, `N`, `A-B`, each with an optional /step.
+// A step on a single value is accepted and ignored, as in Node.
 func parseCronField(source string, bounds cronBounds) (cronMatcher, error) {
 	trimmed := strings.TrimSpace(source)
 	if trimmed == "" {
-		return nil, fmt.Errorf("invalid cron %s field", bounds.name)
+		return nil, fmt.Errorf("Invalid cron %s field", bounds.name)
 	}
 	out := make(cronMatcher, bounds.max-bounds.min+1)
 
 	for _, rawPart := range strings.Split(trimmed, ",") {
 		part := strings.TrimSpace(rawPart)
 		if part == "" {
-			return nil, fmt.Errorf("invalid cron %s field", bounds.name)
+			return nil, fmt.Errorf("Invalid cron %s field", bounds.name)
 		}
 		base, step, err := splitCronStep(part, bounds)
 		if err != nil {
 			return nil, err
 		}
 
-		switch {
-		case base == "*":
+		if base == "*" {
 			for value := bounds.min; value <= bounds.max; value += step {
 				out[value] = true
 			}
-		case strings.Contains(base, "-"):
-			startText, endText, _ := strings.Cut(base, "-")
-			start, err1 := strconv.Atoi(strings.TrimSpace(startText))
-			end, err2 := strconv.Atoi(strings.TrimSpace(endText))
-			if err1 != nil || err2 != nil || start < bounds.min || end > bounds.max || start > end {
-				return nil, fmt.Errorf("invalid cron %s range %q", bounds.name, base)
+			continue
+		}
+		if match := cronRangePattern.FindStringSubmatch(base); match != nil {
+			start, _ := strconv.Atoi(match[1])
+			end, _ := strconv.Atoi(match[2])
+			if start > end || start < bounds.min || end > bounds.max {
+				return nil, fmt.Errorf("Invalid cron %s range", bounds.name)
 			}
 			for value := start; value <= end; value += step {
 				out[value] = true
 			}
-		default:
-			value, err := strconv.Atoi(base)
-			if err != nil || value < bounds.min || value > bounds.max {
-				return nil, fmt.Errorf("invalid cron %s value %q", bounds.name, base)
-			}
-			out[value] = true
+			continue
 		}
+		if !cronNumberPattern.MatchString(base) {
+			return nil, fmt.Errorf("Invalid cron %s value", bounds.name)
+		}
+		value, convErr := strconv.Atoi(base)
+		if convErr != nil || value < bounds.min || value > bounds.max {
+			return nil, fmt.Errorf("Invalid cron %s value", bounds.name)
+		}
+		out[value] = true
 	}
 	return out, nil
 }
@@ -108,77 +119,94 @@ func parseCronField(source string, bounds cronBounds) (cronMatcher, error) {
 func splitCronStep(part string, bounds cronBounds) (base string, step int, err error) {
 	pieces := strings.Split(part, "/")
 	if len(pieces) > 2 {
-		return "", 0, fmt.Errorf("invalid cron %s step", bounds.name)
+		return "", 0, fmt.Errorf("Invalid cron %s step", bounds.name)
 	}
-	base = strings.TrimSpace(pieces[0])
+	base = pieces[0]
 	step = 1
 	if len(pieces) == 2 {
 		stepText := strings.TrimSpace(pieces[1])
 		parsed, convErr := strconv.Atoi(stepText)
 		if convErr != nil || parsed <= 0 || strconv.Itoa(parsed) != stepText {
-			return "", 0, fmt.Errorf("invalid cron %s step %q", bounds.name, stepText)
+			return "", 0, fmt.Errorf("Invalid cron %s step", bounds.name)
 		}
 		step = parsed
-	}
-	if base == "" {
-		return "", 0, fmt.Errorf("invalid cron %s field", bounds.name)
 	}
 	return base, step, nil
 }
 
-// Next returns the next time the expression matches, strictly after `now`.
+// loadCronZone resolves a cadence's IANA time zone.
+func loadCronZone(timeZone string) (*time.Location, error) {
+	// "Local" is the host's zone, which is not a time zone name a schedule can carry.
+	if timeZone == "Local" {
+		return nil, fmt.Errorf("Invalid cron time zone: %s", timeZone)
+	}
+	loc, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid cron time zone: %s", timeZone)
+	}
+	return loc, nil
+}
+
+// ValidateCadence rejects a cadence that cannot be stored: a malformed cron expression or time zone,
+// or an interval that is not a positive number of milliseconds.
 //
-// Scans minute by minute over a bounded horizon. Cron's day-of-month/day-of-week interaction is
-// "either matches when both are restricted", which minute-by-minute evaluation reproduces
-// exactly and a bitmask arithmetic version gets wrong.
-func (c *parsedCron) Next(now time.Time) (time.Time, error) {
-	cursor := now.Truncate(time.Minute).Add(time.Minute)
-	// Four years covers Feb 29 on a specific weekday; anything beyond that is a schedule that
-	// will never fire again, which the caller should hear about.
-	limit := cursor.AddDate(4, 0, 0)
-	domRestricted := !isEveryValue(c.dayOfMonth, 1, 31)
-	dowRestricted := !isEveryValue(c.dayOfWeek, 0, 6)
-
-	for cursor.Before(limit) {
-		if !c.month.matches(int(cursor.Month())) {
-			// Jump to the first day of the next month rather than stepping 40 000 minutes.
-			cursor = time.Date(cursor.Year(), cursor.Month(), 1, 0, 0, 0, 0, cursor.Location()).AddDate(0, 1, 0)
-			continue
+// Ported from validateScheduleCadence plus the protocol schema the Node store parses every record
+// with: a zero interval would fire on every tick.
+func ValidateCadence(cadence Cadence) error {
+	switch cadence.Type {
+	case "every":
+		if cadence.EveryMs <= 0 {
+			return errors.New("everyMs must be a positive integer")
 		}
-		if !c.dayMatches(cursor, domRestricted, dowRestricted) {
-			cursor = time.Date(cursor.Year(), cursor.Month(), cursor.Day(), 0, 0, 0, 0, cursor.Location()).AddDate(0, 0, 1)
-			continue
+		return nil
+	case "cron":
+		if _, err := ParseCron(cadence.Expression); err != nil {
+			return err
 		}
-		if !c.hour.matches(cursor.Hour()) {
-			cursor = time.Date(cursor.Year(), cursor.Month(), cursor.Day(), cursor.Hour(), 0, 0, 0, cursor.Location()).Add(time.Hour)
-			continue
+		if cadence.Timezone != "" {
+			if _, err := loadCronZone(cadence.Timezone); err != nil {
+				return err
+			}
 		}
-		if !c.minute.matches(cursor.Minute()) {
-			cursor = cursor.Add(time.Minute)
-			continue
-		}
-		return cursor, nil
+		return nil
+	default:
+		return fmt.Errorf("Invalid schedule cadence type: %q", cadence.Type)
 	}
-	return time.Time{}, fmt.Errorf("cron expression never matches within four years")
 }
 
-// dayMatches applies cron's day rule: when both day fields are restricted the day matches if
-// either does; otherwise the restricted one decides.
-func (c *parsedCron) dayMatches(t time.Time, domRestricted, dowRestricted bool) bool {
-	dom := c.dayOfMonth.matches(t.Day())
-	dow := c.dayOfWeek.matches(int(t.Weekday()))
-	if domRestricted && dowRestricted {
-		return dom || dow
-	}
-	return dom && dow
-}
+// cronHorizonMinutes bounds the next-run search, as in Node: a year of minutes.
+const cronHorizonMinutes = 366 * 24 * 60
 
-// isEveryValue reports whether a matcher covers every value in [min,max].
-func isEveryValue(m cronMatcher, min, max int) bool {
-	for value := min; value <= max; value++ {
-		if !m.matches(value) {
-			return false
+// ComputeNextRunAt returns the next fire time strictly after `after`.
+//
+// Ported from computeNextRunAt. A cron expression is evaluated in its time zone (UTC when it has
+// none), minute by minute, and every field must match — day-of-month and day-of-week included, so
+// `0 0 13 * 5` is Friday the 13th, not every 13th plus every Friday.
+func ComputeNextRunAt(cadence Cadence, after time.Time) (time.Time, error) {
+	if cadence.Type == "every" {
+		return after.Add(time.Duration(cadence.EveryMs) * time.Millisecond), nil
+	}
+	cron, err := ParseCron(cadence.Expression)
+	if err != nil {
+		return time.Time{}, err
+	}
+	loc := time.UTC
+	if cadence.Timezone != "" {
+		if loc, err = loadCronZone(cadence.Timezone); err != nil {
+			return time.Time{}, err
 		}
 	}
-	return true
+	cursor := after.UTC().Truncate(time.Minute).Add(time.Minute)
+	for index := 0; index < cronHorizonMinutes; index++ {
+		local := cursor.In(loc)
+		if cron.minute.matches(local.Minute()) &&
+			cron.hour.matches(local.Hour()) &&
+			cron.dayOfMonth.matches(local.Day()) &&
+			cron.month.matches(int(local.Month())) &&
+			cron.dayOfWeek.matches(int(local.Weekday())) {
+			return cursor, nil
+		}
+		cursor = cursor.Add(time.Minute)
+	}
+	return time.Time{}, fmt.Errorf("Unable to compute next run time for cron expression: %s", cadence.Expression)
 }

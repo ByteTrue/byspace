@@ -89,6 +89,21 @@ func ProbeForgeAuth(cwd string, forge string) ForgeAuthState {
 		return ClassifyForgeAuth(true, "", nil, false)
 	}
 
+	// A GitHub Enterprise checkout is signed in when gh is signed in to its host, which the routing
+	// lookup has just asked `gh auth status --hostname` about.
+	if binary == "gh" {
+		host, routeErr := gitHubRoutingHost(context.Background(), cwd)
+		var unauthenticated errGitHubHostUnauthenticated
+		switch {
+		case errors.As(routeErr, &unauthenticated):
+			return ForgeAuthUnauthenticated
+		case routeErr != nil:
+			return ClassifyForgeAuth(true, path, routeErr, false)
+		case host != "":
+			return ForgeAuthAuthenticated
+		}
+	}
+
 	out, runErr := runForgeProbe(cwd, binary)
 	if runErr != nil {
 		return ClassifyForgeAuth(true, path, runErr, false)

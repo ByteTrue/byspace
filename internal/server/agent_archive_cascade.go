@@ -98,6 +98,7 @@ func (s *Server) cascadeArchiveChildren(parentID string) {
 		archivedChild := store.BuildArchivedAgentRecord(*child, now)
 		*child = archivedChild
 		_ = s.store.UpsertAgent(archivedChild)
+		s.noteAgentArchived(archivedChild.ID)
 		s.broadcastAgentUpdate(archivedChild)
 		s.broadcastSessionMsg("agent_archived", map[string]any{
 			"agentId":    child.ID,

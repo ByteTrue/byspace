@@ -1413,6 +1413,7 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		_ = la.sess.Close()
 		rec := store.BuildArchivedAgentRecord(la.record, archivedAt)
 		_ = s.store.UpsertAgent(rec)
+		s.noteAgentArchived(rec.ID)
 		s.broadcastAgentUpdate(rec)
 	}
 
@@ -1439,6 +1440,7 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		rec.ArchivedAt = &archivedAt
 		rec.UpdatedAt = archivedAt
 		_ = s.store.UpsertAgent(rec)
+		s.noteAgentArchived(rec.ID)
 		s.broadcastAgentUpdate(rec)
 	}
 	_ = ctx
@@ -1641,6 +1643,7 @@ func (s *Server) teardownArchivedWorkspace(workspaceID, archivedAt string) {
 			}
 			archived := store.BuildArchivedAgentRecord(agent, archivedAt)
 			_ = s.store.UpsertAgent(archived)
+			s.noteAgentArchived(archived.ID)
 			s.broadcastAgentUpdate(archived)
 			s.cascadeArchiveChildren(agent.ID)
 		}
@@ -1815,26 +1818,7 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	intentInput workspace.WorktreeIntentInput,
 	firstAgentContext any,
 ) {
-	// Resolve through the same resolver the worktree RPCs use: the client speaks action + refName +
-	// checkoutSource, and reading only some of those fields silently dropped the branch the user
-	// picked in the starting-ref picker.
-	intent, intentErr := workspace.ResolveWorktreeIntent(ctx, intentInput, projectRoot, workspace.WorktreeIntentDeps{
-		Forge:         workspace.DetectForge(ctx, projectRoot),
-		DefaultBranch: workspace.ResolveDefaultBranch,
-	})
-	if intentErr != nil {
-		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
-			"requestId":       requestID,
-			"workspace":       nil,
-			"setupTerminalId": nil,
-			"error":           intentErr.Error(),
-		})
-		return
-	}
-	worktreeSlug := intentInput.WorktreeSlug
-
-	wtBase := filepath.Join(s.homeDir, "worktrees")
-	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, worktreeSlug)
+	wsRec, prj, err := s.createWorktreeWorkspace(ctx, projectRoot, title, intentInput, firstAgentContext)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
 			"requestId":       requestID,
@@ -1843,17 +1827,54 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 			"error":           err.Error(),
 		})
 		return
+	}
+	var setupTerminalID any
+	payload := map[string]any{
+		"requestId":       requestID,
+		"workspace":       s.workspaceDescriptor(wsRec, prj),
+		"setupTerminalId": setupTerminalID,
+		"error":           nil,
+	}
+	// Optional-not-nullable: the client reads this to explain why the setup tab is blocked, and a
+	// null would make it reject the whole response.
+	if wsRec.UntrustedSource != nil {
+		payload["setupSkippedReason"] = workspace.AutomationBlockedError{Source: *wsRec.UntrustedSource}.Error()
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.create.response", payload)
+}
+
+// createWorktreeWorkspace cuts a BySpace worktree from projectRoot and registers a workspace on it:
+// the record, its broadcast, the base metadata inside the worktree, and the setup run.
+//
+// The workspace.create handler and the schedule runner (a run with worktree isolation) both create
+// worktree workspaces; sharing this keeps the untrusted-source guard and setup scheduling in one place.
+func (s *Server) createWorktreeWorkspace(
+	ctx context.Context,
+	projectRoot string,
+	title *string,
+	intentInput workspace.WorktreeIntentInput,
+	firstAgentContext any,
+) (store.WorkspaceRecord, store.ProjectRecord, error) {
+	// Resolve through the same resolver the worktree RPCs use: the client speaks action + refName +
+	// checkoutSource, and reading only some of those fields silently dropped the branch the user
+	// picked in the starting-ref picker.
+	intent, err := workspace.ResolveWorktreeIntent(ctx, intentInput, projectRoot, workspace.WorktreeIntentDeps{
+		Forge:         workspace.DetectForge(ctx, projectRoot),
+		DefaultBranch: workspace.ResolveDefaultBranch,
+	})
+	if err != nil {
+		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
+	}
+
+	wtBase := filepath.Join(s.homeDir, "worktrees")
+	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, intentInput.WorktreeSlug)
+	if err != nil {
+		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
 	}
 
 	prj, _, err := s.store.EnsureWorkspaceForCwd(projectRoot)
 	if err != nil {
-		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
-			"requestId":       requestID,
-			"workspace":       nil,
-			"setupTerminalId": nil,
-			"error":           err.Error(),
-		})
-		return
+		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -1894,26 +1915,14 @@ func (s *Server) handleWorkspaceCreateFromWorktree(
 	// without asking the forge on every request.
 	s.writeCreatedWorktreeMetadata(wtPath, intent, branch)
 
-	// Setup runs before the response is considered complete by the client, but it must not block the response: a
-	// worktree whose setup is slow is still openable, and the timeline carries the progress.
+	// Setup must not block the caller: a worktree whose setup is slow is still openable, and the
+	// timeline carries the progress.
 	//
 	// Run even when there is nothing to run: a project with no setup still needs a "completed"
 	// snapshot, otherwise a client waiting for progress waits forever. Node emits the empty
 	// completed progress for exactly this case.
-	var setupTerminalID any
 	go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, workspace.ReadSetupCommands(wtPath))
-	payload := map[string]any{
-		"requestId":       requestID,
-		"workspace":       s.workspaceDescriptor(wsRec, prj),
-		"setupTerminalId": setupTerminalID,
-		"error":           nil,
-	}
-	// Optional-not-nullable: the client reads this to explain why the setup tab is blocked, and a
-	// null would make it reject the whole response.
-	if wsRec.UntrustedSource != nil {
-		payload["setupSkippedReason"] = workspace.AutomationBlockedError{Source: *wsRec.UntrustedSource}.Error()
-	}
-	_ = sendSessionMsg(ctx, sink, "workspace.create.response", payload)
+	return wsRec, prj, nil
 }
 
 // writeCreatedWorktreeMetadata records what a fresh worktree was cut from.

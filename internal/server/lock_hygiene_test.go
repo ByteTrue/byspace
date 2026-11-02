@@ -43,6 +43,9 @@ var selfLockingMethods = map[string]bool{
 	"broadcastWorkspaceRecords":     true,
 	"workspaceStatus":               true,
 	"HasActiveAgentWork":            true,
+	// The schedule runner's turn helpers lock to read and stamp the agent record.
+	"runScheduledTurn":   true,
+	"scheduledTurnError": true,
 }
 
 // TestNoReentrantServerLocks parses every non-test file in this package and reports a call to a

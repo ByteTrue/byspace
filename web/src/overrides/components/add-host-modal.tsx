@@ -3,10 +3,8 @@
 // After changing either file, rerun it and then npm run format:files; do not edit by hand.
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
 import { cn } from "cn";
 import { useUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -210,7 +208,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const { t } = useTranslation();
   const daemons = useHosts();
   const { probeAndUpsertDirectConnection } = useHostMutations();
-  const isMobile = useIsCompactFormFactor();
 
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -320,9 +317,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         combined = title;
       }
       setErrorMessage(combined);
-      if (!isMobile) {
-        Alert.alert(t("pairing.direct.errors.failedTitle"), combined);
-      }
     } finally {
       setIsSaving(false);
     }
@@ -331,7 +325,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     directConnectionLabels,
     handleClose,
     host,
-    isMobile,
     isSaving,
     onSaved,
     password,

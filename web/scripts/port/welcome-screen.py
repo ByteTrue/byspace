@@ -165,9 +165,15 @@ p = Port("components/setup-guide-modal.tsx")
 p.rep('''import { Alert, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime } from "react-native-unistyles";
 import { ClipboardPaste, Copy } from "lucide-react-native";
-''', '''import { Alert } from "react-native";
-import { ClipboardPaste, Copy } from "lucide-react";
+''', '''import { ClipboardPaste, Copy } from "lucide-react";
 ''')
+# The form shows the error inline. packages/app also raised a desktop alert, which on the web now
+# becomes a toast (the react-native shim): the same message twice. Keep the inline one only, as
+# the web build always had.
+p.sub(r"\n[ ]*if \(!isMobile\) \{\n[ ]*Alert\.alert\([^;]*\);\n[ ]*\}", "", count=1)
+p.rep("  const isMobile = useIsCompactFormFactor();\n", "")
+p.rep('import { useIsCompactFormFactor } from "@/constants/layout";\n', "")
+p.rep("    [isMobile, t],\n", "    [],\n")
 p.rep('''import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 ''', '''import {
   AdaptiveModalSheet,

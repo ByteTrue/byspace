@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { AppState } from "react-native";
+import { AppState, setAlertHandler } from "react-native";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { SessionProvider } from "@/contexts/session-context";
+import { useToast } from "@/contexts/toast-context";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "@/push-notifications/internal/types";
@@ -137,5 +138,23 @@ export function DraftFlushOnBackground() {
     });
     return () => subscription.remove();
   }, []);
+  return null;
+}
+
+/** Shows Alert.alert notices as error toasts (see the react-native shim). */
+export function AlertToastBridge() {
+  const toast = useToast();
+  useEffect(() => {
+    setAlertHandler((title, message) => {
+      toast.show(
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">{title}</span>
+          {message ? <span>{message}</span> : null}
+        </span>,
+        { variant: "error", durationMs: 4000 },
+      );
+    });
+    return () => setAlertHandler(null);
+  }, [toast]);
   return null;
 }

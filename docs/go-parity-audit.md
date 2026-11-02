@@ -23,17 +23,15 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 | `npm run audit:go-parity`       | 入站字段 Go 有没有接住        | 点了没反应                                 |
 | `npm run audit:emit`            | 出站字段 Go 有没有发全        | 界面上那块数据永远空着或显示旧值           |
 | `node scripts/e2e-runnable.mjs` | 哪些 spec 能对 Go daemon 说话 | 拿错清单会造出成片假失败                   |
-| `npm run audit:browser`         | 真实 Chrome 里能不能用        | 页面报错、菜单缺项、状态不对、操作序列后果 |
+| `npm run audit:browser`         | 真实浏览器里能不能用          | 页面报错、菜单缺项、状态不对、操作序列后果 |
 
-`audit:browser` 需要 daemon 在跑（`./bin/byspace daemon restart --addr 127.0.0.1:6778 --home .dev/byspace-home`）。
+`audit:browser` 需要 daemon 在跑（`npm run dev` 起的开发版，6778）。它用仓库里的 Playwright 开无头 Chromium，不动你自己的浏览器，也不需要另装命令行工具。
 
 ## 基线守卫
 
-入站审计还有 47 条已知缺口，集中在 `hub.*`（远程托管未实现）、`plugin.*`（运行时不存）、
-语音与听写（原生客户端能力）。这些不阻断交付，但**数字不许涨**。
+只有入站字段对账有基线：`scripts/audit-baseline.json` 记录已知缺口数的上限（现在是 0），不超过上限时这一步只算提醒，超过就失败并指出降级办法。缺口修少了也要更新这个文件，否则守卫会一直报「已降到 N」。
 
-`scripts/audit-baseline.json` 记录当前上限。涨了说明新写的 handler 又漏字段了，`.audit` 会失败并指出降级办法。
-缺口真的修少了也要更新这个文件，否则守卫会一直报「已降到 N」。
+其余各步没有基线，失败就是失败。`go-parity-audit.mjs` 打印的「解析了但从未使用」是提醒，不计入退出码。
 
 ## 出站审计能看多深
 

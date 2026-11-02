@@ -23,3 +23,20 @@ Node 的 `ScheduleService`（`git show 20721fdcf^:archive/packages/server/src/se
 ## 要做
 
 照 Node 的 `service.ts` 移植执行层，逐项对照上面 1–5，补 Go 测试（Node 的 `service.test.ts`、`schedule-run-lifecycle.e2e.test.ts` 是用例来源），`npm run audit`，再在开发版用 Mock 模型实测：按时触发、Run now、local 和 worktree 两种隔离、archiveOnFinish 开关、主工作区不受影响。
+
+## 实现（2026-11-02，快改 [rewrite-leftover-fixes](2026-11-02-x-ff-rewrite-leftover-fixes.md)）
+
+照 Node 的 `service.ts`、`store.ts`、`cron.ts`、`schedule-session.ts` 和 `byspace-tools.ts` 的定时部分重写，上面 1–5 逐项：
+
+1. 每秒时钟：`internal/schedule/schedule.go` 的 `Start`/`Tick`，服务器创建时启动、关闭时停。cron 按任务的时区算下次运行（无时区按 UTC），日和星期两个字段都要匹配（与 Node 一致）。
+2. 每次运行按任务配置建 agent：提供方、模型、模式、思考档、标题、`byspace.schedule-id` / `byspace.schedule-run` 标签，按无人值守解析模式。`internal/server/schedule_runner.go`。
+3. 每次运行建自己的工作区：local 是同目录的新工作区，worktree 是新的 BySpace worktree；跑完按 `archiveOnFinish`（默认开）归档这个工作区，没拿到 agent 的运行一律归档；项目已有的工作区不碰。
+4. 已修（见上）。
+5. 重启恢复（中断的运行记失败并归档它的工作区，错过的时段直接跳到下一个）、启动时结束目标 agent 已不存在的心跳、agent 归档时结束它的心跳、运行一开始就记下工作区和 agent、Run now 不推进下次运行也不计入次数、目标消失（agent 没了、目录没了）时结束任务、同名同目标的重复创建改为更新。MCP 的 11 个定时和心跳工具照 Node 移植（`internal/server/mcp_schedule.go`）。
+
+验证：
+
+- Go 测试：`internal/schedule`（cron、时钟、Run now、maxRuns、暂停恢复、更新补丁、重启恢复、心跳随 agent 结束、去重）和 `internal/server/schedule_runner_test.go`（用 Mock 提供方真实建 agent：自己的工作区、配置、标签、归档开关、目录消失、提供方失败、心跳）。
+- 开发版实测（Mock 模型）：在 8082 新建「每分钟」任务，02:49、02:50 两次按时触发，各建一个新工作区、agent id 是 UUID、模型和模式是配置的、跑完归档，主工作区没动；Run now 立即跑一次，下次时间不变；暂停后 02:52 没有触发；编辑关掉 archiveOnFinish 后 Run now 的工作区保留；8081 旧版能打开编辑弹窗、显示模型思考模式；删除带确认。开发版原有的「每小时」任务（`Asia/Hong_Kong`）在 11:00 按时触发、跑满五分钟、归档本次工作区。worktree 隔离：新建 BySpace worktree、跑完归档并删掉目录。MCP：`create_heartbeat` 在 02:54 触发，agent 收到「Schedule "hb-verify" fired (id=…, run=…)」；归档 agent 后心跳结束；`create_schedule` 继承调用者的提供方和模型；`run_schedule_once`、`schedule_logs`、`update_schedule`、`delete_schedule` 正常；别的 agent 删不了这个心跳，定时工具碰不到心跳。
+
+等用户验收后关闭。

@@ -442,7 +442,7 @@ func New(opts Options) (*Server, error) {
 	srv.allowedHostnames = resolveAllowedHostnames(st)
 	srv.skillsQueue.start()
 	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
-	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
+	srv.schedules = schedule.NewService(homeDir, srv.scheduleHooks())
 	go func() {
 		pctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -496,6 +496,9 @@ func New(opts Options) (*Server, error) {
 	})
 	srv.startRuntimeMetrics()
 	srv.startBackgroundGitFetch()
+	// Last: recovering an interrupted run archives its workspace, which needs the rest of the
+	// server. Then the clock fires due schedules every second.
+	srv.schedules.Start()
 	return srv, nil
 }
 
@@ -506,6 +509,9 @@ func (s *Server) Store() *store.Store  { return s.store }
 
 // Close shuts down any live Pi agent subprocesses and PTY sessions.
 func (s *Server) Close() error {
+	if s.schedules != nil {
+		s.schedules.Stop()
+	}
 	// Anything merged but not yet sent would be lost with the daemon: a message's tail must not
 	// depend on how long the daemon stayed up.
 	if s.streamCoalescer != nil {
@@ -2739,6 +2745,20 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
+		// `byspace run --output-schema` constrains the reply. Codex and OpenCode honour it; a schema
+		// they cannot use fails the request instead of being dropped (Node threw from the run).
+		if req.OutputSchema != nil {
+			if setter, ok := mp.session.(providers.OutputSchemaSetter); ok {
+				if err := setter.SetNextOutputSchema(req.OutputSchema); err != nil {
+					_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+						"status":    "agent_create_failed",
+						"requestId": req.RequestID,
+						"error":     err.Error(),
+					})
+					return
+				}
+			}
+		}
 		initialClientMessageID := normalizeClientMessageID(req.ClientMessageID)
 		mp.session.SetNextClientMessageID(initialClientMessageID)
 		createdImages := make([]pi.ImageContent, 0, len(req.Images))
@@ -3420,7 +3440,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		// A host tool call is the provider asking the daemon to run one of its own tools. Answered
 		// asynchronously so the event loop is not blocked for the length of the tool.
 		if call, ok := providers.ParseOmpHostToolCall(ev); ok && hostToolSink != nil {
-			go s.answerOmpHostToolCall(hostToolSink, call)
+			go s.answerOmpHostToolCall(hostToolSink, call, rec.ID)
 		}
 
 		switch evType {
@@ -5315,9 +5335,10 @@ func (s *Server) declareOmpHostTools(sess hostToolSession) {
 }
 
 // answerOmpHostToolCall runs one host tool call and returns its result.
-func (s *Server) answerOmpHostToolCall(sess hostToolSession, call providers.OmpHostToolCall) {
+func (s *Server) answerOmpHostToolCall(sess hostToolSession, call providers.OmpHostToolCall, agentID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+	ctx = withMCPCaller(ctx, agentID)
 
 	result, isError := s.callMCPTool(ctx, call.Name, call.Arguments)
 	output := ""

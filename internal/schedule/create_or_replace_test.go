@@ -5,123 +5,100 @@ import (
 	"testing"
 )
 
-// A model re-running "set up a nightly check" must not accumulate one schedule per call — the
-// user asked for one schedule and would get a dozen, all firing.
+// A model re-running "set up a nightly check" must not accumulate one schedule per call.
 func TestCreateOrReplaceUpdatesInPlace(t *testing.T) {
-	svc := NewService(t.TempDir(), nil)
+	h := newHarness(t)
 	name := "nightly"
 
-	first, err := svc.CreateOrReplace(context.Background(), CreateInput{
-		Name:    &name,
-		Prompt:  "check the build",
-		Cadence: Cadence{Type: "every", EveryMs: 60000},
-		Target:  Target{Type: "new-agent", Config: &TargetConfig{Cwd: "/tmp/a"}},
+	first, err := h.svc.CreateOrReplace(CreateInput{
+		Name: &name, Prompt: "check the build", Cadence: every(60000), Target: newAgentTarget(), MaxRuns: intPtr(5),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := h.svc.Pause(first.ID); err != nil {
+		t.Fatal(err)
+	}
 
-	second, err := svc.CreateOrReplace(context.Background(), CreateInput{
-		Name:    &name,
-		Prompt:  "check the build and the tests",
-		Cadence: Cadence{Type: "every", EveryMs: 120000},
-		Target:  Target{Type: "new-agent", Config: &TargetConfig{Cwd: "/tmp/a"}},
+	second, err := h.svc.CreateOrReplace(CreateInput{
+		Name: &name, Prompt: "check the build and the tests", Cadence: every(120000), Target: newAgentTarget(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if second.ID != first.ID {
 		t.Fatalf("a same-name same-target call created a second schedule: %q vs %q", second.ID, first.ID)
 	}
-	if second.Prompt != "check the build and the tests" {
-		t.Fatalf("prompt not updated: %q", second.Prompt)
+	// The replacement is the new definition in full: active again, and limits it does not state are
+	// cleared rather than inherited.
+	if second.Prompt != "check the build and the tests" || second.Cadence.EveryMs != 120000 ||
+		second.Status != "active" || second.PausedAt != nil || second.MaxRuns != nil {
+		t.Fatalf("replaced schedule: %+v", second)
 	}
-	if second.Cadence.EveryMs != 120000 {
-		t.Fatalf("cadence not updated: %d", second.Cadence.EveryMs)
-	}
-
-	all, err := svc.List()
-	if err != nil {
-		t.Fatal(err)
-	}
+	all, _ := h.svc.List()
 	if len(all) != 1 {
 		t.Fatalf("%d schedules for one name", len(all))
 	}
 }
 
-// "nightly check" against agent A and against agent B are different work.
+// The identity is the name plus the whole target: another agent, or a new agent configured
+// differently, is different work.
 func TestCreateOrReplaceKeepsDifferentTargets(t *testing.T) {
-	svc := NewService(t.TempDir(), nil)
+	h := newHarness(t)
 	name := "nightly"
-
-	_, err := svc.CreateOrReplace(context.Background(), CreateInput{
-		Name: &name, Prompt: "p", Cadence: Cadence{Type: "every", EveryMs: 60000},
-		Target: Target{Type: "agent", AgentID: "agt_a"},
-	})
-	if err != nil {
-		t.Fatal(err)
+	targets := []Target{
+		{Type: "agent", AgentID: "66666666-6666-4666-8666-666666666666"},
+		{Type: "agent", AgentID: "77777777-7777-4777-8777-777777777777"},
+		{Type: "new-agent", Config: &TargetConfig{Provider: "mock", Cwd: "/tmp/a"}},
+		{Type: "new-agent", Config: &TargetConfig{Provider: "claude", Cwd: "/tmp/a"}},
 	}
-	_, err = svc.CreateOrReplace(context.Background(), CreateInput{
-		Name: &name, Prompt: "p", Cadence: Cadence{Type: "every", EveryMs: 60000},
-		Target: Target{Type: "agent", AgentID: "agt_b"},
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, target := range targets {
+		if _, err := h.svc.CreateOrReplace(CreateInput{Name: &name, Prompt: "p", Cadence: every(60000), Target: target}); err != nil {
+			t.Fatal(err)
+		}
 	}
-
-	all, _ := svc.List()
-	if len(all) != 2 {
-		t.Fatalf("two targets should stay separate, got %d", len(all))
+	all, _ := h.svc.List()
+	if len(all) != len(targets) {
+		t.Fatalf("expected %d schedules, got %d", len(targets), len(all))
 	}
 }
 
 // An unnamed schedule has no identity to match on, so each call is a new one.
 func TestCreateOrReplaceWithNoNameAlwaysCreates(t *testing.T) {
-	svc := NewService(t.TempDir(), nil)
+	h := newHarness(t)
 	for i := 0; i < 2; i++ {
-		if _, err := svc.CreateOrReplace(context.Background(), CreateInput{
-			Prompt: "p", Cadence: Cadence{Type: "every", EveryMs: 60000},
-			Target: Target{Type: "new-agent", Config: &TargetConfig{Cwd: "/tmp/x"}},
-		}); err != nil {
+		if _, err := h.svc.CreateOrReplace(CreateInput{Prompt: "p", Cadence: every(60000), Target: newAgentTarget()}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	all, _ := svc.List()
+	all, _ := h.svc.List()
 	if len(all) != 2 {
 		t.Fatalf("expected two unnamed schedules, got %d", len(all))
 	}
 }
 
-// A completed schedule is finished business; the caller wants a fresh one rather than a revived
-// series whose run count is already spent.
+// A completed schedule is finished business: a repeat call starts a fresh one.
 func TestCreateOrReplaceAfterCompletionCreatesNew(t *testing.T) {
-	svc := NewService(t.TempDir(), nil)
+	h := newHarness(t)
 	name := "once"
-	maxRuns := 1
-
-	first, err := svc.CreateOrReplace(context.Background(), CreateInput{
-		Name: &name, Prompt: "p", Cadence: Cadence{Type: "every", EveryMs: 60000},
-		Target: Target{Type: "new-agent", Config: &TargetConfig{Cwd: "/tmp/c"}}, MaxRuns: &maxRuns,
-	})
+	first, err := h.svc.CreateOrReplace(CreateInput{Name: &name, Prompt: "p", Cadence: every(60000), Target: newAgentTarget(), MaxRuns: intPtr(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.RunOnce(context.Background(), first.ID); err != nil {
+	if _, err := h.svc.RunOnce(context.Background(), first.ID); err != nil {
 		t.Fatal(err)
 	}
+	h.svc.Tick()
+	h.waitIdle(t)
+	if got, _ := h.svc.Inspect(first.ID); got.Status != "completed" {
+		t.Fatalf("status = %s", got.Status)
+	}
 
-	second, err := svc.CreateOrReplace(context.Background(), CreateInput{
-		Name: &name, Prompt: "p2", Cadence: Cadence{Type: "every", EveryMs: 60000},
-		Target: Target{Type: "new-agent", Config: &TargetConfig{Cwd: "/tmp/c"}},
-	})
+	second, err := h.svc.CreateOrReplace(CreateInput{Name: &name, Prompt: "p2", Cadence: every(60000), Target: newAgentTarget()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.ID == first.ID {
-		t.Fatal("a completed schedule should not be revived")
-	}
-	if second.Status != "active" {
-		t.Fatalf("new schedule status = %q", second.Status)
+	if second.ID == first.ID || second.Status != "active" {
+		t.Fatalf("second = %+v", second)
 	}
 }

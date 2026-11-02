@@ -95,13 +95,22 @@ interface AlertButton {
   onPress?: () => void;
 }
 
-// react-native-web's Alert.alert does nothing, so packages/app on the web never showed these; the
-// forms that matter put the same error inline. A browser alert here would add a second, blocking
-// copy of it.
-// shortcut: errors that only ever went to Alert.alert (a failed provider toggle or removal, a
-// failed restart request) still show nothing; route them to a toast when that gets an imperative API.
+type AlertHandler = (title: string, message?: string) => void;
+let alertHandler: AlertHandler | null = null;
+
+/** The app shell routes Alert.alert into its toast (AlertToastBridge in ~/app/global-listeners). */
+export function setAlertHandler(handler: AlertHandler | null): void {
+  alertHandler = handler;
+}
+
+// react-native-web's Alert.alert does nothing, so on the web packages/app never showed the errors
+// that only go there (a failed provider toggle or removal, a failed daemon restart, a failed save).
+// They show as an error toast: a browser alert would block the page. Every caller passes a notice
+// (title and message, no buttons); confirmations go through confirmDialog.
 export const Alert = {
-  alert(_title: string, _message?: string, _buttons?: AlertButton[]) {},
+  alert(title: string, message?: string, _buttons?: AlertButton[]) {
+    alertHandler?.(title, message);
+  },
 };
 
 // Types shared modules reference in their signatures. Loose on purpose: on the web these values
