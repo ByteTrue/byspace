@@ -55,4 +55,4 @@ created: 2026-10-31
 - 回写：结果和仍然有效的约束写进 Epic spec「已落地」一节；控件规则此前已写进 `docs/design.md`；Mock 模型的用法和坑写进 [notes](../../../notes/2026-10-31-mock-provider-for-ui-checks.md)。
 - 遗留：
   - 样板页没覆盖的界面留在 Epic 推进视图。关闭前核查：`packages/app/src` 里有 238 个自带样式的组件文件，本次直接改了 56 个；没改的文件里有 43 个还自己写着按钮、输入框、筛选器这类样式，10 个写死了颜色。
-  - 手机首页底部的 Star、Sponsor、Community 链接盖住了入口卡片。这是布局问题，所在文件本次没改，没处理。
+  - 手机首页底部的 Star、Sponsor、Community 链接盖住了入口卡片。这是布局问题，所在文件本次没改，没处理。（2026-11-02 已在[快改](../../../issues/2026-11-02-x-ff-rewrite-leftover-fixes.md)修复。）

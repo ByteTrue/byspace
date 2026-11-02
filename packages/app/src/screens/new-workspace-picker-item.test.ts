@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ForgeSearchItem } from "@bytetrue/protocol/messages";
+import { filterAndRankComboboxOptions } from "@/components/ui/combobox-options";
 import {
   type BranchPickerDetail,
   branchPickerOptionId,
@@ -254,6 +255,14 @@ const mainRow: BranchPickerDetail = {
 };
 
 describe("buildPickerOptionData", () => {
+  it("keeps a PR found from a pasted link in the picker's search", () => {
+    const data = buildPickerOptionData({ branchDetails: [], prItems: [prItem], baseItem: null });
+
+    expect(
+      filterAndRankComboboxOptions(data.options, prItem.url).map((option) => option.label),
+    ).toEqual(["#42 Add picker"]);
+  });
+
   it("marks origin and keeps an ahead local main explicit", () => {
     const baseItem = defaultBasePickerItem({
       currentBranch: "main",

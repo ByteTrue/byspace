@@ -10,7 +10,7 @@ from _port import Port  # noqa: E402
 p = Port("screens/open-project-screen.tsx")
 p.rep('''import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
@@ -29,18 +29,16 @@ p.rep('''import {
 ''', '''import { useIsCompactFormFactor } from "@/constants/layout";
 ''')
 
-# Layout. The desktop offsets are packages/app's: content padding-bottom and the community row's
-# bottom are the header height (36) plus 24 / 8. On a phone packages/app pinned the links 72px from
-# the bottom over a page that could not scroll, so on a short screen they covered a tile and the
-# last tile was cut off. Here the page scrolls and the links follow the tiles on a phone; on a tall
-# phone they land where they did.
+# Layout, as packages/app's: the page scrolls; the desktop offsets are the header height (36) plus
+# 24 / 8; on a phone the links follow the tiles, 72px above the bottom.
 p.rep('''    <View style={styles.container}>
       <MenuHeader borderless />
-      <View style={styles.content}>
-        <View style={styles.logo}>
-          <BySpaceLogo size={52} />
-        </View>
-        <View style={styles.tiles}>''', '''    <div className="relative flex min-h-0 flex-1 flex-col bg-background select-none">
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <View style={styles.logo}>
+            <BySpaceLogo size={52} />
+          </View>
+          <View style={styles.tiles}>''', '''    <div className="relative flex min-h-0 flex-1 flex-col bg-background select-none">
       <MenuHeader borderless />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="relative flex flex-1 flex-col items-center justify-start p-6 pt-12 md:justify-center md:pt-6 md:pb-[60px]">
@@ -48,12 +46,13 @@ p.rep('''    <View style={styles.container}>
           <BySpaceLogo size={52} />
         </div>
         <div className="mt-6 flex w-full max-w-[452px] flex-row flex-wrap justify-start gap-3 md:mt-12">''')
-p.rep('''          ) : null}
+p.rep('''            ) : null}
+          </View>
         </View>
-      </View>
-      <View style={styles.communityRow}>
-        <CommunityLinks />
-      </View>''', '''          ) : null}
+        <View style={styles.communityRow}>
+          <CommunityLinks />
+        </View>
+      </ScrollView>''', '''          ) : null}
         </div>
       </div>
       <div className="mb-[72px] flex shrink-0 flex-row items-center justify-center md:absolute md:inset-x-0 md:bottom-11 md:mb-0">

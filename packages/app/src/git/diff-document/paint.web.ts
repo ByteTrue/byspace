@@ -5,6 +5,7 @@ import {
   fragmentWidthForRange,
   visibleRowRange,
 } from "./model";
+import { snapToDevicePixel } from "./device-canvas.web";
 import { codeLineNumberTone, codeTextColor } from "./palette";
 import {
   DIFF_FILE_HEADER_CONTENT_HEIGHT,
@@ -48,6 +49,8 @@ export interface PaintWebViewportInput {
   selection: DiffSelection | null;
   activeHeaderPath: string | null;
   devicePixelRatio: number;
+  /** The canvas's CSS width, when it overhangs the viewport to stay 1:1 with device pixels. */
+  canvasWidth?: number;
   paintTop?: number;
   paintHeight?: number;
 }
@@ -57,14 +60,16 @@ export function paintWebViewport(input: PaintWebViewportInput): void {
   const scale = input.devicePixelRatio;
   const paintTop = input.paintTop ?? 0;
   const paintHeight = input.paintHeight ?? input.viewportHeight;
+  // An opaque canvas is black wherever it is not painted, so the band covers the whole bitmap,
+  // overhang included.
+  const bandWidth = Math.max(input.viewportWidth, input.canvasWidth ?? 0);
   context.setTransform(scale, 0, 0, scale, 0, 0);
   context.save();
   context.beginPath();
-  context.rect(0, paintTop, input.viewportWidth, paintHeight);
+  context.rect(0, paintTop, bandWidth, paintHeight);
   context.clip();
-  context.clearRect(0, paintTop, input.viewportWidth, paintHeight);
   context.fillStyle = input.palette.surface;
-  context.fillRect(0, paintTop, input.viewportWidth, paintHeight);
+  context.fillRect(0, paintTop, bandWidth, paintHeight);
   context.font = `${input.typography.size}px ${input.typography.family}`;
   context.textBaseline = "alphabetic";
 
@@ -75,7 +80,7 @@ export function paintWebViewport(input: PaintWebViewportInput): void {
     const y = row.top - input.scrollTop;
     if (row.kind === "status") {
       context.fillStyle = input.palette.foregroundMuted;
-      context.fillText(row.label, 12, y + input.model.lineHeight + 6);
+      context.fillText(row.label, 12, snapToDevicePixel(y + input.model.lineHeight + 6, scale));
       continue;
     }
     paintLine({
@@ -115,6 +120,7 @@ export function paintWebViewport(input: PaintWebViewportInput): void {
       viewportWidth: input.viewportWidth,
       y: file.top - input.scrollTop,
       activePath: input.activeHeaderPath,
+      devicePixelRatio: scale,
     });
   }
 
@@ -130,8 +136,10 @@ export function paintWebFileHeader(input: {
   viewportWidth: number;
   y: number;
   activePath: string | null;
+  devicePixelRatio: number;
 }): void {
   const { context, file, palette, typography, viewportWidth, y } = input;
+  const scale = input.devicePixelRatio;
   context.fillStyle =
     input.activePath === file.path ? palette.headerActiveSurface : palette.headerSurface;
   context.fillRect(0, y, viewportWidth, DIFF_FILE_HEADER_HEIGHT);
@@ -147,7 +155,10 @@ export function paintWebFileHeader(input: {
   const statWidths = statLabels.map((label) => context.measureText(label).width);
   const statWidth = statWidths[0]! + 4 + statWidths[1]!;
   const statX = iconX - 8 - statWidth;
-  const statBaseline = centeredTextBaseline(context, y + DIFF_FILE_HEADER_CONTENT_HEIGHT / 2);
+  const statBaseline = snapToDevicePixel(
+    centeredTextBaseline(context, y + DIFF_FILE_HEADER_CONTENT_HEIGHT / 2),
+    scale,
+  );
   context.fillStyle = palette.statusSuccess;
   context.fillText(statLabels[0]!, statX, statBaseline);
   context.fillStyle = palette.statusDanger;
@@ -161,7 +172,10 @@ export function paintWebFileHeader(input: {
   );
 
   context.font = `${typography.size}px ${typography.family}`;
-  const textBaseline = centeredTextBaseline(context, y + DIFF_FILE_HEADER_CONTENT_HEIGHT / 2);
+  const textBaseline = snapToDevicePixel(
+    centeredTextBaseline(context, y + DIFF_FILE_HEADER_CONTENT_HEIGHT / 2),
+    scale,
+  );
   const available = Math.max(0, statX - DIFF_FILE_HEADER_LEFT);
   const name = fileNameForPath(file.path);
   // React Native Web collapses the leading separator space at the start of the
@@ -292,7 +306,7 @@ function paintLine(
       input.context.fillText(
         label,
         x + file.gutterWidth - 7 - input.measureText.measure(label),
-        input.y + input.model.lineHeight * 0.78,
+        snapToDevicePixel(input.y + input.model.lineHeight * 0.78, input.devicePixelRatio),
       );
     }
     input.context.save();
@@ -320,7 +334,8 @@ function paintCellText(
 ): void {
   const offset = input.model.wrapLines ? 0 : input.horizontalOffset;
   for (const fragment of input.cell.fragments) {
-    const baseline = input.y + fragment.baseline;
+    // On the pixel grid: a baseline between device rows smears every horizontal stroke.
+    const baseline = snapToDevicePixel(input.y + fragment.baseline, input.devicePixelRatio);
     const textX = input.x - offset;
     for (const band of fragmentColorBands(input.cell, fragment, input.palette)) {
       input.context.save();

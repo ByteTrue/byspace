@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
@@ -58,47 +58,49 @@ export function OpenProjectScreen() {
   return (
     <View style={styles.container}>
       <MenuHeader borderless />
-      <View style={styles.content}>
-        <View style={styles.logo}>
-          <BySpaceLogo size={52} />
-        </View>
-        <View style={styles.tiles}>
-          <HomeTile
-            icon={FolderOpen}
-            title={t("openProject.tiles.addProject.title")}
-            description={t("openProject.tiles.addProject.description")}
-            onPress={handleOpenPicker}
-            testID="open-project-submit"
-            accent
-          />
-          <HomeTile
-            icon={Inbox}
-            title={t("openProject.tiles.importSession.title")}
-            description={t("openProject.tiles.importSession.description")}
-            onPress={importSession.open}
-            testID="open-project-import-session"
-          />
-          <HomeTile
-            icon={Plug}
-            title={t("openProject.tiles.setupProviders.title")}
-            description={t("openProject.tiles.setupProviders.description")}
-            onPress={handleOpenProviders}
-            testID="open-project-setup-providers"
-          />
-          {localServerId ? (
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <View style={styles.logo}>
+            <BySpaceLogo size={52} />
+          </View>
+          <View style={styles.tiles}>
             <HomeTile
-              icon={Smartphone}
-              title={t("openProject.tiles.pairDevice.title")}
-              description={t("openProject.tiles.pairDevice.description")}
-              onPress={handleOpenPairDevice}
-              testID="open-project-pair-device"
+              icon={FolderOpen}
+              title={t("openProject.tiles.addProject.title")}
+              description={t("openProject.tiles.addProject.description")}
+              onPress={handleOpenPicker}
+              testID="open-project-submit"
+              accent
             />
-          ) : null}
+            <HomeTile
+              icon={Inbox}
+              title={t("openProject.tiles.importSession.title")}
+              description={t("openProject.tiles.importSession.description")}
+              onPress={importSession.open}
+              testID="open-project-import-session"
+            />
+            <HomeTile
+              icon={Plug}
+              title={t("openProject.tiles.setupProviders.title")}
+              description={t("openProject.tiles.setupProviders.description")}
+              onPress={handleOpenProviders}
+              testID="open-project-setup-providers"
+            />
+            {localServerId ? (
+              <HomeTile
+                icon={Smartphone}
+                title={t("openProject.tiles.pairDevice.title")}
+                description={t("openProject.tiles.pairDevice.description")}
+                onPress={handleOpenPairDevice}
+                testID="open-project-pair-device"
+              />
+            ) : null}
+          </View>
         </View>
-      </View>
-      <View style={styles.communityRow}>
-        <CommunityLinks />
-      </View>
+        <View style={styles.communityRow}>
+          <CommunityLinks />
+        </View>
+      </ScrollView>
       <PairDeviceModal
         serverId={localServerId ?? ""}
         visible={isPairDeviceOpen}
@@ -160,18 +162,24 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
     userSelect: "none",
   },
+  // The page scrolls, and on a phone the community links follow the tiles: pinned over a page
+  // that could not scroll, they covered a tile on a short screen and the last tile was cut off.
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    position: "relative",
+    flexGrow: 1,
+  },
   content: {
     position: "relative",
-    flex: 1,
+    flexGrow: 1,
     justifyContent: { xs: "flex-start", md: "center" },
     alignItems: "center",
     gap: 0,
     padding: theme.spacing[6],
     paddingTop: { xs: theme.spacing[12], md: theme.spacing[6] },
-    paddingBottom: {
-      xs: HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE + theme.spacing[6],
-      md: HEADER_INNER_HEIGHT + theme.spacing[6],
-    },
+    paddingBottom: { xs: theme.spacing[6], md: HEADER_INNER_HEIGHT + theme.spacing[6] },
   },
   logo: {
     marginBottom: theme.spacing[8],
@@ -216,12 +224,13 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 18,
   },
   communityRow: {
-    position: "absolute",
+    position: { xs: "relative", md: "absolute" },
     left: 0,
     right: 0,
-    bottom: {
+    bottom: { xs: 0, md: HEADER_INNER_HEIGHT + theme.spacing[2] },
+    marginBottom: {
       xs: HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE + theme.spacing[2],
-      md: HEADER_INNER_HEIGHT + theme.spacing[2],
+      md: 0,
     },
     flexDirection: "row",
     justifyContent: "center",

@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { InlineReviewAddButton, InlineReviewThread } from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
+import { deviceCanvasPixels, fillCanvas, opaqueContext } from "./device-canvas.web";
 import { DocumentFileHeader } from "./document-file-header";
 import {
   diffInteractionWindowTop,
@@ -241,16 +242,21 @@ export function DiffSurface(props: DiffSurfaceProps) {
           slot.typography === props.headerTypography;
         if (canReusePaint) continue;
 
-        const pixelWidth = Math.ceil(viewport.width * ratio);
-        const pixelHeight = Math.ceil(FILE_HEADER_HEIGHT * ratio);
+        // Sized so the browser shows the bitmap 1:1 (device-canvas.web.ts); the slot clips it to
+        // the header's height and the content clips its width.
+        const pixelWidth = deviceCanvasPixels(viewport.width, ratio);
+        const pixelHeight = deviceCanvasPixels(FILE_HEADER_HEIGHT, ratio);
         if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
         if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${FILE_HEADER_HEIGHT}px`;
-        const context = canvas.getContext("2d");
+        canvas.style.width = `${pixelWidth / ratio}px`;
+        canvas.style.height = `${pixelHeight / ratio}px`;
+        const context = opaqueContext(canvas);
         if (!context) continue;
+        fillCanvas(
+          context,
+          active ? props.palette.headerActiveSurface : props.palette.headerSurface,
+        );
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
-        context.clearRect(0, 0, viewport.width, FILE_HEADER_HEIGHT);
         paintWebFileHeader({
           context,
           file,
@@ -259,6 +265,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
           viewportWidth: viewport.width,
           y: 0,
           activePath: activeHeaderPathRef.current,
+          devicePixelRatio: ratio,
         });
         slot.file = file;
         slot.active = active;
@@ -276,10 +283,14 @@ export function DiffSurface(props: DiffSurfaceProps) {
     const canvas = canvasRef.current;
     const currentModel = modelRef.current;
     if (!canvas || !currentModel || currentModel.viewportWidth <= 0 || viewport.height <= 0) return;
-    const desiredHeight = Math.min(
-      Math.max(currentModel.height, viewport.height),
-      viewport.height * 3,
+    const ratio = window.devicePixelRatio || 1;
+    // Sized so the browser shows the bitmap 1:1 (device-canvas.web.ts). The window's top is
+    // snapped to device pixels too, so the bands repainted after a shift start on pixel rows.
+    const pixelHeight = deviceCanvasPixels(
+      Math.min(Math.max(currentModel.height, viewport.height), viewport.height * 3),
+      ratio,
     );
+    const desiredHeight = pixelHeight / ratio;
     const currentWindow = canvasWindowRef.current;
     const viewportTop = scrollTopRef.current;
     const viewportBottom = viewportTop + viewport.height;
@@ -292,7 +303,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
     const forceFullPaint = forcePaintRef.current;
     forcePaintRef.current = false;
     const canvasHeight = desiredHeight;
-    const ratio = window.devicePixelRatio || 1;
     const requestedCanvasTop = mustRecenter
       ? Math.min(
           Math.max(0, viewportTop - viewport.height),
@@ -301,17 +311,20 @@ export function DiffSurface(props: DiffSurfaceProps) {
       : currentWindow.top;
     const canvasTop = Math.round(requestedCanvasTop * ratio) / ratio;
     canvasWindowRef.current = { top: canvasTop, height: canvasHeight };
-    const pixelWidth = Math.ceil(currentModel.viewportWidth * ratio);
-    const pixelHeight = Math.ceil(canvasHeight * ratio);
+    const pixelWidth = deviceCanvasPixels(currentModel.viewportWidth, ratio);
     const resized = canvas.width !== pixelWidth || canvas.height !== pixelHeight;
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
     if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-    canvas.style.width = `${currentModel.viewportWidth}px`;
+    canvas.style.width = `${pixelWidth / ratio}px`;
     canvas.style.top = `${canvasTop}px`;
-    canvas.style.height = `${canvasHeight}px`;
-    const context = canvas.getContext("2d");
+    canvas.style.height = `${pixelHeight / ratio}px`;
+    const context = opaqueContext(canvas);
     if (!context) return;
-    if (!measurement || !loadedTypography) return;
+    if (!measurement || !loadedTypography) {
+      // An opaque canvas is black until painted; show the surface until the fonts load.
+      fillCanvas(context, props.palette.surface);
+      return;
+    }
     const { paintTop, paintHeight } = shiftCanvasPixels({
       canvas,
       scratch:
@@ -339,6 +352,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       selection: selectionRef.current,
       activeHeaderPath: activeHeaderPathRef.current,
       devicePixelRatio: ratio,
+      canvasWidth: pixelWidth / ratio,
       paintTop,
       paintHeight,
     });
@@ -931,11 +945,13 @@ function StickyHeaderCanvasSlotView({
   );
   return (
     <div ref={setSection} style={STICKY_CANVAS_SECTION_STYLE}>
-      <canvas
-        ref={setCanvas}
-        data-testid={`git-diff-sticky-header-${slotIndex}`}
-        style={STICKY_CANVAS_STYLE}
-      />
+      <div style={STICKY_CANVAS_CLIP_STYLE}>
+        <canvas
+          ref={setCanvas}
+          data-testid={`git-diff-sticky-header-${slotIndex}`}
+          style={STICKY_CANVAS_STYLE}
+        />
+      </div>
     </div>
   );
 }
@@ -1088,6 +1104,9 @@ const CONTENT_STYLE: React.CSSProperties = {
   position: "relative",
   width: "100%",
   userSelect: "none",
+  // The canvases overhang by up to 4px to stay 1:1 (device-canvas.web.ts). Clip, not hidden:
+  // the file headers inside are sticky to the scroller, which a scroll container here would break.
+  overflow: "clip",
 };
 const FILE_SECTION_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -1105,9 +1124,15 @@ const STICKY_CANVAS_SECTION_STYLE: React.CSSProperties = {
   zIndex: 2,
   pointerEvents: "none",
 };
-const STICKY_CANVAS_STYLE: React.CSSProperties = {
+// The header canvas can be a few px taller than the header to stay 1:1; this clips it.
+const STICKY_CANVAS_CLIP_STYLE: React.CSSProperties = {
   position: "sticky",
   top: 0,
+  height: FILE_HEADER_HEIGHT,
+  overflow: "hidden",
+  pointerEvents: "none",
+};
+const STICKY_CANVAS_STYLE: React.CSSProperties = {
   display: "block",
   pointerEvents: "none",
 };

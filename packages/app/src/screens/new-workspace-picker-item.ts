@@ -306,7 +306,9 @@ export function buildPickerOptionData(input: {
     itemById.set(id, { kind: "github-pr", item: pr });
     const updatedAtMs = pr.updatedAt ? Date.parse(pr.updatedAt) : 0;
     const timestamp = Number.isNaN(updatedAtMs) ? 0 : Math.floor(updatedAtMs / 1000);
-    timedOptions.push({ option: { id, label: formatPrLabel(pr) }, timestamp });
+    // The URL is what the picker's own search matches a pasted PR link against: the daemon
+    // finds the PR from the link, and the label alone ("#42 Add picker") would filter it out.
+    timedOptions.push({ option: { id, label: formatPrLabel(pr), description: pr.url }, timestamp });
   }
 
   const baseItem = input.baseItem;
