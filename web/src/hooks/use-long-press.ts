@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 // is no longer a long press.
 const DEFAULT_DELAY_MS = 500;
 const SLOP_PX = 10;
+// Marks a press an inner element already tracks, so a trigger around it (a list's background menu
+// around a row's) does not long-press too: the innermost Pressable owned a press in packages/app.
+const claimedPresses = new WeakSet<Event>();
 
 /** Swallows the click that ends a long press, so the press does not also activate what it held. */
 function swallowNextClick() {
@@ -45,7 +48,8 @@ export function useLongPress(
   const onPointerDown = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       cancel();
-      if (!enabled || event.button !== 0) return;
+      if (!enabled || event.button !== 0 || claimedPresses.has(event.nativeEvent)) return;
+      claimedPresses.add(event.nativeEvent);
       const pointerType = event.pointerType;
       originRef.current = { x: event.clientX, y: event.clientY };
       timerRef.current = window.setTimeout(() => {
