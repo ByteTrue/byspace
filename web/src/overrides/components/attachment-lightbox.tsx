@@ -75,7 +75,7 @@ export function AttachmentLightbox({
         onClick={onClose}
         className="absolute inset-0 bg-black/90"
       />
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
         {hasError ? (
           <span className="text-sm text-muted-foreground">
             {t("message.attachments.imageLoadFailed")}

@@ -77,7 +77,7 @@ export function MermaidFullscreenViewer({
       <div
         ref={contentLayerRef}
         tabIndex={-1}
-        className="flex h-full min-h-0 flex-col outline-none"
+        className="flex h-full min-h-0 flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] outline-none"
       >
         <ZoomableViewport
           accessibilityLabel={t("message.diagram.diagram")}

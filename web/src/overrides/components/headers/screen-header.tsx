@@ -25,7 +25,7 @@ export function ScreenHeader({
   borderless,
 }: ScreenHeaderProps) {
   return (
-    <div className="shrink-0 max-md:pt-2">
+    <div className="shrink-0 pt-[env(safe-area-inset-top)] max-md:pt-[calc(env(safe-area-inset-top)+8px)]">
       <div
         data-wails-drag="true"
         className={cn(

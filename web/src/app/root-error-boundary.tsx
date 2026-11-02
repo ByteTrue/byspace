@@ -37,7 +37,10 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, RootEr
 function RootErrorFallback({ error, onRetry }: { error: string; onRetry: () => void }) {
   const { t } = useTranslation();
   return (
-    <div data-testid="root-error-boundary" className="h-svh overflow-auto">
+    <div
+      data-testid="root-error-boundary"
+      className="h-svh overflow-auto pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+    >
       <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-16">
         <div data-testid="root-error-boundary-header" className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold">{t("rootError.title")}</h1>
