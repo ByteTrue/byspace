@@ -190,6 +190,12 @@ type Session struct {
 	finishWaiters     []chan error
 	eventSubscribers  map[int]func(map[string]any)
 	nextSubID         int
+	// frames holds streamed updates until they go out, merged as Node merged them; an update gets its
+	// seq when it goes out, so consecutive frames carry consecutive seqs (see sdk.StreamFrames).
+	frames *sdk.StreamFrames
+	// emitMu keeps deliveries to subscribers in seq order: a raw event's handling and a trailing
+	// flush from the frames' timer each hold it from taking seqs until they have delivered.
+	emitMu sync.Mutex
 }
 
 // StartSession launches a Pi RPC subprocess and initializes timeline tracking.
@@ -219,6 +225,7 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		eventSubscribers:   make(map[int]func(map[string]any)),
 		toolDetailBuilder:  opts.ToolDetailBuilder,
 	}
+	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	proc.OnEvent(s.handleRawEvent)
 
 	return s, nil
@@ -228,7 +235,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 	evType, _ := ev["type"].(string)
 	var extraEvents []map[string]any
 
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
+	// Streamed text and tool calls merge into frames; anything else is a boundary the frames must
+	// not be overtaken by, so what is pending goes out ahead of it.
+	var preEvents []map[string]any
+	if evType != "message_update" && !strings.HasPrefix(evType, "tool_execution_") {
+		preEvents = s.flushFramesLocked()
+	}
 	switch evType {
 	case "agent_start", "turn_start":
 		s.status = "running"
@@ -284,47 +299,27 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 						s.timeline[s.activeTextIdx].Item.Text += delta
 						emitDelta = delta
 					}
-					if emitDelta != "" {
-						s.streamSeq++
-						seq := s.streamSeq
-						if s.timeline[s.activeTextIdx].Seq == 0 {
-							s.timeline[s.activeTextIdx].Seq = seq
-						}
-						s.timeline[s.activeTextIdx].SeqEnd = seq
-						extraEvents = append(extraEvents, map[string]any{
-							"type":   "byspace_stream_timeline",
-							"seq":    seq,
-							"turnId": s.activeTurnID,
-							"item": TimelineItem{
-								Type:      "assistant_message",
-								Text:      emitDelta,
-								MessageID: s.activeMessageID,
-							},
-						})
+					if emitDelta != "" && s.frames.AddText(s.activeTextIdx, TimelineItem{
+						Type:      "assistant_message",
+						Text:      emitDelta,
+						MessageID: s.activeMessageID,
+					}, s.activeTurnID) {
+						extraEvents = append(extraEvents, s.flushFramesLocked()...)
 					}
 				}
 			case "thinking_delta":
 				if delta != "" {
-					s.streamSeq++
-					seq := s.streamSeq
 					if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
-						s.activeThinkIdx = s.appendItemWithSeqLocked(seq, TimelineItem{
+						s.activeThinkIdx = s.appendItemWithSeqLocked(0, TimelineItem{
 							Type: "reasoning",
 							Text: delta,
 						})
 					} else {
 						s.timeline[s.activeThinkIdx].Item.Text += delta
-						s.timeline[s.activeThinkIdx].SeqEnd = seq
 					}
-					extraEvents = append(extraEvents, map[string]any{
-						"type":   "byspace_stream_timeline",
-						"seq":    seq,
-						"turnId": s.activeTurnID,
-						"item": TimelineItem{
-							Type: "reasoning",
-							Text: delta,
-						},
-					})
+					if s.frames.AddText(s.activeThinkIdx, TimelineItem{Type: "reasoning", Text: delta}, s.activeTurnID) {
+						extraEvents = append(extraEvents, s.flushFramesLocked()...)
+					}
 				}
 			}
 		}
@@ -391,8 +386,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if startDetail == nil {
 			break
 		}
-		s.streamSeq++
-		idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
+		idx := s.appendItemWithSeqLocked(0, TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
 			Name:   toolName,
@@ -403,27 +397,20 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if callID != "" {
 			s.toolIndexByID[callID] = idx
 		}
-		extraEvents = append(extraEvents, map[string]any{
-			"type":   "byspace_stream_timeline",
-			"seq":    s.timeline[idx].SeqEnd,
-			"turnId": s.activeTurnID,
-			"item":   s.timeline[idx].Item,
-		})
+		if s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, nil) {
+			extraEvents = append(extraEvents, s.flushFramesLocked()...)
+		}
 
 	case "tool_execution_update":
 		callID, _ := ev["toolCallId"].(string)
 		toolName, _ := ev["toolName"].(string)
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			args := s.toolArgsByID[callID]
+			visible := s.sentItemLocked(idx)
 			s.timeline[idx].Item.Detail = BuildToolCallDetail(toolName, args, ev["partialResult"])
-			s.streamSeq++
-			s.timeline[idx].SeqEnd = s.streamSeq
-			extraEvents = append(extraEvents, map[string]any{
-				"type":   "byspace_stream_timeline",
-				"seq":    s.streamSeq,
-				"turnId": s.activeTurnID,
-				"item":   s.timeline[idx].Item,
-			})
+			if s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, visible) {
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
+			}
 		}
 
 	case "tool_execution_end":
@@ -450,15 +437,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// the oversized body never reaches the transcript, so it is not re-sent on every fetch.
 		limitedDetail, limitedError := limitToolCall(detail, status, ev["result"], isErr)
 		detail = limitedDetail
-		s.streamSeq++
 		var targetIdx int
+		var visible *TimelineItem
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
+			visible = s.sentItemLocked(idx)
 			s.timeline[idx].Item.Status = status
 			s.timeline[idx].Item.Detail = detail
 			if resolvedName != "" && resolvedName != toolName {
 				s.timeline[idx].Item.Name = resolvedName
 			}
-			s.timeline[idx].SeqEnd = s.streamSeq
 			if isErr {
 				s.timeline[idx].Item.Error = limitedError
 			}
@@ -468,7 +455,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			if isErr {
 				errVal = limitedError
 			}
-			targetIdx = s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
+			targetIdx = s.appendItemWithSeqLocked(0, TimelineItem{
 				Type:   "tool_call",
 				CallID: callID,
 				Name:   toolName,
@@ -477,12 +464,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				Error:  errVal,
 			})
 		}
-		extraEvents = append(extraEvents, map[string]any{
-			"type":   "byspace_stream_timeline",
-			"seq":    s.streamSeq,
-			"turnId": s.activeTurnID,
-			"item":   s.timeline[targetIdx].Item,
-		})
+		// A finished call goes out at once, with whatever streamed ahead of it.
+		s.frames.AddToolCall(targetIdx, s.timeline[targetIdx].Item, s.activeTurnID, visible)
+		extraEvents = append(extraEvents, s.flushFramesLocked()...)
 		if strings.HasPrefix(toolName, "subagent") {
 			for _, sub := range ParseSubagentDetails(callID, args, ev["result"]) {
 				s.upsertSubagentLocked(sub)
@@ -534,18 +518,88 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		s.notifyFinishLocked(fmt.Errorf("pi process exited: %s", errMsg))
 	}
 
-	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
-	for _, fn := range s.eventSubscribers {
-		subs = append(subs, fn)
-	}
+	subs := s.subscribersLocked()
 	s.mu.Unlock()
 
 	for _, fn := range subs {
+		for _, pre := range preEvents {
+			fn(pre)
+		}
 		fn(ev)
 		for _, ex := range extraEvents {
 			fn(ex)
 		}
 	}
+}
+
+func (s *Session) subscribersLocked() []func(map[string]any) {
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
+	return subs
+}
+
+// flushFramesLocked sends the pending frames: each takes the next seq, which becomes the end of the
+// range its row occupies, and the first seq of a row never sent before. Caller holds s.mu.
+func (s *Session) flushFramesLocked() []map[string]any {
+	frames := s.frames.Take()
+	if len(frames) == 0 {
+		return nil
+	}
+	events := make([]map[string]any, 0, len(frames))
+	for _, frame := range frames {
+		if frame.Row < 0 || frame.Row >= len(s.timeline) {
+			continue
+		}
+		s.streamSeq++
+		entry := &s.timeline[frame.Row]
+		if entry.Seq == 0 {
+			entry.Seq = s.streamSeq
+		}
+		entry.SeqEnd = s.streamSeq
+		item := frame.Item
+		if frame.Kind == "tool_call" {
+			item = entry.Item
+		}
+		events = append(events, map[string]any{
+			"type":   "byspace_stream_timeline",
+			"seq":    s.streamSeq,
+			"turnId": frame.TurnID,
+			"item":   item,
+		})
+	}
+	return events
+}
+
+// flushFramesOnTimer is the trailing flush at the end of a burst's window.
+func (s *Session) flushFramesOnTimer() {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	s.mu.Lock()
+	events := s.flushFramesLocked()
+	subs := s.subscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, ev := range events {
+			fn(ev)
+		}
+	}
+}
+
+// sentItemLocked is a tool call row as it was last sent, for readers while a newer snapshot is
+// pending; nil when the row has not been sent. Caller holds s.mu.
+func (s *Session) sentItemLocked(idx int) *TimelineItem {
+	for _, frame := range s.frames.Pending() {
+		if frame.Kind == "tool_call" && frame.Row == idx {
+			return frame.Visible
+		}
+	}
+	if s.timeline[idx].Seq == 0 {
+		return nil
+	}
+	item := s.timeline[idx].Item
+	return &item
 }
 
 func extractAssistantText(msg map[string]any) string {
@@ -615,13 +669,13 @@ func (s *Session) Status() string {
 	return s.status
 }
 
-// Timeline returns a snapshot copy of the accumulated timeline entries.
+// Timeline returns a snapshot copy of the accumulated timeline entries, as the frames sent so far
+// describe it: a streamed update still waiting for its frame is left out, so a timeline fetch lines
+// up with the frames that follow it.
 func (s *Session) Timeline() []TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]TimelineEntry, len(s.timeline))
-	copy(out, s.timeline)
-	return out
+	return sdk.VisibleTimeline(s.timeline, s.frames.Pending())
 }
 
 // AppendTimelineItem stores one item in the session's own timeline and returns the entry.
@@ -719,7 +773,11 @@ func (s *Session) SetNextClientMessageID(id string) {
 
 // Prompt sends a user prompt to Pi and appends the user_message to the timeline.
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
+	// Held until the prompt's row is delivered, so its seq reaches subscribers in order with the
+	// frames around it. What is still merging goes out first: it arrived before the prompt.
+	s.emitMu.Lock()
 	s.mu.Lock()
+	preEvents := s.flushFramesLocked()
 	s.turnCounter++
 	// A turn token makes a late event from the previous turn identifiable. Pi emits one
 	// `turn_end` per model step, and a second prompt can start before the first turn's
@@ -750,13 +808,13 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	seq := s.timeline[idx].SeqEnd
 	turnID := s.activeTurnID
 
-	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
-	for _, fn := range s.eventSubscribers {
-		subs = append(subs, fn)
-	}
+	subs := s.subscribersLocked()
 	s.mu.Unlock()
 
 	for _, fn := range subs {
+		for _, pre := range preEvents {
+			fn(pre)
+		}
 		fn(map[string]any{
 			"type":   "byspace_turn_started",
 			"turnId": turnID,
@@ -768,6 +826,7 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 			"item":   userItem,
 		})
 	}
+	s.emitMu.Unlock()
 
 	cmd := map[string]any{
 		"type":    "prompt",
@@ -1077,7 +1136,17 @@ func (s *Session) Close() error {
 	}
 	waiters := s.finishWaiters
 	s.finishWaiters = nil
+	// The tail still merging goes out rather than vanishing with the session. Not under emitMu: a
+	// subscriber may close the session while a delivery holds it.
+	frames := s.flushFramesLocked()
+	s.frames.Stop()
+	subs := s.subscribersLocked()
 	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, ev := range frames {
+			fn(ev)
+		}
+	}
 	for _, ch := range waiters {
 		select {
 		case ch <- errSessionClosed:

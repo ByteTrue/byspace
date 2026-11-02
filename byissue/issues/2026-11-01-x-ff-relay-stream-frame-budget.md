@@ -25,3 +25,7 @@ Durable Object 请求。实测 pi 一次 200 词回答产生 1,230 个 delta（~
 - byissue：已同步 `byissue/notes/018-durable-object-billing-and-hibernation.md`（新增「第二个额度：requests，不是 duration」小节，含 140 事件/秒的实测常数与 60ms 上限换算）
 
 顺手发现（不在本次范围）：免费层 10 万/天 ≈ 1.16 帧/秒，即使合并后重度使用仍会撞顶；relay 侧没有帧数配额保护，一个客户端的行为就能替整个账户花完额度。
+
+## 更正（2026-11-02）
+
+这次的合并放错了位置，引入了一个 bug：合并器接在 server 出口，而 seq 在 session 里已经按 delta 一个一个编好了，合并后的帧 seq 不连续（实测一个回合 182 帧里 171 帧跳号）。客户端只接受「上一帧 + 1」的 seq，跳号就丢帧并重新拉整个时间线，所以每一帧都触发一次时间线请求，CI 里两个工具调用的 e2e 因此失败。Node 的合并器在 `recordTimeline` 前面，先合并再编号。已改成同样的顺序：合并移进 pi session（`internal/agent/sdk/stream_frames.go`，帧发出时才取 seq），server 端合并器删除；读时间线时只返回已经发出的部分，避免拉取结果和后续帧重复。`stream_frame_rate_test.go` 增加了 seq 连续的断言。mock provider 每个 delta 本来就是一行，不再合并。

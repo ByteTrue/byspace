@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // fakePiDeltas builds a pi script that streams n text deltas as fast as the pipe allows,
@@ -105,6 +107,7 @@ func TestStreamFramesAreCoalesced(t *testing.T) {
 	var (
 		frames     int
 		itemFrames int
+		seqs       []int
 		received   strings.Builder
 		firstFrame time.Time
 		lastFrame  time.Time
@@ -141,6 +144,9 @@ func TestStreamFramesAreCoalesced(t *testing.T) {
 		switch kind {
 		case "timeline":
 			itemFrames++
+			if seq, ok := envelope.Message.Payload["seq"].(float64); ok {
+				seqs = append(seqs, int(seq))
+			}
 			item, _ := event["item"].(map[string]any)
 			if itemType, _ := item["type"].(string); itemType == "assistant_message" {
 				if text, ok := item["text"].(string); ok {
@@ -163,9 +169,16 @@ func TestStreamFramesAreCoalesced(t *testing.T) {
 	}
 	// One frame per window, plus slack for the leading flush, the barrier before turn_completed,
 	// and the non-timeline frames that share this connection.
-	ceiling := int(span/agentStreamCoalesceWindow) + 20
+	ceiling := int(span/sdk.StreamFrameWindow) + 20
 	if frames > ceiling {
 		t.Fatalf("%d deltas became %d frames in %s; ceiling is %d (one frame per %s)",
-			deltas, frames, span.Round(time.Millisecond), ceiling, agentStreamCoalesceWindow)
+			deltas, frames, span.Round(time.Millisecond), ceiling, sdk.StreamFrameWindow)
+	}
+	// Each timeline frame continues the last: a client applies a frame only when its seq is one past
+	// the one before, and answers anything else with a timeline fetch.
+	for i := 1; i < len(seqs); i++ {
+		if seqs[i] != seqs[i-1]+1 {
+			t.Fatalf("timeline frame seqs jump from %d to %d (all: %v)", seqs[i-1], seqs[i], seqs)
+		}
 	}
 }

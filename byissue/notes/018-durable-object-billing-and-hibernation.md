@@ -116,7 +116,7 @@ socket 接收必须是 hibernation：
 
 实测常数（pi 1.4，一次 200 词回答，8.9 秒）：245 个 `text_delta` + 985 个 `thinking_delta`，
 约 **140 事件/秒**。daemon 若每事件发一帧，单次小回答就是 1,230 次 DO 请求；一个下午的
-agent 工作实测 226 万次。这就是 `internal/server/stream_coalescer.go` 存在的理由——它抄的是
+agent 工作实测 226 万次。这就是 `internal/agent/sdk/stream_frames.go`（原 `internal/server/stream_coalescer.go`，2026-11-02 移进 session，先合并再编 seq）存在的理由——它抄的是
 Node 的 `AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS = 60`（按 agent、text/reasoning 合并、
 tool_call 按 callId 就地覆盖）。
 

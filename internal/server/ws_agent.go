@@ -302,9 +302,6 @@ func (s *Server) handleDeleteAgent(ctx context.Context, sink frameSink, raw json
 	mp := s.agents[req.AgentID]
 	delete(s.agents, req.AgentID)
 	s.mu.Unlock()
-	// Merged text still pending for an agent that is going away is flushed, then dropped: the
-	// buffer would otherwise outlive the agent it belongs to.
-	s.streamCoalescer.forget(req.AgentID)
 
 	// Tell every connected client to drop this agent's subagents before the session goes away.
 	// Otherwise the Subagents panel keeps rows for a parent that no longer exists, and they can
@@ -339,8 +336,6 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 	mp := s.agents[req.AgentID]
 	delete(s.agents, req.AgentID)
 	s.mu.Unlock()
-
-	s.streamCoalescer.forget(req.AgentID)
 
 	if mp != nil && mp.session != nil {
 		// Clients waiting on this turn (a `wait_for_finish`, a blocking CLI) need a terminal

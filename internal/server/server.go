@@ -327,9 +327,6 @@ type Server struct {
 	// for that would stall every other request.
 	providerCatalogMu sync.Mutex
 	providerCatalogs  map[string]*providerCatalog
-	// streamCoalescer merges provider token deltas so one frame per window leaves the daemon
-	// instead of one frame per token. See stream_coalescer.go for why the relay bills this.
-	streamCoalescer *streamCoalescer
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -482,21 +479,6 @@ func New(opts Options) (*Server, error) {
 	// re-saves the selection — and the user has no reason to do that.
 	srv.autoUpdateInstalledSkills()
 
-	srv.streamCoalescer = newStreamCoalescer(func(agentID, provider, turnID string, seq int, item sdk.TimelineItem) {
-		srv.broadcastSessionMsg("agent_stream", map[string]any{
-			"agentId":   agentID,
-			"provider":  provider,
-			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
-			"seq":       seq,
-			"epoch":     srv.epoch,
-			"event": map[string]any{
-				"type":     "timeline",
-				"provider": provider,
-				"turnId":   turnID,
-				"item":     item,
-			},
-		})
-	})
 	srv.startRuntimeMetrics()
 	srv.startBackgroundGitFetch()
 	srv.startHeadWatch()
@@ -517,11 +499,6 @@ func (s *Server) Close() error {
 		s.schedules.Stop()
 	}
 	s.closePRStatus()
-	// Anything merged but not yet sent would be lost with the daemon: a message's tail must not
-	// depend on how long the daemon stayed up.
-	if s.streamCoalescer != nil {
-		s.streamCoalescer.flushAll()
-	}
 
 	// The shared `opencode serve` process outlives individual agents, so it is stopped here rather
 	// than in an agent's Close. Without this the daemon exits and leaves an orphaned server holding a
@@ -3449,10 +3426,6 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 
-		// Ordering barrier: a structural event must not overtake text that is still merged.
-		if streamBarrierEvents[evType] && s.streamCoalescer != nil {
-			s.streamCoalescer.flush(rec.ID)
-		}
 		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
 
 		// A host tool call is the provider asking the daemon to run one of its own tools. Answered
@@ -3522,16 +3495,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					break
 				}
 			}
-			// Text, reasoning and tool_call deltas are merged (tool_call by callId, last snapshot wins):
-			// forwarding each one made a single answer cost over a thousand relay frames, and every
-			// frame is a billed Durable Object request.
-			if item, ok := ev["item"].(sdk.TimelineItem); ok && s.streamCoalescer != nil &&
-				s.streamCoalescer.handle(rec.ID, rec.Provider, turnID, seq, item) {
-				break
-			}
-			if s.streamCoalescer != nil {
-				s.streamCoalescer.flush(rec.ID)
-			}
+			// Streamed deltas arrive here already merged, one frame per window, by the session that
+			// numbered them (sdk.StreamFrames): merging here, after the seq was taken, broke the seq
+			// continuity every client checks.
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,

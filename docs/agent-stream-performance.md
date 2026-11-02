@@ -1,6 +1,6 @@
 # Agent stream performance
 
-How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `packages/server/src/server/agent/agent-stream-coalescer.ts`, the reducer queue in `packages/app/src/timeline/session-stream-reducers.ts`, or the reveal in `packages/app/src/hooks/use-revealed-text.ts`.
+How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `internal/agent/sdk/stream_frames.go`, the reducer queue in `packages/app/src/timeline/session-stream-reducers.ts`, or the reveal in `packages/app/src/hooks/use-revealed-text.ts`.
 
 For terminal output, which is a separate pipeline with separate budgets, see [terminal-performance.md](terminal-performance.md). The `BYSPACE_*` variables below are performance-test controls, not public daemon configuration.
 
@@ -15,12 +15,19 @@ provider deltas (every provider streams incrementally)
   → paced reveal (app, per assistant/reasoning item) → markdown blocks → paint
 ```
 
-The Go daemon implements the coalescer in `internal/server/stream_coalescer.go`, and it is not
-only a smoothness knob: over the relay every websocket frame is one billed Durable Object
-request, and the free plan allows 100,000 per day. Measured on pi 1.4, a 200-word answer arrives
-as ~1,230 deltas (245 text, 985 thinking) at ~140/s, so forwarding each delta costs a normal
-session millions of requests. Node always merged them; the Go port did not, and one afternoon of
-ordinary use reached 2.26M.
+The Go daemon implements the coalescer as `sdk.StreamFrames` (`internal/agent/sdk/stream_frames.go`),
+used by the pi session, and it is not only a smoothness knob: over the relay every websocket frame
+is one billed Durable Object request, and the free plan allows 100,000 per day. Measured on pi 1.4,
+a 200-word answer arrives as ~1,230 deltas (245 text, 985 thinking) at ~140/s, so forwarding each
+delta costs a normal session millions of requests. Node always merged them; the Go port did not,
+and one afternoon of ordinary use reached 2.26M.
+
+Merge before the seq is taken. A frame's `seq` is the client's continuity check: it applies a frame
+only when the seq is exactly one past the last, and answers any other with a timeline fetch. Node
+merged in front of `recordTimeline`, so each flushed item became one row with the next seq. The
+first Go port merged in the server, after the session had numbered every delta, so every merged
+frame skipped seqs and every client refetched the timeline once per frame. `TestStreamFramesAreCoalesced`
+checks the frame budget and that the seqs are contiguous.
 
 Every provider delivers incremental text, so there is no provider that needs special handling: Claude via `includePartialMessages`, Codex via `agent_message_delta`, ACP agents via `agent_message_chunk`, Pi and OMP via `text_delta`.
 
