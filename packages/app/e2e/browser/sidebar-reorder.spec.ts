@@ -18,24 +18,15 @@ async function visibleBoundingBox(row: Locator) {
   return box;
 }
 
-async function pressProjectRow(rows: Locator) {
+// A pressed row is filled like a hovered one (the shadcn sidebar accent), so there is no press
+// feedback to wait for; the scrim leaving once the pointer moves is what proves the drag started.
+async function pressRow(rows: Locator) {
   await rows.page().mouse.down();
-}
-
-async function pressWorkspaceRow(rows: Locator) {
-  const solidScrimStop = rows
-    .nth(0)
-    .getByTestId("sidebar-workspace-trailing-scrim")
-    .locator("stop")
-    .nth(1);
-  const hoverScrimColor = await solidScrimStop.getAttribute("stop-color");
-  await rows.page().mouse.down();
-  await expect.poll(() => solidScrimStop.getAttribute("stop-color")).not.toBe(hoverScrimColor);
 }
 
 async function quickDragFirstRowAfterSecond(
   rows: Locator,
-  pressRow: (rows: Locator) => Promise<void>,
+  press: (rows: Locator) => Promise<void>,
 ) {
   await expect(rows).toHaveCount(2);
   const before = await rowTestIds(rows);
@@ -48,7 +39,7 @@ async function quickDragFirstRowAfterSecond(
 
   await page.mouse.move(source.x, source.y);
   const trailingScrim = rows.nth(0).getByTestId("sidebar-workspace-trailing-scrim");
-  await pressRow(rows);
+  await press(rows);
   await page.mouse.move(source.x, source.y + 7);
   await expect(trailingScrim).toHaveCount(0);
   await page.mouse.move(target.x, target.y, { steps: 4 });
@@ -83,7 +74,7 @@ test("projects, workspaces, and pinned chats reorder with an immediate mouse dra
     const secondProjectTestId = `sidebar-project-row-${projectEquivalenceViewKey(secondProject.projectKey)}`;
     await quickDragFirstRowAfterSecond(
       page.locator(`[data-testid="${firstProjectTestId}"], [data-testid="${secondProjectTestId}"]`),
-      pressProjectRow,
+      pressRow,
     );
     const firstWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${firstProject.workspaceId}`;
     const secondWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${secondWorkspace.workspace.id}`;
@@ -91,7 +82,7 @@ test("projects, workspaces, and pinned chats reorder with an immediate mouse dra
       page.locator(
         `[data-testid="${firstWorkspaceTestId}"], [data-testid="${secondWorkspaceTestId}"]`,
       ),
-      pressWorkspaceRow,
+      pressRow,
     );
 
     await firstProject.client.setWorkspacePinned(firstProject.workspaceId, true);
@@ -101,7 +92,7 @@ test("projects, workspaces, and pinned chats reorder with an immediate mouse dra
       page.locator(
         `[data-testid="${firstWorkspaceTestId}"], [data-testid="${secondProjectWorkspaceTestId}"]`,
       ),
-      pressWorkspaceRow,
+      pressRow,
     );
   } finally {
     await firstProject.cleanup();

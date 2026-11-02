@@ -35,7 +35,8 @@ test("keeps the selected workspace visible in Light", async ({ page }, testInfo)
     await row.click();
 
     await expect(row).toHaveAttribute("aria-selected", "true");
-    await expect(row).toHaveCSS("background-color", "rgb(229, 231, 235)");
+    // The shadcn sidebar accent (neutral-100) over the neutral-50 sidebar, with the 2px bar.
+    await expect(row).toHaveCSS("background-color", "rgb(245, 245, 245)");
     await page.screenshot({
       path: testInfo.outputPath("light-selected-workspace.png"),
       fullPage: true,

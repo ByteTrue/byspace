@@ -524,8 +524,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  // As tall as the label's line, so a 20px key cap overhangs into the padding instead of making
+  // its row 2px taller than the rows around it.
   trailingSlot: {
     marginLeft: "auto",
+    height: MENU_ITEM_LINE_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -33,14 +33,15 @@ afterEach(() => {
 });
 
 describe("StatusBadge", () => {
+  // shadcn/ui secondary badge: a filled pill with no border.
   it.each(["success", "warning", "error", "muted"] as const)(
-    "uses the semantic badge shell for the %s variant",
+    "uses the secondary badge shell for the %s variant",
     (variant) => {
       const badge = mountBadge(variant);
       const style = getComputedStyle(badge);
 
       expect(style.backgroundColor).toBe("rgb(244, 244, 245)");
-      expect(style.borderColor).toBe("rgb(228, 228, 231)");
+      expect(style.borderTopWidth).toBe("0px");
     },
   );
 
@@ -48,7 +49,8 @@ describe("StatusBadge", () => {
     ["success", "rgb(21, 128, 61)"],
     ["warning", "rgb(217, 119, 6)"],
     ["error", "rgb(185, 28, 28)"],
-    ["muted", "rgb(102, 102, 102)"],
+    // Muted is the plain secondary badge: foreground text.
+    ["muted", "rgb(17, 17, 17)"],
   ] as const)("uses the semantic %s signal for its text", (variant, expectedColor) => {
     const badge = mountBadge(variant);
     const text = badge.lastElementChild;

@@ -477,11 +477,13 @@ test.describe("Half-screen desktop layout", () => {
       await waitForSidebarWorkspace(page, lastWorkspaceId);
 
       const sidebarScroll = page.getByTestId("sidebar-project-workspace-list-scroll");
+      // Halfway down rather than a fixed offset, so the row height does not decide whether the
+      // list can scroll that far.
       const scrollTop = await sidebarScroll.evaluate((element) => {
-        element.scrollTop = 160;
+        element.scrollTop = Math.floor((element.scrollHeight - element.clientHeight) / 2);
         return element.scrollTop;
       });
-      expect(scrollTop).toBe(160);
+      expect(scrollTop).toBeGreaterThan(40);
 
       await page.getByTestId("menu-button").click();
       await expect(pinnedSidebar(page)).toHaveCount(0);
@@ -515,12 +517,15 @@ test.describe("Half-screen desktop layout", () => {
     await openToggle.click();
     await expect(pinnedSidebar(page)).toHaveCount(0);
 
+    // Collapsed, the toggle is in the content card's header, and the card sits inside the window
+    // by its 6px margin and 1px border. The toggle moves by exactly that and nothing else.
     const closedToggle = page.getByTestId("menu-button");
     await expect(closedToggle).toBeVisible();
     const closedBounds = await closedToggle.boundingBox();
     expect(closedBounds).not.toBeNull();
-    expect(closedBounds?.x).toBe(openBounds?.x);
-    expect(closedBounds?.y).toBe(openBounds?.y);
+    const contentFrameInset = 7;
+    expect((closedBounds?.x ?? 0) - (openBounds?.x ?? 0)).toBe(contentFrameInset);
+    expect((closedBounds?.y ?? 0) - (openBounds?.y ?? 0)).toBe(contentFrameInset);
 
     // Exactly one host at a time: never two toggles, never none.
     await expect(page.getByTestId("menu-button")).toHaveCount(1);

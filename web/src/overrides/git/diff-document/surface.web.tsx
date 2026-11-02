@@ -88,6 +88,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const workspaceCache = useDiffDocumentWorkspaceCache();
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasClipRef = useRef<HTMLDivElement>(null);
   const stickyHeaderSlotsRef = useRef<[StickyHeaderCanvasSlot, StickyHeaderCanvasSlot]>([
     emptyStickyHeaderCanvasSlot(),
     emptyStickyHeaderCanvasSlot(),
@@ -296,13 +297,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
     const currentModel = modelRef.current;
     if (!canvas || !currentModel || currentModel.viewportWidth <= 0 || viewport.height <= 0) return;
     const ratio = window.devicePixelRatio || 1;
-    // Sized so the browser shows the bitmap 1:1 (device-canvas.web.ts). The window's top is
-    // snapped to device pixels too, so the bands repainted after a shift start on pixel rows.
-    const pixelHeight = deviceCanvasPixels(
-      Math.min(Math.max(currentModel.height, viewport.height), viewport.height * 3),
-      ratio,
+    const desiredHeight = Math.min(
+      Math.max(currentModel.height, viewport.height),
+      viewport.height * 3,
     );
-    const desiredHeight = pixelHeight / ratio;
     const currentWindow = canvasWindowRef.current;
     const viewportTop = scrollTopRef.current;
     const viewportBottom = viewportTop + viewport.height;
@@ -323,13 +321,18 @@ export function DiffSurface(props: DiffSurfaceProps) {
       : currentWindow.top;
     const canvasTop = Math.round(requestedCanvasTop * ratio) / ratio;
     canvasWindowRef.current = { top: canvasTop, height: canvasHeight };
+    // The bitmap is sized so the browser shows it 1:1 (device-canvas.web.ts), which can make it a
+    // few px larger than the window; the clip keeps the window's exact box, so the layout around
+    // the canvas does not move. The window's top is snapped to device pixels, so the bands
+    // repainted after a shift start on pixel rows.
     const pixelWidth = deviceCanvasPixels(currentModel.viewportWidth, ratio);
+    const pixelHeight = deviceCanvasPixels(canvasHeight, ratio);
     const resized = canvas.width !== pixelWidth || canvas.height !== pixelHeight;
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
     if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     canvas.style.width = `${pixelWidth / ratio}px`;
-    canvas.style.top = `${canvasTop}px`;
     canvas.style.height = `${pixelHeight / ratio}px`;
+    placeCanvasWindow(canvasClipRef.current, canvasTop, currentModel.viewportWidth, canvasHeight);
     const context = opaqueContext(canvas);
     if (!context) return;
     if (!measurement || !loadedTypography) {
@@ -846,7 +849,9 @@ export function DiffSurface(props: DiffSurfaceProps) {
         style={SCROLL_STYLE}
       >
         <div style={contentStyle} onMouseDown={preventDocumentMouseSelection}>
-          <canvas ref={canvasRef} data-testid="git-diff-canvas" style={canvasStyle} />
+          <div ref={canvasClipRef} style={CANVAS_CLIP_STYLE}>
+            <canvas ref={canvasRef} data-testid="git-diff-canvas" style={canvasStyle} />
+          </div>
           <StickyHeaderCanvasSlotView slotsRef={stickyHeaderSlotsRef} slotIndex={0} />
           <StickyHeaderCanvasSlotView slotsRef={stickyHeaderSlotsRef} slotIndex={1} />
           {interactionFiles.map((file) => (
@@ -1115,9 +1120,6 @@ const CONTENT_STYLE: React.CSSProperties = {
   position: "relative",
   width: "100%",
   userSelect: "none",
-  // The canvases overhang by up to 4px to stay 1:1 (device-canvas.web.ts). Clip, not hidden:
-  // the file headers inside are sticky to the scroller, which a scroll container here would break.
-  overflow: "clip",
 };
 const FILE_SECTION_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -1162,11 +1164,29 @@ const BODY_MARKER_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 const REVIEW_STYLE: React.CSSProperties = { position: "absolute", zIndex: 4, userSelect: "text" };
-const CANVAS_STYLE: React.CSSProperties = {
+function placeCanvasWindow(
+  clip: HTMLDivElement | null,
+  top: number,
+  width: number,
+  height: number,
+): void {
+  if (!clip) return;
+  clip.style.top = `${top}px`;
+  clip.style.width = `${width}px`;
+  clip.style.height = `${height}px`;
+}
+
+// The canvas's window into the document; the canvas inside can overhang it (see paint).
+const CANVAS_CLIP_STYLE: React.CSSProperties = {
   position: "absolute",
   top: 0,
   left: 0,
   zIndex: 1,
+  overflow: "hidden",
+  pointerEvents: "none",
+};
+const CANVAS_STYLE: React.CSSProperties = {
+  display: "block",
   pointerEvents: "none",
 };
 const AFFORDANCE_STYLE: ViewStyle = {
