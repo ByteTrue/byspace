@@ -59,6 +59,7 @@ browser:
   - "packages/app/public/**"
   - "packages/app/index.ts"
   - "packages/app/*config.{cjs,js,ts}"
+  - "web/**"
 
 relay:
   - "packages/relay/**"

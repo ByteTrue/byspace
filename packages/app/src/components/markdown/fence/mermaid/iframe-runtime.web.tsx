@@ -1,8 +1,22 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DiagramColorScheme, MermaidRenderRequest } from "./render-model";
-import { mermaidRuntimeHtml } from "./runtime/html.gen";
 import { parseMermaidRuntimeMessage, type MermaidRuntimeRenderMessage } from "./runtime/messages";
 import { MermaidRuntimeRequestDriver } from "./runtime/request-driver";
+
+// The runtime inlines all of Mermaid (3.5 MB, a quarter of the app bundle), so it loads with the
+// first diagram instead of with the app. The request driver waits for the iframe's bridgeReady, so
+// a late srcDoc only delays the first render.
+let runtimeHtml: Promise<string> | null = null;
+function loadMermaidRuntimeHtml(): Promise<string> {
+  runtimeHtml ??= import("./runtime/html.gen").then(
+    (module) => module.mermaidRuntimeHtml,
+    (error: unknown) => {
+      runtimeHtml = null;
+      throw error;
+    },
+  );
+  return runtimeHtml;
+}
 
 export interface MermaidRenderedMessage {
   revision: number;
@@ -27,6 +41,23 @@ export function MermaidIframeRuntime({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const driverRef = useRef<MermaidRuntimeRequestDriver | null>(null);
   driverRef.current ??= new MermaidRuntimeRequestDriver();
+  const [srcDoc, setSrcDoc] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load(): Promise<void> {
+      try {
+        const html = await loadMermaidRuntimeHtml();
+        if (mounted) setSrcDoc(html);
+      } catch (error) {
+        console.error("[mermaid] runtime failed to load", error);
+      }
+    }
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const sendRequest = useCallback((current: MermaidRenderRequest | null) => {
     const target = iframeRef.current?.contentWindow;
@@ -75,7 +106,7 @@ export function MermaidIframeRuntime({
       aria-hidden
       inert
       sandbox="allow-scripts"
-      srcDoc={mermaidRuntimeHtml}
+      srcDoc={srcDoc}
       tabIndex={-1}
       style={iframeStyle}
     />
