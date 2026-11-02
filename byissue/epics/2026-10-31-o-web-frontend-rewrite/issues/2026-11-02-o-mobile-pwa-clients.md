@@ -45,3 +45,10 @@ created: 2026-11-02
 - 长按：抽出 `web/src/hooks/use-long-press.ts`（同 Pressable：按住 500ms、移动超过 10px 取消、松手那次点击不算）。历史行的长按归档改用它；右键菜单触发器重新转发 `onLongPress`（文件、文件夹行长按选中自己，移植时丢了）。手机上长按一行同时打开它的菜单面板：iOS Safari 不发 `contextmenu` 事件，旧版在 iPhone 上没有任何办法打开文件菜单（复制路径、重命名、删除等）；Android 长按两边都能打开。
 - 软键盘：旧版用的 `react-native-keyboard-controller` 在网页上不报告键盘，旧版网页从不为键盘移动布局，由浏览器自己调整；新版同样不处理。要在真机上看。
 - 验证（390×844，Chrome 触摸模拟，脚本在 `screenshots/对照全集/_脚本/第5步/`）：长按（`long-press.mjs`）文件行按住 800ms 后选中并打开菜单面板，桌面上鼠标按住只选中、不打开文件，历史行按住弹出归档确认（旧版用触摸都没反应）；手势（`m-gestures.mjs`）：慢拖到一半时面板位置等于手指位移（旧版用鼠标拖时落后 2–3 帧），过三分之一松手打开、不到三分之一弹回、快速甩动打开和关闭、屏幕中间开始的拖动不触发；点按钮打开时每帧位置和旧版的曲线一致；打开后的侧栏、文件面板截图和旧版一致（侧栏除了第 2 步有意移进列表的 Search、Schedules、Tunnels）。
+
+### 第 3 批：PWA
+
+- `web/index.html` 原来缺了装到主屏需要的东西：manifest 链接、`apple-touch-icon`、主屏模式的 meta（全屏、标题、半透明状态栏）、`robots`，以及外壳的 `overflow: hidden` / `overscroll-behavior: none`（没有它 Android 上在顶部下拉会触发刷新，把应用重新加载）和深色主题下 JS 加载前的深色底。都换成旧版 `public/index.html` 的值。manifest、图标、`sw.js` 原来就由 `web/vite.config.ts` 从 `packages/app/public` 提供。
+- 手机上锁定缩放：旧版根布局调用 `useCompactWebViewportZoomLock`（窄屏时 `maximum-scale=1, user-scalable=no`，防止 iOS 点进输入框时自动放大），第 2 步移植根布局时漏了，加到 `AppChrome`。
+- 验证（`screenshots/对照全集/_脚本/第5步/pwa-probe.mjs`）：Chrome 的可安装性检查两边都没有错误，manifest 解析无错，运行后的全部 meta、link、外壳样式两边一致，JS 被拦下时深色主题的底色一致。
+- 没验：真机安装到主屏（iOS 的状态栏留边、Android 的安装提示），推送沿用第 4 步已验的部分。
