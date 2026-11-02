@@ -84,9 +84,9 @@ Workspaces 区头（`WorkspacesSectionHeader`）：3. 标题、头部导航按�
 
 用户放开了「重写期间不改布局」之后的第一处改动（用户举的例子）。
 
-- 改了什么：旧版侧栏左上角是「BySpace ⌄」下拉，里面是 Search（⌘K）、Schedules、Tunnels。新版去掉下拉，这三项直接列在侧栏顶部，图标加名字，Search 带 ⌘K 提示；顺序和显隐仍按外观设置里的侧栏项。在 Schedules 或 Tunnels 页面时对应行高亮，样式和选中的工作区行一样（底色加左侧竖条）。这几行和 Workspaces 标题一样随列表滚动。侧栏顶栏只剩开关（手机上是关闭按钮）。代码在 `web/src/sidebar/nav-menu.tsx`。
+- 改了什么：旧版侧栏左上角是「BySpace ⌄」下拉，里面是 Search（⌘K）、Schedules、Tunnels。新版去掉下拉，这三项直接列在侧栏顶部，图标加名字，Search 带 ⌘K 提示；顺序和显隐仍按外观设置里的侧栏项。在 Schedules 或 Tunnels 页面时对应行高亮，样式和选中的工作区行一样（底色加左侧竖条）。这几行固定在列表上方，不随列表滚动（2026-11-02 用户在桌面窗口里发现：原来随列表一起滚，列表因为多了这三行比侧栏高出约 100px，在旧版不滚的高度上滚轮一拨，连这几行在内的整个侧栏都跟着动）。侧栏顶栏只剩开关（手机上是关闭按钮）。代码在 `web/src/sidebar/nav-menu.tsx`。
 - 为什么：产品名加下拉箭头，看上去是切换账号或工作区的按钮，点开才知道是导航；三个页面藏在一次点击后面，进了 Schedules 侧栏也看不出当前在哪个页面。
-- 代价：工作区列表往下挪了三行（约 96px）。不用的行可以在外观设置里关掉。
+- 代价：工作区列表少了三行的高度（约 100px），工作区多时列表会比旧版更早需要滚动（1512×949 的窗口、13 个工作区时要滚约 100px，旧版刚好放下）。不用的行可以在外观设置里关掉。
 - 验证：桌面点 Schedules 跳到 `/schedules` 且该行高亮，点 Search 打开命令面板，深色主题；手机抽屉里点 Tunnels 跳转并收起抽屉。截图 14–17。
 - 切换时要跟着改的：端到端用例 `e2e/browser/sidebar-workspace.spec.ts`、`sidebar-nav-settings.spec.ts` 和 `e2e/support/helpers/sidebar-chrome.ts` 里先点开「BySpace」菜单的步骤（行的 `data-testid` `sidebar-search`、`sidebar-schedules`、`sidebar-tunnels` 没变）；`docs/menus.md` 的「When a list of destinations is a menu」一节和 `byissue/spec/workspace.md` 里手机侧栏用这个菜单的说明。Windows 客户端标题栏在侧栏收起时也放了这个菜单（`components/desktop-window-titlebar.tsx`），第 5 步做客户端时处理；侧栏收起时这三项只剩 ⌘K 可用。
 

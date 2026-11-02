@@ -81,11 +81,16 @@ export function AppSidebar() {
           </Button>
         ) : null}
       </SidebarHeader>
+      {/* Pinned above the list, as packages/app's header was: a wheel over them scrolls nothing,
+          and they stay in reach when the list is scrolled. */}
+      <div className="shrink-0 pt-0.5">
+        <SidebarNavRows onBeforeNavigate={closeOnNavigate} />
+      </div>
+      {/* overflow-x hidden as packages/app's list: it scrolls up and down only. */}
       <SidebarContent
-        className="gap-0 pt-0.5 pb-4"
+        className="gap-0 overflow-x-hidden pb-4"
         data-testid="sidebar-project-workspace-list-scroll"
       >
-        <SidebarNavRows onBeforeNavigate={closeOnNavigate} />
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarListSkeleton />
         ) : (
