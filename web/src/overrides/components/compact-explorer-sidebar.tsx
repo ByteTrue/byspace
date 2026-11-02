@@ -19,7 +19,7 @@ import { usePullRequestPanelAvailability } from "@/panels/pull-request-availabil
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePanelStore, type ExplorerTab } from "@/stores/panel-store";
-import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { cn } from "cn";
 
 interface ExplorerSidebarProps {
@@ -53,7 +53,6 @@ export function CompactExplorerSidebar({
   isGit,
   onOpenFile,
 }: ExplorerSidebarProps) {
-  const { t } = useTranslation();
   const isActive = useIsMobilePanelActive("file-explorer");
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
   const { explorerTab, handleTabPress } = useExplorerSidebarSharedState({
@@ -61,36 +60,25 @@ export function CompactExplorerSidebar({
     workspaceRoot,
     isGit,
   });
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) showMobileAgent();
-    },
-    [showMobileAgent],
-  );
   return (
     <RetainedPanelActivity active={isActive}>
-      <Sheet open={isActive} onOpenChange={handleOpenChange}>
-        <SheetContent
-          side="right"
-          showCloseButton={false}
-          aria-describedby={undefined}
-          className="w-full gap-0 bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] pb-[env(safe-area-inset-bottom)] text-sidebar-foreground sm:max-w-none data-[side=right]:w-full"
-          data-testid="compact-explorer-sidebar"
-        >
-          <SheetTitle className="sr-only">{t("workspace.tabs.explorerSidebar.files")}</SheetTitle>
-          <ExplorerSidebarContent
-            activeTab={explorerTab}
-            onTabPress={handleTabPress}
-            onClose={showMobileAgent}
-            serverId={serverId}
-            workspaceId={workspaceId}
-            workspaceRoot={workspaceRoot}
-            isGit={isGit}
-            isOpen={isActive}
-            onOpenFile={onOpenFile}
-          />
-        </SheetContent>
-      </Sheet>
+      <MobilePanelOverlay
+        panel="file-explorer"
+        className="flex flex-col bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] pb-[env(safe-area-inset-bottom)] text-sm text-sidebar-foreground"
+        testID="compact-explorer-sidebar"
+      >
+        <ExplorerSidebarContent
+          activeTab={explorerTab}
+          onTabPress={handleTabPress}
+          onClose={showMobileAgent}
+          serverId={serverId}
+          workspaceId={workspaceId}
+          workspaceRoot={workspaceRoot}
+          isGit={isGit}
+          isOpen={isActive}
+          onOpenFile={onOpenFile}
+        />
+      </MobilePanelOverlay>
     </RetainedPanelActivity>
   );
 }

@@ -104,10 +104,13 @@ export function AppSidebar() {
           />
         )}
       </SidebarContent>
-      <div className="shrink-0 empty:hidden">
-        <SidebarCalloutViewport />
-      </div>
-      {DEV_BUILD_LABEL ? (
+      {/* As packages/app's MobileSidebar, the phone panel has no callouts and no build label. */}
+      {isCompact ? null : (
+        <div className="shrink-0 empty:hidden">
+          <SidebarCalloutViewport />
+        </div>
+      )}
+      {DEV_BUILD_LABEL && !isCompact ? (
         <div className="flex shrink-0 px-2 pb-1.5">
           <span
             className="flex min-w-0 items-center gap-1 rounded-[4px] bg-sidebar-accent px-1.5 py-0.5 text-xs text-muted-foreground"

@@ -25,6 +25,7 @@ import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-ac
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
+import { MobilePanelsProvider, useMobilePanelOpenGesture } from "@/mobile-panels/provider";
 import { useHosts } from "@/runtime/host-runtime";
 import { usePanelStore } from "@/stores/panel-store";
 import { getNextThemePreference } from "@/styles/theme";
@@ -75,6 +76,16 @@ function MobileSidebarSync() {
 }
 
 export function AppChrome() {
+  const isCompactLayout = useIsCompactFormFactor();
+  // Phone panels slide and follow the finger; on a desktop the runtime only reports the panel.
+  return (
+    <MobilePanelsProvider enabled={isCompactLayout}>
+      <AppChromeContent />
+    </MobilePanelsProvider>
+  );
+}
+
+function AppChromeContent() {
   const { pathname } = useLocation();
   const hosts = useHosts();
   const storeReady = useStoreReady();
@@ -138,6 +149,8 @@ export function AppChrome() {
     }),
   });
   const sidebarActive = isCompactLayout ? chromeEnabled : desktopSidebarVisible;
+  // packages/app's MobileGestureWrapper: a swipe in from the left edge opens the sidebar.
+  useMobilePanelOpenGesture("agent-list", { enabled: isCompactLayout && chromeEnabled });
 
   // A drag previews its width locally and commits to the store on release.
   const [draftWidth, setDraftWidth] = useState<number | null>(null);
