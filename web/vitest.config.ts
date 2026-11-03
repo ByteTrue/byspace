@@ -15,12 +15,22 @@ export default defineConfig((env) =>
       global: "globalThis",
     },
     resolve: {
-      // The ligatures addon reads Node's diagnostics_channel at import time, which a test browser
-      // does not have; nothing under test draws ligatures.
       alias: [
+        // The ligatures addon reads Node's diagnostics_channel at import time, which a test browser
+        // does not have; nothing under test draws ligatures.
         {
           find: /^@xterm\/addon-ligatures(\/lib\/addon-ligatures\.mjs)?$/,
           replacement: path.join(webRoot, "test-stubs/xterm-addon-ligatures.ts"),
+        },
+        // CI builds only the app's dependencies (`build:app-deps`) before these tests, not the relay
+        // package that @bytetrue/client imports, so it is read from source.
+        {
+          find: /^@bytetrue\/relay\/e2ee$/,
+          replacement: path.resolve(webRoot, "../packages/relay/src/e2ee.ts"),
+        },
+        {
+          find: /^@bytetrue\/relay$/,
+          replacement: path.resolve(webRoot, "../packages/relay/src/index.ts"),
         },
       ],
     },
