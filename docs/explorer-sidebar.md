@@ -22,12 +22,12 @@ retention, while each shell owns its tabs, focus, dragging, resizing, and shortc
 
 ## Explorer sidebar
 
-`packages/app/src/workspace-tabs/explorer-sidebar.ts` owns show, hide, toggle, and view selection.
+`web/src/core/workspace-tabs/explorer-sidebar.ts` owns show, hide, toggle, and view selection.
 On desktop, the shell is rendered outside the workspace split canvas so it divides the full
 workspace, including the header. It has its own persisted width and resize handle. Main-pane splits
 never read or modify that width.
 
-`packages/app/src/workspace-tabs/open-supporting-view.ts` owns semantic Changes and pull-request
+`web/src/core/workspace-tabs/open-supporting-view.ts` owns semantic Changes and pull-request
 opens. Compact and wide native layouts select the matching Explorer tab. Desktop Changes opens
 follow the shared diff preference. Desktop pull requests use their Main panel, On the side, or
 Explorer sidebar setting. Callers request the content and never choose the shell.
@@ -49,7 +49,7 @@ lifecycle.
 
 ## Side pane
 
-`packages/app/src/workspace-tabs/open-beside.ts` owns content opened beside the user's work. The
+`web/src/core/workspace-tabs/open-beside.ts` owns content opened beside the user's work. The
 layout store remembers one ordinary pane per workspace. The first side open creates a full-height
 right split around the workspace root; later side opens reuse it.
 

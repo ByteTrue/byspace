@@ -1,10 +1,11 @@
-// Transitional stand-in for `react-native` while web/ imports modules from packages/app/src.
-// It carries only the non-UI APIs those modules use, with react-native-web's semantics, and
-// deliberately no components: a shared module that renders React Native UI fails to build and
-// has to be overridden in src/overrides/. Deleted at the cutover.
+// Stand-in for `react-native`. The modules ported from the Expo app (src/core) still import its
+// non-UI APIs; this has those, with react-native-web's semantics, and deliberately no components,
+// so React Native UI fails to build.
 import { useSyncExternalStore } from "react";
 
-export type AppStateStatus = "active" | "background";
+// The browser only reports active and background; "inactive" is in the type, as in React Native,
+// for the shared code that handles it.
+export type AppStateStatus = "active" | "background" | "inactive";
 type AppStateEvent = "change" | "focus" | "blur";
 
 function currentAppState(): AppStateStatus {

@@ -39,8 +39,7 @@ go:
   - "Makefile"
 
 app:
-  - "packages/app/src/**"
-  - "packages/app/package.json"
+  - "web/**"
 
 sdk:
   - "packages/client/**"
@@ -52,13 +51,6 @@ browser:
   - "internal/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
   - "packages/protocol/src/client-capabilities.ts"
-  - "packages/app/src/**"
-  - "packages/app/e2e/browser/**"
-  - "packages/app/e2e/support/**"
-  - "packages/app/assets/**"
-  - "packages/app/public/**"
-  - "packages/app/index.ts"
-  - "packages/app/*config.{cjs,js,ts}"
   - "web/**"
 
 relay:

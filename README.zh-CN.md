@@ -113,7 +113,7 @@ npx skills add ByteTrue/byspace
 Monorepo 包结构速览：
 
 - `packages/server`：BySpace daemon（agent 进程编排、WebSocket API、MCP server）
-- `packages/app`：Expo Web 客户端
+- `web`：Web 客户端（React、Vite），浏览器、PWA、桌面端与 Android 共用
 - `packages/cli`：用于 daemon 和 agent 工作流的 `byspace` CLI
 - `packages/relay`：用于远程连接的 relay 包
 

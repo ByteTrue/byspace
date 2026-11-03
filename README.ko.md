@@ -123,7 +123,7 @@ npx skills add ByteTrue/byspace
 모노레포 패키지 구성은 다음과 같습니다.
 
 - `packages/server`: BySpace 데몬(에이전트 프로세스 오케스트레이션, WebSocket API, MCP 서버 제공)
-- `packages/app`: Expo 웹 클라이언트
+- `web`: 웹 클라이언트(React, Vite). 브라우저, PWA, 데스크톱, Android 공용
 - `packages/cli`: `byspace` CLI(데몬과 에이전트 워크플로)
 - `packages/relay`: 데몬과 클라이언트가 쓰는 릴레이 전송 및 암호화 패키지
 

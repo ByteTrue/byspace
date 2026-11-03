@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 
-/** Renders the dialog behind confirmDialog() (web/src/overrides/utils/confirm-dialog.ts). */
+/** Renders the dialog behind confirmDialog() (core/utils/confirm-dialog.ts). */
 export function ConfirmDialogHost() {
   const { t } = useTranslation();
   const pending = useSyncExternalStore(

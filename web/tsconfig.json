@@ -2,20 +2,19 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "types": ["vite/client", "node"],
     "noEmit": true,
     "incremental": false,
     "paths": {
       "~/*": ["./src/*"],
-      "@/*": ["./src/overrides/*", "../packages/app/src/*"],
+      "@/*": ["./src/core/*"],
       "react-native": ["./src/shims/react-native.ts"],
       "expo-router": ["./src/shims/expo-router.tsx"],
       "lucide-react-native": ["./src/shims/lucide-react-native.ts"],
       "expo-constants": ["./src/shims/expo-constants.ts"],
       "expo-localization": ["./src/shims/expo-localization.ts"],
-      "expo-asset": ["./src/shims/expo-asset.ts"],
       "expo-linking": ["./src/shims/expo-linking.ts"],
       "expo-clipboard": ["./src/shims/expo-clipboard.ts"],
       "expo/dom": ["./src/shims/expo__dom.ts"],
@@ -24,13 +23,20 @@
       "expo-sharing": ["./src/shims/expo-sharing.ts"],
       "react-native-svg": ["./src/shims/react-native-svg.tsx"],
       "react-native-unistyles": ["./src/shims/react-native-unistyles.tsx"],
-      "@react-navigation/native": ["./src/shims/@react-navigation__native.ts"]
+      "@react-navigation/native": ["./src/shims/@react-navigation__native.ts"],
+      "@react-native-async-storage/async-storage": [
+        "./src/shims/@react-native-async-storage__async-storage.ts"
+      ]
     }
   },
   "include": [
     "src",
+    "e2e",
+    "perf",
     "vite.config.ts",
-    "../packages/app/src/types/turndown-plugin-gfm.d.ts",
-    "../packages/app/src/types/xterm-addon-ligatures.d.ts"
+    "vitest.config.ts",
+    "vitest.setup.ts",
+    "playwright.config.ts",
+    "playwright.profile.config.ts"
   ]
 }

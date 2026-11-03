@@ -1,0 +1,1795 @@
+// Port of packages/app/src/agent-stream/view.tsx. The stream logic is the Expo file's (tool-call
+// grouping and detail levels, nested codemode, subagents, forks, the outline, history paging);
+// the view is DOM and Tailwind. Keep the two in step until the cutover deletes packages/app.
+// Converted from the Expo file by web/scripts/port/agent-stream-view.py (tag archive/expo-app); edit it directly.
+import { Spinner } from "~/components/ui/spinner";
+import React, {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { useMutation } from "@tanstack/react-query";
+import { Check, ChevronDown, X } from "lucide-react";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { openExplorerSidebarView } from "@/workspace-tabs/explorer-sidebar";
+import {
+  AssistantMessage,
+  SpeakMessage,
+  UserMessage,
+  Notification,
+  CustomMessage,
+  ToolCall,
+  TodoListCard,
+  CompactionMarker,
+  MessageOuterSpacingProvider,
+  type InlinePathTarget,
+} from "@/components/message";
+import { PlanCard } from "@/components/plan-card";
+import type { StreamItem } from "@/types/stream";
+import type { PendingMessageSubmission } from "@/composer/submission/model";
+import type { TurnPresentation } from "@/timeline/turn-liveness";
+import type { PendingPermission } from "@/types/shared";
+import type {
+  AgentCapabilityFlags,
+  AgentPermissionAction,
+  AgentPermissionResponse,
+} from "@bytetrue/protocol/agent-types";
+import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
+import { useSessionStore } from "@/stores/session-store";
+import { useRevealedText } from "@/hooks/use-revealed-text";
+import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
+import { useSettings } from "@/hooks/use-settings";
+import {
+  expandsThinking,
+  expandsToolDetail,
+  toToolCallDetailLevel,
+  type TimelineDetailLevel,
+} from "@/hooks/use-settings/storage";
+import type { ToastApi } from "@/components/toast-host";
+import { returnToTimelineTail } from "@/agent-stream/timeline-tail-navigation";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import { ToolCallDetailsContent } from "@/components/tool-call-details";
+import { QuestionFormCard } from "@/components/question-form-card";
+import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
+import {
+  prepareToolCallHistory,
+  projectToolCallDetailLevel,
+} from "@/tool-calls/detail-level/projection";
+import {
+  nestedGroupRowIds,
+  projectNestedCodemodeCalls,
+} from "@/tool-calls/detail-level/nested-codemode";
+import { useProviderSubagentsByToolCallId } from "@/subagents/select";
+import type { ToolCallSubagentBinding } from "@/components/message";
+import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
+import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
+import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
+import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
+import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "@/agent-stream/model";
+import { createWebStreamStrategy } from "@/agent-stream/strategy-web";
+import { type StreamSegmentRenderers, type StreamViewportHandle } from "@/agent-stream/strategy";
+import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import {
+  CompletedTurnFooterRow,
+  TurnFooter,
+  TURN_FOOTER_BOTTOM_SPACING,
+  type AssistantTurnForkHandler,
+  type InFlightTurnForkHandler,
+  type TurnContentStrategy,
+} from "@/agent-stream/turn-footer";
+import { resolveBottomOverlayTailInset } from "@/agent-stream/bottom-overlay-inset";
+import { layoutStream, type StreamLayoutItem } from "@/agent-stream/layout";
+import {
+  type BottomAnchorLocalRequest,
+  type BottomAnchorRouteRequest,
+} from "@/agent-stream/bottom-anchor-controller";
+import { createAssistantImageOccurrenceKey } from "@/assistant-image/acquisition-cache";
+import { AssistantSelectionCopySurface } from "@/assistant-selection-copy/surface";
+import {
+  AssistantFileLinkResolverProvider,
+  normalizeInlinePathTarget,
+} from "@/assistant-file-links";
+import {
+  createWorkspaceFileTabTarget,
+  normalizeWorkspaceFileLocation,
+  type OpenFileDisposition,
+  type WorkspaceFileOpenRequest,
+} from "@/workspace/file-open";
+import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
+import { useStableEvent } from "@/hooks/use-stable-event";
+import { useForkAgent } from "@/hooks/use-fork-agent";
+import { cn } from "cn";
+import { recordRenderProfileReasons } from "@/utils/render-profiler";
+import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useStreamHistoryWindow } from "@/agent-stream/use-stream-history-window";
+
+function renderLiveAuxiliaryNode(input: {
+  pendingPermissions: ReactNode;
+  turnFooter: ReactNode;
+  bottomOverlayInset: number;
+}): ReactNode {
+  if (!input.pendingPermissions && !input.turnFooter && input.bottomOverlayInset === 0) {
+    return null;
+  }
+  return (
+    <>
+      {input.turnFooter}
+      {input.pendingPermissions ? (
+        <div className={CONTENT_COLUMN}>
+          <div className="flex flex-col gap-3">{input.pendingPermissions}</div>
+        </div>
+      ) : null}
+      {input.bottomOverlayInset > 0 ? (
+        <BottomOverlayInset height={input.bottomOverlayInset} />
+      ) : null}
+    </>
+  );
+}
+
+function BottomOverlayInset({ height }: { height: number }) {
+  const style = useMemo(() => ({ height }), [height]);
+  return <div style={style} />;
+}
+
+function renderPendingPermissionsNode(input: {
+  pendingPermissions: PendingPermission[];
+  client: DaemonClient | null;
+}): ReactNode {
+  if (input.pendingPermissions.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {input.pendingPermissions.map((permission) => (
+        <PermissionRequestCard key={permission.key} permission={permission} client={input.client} />
+      ))}
+    </div>
+  );
+}
+
+function renderStreamItemWithTurnFooter(input: {
+  content: ReactNode;
+  layoutItem: StreamLayoutItem;
+  strategy: TurnContentStrategy;
+  supportsTimelineCursor: boolean;
+  onForkAssistantTurn?: AssistantTurnForkHandler;
+}): ReactNode {
+  if (!input.content) {
+    return null;
+  }
+
+  const footerHost = input.layoutItem.completedFooter;
+  const footer = footerHost ? (
+    <CompletedTurnFooterRow
+      strategy={input.strategy}
+      items={footerHost.items}
+      timing={footerHost.timing}
+      startIndex={footerHost.startIndex}
+      supportsTimelineCursor={input.supportsTimelineCursor}
+      onForkAssistantTurn={input.onForkAssistantTurn}
+    />
+  ) : null;
+  const content = (
+    <StreamItemWrapper itemId={input.layoutItem.item.id} gapBelow={input.layoutItem.gapBelow}>
+      {input.content}
+    </StreamItemWrapper>
+  );
+
+  if (input.layoutItem.frameOrder === "footer-then-content") {
+    return (
+      <>
+        {footer}
+        {content}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {content}
+      {footer}
+    </>
+  );
+}
+
+function SuggestionChip({
+  label,
+  prompt,
+  onSelect,
+}: {
+  label: string;
+  prompt: string;
+  onSelect?: (prompt: string) => void;
+}) {
+  const handlePress = useCallback(() => onSelect?.(prompt), [onSelect, prompt]);
+  return (
+    <button
+      type="button"
+      onClick={handlePress}
+      className="rounded-md border px-3 py-2 text-xs text-foreground hover:bg-muted"
+    >
+      {label}
+    </button>
+  );
+}
+
+function renderListEmptyComponent(input: {
+  renderModel: AgentStreamRenderModel;
+  emptyStateClassName: string;
+  emptyText: string;
+  suggestions?: { label: string; prompt: string }[];
+  onSuggestionSelect?: (prompt: string) => void;
+}): ReactNode {
+  if (
+    input.renderModel.boundary.hasVirtualizedHistory ||
+    input.renderModel.boundary.hasMountedHistory ||
+    input.renderModel.boundary.hasLiveHead ||
+    input.renderModel.auxiliary.pendingPermissions ||
+    input.renderModel.auxiliary.turnFooter
+  ) {
+    return null;
+  }
+
+  return (
+    <div className={input.emptyStateClassName}>
+      <span className="text-center text-sm text-muted-foreground">{input.emptyText}</span>
+      {input.suggestions && input.suggestions.length > 0 ? (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          {input.suggestions.map((s) => (
+            <SuggestionChip
+              key={s.label}
+              label={s.label}
+              prompt={s.prompt}
+              onSelect={input.onSuggestionSelect}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// History rows sit inside FlatList cells that rerender on every data change (RN recreates each
+// CellRenderer with a fresh ref and, in a newest-first list, a shifted index). This boundary is
+// what stops that churn: a row renders again only when its stream item identity, its layout item
+// identity, or the renderer itself changes. Item identity is the revision signal the strategy
+// already uses (`useRevisedHistoryRows` clones items whose content or display state changed).
+const HistoryStreamRow = memo(function HistoryStreamRow({
+  layoutItem,
+  renderStreamItem,
+}: {
+  item: StreamItem;
+  layoutItem: StreamLayoutItem;
+  renderStreamItem: (layoutItem: StreamLayoutItem) => ReactNode;
+}) {
+  return <>{renderStreamItem(layoutItem)}</>;
+});
+
+function renderHistoryStreamItem(input: {
+  item: StreamItem;
+  layoutItemById: Map<string, StreamLayoutItem>;
+  renderStreamItem: (layoutItem: StreamLayoutItem) => ReactNode;
+}): ReactNode {
+  const layoutItem = input.layoutItemById.get(input.item.id);
+  if (!layoutItem) {
+    return null;
+  }
+  return (
+    <HistoryStreamRow
+      item={input.item}
+      layoutItem={layoutItem}
+      renderStreamItem={input.renderStreamItem}
+    />
+  );
+}
+
+function renderLiveHeadStreamItem(input: {
+  item: StreamItem;
+  layoutItemById: Map<string, StreamLayoutItem>;
+  renderStreamItem: (layoutItem: StreamLayoutItem) => ReactNode;
+}): ReactNode {
+  const layoutItem = input.layoutItemById.get(input.item.id);
+  if (!layoutItem) {
+    return null;
+  }
+  return input.renderStreamItem(layoutItem);
+}
+
+export interface AgentStreamViewHandle {
+  scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  collapseAll(): void;
+  prepareForViewportChange(): void;
+}
+
+export interface AgentStreamViewProps {
+  agentId: string;
+  serverId?: string;
+  context: AgentScreenAgent;
+  streamItems: StreamItem[];
+  streamHead?: StreamItem[];
+  pendingPermissions: Map<string, PendingPermission>;
+  pendingMessageSubmissions?: readonly PendingMessageSubmission[];
+  turnPresentation: TurnPresentation;
+  routeBottomAnchorRequest?: BottomAnchorRouteRequest | null;
+  isAuthoritativeHistoryReady?: boolean;
+  /** Tail space required by a transparent overlay rendered at the bottom edge. */
+  bottomOverlayTailClearance?: number;
+  /** Bottom offset required for controls floating above that overlay. */
+  bottomOverlayControlClearance?: number;
+  toast?: ToastApi | null;
+  onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  readOnly?: boolean;
+  /** Opens the provider subagent tab for a launch row's descriptor (pi inline cards). */
+  onOpenProviderSubagent?: (parentAgentId: string, subagentId: string) => void;
+  showScrollToBottomButton?: boolean;
+  onScrollToBottomVisibilityChange?: (visible: boolean) => void;
+  /** Suggestion chips rendered in the empty state. Tapping one calls onSelect
+   *  with the prompt text. Rendered below the empty text. */
+  emptySuggestions?: { label: string; prompt: string }[];
+  onEmptySuggestionSelect?: (prompt: string) => void;
+  historyPagination?: {
+    hasOlder: boolean;
+    isLoadingOlder: boolean;
+    progressKey: string | null;
+    onLoadOlder: () => boolean | Promise<boolean>;
+  };
+}
+
+const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
+  "supportsStreaming",
+  "supportsSessionPersistence",
+  "supportsDynamicModes",
+  "supportsMcpServers",
+  "supportsReasoningStream",
+  "supportsToolInvocations",
+  "supportsRewindConversation",
+  "supportsRewindFiles",
+  "supportsRewindBoth",
+];
+
+const EMPTY_STREAM_HEAD: StreamItem[] = [];
+/** Shared empty ledger: no row was folded by "collapse all" for the current level. */
+const EMPTY_DETAIL_IDS: ReadonlySet<string> = new Set();
+
+function useRetainedValue<T>(value: T, active: boolean): T {
+  const retainedRef = useRef(value);
+  if (active) {
+    retainedRef.current = value;
+  }
+  return active ? value : retainedRef.current;
+}
+const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [];
+const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
+
+function resolveBottomOverlayControlOffset(clearance: number | undefined): number {
+  return Math.max(16, clearance ?? 0);
+}
+
+function resolveScrollToBottomVisibility(isNearBottom: boolean, isTimelineDetached: boolean) {
+  return !isNearBottom || isTimelineDetached;
+}
+
+function renderOptionalControl(enabled: boolean, visible: boolean, control: React.ReactNode) {
+  return enabled && visible ? control : null;
+}
+
+const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
+  function AgentStreamView(
+    {
+      agentId,
+      serverId,
+      context,
+      streamItems,
+      streamHead: providedStreamHead,
+      pendingPermissions,
+      pendingMessageSubmissions = EMPTY_PENDING_MESSAGE_SUBMISSIONS,
+      turnPresentation,
+      routeBottomAnchorRequest = null,
+      isAuthoritativeHistoryReady = true,
+      bottomOverlayTailClearance = 0,
+      bottomOverlayControlClearance,
+      toast,
+      onOpenWorkspaceFile,
+      onOpenProviderSubagent,
+      readOnly = false,
+      showScrollToBottomButton = true,
+      onScrollToBottomVisibilityChange,
+      emptySuggestions,
+      onEmptySuggestionSelect,
+      historyPagination,
+    },
+    ref,
+  ) {
+    const { t } = useTranslation();
+    const timelineDetailLevel = useSettings((settings) => settings.timelineDetailLevel);
+    const toolCallDetailLevel = toToolCallDetailLevel(timelineDetailLevel);
+    const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
+    const viewportRef = useRef<StreamViewportHandle | null>(null);
+    const pendingClientMessageIds = useMemo(
+      () => new Set(pendingMessageSubmissions.map((submission) => submission.clientMessageId)),
+      [pendingMessageSubmissions],
+    );
+    const isMobile = useIsCompactFormFactor();
+    const streamRenderStrategy = useMemo(
+      () =>
+        createWebStreamStrategy({
+          isMobileBreakpoint: isMobile,
+        }),
+      [isMobile],
+    );
+    const [isNearBottom, setIsNearBottom] = useState(true);
+    const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
+      new Set(),
+    );
+    const [collapseRevision, setCollapseRevision] = useState(0);
+    // Rows the user folded through "collapse all". The levels that open details on their own read
+    // this at mount, so a fold outlives the remount the revision bump forces. The level is part of
+    // the state: switching levels invalidates the fold by derivation instead of letting it follow
+    // the user across and veto the new level's defaults.
+    const [collapsedDetailState, setCollapsedDetailState] = useState<{
+      level: TimelineDetailLevel;
+      ids: ReadonlySet<string>;
+    }>(() => ({ level: timelineDetailLevel, ids: EMPTY_DETAIL_IDS }));
+    const collapsedDetailIds =
+      collapsedDetailState.level === timelineDetailLevel
+        ? collapsedDetailState.ids
+        : EMPTY_DETAIL_IDS;
+    // Get serverId (fallback to agent's serverId if not provided)
+    const resolvedServerId = serverId ?? context.serverId ?? "";
+
+    const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
+    const sessionStreamHead = useSessionStore((state) =>
+      state.sessions[resolvedServerId]?.agentStreamHead?.get(agentId),
+    );
+    const streamHead = providedStreamHead ?? sessionStreamHead;
+    const forkAgent = useForkAgent({ serverId: resolvedServerId, toast, readOnly });
+    const supportsAgentForkContextCursor = useSessionStore(
+      (state) =>
+        state.sessions[resolvedServerId]?.serverInfo?.features?.agentForkContextCursor === true,
+    );
+    const supportsChatOutline = useSessionStore(
+      (state) =>
+        state.sessions[resolvedServerId]?.serverInfo?.features?.agentTimelinePromptIndex === true,
+    );
+    const timelineEpoch = useSessionStore(
+      (state) => state.sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)?.epoch ?? null,
+    );
+    const isTimelineDetached = useSessionStore(
+      (state) => state.sessions[resolvedServerId]?.agentTimelineHasNewer.get(agentId) === true,
+    );
+
+    const workspaceRoot = context.cwd?.trim() || "";
+    const { requestDirectoryListing } = useFileExplorerActions({
+      serverId: resolvedServerId,
+      workspaceId: context.workspaceId,
+      workspaceRoot,
+    });
+    const agentHistoryPagination = useLoadOlderAgentHistory({
+      serverId: resolvedServerId,
+      agentId,
+      toast,
+    });
+    const {
+      isLoadingOlder: remoteIsLoadingOlder,
+      hasOlder: remoteHasOlder,
+      progressKey: remoteProgressKey,
+      loadOlder: loadRemoteOlder,
+    } = historyPagination
+      ? {
+          isLoadingOlder: historyPagination.isLoadingOlder,
+          hasOlder: historyPagination.hasOlder,
+          progressKey: historyPagination.progressKey,
+          loadOlder: historyPagination.onLoadOlder,
+        }
+      : agentHistoryPagination;
+
+    useEffect(() => {
+      setIsNearBottom(true);
+      setExpandedToolCallGroupIds(new Set());
+      setCollapseRevision(0);
+      setCollapsedDetailState((current) => ({ ...current, ids: EMPTY_DETAIL_IDS }));
+    }, [agentId]);
+
+    const handleInlinePathPress = useStableEvent(
+      (target: InlinePathTarget, disposition: OpenFileDisposition) => {
+        if (!target.path) {
+          return;
+        }
+
+        const normalized = normalizeInlinePathTarget(target.path, context.cwd);
+        if (!normalized) {
+          return;
+        }
+
+        if (normalized.file) {
+          const location = normalizeWorkspaceFileLocation({
+            path: normalized.file,
+            lineStart: target.lineStart,
+            lineEnd: target.lineEnd,
+          });
+          if (!location) {
+            return;
+          }
+
+          if (onOpenWorkspaceFile) {
+            onOpenWorkspaceFile({
+              location,
+              disposition,
+            });
+            return;
+          }
+
+          if (context.workspaceId) {
+            navigateToWorkspace({
+              serverId: resolvedServerId,
+              workspaceId: context.workspaceId,
+              target: createWorkspaceFileTabTarget(location),
+            });
+          }
+          return;
+        }
+
+        void requestDirectoryListing(normalized.directory, {
+          recordHistory: false,
+          setCurrentPath: false,
+        });
+
+        openExplorerSidebarView({
+          isCompact: isMobile,
+          workspaceKey: buildWorkspaceTabPersistenceKey({
+            serverId: resolvedServerId,
+            workspaceId: context.workspaceId ?? "",
+          }),
+          checkout: {
+            serverId: resolvedServerId,
+            cwd: context.cwd,
+            isGit: context.projectPlacement?.checkout?.isGit ?? true,
+          },
+          view: "files",
+        });
+      },
+    );
+
+    const handleToolCallOpenFile = useStableEvent((filePath: string) => {
+      handleInlinePathPress({ raw: filePath, path: filePath }, "preferred");
+    });
+
+    const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
+      async ({ target, boundary }) => {
+        await forkAgent({
+          agentId,
+          agent: context,
+          workspaceId: context.workspaceId,
+          target,
+          boundary,
+        });
+      },
+    );
+
+    // The in-flight turn forks with no boundary at all: `selectForkContextRows`
+    // projects the whole timeline when neither boundary field is given, so the
+    // fork carries everything up to now, including the response still streaming
+    // in front of the user.
+    const handleForkInFlightTurn: InFlightTurnForkHandler = useStableEvent(async (target) => {
+      await forkAgent({
+        agentId,
+        agent: context,
+        workspaceId: context.workspaceId,
+        target,
+      });
+    });
+
+    // Freeze stream presentation while this tab slot is hidden to prevent offscreen
+    // cell-window and turn-lifecycle renders from background agents.
+    // When isActive flips back to true, the context change triggers a re-render and
+    // the component reads the current (fresh) streamItems/streamHead from props.
+    const isActive = useRetainedPanelActive();
+    const effectiveStreamItems = useRetainedValue(streamItems, isActive);
+    const effectiveStreamHead = useRetainedValue(streamHead, isActive);
+    const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
+    const isTurnActive = effectiveTurnPresentation.isActive;
+    // Fold nested codemode calls (pi >=0.99) into their parent codemode row before any
+    // tool-call grouping; the outline keeps the raw stream since nested rows have no cursor.
+    const nestedCodemodeProjection = useMemo(
+      () =>
+        projectNestedCodemodeCalls({
+          tail: effectiveStreamItems,
+          head: effectiveStreamHead,
+        }),
+      [effectiveStreamItems, effectiveStreamHead],
+    );
+    // Provider subagents (pi) join onto their launch tool rows by call id: the row shows live
+    // status and opens the subagent's tab. Empty when the feature is off or nothing launched.
+    const subagentsByToolCallId = useProviderSubagentsByToolCallId({
+      serverId: resolvedServerId,
+      parentAgentId: agentId,
+    });
+    // Bindings are cached per descriptor: the memo comparator on tool rows compares onOpen by
+    // identity, so a fresh closure per lookup would defeat it and re-render every row.
+    const subagentBindingCache = useRef(
+      new WeakMap<ProviderSubagentDescriptorPayload, ToolCallSubagentBinding>(),
+    );
+    const getSubagentBinding = useStableEvent(
+      (callId: string): ToolCallSubagentBinding | undefined => {
+        const descriptor = subagentsByToolCallId.get(callId);
+        if (!descriptor) {
+          return undefined;
+        }
+        let binding = subagentBindingCache.current.get(descriptor);
+        if (!binding) {
+          binding = {
+            status: descriptor.status,
+            secondaryLabel:
+              descriptor.subtitle ?? descriptor.description ?? descriptor.title ?? null,
+            onOpen: () => onOpenProviderSubagent?.(agentId, descriptor.id),
+          };
+          subagentBindingCache.current.set(descriptor, binding);
+        }
+        return binding;
+      },
+    );
+    // Nested parents whose group is still running have to revise their history row on every
+    // flush: the children fold into that row, and the row's own item identity never changes while
+    // the script runs.
+    const nestedLiveParentItemIds = useMemo(() => {
+      const ids = new Set<string>();
+      for (const [parentItemId, group] of nestedCodemodeProjection.groupsByParentItemId) {
+        if (group.isLoading) {
+          ids.add(parentItemId);
+        }
+      }
+      return ids;
+    }, [nestedCodemodeProjection]);
+    // Keep retained history outside the 48ms live-head flush path: depend on the projected tail
+    // array, not on the projection object, which a head-only flush replaces every time.
+    const preparedToolCallHistory = useMemo(
+      () => prepareToolCallHistory(toolCallDetailLevel, nestedCodemodeProjection.tail),
+      [nestedCodemodeProjection.tail, toolCallDetailLevel],
+    );
+    const projectedToolCalls = useMemo(
+      () =>
+        projectToolCallDetailLevel({
+          level: toolCallDetailLevel,
+          tail: nestedCodemodeProjection.tail,
+          head: nestedCodemodeProjection.head ?? EMPTY_STREAM_HEAD,
+          preparedHistory: preparedToolCallHistory,
+          isTurnActive,
+        }),
+      [nestedCodemodeProjection, isTurnActive, preparedToolCallHistory, toolCallDetailLevel],
+    );
+    // Plugin timeline projection was removed with the plugin system (issue 025
+    // C6); the stream renders tool-call output directly.
+    const projectedPlugins = projectedToolCalls;
+    const {
+      start: historyWindowStart,
+      hasLocalHistory,
+      revealLoadedHistory,
+      loadOlder,
+    } = useStreamHistoryWindow({
+      agentId,
+      items: projectedPlugins.tail,
+      loadRemoteOlder,
+    });
+    const isLoadingOlder = remoteIsLoadingOlder;
+    const hasOlder = hasLocalHistory || remoteHasOlder;
+    const progressKey = `${remoteProgressKey ?? "local"}:${historyWindowStart}`;
+
+    const baseRenderModel = useMemo(() => {
+      return buildAgentStreamRenderModel({
+        isTurnActive,
+        activeTurnStartedAt: effectiveTurnPresentation.startedAt,
+        tail: projectedPlugins.tail,
+        head: projectedPlugins.head,
+        isMobileBreakpoint: isMobile,
+        historyStart: historyWindowStart,
+      });
+    }, [
+      isMobile,
+      isTurnActive,
+      projectedPlugins.head,
+      projectedPlugins.tail,
+      effectiveTurnPresentation.startedAt,
+      historyWindowStart,
+    ]);
+    const streamLayout = useMemo(
+      () =>
+        layoutStream({
+          strategy: streamRenderStrategy,
+          isTurnActive,
+          history: baseRenderModel.history,
+          liveHead: baseRenderModel.segments.liveHead,
+          timingByAssistantId: baseRenderModel.turnTiming.byAssistantId,
+        }),
+      [
+        baseRenderModel.history,
+        baseRenderModel.segments.liveHead,
+        baseRenderModel.turnTiming.byAssistantId,
+        isTurnActive,
+        streamRenderStrategy,
+      ],
+    );
+    const handleTimelineHistoryLoadError = useCallback(() => {
+      toast?.error(t("agentStream.historyLoadFailed"));
+    }, [t, toast]);
+    // Live mode expands a thinking block only while it is the last item of the timeline: the
+    // moment a tool call or a message lands below it the model has moved on, and the block folds
+    // instead of staying open while the newer rows pile up under it. The live head is the newest
+    // segment, so its last entry is the tail whenever it is non-empty.
+    const liveThoughtId = useMemo(() => {
+      const tailItem =
+        streamLayout.liveHead.at(-1)?.item ?? streamLayout.history.at(-1)?.item ?? null;
+      return tailItem?.kind === "thought" ? tailItem.id : null;
+    }, [streamLayout.history, streamLayout.liveHead]);
+    const visibleHistoryItemIds = useMemo(
+      () =>
+        new Set(
+          [...baseRenderModel.history, ...baseRenderModel.segments.liveHead].map((item) => item.id),
+        ),
+      [baseRenderModel.history, baseRenderModel.segments.liveHead],
+    );
+    const chatOutline = useChatOutline({
+      agentId,
+      serverId: resolvedServerId,
+      timelineEpoch,
+      tail: effectiveStreamItems,
+      head: effectiveStreamHead,
+      enabled: supportsChatOutline && chatOutlineEnabled,
+      viewportRef,
+      onJumpError: handleTimelineHistoryLoadError,
+      visibleItemIds: visibleHistoryItemIds,
+      revealLoadedItem: revealLoadedHistory,
+    });
+
+    const scrollToBottom = useCallback(
+      (reason: BottomAnchorLocalRequest["reason"] = "jump-to-bottom") => {
+        if (!isTimelineDetached) {
+          viewportRef.current?.scrollToBottom(reason);
+          return;
+        }
+        void returnToTimelineTail({
+          fetchTail: () =>
+            getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, {
+              ...planTimelineTailFetch(),
+            }),
+          scrollToBottom: () => viewportRef.current?.scrollToBottom(reason),
+          onError: handleTimelineHistoryLoadError,
+        });
+      },
+      [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        scrollToBottom,
+        collapseAll() {
+          setExpandedToolCallGroupIds(new Set());
+          setCollapseRevision((current) => current + 1);
+          const collapsedIds = new Set<string>();
+          for (const { item } of [...streamLayout.history, ...streamLayout.liveHead]) {
+            if (item.kind === "thought" || item.kind === "tool_call") {
+              collapsedIds.add(item.id);
+            }
+          }
+          // Nested children are lifted out of the stream, so they are absent from the layout and
+          // would keep the level default without this.
+          for (const id of nestedGroupRowIds(nestedCodemodeProjection.groupsByParentItemId)) {
+            collapsedIds.add(id);
+          }
+          setCollapsedDetailState({ level: timelineDetailLevel, ids: collapsedIds });
+        },
+        prepareForViewportChange() {
+          viewportRef.current?.prepareForViewportChange();
+        },
+      }),
+      [
+        scrollToBottom,
+        streamLayout.history,
+        streamLayout.liveHead,
+        nestedCodemodeProjection,
+        timelineDetailLevel,
+      ],
+    );
+
+    const scrollToBottomVisible = resolveScrollToBottomVisibility(isNearBottom, isTimelineDetached);
+    const handleScrollToBottomPress = useCallback(() => scrollToBottom(), [scrollToBottom]);
+    useEffect(() => {
+      onScrollToBottomVisibilityChange?.(scrollToBottomVisible);
+    }, [onScrollToBottomVisibilityChange, scrollToBottomVisible]);
+
+    const setToolCallGroupExpanded = useCallback((groupId: string, expanded: boolean) => {
+      setExpandedToolCallGroupIds((previous) => {
+        const next = new Set(previous);
+        if (expanded) {
+          next.add(groupId);
+        } else {
+          next.delete(groupId);
+        }
+        return next;
+      });
+    }, []);
+
+    const renderUserMessageItem = useCallback(
+      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "user_message" }>) => {
+        return (
+          <UserMessage
+            serverId={resolvedServerId}
+            agentId={agentId}
+            messageId={item.messageId}
+            message={item.text}
+            images={item.images}
+            attachments={item.attachments}
+            timestamp={item.timestamp.getTime()}
+            capabilities={context.capabilities}
+            client={client}
+            isFirstInGroup={layoutItem.isFirstInUserGroup}
+            isLastInGroup={layoutItem.isLastInUserGroup}
+            isPending={
+              item.clientMessageId !== undefined &&
+              pendingClientMessageIds.has(item.clientMessageId)
+            }
+          />
+        );
+      },
+      [context.capabilities, agentId, client, pendingClientMessageIds, resolvedServerId],
+    );
+
+    const renderAssistantMessageItem = useCallback(
+      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "assistant_message" }>) => {
+        return (
+          <AssistantFileLinkResolverProvider
+            client={client}
+            serverId={resolvedServerId}
+            workspaceRoot={workspaceRoot}
+            onOpenWorkspaceFile={handleInlinePathPress}
+            toast={toast}
+          >
+            <AssistantMessage
+              occurrenceKey={createAssistantImageOccurrenceKey({ agentId, itemId: item.id })}
+              message={item.text}
+              timestamp={item.timestamp.getTime()}
+              workspaceRoot={workspaceRoot}
+              serverId={resolvedServerId}
+              client={client}
+              spacing={layoutItem.assistantSpacing}
+              phase={layoutItem.phase}
+            />
+          </AssistantFileLinkResolverProvider>
+        );
+      },
+      [agentId, client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot],
+    );
+
+    const renderThoughtItem = useCallback(
+      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
+        const isLiveThought = timelineDetailLevel === "live" && item.id === liveThoughtId;
+        return (
+          <ThoughtSlot
+            // ToolCall reads defaultExpanded only at mount, so the key carries everything that
+            // changes what "default expanded" means: the level (fold/expand-all switches) and,
+            // in live mode, whether this row is the tail (the previous target folds, the new one
+            // expands — per-row so manual expansion elsewhere survives a retarget).
+            key={`${collapseRevision}:${timelineDetailLevel}:${isLiveThought}`}
+            text={item.text}
+            status={item.status}
+            isLastInSequence={layoutItem.isLastInToolSequence}
+            defaultExpanded={
+              !collapsedDetailIds.has(item.id) &&
+              (expandsThinking(timelineDetailLevel) || isLiveThought)
+            }
+          />
+        );
+      },
+      [timelineDetailLevel, collapsedDetailIds, collapseRevision, liveThoughtId],
+    );
+
+    const renderSingleToolCallRow = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        maxDetailHeight?: number,
+        summaryOverride?: string,
+      ) => {
+        // Only "Expand all" opens tool call details on its own; the thinking levels leave every
+        // tool row collapsed until it is pressed. A row "collapse all" folded stays folded
+        // because the level default is suppressed for it.
+        const detailExpandedByLevel =
+          expandsToolDetail(timelineDetailLevel) && !collapsedDetailIds.has(item.id);
+        const { payload } = item;
+
+        if (payload.source === "agent") {
+          const data = payload.data;
+
+          if (
+            data.name === "speak" &&
+            data.detail.type === "unknown" &&
+            typeof data.detail.input === "string" &&
+            data.detail.input.trim()
+          ) {
+            return (
+              <SpeakMessage message={data.detail.input} timestamp={item.timestamp.getTime()} />
+            );
+          }
+
+          const subagent = data.callId ? getSubagentBinding(data.callId) : undefined;
+          return (
+            <ToolCallSlot
+              key={`${collapseRevision}:${detailExpandedByLevel}`}
+              toolName={data.name}
+              error={data.error}
+              status={data.status}
+              detail={data.detail}
+              cwd={context.cwd}
+              metadata={data.metadata}
+              summaryOverride={summaryOverride}
+              subagent={subagent}
+              isLastInSequence={isLastInSequence}
+              onOpenFilePath={handleToolCallOpenFile}
+              maxDetailHeight={maxDetailHeight}
+              defaultExpanded={detailExpandedByLevel}
+            />
+          );
+        }
+
+        const data = payload.data;
+        return (
+          <ToolCallSlot
+            key={`${collapseRevision}:${detailExpandedByLevel}`}
+            toolName={data.toolName}
+            args={data.arguments}
+            result={data.result}
+            status={data.status}
+            isLastInSequence={isLastInSequence}
+            onOpenFilePath={handleToolCallOpenFile}
+            maxDetailHeight={maxDetailHeight}
+            defaultExpanded={detailExpandedByLevel}
+          />
+        );
+      },
+      [
+        collapseRevision,
+        collapsedDetailIds,
+        context.cwd,
+        timelineDetailLevel,
+        handleToolCallOpenFile,
+        getSubagentBinding,
+      ],
+    );
+
+    const getNestedToolCallGroup = useStableEvent((itemId: string) =>
+      nestedCodemodeProjection.groupsByParentItemId.get(itemId),
+    );
+    const renderNestedToolCallGroup = useCallback(
+      (group: OverviewToolCallGroup, isLastInSequence: boolean) => {
+        const [parentCall, ...childCalls] = group.run.calls;
+        if (!parentCall) {
+          return null;
+        }
+        const summaryText = formatOverviewSummary(group.summary, t, { capitalize: false });
+        const parentRow = renderSingleToolCallRow(
+          parentCall,
+          childCalls.length === 0 && isLastInSequence,
+          undefined,
+          summaryText.length > 0 ? summaryText : undefined,
+        );
+        if (childCalls.length === 0) {
+          return parentRow;
+        }
+        // The nested rows stay visible and hang off the parent on an indent rail, so the
+        // containment reads without expanding anything and the parent keeps its own row.
+        return (
+          <React.Fragment>
+            {parentRow}
+            {/* The rail drops from the centre of the parent's glyph (the badge pulls out 13 and
+                pads 8, so the glyph centre is at 6); child rows indent one step past it. */}
+            <div className="ml-1.5 flex flex-col gap-1 border-l pl-3">
+              {childCalls.map((call, index) => (
+                <React.Fragment key={call.id}>
+                  {renderSingleToolCallRow(
+                    call,
+                    index === childCalls.length - 1 && isLastInSequence,
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </React.Fragment>
+        );
+      },
+      [renderSingleToolCallRow, t],
+    );
+    const renderSingleToolCallItem = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        maxDetailHeight?: number,
+      ) => {
+        if (item.payload.source === "agent") {
+          const nestedGroup = getNestedToolCallGroup(item.id);
+          if (nestedGroup) {
+            return renderNestedToolCallGroup(nestedGroup, isLastInSequence);
+          }
+        }
+        return renderSingleToolCallRow(item, isLastInSequence, maxDetailHeight);
+      },
+      [getNestedToolCallGroup, renderNestedToolCallGroup, renderSingleToolCallRow],
+    );
+
+    // Read through a stable event so live group updates do not change the renderer identity
+    // every tick; history hosts whose group changed are revised through `historyRowRevision`.
+    const getToolCallGroup = useStableEvent((hostId: string) =>
+      projectedToolCalls.groupsByHostId.get(hostId),
+    );
+    const renderToolCallItem = useCallback(
+      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "tool_call" }>) => {
+        const group = getToolCallGroup(item.id);
+        if (!group) {
+          return renderSingleToolCallItem(item, layoutItem.isLastInToolSequence);
+        }
+        const expanded = expandedToolCallGroupIds.has(group.run.id);
+        return (
+          <OverviewToolCallGroupView
+            group={group}
+            expanded={expanded}
+            isLastInSequence={layoutItem.isLastInToolSequence}
+            onExpandedChange={setToolCallGroupExpanded}
+          >
+            {expanded
+              ? group.run.calls.map((call, index) => (
+                  <React.Fragment key={call.id}>
+                    {renderSingleToolCallItem(
+                      call,
+                      index === group.run.calls.length - 1,
+                      GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT,
+                    )}
+                  </React.Fragment>
+                ))
+              : null}
+          </OverviewToolCallGroupView>
+        );
+      },
+      [
+        expandedToolCallGroupIds,
+        getToolCallGroup,
+        renderSingleToolCallItem,
+        setToolCallGroupExpanded,
+      ],
+    );
+
+    const renderStreamItemContent = useCallback(
+      (layoutItem: StreamLayoutItem) => {
+        const item = layoutItem.item;
+        switch (item.kind) {
+          case "user_message":
+            return renderUserMessageItem(layoutItem, item);
+
+          case "assistant_message":
+            return renderAssistantMessageItem(layoutItem, item);
+
+          case "thought":
+            return renderThoughtItem(layoutItem, item);
+
+          case "tool_call":
+            return renderToolCallItem(layoutItem, item);
+
+          case "notification":
+            return <Notification level={item.level} message={item.message} />;
+
+          case "custom_message":
+            return <CustomMessage customType={item.customType} content={item.content} />;
+
+          case "todo_list":
+            return <TodoListCard items={item.items} activity={item.activity} />;
+
+          case "compaction":
+            return (
+              <CompactionMarker
+                status={item.status}
+                trigger={item.trigger}
+                preTokens={item.preTokens}
+              />
+            );
+
+          default:
+            return null;
+        }
+      },
+      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+    );
+
+    const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
+
+    const renderStreamItem = useCallback(
+      (layoutItem: StreamLayoutItem) => {
+        const content = renderStreamItemContent(layoutItem);
+        return renderStreamItemWithTurnFooter({
+          content,
+          layoutItem,
+          strategy: streamRenderStrategy,
+          supportsTimelineCursor: supportsAgentForkContextCursor,
+          onForkAssistantTurn: readOnly ? undefined : handleForkAssistantTurn,
+        });
+      },
+      [
+        handleForkAssistantTurn,
+        readOnly,
+        renderStreamItemContent,
+        streamRenderStrategy,
+        supportsAgentForkContextCursor,
+      ],
+    );
+
+    const pendingPermissionItems = useMemo(
+      () => Array.from(pendingPermissions.values()).filter((perm) => perm.agentId === agentId),
+      [pendingPermissions, agentId],
+    );
+
+    const pendingPermissionsNode = useMemo(
+      () =>
+        renderPendingPermissionsNode({
+          pendingPermissions: pendingPermissionItems,
+          client,
+        }),
+      [client, pendingPermissionItems],
+    );
+    const turnFooterNode = useMemo(
+      () =>
+        isTurnActive || bottomTurnFooterHost ? (
+          <TurnFooter
+            isRunning={isTurnActive}
+            inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
+            host={bottomTurnFooterHost}
+            strategy={streamRenderStrategy}
+            supportsTimelineCursor={supportsAgentForkContextCursor}
+            onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
+            onForkInFlightTurn={readOnly ? undefined : handleForkInFlightTurn}
+          />
+        ) : null,
+      [
+        handleForkAssistantTurn,
+        handleForkInFlightTurn,
+        readOnly,
+        isTurnActive,
+        baseRenderModel.turnTiming.runningStartedAt,
+        bottomTurnFooterHost,
+        streamRenderStrategy,
+        supportsAgentForkContextCursor,
+      ],
+    );
+    const renderModel = useMemo<AgentStreamRenderModel>(() => {
+      return {
+        ...baseRenderModel,
+        boundary: baseRenderModel.boundary,
+        auxiliary: {
+          pendingPermissions: pendingPermissionsNode,
+          turnFooter: turnFooterNode,
+        },
+      };
+    }, [baseRenderModel, pendingPermissionsNode, turnFooterNode]);
+
+    const scrollToBottomContainerStyle = useMemo(
+      () => ({ bottom: resolveBottomOverlayControlOffset(bottomOverlayControlClearance) }),
+      [bottomOverlayControlClearance],
+    );
+    const listEmptyComponent = useMemo(
+      () =>
+        renderListEmptyComponent({
+          renderModel,
+          emptyStateClassName: EMPTY_STATE,
+          emptyText: t("agentStream.empty"),
+          suggestions: emptySuggestions,
+          onSuggestionSelect: onEmptySuggestionSelect,
+        }),
+      [renderModel, t, emptySuggestions, onEmptySuggestionSelect],
+    );
+
+    const { boundary, auxiliary } = renderModel;
+
+    const layoutHistoryItemById = useMemo(() => {
+      const itemById = new Map<string, StreamLayoutItem>();
+      for (const item of streamLayout.history) {
+        itemById.set(item.item.id, item);
+      }
+      return itemById;
+    }, [streamLayout.history]);
+
+    const layoutLiveHeadItemById = useMemo(() => {
+      const itemById = new Map<string, StreamLayoutItem>();
+      for (const item of streamLayout.liveHead) {
+        itemById.set(item.item.id, item);
+      }
+      return itemById;
+    }, [streamLayout.liveHead]);
+
+    const renderHistoryRow = useCallback(
+      (item: StreamItem) =>
+        renderHistoryStreamItem({
+          item,
+          layoutItemById: layoutHistoryItemById,
+          renderStreamItem,
+        }),
+      [layoutHistoryItemById, renderStreamItem],
+    );
+
+    const renderHistoryVirtualizedRow = useCallback<
+      StreamSegmentRenderers["renderHistoryVirtualizedRow"]
+    >((item) => renderHistoryRow(item), [renderHistoryRow]);
+    const renderHistoryMountedRow = useCallback<StreamSegmentRenderers["renderHistoryMountedRow"]>(
+      (item) => renderHistoryRow(item),
+      [renderHistoryRow],
+    );
+    // useStableEvent keeps the function reference stable across flushes.
+    // layoutLiveHeadItemById and renderStreamItem are read from the ref at call time,
+    // so the live-head render always uses the latest layout without causing renderers
+    // to be a new object on every text-chunk flush.
+    const renderLiveHeadRow: StreamSegmentRenderers["renderLiveHeadRow"] = useStableEvent(
+      (item: StreamItem) =>
+        renderLiveHeadStreamItem({
+          item,
+          layoutItemById: layoutLiveHeadItemById,
+          renderStreamItem,
+        }),
+    );
+    const renderLiveAuxiliary = useCallback<StreamSegmentRenderers["renderLiveAuxiliary"]>(() => {
+      const existingTailSpacing =
+        auxiliary.turnFooter && !auxiliary.pendingPermissions ? TURN_FOOTER_BOTTOM_SPACING : 0;
+      const bottomOverlayInset = resolveBottomOverlayTailInset({
+        requiredTailClearance: bottomOverlayTailClearance,
+        existingTailSpacing,
+      });
+      return renderLiveAuxiliaryNode({
+        pendingPermissions: auxiliary.pendingPermissions,
+        turnFooter: auxiliary.turnFooter,
+        bottomOverlayInset,
+      });
+    }, [auxiliary.pendingPermissions, auxiliary.turnFooter, bottomOverlayTailClearance]);
+
+    const renderers = useMemo<StreamSegmentRenderers>(
+      () => ({
+        renderHistoryVirtualizedRow,
+        renderHistoryMountedRow,
+        renderLiveHeadRow,
+        renderLiveAuxiliary,
+      }),
+      [
+        renderHistoryVirtualizedRow,
+        renderHistoryMountedRow,
+        renderLiveHeadRow,
+        renderLiveAuxiliary,
+      ],
+    );
+
+    const historyContentRevisionIds = useMemo(
+      () => ({
+        has: (id: string) =>
+          collapseRevision > 0 ||
+          projectedToolCalls.historyGroupUpdatesByHostId.has(id) ||
+          nestedLiveParentItemIds.has(id),
+      }),
+      [collapseRevision, nestedLiveParentItemIds, projectedToolCalls.historyGroupUpdatesByHostId],
+    );
+    const historyRowRevision = useMemo(
+      () => ({
+        contentById: historyContentRevisionIds,
+        displayStateById: expandedToolCallGroupIds,
+        globalDisplayState: isMobile,
+      }),
+      [expandedToolCallGroupIds, historyContentRevisionIds, isMobile],
+    );
+    const liveHeadRowRevision = useMemo(
+      () => ({ collapseRevision, expandedToolCallGroupIds }),
+      [collapseRevision, expandedToolCallGroupIds],
+    );
+
+    return (
+      <ToolCallSheetProvider>
+        <AssistantSelectionCopySurface className="bg-background">
+          <MessageOuterSpacingProvider disableOuterSpacing>
+            {streamRenderStrategy.render({
+              agentId,
+              segments: renderModel.segments,
+              historyRowRevision,
+              liveHeadRowRevision,
+              boundary,
+              renderers,
+              listEmptyComponent,
+              viewportRef,
+              routeBottomAnchorRequest,
+              isAuthoritativeHistoryReady,
+              onNearBottomChange: setIsNearBottom,
+              onReadingPositionChange: chatOutline.reportReadingPosition,
+              onNearHistoryStart: loadOlder,
+              isLoadingOlderHistory: isLoadingOlder,
+              hasOlderHistory: hasOlder,
+              olderHistoryProgressKey: progressKey,
+              scrollEnabled: true,
+              // The web strategy lays its list out itself; these React Native styles are unused.
+              listStyle: undefined,
+              baseListContentContainerStyle: undefined,
+              forwardListContentContainerStyle: undefined,
+            })}
+          </MessageOuterSpacingProvider>
+          <ChatOutlineRail
+            prompts={chatOutline.prompts}
+            activePrompt={chatOutline.activePrompt}
+            onJumpToPrompt={chatOutline.jumpToPrompt}
+          />
+          {renderOptionalControl(
+            showScrollToBottomButton,
+            scrollToBottomVisible,
+            <div
+              className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
+              style={scrollToBottomContainerStyle}
+            >
+              <button
+                type="button"
+                onClick={handleScrollToBottomPress}
+                aria-label={t("agentStream.scrollToBottom")}
+                data-testid="scroll-to-bottom-button"
+                className="pointer-events-auto flex size-12 animate-in items-center justify-center rounded-full bg-muted text-foreground shadow-sm duration-200 fade-in-0"
+              >
+                <ChevronDown size={24} />
+              </button>
+            </div>,
+          )}
+        </AssistantSelectionCopySurface>
+      </ToolCallSheetProvider>
+    );
+  },
+);
+
+function agentCapabilityFlagsEqual(
+  left: AgentCapabilityFlags | undefined,
+  right: AgentCapabilityFlags | undefined,
+): boolean {
+  return AGENT_CAPABILITY_FLAG_KEYS.every((key) => left?.[key] === right?.[key]);
+}
+
+function collectAgentProjectPlacementDiffs(
+  left: AgentScreenAgent["projectPlacement"],
+  right: AgentScreenAgent["projectPlacement"],
+): string[] {
+  const reasons: string[] = [];
+  if (left?.checkout?.cwd !== right?.checkout?.cwd) {
+    reasons.push("agent.projectPlacement.checkout.cwd");
+  }
+  if (left?.checkout?.isGit !== right?.checkout?.isGit) {
+    reasons.push("agent.projectPlacement.checkout.isGit");
+  }
+  if (left?.projectName !== right?.projectName) {
+    reasons.push("agent.projectPlacement.projectName");
+  }
+  if (left?.projectKey !== right?.projectKey) {
+    reasons.push("agent.projectPlacement.projectKey");
+  }
+  return reasons;
+}
+
+function collectAgentSetupDiffs(left: AgentScreenAgent, right: AgentScreenAgent): string[] {
+  const reasons: string[] = [];
+  if (left.provider !== right.provider) reasons.push("agent.provider");
+  if (left.currentModeId !== right.currentModeId) reasons.push("agent.currentModeId");
+  if (left.model !== right.model) reasons.push("agent.model");
+  if (left.thinkingOptionId !== right.thinkingOptionId) {
+    reasons.push("agent.thinkingOptionId");
+  }
+  if (left.runtimeInfo?.modeId !== right.runtimeInfo?.modeId) {
+    reasons.push("agent.runtimeInfo.modeId");
+  }
+  if (left.runtimeInfo?.model !== right.runtimeInfo?.model) {
+    reasons.push("agent.runtimeInfo.model");
+  }
+  if (left.runtimeInfo?.thinkingOptionId !== right.runtimeInfo?.thinkingOptionId) {
+    reasons.push("agent.runtimeInfo.thinkingOptionId");
+  }
+  if (left.features !== right.features) reasons.push("agent.features");
+  return reasons;
+}
+
+function collectAgentScreenAgentDiffs(left: AgentScreenAgent, right: AgentScreenAgent): string[] {
+  const reasons: string[] = [];
+  if (left.serverId !== right.serverId) reasons.push("agent.serverId");
+  if (left.id !== right.id) reasons.push("agent.id");
+  if (left.workspaceId !== right.workspaceId) reasons.push("agent.workspaceId");
+  if (left.status !== right.status) reasons.push("agent.status");
+  if (left.cwd !== right.cwd) reasons.push("agent.cwd");
+  if (!agentCapabilityFlagsEqual(left.capabilities, right.capabilities)) {
+    reasons.push("agent.capabilities");
+  }
+  if (left.lastError !== right.lastError) reasons.push("agent.lastError");
+  reasons.push(...collectAgentSetupDiffs(left, right));
+  reasons.push(...collectAgentProjectPlacementDiffs(left.projectPlacement, right.projectPlacement));
+  return reasons;
+}
+
+function bottomAnchorRouteRequestsEqual(
+  left: BottomAnchorRouteRequest | null | undefined,
+  right: BottomAnchorRouteRequest | null | undefined,
+): boolean {
+  return (
+    left?.agentId === right?.agentId &&
+    left?.reason === right?.reason &&
+    left?.requestKey === right?.requestKey
+  );
+}
+
+function historyPaginationPropsEqual(
+  left: AgentStreamViewProps["historyPagination"],
+  right: AgentStreamViewProps["historyPagination"],
+): boolean {
+  return (
+    left?.hasOlder === right?.hasOlder &&
+    left?.isLoadingOlder === right?.isLoadingOlder &&
+    left?.progressKey === right?.progressKey &&
+    left?.onLoadOlder === right?.onLoadOlder
+  );
+}
+
+function agentStreamViewPropsEqual(
+  left: AgentStreamViewProps,
+  right: AgentStreamViewProps,
+): boolean {
+  const reasons: string[] = [];
+  if (left.agentId !== right.agentId) reasons.push("agentId");
+  if (left.serverId !== right.serverId) reasons.push("serverId");
+  reasons.push(...collectAgentScreenAgentDiffs(left.context, right.context));
+  if (left.streamItems !== right.streamItems) reasons.push("streamItems");
+  if (left.streamHead !== right.streamHead) reasons.push("streamHead");
+  if (left.pendingPermissions !== right.pendingPermissions) reasons.push("pendingPermissions");
+  if (left.pendingMessageSubmissions !== right.pendingMessageSubmissions) {
+    reasons.push("pendingMessageSubmissions");
+  }
+  if (left.turnPresentation !== right.turnPresentation) reasons.push("turnPresentation");
+  if (
+    !bottomAnchorRouteRequestsEqual(left.routeBottomAnchorRequest, right.routeBottomAnchorRequest)
+  ) {
+    reasons.push("routeBottomAnchorRequest");
+  }
+  if (left.isAuthoritativeHistoryReady !== right.isAuthoritativeHistoryReady) {
+    reasons.push("isAuthoritativeHistoryReady");
+  }
+  if (left.toast !== right.toast) reasons.push("toast");
+  if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.onOpenProviderSubagent !== right.onOpenProviderSubagent) {
+    reasons.push("onOpenProviderSubagent");
+  }
+  if (left.readOnly !== right.readOnly) reasons.push("readOnly");
+  if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
+    reasons.push("showScrollToBottomButton");
+  }
+  if (left.onScrollToBottomVisibilityChange !== right.onScrollToBottomVisibilityChange) {
+    reasons.push("onScrollToBottomVisibilityChange");
+  }
+  if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
+    reasons.push("historyPagination");
+  }
+  recordRenderProfileReasons(`AgentStreamView:${right.agentId}`, reasons);
+  return reasons.length === 0;
+}
+
+export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
+AgentStreamView.displayName = "AgentStreamView";
+
+type ToolCallSlotProps = ComponentProps<typeof ToolCall>;
+
+interface ThoughtSlotProps {
+  text: string;
+  status: Extract<StreamItem, { kind: "thought" }>["status"];
+  isLastInSequence: boolean;
+  defaultExpanded: boolean;
+}
+
+// Reasoning text is paced the same way assistant text is; see @/hooks/use-revealed-text.
+function ThoughtSlot({ text, status, isLastInSequence, defaultExpanded }: ThoughtSlotProps) {
+  const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
+  const isStreaming = status !== "ready";
+  return (
+    <ToolCallSlot
+      toolName="thinking"
+      args={revealedText}
+      status={isStreaming ? "executing" : "completed"}
+      isLastInSequence={isLastInSequence}
+      defaultExpanded={defaultExpanded}
+      followTail={defaultExpanded && isStreaming}
+    />
+  );
+}
+
+function ToolCallSlot(props: ToolCallSlotProps) {
+  return (
+    <ToolCall
+      {...props}
+      // A row the level opens by default renders inline even on compact widths; a sheet behind a
+      // press would contradict the level.
+      forceInline={props.forceInline ?? props.defaultExpanded}
+    />
+  );
+}
+
+interface PermissionActionButtonProps {
+  action: AgentPermissionAction;
+  isRespondingAction: boolean;
+  isResponding: boolean;
+  isPrimary: boolean;
+  testID: string;
+  onPress: (action: AgentPermissionAction) => void;
+}
+
+// Outline buttons (shadcn/ui), 28px on desktop.
+function PermissionActionButton({
+  action,
+  isRespondingAction,
+  isResponding,
+  isPrimary,
+  testID,
+  onPress,
+}: PermissionActionButtonProps) {
+  const handlePress = useCallback(() => onPress(action), [onPress, action]);
+  const Icon = action.behavior === "allow" ? Check : X;
+  return (
+    <button
+      type="button"
+      data-testid={testID}
+      onClick={handlePress}
+      disabled={isResponding}
+      className="flex min-h-9 items-center justify-center rounded-md border border-input bg-background px-2.5 py-1 hover:bg-muted active:opacity-90 disabled:pointer-events-none md:min-h-7 dark:bg-input/30 dark:hover:bg-input/50"
+    >
+      {isRespondingAction ? (
+        <Spinner className={isPrimary ? "text-foreground" : "text-muted-foreground"} />
+      ) : (
+        <span className="flex items-center gap-2">
+          <Icon size={14} className={isPrimary ? "text-foreground" : "text-muted-foreground"} />
+          <span className="text-sm font-medium text-foreground">{action.label}</span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+function PermissionRequestCard({
+  permission,
+  client,
+}: {
+  permission: PendingPermission;
+  client: DaemonClient | null;
+}) {
+  const { t } = useTranslation();
+  const isMobile = useIsCompactFormFactor();
+
+  const { request } = permission;
+  const isPlanRequest = request.kind === "plan";
+  const title = isPlanRequest
+    ? t("agentStream.permission.plan")
+    : (request.title ?? request.name ?? t("agentStream.permission.required"));
+  const description = request.description ?? "";
+  const resolvedToolCallDetail = useMemo(
+    () =>
+      request.detail ?? {
+        type: "unknown" as const,
+        input: request.input ?? null,
+        output: null,
+      },
+    [request.detail, request.input],
+  );
+  const resolvedActions = useMemo((): AgentPermissionAction[] => {
+    if (request.kind === "question") {
+      return [];
+    }
+    if (Array.isArray(request.actions) && request.actions.length > 0) {
+      return request.actions;
+    }
+    return [
+      {
+        id: "reject",
+        label: t("agentStream.permission.deny"),
+        behavior: "deny",
+        variant: "danger",
+        intent: "dismiss",
+      },
+      {
+        id: "accept",
+        label: isPlanRequest
+          ? t("agentStream.permission.implement")
+          : t("agentStream.permission.accept"),
+        behavior: "allow",
+        variant: "primary",
+      },
+    ];
+  }, [isPlanRequest, request, t]);
+
+  const planMarkdown = useMemo(() => {
+    if (!request) {
+      return undefined;
+    }
+    const planFromMetadata =
+      typeof request.metadata?.planText === "string" ? request.metadata.planText : undefined;
+    if (planFromMetadata) {
+      return planFromMetadata;
+    }
+    const candidate = request.input?.["plan"];
+    if (typeof candidate === "string") {
+      return candidate;
+    }
+    return undefined;
+  }, [request]);
+
+  const permissionMutation = useMutation({
+    mutationFn: async (input: {
+      agentId: string;
+      requestId: string;
+      response: AgentPermissionResponse;
+    }) => {
+      if (!client) {
+        throw new Error(t("common.errors.daemonClientUnavailable"));
+      }
+      return client.respondToPermissionAndWait(
+        input.agentId,
+        input.requestId,
+        input.response,
+        15000,
+      );
+    },
+  });
+  const {
+    reset: resetPermissionMutation,
+    mutateAsync: respondToPermission,
+    isPending: isResponding,
+  } = permissionMutation;
+
+  const [respondingActionId, setRespondingActionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    resetPermissionMutation();
+    setRespondingActionId(null);
+  }, [permission.request.id, resetPermissionMutation]);
+  const handleResponse = useCallback(
+    (response: AgentPermissionResponse) => {
+      respondToPermission({
+        agentId: permission.agentId,
+        requestId: permission.request.id,
+        response,
+      }).catch((error) => {
+        console.error("[PermissionRequestCard] Failed to respond to permission:", error);
+      });
+    },
+    [permission.agentId, permission.request.id, respondToPermission],
+  );
+  const handleActionPress = useCallback(
+    (action: AgentPermissionAction) => {
+      setRespondingActionId(action.id);
+      if (action.behavior === "allow") {
+        handleResponse({
+          behavior: "allow",
+          selectedActionId: action.id,
+        });
+        return;
+      }
+      handleResponse({
+        behavior: "deny",
+        selectedActionId: action.id,
+        message: "Denied by user",
+      });
+    },
+    [handleResponse],
+  );
+
+  if (request.kind === "question") {
+    return (
+      <QuestionFormCard
+        permission={permission}
+        onRespond={handleResponse}
+        isResponding={isResponding}
+      />
+    );
+  }
+
+  const footer = (
+    <>
+      <span
+        data-testid="permission-request-question"
+        className="my-1 text-sm text-muted-foreground"
+      >
+        {t("agentStream.permission.question")}
+      </span>
+
+      <div
+        className={cn(
+          "flex gap-2",
+          isMobile ? "flex-col" : "w-full flex-row flex-wrap items-center justify-start",
+        )}
+      >
+        {resolvedActions.map((action) => {
+          const isPrimary = action.variant === "primary";
+          const isRespondingAction = respondingActionId === action.id;
+          let testID: string;
+          if (action.behavior === "deny") testID = "permission-request-deny";
+          else if (action.id === "accept" || action.id === "implement")
+            testID = "permission-request-accept";
+          else testID = `permission-request-action-${action.id}`;
+
+          return (
+            <PermissionActionButton
+              key={action.id}
+              action={action}
+              isRespondingAction={isRespondingAction}
+              isResponding={isResponding}
+              isPrimary={isPrimary}
+              testID={testID}
+              onPress={handleActionPress}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+
+  if (isPlanRequest && planMarkdown) {
+    return (
+      <PlanCard
+        title={title}
+        description={description}
+        text={planMarkdown}
+        footer={footer}
+        testID="permission-plan-card"
+        disableOuterSpacing
+      />
+    );
+  }
+
+  // shadcn/ui card: hairline frame, 14px radius, shadow-xs.
+  return (
+    <div className="my-3 flex flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 shadow-xs">
+      <span className="text-sm leading-[22px] font-medium text-foreground">{title}</span>
+
+      {description ? (
+        <span className="text-sm leading-5 text-muted-foreground">{description}</span>
+      ) : null}
+
+      {planMarkdown ? (
+        <PlanCard
+          title={t("agentStream.permission.proposedPlan")}
+          text={planMarkdown}
+          testID="permission-plan-card"
+          disableOuterSpacing
+        />
+      ) : null}
+
+      {!isPlanRequest ? (
+        <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
+      ) : null}
+
+      {footer}
+    </div>
+  );
+}
+
+// One column of the conversation: 820px wide at most, centred, 8px gutters.
+const CONTENT_COLUMN = "mx-auto w-full max-w-[820px] px-2";
+const EMPTY_STATE = cn("flex flex-1 flex-col items-center justify-center py-12", CONTENT_COLUMN);
+
+interface StreamItemWrapperProps {
+  itemId: string;
+  gapBelow: number;
+  children: ReactNode;
+}
+
+function StreamItemWrapper({ gapBelow, children }: StreamItemWrapperProps) {
+  const wrapperStyle = useMemo(() => ({ marginBottom: gapBelow }), [gapBelow]);
+  return (
+    <div className={cn("flex flex-col", CONTENT_COLUMN)} style={wrapperStyle}>
+      {children}
+    </div>
+  );
+}

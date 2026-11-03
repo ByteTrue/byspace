@@ -1,0 +1,23 @@
+import { expect, type Locator, type Page } from "@playwright/test";
+import { clickTopLevelNavItem } from "./sidebar-chrome";
+
+// Opens the command center / global search palette from the sidebar and returns its panel.
+export async function openCommandCenter(page: Page): Promise<Locator> {
+  await clickTopLevelNavItem(page, "sidebar-search");
+  const panel = page.getByTestId("command-center-panel");
+  await expect(panel).toBeVisible({ timeout: 30_000 });
+  return panel;
+}
+
+/** The command center's rows: options of its listbox (cmdk). */
+export function commandCenterRows(
+  panel: Locator,
+  options?: Parameters<Locator["getByRole"]>[1],
+): Locator {
+  return panel.getByRole("option", options);
+}
+
+export async function closeCommandCenter(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-center-panel")).not.toBeVisible();
+}

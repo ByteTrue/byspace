@@ -258,7 +258,7 @@ jobs:
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
 
-      # The app's vitest suite has a browser project (@vitest/browser-playwright),
+      # web/'s vitest suite has a browser project (@vitest/browser-playwright),
       # so the unit run needs the chromium build even though e2e is separate.
       - name: Install Playwright browsers
         timeout-minutes: 10
@@ -268,7 +268,7 @@ jobs:
         run: npm run build:app-deps
 
       - name: Run app unit tests
-        run: npm run test --workspace=@bytetrue/app
+        run: npm run test --workspace=@bytetrue/web
 
   sdk-tests:
     name: sdk-tests
@@ -391,10 +391,9 @@ jobs:
         run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code @openai/codex@0.105.0 opencode-ai@1.19.4
 
       - name: Run Playwright E2E tests
-        run: npm run test:e2e --workspace=@bytetrue/app -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npm run test:e2e --workspace=@bytetrue/web -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          E2E_STATIC_WEB_DIR: ${{ github.workspace }}/web/dist
           E2E_WORKERS: "1"
 
       - name: Upload test artifacts
@@ -403,7 +402,7 @@ jobs:
         with:
           name: playwright-results-${{ env.PLAYWRIGHT_ARTIFACT }}
           path: |
-            packages/app/test-results/
+            web/test-results/
 
   relay-tests:
     name: relay-tests

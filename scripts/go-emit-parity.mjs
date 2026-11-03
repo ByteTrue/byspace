@@ -76,7 +76,7 @@ const CONDITIONALLY_OMITTED = new Map([
   ["fetch_agents_response", new Set(["sync.reason"])],
   ["fetch_agent_history_response", new Set(["sync.reason"])],
   // Go 的 ProviderSpec 没有图标字段：内置与脚本 provider 的图标由客户端
-  // `packages/app/src/data/acp-provider-catalog.ts` 自带，插件式 provider 注册（唯一会
+  // `web/src/core/data/acp-provider-catalog.ts` 自带，插件式 provider 注册（唯一会
   // 提供 SVG 的来源）在 Go 分支不存在。因此快照条目不携带 iconSvg，客户端回退到目录图标。
   // 响应与推送用的是同一份 entries，所以两处都要登记。
   ["get_providers_snapshot_response", new Set(["entries.iconSvg"])],

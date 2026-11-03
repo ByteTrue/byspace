@@ -1,5 +1,5 @@
 // The arithmetic of packages/app's four panel gestures (mobile-panels/gestures.ts), for the DOM
-// runtime in overrides/mobile-panels/provider.tsx.
+// runtime in core/mobile-panels/provider.tsx.
 import type { MobilePanelView } from "@/stores/panel-store";
 
 export type MobilePanelGestureKind = "open-left" | "close-left" | "open-right" | "close-right";

@@ -50,7 +50,7 @@ console.log(`  Daemon:  ${daemonEndpoint}`);
 console.log(`  Home:    ${process.env.BYSPACE_HOME}`);
 console.log("══════════════════════════════════════════════════════");
 
-// web/ reuses packages/app modules, which read these two names (see web/vite.config.ts).
+// The modules ported from the Expo app read these two names (see web/vite.config.ts).
 const env = {
   ...process.env,
   EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL: devBuildLabel,

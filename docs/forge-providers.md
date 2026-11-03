@@ -26,15 +26,15 @@ For forge `acme`, the expected end state is:
 3. **App modules** - a forge splits into a pure logic half and a view half so
    logic consumers (URL builders, merge-capability, native checks, and the
    Node-based e2e harness) never pull the client rendering stack:
-   - `packages/app/src/git/forges/acme.ts` - logic: `id`, optional `urlGrammar`
+   - `web/src/core/git/forges/acme.ts` - logic: `id`, optional `urlGrammar`
      (source links and pasted issue/change-request reference paths), optional
      `facts` (schema, merge-capability, native-check fallbacks). No
      React/React-Native imports. Register in `CLIENT_FORGE_LOGIC_MODULES` in
-     `packages/app/src/git/forges/index.ts`.
-   - `packages/app/src/git/forges/acme.view.tsx` - view: `icon` (SVG component
-     under `packages/app/src/components/icons/`), optional `brandColor`, optional
+     `web/src/core/git/forges/index.ts`.
+   - `web/src/core/git/forges/acme.view.tsx` - view: `icon` (SVG component
+     under `web/src/core/components/icons/`), optional `brandColor`, optional
      `paneContributions`. Register in `CLIENT_FORGE_VIEW_MODULES` in
-     `packages/app/src/git/forges/view.ts`.
+     `web/src/core/git/forges/view.ts`.
 
 There should be no protocol typed-union arm, no central app icon/color/url/facts
 map, and no central server union of known forge facts.
@@ -135,20 +135,14 @@ rendering stack:
 - `brandColor` (`null` for neutral; GitHub intentionally uses `null`)
 - optional `paneContributions`
 
-Two registries live under `packages/app/src/git/forges/`:
+Two registries live under `web/src/core/git/forges/`:
 `CLIENT_FORGE_LOGIC_MODULES` (`index.ts`) drives URL grammar, merge-capability
 derivation, and native fallback checks; `CLIENT_FORGE_VIEW_MODULES` (`view.ts`)
 drives icon/color lookup and PR-pane contributions. Logic consumers must import
 the logic registry only — importing the view registry (or a `.view.tsx` module)
-from a logic path pulls react-native and breaks the Node-based e2e harness.
+from a logic path pulls the React rendering stack and breaks the Node-based e2e harness.
 
-Per-forge brand colors live on the module, not in `styles/theme.ts`. Use the
-Unistyles-safe pattern from `docs/unistyles.md`: no `useUnistyles()`. Brand icon
-call sites use `withUnistyles` and a `uniProps` mapping such as:
-
-```ts
-(theme) => ({ color: theme.colorScheme === "light" ? colors.light : colors.dark });
-```
+Per-forge brand colors live on the module, not in `styles/theme.ts`, with a light and a dark value.
 
 Facts modules use one source of truth: a Zod schema. Helpers like
 `defineForgeFacts`, `defineNativeFallbackCheck`, and `definePaneContribution`
@@ -164,8 +158,8 @@ To add `acme`:
 2. Add `acme-service.ts` implementing `ForgeService`.
 3. Add `acme-facts.ts` beside the adapter if it reports native facts.
 4. Add one `defaultForgeRegistry` entry.
-5. Add `packages/app/src/git/forges/acme.ts` (logic) and
-   `packages/app/src/git/forges/acme.view.tsx` (view).
+5. Add `web/src/core/git/forges/acme.ts` (logic) and
+   `web/src/core/git/forges/acme.view.tsx` (view).
 6. Add one `CLIENT_FORGE_LOGIC_MODULES` entry (`index.ts`) and one
    `CLIENT_FORGE_VIEW_MODULES` entry (`view.ts`).
 7. Add/update the icon component only if the client bundle should show a brand

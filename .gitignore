@@ -46,11 +46,12 @@ coverage/
 test-results/
 **/test-results/
 
+# vitest browser failure screenshots and attachments
+.vitest-screenshots/
+.vitest-attachments/
+
 # Vercel
 .vercel/
-
-# Expo
-.expo/
 
 # Misc
 *.pem

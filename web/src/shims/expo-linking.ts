@@ -1,4 +1,4 @@
-// Transitional stand-in for `expo-linking`, backed by the browser location. Deleted at the cutover.
+// Stand-in for `expo-linking`, backed by the browser location.
 export async function openURL(url: string): Promise<true> {
   window.open(url, "_blank", "noopener,noreferrer");
   return true;

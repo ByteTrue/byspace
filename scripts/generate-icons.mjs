@@ -8,7 +8,7 @@ const root = resolve(__dirname, "..");
 
 // 导入单一事实来源的品牌矢量路径
 const { BYSPACE_LOGO_PATH, BYSPACE_LOGO_VIEWBOX } =
-  await import("../packages/app/src/components/icons/byspace-logo-path.ts");
+  await import("../web/src/core/components/icons/byspace-logo-path.ts");
 
 const S = 1024;
 const RX = 228; // 标准 App Icon 平滑圆角半径
@@ -59,52 +59,41 @@ async function main() {
 
   // 1. 标准圆角应用图标与大尺寸资产
   const appIconSvg = makeSvg({ rounded: true });
-  await renderPng(appIconSvg, 1024, resolve(root, "packages/app/assets/images/icon.png"));
-  await renderPng(appIconSvg, 512, resolve(root, "packages/app/public/pwa-icon-512.png"));
-  await renderPng(appIconSvg, 192, resolve(root, "packages/app/public/pwa-icon-192.png"));
+  await renderPng(appIconSvg, 512, resolve(root, "web/public/pwa-icon-512.png"));
+  await renderPng(appIconSvg, 192, resolve(root, "web/public/pwa-icon-192.png"));
   await renderPng(
     appIconSvg,
     96,
-    resolve(root, "packages/app/assets/images/notification-icon.png"),
+    resolve(root, "web/src/core/assets/images/notification-icon.png"),
   );
 
   // 2. 全出血 Apple Touch Icon (180x180, iOS 规范: 纯黑无透明圆角，避免黑色脏硬边)
   const appleTouchSvg = makeSvg({ rounded: false });
-  await renderPng(appleTouchSvg, 180, resolve(root, "packages/app/public/apple-touch-icon.png"));
+  await renderPng(appleTouchSvg, 180, resolve(root, "web/public/apple-touch-icon.png"));
 
   // 3. PWA 自适应遮罩图标 Maskable (必须全出血全黑底，内容缩放至 ~82% 严格落在中央安全区内)
   const maskableSvg = makeSvg({ rounded: false, scale: 0.82 });
-  await renderPng(maskableSvg, 512, resolve(root, "packages/app/public/pwa-maskable-512.png"));
-  await renderPng(maskableSvg, 192, resolve(root, "packages/app/public/pwa-maskable-192.png"));
+  await renderPng(maskableSvg, 512, resolve(root, "web/public/pwa-maskable-512.png"));
+  await renderPng(maskableSvg, 192, resolve(root, "web/public/pwa-maskable-192.png"));
 
-  // 4. Favicon 家族 (48x48 PNG + SVG)
+  // 4. Favicon 家族 (48x48 PNG)
   // none 状态
   const favNoneSvg = makeSvg({ rounded: true, status: "none" });
-  await renderPng(favNoneSvg, 48, resolve(root, "packages/app/assets/images/favicon.png"));
-  await renderPng(favNoneSvg, 48, resolve(root, "packages/app/assets/images/favicon-light.png"));
-  await renderPng(favNoneSvg, 48, resolve(root, "packages/app/assets/images/favicon-dark.png"));
-  writeFileSync(resolve(root, "packages/app/assets/images/favicon-light.svg"), favNoneSvg);
-  writeFileSync(resolve(root, "packages/app/assets/images/favicon-dark.svg"), favNoneSvg);
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon-light.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon-dark.png"));
 
   // running 状态 (右下角蓝点)
   const favRunningSvg = makeSvg({ rounded: true, status: "running" });
   await renderPng(
     favRunningSvg,
     48,
-    resolve(root, "packages/app/assets/images/favicon-light-running.png"),
+    resolve(root, "web/src/core/assets/images/favicon-light-running.png"),
   );
   await renderPng(
     favRunningSvg,
     48,
-    resolve(root, "packages/app/assets/images/favicon-dark-running.png"),
-  );
-  writeFileSync(
-    resolve(root, "packages/app/assets/images/favicon-light-running.svg"),
-    favRunningSvg,
-  );
-  writeFileSync(
-    resolve(root, "packages/app/assets/images/favicon-dark-running.svg"),
-    favRunningSvg,
+    resolve(root, "web/src/core/assets/images/favicon-dark-running.png"),
   );
 
   // attention 状态 (右下角绿点)
@@ -112,20 +101,12 @@ async function main() {
   await renderPng(
     favAttentionSvg,
     48,
-    resolve(root, "packages/app/assets/images/favicon-light-attention.png"),
+    resolve(root, "web/src/core/assets/images/favicon-light-attention.png"),
   );
   await renderPng(
     favAttentionSvg,
     48,
-    resolve(root, "packages/app/assets/images/favicon-dark-attention.png"),
-  );
-  writeFileSync(
-    resolve(root, "packages/app/assets/images/favicon-light-attention.svg"),
-    favAttentionSvg,
-  );
-  writeFileSync(
-    resolve(root, "packages/app/assets/images/favicon-dark-attention.svg"),
-    favAttentionSvg,
+    resolve(root, "web/src/core/assets/images/favicon-dark-attention.png"),
   );
 
   // 5. README.md 顶层 Logo (assets/logo.svg)

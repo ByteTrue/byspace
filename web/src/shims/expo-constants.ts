@@ -1,5 +1,5 @@
-// Transitional stand-in for `expo-constants`: shared code only reads the app version from it,
-// and falls back to packages/app/package.json first. Deleted at the cutover.
+// Stand-in for `expo-constants`: src/core only reads the app version from it, and reads
+// web/package.json first.
 interface ExpoConstants {
   expoConfig: { version?: string } | null;
   manifest: { version?: string } | null;

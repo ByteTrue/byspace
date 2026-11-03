@@ -1,4 +1,4 @@
-// Transitional stand-in for `expo-clipboard`, backed by the async Clipboard API. Deleted at the cutover.
+// Stand-in for `expo-clipboard`, backed by the async Clipboard API.
 // As expo-clipboard's web module: when the Clipboard API is missing or refuses (no permission, an
 // insecure origin, a sandboxed frame), copy through a hidden textarea and report whether that
 // worked. It never rejects, so callers that do not catch do not raise an unhandled rejection.

@@ -142,7 +142,7 @@ See [SECURITY.md](../SECURITY.md) for the full trust model.
 docker build -f docker/Dockerfile -t byspace:local .
 ```
 
-The build compiles from source in this checkout: the web UI is exported, the
+The build compiles from source in this checkout: the web UI is built, the
 relay package is packed, and one runtime image carries both. `BYSPACE_VERSION`
 is an optional build arg that asserts the source-tree version. On release
 tags, CI publishes the image multi-arch (amd64/arm64) to

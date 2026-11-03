@@ -21,20 +21,18 @@ COPY package.json package-lock.json ./
 COPY packages/highlight/package.json packages/highlight/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/client/package.json packages/client/
-COPY packages/app/package.json packages/app/
 COPY packages/relay/package.json packages/relay/
 COPY web/package.json web/
 
 RUN set -eux; \
-    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; delete pkg.scripts.postinstall; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
+    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
     npm ci
 
 COPY . .
 
-# COPY restored the original package.json (with its prepare and postinstall
-# hooks). Strip both again: the build must not run lefthook, and the
-# patch-package postinstall only patches app-only react-native deps.
-RUN node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; delete pkg.scripts.postinstall; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'
+# COPY restored the original package.json (with its prepare hook). Strip it
+# again: the build must not run lefthook.
+RUN node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'
 
 RUN set -eux; \
     if [ -n "${BYSPACE_VERSION:-}" ]; then \

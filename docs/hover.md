@@ -1,154 +1,71 @@
 # Hover
 
-Read this before writing any hover code. Every hover regression we ship is one of the three failure modes below, and every one of them is solved by the same canonical pattern. The pattern is hardwon — it survived every other shape we tried — so copy it, don't reinvent it.
+Read this before writing hover code. Hover-to-reveal is CSS: the row is a Tailwind `group`, and
+what it reveals is a descendant switched by `group-hover`. Copy the workspace row in
+`web/src/sidebar/workspace-row.tsx`.
 
 ## The pattern
 
-The canonical implementation lives in `packages/app/src/components/sidebar-workspace-list.tsx`, in the workspace row (around line 1369). When in doubt, open that file and copy the shape.
-
 ```tsx
-//
-//   ┌─ Plain View. Tracks hover via pointerenter/pointerleave.
-//   │
-<View
-  style={styles.workspaceRowContainer}
-  onPointerEnter={handlePointerEnter}
-  onPointerLeave={handlePointerLeave}
->
-  <Pressable                          // ┐ Separate inner Pressable.
-    onPress={handlePress}             // │ Handles press only.
-    onPressIn={...}                   // │ Never has onHoverIn/onHoverOut.
-    onPressOut={...}                  // ┘
-    style={workspaceRowStyle}
+<div className="group/workspace-row">
+  {" "}
+  {/* the hover target */}
+  <a className="... hover:bg-sidebar-accent">
+    {" "}
+    {/* the row's own press */}
+    <span className="group-hover/workspace-row:invisible max-md:hidden">{diffStat}</span>
+  </a>
+  <button
+    className="invisible group-hover/workspace-row:visible data-[state=open]:visible max-md:visible"
+    tabIndex={isCompact ? undefined : -1}
   >
-    <View style={styles.workspaceRowMain}>
-      <View style={styles.workspaceRowLeft}>…</View>
-      <WorkspaceRowRightGroup isHovered={isHovered} />
-      {/*                    └─ Reveals content based on hover state. */}
-    </View>
-  </Pressable>
-</View>
+    {/* kebab */}
+  </button>
+</div>
 ```
 
-Five things make this work. Every one of them matters.
+- **The `group` element holds everything the pointer can move into.** CSS `:hover` stays on an
+  ancestor while the pointer is over any descendant, so buttons nested in the row never take the
+  hover away. A revealed control that sits outside the group loses hover as the pointer crosses
+  to it.
+- **Hide with `invisible`, not by unmounting.** The revealed control and what it replaces share
+  one slot, so nothing reflows under the pointer.
+- **A control whose menu is open stays visible** (`data-[state=open]:visible`). The menu takes the
+  pointer off the row; if the trigger hid with the hover, an open menu would sit under nothing.
+- **Compact layouts have no hover**: `max-md:visible` shows the control on phones, where it is
+  always there.
+- **A control that only appears on hover is not a Tab stop on desktop** (`tabIndex={-1}` unless
+  compact), so the Tab order does not depend on where the pointer happens to be.
 
-1. **Hover lives on a plain `View`, not a `Pressable`.** `Pressable` carries its own internal hover state machine. Nested `Pressable`s fight over it. A plain `View` just dispatches DOM events — no state machine, no fighting.
-2. **Press lives on a _separate_ inner `Pressable`.** Hover and press never share an element. The two state machines never see each other.
-3. **`onPointerEnter` / `onPointerLeave` are non-bubbling**, mouseenter-style by W3C spec. They fire only when crossing the outer `View`'s bounding box. Crossing into descendants — including descendant `Pressable`s (the kebab menu's buttons, a copy button, a tooltip target) — does **not** fire `pointerleave`. This is why nesting `Pressable`s inside is safe.
-4. **The row has a fixed `minHeight`.** When content swaps in on hover (kebab replacing a diff stat), both occupy the same fixed slot. Zero layout shift, zero geometry flicker.
-5. **The outer `View` has nothing but `position: relative`.** It exists only to be the hover target. All real layout lives on the inner `Pressable`. The hover-tracker is a sealed envelope around the row; layout changes inside it never leak out and re-enter through the side.
+## Geometry
 
-That's the whole pattern. Internalize it.
+Hover must not change the hover target's size or position: no hover-only `padding`, `border`,
+`width`, or a sibling that mounts and pushes the target. The pointer ends up outside the moved
+box, the hover drops, the box moves back, and it flickers. Change colour, opacity, or content
+that fits the same fixed box. Give a row that swaps content on hover a `min-h-*` so the swap
+cannot change its height.
 
-## When you skip the pattern, here is what breaks
+## Hover in JavaScript
 
-### Failure mode 1 — Nested Pressables fight over hover state
+Use `onPointerEnter` / `onPointerLeave` only when code, not styling, needs to know: a timer, a
+tooltip, a hover intent delay. Touch fires pointer events too, so check `event.pointerType ===
+"mouse"` when the behaviour is hover-only, and never make a pointer-enter handler the only way to
+reach a control.
 
-If you put `onHoverIn` / `onHoverOut` on a `Pressable` that has another `Pressable` anywhere inside it (a copy button, an icon button, a nested action), the moment the cursor moves onto the inner `Pressable`, the inner one's hover state machine claims hover and the outer one's `onHoverOut` fires. Your reveal state flips off. The reveal hides. The cursor is no longer over the hidden reveal, so it ends up back over the trigger area. The outer's `onHoverIn` fires. Loop.
+## Floating content
 
-This is the most common hover bug shipped in this codebase, by a wide margin. It is what the workspace row is structured to avoid. The fix is not "be clever about handlers" — it's "don't put hover on a Pressable that contains other Pressables."
+Content that renders in a portal (a hover card, a tooltip) cannot be inside the group. Use Radix:
+`HoverCard` keeps the card open while the pointer is over the trigger or the card, and
+`closeDelay` covers the gap between them. `web/src/sidebar/workspace-hover-card.tsx` is the
+example: no delay to open, 100ms grace to close, and no opening on focus, so a row that keeps focus
+after a click does not hold its card open.
 
-> **Rule:** the hover-tracking element is a plain `View` with `onPointerEnter` / `onPointerLeave`. Any `Pressable`s — including ones you forgot are Pressables, like `TurnCopyButton`, icon buttons, anything that handles a tap — live inside it.
+## Checklist
 
-### Failure mode 2 — The hovered state changes the trigger's geometry
-
-Symptom: you hover a button, it changes appearance, then flickers between hovered and not-hovered without the cursor moving.
-
-Cause: the hover state changed the size or position of the trigger. The cursor was on the original element; the new layout shifts or shrinks it out from under the cursor; `onHoverOut` fires; state reverts; original layout returns; cursor is back over the trigger; `onHoverIn` fires; loop.
-
-Common variants:
-
-- Hover state changes the trigger's `width`, `height`, `padding`, or `borderWidth`.
-- Hover state mounts/unmounts a child that pushes the trigger to a new position.
-- Hover state swaps the trigger for a different element type, remounting it.
-
-Fixes, in preferred order:
-
-1. **Don't change the trigger's outer geometry on hover.** Change colors, opacity, borders that don't take layout space (`outlineWidth` on web, absolutely positioned overlays), or child content that fits inside the same fixed box. Never change `width`, `height`, `padding`, or `borderWidth` of the hover target itself.
-2. **Hide with `opacity` + `pointerEvents`, not conditional rendering**, when the hidden element lives inside the trigger. Mounting/unmounting on hover reflows the layout under the cursor.
-3. **Pin the hit area.** Set a fixed `minHeight` / `minWidth` on the trigger so internal swaps (icon-A becomes icon-B on hover) leave the bounding box unchanged. The workspace row's `minHeight: 36` is what makes the kebab/diff-stat swap stable.
-
-### Failure mode 3 — Revealed content lives outside the hover trigger
-
-If hovering element A reveals element B, B must be **inside** A's hover trigger. If B is a sibling, the moment the cursor moves from A toward B it crosses out of A's bounding box, `pointerleave` fires, B disappears.
-
-Wrong:
-
-```tsx
-<View>
-  <View onPointerEnter={...} onPointerLeave={...}>     {/* hover trigger */}
-    <Bubble />
-  </View>
-  <TrailingRow />                                       {/* OUTSIDE — sibling, not child */}
-</View>
-```
-
-Right:
-
-```tsx
-<View onPointerEnter={...} onPointerLeave={...}>      {/* hover trigger */}
-  <Bubble />
-  <TrailingRow />                                      {/* INSIDE — child */}
-</View>
-```
-
-Any gap between A and B (margins between siblings inside the same parent) is part of the parent's bounding box, so the cursor stays inside the hover region while crossing it. No bridge needed.
-
-If A and B genuinely can't share a parent — B portals into a different layer, floats above other content — see [Section: real gaps](#real-gaps-with-floating-panels) below.
-
-### Failure mode 4 — A hover-revealed trigger unmounts its own open menu
-
-A kebab that only exists while its row is hovered opens a menu, and that menu takes the pointer
-off the row: a sheet slides up over it, a popover covers it. The row un-hovers, the trailing
-overlay unmounts, and the trigger goes with it — taking the menu's open state, which lived
-inside the trigger's subtree. The surface itself is already presented in a portal, so nothing
-unmounts it and nothing is left that can close it. On a bottom sheet that means a full-screen
-backdrop swallowing every click until reload.
-
-Lift the menu's open state to whatever decides to render the trigger, and keep the trigger
-rendered while the menu is up. `useOpenKebabMenuVisibility`
-(`packages/app/src/components/sidebar/use-open-kebab-menu-visibility.ts`) is that shape for the
-sidebar rows: it owns `open`, hands the menu its controlled props, and ORs `open` into the
-row's own `showKebab`.
-
-## Touch fallback
-
-Hover doesn't exist on touch devices. Anything you hide behind hover must have a non-hover path on compact layouts:
-
-```tsx
-const showControls = isHovered || isCompact;
-```
-
-`isCompact` comes from `@/constants/layout` (`useIsCompactFormFactor()`). Don't use `Platform.OS` as a proxy for layout — a phone browser is compact but still web.
-
-`onPointerEnter` / `onPointerLeave` are DOM events. They do not fire on touch input. You do not need to gate them — on touch, hover is unreachable anyway and visibility is driven by `isCompact` in your show-the-controls expression above. This is why the workspace row's pointer events are not wrapped in `if (isWeb)`.
-
-## What about `Pressable.onHoverIn` / `onHoverOut`?
-
-It's fine when a `Pressable` styles **itself** based on its own hover — for example, an icon button that changes color on hover. That's self-contained. The render-prop `<Pressable style={({ hovered }) => ...}>` does the same thing more cleanly and is the preferred form.
-
-It is **not** fine for tracking hover to drive state **outside** that `Pressable` (revealing a sibling, opening a tooltip, showing a kebab) when there is any other `Pressable` inside — because that's Failure Mode 1.
-
-Heuristic: if your hover state is going to be `useState`'d and read by anything other than the same `Pressable`'s own style, do not use `onHoverIn` / `onHoverOut`. Use the canonical pattern.
-
-## Real gaps with floating panels
-
-Sometimes the revealed content can't live inside the trigger — a hover card portals into a different layer, a tooltip floats above other content, a popover renders into a `Portal`. There's a real visual gap the user has to cross with the cursor.
-
-For this case, use `useHoverSafeZone` (`packages/app/src/hooks/use-hover-safe-zone.ts`). It computes a rectangular "bridge" between the trigger and the content; while the pointer is inside trigger, content, or the bridge, the card stays open. A short grace timer absorbs jitter at the edges. The canonical caller is `packages/app/src/components/workspace-hover-card.tsx`.
-
-Don't roll your own. The math is annoying, the edge cases (pointer leaves window, drag in progress, content unmounts) are subtle, and we already paid for the hook.
-
-## Pre-PR checklist
-
-Before opening a PR that touches hover:
-
-- [ ] Hover-tracking is on a plain `View` with `onPointerEnter` / `onPointerLeave`, **not** on a `Pressable` that wraps anything pressable.
-- [ ] Any press behavior lives on a separate inner `Pressable` that does not have `onHoverIn` / `onHoverOut`.
-- [ ] The hover trigger's bounding box contains every element the user might mouse into while interacting with the feature.
-- [ ] Hovered state does **not** change the trigger's outer geometry (`width`, `height`, `padding`, `borderWidth`, mount/unmount of siblings that shift it). Internal swaps fit inside a fixed `minHeight` / `minWidth`.
-- [ ] Revealed content inside the trigger uses `opacity` + `pointerEvents`, not conditional rendering, if mounting it would reflow the trigger.
-- [ ] Visibility on compact layouts works without hover (`isHovered || isCompact`).
-- [ ] A menu opened from the revealed trigger keeps the trigger rendered while it is open, so losing hover can't strand it.
-- [ ] If the revealed content sits in a separate layer (portal, floating panel), `useHoverSafeZone` is wired up.
-- [ ] You opened the dev server, hovered the trigger, and slowly moved the mouse along **every** revealed element — including any visible gaps — without losing hover state.
+- [ ] The `group` element contains every element the pointer moves into while using the feature.
+- [ ] Revealed controls use `invisible` / `group-hover:visible`, not conditional rendering.
+- [ ] Hover changes no size, padding, or border of the hover target.
+- [ ] An open menu keeps its trigger visible.
+- [ ] Compact layouts show the controls without hover.
+- [ ] You hovered the row in the dev server and moved the pointer slowly onto every revealed
+      control without losing it.

@@ -530,7 +530,7 @@ These small files are not validated as full Zod schemas but are persisted under 
 
 ## Client-side stores (App)
 
-These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the daemon filesystem.
+These live in the browser's `localStorage` (behind the `AsyncStorage` API) or `IndexedDB`, not on the daemon filesystem.
 
 ### Keying convention: directory-backed vs workspace-owned
 
@@ -541,7 +541,7 @@ Right-sidebar client state splits on whether it is determined by the directory o
 
 ### Replica row store
 
-The durable client replica uses IndexedDB on browser/Electron and expo-sqlite on native. Rows use the
+The durable client replica uses IndexedDB. Rows use the
 compound key `(serverId, kind, id)`; kinds are `agent`, `workspace`, `project`, `timeline`, and
 `checkpoint`. Directory entities have individual rows, timelines use the agent id, and the checkpoint
 uses the singleton id.

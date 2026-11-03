@@ -1,6 +1,6 @@
 # Agent stream performance
 
-How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `internal/agent/sdk/stream_frames.go`, the reducer queue in `packages/app/src/timeline/session-stream-reducers.ts`, or the reveal in `packages/app/src/hooks/use-revealed-text.ts`.
+How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `internal/agent/sdk/stream_frames.go`, the reducer queue in `web/src/core/timeline/session-stream-reducers.ts`, or the reveal in `web/src/core/hooks/use-revealed-text.ts`.
 
 For terminal output, which is a separate pipeline with separate budgets, see [terminal-performance.md](terminal-performance.md). The `BYSPACE_*` variables below are performance-test controls, not public daemon configuration.
 
@@ -57,9 +57,9 @@ So arrival sets a _target_ and the reveal rate is derived from the backlog inste
 
 ## Measuring
 
-- **Smoothness (user-perceived):** `packages/app/e2e/browser/agent-stream-smoothness.spec.ts`, gated behind `BYSPACE_AGENT_STREAM_PERF_E2E=1`. Drives the mock provider's `bursty-stream` model and reports coefficient of variation of characters painted per frame (smoothness) plus p95 gap between visible updates (stalls). Both numbers are needed: a stalled stream is perfectly smooth.
+- **Smoothness (user-perceived):** `web/e2e/browser/agent-stream-smoothness.spec.ts`, gated behind `BYSPACE_AGENT_STREAM_PERF_E2E=1`. Drives the mock provider's `bursty-stream` model and reports coefficient of variation of characters painted per frame (smoothness) plus p95 gap between visible updates (stalls). Both numbers are needed: a stalled stream is perfectly smooth.
 - **Reproducing bursty arrival:** the `bursty-stream` model in `mock-load-test-agent.ts` emits uneven runs of tokens separated by idle gaps. Burst sizes come from a seeded generator, so a run repeats exactly.
-- **Rate policy in isolation:** `computeRevealStep` in `packages/app/src/agent-stream/text-reveal.ts` is pure; `text-reveal.test.ts` covers convergence and burst flattening without a renderer.
+- **Rate policy in isolation:** `computeRevealStep` in `web/src/core/agent-stream/text-reveal.ts` is pure; `text-reveal.test.ts` covers convergence and burst flattening without a renderer.
 
 Healthy numbers (2026-08, Expo web against a local dev daemon, real Claude Haiku agent, ~8.5s samples during active streaming). Setting `TEXT_REVEAL_HORIZON_MS` to 0 makes the reveal paint on arrival, which is how the baseline column was taken:
 

@@ -23,7 +23,7 @@ npm run dev:app
 Root checkout dev is split across two terminals:
 
 - `npm run dev:daemon` builds `./bin/byspace` and runs the daemon on `127.0.0.1:6778` in development mode, so development-only providers such as Mock Load Test are available.
-- `npm run dev:app` (or `npm run dev`) runs the web app (`web/`, Vite) on `http://localhost:8082` and connects to the dev daemon. `npm run dev:expo` runs the old Expo app on `8081` until `packages/app` is deleted.
+- `npm run dev:app` (or `npm run dev`) runs the web app (`web/`, Vite) on `http://localhost:8082` and connects to the dev daemon.
 
 The launcher passes the current Git branch as `EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL`, which the app shows in the titlebar row. Production builds leave it unset and show no label.
 
@@ -178,23 +178,11 @@ npm run build:app-deps     # highlight -> protocol -> client
 
 Use `npm run build:server` whenever you have changed any daemon/server-facing package and need clean cross-package types or runtime behavior.
 
-The app Metro config disables Watchman and uses Metro's node crawler for exports. Keep that invariant unless you have verified production app exports on machines with and without Watchman installed; distro Watchman builds can differ in capabilities and change Metro's crawl behavior.
-
 For tighter loops, you can rebuild a single workspace:
 
 - Changed `packages/protocol/src/*` or `packages/client/src/*`: `npm run build:client`.
 - Changed `packages/server/src/*`, `packages/cli/src/*`, `packages/relay/src/*`, or `packages/highlight/src/*`: `npm run build:server`.
 - Changed app build dependencies: `npm run build:app-deps`.
-
-## Dependency patches
-
-`patches/*.patch` are applied by `scripts/postinstall-patches.mjs` on every install. A patch only
-runs when its package is actually present, so add the package to that script's `patchedPackages`
-list when you introduce a new patch — otherwise the file sits in `patches/` and never applies.
-Regenerate a patch with `npx patch-package <package>` after editing `node_modules/<package>`, and
-patch every build the consumers use: Metro resolves the `react-native` field of a package
-(`src/*.ts` for `react-native-svg`), while Node and Vitest resolve `main`/`module`
-(`lib/commonjs`, `lib/module`). Patching only `lib/` leaves the app bundle unfixed.
 
 ## ACP provider catalog versions
 
@@ -338,22 +326,14 @@ a socket library.
 compiles it explicitly. A plain `go build ./workers/relay/` also drops a `relay`
 binary in the repository root — pass `-o /dev/null`.
 
-PWA install metadata lives in `packages/app/public/manifest.json` and is linked
-from `packages/app/public/index.html`. Keep the install icons in `public/` so
-the export serves them from stable root URLs.
+PWA install metadata lives in `web/public/manifest.json` and is linked
+from `web/index.html`. Keep the install icons in `web/public/` so the build
+serves them from stable root URLs.
 
 Do not add service-worker caching casually. BySpace is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web
 code. If offline behavior becomes a product requirement, add it deliberately
 with an update strategy and test the installed-app upgrade path.
-
-## Expo troubleshooting
-
-```bash
-npx expo-doctor
-```
-
-Diagnoses version mismatches and native module issues.
 
 ## Typecheck
 

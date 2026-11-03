@@ -1,7 +1,16 @@
 // A react-native-reanimated SharedValue without the UI thread: a value you can set without a React
-// render, with listeners. Shared modules (file-drop's drop listeners) take SharedValue and only
-// read and write `.value`; this gives them one on the web.
-import type { SharedValue } from "react-native-reanimated";
+// render, with listeners. The modules ported from the Expo app (file-drop's drop listeners) take a
+// SharedValue and only read and write `.value`; this gives them one.
+
+/** react-native-reanimated's SharedValue interface, which createSharedFlag implements. */
+export interface SharedValue<T> {
+  value: T;
+  get(): T;
+  set(next: T | ((value: T) => T)): void;
+  addListener(id: number, listener: (value: T) => void): void;
+  removeListener(id: number): void;
+  modify(modifier?: (value: T) => T, forceUpdate?: boolean): void;
+}
 
 export function createSharedFlag<T>(initial: T): SharedValue<T> {
   let current = initial;

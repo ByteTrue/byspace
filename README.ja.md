@@ -113,7 +113,7 @@ npx skills add ByteTrue/byspace
 モノレポのパッケージ構成：
 
 - `packages/server`: BySpace デーモン（エージェントプロセスのオーケストレーション、WebSocket API、MCP サーバー）
-- `packages/app`: Expo Web クライアント
+- `web`: Web クライアント（React、Vite）。ブラウザ、PWA、デスクトップ、Android で共通
 - `packages/cli`: デーモンおよびエージェントワークフロー向け `byspace` CLI
 - `packages/relay`: リモート接続用リレーパッケージ
 

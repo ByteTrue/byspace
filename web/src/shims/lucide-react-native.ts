@@ -1,3 +1,3 @@
-// Transitional: shared modules import icons from lucide-react-native; on the web they are the
-// same icons from lucide-react (pinned to the same version). Deleted at the cutover.
+// Stand-in for lucide-react-native: src/core imports icons from it; they are the same icons from
+// lucide-react (pinned to the same version).
 export * from "lucide-react";

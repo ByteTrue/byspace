@@ -349,10 +349,10 @@ The factory is invoked with `(logger, runtimeSettings, options)`; `options.works
 
 ### 4. Add a provider icon (app)
 
-Create `packages/app/src/components/icons/my-provider-icon.tsx` following the pattern from existing icons (e.g., `claude-icon.tsx`):
+Create `web/src/core/components/icons/my-provider-icon.tsx` following the pattern from existing icons (e.g., `claude-icon.tsx`):
 
 ```tsx
-import Svg, { Path } from "react-native-svg";
+import { Path, Svg } from "react-native-svg";
 
 interface MyProviderIconProps {
   size?: number;
@@ -368,7 +368,7 @@ export function MyProviderIcon({ size = 16, color = "currentColor" }: MyProvider
 }
 ```
 
-Then register it in `packages/app/src/components/provider-icons.ts` by adding an entry to the existing `PROVIDER_ICONS` map (which already covers the built-in providers):
+Then register it in `web/src/core/components/provider-icons.ts` by adding an entry to the existing `PROVIDER_ICONS` map (which already covers the built-in providers):
 
 ```ts
 import { MyProviderIcon } from "@/components/icons/my-provider-icon";

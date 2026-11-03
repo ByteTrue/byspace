@@ -15,7 +15,7 @@
     "*.lock",
     "**/*.gen.ts",
     "**/*.gen.tsx",
-    "packages/app/public/schemas/*.json",
+    "web/public/schemas/*.json",
     "archive/**",
     "design/references/**",
     "design/sheet-assets/**",

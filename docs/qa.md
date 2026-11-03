@@ -38,7 +38,7 @@ The two things that go wrong most often:
 
 BySpace is composable by design, which means your change sits next to features you didn't touch. Open the surfaces around it. A change to the agent list affects archive, subagents, and tabs; a change to git actions affects worktrees and the checkout flow.
 
-Performance is part of this. The app is Expo React Native Web. Verify on a phone-sized viewport: what feels instant on a desktop browser can be visibly slow there.
+Performance is part of this. The app is a React web app (`web/`). Verify on a phone-sized viewport: what feels instant on a desktop browser can be visibly slow there.
 
 If your change touches a hot path such as the terminal, the message list, or git polling, submit before and after numbers. [terminal-performance.md](terminal-performance.md) has the terminal pipeline and its benchmarks, and [development.md](development.md) covers renderer and React profiling.
 
@@ -54,7 +54,7 @@ You aren't expected to own every device. You are expected to say what you covere
 
 A phone-sized browser viewport (or device-mode in dev tools) covers the compact layout; see [development.md](development.md).
 
-For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../AGENTS.md). The recurring traps have their own docs: [hover.md](hover.md), [unistyles.md](unistyles.md), [floating-panels.md](floating-panels.md), [mobile-panels.md](mobile-panels.md), [expo-router.md](expo-router.md).
+For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../AGENTS.md). The recurring traps have their own docs: [hover.md](hover.md), [menus.md](menus.md), [mobile-panels.md](mobile-panels.md), [routing.md](routing.md).
 
 App and daemon versions also drift, in both directions. That has its own contract: [protocol-compatibility.md](protocol-compatibility.md).
 

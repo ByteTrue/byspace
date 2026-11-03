@@ -6,15 +6,13 @@ Compact layouts have three mutually exclusive destinations:
 - `agent` in the center
 - `file-explorer` on the right
 
-They are one interaction, not two independent drawers. The implementation lives in
-`packages/app/src/mobile-panels/`. The `web/` frontend runs the same `model.ts` and
-`gesture-intent.ts` on the DOM (`web/src/overrides/mobile-panels/`): a plain object instead of
-worklets, writing the position straight to the panel styles. Its gestures listen for touch events on
-the document and cancel the page scroll once the swipe is horizontal. On the web, packages/app's
-open detectors (`touchAction: "auto"`) lose a touch to the browser's panning, so its edge swipes only
-ever opened a panel with a mouse; its close detectors (`pan-y`) work by touch. On Android with gesture
-navigation the system back gesture owns both screen edges, so the open swipes need three-button
-navigation there.
+They are one interaction, not two independent drawers. The transition model is `model.ts` and
+the gesture rules are `gesture-intent.ts`, both in `web/src/core/mobile-panels/`; `provider.tsx`
+runs them on the DOM, writing the position straight to the panel and backdrop styles, and
+`web/src/mobile-panels/gesture.ts` holds the arithmetic of the four gestures (open and close, left
+and right). The gestures listen for touch events on the document and cancel the page scroll once a
+swipe is horizontal; a mouse drags them too. On Android with gesture navigation the system back
+gesture owns both screen edges, so the open swipes need three-button navigation there.
 
 ## Ownership
 
@@ -30,19 +28,17 @@ interface MobilePanelSelection {
 Every semantic target change increments `revision`. Repeating the current target is idempotent.
 Compact panel selection is not persisted; a cold start begins at `agent`.
 
-The UI worklet owns transient motion:
+The runtime in `provider.tsx` owns transient motion:
 
 - one normalized position (`-1` left, `0` center, `1` right)
 - the current motion target
 - the active gesture's starting revision
 - the last settled target
 
-React publishes the active panel only when the canonical target and the UI-thread position agree at
+React publishes the active panel only when the canonical target and the runtime's position agree at
 the final anchor. Retained content never observes gesture previews, progress, or an unsettled target.
-The gesture hosts stay mounted; worklets reveal their retained overlays through native styles while
-React owns pointer events and accessibility. Native panel hosts and their dependent draggable lists
-also retain identity across appearance hydration and settings changes. Do not wrap those hosts in
-appearance keys; see [Unistyles appearance boundaries](unistyles.md#runtime-theme-patching-for-user-preferences).
+The panel hosts stay mounted; the runtime reveals their overlays through inline styles while React
+owns pointer events and accessibility.
 
 ## Why one position
 
@@ -56,8 +52,7 @@ This makes these invalid states unrepresentable:
 - a width-sync effect resetting an active drag
 - one animation context settling a transition owned by the other
 
-Do not add another panel translate shared value, backdrop shared value, or width synchronization
-effect.
+Do not add another panel translate, backdrop opacity, or width synchronization effect.
 
 ## Ordering and interruption
 
@@ -81,51 +76,26 @@ definition, no longer eligible to begin.
 
 ## Integration rules
 
-- Callers request semantic targets through `panel-store`; they never write shared values.
-- Gesture behavior comes from the four explicit hooks in `mobile-panels/gestures.ts`.
+- Callers request semantic targets through `panel-store`; they never write the runtime's position.
 - A focused interactive surface may block panel-opening gestures through
-  `useBlockMobilePanelOpenGestures`. Register only while the conflicting interaction is active and
-  unregister when the surface is hidden or unfocused. The blocker never disables gestures that close
-  an already-open panel.
-- Keep `SidebarModelProvider` outside `MobileGestureWrapper`. The provider shares sidebar derivation
-  across consumers, while Gesture Handler requires the wrapper's direct child to be a native `View`
-  so its injected `collapsable={false}` reaches Android/Fabric.
+  `useBlockMobilePanelOpenGestures` (the terminal does). Register only while the conflicting
+  interaction is active and unregister when the surface is hidden or unfocused. The blocker never
+  disables gestures that close an already-open panel.
 - Mobile sidebars render through `MobilePanelOverlay`; do not duplicate overlay lifecycle or motion
   styles in sidebar components.
-- The desktop left sidebar is retained too. App chrome owns separate mounted and visible decisions:
-  closing it or yielding its width marks it inactive and applies `display: none` without conditionally
-  removing the sidebar tree.
-- Animated panel nodes use React Native static styles plus inline theme values. Do not attach
-  Unistyles-generated styles to those nodes; Unistyles and Reanimated patching the same Fabric node
-  has caused native crashes.
-- `FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS` stays off in `packages/app/package.json`. It is a
-  compile-time flag; changing it needs a native rebuild. With it on, Reanimated 4.3 hands settled
-  animated props back to React through a collector that forgets entries older than two seconds. A JS
-  stall across a panel settle loses the final position, and the next React commit reverts the overlay
-  to its last synced props: a backdrop over the workspace while the store says closed. Upstream fixed
-  the collector in 4.4.3, which needs React Native 0.83.
-- Gesture start and progress must not update React state. The retained overlay is already mounted and
-  offscreen; only the shared position and its derived native styles move during a drag.
-- Hidden tabs and workspaces use `RetainedPanel`. It owns a non-collapsible native root, visibility,
-  pointer events, and the active signal consumed by `useRetainedPanelActive`.
-- Panels whose gesture wrapper already owns visibility use `RetainedPanelActivity` to provide the
-  same active signal without adding another layout root. Persistent animations, timers, polling, and
-  shared clocks must subscribe to that signal and stop when their final visible consumer leaves.
-- Synchronized step animations use one wall-clock-aligned source. Register a local shared value only
-  while its retained panel is active so hidden animated styles remain mounted without receiving clock
-  updates. Do not give every instance its own loop or leave hidden styles subscribed to the source.
-- Retention order and render order are separate concerns. LRU metadata may change on every switch;
-  keyed retained roots must keep a stable sibling order. Moving large retained roots triggered Fabric
-  Differ failures (`addViewAt` / `removeViewAt` view reuse) on Android.
+- Gesture start and progress must not update React state. The overlay is already mounted and
+  offscreen; only the position and the styles derived from it move during a drag.
+- Hidden tabs and workspaces use `RetainedPanel`. It owns visibility, pointer events, and the active
+  signal consumed by `useRetainedPanelActive`.
+- Panels whose host already owns visibility use `RetainedPanelActivity` to provide the same active
+  signal without adding another layout root. Persistent animations, timers, polling, and shared
+  clocks subscribe to that signal and stop when their last visible consumer leaves.
 - `useIsMobilePanelActive` follows the settled target, not the requested target. Position at the
   canonical target's anchor is the settlement signal; animation duration and completion callbacks
   do not own activity. Cancellation publishes nothing.
-- Do not suspend retained native subtrees with `Suspense`/`react-freeze`. Suspension changes native
-  ownership and can detach descendants. Keep the tree mounted, stabilize its subscriptions/selectors,
-  and use the retained-panel active signal to stop timers, polling, and other genuine background work.
 
 ## Tests
 
-`packages/app/src/mobile-panels/model.test.ts` exercises command, drag, cancellation, interruption,
+`web/src/core/mobile-panels/model.test.ts` exercises command, drag, cancellation, interruption,
 rapid-command, position-settlement, and width-projection sequences through the transition model. Add
 a sequence there whenever ownership or ordering changes.

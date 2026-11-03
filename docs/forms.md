@@ -6,12 +6,12 @@ whatever screen you happen to be near.
 
 Golden example files:
 
-- `packages/app/src/schedules/schedule-form-model.ts` (+ `.test.ts`) — the model
-- `packages/app/src/schedules/use-schedule-form-model.ts` — model lifetime adapter
-- `packages/app/src/schedules/use-schedule-form-provider-snapshot.ts` — async input adapter
-- `packages/app/src/components/schedules/schedule-form-sheet.tsx` — render + intent dispatch
-- `packages/app/src/schedules/aggregated-schedules.ts` / `hooks/use-schedules.ts` — load-state gating
-- `packages/app/e2e/schedules-*.spec.ts` — the behavioral contract
+- `web/src/core/schedules/schedule-form-model.ts` (+ `.test.ts`) — the model
+- `web/src/core/schedules/use-schedule-form-model.ts` — model lifetime adapter
+- `web/src/core/schedules/use-schedule-form-provider-snapshot.ts` — async input adapter
+- `web/src/core/components/schedules/schedule-form-sheet.tsx` — render + intent dispatch
+- `web/src/core/schedules/aggregated-schedules.ts` / `hooks/use-schedules.ts` — load-state gating
+- `web/e2e/browser/schedules-*.spec.ts` — the behavioral contract
 
 ## The form model
 
@@ -65,8 +65,7 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
   wrapper. The editing surface owns in-progress text; React observes committed
   edits through `onChangeText`, and programmatic mutations use the input's
   `replaceText` command. Its props omit `value` and `defaultValue`, web IME
-  candidates stay unpublished until composition commits, and lint rejects raw
-  React Native `TextInput` imports outside the primitive.
+  candidates stay unpublished until composition commits.
 - The form declares one size for all fields: `sm` on desktop, `md` compact
   (`useIsCompactFormFactor`).
 - Availability hierarchy: a field whose capability doesn't apply is **hidden**
@@ -76,7 +75,6 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 - Copy is opt-in and rare. No hint/subtext unless the maintainer approved the
   exact string; validation errors are the exception. State a fact (like the
   timezone) once — never in a preview line AND a helper line.
-- `useUnistyles` is banned (see docs/unistyles.md); lint enforces.
 
 ## Settings rows
 

@@ -1,11 +1,13 @@
 # Menus
 
-One engine, in `packages/app/src/components/ui/menu/`. `dropdown-menu.tsx` and `context-menu.tsx`
-are wrappers over it and differ only in what opens them — a press, or a long press / right click.
-Import the `DropdownMenu*` or `ContextMenu*` names as before; reach for `@/components/ui/menu`
-directly only when you are building a third trigger shape.
+One engine, in `web/src/core/components/ui/menu/`, drawn with shadcn's (Radix) `DropdownMenu` and
+`ContextMenu` on wide screens and a bottom sheet (`web/src/components/sheet-menu.tsx`) on compact
+ones. `web/src/core/components/ui/dropdown-menu.tsx` and `context-menu.tsx` are wrappers over it and
+differ only in what opens them — a press, or a long press / right click. Import the
+`DropdownMenu*` or `ContextMenu*` names; reach for `@/components/ui/menu` directly only when you
+are building a third trigger shape.
 
-Do not add a third menu implementation. The two that existed were byte-identical from
+Do not add a second menu implementation. The Expo app once had two, byte-identical from
 `computePosition` down, and the copies drifted: only one of them ever grew a sheet.
 
 ## Two presentations
@@ -23,34 +25,27 @@ sheets the same way a phone does.
 flipping every menu in the app to sheets at once is not a change anyone can review. Opt a menu in
 when you have actually looked at it on a phone.
 
-`ContextMenu` is the exception: it defaults to `compactMode="sheet"` and enables native long press.
-Disable mobile triggering explicitly on draggable rows, where long press belongs to drag instead.
+`ContextMenu` is the exception: it defaults to `compactMode="sheet"` and opens on a long press
+(`web/src/hooks/use-long-press.ts`) as well as a right click. Disable mobile triggering explicitly
+on draggable rows, where long press belongs to drag instead.
 
 ## When the items differ per form factor
 
 A menu whose contents depend on what else is on screen gets one component per surface, not one
 component with `isMobile` branches inside it. The workspace header menu is the example
-(`packages/app/src/screens/workspace/workspace-header-menu.tsx`): compact has no tab strip, so it
+(`web/src/core/screens/workspace/workspace-header-menu.tsx`): compact has no tab strip, so it
 carries new-tab actions, while wide leaves those to the strip's `+` menu and lists workspace
 actions only. Items both surfaces share live in one component that each menu renders, from the same
 callbacks, so the two can't drift.
 
-## Selecting an item on iOS
+## Selecting an item
 
-An item that closes the menu runs its action after a fixed grace period on iOS, not immediately:
-a native presenter launched while UIKit is still tearing down the surface can hang. Both surfaces
-unmount the moment the menu closes, so the wait is a timer rather than the surface's own dismissal
-callback — a callback fired from inside a subtree that is being removed is racing its own removal,
-and it loses. Selections used to be dropped entirely for exactly that reason.
-
-The consequence for callers: an `onSelect` on iOS runs a beat after the press. Don't add a second
-delay on top of it, and don't read state that the same press mutated.
-
-This is why a row inside a menu surface goes through `selectItem` rather than calling its handler
-from its own `Pressable`. `MenuItem` is not the only row shape on the engine — `ComposerTrackRow`
-is another, with its own icons and hover-revealed actions — but both hand the press to the engine
-and take `closeOnSelect` to say whether choosing them ends the surface. A row that owns its press
-outright leaves the surface open behind whatever it opened, and skips the iOS wait.
+A row that ends the surface goes through the engine. In the popover it is a Radix item, and
+`closeOnSelect={false}` keeps the menu open; in the sheet it calls the engine's `selectItem`.
+`MenuItem` is not the only row shape on the engine — `ComposerTrackRow`
+(`web/src/core/composer/tracks.tsx`) is another, with its own icons and hover-revealed actions —
+but both hand the press to the engine. A row that handles its own click leaves the surface open
+behind whatever it opened.
 
 ## Pages
 
@@ -65,51 +60,22 @@ matches:
 </MenuSurface>
 ```
 
-Pages are data rather than nested children because the popover renders them as _siblings_ of the
-root surface — a flyout nested inside the root's box would be clipped by its `overflow: hidden`.
-Declaring them separately is what lets one model drive both presentations.
-
-`menu-navigation.ts` holds that model, and it is pure: the open flyout chain and the mobile push
-stack are the same path, so the popover renders every entry in it and the sheet renders only the
-last. Nothing else differs between the two.
-
-Opening a submenu truncates the path to the depth of the trigger that opened it. Without that,
-sliding the pointer across a row of triggers would stack up every flyout it passed instead of
-swapping between them.
+The popover opens a page as a Radix flyout beside its row; the sheet replaces the page in place
+under a back header. Pages are data rather than nested children so one declaration drives both.
+`menu-navigation.ts` holds the sheet's stack of open pages, and it is pure.
 
 ## A page that takes input
 
-A menu page can hold a small form — `MenuTextField` is the field for it, drawn as a row's own
-fill so its text lands on the same rail as the labels above it. Two things have to be true for
-that page, and both are set on the page definition rather than discovered later:
-
-- **`hoverIntent: false`.** A branch you skim is opened and closed by the pointer; a form is not.
-  Without this the page opens on a pointer that was only passing through, and dismisses itself —
-  draft and all — the moment your hands move to the keyboard and the mouse drifts off the flyout.
-  While such a page is open, the whole surface stops closing on hover, because the parent flyout
-  leads back to the same dismissal.
-- **The compact presentation has to be a sheet.** `MenuTextField` resolves to
-  `BottomSheetTextInput` on compact native, which reads the sheet's context and has none in a
-  popover.
-
-The sheet keeps `keyboardBehavior="interactive"`. `extend` grows a sheet to its largest snap
-point, and with `enableDynamicSizing` that point is the content's own height — a short page does
-not grow, and the keyboard comes up over the field you are typing into.
+A menu page can hold a small form; `MenuTextField` is the field for it. It stops Radix's typeahead,
+so letters type into the field instead of jumping to the row they start, and Enter submits.
 
 ## Hover intent
 
-A flyout **overlaps its parent by 5pt** rather than sitting beside it. With a gap there is a strip
-of backdrop between the two that belongs to neither surface, and every pixel of it is a chance to
-dismiss the menu you are reaching for. Overlapping deletes the strip; don't reintroduce the gap
-and try to cover it with a longer timer.
-
-On top of that, a flyout opens after the pointer rests ~90ms, closes ~260ms after it leaves, and
-cancels its own pending close while the pointer is inside it. The grace still matters because the
-pointer crosses sibling rows on the way down into the flyout.
-
-Hover lives on a plain `View`, never on a `Pressable` — see [hover.md](hover.md), which owns that
-rule. Hover only fires on web, which is exactly where flyouts exist; everywhere else the page
-opens on press.
+Radix opens a flyout when the pointer rests on its row and keeps it open while the pointer travels
+toward it. The flyout also **overlaps its parent by 6px** (`DropdownMenuSubContent`'s
+`sideOffset={-1}` from a row inset 5px) rather than sitting beside it. With a gap there is a strip
+of nothing between the two surfaces, and every pixel of it is a chance to dismiss the menu you are
+reaching for. Don't reintroduce the gap.
 
 ## Item states
 
@@ -134,35 +100,17 @@ and a column of icons there is decoration competing with the values you actually
 
 ## Surface details
 
-- The hover fill is **inset from the surface's edges and rounded** — a chip inside the menu, not a
-  band across it. The inset is taken _out of_ the row, never added to it: padding gives up what
-  margin takes, so labels sit at the same 13pt they always did. Insetting by growing the row is how
-  the menu ends up taller than it started.
-- **A row is as tall as what is driving it** — 28pt for a pointer, 40pt below `md` for a thumb. The
-  split is on breakpoint, not on `presentation`: the compact popover that `compactMode` defaults to
-  is worked with a thumb just as a sheet is, and sizing off the sheet would leave it at the desktop
-  height. `md` is where `useIsCompactFormFactor` divides, so row height and the popover/sheet choice
-  turn over together.
-- The desktop height only holds because the label's `lineHeight` is pinned — 18 line + 8 padding +
-  2 border is exactly 28. Leave it to the platform and content outgrows `minHeight`, which then does
-  nothing. Compact is the other way round: `minHeight` leads and the label centres in it.
-- **A row owns its fill; `MenuPage` owns the spacing between rows.** The vertical inset above the
-  first row and below the last, and the gap between rows, are the page's — one knob each,
-  `MENU_ROW_GAP` being the one a redesign turns. A row that carried vertical margin would be
-  serving both at once, and since margins don't collapse it would land as one unit at the edges and
-  two between rows, so shrinking the gap would eat the inset with it. Horizontal inset does stay on
-  the row: there is one left edge and one right edge, so nothing is doubling up.
-- `MenuPage` is also what provides a page's depth, so the popover and the sheet cannot disagree
-  about what a page is. Every entry point goes through it — root, flyout, pushed sheet page.
-- The gap reaches a page's **direct children**. A group of rows wrapped in a `View` of its own drops
-  out of it; at the current gap of zero there is nothing to lose, but anything above zero wants that
-  wrapper to carry the page style too.
-- The separator is the one row-level thing that asks for vertical space of its own, and now that
-  rows carry none, that is still one number controlling one gap. It takes no horizontal margin and
-  the page has no horizontal padding, so the rule runs the full width of the surface.
-- Separators use `borderAccent`, the same colour the surface outlines itself with. `border` sits
-  between `surface1` and `surface2`, which put it within a hair of the hover fill and made
-  separators disappear against a hovered row.
+- The hover fill is **inset from the surface's edges and rounded** (`mx-1 rounded-md`) — a chip
+  inside the menu, not a band across it.
+- **A row is as tall as what is driving it** — 28px for a pointer (`min-h-7`), 40px below `md` for
+  a thumb (`max-md:min-h-10`). The split is on breakpoint, not on presentation: the compact popover
+  is worked with a thumb as much as a sheet is. `md` is where `useIsCompactFormFactor` divides, so
+  row height and the popover/sheet choice turn over together.
+- The label's line height is pinned at 18px; 18 + 8 padding + 2 border is the 28px row. Content
+  that outgrows the minimum height makes the minimum mean nothing.
+- Rows carry no vertical margin; the surface's padding is the inset above the first row and below
+  the last. The separator is the one thing with vertical space of its own (`my-1`), and it runs the
+  full width of the surface.
 
 ## When a decision earns a submenu
 
@@ -176,56 +124,29 @@ its own.
 
 ## When a list of destinations is a menu
 
-A set of destinations that already has a row treatment — rows you hover, drag out of, or click a
-kebab on — is not a menu. Folding it into one means creating a button, then restyling the same rows
-inside a floating surface and anchoring them to the trigger: two presentations of one list, plus a
-popover that covers the content it was meant to sit beside.
+A set of destinations is not a menu. Search, Schedules, and Tunnels are rows above the workspace
+list (`SidebarNavRows` in `web/src/sidebar/nav-menu.tsx`), each highlighted like a selected workspace while you are on
+its page. They used to sit behind a "BySpace ⌄" menu: the product name with a chevron read as an
+account switcher, the pages could not be seen until the menu was opened, and once on a page
+nothing showed where you were.
 
-The top-level nav is the other case, and it is why it is a menu. Its entries are destinations you
-visit and leave: choosing one navigates and closes the surface, so giving them room in the layout
-buys nothing — while an inline version of them pushes the workspace list down on every open and
-puts it back on every close.
+A list that already has a row treatment — rows you hover, drag out of, or click a kebab on — is not
+a menu either. Folding it into one means two presentations of the same list, plus a popover that
+covers the content it was meant to sit beside.
 
-`packages/app/src/components/sidebar/sidebar-nav-menu.tsx` is the example. The trigger is a
-compact button on the left side of the sidebar's top row (sharing the row with the collapse toggle
-on the left and the permanent Chief button on the right), with a trailing chevron and ordinary
-`MenuItem`s on the floating surface below it.
-
-The trigger's leading edge has to be deliberate once it shares its line with another control — a
-window control, a collapse toggle. That neighbour's gap decides where a leading chevron lands, so
-the entries end up on a different rail. Three ways out:
-
-- Give the trigger its own line. Every leading slot in the group then shares a rail.
-- Keep the shared line and align the neighbour to the rail the rows use. Cheapest when the rows
-  are full-width and the trigger is one more row among them. Align the neighbour's _glyph_, not
-  its frame: a framed icon button centres a smaller glyph inside a wider box, so matching frames
-  leaves the visible icon a few pixels off. A frame that hangs past the rail is only a hit area.
-- Drop the leading chevron and place the chevron after the label. The question disappears, at the
-  cost of the label sitting beside the leading control rather than on the rows' left rail — which
-  is what the sidebar's BySpace menu trigger does.
-
-A trigger that opens nothing into its own layout also stops owing the inline version's box model:
-that row plus the hairline under its group had to add up to the row height a content header uses,
-or the control shifted by the border width when the two hosts swapped.
-
-Reach for a menu when the items are actions, when the surface must escape its container (a
-clipped or scrolled ancestor), or when the list is long enough that leaving it open would push
-the page around.
+Reach for a menu when the items are actions, when the surface must escape its container (a clipped
+or scrolled ancestor), or when the list is long enough that leaving it open would push the page
+around.
 
 ## Gotchas
 
-- **Released height.** Reanimated's web entering animation leaves an inline height snapshot on
-  the surface. `AnchoredSurface` clears it, and a `revision` prop re-clears it when content
-  identity changes — a pushed page taller than the one it replaced is clipped without that.
-- **Sheets size to content.** `enableDynamicSizing`, not fixed snap points. A pushed page is
-  rarely the height of the page before it.
-- **The sheet's content is teleported out of the menu's subtree**, so `MenuSheetSurface` rebuilds
-  both menu contexts through the sheet's `contextBridge`. Providing them around the modal puts
-  them on the wrong side of the portal and every item inside throws. Gotcha 7 in
-  [floating-panels.md](floating-panels.md).
-- **One overlay per menu.** Submenus render inside their parent's layer and paint no second
-  backdrop, so there is exactly one `Modal` on native no matter how deep the menu goes.
-- Anchoring, flipping, and edge clamping live in `menu-anchor.ts` and are unit-tested. Fix
-  positioning bugs there, not at a call site.
-- Everything else about floating surfaces on Android — Portal/Modal escape, lifecycle gates,
-  status-bar offset, the open flash — is in [floating-panels.md](floating-panels.md).
+- **The shortcut engine asks whether a layer owns the keyboard.** Every Radix layer counts, so
+  Escape closes the menu instead of leaving the page or interrupting the agent behind it
+  (`web/src/core/lib/overlay-root.ts`). An overlay of your own needs `role="dialog"` and
+  `data-state="open"` to count.
+- **React bubbles a portal's events through the component tree, not the DOM.** A right click on an
+  item reached the context-menu trigger around the menu's own trigger and opened that menu on top;
+  menu content stops `contextmenu` (`web/src/components/ui/menu-events.ts`).
+- **No slide-in and no transition.** A surface fades and scales in place. A surface sliding in under
+  the pointer takes the release of a right click as a press on its first item, and shadcn's
+  `transition` glides the transform origin so the zoom drifts sideways.

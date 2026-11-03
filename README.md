@@ -123,7 +123,7 @@ Then use them in any agent conversation:
 Quick monorepo package map:
 
 - `packages/server`: BySpace daemon (agent process orchestration, WebSocket API, MCP server)
-- `packages/app`: Expo web client
+- `web`: web client (React, Vite) for the browser, PWA, desktop, and Android apps
 - `packages/cli`: `byspace` CLI for daemon and agent workflows
 - `packages/relay`: Relay transport and encryption used by the daemon and clients
 

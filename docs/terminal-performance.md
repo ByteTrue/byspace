@@ -1,6 +1,6 @@
 # Terminal performance
 
-How terminal output stays low-latency, what the invariants are, and how to measure before/after any change to the pipeline. Read this before touching anything under `packages/server/src/terminal/` or `packages/app/src/terminal/runtime/`.
+How terminal output stays low-latency, what the invariants are, and how to measure before/after any change to the pipeline. Read this before touching anything under `packages/server/src/terminal/` or `web/src/core/terminal/runtime/`.
 
 ## The pipeline
 
@@ -37,7 +37,7 @@ Terminal frames share the daemon main event loop with all agent traffic. The `ev
 
 - **Node-only benchmark (fast iteration, server pipeline):** `node --import tsx scripts/benchmark-terminal-latency.ts`. Boots an isolated daemon (fresh `BYSPACE_HOME`, random port — never 6777), measures echo latency percentiles, burst jitter, and snapshot counts under ramped mock-agent load. Writes JSON to the platform temporary directory under `byspace-terminal-bench/`. Healthy numbers (2026-06): echo p50 ~2.3ms, p95 ~3.3ms, a 2MB burst fully streamed with `snap=0`.
 - **Browser perf specs (user-perceived path):** gated behind `BYSPACE_TERMINAL_PERF_E2E=1` —
-  `packages/app/e2e/browser/terminal-performance.spec.ts` and `packages/app/e2e/browser/terminal-keystroke-stress.spec.ts` (per-stage keydown→xterm-commit breakdown under mock-agent load). Compare latency percentiles only between runs on the same runner class; sequence integrity and one-second main-thread stalls are the fixed gates.
+  `web/e2e/browser/terminal-performance.spec.ts` and `web/e2e/browser/terminal-keystroke-stress.spec.ts` (per-stage keydown→xterm-commit breakdown under mock-agent load). Compare latency percentiles only between runs on the same runner class; sequence integrity and one-second main-thread stalls are the fixed gates.
 - **Production:** grep `daemon.log` for `ws_runtime_metrics` and read `eventLoopDelay` + `bufferedAmount`.
 - **Git pressure:** the same log line includes `git.commands` (limiter occupancy, queue age,
   queue wait, execution time, failures, timeouts, and top operations),
@@ -60,13 +60,13 @@ same workload does not depend on shell quoting:
 ```bash
 BYSPACE_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
 BYSPACE_TERMINAL_TRANSPORT=direct \
-npm run test:e2e --workspace=@bytetrue/app -- \
+npm run test:e2e --workspace=@bytetrue/web -- \
 e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
 --retries=0
 
 BYSPACE_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
 BYSPACE_TERMINAL_TRANSPORT=relay \
-npm run test:e2e --workspace=@bytetrue/app -- \
+npm run test:e2e --workspace=@bytetrue/web -- \
 e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
 --retries=0
 ```

@@ -1,16 +1,16 @@
 # File Icons
 
-The file explorer uses colored SVG icons from [`material-icon-theme`](https://github.com/material-extensions/vscode-material-icon-theme) (installed as a dev dependency in `packages/app`).
+The file explorer uses colored SVG icons from [`material-icon-theme`](https://github.com/material-extensions/vscode-material-icon-theme) (a dependency of `web`).
 
 ## How it works
 
 Two files:
 
-- `packages/app/src/components/material-file-icons.ts` — the vendor table. `SVG_ICONS` maps icon
+- `web/src/core/components/material-file-icons.ts` — the vendor table. `SVG_ICONS` maps icon
   names to SVG strings copied verbatim from the theme, `EXTENSION_TO_ICON` maps extensions to icon
   names, and `getRawFileIconSvg(fileName)` looks one up with a generic fallback. Keep it a faithful
   copy so re-copying an icon stays a mechanical edit.
-- `packages/app/src/components/file-icon-svg.ts` — `getFileIconSvg(fileName)`, the only thing
+- `web/src/core/components/file-icon-svg.ts` — `getFileIconSvg(fileName)`, the only thing
   anyone should import. It desaturates the vendor colours and caches the result.
 
 Render with `<MaterialFileIcon fileName size />` rather than reaching for `SvgXml` yourself.
@@ -22,7 +22,7 @@ the row. Ours share rows with status dots, diff stats, and check badges, and a c
 full chroma is the loudest thing in the panel.
 
 Every hex in the SVG is pulled toward neutral at the same perceived lightness (`desaturateHexColor`
-in `packages/app/src/utils/color.ts`, OKLab — scaling HSL saturation instead would darken the
+in `web/src/core/utils/color.ts`, OKLab — scaling HSL saturation instead would darken the
 yellows and barely touch the blues). Hue survives, which is the only part of an icon's colour that
 carries meaning at 16pt.
 

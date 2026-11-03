@@ -71,12 +71,8 @@
       {
         "allow": [
           "**/*.css",
-          "**/expo-router/entry",
           "**/event-target-polyfill",
           "**/dotenv/config",
-          "**/react-native",
-          "**/@/styles/unistyles",
-          "**/src/styles/unistyles",
           "**/@/test/window-local-storage"
         ]
       }
@@ -91,29 +87,16 @@
   },
   "overrides": [
     {
-      "files": ["packages/app/src/**/*.{ts,tsx}"],
+      "files": ["web/src/**/*.{ts,tsx}"],
       "rules": {
-        // React Native style arrays must read Unistyles proxies during render. Hoisting them to
-        // satisfy this allocation rule captures the temporary startup theme instead.
-        "react-perf/jsx-no-new-array-as-prop": "off",
         "no-restricted-imports": [
           "error",
           {
             "paths": [
               {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
-              },
-              {
                 "name": "@tanstack/react-query",
                 "importNames": ["useQuery", "useInfiniteQuery", "useQueries"],
                 "message": "App reads must go through useReplicaQuery/useFetchQuery from @/data/query. Grandfathered files may only leave the override burn-down list."
-              },
-              {
-                "name": "react-native-unistyles",
-                "importNames": ["useUnistyles"],
-                "message": "useUnistyles is banned by docs/unistyles.md. Grandfathered files may only leave the override burn-down list."
               },
               {
                 "name": "@/components/adaptive-modal-sheet",
@@ -132,9 +115,51 @@
     },
     {
       "files": [
-        "packages/app/src/data/**/*.{ts,tsx}",
-        "packages/app/src/**/*.test.{ts,tsx}",
-        "packages/app/src/**/*.spec.{ts,tsx}"
+        "web/src/core/data/**/*.{ts,tsx}",
+        "web/src/**/*.test.{ts,tsx}",
+        "web/src/**/*.spec.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      // Render-cost rules mean nothing in a test's throwaway tree.
+      "files": ["web/src/**/*.test.{ts,tsx}"],
+      "rules": {
+        "react-perf/jsx-no-new-array-as-prop": "off",
+        "react-perf/jsx-no-new-function-as-prop": "off",
+        "react-perf/jsx-no-new-object-as-prop": "off",
+        "react-perf/jsx-no-jsx-as-prop": "off"
+      }
+    },
+    // Raw query burn-down: files may only leave this list.
+    {
+      "files": [
+        "web/src/core/assistant-file-links/use-file-link.ts",
+        "web/src/core/components/file-explorer-pane.tsx",
+        "web/src/core/components/import-session-sheet.tsx",
+        "web/src/core/components/worktree-setup-callout-source.tsx",
+        "web/src/core/git/pull-request-panel/use-data.ts",
+        "web/src/core/git/use-pr-status-query.ts",
+        "web/src/core/git/use-status-query.ts",
+        "web/src/core/hooks/use-agent-autocomplete.ts",
+        "web/src/core/hooks/use-agent-commands-query.ts",
+        "web/src/core/hooks/use-agent-history.ts",
+        "web/src/core/hooks/use-archive-agent.ts",
+        "web/src/core/hooks/use-branch-switcher.ts",
+        "web/src/core/hooks/use-changes-preferences/index.ts",
+        "web/src/core/hooks/use-draft-agent-features.ts",
+        "web/src/core/hooks/use-form-preferences.ts",
+        "web/src/core/hooks/use-keyboard-shortcut-overrides.ts",
+        "web/src/core/hooks/use-preferred-editor.ts",
+        "web/src/core/hooks/use-settings/index.ts",
+        "web/src/core/panels/terminal-panel.tsx",
+        "web/src/core/projects/icons.ts",
+        "web/src/core/provider-usage/use-provider-usage.ts",
+        "web/src/core/screens/new-workspace-screen.tsx",
+        "web/src/core/screens/project-settings-screen.tsx",
+        "web/src/core/screens/workspace/use-workspace-checkout-status.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -142,154 +167,40 @@
           {
             "paths": [
               {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
+                "name": "@/components/adaptive-modal-sheet",
+                "importNames": ["AdaptiveTextInput"],
+                "message": "Form inputs go through FormTextInput/Field from @/components/ui/form-field. Bare AdaptiveTextInput renders borderless text that reads as body copy."
               },
               {
-                "name": "react-native-unistyles",
-                "importNames": ["useUnistyles"],
-                "message": "useUnistyles is banned by docs/unistyles.md. Grandfathered files may only leave the override burn-down list."
+                "name": "@/components/adaptive-text-input",
+                "importNames": ["AdaptiveTextInput"],
+                "message": "Form inputs go through FormTextInput/Field from @/components/ui/form-field. Bare AdaptiveTextInput renders borderless text that reads as body copy."
               }
             ]
           }
         ]
       }
     },
-    // Raw query burn-down: 34 files total; the 28 files below still enforce the useUnistyles ban.
+    // FormTextInput burn-down: these predate the primitive (issue 062 owner review) and keep
+    // bespoke input chrome; new code uses FormTextInput/Field from @/components/ui/form-field. Files
+    // may only leave this list. The primitive itself and its re-export live here too.
     {
       "files": [
-        "packages/app/src/assistant-file-links/use-file-link.ts",
-        "packages/app/src/components/message.tsx",
-        "packages/app/src/components/worktree-setup-callout-source.tsx",
-        "packages/app/src/desktop/hooks/use-daemon-status.ts",
-        "packages/app/src/desktop/hooks/use-install-status.ts",
-        "packages/app/src/desktop/settings/desktop-settings.ts",
-        "packages/app/src/git/pull-request-panel/use-data.ts",
-        "packages/app/src/git/use-github-search-query.ts",
-        "packages/app/src/git/use-pr-status-query.ts",
-        "packages/app/src/git/use-status-query.ts",
-        "packages/app/src/hooks/use-archive-agent.ts",
-        "packages/app/src/hooks/use-agent-autocomplete.ts",
-        "packages/app/src/hooks/use-agent-commands-query.ts",
-        "packages/app/src/hooks/use-agent-history.ts",
-        "packages/app/src/hooks/use-branch-switcher.ts",
-        "packages/app/src/hooks/use-changes-preferences/index.ts",
-        "packages/app/src/hooks/use-draft-agent-features.ts",
-        "packages/app/src/hooks/use-form-preferences.ts",
-        "packages/app/src/hooks/use-is-local-daemon.ts",
-        "packages/app/src/hooks/use-keyboard-shortcut-overrides.ts",
-        "packages/app/src/hooks/use-preferred-editor.ts",
-        "packages/app/src/hooks/use-settings/index.ts",
-        "packages/app/src/panels/terminal-panel.tsx",
-        "packages/app/src/projects/icons.ts",
-        "packages/app/src/provider-usage/use-provider-usage.ts",
-        "packages/app/src/screens/project-settings-screen.tsx",
-        "packages/app/src/screens/workspace/use-workspace-checkout-status.ts",
-        "packages/app/src/workspace/desktop-open-targets.ts"
+        "web/src/core/components/adaptive-text-input.tsx",
+        "web/src/core/components/adaptive-modal-sheet.tsx",
+        "web/src/core/components/ui/form-field.tsx",
+        "web/src/core/components/add-host-modal.tsx",
+        "web/src/core/components/pair-link-modal.tsx",
+        "web/src/core/components/provider-diagnostic-sheet.tsx",
+        "web/src/core/components/rename-modal.tsx",
+        "web/src/core/components/setup-guide-modal.tsx",
+        "web/src/core/components/ui/combobox.tsx"
       ],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "paths": [
-              {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
-              },
-              {
-                "name": "react-native-unistyles",
-                "importNames": ["useUnistyles"],
-                "message": "useUnistyles is banned by docs/unistyles.md. Grandfathered files may only leave the override burn-down list."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    // useUnistyles burn-down: 74 files total; the 68 files below still enforce the raw-query ban.
-    {
-      "files": [
-        "packages/app/src/app/_layout.tsx",
-        "packages/app/src/app/pair-scan.tsx",
-        "packages/app/src/components/adaptive-modal-sheet.tsx",
-        "packages/app/src/components/add-host-method-modal.tsx",
-        "packages/app/src/components/add-host-modal.tsx",
-        "packages/app/src/components/agent-list.tsx",
-        "packages/app/src/components/agent-status-dot.tsx",
-        "packages/app/src/components/attachment-lightbox.tsx",
-        "packages/app/src/desktop/browser/pane/index.electron.tsx",
-        "packages/app/src/desktop/browser/pane/index.tsx",
-        "packages/app/src/desktop/browser/pane/index.web.tsx",
-        "packages/app/src/components/command-center.tsx",
-        "packages/app/src/components/compact-explorer-sidebar.tsx",
-        "packages/app/src/components/context-window-meter.tsx",
-        "packages/app/src/components/dictation-controls.tsx",
-        "packages/app/src/components/download-toast.tsx",
-        "packages/app/src/components/draggable-list.native.tsx",
-        "packages/app/src/components/headers/back-header.tsx",
-        "packages/app/src/components/headers/menu-header.tsx",
-        "packages/app/src/components/headers/screen-header.tsx",
-        "packages/app/src/components/host-status-dot.tsx",
-        "packages/app/src/components/hosts/host-picker.tsx",
-        "packages/app/src/components/icons/byspace-logo.tsx",
-        "packages/app/src/components/left-sidebar.tsx",
-        "packages/app/src/components/pair-link-modal.tsx",
-        "packages/app/src/components/plan-card.tsx",
-        "packages/app/src/components/provider-diagnostic-sheet.tsx",
-        "packages/app/src/components/question-form-card.tsx",
-        "packages/app/src/components/quitting-overlay.tsx",
-        "packages/app/src/components/realtime-voice-overlay.tsx",
-        "packages/app/src/components/resize-handle.tsx",
-        "packages/app/src/components/rewind/rewind-menu.tsx",
-        "packages/app/src/components/settings-textarea.tsx",
-        "packages/app/src/components/sidebar-callout.tsx",
-        "packages/app/src/components/split-container.tsx",
-        "packages/app/src/components/split-drop-zone.tsx",
-        "packages/app/src/components/terminal-pane.tsx",
-        "packages/app/src/components/toast-host.tsx",
-        "packages/app/src/components/tool-call-sheet.tsx",
-        "packages/app/src/components/ui/alert.tsx",
-        "packages/app/src/components/ui/autocomplete.tsx",
-        "packages/app/src/components/ui/combobox.tsx",
-        "packages/app/src/components/ui/context-menu.tsx",
-        "packages/app/src/components/ui/dropdown-menu.tsx",
-        "packages/app/src/components/ui/external-link.tsx",
-        "packages/app/src/components/volume-meter.tsx",
-        "packages/app/src/components/web-desktop-scrollbar.tsx",
-        "packages/app/src/components/welcome-screen.tsx",
-        "packages/app/src/composer/agent-controls/index.tsx",
-        "packages/app/src/composer/agent-controls/mode-control.tsx",
-        "packages/app/src/constants/layout.ts",
-        "packages/app/src/desktop/components/desktop-permission-row.tsx",
-        "packages/app/src/desktop/components/desktop-permissions-section.tsx",
-        "packages/app/src/desktop/components/desktop-updates-section.tsx",
-        "packages/app/src/desktop/components/integrations-section.tsx",
-        "packages/app/src/desktop/updates/update-callout-source.tsx",
-        "packages/app/src/git/actions-split-button.tsx",
-        "packages/app/src/hooks/use-web-scrollbar-style.web.ts",
-        "packages/app/src/hosts/host-chooser.tsx",
-        "packages/app/src/screens/open-project-screen.tsx",
-        "packages/app/src/screens/projects-screen.tsx",
-        "packages/app/src/screens/sessions-screen.tsx",
-        "packages/app/src/screens/settings-screen.tsx",
-        "packages/app/src/screens/settings/host-page.tsx",
-        "packages/app/src/screens/settings/providers-section.tsx",
-        "packages/app/src/screens/settings/settings-group.tsx",
-        "packages/app/src/screens/startup-splash-screen.tsx",
-        "packages/app/src/screens/workspace/workspace-route-state-views.tsx"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
-              },
               {
                 "name": "@tanstack/react-query",
                 "importNames": ["useQuery", "useInfiniteQuery", "useQueries"],
@@ -300,76 +211,10 @@
         ]
       }
     },
-    // Both burn-downs: 6 overlapping files. They may only shrink out of this exemption.
-    {
-      "files": [
-        "packages/app/src/components/file-explorer-pane.tsx",
-        "packages/app/src/components/file-pane.tsx",
-        "packages/app/src/components/import-session-sheet.tsx",
-        "packages/app/src/components/project-picker-modal.tsx",
-        "packages/app/src/desktop/components/pair-device-section.tsx",
-        "packages/app/src/screens/new-workspace-screen.tsx"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": [
-        "packages/app/src/components/ui/text-input/**/*.{ts,tsx}",
-        "packages/app/src/agent-stream/scroll-keyboard-dismiss/use-scroll-keyboard-dismiss.ts"
-      ],
-      "rules": {
-        "no-restricted-imports": "off"
-      }
-    },
     {
       "files": ["**/e2e/**/fixtures.ts"],
       "rules": {
         "no-empty-pattern": "off"
-      }
-    },
-    // FormTextInput burn-down: 8 files still import bare AdaptiveTextInput directly. They
-    // predate the primitive (issue 062 owner review) and keep bespoke input chrome; new code
-    // must use FormTextInput/Field from @/components/ui/form-field. Files may only shrink
-    // out of this exemption. The primitive itself and its re-export live here too.
-    {
-      "files": [
-        "packages/app/src/components/adaptive-text-input.tsx",
-        "packages/app/src/components/adaptive-modal-sheet.tsx",
-        "packages/app/src/components/ui/form-field.tsx",
-        "packages/app/src/components/add-host-modal.tsx",
-        "packages/app/src/components/pair-link-modal.tsx",
-        "packages/app/src/components/provider-diagnostic-sheet.tsx",
-        "packages/app/src/components/rename-modal.tsx",
-        "packages/app/src/components/setup-guide-modal.tsx",
-        "packages/app/src/components/ui/combobox.tsx",
-        "packages/app/src/components/ui/menu/menu-item.tsx"
-      ],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "react-native",
-                "importNames": ["TextInput"],
-                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
-              }
-            ]
-          }
-        ]
       }
     }
   ]

@@ -1,7 +1,6 @@
 // The PR pane's activity timeline: comments, reviews and review threads, each with its kebab menu
 // and "Add to chat". The view half of packages/app/src/git/pull-request-panel/pane.tsx (from
-// TimelineEntryCard down); the generated pane (web/scripts/port/pull-request-pane.py) renders
-// these. Kebabs show on hover, while their menu is open, and always on a phone.
+// TimelineEntryCard down); the pane (core/git/pull-request-panel/pane.tsx) renders these. Kebabs show on hover, while their menu is open, and always on a phone.
 import {
   useCallback,
   useMemo,

@@ -1,7 +1,7 @@
 // Stand-in for @react-navigation/native. Only the focus hooks the shared screens call exist. A route
 // is focused while it is the one on screen: the workspace kept mounted under a pushed screen
 // (Settings, History...) is not (~/app/workspace-layer.tsx), as a stack screen under another is not
-// in packages/app. Anything else fails the build, so a module needing more gets an override.
+// in the Expo app. Anything else fails the build.
 import { createContext, createElement, useContext, useEffect, type EffectCallback } from "react";
 import type { ReactNode } from "react";
 

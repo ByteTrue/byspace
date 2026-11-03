@@ -1,6 +1,6 @@
-// Transitional stand-in for `expo-router` while web/ imports modules from packages/app/src.
-// Shared navigation code calls `router.push("/h/...")` with the same URL strings the Expo app
-// uses; this forwards them to React Router. Deleted at the cutover.
+// Stand-in for `expo-router`. The navigation code ported from the Expo app (src/core) calls
+// `router.push("/h/...")` with the same URL strings the Expo app used; this forwards them to React
+// Router.
 import { createContext, useContext } from "react";
 import { Navigate, useLocation, useParams, type Location } from "react-router";
 
