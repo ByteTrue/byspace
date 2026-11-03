@@ -35,7 +35,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/design.md](docs/design.md)                                     | Design system — tokens, buttons, hierarchy, density, alignment rails, states, what's forbidden                 |
 | [docs/forms.md](docs/forms.md)                                       | Form architecture — non-React form model, form kit, load-state gating; the schedule form is the golden example |
 | [docs/hover.md](docs/hover.md)                                       | Hover — CSS `group-hover` reveals, the compact fallback, open menus, floating hover cards                      |
-| [docs/menus.md](docs/menus.md)                                       | The menu engine — popover vs sheet, submenu pages, hover intent, when a decision earns a submenu               |
+| [docs/menus.md](docs/menus.md)                                       | Menus — shadcn DropdownMenu/ContextMenu at the call site, item states, when a decision earns a submenu         |
 | [docs/routing.md](docs/routing.md)                                   | Routes, the workspace layer kept under app-wide screens, startup restore, going to a workspace                 |
 | [docs/file-icons.md](docs/file-icons.md)                             | Material icon theme integration for the file explorer                                                          |
 | [docs/providers.md](docs/providers.md)                               | Adding a new agent provider end-to-end                                                                         |

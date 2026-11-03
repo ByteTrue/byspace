@@ -1,10 +1,6 @@
-// Port of archive/expo-app:packages/app/src/components/highlighted-code-block.tsx: a fenced code block with
-// @bytetrue/highlight colours and a copy button that shows on hover (always on a phone). The box
-// is the `.markdown pre` style; `variant` picks the fence or indented-block margins.
-import * as Clipboard from "~/lib/clipboard";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
-import { useTranslation } from "react-i18next";
+// A fenced code block: shadcn's CodeBlock with @bytetrue/highlight colours and its copy button.
+// `variant` picks the fence or indented-block margins.
+import { memo, useMemo, type ReactNode } from "react";
 import {
   MARKDOWN_COPY_IGNORE_ATTRIBUTE,
   MARKDOWN_COPY_LANGUAGE_ATTRIBUTE,
@@ -14,6 +10,13 @@ import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { highlightToKeyedLines, type KeyedLine } from "@/utils/highlight-cache";
 import { cn } from "cn";
 import { copyTag } from "~/markdown/render";
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+  CodeBlockLine,
+} from "~/components/ui/code-block";
 
 // Fence info strings ("```ts", "```typescript", "```ts {1,3}") map to the
 // extension-based parser table in @bytetrue/highlight. Aliases here only
@@ -45,60 +48,22 @@ function stripTerminalFenceNewline(code: string): string {
   return code.endsWith("\n") ? code.slice(0, -1) : code;
 }
 
-function renderCodeSegments(keyedLines: KeyedLine[]): ReactNode[] {
-  const segments: ReactNode[] = [];
-  keyedLines.forEach((line, lineIndex) => {
-    if (lineIndex > 0) segments.push("\n");
-    for (const { key, token } of line.tokens) {
-      segments.push(
-        <span
-          key={`${line.key}-${key}`}
-          style={token.style ? syntaxTokenStyleFor(token.style) : undefined}
-        >
+// Each line ends in its newline (but the last), so copied text keeps its lines: the selection copy
+// reads text, not layout. A newline at the end of a block line draws nothing.
+function renderCodeLines(keyedLines: KeyedLine[]): ReactNode[] {
+  return keyedLines.map((line, index) => (
+    <CodeBlockLine key={line.key}>
+      {line.tokens.map(({ key, token }) => (
+        <span key={key} style={token.style ? syntaxTokenStyleFor(token.style) : undefined}>
           {token.text}
-        </span>,
-      );
-    }
-  });
-  return segments;
+        </span>
+      ))}
+      {index < keyedLines.length - 1 ? "\n" : null}
+    </CodeBlockLine>
+  ));
 }
 
-const COPIED_RESET_MS = 1500;
 const IGNORE_FOR_COPY = { [MARKDOWN_COPY_IGNORE_ATTRIBUTE]: "true" };
-
-function CopyButton({ getCode }: { getCode: () => string }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (resetRef.current) clearTimeout(resetRef.current);
-    },
-    [],
-  );
-  const handleClick = useCallback(async () => {
-    const content = getCode();
-    if (!content) return;
-    await Clipboard.writeText(content);
-    setCopied(true);
-    if (resetRef.current) clearTimeout(resetRef.current);
-    resetRef.current = setTimeout(() => {
-      setCopied(false);
-      resetRef.current = null;
-    }, COPIED_RESET_MS);
-  }, [getCode]);
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      aria-label={copied ? t("message.actions.copied") : t("message.actions.copyCode")}
-      className="absolute top-2 right-2 rounded-sm p-1 text-muted-foreground opacity-0 outline-none group-hover/code:opacity-100 hover:text-foreground focus-visible:opacity-100 max-md:opacity-100"
-      {...IGNORE_FOR_COPY}
-    >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-    </button>
-  );
-}
 
 export const HighlightedCodeBlock = memo(function HighlightedCodeBlock({
   code,
@@ -120,16 +85,22 @@ export const HighlightedCodeBlock = memo(function HighlightedCodeBlock({
   // Copy the code without its trailing blank lines. A fence body ends in a newline,
   // and ends in more than one when the author left a blank line before the closing
   // fence; pasting any of them into a terminal runs the last line.
-  const getCode = useCallback(() => code.replace(TRAILING_CODE_LINE_BREAKS, ""), [code]);
+  const copyValue = useMemo(() => code.replace(TRAILING_CODE_LINE_BREAKS, ""), [code]);
   return (
-    <pre
-      className={cn("group/code", variant === "code_block" && "md-code-block", className)}
-      data-pmono=""
-      {...copyTag("pre")}
-      {...(fenceLanguage ? { [MARKDOWN_COPY_LANGUAGE_ATTRIBUTE]: fenceLanguage } : {})}
-    >
-      <code {...copyTag("code")}>{keyedLines ? renderCodeSegments(keyedLines) : renderedCode}</code>
-      <CopyButton getCode={getCode} />
-    </pre>
+    <CodeBlock className={cn(variant === "code_block" ? "my-2" : "my-3", className)}>
+      <CodeBlockActions>
+        <CodeBlockCopyButton value={copyValue} {...IGNORE_FOR_COPY} />
+      </CodeBlockActions>
+      <CodeBlockContent
+        className="text-(length:--md-code-size)"
+        {...copyTag("pre")}
+        {...(fenceLanguage ? { [MARKDOWN_COPY_LANGUAGE_ATTRIBUTE]: fenceLanguage } : {})}
+      >
+        {/* The copy tag the selection copy reads; `contents` keeps the lines CodeBlock's rows. */}
+        <span className="contents" {...copyTag("code")}>
+          {keyedLines ? renderCodeLines(keyedLines) : renderedCode}
+        </span>
+      </CodeBlockContent>
+    </CodeBlock>
   );
 });

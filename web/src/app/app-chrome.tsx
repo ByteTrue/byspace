@@ -23,6 +23,7 @@ import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-acti
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useImportSession } from "@/hooks/use-import-session";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useHosts } from "@/runtime/host-runtime";
@@ -94,6 +95,7 @@ function AppChromeContent() {
   const isCompactLayout = useIsCompactFormFactor();
   const { width: viewportWidth } = useWindowDimensions();
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
+  const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
   const { settings, updateSettings } = useAppSettings();
 
   const routeServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
@@ -177,11 +179,12 @@ function AppChromeContent() {
             <MobileSidebarSync />
             {framed ? (
               <Sidebar variant="inset" data-testid="left-sidebar">
-                {chromeEnabled ? <AppSidebar /> : null}
+                {chromeEnabled ? <AppSidebar onImportSession={openImportSession} /> : null}
               </Sidebar>
             ) : null}
             {/* One element for both, so a workspace covered by Settings stays mounted (the
                 workspace layer); Settings run full-bleed as a plain block. */}
+            {importSessionSheet}
             <SidebarInset
               className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
             >

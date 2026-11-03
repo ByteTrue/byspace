@@ -101,7 +101,11 @@ export async function forkMostRecentAssistantTurnToNewWorkspace(page: Page): Pro
 }
 
 export async function expectChatHistoryAttachment(page: Page): Promise<void> {
-  const attachment = page.getByRole("button", { name: "Open chat history attachment" }).first();
+  const attachment = page
+    .locator('[data-slot="attachment"]', {
+      has: page.getByRole("button", { name: "Open chat history attachment" }),
+    })
+    .first();
   await expect(attachment).toBeVisible({ timeout: 30_000 });
   await expect(attachment).toContainText("Chat history");
 }

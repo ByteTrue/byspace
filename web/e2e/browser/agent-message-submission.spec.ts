@@ -353,7 +353,7 @@ async function replaySteeredSleepTurnInBrowser(
     await submitMessage(page, "hello");
 
     await expect(page.getByText("hello", { exact: true })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: /^Worked for/ })).toHaveCount(0);
+    await expect(page.getByText(/^Worked for/)).toHaveCount(0);
     await expectInFlightForkAvailable(page);
 
     await gate.waitForHeldServerMessage();
@@ -361,7 +361,7 @@ async function replaySteeredSleepTurnInBrowser(
     await agent.client.waitForFinish(agent.agentId, 30_000);
 
     await expect(page.getByText("hello", { exact: true })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: /^Worked for/ })).toHaveCount(1);
+    await expect(page.getByText(/^Worked for/)).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Fork chat" }).last()).toBeVisible();
   } finally {
     gate.restore();

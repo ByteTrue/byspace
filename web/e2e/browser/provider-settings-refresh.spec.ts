@@ -67,14 +67,20 @@ async function closeSheetByHeaderButton(page: Page, testId: string) {
   if (await close.isVisible().catch(() => false)) {
     await close.click();
   } else {
-    // A tap above the drawer lands on its overlay.
-    await page.mouse.click(10, 10);
+    // A phone's drawer has no Close button; Escape closes the top one only. A tap on the overlay
+    // during a nested drawer's slide-in could reach the drawer under it too.
+    await page.keyboard.press("Escape");
   }
   await expect(sheet).not.toBeVisible({ timeout: 10_000 });
 }
 
 async function expectOverlayAbove(page: Page, frontTestId: string, backTestId: string) {
-  const frontCoversBack = await page.evaluate(
+  // Polled: the dialog is still zooming in when it first becomes visible.
+  await expect.poll(() => isOverlayAbove(page, frontTestId, backTestId)).toBe(true);
+}
+
+async function isOverlayAbove(page: Page, frontTestId: string, backTestId: string) {
+  return page.evaluate(
     ({ frontTestId: frontId, backTestId: backId }) => {
       const front = document.querySelector(`[data-testid="${frontId}"]`);
       const back = document.querySelector(`[data-testid="${backId}"]`);
@@ -93,7 +99,6 @@ async function expectOverlayAbove(page: Page, frontTestId: string, backTestId: s
     },
     { frontTestId, backTestId },
   );
-  expect(frontCoversBack).toBe(true);
 }
 
 async function hasFocusWithin(locator: Locator): Promise<boolean> {

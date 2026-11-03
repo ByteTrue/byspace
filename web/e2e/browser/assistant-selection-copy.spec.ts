@@ -567,10 +567,10 @@ test("copying an assistant selection preserves Markdown structure and links", as
 
     // The block's own Copy button had the same hazard: a Markdown fence body ends in
     // a newline, and the button copied it raw.
-    const typescriptFence = assistantMessage.locator(
-      '[data-byspace-markdown-language="typescript"]',
-    );
-    // The button is opacity 0 / pointerEvents none until the fence is hovered.
+    // shadcn's CodeBlock: the copy button sits beside the tagged `pre`, in the block.
+    const typescriptFence = assistantMessage.locator('[data-slot="code-block"]', {
+      has: page.locator('[data-byspace-markdown-language="typescript"]'),
+    });
     await typescriptFence.hover();
     await typescriptFence.locator("[data-byspace-markdown-ignore]").click();
 
@@ -578,7 +578,9 @@ test("copying an assistant selection preserves Markdown structure and links", as
 
     // A blank line before the closing fence leaves the body ending in two newlines,
     // so stripping only the terminal one still hands the terminal an executable line.
-    const bashFence = assistantMessage.locator('[data-byspace-markdown-language="bash"]');
+    const bashFence = assistantMessage.locator('[data-slot="code-block"]', {
+      has: page.locator('[data-byspace-markdown-language="bash"]'),
+    });
     await bashFence.hover();
     await bashFence.locator("[data-byspace-markdown-ignore]").click();
 

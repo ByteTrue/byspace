@@ -221,8 +221,11 @@ async function recordTurnFrames(page: Page, prompt: string): Promise<void> {
         backgroundColor: getComputedStyle(spinners[0]).backgroundColor,
       };
     };
+    // The chip around the open button: shadcn's AttachmentTrigger is an empty overlay.
     const findImageAttachment = (row: Element | undefined) =>
-      row?.querySelector(':is(button, [role="button"])[aria-label="Open image attachment"]');
+      row
+        ?.querySelector(':is(button, [role="button"])[aria-label="Open image attachment"]')
+        ?.closest('[data-slot="attachment"]');
     const findAgentTabState = () => {
       const agentTab = Array.from(
         document.querySelectorAll('[data-testid^="workspace-tab-agent_"]'),

@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { keepOpen } from "~/components/menu-kit";
 
@@ -53,13 +54,16 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            aria-label={t("message.actions.forkMenu")}
-            disabled={isLocked}
-            data-testid={`${testID}-trigger`}
-            className="flex items-center justify-center self-center p-1 text-muted-foreground hover:text-foreground disabled:opacity-50 aria-expanded:text-foreground"
-          >
-            <Split size={14} />
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("message.actions.forkMenu")}
+              disabled={isLocked}
+              data-testid={`${testID}-trigger`}
+            >
+              <Split />
+            </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" align="center">

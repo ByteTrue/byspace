@@ -6,7 +6,17 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import { getWorkspaceAttachmentPillContent } from "@/attachments/attachment-pill-content";
-import { AttachmentLabel, AttachmentPill } from "@/components/attachment-pill";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "~/components/ui/attachment";
+import { X } from "lucide-react";
 import {
   isWorkspaceAttachment,
   isPullRequestContextAttachment,
@@ -262,16 +272,27 @@ function WorkspaceAttachmentPill({
     onRemove(index);
   }, [onRemove, index]);
   return (
-    <AttachmentPill
-      testID={getPillTestID(attachment)}
-      onOpen={handleOpen}
-      onRemove={handleRemove}
-      openAccessibilityLabel={getOpenAccessibilityLabel(attachment, t)}
-      removeAccessibilityLabel={getRemoveAccessibilityLabel(attachment, t)}
-      disabled={disabled}
-    >
-      <AttachmentLabel icon={content.icon} title={content.title} subtitle={content.subtitle} />
-    </AttachmentPill>
+    <Attachment size="sm" data-testid={getPillTestID(attachment)}>
+      <AttachmentTrigger
+        onClick={handleOpen}
+        disabled={disabled}
+        aria-label={getOpenAccessibilityLabel(attachment, t)}
+      />
+      <AttachmentMedia>{content.icon}</AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{content.title}</AttachmentTitle>
+        <AttachmentDescription>{content.subtitle}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction
+          onClick={handleRemove}
+          disabled={disabled}
+          aria-label={getRemoveAccessibilityLabel(attachment, t)}
+        >
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
   );
 }
 

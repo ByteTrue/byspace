@@ -56,18 +56,13 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 
 ## Form kit
 
-- Compose `Field` / `SelectField` / `FormTextInput` / `SegmentedControl` /
-  `Switch` from `components/ui/`. Geometry (heights, padding, radii, focus/hover
-  states) is owned by `components/ui/control-geometry.ts` — controls never
-  declare their own, and screens never nudge global component styles to align
-  a row.
-- Every text field consumes `EditingTextInput`, directly or through a UI
-  wrapper. The editing surface owns in-progress text; React observes committed
-  edits through `onChangeText`, and programmatic mutations use the input's
-  `replaceText` command. Its props omit `value` and `defaultValue`, web IME
-  candidates stay unpublished until composition commits.
-- The form declares one size for all fields: `sm` on desktop, `md` compact
-  (`useIsCompactFormFactor`).
+- Compose shadcn's `Field` (`FieldLabel`, `FieldDescription`, `FieldError`) around `Input`,
+  `Textarea`, `InputGroup`, `Select`, `Switch` or `Tabs` from `web/src/components/ui/`, used as
+  shipped. `SelectField` (`web/src/core/components/ui/select-field.tsx`) is the picker for a value
+  that needs a search or a sheet. Screens never nudge a component's styles to align a row.
+- The composer's input is the one text field with an editing surface of its own
+  (`EditingTextInput`, for IME composition and programmatic edits). Every other field is shadcn's
+  `Input` or `Textarea`; a reset remounts it with a `key`.
 - Availability hierarchy: a field whose capability doesn't apply is **hidden**
   (isolation on a non-git project — same gating as New Workspace), not rendered
   disabled with an explanation. Disabled-with-a-reason `hint` is only for
@@ -79,7 +74,8 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 ## Settings rows
 
 Use the named components from `@/components/settings` for settings cards and controls.
-`SettingsCard` owns row separators; `SettingsRow` accepts custom content. Heading-only screens
+`SettingsCard` is shadcn's `ItemGroup` and `SettingsRow` an outline `Item` that accepts custom
+content. Heading-only screens
 can import `SettingsGroup` and `SettingsSection` directly from their modules in
 `@/components/settings/headings/`.
 The plugin UI entry exposes the same components; keep them independent of storage and routing.

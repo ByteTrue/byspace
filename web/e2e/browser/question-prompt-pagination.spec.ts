@@ -6,12 +6,11 @@ import {
   expectCurrentQuestion,
   expectQuestionDismissEnabled,
   expectQuestionHidden,
-  expectQuestionNavigationEnabled,
   expectQuestionOptionSelected,
-  expectQuestionPrimaryActionDisabled,
   expectQuestionPrimaryActionEnabled,
+  expectSubmitAsksForAnswer,
   fillQuestionAnswer,
-  openQuestion,
+  goToPreviousQuestion,
   submitQuestionAnswers,
   waitForQuestionPrompt,
 } from "../support/helpers/questions";
@@ -24,7 +23,7 @@ const REPO_URL_QUESTION = "What is the GitHub private repo URL to push to?";
 const COMMIT_MESSAGE_QUESTION = "What should the first commit message be?";
 
 test.describe("Question prompt pagination", () => {
-  test("shows one question at a time with numbered navigation", async ({ page }) => {
+  test("shows one question at a time with previous and next", async ({ page }) => {
     test.setTimeout(180_000);
 
     const session = await seedMockAgentWorkspace({
@@ -46,13 +45,14 @@ test.describe("Question prompt pagination", () => {
       await expectQuestionHidden(page, SUCCESS_QUESTION);
 
       await chooseQuestionOption(page, "App");
+      await continueToNextQuestion(page);
       await expectCurrentQuestion(page, {
         index: 2,
         total: TOTAL_QUESTIONS,
         question: ROLLOUT_QUESTION,
       });
 
-      await openQuestion(page, { index: 1, total: TOTAL_QUESTIONS });
+      await goToPreviousQuestion(page);
       await expectCurrentQuestion(page, {
         index: 1,
         total: TOTAL_QUESTIONS,
@@ -60,8 +60,9 @@ test.describe("Question prompt pagination", () => {
       });
       await expectQuestionOptionSelected(page, "App");
 
-      await openQuestion(page, { index: 2, total: TOTAL_QUESTIONS });
+      await continueToNextQuestion(page);
       await chooseQuestionOption(page, "Behind feature flag");
+      await continueToNextQuestion(page);
       await expectCurrentQuestion(page, {
         index: 3,
         total: TOTAL_QUESTIONS,
@@ -104,7 +105,6 @@ test.describe("Question prompt pagination", () => {
 
       await expectQuestionPrimaryActionEnabled(page, "Next");
       await expectQuestionDismissEnabled(page);
-      await expectQuestionNavigationEnabled(page, { index: 2, total: 2 });
 
       await continueToNextQuestion(page);
       await expectCurrentQuestion(page, {
@@ -112,7 +112,7 @@ test.describe("Question prompt pagination", () => {
         total: 2,
         question: COMMIT_MESSAGE_QUESTION,
       });
-      await expectQuestionPrimaryActionDisabled(page, "Submit");
+      await expectSubmitAsksForAnswer(page);
 
       await fillQuestionAnswer(page, {
         question: COMMIT_MESSAGE_QUESTION,

@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
 import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
-import { useImportSession } from "@/hooks/use-import-session";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
@@ -20,7 +19,11 @@ import { SidebarWorkspaceList } from "~/sidebar/workspace-list";
 const DEV_BUILD_LABEL = process.env.BYSPACE_DEV_BUILD_LABEL?.trim() || null;
 
 /** The Expo app's LeftSidebar, inside shadcn's inset Sidebar: header, workspace list, callouts, footer. */
-export function AppSidebar() {
+/**
+ * `onImportSession` opens the import sheet, which the chrome renders outside the sidebar: on a phone
+ * the sidebar is a Sheet whose content unmounts when it closes, and the import sheet with it.
+ */
+export function AppSidebar({ onImportSession }: { onImportSession: () => void }) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
@@ -40,7 +43,6 @@ export function AppSidebar() {
   } = useSidebarModel();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const openAddProject = useOpenAddProject();
-  const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
   const addProject = useCallback(() => {
     closeOnNavigate?.();
     openAddProject();
@@ -48,8 +50,8 @@ export function AppSidebar() {
   // As the Expo app's sidebar: on a phone the drawer closes before the sheet opens.
   const importSession = useCallback(() => {
     closeOnNavigate?.();
-    openImportSession();
-  }, [closeOnNavigate, openImportSession]);
+    onImportSession();
+  }, [closeOnNavigate, onImportSession]);
   const headerStyle = useMemo(
     () => (trafficLightInset > 0 ? { paddingLeft: 12 + trafficLightInset } : undefined),
     [trafficLightInset],
@@ -133,7 +135,6 @@ export function AppSidebar() {
         </div>
       ) : null}
       <SidebarFooter onBeforeNavigate={closeOnNavigate} onImportSession={importSession} />
-      {importSessionSheet}
     </>
   );
 }

@@ -147,7 +147,8 @@ test.describe("Host appearance", () => {
   });
 
   test("host names use the available metadata width", async ({ page, twoHostSidebar }) => {
-    const hostName = "Developer MacBook Pro.local";
+    // Long enough to pass the old 96px cap, short enough for shadcn's 16rem sidebar on Linux fonts.
+    const hostName = "Developer MacBook Pro";
     const workspaceKey = `${twoHostSidebar.secondaryServerId}:${twoHostSidebar.secondaryWorkspaceId}`;
 
     await openHostAppearanceSettings(page, twoHostSidebar.secondaryServerId);

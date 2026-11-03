@@ -33,7 +33,7 @@ async function expandedToolCall(page: Page, label: string): Promise<Locator> {
   const badge = page.getByTestId("tool-call-badge").filter({ hasText: label }).last();
   await expect(badge).toBeVisible({ timeout: 30_000 });
   await badge.scrollIntoViewIfNeeded();
-  await badge.click();
+  await badge.getByRole("button").first().click();
   return badge;
 }
 
@@ -49,7 +49,7 @@ async function captureToolCall(
   const screenshot = testInfo.outputPath(`${input.artifact}.png`);
   await badge.screenshot({ path: screenshot });
   await testInfo.attach(input.artifact, { path: screenshot, contentType: "image/png" });
-  await badge.click();
+  await badge.getByRole("button").first().click();
 }
 
 async function runPresentationJourney(handle: AgentHandle, workspacePath: string): Promise<void> {

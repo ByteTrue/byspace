@@ -375,8 +375,11 @@ export async function openModelPicker(page: Page): Promise<void> {
 }
 
 export async function closeModelPicker(page: Page): Promise<void> {
-  await page.keyboard.press("Escape");
-  await expect(pickerViewport(page)).toHaveCount(0, { timeout: 30_000 });
+  // Escape closes the topmost layer first: a tooltip shown under the pointer, then the picker.
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await expect(pickerViewport(page)).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 export function profilePickerRow(page: Page, name: string): Locator {

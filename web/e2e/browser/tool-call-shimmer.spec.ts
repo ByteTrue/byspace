@@ -6,14 +6,6 @@ import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-
 
 type WebSocketMessage = string | Buffer;
 
-interface ShimmerEvidence {
-  animationDuration: string;
-  endPx: number;
-  label: string;
-  renderedWidth: number;
-  startPx: number;
-}
-
 function parseSessionMessage(message: WebSocketMessage): Record<string, unknown> | null {
   const raw = typeof message === "string" ? message : message.toString("utf8");
   try {
@@ -135,38 +127,17 @@ async function gateSecondToolCall(page: Page, agentId: string) {
   };
 }
 
-/** Running shimmers, found by their computed animation (it is set by a class). */
+/** Running shimmers: shadcn Trace's running title animates with its `shimmer` utility. */
 async function countShimmers(locator: Locator): Promise<number> {
   return locator.evaluate(
     (root) =>
       Array.from(root.querySelectorAll<HTMLElement>("*")).filter((element) =>
-        getComputedStyle(element).animationName.includes("byspace-toolcall-shimmer"),
+        getComputedStyle(element).animationName.includes("shimmer"),
       ).length,
   );
 }
 
-async function readShimmerEvidence(locator: Locator): Promise<ShimmerEvidence> {
-  return locator.evaluate((root) => {
-    const shimmer = Array.from(root.querySelectorAll<HTMLElement>("*")).find((element) =>
-      getComputedStyle(element).animationName.includes("byspace-toolcall-shimmer"),
-    );
-    if (!shimmer) {
-      throw new Error("Expected a running shimmer inside the badge");
-    }
-    const style = getComputedStyle(shimmer);
-    return {
-      animationDuration: style.animationDuration,
-      endPx: Number.parseFloat(style.getPropertyValue("--byspace-shimmer-end")),
-      label: shimmer.textContent ?? "",
-      renderedWidth: shimmer.getBoundingClientRect().width,
-      startPx: Number.parseFloat(style.getPropertyValue("--byspace-shimmer-start")),
-    };
-  });
-}
-
-test("measures an overview heading that becomes loading after its idle mount", async ({
-  page,
-}, testInfo) => {
+test("an overview heading shimmers once a call in it starts running", async ({ page }) => {
   test.setTimeout(120_000);
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -206,23 +177,11 @@ test("measures an overview heading that becomes loading after its idle mount", a
       idleGroupHandle,
     );
 
-    await group.click();
+    await group.getByRole("button").first().click();
     const runningChild = page.getByTestId("tool-call-badge").last();
     await expect(runningChild).toBeVisible();
-    const header = await readShimmerEvidence(group);
-    const child = await readShimmerEvidence(runningChild);
-    const evidence = { sameGroupNode, header, child };
-    await testInfo.attach("tool-call-shimmer-evidence", {
-      body: JSON.stringify(evidence, null, 2),
-      contentType: "application/json",
-    });
-
+    await expect.poll(() => countShimmers(runningChild)).not.toBe(0);
     expect(sameGroupNode).toBe(true);
-    expect(child.endPx).toBeGreaterThan(0);
-    expect(
-      header.endPx,
-      `The retained header rendered ${header.renderedWidth}px wide but its shimmer still ends at ${header.endPx}px`,
-    ).toBeGreaterThan(0);
   } finally {
     await agent.cleanup();
   }

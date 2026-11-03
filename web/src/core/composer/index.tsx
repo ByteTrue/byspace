@@ -22,14 +22,15 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
 import {
   ArrowUp,
-  Square,
-  Pencil,
   CircleDot,
+  ClipboardPaste,
   FileText,
   GitPullRequest,
   Image as ImageIcon,
-  ClipboardPaste,
   Paperclip,
+  Pencil,
+  Square,
+  X,
 } from "lucide-react";
 import * as Clipboard from "~/lib/clipboard";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
@@ -114,7 +115,17 @@ import { useWorkspaceAttachmentsForScopes } from "@/attachments/workspace-attach
 import { droppedItemsToPickedFiles } from "@/composer/attachments/drop";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
-import { AttachmentLabel, AttachmentPill, AttachmentThumbnail } from "@/components/attachment-pill";
+import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "~/components/ui/attachment";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
@@ -153,8 +164,6 @@ type AttachmentListUpdater =
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
 
 const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
-
-const noopCallback = () => {};
 
 function resolveComposerButtonIconSize(): number {
   return ICON_SIZE.md;
@@ -633,17 +642,19 @@ function ImageAttachmentPill({
   const handleRemove = useCallback(() => {
     onRemove(index);
   }, [onRemove, index]);
+  const previewUrl = useAttachmentPreviewUrl(attachment.metadata);
   return (
-    <AttachmentPill
-      testID="composer-image-attachment-pill"
-      onOpen={handleOpen}
-      onRemove={handleRemove}
-      openAccessibilityLabel={openLabel}
-      removeAccessibilityLabel={removeLabel}
-      disabled={disabled}
-    >
-      <AttachmentThumbnail metadata={attachment.metadata} />
-    </AttachmentPill>
+    <Attachment size="sm" orientation="vertical" data-testid="composer-image-attachment-pill">
+      <AttachmentTrigger onClick={handleOpen} disabled={disabled} aria-label={openLabel} />
+      <AttachmentMedia variant="image">
+        {previewUrl ? <img src={previewUrl} alt="" /> : null}
+      </AttachmentMedia>
+      <AttachmentActions>
+        <AttachmentAction onClick={handleRemove} disabled={disabled} aria-label={removeLabel}>
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
   );
 }
 
@@ -682,20 +693,27 @@ function GithubAttachmentPill({
     onRemove(index);
   }, [onRemove, index]);
   return (
-    <AttachmentPill
-      testID="composer-github-attachment-pill"
-      onOpen={handleOpen}
-      onRemove={handleRemove}
-      openAccessibilityLabel={openLabel(kindLabel, `${numberPrefix}${item.number}`)}
-      removeAccessibilityLabel={removeLabel(kindLabel, `${numberPrefix}${item.number}`)}
-      disabled={disabled}
-    >
-      <AttachmentLabel
-        icon={isChangeRequest ? githubPrPillIcon : githubIssuePillIcon}
-        title={item.title}
-        subtitle={`${subtitleKind} ${numberPrefix}${item.number}`}
+    <Attachment size="sm" data-testid="composer-github-attachment-pill">
+      <AttachmentTrigger
+        onClick={handleOpen}
+        disabled={disabled}
+        aria-label={openLabel(kindLabel, `${numberPrefix}${item.number}`)}
       />
-    </AttachmentPill>
+      <AttachmentMedia>{isChangeRequest ? githubPrPillIcon : githubIssuePillIcon}</AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{item.title}</AttachmentTitle>
+        <AttachmentDescription>{`${subtitleKind} ${numberPrefix}${item.number}`}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction
+          onClick={handleRemove}
+          disabled={disabled}
+          aria-label={removeLabel(kindLabel, `${numberPrefix}${item.number}`)}
+        >
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
   );
 }
 
@@ -720,20 +738,20 @@ function FileAttachmentPill({
   }, [onRemove, index]);
   const fileName = attachment.attachment.fileName;
   return (
-    <AttachmentPill
-      testID="composer-file-attachment-pill"
-      onOpen={noopCallback}
-      onRemove={handleRemove}
-      openAccessibilityLabel={fileName}
-      removeAccessibilityLabel={removeLabel}
-      disabled={disabled}
-    >
-      <AttachmentLabel
-        icon={filePillIcon}
-        title={fileName}
-        subtitle={getFileTypeLabel(fileName) ?? t("message.attachments.file")}
-      />
-    </AttachmentPill>
+    <Attachment size="sm" data-testid="composer-file-attachment-pill">
+      <AttachmentMedia>{filePillIcon}</AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{fileName}</AttachmentTitle>
+        <AttachmentDescription>
+          {getFileTypeLabel(fileName) ?? t("message.attachments.file")}
+        </AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction onClick={handleRemove} disabled={disabled} aria-label={removeLabel}>
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
   );
 }
 
@@ -757,20 +775,20 @@ function WorkspaceFileAttachmentPill({
   }, [index, onRemove]);
   const fileName = attachment.path.split("/").pop() ?? attachment.path;
   return (
-    <AttachmentPill
-      testID="composer-workspace-file-attachment-pill"
-      onOpen={noopCallback}
-      onRemove={handleRemove}
-      openAccessibilityLabel={fileName}
-      removeAccessibilityLabel={removeLabel}
-      disabled={disabled}
-    >
-      <AttachmentLabel
-        icon={filePillIcon}
-        title={fileName}
-        subtitle={getWorkspaceFileAttachmentSubtitle(attachment)}
-      />
-    </AttachmentPill>
+    <Attachment size="sm" data-testid="composer-workspace-file-attachment-pill">
+      <AttachmentMedia>{filePillIcon}</AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{fileName}</AttachmentTitle>
+        <AttachmentDescription>
+          {getWorkspaceFileAttachmentSubtitle(attachment)}
+        </AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction onClick={handleRemove} disabled={disabled} aria-label={removeLabel}>
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
   );
 }
 

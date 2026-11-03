@@ -221,7 +221,7 @@ test.describe("compact overview tool calls", () => {
 
       const group = page.getByTestId("tool-call-group").first();
       await expect(group).toBeVisible();
-      await group.click();
+      await group.getByRole("button").first().click();
 
       const sheet = page.getByTestId("tool-call-group-sheet");
       const summary = page.getByTestId("tool-call-group-sheet-summary");
@@ -239,7 +239,7 @@ test.describe("compact overview tool calls", () => {
         contentType: "application/json",
       });
 
-      await badges.last().click();
+      await badges.last().getByRole("button").first().click();
       const detailClose = page.getByTestId("tool-call-sheet-close");
       await expect(detailClose).toBeVisible();
 
@@ -271,7 +271,7 @@ test("keeps overview tool calls inline on desktop", async ({ page }) => {
     const group = page.getByTestId("tool-call-group").first();
     await expect(group).toBeVisible();
 
-    await group.click();
+    await group.getByRole("button").first().click();
     await expect(page.getByTestId("tool-call-group-sheet")).toHaveCount(0);
     await expect(group.getByTestId("tool-call-badge").first()).toBeVisible();
   } finally {

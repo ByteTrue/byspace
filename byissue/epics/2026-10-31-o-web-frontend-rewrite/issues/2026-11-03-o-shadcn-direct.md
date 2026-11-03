@@ -66,3 +66,25 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 - 全部做完：对照表里「自己写的」一栏的文件都已删除，`rg` 查不到它们的导入。
 
 ## 执行记录
+
+### 批 A–C（2026-11-03）
+
+提交 `eeaa2b8bf`、`cded10f11`、`5d3ec206d`、`244604541`、`95479ca95`、`653d12806`、`53dfa1d66`、`33f3a5c80`。
+
+- **先把 shadcn 组件本身改回原样**：`web/src/components/ui` 里此前为贴近 Expo 版改过的组件用 `npx shadcn add --overwrite` 重装（按钮、菜单、提示、弹层、对话框、抽屉、侧栏、Sheet 等），`index.css` 里重新定义 shadcn 样式的部分删掉：全局焦点外框、旧调色板与阴影、720px 断点（统一为 Tailwind 的 768px，紧凑布局判断同步）、行高覆盖、`extra-muted`/`interaction-highlight` 两个自造色。留下的 `BySpace:` 段只剩应用设置与 shadcn 没有的东西（字体变量、Markdown、状态色、闪屏动画等）。
+- **A**：开关、分段控件（改为 Tabs）、状态徽标（Badge，状态色用 class）、加载圈（Spinner）、提示框（Alert）、外链、快捷键显示；输入框与表单（Input/Textarea/InputGroup/Field，非受控的地方保持 `defaultValue`）；按钮封装、图标按钮外观、工具栏按钮（Button 的 variant/size）、Tooltip。
+- **B**：弹窗（`AdaptiveModalSheet` 改为桌面 Dialog、手机 Drawer）、确认框、提示消息（Sonner，放在工作区标题栏与标签栏下方）、菜单引擎整套删除（DropdownMenu/ContextMenu，选项行用 CheckboxItem，进行中的菜单项显示 Spinner）、设置里的下拉（Select）、组合框（Popover + Command）、命令面板（CommandDialog）。
+- **C**：设置行与空状态（Item/Empty/Checkbox）、分屏与资源管理器宽度与树栏（Resizable）、折叠区（Collapsible）、用量条（Progress）、骨架行（Skeleton）、快捷键列表（Item）；手机上的侧栏用 shadcn Sidebar 自带的 Sheet，资源管理器用右侧 Sheet。
+- **随之消失的行为**（shadcn 没有，按原则不再自己写）：手机上从屏幕边缘滑动打开侧栏/资源管理器、拖动开合（`docs/mobile-panels.md` 一并删除）；桌面侧栏拖动改宽（固定为 shadcn 默认宽度，旧的宽度设置读取时丢弃）；收起的桌面侧栏按 shadcn 的做法滑出窗口外但仍挂载；菜单只有弹出式，手机上不再变成底部抽屉；分段控件变成 Tabs（高 32px，方向键切换）。
+- **途中修掉的问题**：手机会话列表里的会话菜单点一下会同时选中下面那一行（React 事件穿过菜单的 portal 冒泡）；从行内菜单打开的右键菜单在门户里再右键会打开外层区域的菜单；技能弹窗的保存错误被挤成 0 高（滚动区里的子元素被压缩），移到底部按钮旁；新建定时任务在上一张表单关闭动画期间点开会被一起关掉；Diff 选区（见前一批）。
+- **端到端**：按 shadcn 组件的角色改断言（Select 是 combobox/option，选项行 menuitemcheckbox，Command 输入框是 combobox，紧凑布局的菜单仍是菜单），图标按钮按 shadcn `icon-xs`（24px 框、12px 图标）量尺寸，对话框几何在打开动画结束后再量，关闭中的菜单淡出后再点下一个；删掉 3 条只验证旧行为的用例（手机侧栏关闭后保持挂载、侧栏切换按钮固定在左上角、整页底部抽屉）。
+
+### 批 D：对话区（2026-11-03）
+
+用户选定：时间线的虚拟滚动保留（shadcn 的 Message Scroller 不虚拟化，长会话会卡，加载更早消息与跳转要重写），其余换 shadcn；输入框、模型选择器、上下文用量这类只用 shadcn 官方组件，不引入 Vercel 的 AI Elements（多一个第三方库要跟着维护）。
+
+- **换成 shadcn**：用户消息（Bubble）、助手回合底栏（Message/MessageFooter）、图片与文件附件（Attachment，输入框里和消息里同一套）、工具调用与思考过程的行（Trace，运行中的光效用 Trace 自带的）、压缩分隔线（Marker）、通知（Alert）、朗读消息（Message + Bubble）、Markdown 代码块（Code Block，高亮仍用 `@bytetrue/highlight`，复制按钮用它自带的）、提问卡片（Questionnaire，放在 Card 里，一次一题、上一题/下一题、单选多选与自由填写；答案格式照旧）。
+- **随之变化的行为**：提问卡片不再有按题目切换的标签行，改为 Questionnaire 的进度与上一题/下一题；当前题没答时点提交会提示原因而不是按钮变灰。
+- **途中修掉的问题**：手机上从侧栏打开「导入会话」，侧栏 Sheet 关闭时把导入面板一起卸载了（导入面板移到侧栏外渲染）；代码块复制选区时丢了换行（每行带上换行符）。
+- **端到端**：附件、工具调用行、代码块按 shadcn 组件的结构定位；提问卡片的用例改为 Questionnaire 的交互；几条只在 CI 上偶发的用例改得更稳（打开动画结束后再量覆盖关系、手机上关闭嵌套抽屉用 Esc、断线前先等对话加载完、主机名示例改短以适应 shadcn 侧栏宽度）。
+- **本机仍失败、与本次无关**：`agent-timeline-resume` 的「未变化的恢复不动滚动位置」在改造前的提交 `1307ec9d0` 上本机也失败，CI 上通过。

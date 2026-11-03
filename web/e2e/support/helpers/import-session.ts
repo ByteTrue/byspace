@@ -75,7 +75,11 @@ export class ImportSessionFlow {
     expect((bounds?.x ?? width) + (bounds?.width ?? 1)).toBeLessThanOrEqual(width);
   }
   async revealSession(id: string) {
-    await this.page.getByTestId(rowTestId(id)).scrollIntoViewIfNeeded();
+    // The sheet slides in while the sidebar sheet it was opened from slides out; a row can be
+    // replaced once while that settles.
+    await expect(async () => {
+      await this.page.getByTestId(rowTestId(id)).scrollIntoViewIfNeeded({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
   }
   async search(query: string) {
     await this.page.getByTestId("import-session-search").fill(query);

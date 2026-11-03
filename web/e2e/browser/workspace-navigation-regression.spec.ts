@@ -178,6 +178,8 @@ test.describe("Workspace navigation regression", () => {
       });
       await waitForWorkspaceTabsVisible(page);
       await expectWorkspaceTabVisible(page, agent.id);
+      // The agent has rendered before the connection drops.
+      await expectComposerVisible(page);
 
       await daemonGate.drop();
       await daemonGate.waitForBlockedConnection();
