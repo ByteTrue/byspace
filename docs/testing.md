@@ -176,7 +176,7 @@ Match what an element is, and scope the match to where it lives.
 ### Test setup
 
 - Server: `packages/server/src/test-utils/vitest-setup.ts` loads `.env.test`, sets `BYSPACE_SUPERVISED=0`, and disables Git/SSH prompts. Add new global env shims here, not in individual tests.
-- App: `web/vitest.config.ts` resolves modules the way the build does (`@/` to `web/src/core`, the shims in `web/src/shims`) and swaps `@xterm/addon-ligatures` for a stub, since it reads Node's `diagnostics_channel` at import. `web/vitest.setup.ts` sets `__DEV__`, gives jsdom `matchMedia` and `requestAnimationFrame`, and records `expo-router` navigation instead of mounting React Router. Stubbing there is for modules that have no meaningful Node behavior — not a license to mock app code. `*.browser.test.ts(x)` files run in Chromium (the `browser` project).
+- App: `web/vitest.config.ts` resolves modules the way the build does (`@/` to `web/src/core`) and swaps `@xterm/addon-ligatures` for a stub, since it reads Node's `diagnostics_channel` at import. `web/vitest.setup.ts` sets `__DEV__`, gives jsdom `matchMedia` and `requestAnimationFrame`, and records `~/app/navigation` calls instead of mounting React Router. Stubbing there is for modules that have no meaningful Node behavior — not a license to mock app code. `*.browser.test.ts(x)` files run in Chromium (the `browser` project).
 
 ## Running tests locally
 

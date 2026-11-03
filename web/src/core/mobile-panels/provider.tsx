@@ -1,8 +1,8 @@
-// Port of packages/app/src/mobile-panels/provider.tsx and gestures.ts. The same transition model
+// Port of archive/expo-app:packages/app/src/mobile-panels/provider.tsx and gestures.ts. The same transition model
 // and gesture rules (mobile-panels/model.ts, gesture-intent.ts), run on the DOM instead of Reanimated
 // worklets: one normalized position (-1 sidebar, 0 page, 1 explorer) drives both panels and both
 // backdrops, written straight to their styles, so a drag never re-renders React. A panel counts as
-// active once the position settles on its anchor, as in packages/app. See docs/mobile-panels.md.
+// active once the position settles on its anchor, as in the Expo app. See docs/mobile-panels.md.
 import {
   createContext,
   useCallback,
@@ -38,9 +38,9 @@ import {
 } from "~/mobile-panels/gesture";
 
 const ANIMATION_DURATION = 220;
-// packages/app's Easing.bezier(0.25, 0.1, 0.25, 1).
+// The Expo app's Easing.bezier(0.25, 0.1, 0.25, 1).
 const ANIMATION_EASING = cubicBezier(0.25, 0.1, 0.25, 1);
-// packages/app's MOBILE_WEB_EDGE_SWIPE_WIDTH: on the web the open gestures start at the edges only.
+// The Expo app's MOBILE_WEB_EDGE_SWIPE_WIDTH: on the web the open gestures start at the edges only.
 const EDGE_SWIPE_WIDTH = 32;
 const VELOCITY_WINDOW_MS = 100;
 
@@ -189,7 +189,7 @@ class MobilePanelsRuntime {
     return transition.commit ?? null;
   }
 
-  /** The gesture a touch at this point may start, if any (packages/app's four begin gates). */
+  /** The gesture a touch at this point may start, if any (the Expo app's four begin gates). */
   private pickGesture(x: number, target: EventTarget | null): MobilePanelGestureKind | null {
     const node = target instanceof Node ? target : null;
     if (canBeginMobilePanelGesture(this.motion, "agent", this.position)) {
@@ -290,7 +290,7 @@ class MobilePanelsRuntime {
       target,
     });
     if (!commit) return;
-    // As packages/app's scheduleOnRN(commit): a newer command since the gesture began wins.
+    // As the Expo app's scheduleOnRN(commit): a newer command since the gesture began wins.
     const store = usePanelStore.getState();
     if (store.mobilePanel.revision !== commit.startedRevision) return;
     if (tracking.kind === "open-left") store.showMobileAgentList();
@@ -433,7 +433,7 @@ export function useIsMobilePanelActive(panel: MobilePanelView): boolean {
   return useContext(MobilePanelActiveContext) === panel;
 }
 
-/** packages/app's useOpenAgentListGesture / useOpenFileExplorerGesture, as an edge swipe. */
+/** The Expo app's useOpenAgentListGesture / useOpenFileExplorerGesture, as an edge swipe. */
 export function useMobilePanelOpenGesture(
   panel: MobileOverlayPanel,
   { enabled, onOpen }: { enabled: boolean; onOpen?: () => void },

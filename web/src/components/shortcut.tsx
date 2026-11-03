@@ -4,7 +4,7 @@ import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 
-/** packages/app's Shortcut on shadcn's Kbd: one key cap per combo, nothing when keys are unavailable. */
+/** The Expo app's Shortcut on shadcn's Kbd: one key cap per combo, nothing when keys are unavailable. */
 export function Shortcut({
   keys,
   chord,

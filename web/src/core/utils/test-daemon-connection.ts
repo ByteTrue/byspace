@@ -1,7 +1,6 @@
 import { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { DaemonClientConfig } from "@bytetrue/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
-import { isWeb } from "@/constants/platform";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";
 import {
@@ -60,7 +59,7 @@ export interface DaemonConnectionBrowserContext {
 }
 
 function readBrowserConnectionContext(): DaemonConnectionBrowserContext {
-  if (!isWeb || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return { isWeb: false, protocol: null };
   }
   const hostname = window.location?.hostname?.toLowerCase() ?? "";

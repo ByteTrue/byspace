@@ -1,14 +1,14 @@
 import { Navigate, Outlet, useParams } from "react-router";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "~/app/route-focus";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostRouteProvider } from "@/navigation/host-route-context";
 import { resolveStartupRoute } from "@/navigation/host-runtime-bootstrap";
 import { useHostRegistryStatus, useHosts } from "@/runtime/host-runtime";
 import { buildSettingsSectionRoute } from "@/utils/host-routes";
-import { hrefToPath } from "~/shims/expo-router";
+import { hrefToPath } from "~/app/navigation";
 import SettingsScreen from "@/screens/settings-screen";
 
-/** packages/app/src/app/h/[serverId]/_layout.tsx: an unknown host redirects, a known one scopes its leaves. */
+/** archive/expo-app:packages/app/src/app/h/[serverId]/_layout.tsx: an unknown host redirects, a known one scopes its leaves. */
 export function HostLayout() {
   const { serverId } = useParams();
   // A workspace covered by a pushed screen must not navigate the screen on top away.
@@ -31,7 +31,7 @@ export function HostLayout() {
   );
 }
 
-/** packages/app/src/app/settings/index.tsx: desktop opens General, compact shows the section list. */
+/** archive/expo-app:packages/app/src/app/settings/index.tsx: desktop opens General, compact shows the section list. */
 const SETTINGS_ROOT_VIEW = { kind: "root" as const };
 
 export function SettingsIndexRoute() {

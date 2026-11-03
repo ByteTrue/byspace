@@ -34,15 +34,12 @@ const { theme } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
-  },
-  useUnistyles: () => ({ theme }),
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
 }));
 
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const createIcon = (name: string) => (props: Record<string, unknown>) =>
     React.createElement("span", { ...props, "data-icon": name });
   return {

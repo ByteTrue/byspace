@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/resize-handle.tsx: the 1px divider between split panes.
+// Port of archive/expo-app:packages/app/src/components/resize-handle.tsx: the 1px divider between split panes.
 // A mouse gets a 10px hit area that lights up after 150ms of hover; touch gets a 24×88 grip.
 // Both drive the same shared drag model, previewing while moving and committing on release.
 import {

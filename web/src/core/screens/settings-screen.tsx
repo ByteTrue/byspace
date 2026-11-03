@@ -1,12 +1,11 @@
-// Port of packages/app/src/screens/settings-screen.tsx: the settings sidebar, detail pane, General and About. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/settings-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings-screen.tsx: the settings sidebar, detail pane, General and About. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-screen.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { Switch } from "@/components/ui/switch";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
-import { useUnistyles } from "react-native-unistyles";
+import { useRouter } from "~/app/navigation";
+import { useFocusEffect } from "~/app/route-focus";
 import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -93,6 +92,7 @@ import {
 } from "@/utils/host-routes";
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
+import { useThemeObject } from "~/app/theme-object";
 
 // ---------------------------------------------------------------------------
 // View model
@@ -414,7 +414,7 @@ function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
 
 function WhatsNewRow() {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
 
   return (
     <button
@@ -547,7 +547,7 @@ function SidebarSectionButton({
   isSelected,
   onSelect,
 }: SidebarSectionButtonProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
@@ -590,7 +590,7 @@ function SidebarHostSectionButton({
   isSelected,
   onSelect,
 }: SidebarHostSectionButtonProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
@@ -714,7 +714,7 @@ function SettingsSidebar({
   activeHostServerId,
   layout,
 }: SettingsSidebarProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
@@ -846,7 +846,7 @@ export interface SettingsScreenProps {
 
 export default function SettingsScreen({ view, openAddHostIntent = null }: SettingsScreenProps) {
   const router = useRouter();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);

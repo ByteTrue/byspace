@@ -1,4 +1,4 @@
-// Port of packages/app/src/provider-usage/tooltip-section.tsx: the active agent's provider
+// Port of archive/expo-app:packages/app/src/provider-usage/tooltip-section.tsx: the active agent's provider
 // usage under the context meter's tooltip; nothing when that provider has no usage entry.
 import { ProviderUsageCard } from "@/provider-usage/card";
 import { providerUsageCopy } from "@/provider-usage/copy";

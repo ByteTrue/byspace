@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@react-native-async-storage/async-storage", () => {
+vi.mock("~/lib/local-storage-async", () => {
   const storage = new Map<string, string>();
   return {
     default: {
@@ -15,7 +15,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import { defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { defaultFileState, type FileState } from "@/panels/file/state";
@@ -162,7 +162,7 @@ describe("workspace-layout-store helpers", () => {
   it("discards persisted New tabs and restores each empty pane with a fresh identity", async () => {
     const persisted = createWorkspaceLayoutWithExplorerSidebar();
     const persistedIds = new Set(collectAllTabs(persisted.root).map((tab) => tab.tabId));
-    await AsyncStorage.setItem(
+    await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: {
@@ -357,8 +357,8 @@ describe("workspace-layout-store version 2 migration", () => {
           },
         }
       : layout;
-    await AsyncStorage.removeItem("workspace-layout-state");
-    await AsyncStorage.setItem(
+    await localStorageAsync.removeItem("workspace-layout-state");
+    await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: {
@@ -431,7 +431,7 @@ describe("workspace-layout-store version 2 migration", () => {
       expectMigratedLayout(restored);
       await vi.waitFor(async () => {
         const persisted = JSON.parse(
-          (await AsyncStorage.getItem("workspace-layout-state")) ?? "{}",
+          (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
         );
         expect(persisted.version).toBe(2);
       });
@@ -457,7 +457,9 @@ describe("workspace-layout-store version 2 migration", () => {
     await restored.persist.rehydrate();
 
     await vi.waitFor(async () => {
-      const persisted = JSON.parse((await AsyncStorage.getItem("workspace-layout-state")) ?? "{}");
+      const persisted = JSON.parse(
+        (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
+      );
       expect(persisted.version).toBe(2);
       expect(Object.keys(persisted.state).sort()).toEqual([
         "explorerPaneIdByWorkspace",
@@ -490,7 +492,9 @@ describe("workspace-layout-store version 2 migration", () => {
     expect(addedTabId).toBeTruthy();
 
     await vi.waitFor(async () => {
-      const persisted = JSON.parse((await AsyncStorage.getItem("workspace-layout-state")) ?? "{}");
+      const persisted = JSON.parse(
+        (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
+      );
       expect(persisted.version).toBe(2);
     });
     const reloaded = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
@@ -1086,7 +1090,7 @@ describe("workspace-layout-store actions", () => {
 
   it("migrates legacy layouts to include the hidden registered explorer pane", async () => {
     const legacyLayout = createDefaultLayout();
-    await AsyncStorage.setItem(
+    await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: { layoutByWorkspace: { legacy: legacyLayout } },
@@ -1110,12 +1114,12 @@ describe("workspace-layout-store actions", () => {
       { kind: "changes_tree" },
     ]);
     expect(restored.getState().splitSizesByWorkspace).toEqual({});
-    await expect(AsyncStorage.getItem("workspace-layout-state")).resolves.not.toBeNull();
+    await expect(localStorageAsync.getItem("workspace-layout-state")).resolves.not.toBeNull();
   });
 
   it("restores a layout saved before the Side panel rename, PR bookkeeping and all", async () => {
     const savedLayout = createWorkspaceLayoutWithExplorerSidebar();
-    await AsyncStorage.setItem(
+    await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: {
@@ -1136,7 +1140,7 @@ describe("workspace-layout-store actions", () => {
   });
 
   it("persists first-class pane targets, visibility, and focus", async () => {
-    await AsyncStorage.removeItem("workspace-layout-state");
+    await localStorageAsync.removeItem("workspace-layout-state");
     const workspaceKey = createWorkspaceKey();
     const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await source.persist.rehydrate();
@@ -1165,7 +1169,7 @@ describe("workspace-layout-store actions", () => {
     source.getState().hideExplorerSidebar(workspaceKey);
 
     await vi.waitFor(async () => {
-      expect(await AsyncStorage.getItem("workspace-layout-state")).not.toBeNull();
+      expect(await localStorageAsync.getItem("workspace-layout-state")).not.toBeNull();
     });
 
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
@@ -1187,7 +1191,7 @@ describe("workspace-layout-store actions", () => {
   });
 
   it("persists and rehydrates independent Changes state through validated storage", async () => {
-    await AsyncStorage.removeItem("workspace-layout-state");
+    await localStorageAsync.removeItem("workspace-layout-state");
     const workspaceKey = createWorkspaceKey();
     const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await source.persist.rehydrate();
@@ -1214,7 +1218,7 @@ describe("workspace-layout-store actions", () => {
     source.getState().setTabState(workspaceKey, second, secondState);
 
     await vi.waitFor(async () => {
-      const persisted = await AsyncStorage.getItem("workspace-layout-state");
+      const persisted = await localStorageAsync.getItem("workspace-layout-state");
       expect(persisted).not.toBeNull();
       const root = JSON.parse(persisted ?? "{}").state.layoutByWorkspace[workspaceKey].root;
       expect(collectTabIds(root)).toEqual([first, second, "files", "changes_tree"]);
@@ -1727,7 +1731,7 @@ describe("workspace-layout-store actions", () => {
       context: "agent",
       agentId: "agent-1",
     };
-    await AsyncStorage.setItem(
+    await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: {

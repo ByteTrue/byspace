@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/horizontal-scroll-boundary.tsx: 24px fades at the
+// Port of archive/expo-app:packages/app/src/components/ui/horizontal-scroll-boundary.tsx: 24px fades at the
 // ends of a horizontal scroller, each shown only while there is more content that way.
 import { useCallback, useLayoutEffect, useRef, useState, type UIEvent } from "react";
 import { cn } from "cn";

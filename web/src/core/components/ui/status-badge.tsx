@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/status-badge.tsx: shadcn's secondary badge, a 20px
+// Port of archive/expo-app:packages/app/src/components/ui/status-badge.tsx: shadcn's secondary badge, a 20px
 // pill whose text takes the status colour.
 import type { ReactNode } from "react";
 import { cn } from "cn";

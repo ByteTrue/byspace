@@ -31,8 +31,8 @@ function stopMenuTypeahead(event: KeyboardEvent) {
 }
 
 /**
- * packages/app's WorkspaceLabelCreatePage: the menu's own text field, the swatch row on the rows'
- * text rail, a separator and a Create row. The field is focused on open (packages/app asks for
+ * The Expo app's WorkspaceLabelCreatePage: the menu's own text field, the swatch row on the rows'
+ * text rail, a separator and a Create row. The field is focused on open (the Expo app asks for
  * that too, but its menu engine never focused it on the web).
  */
 function CreateLabelForm({
@@ -87,7 +87,7 @@ function CreateLabelForm({
 
   return (
     <>
-      {/* packages/app's MenuTextField: a row-sized box in the row fill, its text on the rows' rail */}
+      {/* The Expo app's MenuTextField: a row-sized box in the row fill, its text on the rows' rail */}
       <div className="mx-1 flex min-h-7 items-center rounded-md border bg-muted px-2 py-1 focus-within:border-input">
         <input
           autoFocus
@@ -152,7 +152,7 @@ function LabelRow({
       onSelect={keepOpen(() => onToggle(row))}
       data-testid={`workspace-label-picker-row-${row.name}`}
     >
-      {/* packages/app's menu leading slot: the dot centred in a 16px box, on the icons' rail */}
+      {/* The Expo app's menu leading slot: the dot centred in a 16px box, on the icons' rail */}
       <span className="flex size-4 shrink-0 items-center justify-center">
         <WorkspaceLabelDot color={row.color} />
       </span>

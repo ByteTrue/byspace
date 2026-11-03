@@ -1,9 +1,9 @@
-// Port of packages/app/src/screens/workspace/workspace-header-menu.tsx: the workspace "..."
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-header-menu.tsx: the workspace "..."
 // menu in the header, and its phone version that also creates agents and terminals.
 import { useCallback, useMemo } from "react";
 import { Copy, Ellipsis, Import as ImportIcon, Settings, SquarePen } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import {
   getTerminalProfileIcon,

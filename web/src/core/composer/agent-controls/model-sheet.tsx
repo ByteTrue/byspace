@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/agent-controls/model-sheet.tsx: the narrow composer's one
+// Port of archive/expo-app:packages/app/src/composer/agent-controls/model-sheet.tsx: the narrow composer's one
 // model button ("model · thinking"). It opens a sheet with the model browser over the remaining
 // controls; on a phone the controls are a list and the model row drills into a second sheet.
 import { useCallback, useMemo, useState, type ReactNode } from "react";

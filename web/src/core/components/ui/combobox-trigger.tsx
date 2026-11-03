@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/combobox-trigger.tsx: the button that opens a
+// Port of archive/expo-app:packages/app/src/components/ui/combobox-trigger.tsx: the button that opens a
 // combobox — content, then a chevron unless `chevron` is null.
 import {
   forwardRef,

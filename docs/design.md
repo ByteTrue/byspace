@@ -211,7 +211,7 @@ Page-level alerts — informational notices, success confirmations, warnings, or
 
 Sidebar callouts — cross-cutting alerts that apply across the whole app, like worktree setup — register through `useSidebarCallouts()` and render in the left sidebar via `<SidebarCallout>` (`web/src/core/components/sidebar-callout.tsx`). The chrome (top-border-only, full-width action buttons) is tuned for that ~280px column. Canonical source: `web/src/core/components/worktree-setup-callout-source.tsx`. Never import `<SidebarCallout>` into a page — that's what `<Alert>` is for.
 
-Imperative errors are `Alert.alert("Error", "Unable to ...")` (the `react-native` shim's `Alert`, shown as an error toast; not this component) for failures that interrupt the flow and have no place on the page.
+Imperative errors are `showAlert("Error", "Unable to ...")` (`~/lib/alert`, shown as an error toast; not this component) for failures that interrupt the flow and have no place on the page.
 
 Disabled state is `opacity: theme.opacity[50]` on the outer control. Color changes for disabled state are wrong; a disabled button is the same button, dimmer.
 

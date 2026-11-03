@@ -1,5 +1,3 @@
-"use dom";
-
 import {
   useCallback,
   useEffect,
@@ -12,8 +10,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type Ref,
 } from "react";
-import type { DOMProps } from "expo/dom";
-import { useDOMImperativeHandle, type DOMImperativeFactory } from "expo/dom";
 import "@xterm/xterm/css/xterm.css";
 import type { ITheme } from "@xterm/xterm";
 import type { TerminalState } from "@bytetrue/protocol/messages";
@@ -96,7 +92,6 @@ function buildXtermThemeKey(theme: ITheme): string {
 }
 
 interface TerminalEmulatorProps {
-  dom?: DOMProps;
   ref: Ref<TerminalEmulatorHandle>;
   streamKey: string;
   supportsTerminalInputModeReplay: boolean;
@@ -142,20 +137,6 @@ interface TerminalEmulatorProps {
   pendingModifiers?: PendingTerminalModifiers;
   focusRequestToken?: number;
   resizeRequestToken?: number;
-}
-
-declare global {
-  interface Window {}
-}
-
-function isTerminalState(value: unknown): value is TerminalState {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "rows" in value &&
-    "cols" in value &&
-    "grid" in value
-  );
 }
 
 export default function TerminalEmulator({
@@ -238,7 +219,6 @@ export default function TerminalEmulator({
   const [isDropActive, setIsDropActive] = useState(false);
   const dropActiveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const domBridgeRef = useRef<DOMImperativeFactory | null>(null);
   const pasteText = useCallback((text: string) => {
     if (text.length === 0) {
       return;
@@ -246,48 +226,6 @@ export default function TerminalEmulator({
     runtimeRef.current?.paste(text);
   }, []);
 
-  useDOMImperativeHandle(
-    domBridgeRef,
-    (): DOMImperativeFactory => ({
-      writeOutput: (...args) => {
-        const data = args[0];
-        if (data instanceof Uint8Array) runtimeRef.current?.write({ data });
-      },
-      restoreOutput: (...args) => {
-        const data = args[0];
-        if (data instanceof Uint8Array) runtimeRef.current?.restoreOutput({ data });
-      },
-      renderSnapshot: (...args) => {
-        const state = args[0];
-        if (state === null) {
-          runtimeRef.current?.renderSnapshot({ state: null });
-        } else if (isTerminalState(state)) {
-          runtimeRef.current?.renderSnapshot({ state });
-        }
-      },
-      paste: (...args) => {
-        const text = args[0];
-        if (typeof text === "string" && text.length > 0) {
-          pasteText(text);
-        }
-      },
-      copySelection: async () => "",
-      clear: () => {
-        runtimeRef.current?.clear();
-      },
-      claimSize: () => {
-        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
-      },
-      showKeyboard: () => {
-        runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
-        runtimeRef.current?.focus();
-      },
-      blur: () => {
-        runtimeRef.current?.blur();
-      },
-    }),
-    [pasteText],
-  );
   useImperativeHandle(
     ref,
     (): TerminalEmulatorHandle => ({

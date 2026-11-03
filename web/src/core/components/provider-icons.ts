@@ -1,6 +1,5 @@
-import { Bot, PackagePlus } from "lucide-react-native";
+import { Bot, PackagePlus } from "lucide-react";
 import { createElement, type ComponentType } from "react";
-import { SvgXml } from "react-native-svg";
 import { ClaudeIcon } from "@/components/icons/claude-icon";
 import { CodexIcon } from "@/components/icons/codex-icon";
 import { CopilotIcon } from "@/components/icons/copilot-icon";
@@ -10,6 +9,7 @@ import { OmpIcon } from "@/components/icons/omp-icon";
 import { PiIcon } from "@/components/icons/pi-icon";
 import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
 import { resolveProviderIconName } from "@/components/provider-icon-name";
+import { SvgXml } from "~/components/svg-xml";
 
 export interface ProviderIconProps {
   size: number;

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/switch.tsx on shadcn's switch geometry: the track
+// Port of archive/expo-app:packages/app/src/components/ui/switch.tsx on shadcn's switch geometry: the track
 // fills with the primary colour when on, the thumb slides across.
 import { useCallback, type MouseEvent } from "react";
 import { cn } from "cn";
@@ -36,13 +36,13 @@ export function Switch({
       disabled={disabled}
       onClick={handleClick}
       className={cn(
-        // A column like packages/app's Pressable: centred vertically, the track at the start when a
+        // A column like the Expo app's Pressable: centred vertically, the track at the start when a
         // column layout stretches the control (a form field), not in the middle.
         "flex min-h-8 shrink-0 flex-col items-start justify-center md:min-h-7 disabled:opacity-50",
         className,
       )}
     >
-      {/* packages/app's geometry (control-geometry.ts): a 32x18 track with 1px padding round a
+      {/* The Expo app's geometry (control-geometry.ts): a 32x18 track with 1px padding round a
           16px thumb that travels 14px; the thumb is the page colour on light themes, the accent's
           foreground on dark ones, and has no shadow. */}
       <span

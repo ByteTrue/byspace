@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/index.ts: the same exports, through `@/` so
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/index.ts: the same exports, through `@/` so
 // the web pane, error and skeleton replace the Expo ones.
 export { PullRequestPane } from "@/git/pull-request-panel/pane";
 export { PullRequestPaneError } from "@/git/pull-request-panel/pane-error";

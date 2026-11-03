@@ -10,7 +10,7 @@ const SERVER_ID = "setup-guide-pairing";
 // The welcome screen's setup guide is the only path a self-hoster has from "I just ran
 // `byspace onboard`" to a connected app: paste the printed pairing link, press Pair. Every other
 // e2e pairing test seeds the host registry directly, so this walks the real path once — browser
-// loads the Metro bundle, talks to a real daemon through the real relay, and lands on the
+// loads the web bundle, talks to a real daemon through the real relay, and lands on the
 // connected app shell.
 test("pairs with a pasted offer through the setup guide", async ({ page, baseURL }) => {
   const relay = await startLocalGoRelay();

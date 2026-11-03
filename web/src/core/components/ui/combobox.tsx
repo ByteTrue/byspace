@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/combobox.tsx: a searchable list anchored to a trigger
+// Port of archive/expo-app:packages/app/src/components/ui/combobox.tsx: a searchable list anchored to a trigger
 // the caller owns — a popover on desktop, a bottom drawer on a phone. Filtering, ranking, the
 // custom-value row and the keyboard model are the shared modules the Expo combobox used.
 import {
@@ -122,7 +122,7 @@ export function SearchInput({
       <Search size={16} className="shrink-0 text-muted-foreground" />
       <AdaptiveTextInput
         ref={inputRef}
-        // packages/app: 12px above and below one line of text.
+        // The Expo app: 12px above and below one line of text.
         className="min-w-0 flex-1 bg-transparent py-3 text-sm leading-[normal] outline-none"
         placeholder={placeholder}
         resetKey={resetKey}
@@ -178,7 +178,7 @@ export function ComboboxItem({
       aria-label={accessibilityLabel ?? label}
       className={cn(
         "flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left outline-none disabled:opacity-55",
-        // packages/app fills the keyboard-active, hovered and pressed row with surface1 (surface2
+        // The Expo app fills the keyboard-active, hovered and pressed row with surface1 (surface2
         // when elevated), the active fill winning. On light themes surface1 is the list's own white,
         // so the selected row cannot be seen; there it takes muted instead (deliberate since step 4
         // batch 2). Dark themes keep surface1 (card).
@@ -634,7 +634,7 @@ function ComboboxSheet({
       )}
       {scrollBody ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* packages/app asks for 8px sides, 4 top and 32 bottom here, but gorhom's web scroll
+          {/* The Expo app asks for 8px sides, 4 top and 32 bottom here, but gorhom's web scroll
               view drops that contentContainerStyle, so its rows sit at the sheet's edges. */}
           <div className={bodyClassName}>{children}</div>
         </div>
@@ -716,7 +716,7 @@ function ComboboxPopover({
           <PopoverPrimitive.Content
             side={placement === "top-start" ? "top" : "bottom"}
             align="start"
-            // packages/app's floating middleware: 5px from the anchor on the web, 16px from the
+            // The Expo app's floating middleware: 5px from the anchor on the web, 16px from the
             // window edges.
             sideOffset={5}
             collisionPadding={16}
@@ -724,12 +724,12 @@ function ComboboxPopover({
             data-testid="combobox-desktop-container"
             onKeyDown={onKeyDown}
             onInteractOutside={onInteractOutside}
-            // packages/app's list closes on a press outside or Escape, not when focus leaves it: a
+            // The Expo app's list closes on a press outside or Escape, not when focus leaves it: a
             // dialog opened above it (shortcuts, ⌘K, provider settings) takes focus and the list
             // is still there when it closes.
             onFocusOutside={preventDismiss}
             style={frameStyle}
-            // packages/app's desktop surface is surface0 (the page colour), not shadcn's popover
+            // The Expo app's desktop surface is surface0 (the page colour), not shadcn's popover
             // colour, which is lighter on dark themes; it fades in over 100ms without a zoom, and
             // its size changes land at once (transition-none, see components/ui/context-menu.tsx).
             className="z-50 flex flex-col overflow-hidden rounded-lg border bg-background text-sm text-popover-foreground shadow-md outline-none transition-none duration-100 data-open:animate-in data-open:fade-in-0"

@@ -1,11 +1,10 @@
-// Port of packages/app/src/components/provider-diagnostic-sheet.tsx: a provider's settings sheet: models, custom models, diagnostic, terminal tab; DOM view.
-// Converted from the Expo file by web/scripts/port/provider-diagnostic-sheet.py (tag archive/expo-app); edit it directly.
-import * as Clipboard from "expo-clipboard";
+// Port of archive/expo-app:packages/app/src/components/provider-diagnostic-sheet.tsx: a provider's settings sheet: models, custom models, diagnostic, terminal tab; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/provider-diagnostic-sheet.py; edit it directly.
+import * as Clipboard from "~/lib/clipboard";
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import {
   AdaptiveModalSheet,
@@ -34,6 +33,7 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "@/components/provider-diagnostic-models";
+import { useThemeObject } from "~/app/theme-object";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -86,7 +86,7 @@ function CustomModelRow({
   onDelete: (modelId: string) => void;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const handleDelete = useCallback(() => onDelete(model.id), [model.id, onDelete]);
 
   return (
@@ -233,7 +233,7 @@ function DiagnosticSubSheet({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const toast = useToast();
   const client = useHostRuntimeClient(serverId);
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
@@ -268,7 +268,7 @@ function DiagnosticSubSheet({
 
   const handleCopyPress = useCallback(() => {
     if (!diagnostic) return;
-    void Clipboard.setStringAsync(diagnostic)
+    void Clipboard.writeText(diagnostic)
       .then(() => toast.copied(t("settings.providers.diagnostic.copyLabel")))
       .catch(() => toast.error(t("settings.providers.diagnostic.copyFailed")));
   }, [diagnostic, t, toast]);
@@ -555,7 +555,7 @@ export function ProviderDiagnosticSheet({
   serverId,
 }: ProviderDiagnosticSheetProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const isCompact = useIsCompactFormFactor();
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);

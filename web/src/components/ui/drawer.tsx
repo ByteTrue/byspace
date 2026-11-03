@@ -33,12 +33,12 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
-      // BySpace: named as packages/app's sheet backdrop (gorhom's pressable backdrop); a press on it
+      // BySpace: named as the Expo app's sheet backdrop (gorhom's pressable backdrop); a press on it
       // closes the sheet.
       role="button"
       aria-label="Bottom sheet backdrop"
       className={cn(
-        // BySpace: packages/app's bottom sheets dim with plain black at 0.45 (gorhom's backdrop).
+        // BySpace: the Expo app's bottom sheets dim with plain black at 0.45 (gorhom's backdrop).
         "fixed inset-0 z-50 bg-black/45 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
@@ -54,9 +54,9 @@ function DrawerContent({
   children,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Content> & {
-  /** BySpace: restyles the grab handle (packages/app's menu sheets use a wider, lighter one). */
+  /** BySpace: restyles the grab handle (the Expo app's menu sheets use a wider, lighter one). */
   handleClassName?: string
-  /** BySpace: restyles the dimming (packages/app's tool call sheets use 0.5). */
+  /** BySpace: restyles the dimming (the Expo app's tool call sheets use 0.5). */
   overlayClassName?: string
 }) {
   return (
@@ -70,9 +70,9 @@ function DrawerContent({
         )}
         {...props}
       >
-        {/* BySpace: @gorhom/bottom-sheet's handle as packages/app drew it: 30x4 in zinc-600, 10px
+        {/* BySpace: @gorhom/bottom-sheet's handle as the Expo app drew it: 30x4 in zinc-600, 10px
             below the sheet's top edge and 10px above the content. The bottom sheet itself is
-            packages/app's SheetBackground: a 16px top radius and no border (adaptive-modal-sheet). */}
+            The Expo app's SheetBackground: a 16px top radius and no border (adaptive-modal-sheet). */}
         <div
           data-slot="drawer-handle"
           className={cn(

@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -24,6 +23,7 @@ import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import type { AgentMode } from "@bytetrue/protocol/agent-types";
 import type { AgentProviderDefinition } from "@bytetrue/protocol/provider-manifest";
 import { getAgentModeIcon, getAgentModeOptionIcon } from "@/agent-controls/icons";
+import { useThemeObject } from "~/app/theme-object";
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
   selected: boolean;
@@ -82,7 +82,7 @@ export function AgentModeControl({
   surface = "toolbar",
   onClose,
 }: AgentModeControlValue & { surface?: "toolbar" | "sheet"; onClose?: () => void }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { presentation } = useComposerControlLayout();
   const { t } = useTranslation();
   const { isActiveComposer } = useComposerKeyboardScope();

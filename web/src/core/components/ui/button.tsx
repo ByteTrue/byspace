@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/button.tsx on shadcn's Button. Same props; `size`
+// Port of archive/expo-app:packages/app/src/components/ui/button.tsx on shadcn's Button. Same props; `size`
 // md is shadcn's default (32px) and the variants map one to one.
 import {
   isValidElement,
@@ -24,7 +24,7 @@ type LeftIcon =
   | null;
 
 const SIZE = { xs: "xs", sm: "sm", md: "default", lg: "lg" } as const;
-// packages/app's buttons: 14px text at every size but xs (shadcn's sm is 0.8rem), and below md the
+// The Expo app's buttons: 14px text at every size but xs (shadcn's sm is 0.8rem), and below md the
 // touch heights 28 / 32 / 44 / 44 instead of shadcn's 24 / 28 / 32 / 36 (control-geometry.ts).
 const PHONE_HEIGHT: Record<ButtonSize, string> = {
   xs: "max-md:h-7",
@@ -32,7 +32,7 @@ const PHONE_HEIGHT: Record<ButtonSize, string> = {
   md: "max-md:h-11",
   lg: "max-md:h-11",
 };
-// packages/app's horizontal padding where it differs from shadcn's: md and lg widen to 16 / 24 on
+// The Expo app's horizontal padding where it differs from shadcn's: md and lg widen to 16 / 24 on
 // a phone, and lg is 12 on a desktop (shadcn's lg keeps md's 10).
 const PADDING: Record<ButtonSize, string | null> = {
   xs: null,
@@ -40,13 +40,13 @@ const PADDING: Record<ButtonSize, string | null> = {
   md: "max-md:px-4",
   lg: "px-3 max-md:px-6",
 };
-// A caller that sizes the button itself (as packages/app's style overrides did) keeps that size.
+// A caller that sizes the button itself (as the Expo app's style overrides did) keeps that size.
 const CALLER_HEIGHT = /(^|\s)(h|size|min-h)-/;
 const CALLER_PADDING = /(^|\s)(p|px|pl|pr)-/;
 
 function sizeClassName(size: ButtonSize, className: string | undefined): string {
   return cn(
-    // packages/app's buttons keep 6px between icon and label at every size; shadcn's xs and sm use 4.
+    // The Expo app's buttons keep 6px between icon and label at every size; shadcn's xs and sm use 4.
     "gap-1.5",
     size === "sm" && "text-sm",
     !(className && CALLER_HEIGHT.test(className)) && PHONE_HEIGHT[size],

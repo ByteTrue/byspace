@@ -1,5 +1,5 @@
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 
 export async function copyToClipboard(text: string): Promise<void> {
-  await Clipboard.setStringAsync(text);
+  await Clipboard.writeText(text);
 }

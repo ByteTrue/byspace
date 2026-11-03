@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/markdown/fence/mermaid/host.web.tsx: a mermaid fence
+// Port of archive/expo-app:packages/app/src/components/markdown/fence/mermaid/host.web.tsx: a mermaid fence
 // shows its source until the sandboxed runtime has drawn it, then the diagram in a zoomable box
 // the size of the drawing, with "view source" and "fullscreen". Same model and runtime.
 import { useCallback, useMemo, useState, type CSSProperties } from "react";

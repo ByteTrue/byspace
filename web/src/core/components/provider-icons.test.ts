@@ -1,8 +1,8 @@
-import { Bot } from "lucide-react-native";
-import { SvgXml } from "react-native-svg";
+import { Bot } from "lucide-react";
 import { describe, expect, it } from "vitest";
 import { replaceProviderSnapshotIcons } from "./provider-icon-name";
 import { getProviderIcon, type ProviderIconComponent } from "./provider-icons";
+import { SvgXml } from "~/components/svg-xml";
 
 function renderIcon(Component: ProviderIconComponent) {
   if (typeof Component !== "function") throw new Error("Expected a function component");

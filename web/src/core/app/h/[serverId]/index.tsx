@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect } from "~/app/navigation";
 import { useHostRouteServerId } from "@/navigation/host-route-context";
 import {
   resolveHostIndexRoute,

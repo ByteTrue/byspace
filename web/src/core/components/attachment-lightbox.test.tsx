@@ -48,16 +48,9 @@ const assistantImageSource: ImageLightboxSource = {
   uri: "blob:assistant-image",
 };
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  useUnistyles: () => ({ theme }),
-}));
-
-vi.mock("@/constants/platform", () => ({
-  isWeb: true,
-  isNative: false,
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -71,7 +64,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const createIcon = (name: string) => (props: Record<string, unknown>) =>
     React.createElement("span", { ...props, "data-icon": name });
   return {
@@ -109,13 +102,6 @@ vi.mock("@/components/zoomable-viewport/image", () => ({
     );
   },
 }));
-
-vi.mock("react-native", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("react-native");
-  const Modal = ({ visible = true, children }: { visible?: boolean; children?: React.ReactNode }) =>
-    visible ? React.createElement("div", { "data-testid": "lightbox-modal" }, children) : null;
-  return { ...actual, Modal };
-});
 
 vi.mock("@/attachments/use-attachment-preview-url", () => ({
   useAttachmentPreviewUrl: (metadata: AttachmentMetadata | null) =>

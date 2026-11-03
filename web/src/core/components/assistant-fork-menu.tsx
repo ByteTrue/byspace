@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/assistant-fork-menu.tsx: fork the conversation from an
+// Port of archive/expo-app:packages/app/src/components/assistant-fork-menu.tsx: fork the conversation from an
 // assistant turn into a new tab or a new workspace.
 import { memo, useCallback, useState } from "react";
 import { Split } from "lucide-react";

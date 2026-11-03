@@ -1,7 +1,7 @@
-// Port of packages/app/src/command-center/root-registration.tsx: the same root actions, with
+// Port of archive/expo-app:packages/app/src/command-center/root-registration.tsx: the same root actions, with
 // lucide-react icons painted in the muted text colour instead of Unistyles-themed ones.
 import { useMemo } from "react";
-import { router, type Href } from "expo-router";
+import { router, type Href } from "~/app/navigation";
 import { useTranslation } from "react-i18next";
 import {
   ArrowRightLeft,

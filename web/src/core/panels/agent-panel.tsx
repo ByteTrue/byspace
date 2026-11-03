@@ -1,7 +1,7 @@
-// Port of packages/app/src/panels/agent-panel.tsx. The panel logic is the Expo file's (load and
+// Port of archive/expo-app:packages/app/src/panels/agent-panel.tsx. The panel logic is the Expo file's (load and
 // lookup states, reconnect toast, attention clearing, history sync, archive, tracks, rewind
 // restore); the view is DOM and Tailwind. Keep the two in step until the cutover.
-// Converted from the Expo file by web/scripts/port/agent-panel.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-panel.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { Button } from "@/components/ui/button";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";

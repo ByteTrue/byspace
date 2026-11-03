@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The hook module imports @/runtime/host-runtime, whose import chain pulls in
-// expo-constants and crashes under vitest (__DEV__ undefined). The tests here
-// target the pure resolvers, so the runtime layer is stubbed out.
+// The tests here target the pure resolvers, so the host runtime the hook reads
+// is stubbed out.
 vi.mock("@/runtime/host-runtime", () => ({
   useHosts: () => [],
   useHostRegistryLoaded: () => true,

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/select-field.tsx: a field-sized trigger that opens a
+// Port of archive/expo-app:packages/app/src/components/ui/select-field.tsx: a field-sized trigger that opens a
 // combobox of typed options. Same props; the trigger draws the input chrome.
 import { useCallback, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
@@ -86,7 +86,7 @@ export function SelectFieldTrigger({
     <span
       data-testid={testID}
       className={cn(
-        // packages/app's control phases (control-geometry.ts): hover keeps the rest border; open,
+        // The Expo app's control phases (control-geometry.ts): hover keeps the rest border; open,
         // pressed or focused (by any means, not only the keyboard) draw the ring border and the 3px
         // focus ring.
         "pointer-events-none flex w-full items-center gap-1.5 border border-input bg-transparent transition-colors group-focus/select:border-ring group-focus/select:ring-3 group-focus/select:ring-ring/50 group-active/select:border-ring group-active/select:ring-3 group-active/select:ring-ring/50 dark:bg-input/30",
@@ -235,7 +235,7 @@ export function SelectField<TValue>({
         aria-expanded={open}
         data-testid={triggerTestID}
         // The global keyboard focus outline on the button and the ring on the field inside, both
-        // as packages/app's (a Pressable round the field).
+        // as the Expo app's (a Pressable round the field).
         className="group/select flex w-full"
       >
         <SelectFieldTrigger

@@ -1,4 +1,4 @@
-// Port of packages/app/src/workspace/open-in-editor/button.tsx: the header's "Open" split
+// Port of archive/expo-app:packages/app/src/workspace/open-in-editor/button.tsx: the header's "Open" split
 // button (open the workspace or file on its forge), with a menu to pick and remember the target.
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useMutation } from "@tanstack/react-query";

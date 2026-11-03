@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/workspace-tab-presentation.tsx: the same
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-presentation.tsx: the same
 // presentation resolver; the icon and option row are DOM.
 import { useMemo, type ComponentType, type ReactElement, type ReactNode } from "react";
 import { Check, CircleAlert } from "lucide-react";
@@ -108,7 +108,7 @@ const BACKDROP_BORDER: Record<string, string> = {
 
 /**
  * The tab's panel icon with its agent status on the bottom-right corner: the running ring, a
- * failed or attention dot, or the needs-input alert. Same offsets as packages/app.
+ * failed or attention dot, or the needs-input alert. Same offsets as the Expo app.
  */
 export function WorkspaceTabIcon({
   presentation,
@@ -184,7 +184,7 @@ export function WorkspaceTabOptionRow({
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    // packages/app highlights the row, and the hovered/pressed press area, with surface1 (card):
+    // The Expo app highlights the row, and the hovered/pressed press area, with surface1 (card):
     // the same white as the sheet in light, a step lighter in dark.
     <div className={cn("mx-1 mb-1 flex min-h-9 items-center gap-2 px-1 py-1", active && "bg-card")}>
       <button

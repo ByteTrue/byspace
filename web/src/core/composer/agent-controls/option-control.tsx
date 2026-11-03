@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/agent-controls/option-control.tsx: a composer control that
+// Port of archive/expo-app:packages/app/src/composer/agent-controls/option-control.tsx: a composer control that
 // opens a list — the glyph trigger plus a combobox anchored to it, owning the open state and the
 // select-then-close handshake. Mode, thinking, role and select-type features are all this.
 import { useCallback, useRef, useState, type ReactElement } from "react";

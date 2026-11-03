@@ -18,7 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { getDragActivationConstraints, useDragReorderState } from "@/components/drag-reorder";
 
-// Same activation as packages/app's DraggableList: a 6px drag with the mouse, a 180ms hold on touch.
+// Same activation as the Expo app's DraggableList: a 6px drag with the mouse, a 180ms hold on touch.
 const DRAG_ACTIVATION = getDragActivationConstraints(true, {
   movementDistance: 6,
   touchHoldDelayMs: 180,
@@ -69,7 +69,7 @@ function SortableItem<T>({
   });
 }
 
-/** A vertical list the user reorders by dragging, as packages/app's DraggableList on the web. */
+/** A vertical list the user reorders by dragging, as the Expo app's DraggableList on the web. */
 export function SortableList<T>({
   items,
   getId,

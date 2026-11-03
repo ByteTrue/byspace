@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -1807,7 +1807,10 @@ export function createWorkspaceLayoutStore(
       {
         name: "workspace-layout-state",
         version: WORKSPACE_LAYOUT_PERSIST_VERSION,
-        storage: createValidatedPersistStorage(AsyncStorage, WorkspaceLayoutPersistedStateSchema),
+        storage: createValidatedPersistStorage(
+          localStorageAsync,
+          WorkspaceLayoutPersistedStateSchema,
+        ),
         migrate: (persistedState, version) =>
           migrateWorkspaceLayoutPersistedState(persistedState, version, ids),
         partialize: (state) => {

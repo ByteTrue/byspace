@@ -1,5 +1,5 @@
-// Port of packages/app/src/panels/terminal-panel.tsx: same descriptor and pane, DOM view.
-// Converted from the Expo file by web/scripts/port/terminal-pane.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/panels/terminal-panel.tsx: same descriptor and pane, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/terminal-pane.py; edit it directly.
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";

@@ -1,7 +1,7 @@
 // Renders the markdown node tree (./ast.ts) as DOM. Every element carries the copy markers the
 // Expo renderer put on its views (assistant-selection-copy/markup.ts), so selection copy turns a
 // rendered selection back into markdown the same way. Styles live in index.css under `.markdown`
-// and mirror packages/app/src/styles/markdown-styles.ts.
+// and mirror archive/expo-app:packages/app/src/styles/markdown-styles.ts.
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 import {
   MARKDOWN_COPY_ALIGN_ATTRIBUTE,
@@ -31,7 +31,7 @@ const LIST_MARKER_ATTRIBUTES = {
   [MARKDOWN_COPY_LIST_MARKER_ATTRIBUTE]: "true",
 };
 
-// A column's `:---:` / `---:` alignment. packages/app read it for copying only, so aligned columns
+// A column's `:---:` / `---:` alignment. The Expo app read it for copying only, so aligned columns
 // rendered left-aligned; the cell now applies it.
 type CellAlign = "left" | "right" | "center";
 
@@ -89,7 +89,7 @@ export const DEFAULT_MARKDOWN_RULES: Record<string, MarkdownRule> = {
       {children}
     </s>
   ),
-  // packages/app's hardbreak is an 8px-tall full-width block: a new line plus 8px.
+  // The Expo app's hardbreak is an 8px-tall full-width block: a new line plus 8px.
   hardbreak: (node) => <span key={node.key} className="md-hardbreak" {...copyTag("br")} />,
   // A soft break is a line break here too: the Expo renderer emitted "\n" into pre-wrapped text.
   softbreak: (node) => <Fragment key={node.key}>{"\n"}</Fragment>,

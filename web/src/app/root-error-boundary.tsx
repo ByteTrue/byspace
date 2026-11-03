@@ -8,7 +8,7 @@ interface RootErrorBoundaryState {
   resetKey: number;
 }
 
-/** Same contract as packages/app's RootErrorBoundary: catch, show the error, retry by remounting. */
+/** Same contract as the Expo app's RootErrorBoundary: catch, show the error, retry by remounting. */
 export class RootErrorBoundary extends Component<{ children: ReactNode }, RootErrorBoundaryState> {
   state: RootErrorBoundaryState = { error: null, resetKey: 0 };
 

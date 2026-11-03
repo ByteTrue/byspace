@@ -1,10 +1,10 @@
-// The arithmetic of packages/app's four panel gestures (mobile-panels/gestures.ts), for the DOM
+// The arithmetic of the Expo app's four panel gestures (mobile-panels/gestures.ts), for the DOM
 // runtime in core/mobile-panels/provider.tsx.
 import type { MobilePanelView } from "@/stores/panel-store";
 
 export type MobilePanelGestureKind = "open-left" | "close-left" | "open-right" | "close-right";
 
-/** The panel position for a drag of `deltaX` px: packages/app's per-gesture onUpdate. */
+/** The panel position for a drag of `deltaX` px: the Expo app's per-gesture onUpdate. */
 export function mobilePanelGesturePosition(
   kind: MobilePanelGestureKind,
   deltaX: number,

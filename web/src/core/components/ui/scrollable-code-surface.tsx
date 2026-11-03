@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/scrollable-code-surface.tsx: a bordered card, and a
+// Port of archive/expo-app:packages/app/src/components/ui/scrollable-code-surface.tsx: a bordered card, and a
 // scrolling monospace block in one (both directions by default) for diagnostics and logs. Same
 // props; style props take CSS.
 import { useMemo, type CSSProperties, type ReactNode } from "react";
@@ -97,7 +97,7 @@ export function ScrollableCodeSurface({
       accessibilityLabel={accessibilityLabel}
       codeSurface
     >
-      {/* As packages/app: the vertical scroll holds the padded content, and the horizontal scroll
+      {/* As the Expo app: the vertical scroll holds the padded content, and the horizontal scroll
           sits inside that padding, so long lines clip 16px short of the card's edge. */}
       <div className="min-h-0 shrink overflow-y-auto" style={outerScrollStyle}>
         <div className="px-4 py-3" style={contentContainerStyle}>

@@ -1,4 +1,4 @@
-// Port of packages/app/src/styles/syntax-token-styles.ts. The colours come from the theme's
+// Port of archive/expo-app:packages/app/src/styles/syntax-token-styles.ts. The colours come from the theme's
 // syntax palette, which AppearanceProvider writes to <html> as --syntax-<token> variables.
 import type { CSSProperties } from "react";
 

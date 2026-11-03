@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/pill-styles.ts: the clearances are the Expo file's; the
+// Port of archive/expo-app:packages/app/src/composer/pill-styles.ts: the clearances are the Expo file's; the
 // pill look (32px, md radius, hairline, card fill; muted fill when active) is a class.
 import { SPACING } from "@/styles/theme";
 import { cn } from "cn";

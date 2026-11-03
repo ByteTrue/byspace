@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/import-session-sheet.tsx: importing a provider session started outside BySpace; DOM view.
-// Converted from the Expo file by web/scripts/port/import-session-sheet.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/import-session-sheet.tsx: importing a provider session started outside BySpace; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/import-session-sheet.py; edit it directly.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";

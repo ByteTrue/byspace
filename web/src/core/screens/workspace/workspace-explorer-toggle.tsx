@@ -1,6 +1,5 @@
-import { PanelRight } from "lucide-react-native";
-import { type StyleProp, type ViewStyle } from "react-native";
-import { withUnistyles } from "react-native-unistyles";
+import type { CSSProperties } from "react";
+import { PanelRight } from "lucide-react";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
 import {
   extraMutedIconColorMapping,
@@ -8,8 +7,9 @@ import {
   mutedIconColorMapping,
 } from "@/components/ui/icon-button-chrome";
 import type { ShortcutKey } from "@/utils/format-shortcut";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedPanelRight = withUnistyles(PanelRight);
+const ThemedPanelRight = withTheme(PanelRight);
 
 interface WorkspaceExplorerToggleProps {
   onPress: () => void;
@@ -18,7 +18,7 @@ interface WorkspaceExplorerToggleProps {
   tooltipKeys: ShortcutKey[];
   accessibilityState: { expanded: boolean };
   mobile: boolean;
-  style?: StyleProp<ViewStyle>;
+  style?: CSSProperties;
 }
 
 export type WorkspaceExplorerToggleOwner = "mobile" | "content" | "dock";
@@ -80,7 +80,7 @@ export function WorkspaceExplorerToggle({
       <ThemedPanelRight
         size={iconButtonChromeGlyphSize("large")}
         strokeWidth={1.5}
-        uniProps={mobile ? mutedIconColorMapping : extraMutedIconColorMapping}
+        themeProps={mobile ? mutedIconColorMapping : extraMutedIconColorMapping}
       />
     </HeaderToggleButton>
   );

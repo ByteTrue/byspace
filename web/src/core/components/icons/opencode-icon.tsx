@@ -1,5 +1,3 @@
-import { Path, Svg } from "react-native-svg";
-
 interface OpenCodeIconProps {
   size?: number;
   color?: string;
@@ -7,13 +5,13 @@ interface OpenCodeIconProps {
 
 export function OpenCodeIcon({ size = 16, color = "currentColor" }: OpenCodeIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="96 64 288 384" fill={color}>
-      <Path d="M320 224V352H192V224H320Z" opacity={0.4} />
-      <Path
+    <svg width={size} height={size} viewBox="96 64 288 384" fill={color}>
+      <path d="M320 224V352H192V224H320Z" opacity={0.4} />
+      <path
         fillRule="evenodd"
         clipRule="evenodd"
         d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"
       />
-    </Svg>
+    </svg>
   );
 }

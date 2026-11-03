@@ -1,10 +1,10 @@
-import type { TextStyle } from "react-native";
+import type { CSSProperties } from "react";
 
 export type MarkdownPhase = "streaming" | "complete";
 
 export interface MarkdownFenceRendererProps {
   code: string;
   phase: MarkdownPhase;
-  inheritedStyles: TextStyle;
-  textStyle: TextStyle;
+  inheritedStyles: CSSProperties;
+  textStyle: CSSProperties;
 }

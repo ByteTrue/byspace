@@ -1,9 +1,16 @@
-// Port of packages/app/src/git/diff-document/surface.web.tsx: unchanged but for `@/` imports
+// Port of archive/expo-app:packages/app/src/git/diff-document/surface.web.tsx: unchanged but for `@/` imports
 // and the context-menu trigger's layout (a flex column, as the React Native View was).
-// Converted from the Expo file by web/scripts/port/diff-document.py (tag archive/expo-app); edit it directly.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+// Converted from the Expo file by archive/expo-app:web/scripts/port/diff-document.py; edit it directly.
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import type { ViewStyle } from "react-native";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import {
   ContextMenu,
@@ -806,7 +813,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     () => ({ ...CONTENT_STYLE, height: Math.max(model.height, viewport.height) }),
     [model.height, viewport.height],
   );
-  const affordanceStyle = useMemo<ViewStyle>(
+  const affordanceStyle = useMemo<CSSProperties>(
     () => ({
       ...AFFORDANCE_STYLE,
       left: hoveredAffordance?.left ?? 0,
@@ -1186,7 +1193,7 @@ const CANVAS_STYLE: React.CSSProperties = {
   display: "block",
   pointerEvents: "none",
 };
-const AFFORDANCE_STYLE: ViewStyle = {
+const AFFORDANCE_STYLE: CSSProperties = {
   position: "absolute",
   zIndex: 5,
 };

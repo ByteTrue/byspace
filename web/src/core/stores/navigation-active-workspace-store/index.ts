@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLocalSearchParams, usePathname } from "expo-router";
+import localStorageAsync from "~/lib/local-storage-async";
+import { useLocalSearchParams, usePathname } from "~/app/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import {
   createLastWorkspaceSelectionStore,
@@ -23,9 +23,9 @@ export type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection
 export type { NavigateToWorkspaceInput } from "./navigation";
 
 const lastWorkspaceSelectionStorage: LastWorkspaceSelectionStorage = {
-  read: () => AsyncStorage.getItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY),
-  write: (value) => AsyncStorage.setItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY, value),
-  clear: () => AsyncStorage.removeItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY),
+  read: () => localStorageAsync.getItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY),
+  write: (value) => localStorageAsync.setItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY, value),
+  clear: () => localStorageAsync.removeItem(LAST_WORKSPACE_SELECTION_STORAGE_KEY),
 };
 
 const lastWorkspaceSelectionStore = createLastWorkspaceSelectionStore(

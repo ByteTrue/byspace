@@ -1,12 +1,11 @@
-// Port of packages/app/src/screens/settings/desktop-app-section.tsx: the Wails desktop app's General and About rows. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/desktop-app-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/desktop-app-section.tsx: the Wails desktop app's General and About rows. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/desktop-app-section.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
-import { isWeb } from "@/constants/platform";
 import { settingsStyles } from "@/styles/settings";
 
 type KeepAwakeLevel = "off" | "system" | "display";
@@ -75,7 +74,7 @@ interface DesktopSettingsResponse {
 }
 
 function isWailsDesktopContainer(): boolean {
-  if (!isWeb || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return false;
   }
   const isWailsOrigin =

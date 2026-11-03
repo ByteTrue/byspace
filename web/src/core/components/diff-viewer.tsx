@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/diff-viewer.tsx: an edit's lines on tinted rows, word
+// Port of archive/expo-app:packages/app/src/components/diff-viewer.tsx: an edit's lines on tinted rows, word
 // changes highlighted, scrolling both ways inside a capped height.
 import { memo, useMemo, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";

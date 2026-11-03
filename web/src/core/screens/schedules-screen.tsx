@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/schedules-screen.tsx: the Schedules page; DOM view.
-// Converted from the Expo file by web/scripts/port/schedules.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/schedules-screen.tsx: the Schedules page; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import {
   useCallback,
   useEffect,
@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
   type ReactElement,
 } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "~/app/route-focus";
 import { CalendarClock, Plus } from "lucide-react";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { ExternalLink } from "@/components/ui/external-link";

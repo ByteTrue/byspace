@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/question-form-card.tsx: an agent's questions as a card —
+// Port of archive/expo-app:packages/app/src/components/question-form-card.tsx: an agent's questions as a card —
 // one tab per question once there are several, option rows (radio or checkbox), a free-text
 // answer, dismiss and next/submit. The answer logic is the Expo file's.
 import { useCallback, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/markdown/fence/index.tsx: mermaid fences draw the
+// Port of archive/expo-app:packages/app/src/components/markdown/fence/index.tsx: mermaid fences draw the
 // diagram, every other fence is a highlighted code block.
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { getMarkdownFenceLanguage } from "@/components/markdown/fence/language";

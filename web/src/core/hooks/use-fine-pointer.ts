@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { isWeb } from "@/constants/platform";
 
-// A touch tablet running the desktop layout is still `isWeb === false || true`
-// depending on the build, so neither platform gate answers "can this user
-// hover and point precisely". Only the media query does.
+// Whether this user can hover and point precisely: a touch tablet can run the desktop layout,
+// so only the media query answers it.
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
 
 function getFinePointerQueryList(): MediaQueryList | null {
-  if (!isWeb || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return null;
   }
   return window.matchMedia(FINE_POINTER_QUERY);

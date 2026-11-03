@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/file-drop/file-drop-backdrop.tsx: "Drop files here" over
+// Port of archive/expo-app:packages/app/src/components/file-drop/file-drop-backdrop.tsx: "Drop files here" over
 // the drop area while a drag is over it and a consumer can take the files. Opacity is written to
 // the node from the drag flags, so the dim never repaints anything else.
 import { useLayoutEffect, useRef } from "react";

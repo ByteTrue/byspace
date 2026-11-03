@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/headers/screen-header.tsx: the same frame (36px row on
+// Port of archive/expo-app:packages/app/src/components/headers/screen-header.tsx: the same frame (36px row on
 // desktop, 56px plus 8px on a phone, a bottom hairline, left group and right cluster) in DOM.
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "cn";

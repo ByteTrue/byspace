@@ -19,7 +19,7 @@ export function SidebarIconButton({
   shortcutKeys?: ShortcutKey[][] | null;
   tooltipSide?: "top" | "bottom";
   active?: boolean;
-  /** packages/app's footer buttons only darken their glyph on hover; header buttons also fill. */
+  /** The Expo app's footer buttons only darken their glyph on hover; header buttons also fill. */
   fill?: boolean;
   children: ReactNode;
 }) {
@@ -36,7 +36,7 @@ export function SidebarIconButton({
             "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground [&_svg]:size-4",
             active && "text-sidebar-foreground",
             // Square: with no fill the radius only shapes the keyboard focus outline, and
-            // packages/app's footer buttons have none.
+            // The Expo app's footer buttons have none.
             !fill && "rounded-none hover:bg-transparent data-[state=open]:bg-transparent",
             className,
           )}

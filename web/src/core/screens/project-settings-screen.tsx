@@ -1,10 +1,10 @@
-// Port of packages/app/src/screens/project-settings-screen.tsx: one project's settings, scripts and their edit modal; DOM view.
-// Converted from the Expo file by web/scripts/port/project-settings-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/project-settings-screen.tsx: one project's settings, scripts and their edit modal; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/project-settings-screen.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { router, type Href } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { router, type Href } from "~/app/navigation";
+import { useFocusEffect } from "~/app/route-focus";
 import { cn } from "cn";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MoreVertical, Pencil, Plus } from "lucide-react";

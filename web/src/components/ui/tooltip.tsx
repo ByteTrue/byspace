@@ -16,7 +16,7 @@ function TooltipProvider({
 }
 
 // BySpace: a tooltip closes as soon as the pointer leaves its trigger and never takes the pointer
-// itself, as packages/app's (pointerEvents none). A hoverable one stays open over whatever it covers,
+// itself, as the Expo app's (pointerEvents none). A hoverable one stays open over whatever it covers,
 // such as the project path tooltip over the project's first workspace row, and swallows its clicks.
 function Tooltip({
   disableHoverableContent = true,

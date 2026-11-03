@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/combined-model-selector.tsx: the model trigger (provider
+// Port of archive/expo-app:packages/app/src/components/combined-model-selector.tsx: the model trigger (provider
 // glyph + model label, or a caller-drawn trigger) and the model browser in a combobox.
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";

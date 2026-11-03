@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/settings/headings/settings-info-tip.tsx: the info icon on
+// Port of archive/expo-app:packages/app/src/components/settings/headings/settings-info-tip.tsx: the info icon on
 // a settings header that opens a tooltip explaining it (never a paragraph under the header).
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/zoomable-viewport/toolbar.tsx: zoom in, zoom out, reset
+// Port of archive/expo-app:packages/app/src/components/zoomable-viewport/toolbar.tsx: zoom in, zoom out, reset
 // and the caller's actions, top-right over the viewport, shown while it is hovered or focused.
 import { memo } from "react";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";

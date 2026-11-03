@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/model-browser.tsx: the model picker's body — pinned agent
+// Port of archive/expo-app:packages/app/src/components/model-browser.tsx: the model picker's body — pinned agent
 // profiles, providers to drill into, a provider's models, search across all of them, and the
 // loading, error and no-match states. `useModelBrowser` is the Expo file's state model.
 import {
@@ -57,7 +57,7 @@ const DESKTOP_MODEL_ROW_HEIGHT = 40;
 
 const ICON_BUTTON =
   "flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-accent active:bg-muted";
-/** packages/app's web rows: 12px in a popover and in a phone sheet alike (24px is its native inset). */
+/** The Expo app's web rows: 12px in a popover and in a phone sheet alike (24px is its native inset). */
 const ROW_INSET = "px-3";
 
 function ProviderSettingsAction({
@@ -432,7 +432,7 @@ function ModelBrowserRow({
       className={cn(
         "flex min-h-9 w-full items-center gap-2 py-2 text-left",
         ROW_INSET,
-        // packages/app fills a hovered or pressed row with surface1 (surface2 when elevated):
+        // The Expo app fills a hovered or pressed row with surface1 (surface2 when elevated):
         // bg-card in the dark theme. In the light theme surface1 is white, so rows keep the
         // visible muted fill, as the combobox rows do (step 4 batch 2).
         tone === "elevated"
@@ -877,7 +877,7 @@ function ModelRowList({
 const ESTIMATED_MODEL_ROW_HEIGHT = 36;
 
 /**
- * packages/app's FlatList: a host-wide catalog runs to hundreds of models, so only the rows in
+ * The Expo app's FlatList: a host-wide catalog runs to hundreds of models, so only the rows in
  * view (and a screen of overscan) are mounted.
  */
 function IndependentModelList({

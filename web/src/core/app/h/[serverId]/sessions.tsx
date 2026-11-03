@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect } from "~/app/navigation";
 import { buildSessionsRoute } from "@/utils/host-routes";
 
 export default function HostSessionsRoute() {

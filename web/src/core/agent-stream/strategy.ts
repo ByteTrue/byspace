@@ -1,5 +1,4 @@
-import type { ComponentType, ReactElement, ReactNode, RefObject } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
+import type { ComponentType, CSSProperties, ReactElement, ReactNode, RefObject } from "react";
 import type { StreamItem } from "@/types/stream";
 import type { StreamHistoryBoundary, StreamRenderSegments } from "./model";
 import type {
@@ -33,9 +32,9 @@ export type StreamNearBottomInput = StreamViewportMetrics & {
 
 export interface StreamEdgeSlotProps {
   ListHeaderComponent?: ReactElement | ComponentType<unknown> | null;
-  ListHeaderComponentStyle?: StyleProp<ViewStyle>;
+  ListHeaderComponentStyle?: CSSProperties;
   ListFooterComponent?: ReactElement | ComponentType<unknown> | null;
-  ListFooterComponentStyle?: StyleProp<ViewStyle>;
+  ListFooterComponentStyle?: CSSProperties;
 }
 
 export interface StreamViewportHandle {
@@ -77,9 +76,6 @@ export interface StreamRenderInput {
   hasOlderHistory: boolean;
   olderHistoryProgressKey: string | null;
   scrollEnabled: boolean;
-  listStyle: StyleProp<ViewStyle>;
-  baseListContentContainerStyle: StyleProp<ViewStyle>;
-  forwardListContentContainerStyle: StyleProp<ViewStyle>;
 }
 
 export interface StreamStrategy {

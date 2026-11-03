@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/rewind/rewind-menu.tsx: the undo-arrow menu under a
+// Port of archive/expo-app:packages/app/src/components/rewind/rewind-menu.tsx: the undo-arrow menu under a
 // user message — rewind the conversation, the files, or both.
 import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { FileText, Layers, MessageSquare, Undo2 } from "lucide-react";

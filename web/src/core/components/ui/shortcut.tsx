@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/shortcut.tsx: shadcn key caps (web/src/components/shortcut).
+// Port of archive/expo-app:packages/app/src/components/ui/shortcut.tsx: shadcn key caps (web/src/components/shortcut).
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { Shortcut as KbdShortcut } from "~/components/shortcut";
 

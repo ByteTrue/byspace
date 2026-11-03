@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
@@ -87,7 +87,7 @@ export type {
 
 /**
  * Split a `Settings` patch into the part the app owns. The two halves persist to different
- * places (AsyncStorage vs the Electron settings bridge), and the app's half is exactly the
+ * places (localStorageAsync vs the Electron settings bridge), and the app's half is exactly the
  * key set of `DEFAULT_CLIENT_SETTINGS` — reading the keys off it means a new app setting
  * flows through here without anyone remembering to widen a hand-written list.
  */
@@ -103,7 +103,7 @@ function pickDefinedAppSettings(updates: Partial<Settings>): Partial<AppSettings
 }
 
 const productionDeps: SettingsDeps = {
-  storage: AsyncStorage,
+  storage: localStorageAsync,
 };
 
 export interface UseAppSettingsReturn {
@@ -149,7 +149,7 @@ export function useAppSettings(): UseAppSettingsReturn {
     try {
       const next = { ...DEFAULT_CLIENT_SETTINGS };
       queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
-      await AsyncStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+      await localStorageAsync.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
     } catch (err) {
       console.error("[AppSettings] Failed to reset settings:", err);
       throw err;

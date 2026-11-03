@@ -140,8 +140,8 @@ export async function startIsolatedHostDaemon(
   let port = await getAvailablePort();
   while (port === 6767 || port === 6777 || port === primaryPort) port = await getAvailablePort();
 
-  const metroPort = process.env.E2E_METRO_PORT;
-  if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
+  const webPort = process.env.E2E_WEB_PORT;
+  if (!webPort) throw new Error("E2E_WEB_PORT is required to start an isolated host daemon");
 
   const byspaceHome =
     options.byspaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-")));
@@ -155,8 +155,8 @@ export async function startIsolatedHostDaemon(
       BYSPACE_HOME: byspaceHome,
       BYSPACE_LISTEN: `127.0.0.1:${port}`,
       BYSPACE_SERVER_ID: serverId,
-      // The web app runs on the Metro origin during E2E, which is cross-origin to the daemon.
-      BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort},http://127.0.0.1:${metroPort}`,
+      // The web app runs on the static web server's origin during E2E, which is cross-origin to the daemon.
+      BYSPACE_CORS_ORIGINS: `http://localhost:${webPort},http://127.0.0.1:${webPort}`,
       // Specs assert exact workspace counts; the daemon-owned Chief workspace
       // would shift them by one.
       BYSPACE_DISABLE_HOME_WORKSPACE: "1",

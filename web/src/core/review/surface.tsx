@@ -1,4 +1,4 @@
-// Port of packages/app/src/review/surface.tsx: inline review comments on a diff line — the "+"
+// Port of archive/expo-app:packages/app/src/review/surface.tsx: inline review comments on a diff line — the "+"
 // affordance, the thread of draft comments under the line, and the comment editor (⌘/Ctrl+Enter
 // saves, Escape cancels). The draft store and the controller are the Expo file's; the view is DOM.
 // InlineReviewGutterCell is not ported: the canvas diff draws its own gutter and uses

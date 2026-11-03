@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/tree-rail.tsx: content on the left, a tree on the right
+// Port of archive/expo-app:packages/app/src/components/tree-rail.tsx: content on the left, a tree on the right
 // whose left edge drags to resize it. The width rules are the shared tree-rail-layout; the drag
 // previews locally and commits on release, like the Expo gesture.
 import {

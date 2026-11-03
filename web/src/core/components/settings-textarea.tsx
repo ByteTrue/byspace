@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/settings-textarea.tsx: a multiline settings field, a bare textarea in a settings card.
-// Converted from the Expo file by web/scripts/port/settings-small-sections.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/settings-textarea.tsx: a multiline settings field, a bare textarea in a settings card.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
 import { useEffect, useRef } from "react";
 import { cn } from "cn";
 import { settingsStyles } from "@/styles/settings";
@@ -26,7 +26,7 @@ export function SettingsTextArea({
   testID,
   className,
 }: SettingsTextAreaProps) {
-  // packages/app hands `value` over once, so a parent that resets it (the system prompt's Reset)
+  // The Expo app hands `value` over once, so a parent that resets it (the system prompt's Reset)
   // left the edited text on screen with Save disabled. Show what the parent holds; typing keeps
   // the two equal, so this only acts on an outside change.
   const inputRef = useRef<EditingTextInputHandle>(null);

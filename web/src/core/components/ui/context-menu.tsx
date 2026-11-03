@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/context-menu.tsx: the right-click shape of the menu
+// Port of archive/expo-app:packages/app/src/components/ui/context-menu.tsx: the right-click shape of the menu
 // engine. The trigger is the element itself (a tab chip, a row), so it renders a div that Radix
 // opens the menu from. On a phone the menu is a bottom sheet, opened by the context gesture or a
 // held touch (iOS Safari sends no contextmenu event).
@@ -80,7 +80,7 @@ type ContextMenuTriggerProps = PropsWithChildren<
 
 /**
  * On a phone the sheet is not a Radix menu, so the trigger opens it from the context gesture or a
- * held touch. packages/app's trigger forwards a long press too (a row selects itself).
+ * held touch. The Expo app's trigger forwards a long press too (a row selects itself).
  */
 function useSheetTrigger({
   isSheet,

@@ -1,4 +1,4 @@
-// Port of packages/app/src/review/index.ts: the same exports, through `@/` so the web surface
+// Port of archive/expo-app:packages/app/src/review/index.ts: the same exports, through `@/` so the web surface
 // (review/surface.tsx) replaces the Expo one.
 export {
   buildReviewAttachmentSnapshot,

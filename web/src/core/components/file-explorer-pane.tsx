@@ -1,7 +1,7 @@
-// Port of packages/app/src/components/file-explorer-pane.tsx. The tree logic is the Expo
+// Port of archive/expo-app:packages/app/src/components/file-explorer-pane.tsx. The tree logic is the Expo
 // file's (listing, expand and restore, sort, hidden files, refresh, create, rename, duplicate,
 // delete, copy path, download, add to chat, drag into the composer); the view is DOM.
-// Converted from the Expo file by web/scripts/port/file-explorer.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/file-explorer.py; edit it directly.
 import {
   Fragment,
   useCallback,
@@ -23,8 +23,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { focusWithRetries } from "@/utils/web-focus";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import { ChevronDown, Eye, EyeOff, FilePlus, FolderPlus, RotateCw } from "lucide-react";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
@@ -288,7 +287,7 @@ function TreeRowItem({
   });
 
   const handlePress = useCallback(() => {
-    const selection = isWeb ? window.getSelection() : null;
+    const selection = window.getSelection();
     if (selection && !selection.isCollapsed && selection.toString().length > 0) {
       return;
     }
@@ -581,7 +580,7 @@ export function FileExplorerPane({
 
   const handleCopyPath = useCallback(
     async (path: string) => {
-      await Clipboard.setStringAsync(
+      await Clipboard.writeText(
         buildAbsoluteExplorerPath({
           workspaceRoot: normalizedWorkspaceRoot,
           entryPath: path,
@@ -592,7 +591,7 @@ export function FileExplorerPane({
   );
 
   const handleCopyRelativePath = useCallback(async (path: string) => {
-    await Clipboard.setStringAsync(path);
+    await Clipboard.writeText(path);
   }, []);
 
   const handleDownloadEntry = useCallback(

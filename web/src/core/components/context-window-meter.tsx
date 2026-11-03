@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/context-window-meter.tsx: a ring for how full the context
+// Port of archive/expo-app:packages/app/src/components/context-window-meter.tsx: a ring for how full the context
 // window is (grey, amber past 70%, red past 90%), a track-only ring while usage is pending, and a
 // tooltip with tokens, session cost and the provider's usage.
 import { useCallback, useState } from "react";

@@ -1,9 +1,8 @@
-// Port of packages/app/src/components/add-host-modal.tsx: the direct connection form; DOM view.
-// Converted from the Expo file by web/scripts/port/add-host-modals.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/add-host-modal.tsx: the direct connection form; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
-import { useUnistyles } from "react-native-unistyles";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -19,6 +18,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { useThemeObject } from "~/app/theme-object";
 
 interface DirectConnectionDraft {
   host: string;
@@ -203,7 +203,7 @@ export interface AddHostModalProps {
 }
 
 export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostModalProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const daemons = useHosts();
   const { probeAndUpsertDirectConnection } = useHostMutations();

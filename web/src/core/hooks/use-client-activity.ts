@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
-import { AppState } from "react-native";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { isWeb } from "@/constants/platform";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,
   HEARTBEAT_INTERVAL_MS,
 } from "./client-activity-tracker";
+import { AppState } from "~/lib/app-state";
 
 interface ClientActivityOptions {
   client: DaemonClient;
@@ -34,7 +33,7 @@ export function useClientActivity({
   if (!trackerRef.current) {
     trackerRef.current = createClientActivityTracker({
       client,
-      deviceType: isWeb ? "web" : "mobile",
+      deviceType: "web",
       initialFocusedAgentId: focusedAgentId,
       initialFocusedTerminalId: focusedTerminalId,
       initialAppVisible: AppState.currentState === "active",

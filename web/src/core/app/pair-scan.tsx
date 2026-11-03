@@ -1,9 +1,9 @@
-// Port of packages/app/src/app/pair-scan.tsx: QR pairing. packages/app's file renders the
+// Port of archive/expo-app:packages/app/src/app/pair-scan.tsx: QR pairing. The Expo app's file renders the
 // camera on native and, on web, a card that says scanning is not available; the web build only has
 // that branch, so the camera code (expo-camera) is not carried over.
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter, type Href } from "expo-router";
+import { useRouter, type Href } from "~/app/navigation";
 import { BackHeader } from "@/components/headers/back-header";
 
 export default function PairScanScreen() {

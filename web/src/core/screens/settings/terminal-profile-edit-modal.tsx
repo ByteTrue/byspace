@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/settings/terminal-profile-edit-modal.tsx: the add/edit terminal profile sheet; DOM view.
-// Converted from the Expo file by web/scripts/port/agents-page-sections.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/terminal-profile-edit-modal.tsx: the add/edit terminal profile sheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agents-page-sections.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";

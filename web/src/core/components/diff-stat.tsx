@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/diff-stat.tsx: "+12 -3" in the status colours.
+// Port of archive/expo-app:packages/app/src/components/diff-stat.tsx: "+12 -3" in the status colours.
 import { formatDiffCount } from "@/git/file-header-presentation";
 
 export function DiffStat({

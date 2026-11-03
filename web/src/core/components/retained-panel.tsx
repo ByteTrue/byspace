@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/retained-panel.tsx: same API, rendered as a div. An
+// Port of archive/expo-app:packages/app/src/components/retained-panel.tsx: same API, rendered as a div. An
 // inactive panel stays mounted but is hidden and inert.
 import { createContext, memo, useContext, type CSSProperties, type ReactNode } from "react";
 import { cn } from "cn";

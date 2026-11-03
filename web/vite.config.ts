@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
@@ -8,20 +7,6 @@ import { defineConfig, type Plugin } from "vite";
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const webSrc = path.join(webRoot, "src");
 const coreDir = path.join(webSrc, "core");
-const shimsDir = path.join(webSrc, "shims");
-
-// Every file in src/shims/ stands in for the package it is named after (react-native.ts,
-// expo-router.tsx, ...; `__` is a `/`, so expo__dom.ts is expo/dom). The modules in src/core came
-// from the Expo app and still call those APIs. The react-native shim has no components.
-const shimAliases = fs.readdirSync(shimsDir).map((file) => ({
-  find: new RegExp(
-    `^${file
-      .replace(/\.tsx?$/, "")
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replaceAll("__", "/")}$`,
-  ),
-  replacement: path.join(shimsDir, file),
-}));
 
 // A Node built-in name with no browser package installed (`buffer` without the `buffer` dependency)
 // builds into an empty module and the app crashes at runtime. Vite only warns, and a throw from the
@@ -43,17 +28,14 @@ export default defineConfig(({ mode }) => ({
     alias: [
       { find: /^~\//, replacement: `${webSrc}/` },
       { find: /^@\//, replacement: `${coreDir}/` },
-      ...shimAliases,
     ],
     dedupe: ["react", "react-dom", "zustand", "@tanstack/react-query", "i18next", "react-i18next"],
   },
   define: {
     __DEV__: JSON.stringify(mode !== "production"),
-    "process.env.EXPO_PUBLIC_LOCAL_DAEMON": JSON.stringify(
-      process.env.EXPO_PUBLIC_LOCAL_DAEMON ?? "",
-    ),
-    "process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL": JSON.stringify(
-      process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL ?? "",
+    "process.env.BYSPACE_LOCAL_DAEMON": JSON.stringify(process.env.BYSPACE_LOCAL_DAEMON ?? ""),
+    "process.env.BYSPACE_DEV_BUILD_LABEL": JSON.stringify(
+      process.env.BYSPACE_DEV_BUILD_LABEL ?? "",
     ),
   },
   build: {

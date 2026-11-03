@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/compact-explorer-sidebar-host.tsx: on a phone the explorer
+// Port of archive/expo-app:packages/app/src/components/compact-explorer-sidebar-host.tsx: on a phone the explorer
 // is a panel over the workspace that a swipe in from the right edge opens. Which workspace it shows
 // and how a file opens from it are the Expo file's.
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";

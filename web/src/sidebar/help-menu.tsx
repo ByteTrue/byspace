@@ -68,7 +68,7 @@ function openGithubIssue() {
   void openExternalUrl(GITHUB_ISSUE_URL);
 }
 
-/** packages/app's SidebarHelpMenu: shortcuts, what's new, diagnostics, where to report, and versions. */
+/** The Expo app's SidebarHelpMenu: shortcuts, what's new, diagnostics, where to report, and versions. */
 export function SidebarHelpMenu() {
   const { t } = useTranslation();
   const shortcutsAvailable = useKeyboardShortcutsAvailable();
@@ -126,7 +126,7 @@ export function SidebarHelpMenu() {
           {t("sidebar.help.github")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {/* packages/app's versionList: the version rows as one block, 4px apart, 8px above and below. */}
+        {/* The Expo app's versionList: the version rows as one block, 4px apart, 8px above and below. */}
         <div className="flex flex-col gap-1 py-2">
           <VersionRow
             label={t("sidebar.help.appName")}

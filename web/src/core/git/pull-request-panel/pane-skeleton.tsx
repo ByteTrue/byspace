@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/pane-skeleton.tsx: the PR pane while its
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/pane-skeleton.tsx: the PR pane while its
 // first load is in flight, on shadcn's Skeleton.
 import { useTranslation } from "react-i18next";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";

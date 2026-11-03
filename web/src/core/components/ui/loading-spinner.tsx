@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/loading-spinner.tsx on shadcn's Spinner. React
+// Port of archive/expo-app:packages/app/src/components/ui/loading-spinner.tsx on shadcn's Spinner. React
 // Native's "small" is 20px and "large" 36px; a number is a size in px.
 import { useMemo, type CSSProperties } from "react";
 import { Spinner } from "~/components/ui/spinner";

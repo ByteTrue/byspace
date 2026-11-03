@@ -1,4 +1,3 @@
-import { Circle, Path, Svg } from "react-native-svg";
 import type { SvgPathIconProps } from "./svg-path-icon";
 
 // Forge-neutral rendering of GitLab's manual-status gear, aligned with the
@@ -8,9 +7,9 @@ const MANUAL_STATUS_GEAR_PATH =
 
 export function ManualStatusIcon({ size = 16, color = "currentColor" }: SvgPathIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="-0.5 -0.5 15 15">
-      <Circle cx={7} cy={7} r={6.25} fill="none" stroke={color} strokeWidth={1.25} />
-      <Path d={MANUAL_STATUS_GEAR_PATH} fill={color} />
-    </Svg>
+    <svg width={size} height={size} viewBox="-0.5 -0.5 15 15">
+      <circle cx={7} cy={7} r={6.25} fill="none" stroke={color} strokeWidth={1.25} />
+      <path d={MANUAL_STATUS_GEAR_PATH} fill={color} />
+    </svg>
   );
 }

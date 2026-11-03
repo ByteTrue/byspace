@@ -1,4 +1,4 @@
-// Port of packages/app/src/panels/pull-request-panel.tsx: same presentation and descriptor.
+// Port of archive/expo-app:packages/app/src/panels/pull-request-panel.tsx: same presentation and descriptor.
 import { GitPullRequest } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";

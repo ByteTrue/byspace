@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AppStateStatus } from "react-native";
 import { bindHostRuntimeAppState } from "@/navigation/host-runtime-bootstrap";
 import type {
   DaemonClient,
@@ -24,6 +23,7 @@ import {
   type HostRuntimeStorage,
 } from "./host-runtime";
 import type { ReplicaRow, ReplicaRowStore } from "./replica-cache/row-store";
+import type { AppStateStatus } from "~/lib/app-state";
 
 class FakeDaemonClient {
   private state: ConnectionState = { status: "idle" };
@@ -1681,8 +1681,8 @@ describe("HostRuntimeStore", () => {
   });
 
   it("marks the host registry loaded after boot reads storage", async () => {
-    const previousOverride = process.env.EXPO_PUBLIC_LOCAL_DAEMON;
-    process.env.EXPO_PUBLIC_LOCAL_DAEMON = "not-an-endpoint";
+    const previousOverride = process.env.BYSPACE_LOCAL_DAEMON;
+    process.env.BYSPACE_LOCAL_DAEMON = "not-an-endpoint";
     const store = new HostRuntimeStore({
       deps: {
         createClient: () => {
@@ -1715,9 +1715,9 @@ describe("HostRuntimeStore", () => {
       expect(hostListNotifications).toBe(2);
     } finally {
       if (previousOverride === undefined) {
-        delete process.env.EXPO_PUBLIC_LOCAL_DAEMON;
+        delete process.env.BYSPACE_LOCAL_DAEMON;
       } else {
-        process.env.EXPO_PUBLIC_LOCAL_DAEMON = previousOverride;
+        process.env.BYSPACE_LOCAL_DAEMON = previousOverride;
       }
     }
   });
@@ -3321,7 +3321,7 @@ describe("HostRuntimeStore", () => {
     });
     expect(store.getHosts().find((h) => h.serverId === "srv_rename")?.label).toBe("old name");
 
-    // persistHosts may throw in test env (no AsyncStorage/window), but the
+    // persistHosts may throw in test env (no localStorage/window), but the
     // in-memory state should still be updated by setHostsAndSync.
     await store.renameHost("srv_rename", "new name").catch(() => undefined);
 

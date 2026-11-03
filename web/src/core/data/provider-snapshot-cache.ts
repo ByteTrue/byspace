@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { Buffer } from "buffer";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 import {
@@ -414,4 +414,4 @@ export function createProviderSnapshotCache(
   };
 }
 
-export const providerSnapshotCache = createProviderSnapshotCache(AsyncStorage);
+export const providerSnapshotCache = createProviderSnapshotCache(localStorageAsync);

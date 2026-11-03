@@ -1,9 +1,8 @@
-// Port of packages/app/src/components/app-diagnostic-sheet.tsx: the app diagnostic — live progress, then the redacted report. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/app-diagnostic-sheet.py (tag archive/expo-app); edit it directly.
-import * as Clipboard from "expo-clipboard";
+// Port of archive/expo-app:packages/app/src/components/app-diagnostic-sheet.tsx: the app diagnostic — live progress, then the redacted report. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/app-diagnostic-sheet.py; edit it directly.
+import * as Clipboard from "~/lib/clipboard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, RotateCw } from "lucide-react";
-import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -21,6 +20,7 @@ import { collectDesktopDiagnosticSections } from "@/diagnostics/desktop-diagnost
 import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
+import { withTheme } from "~/app/theme-object";
 
 interface AppDiagnosticSheetProps {
   visible: boolean;
@@ -43,9 +43,9 @@ interface DiagnosticCollectionResult {
 }
 
 const SNAP_POINTS = ["55%", "88%"];
-const ThemedCopy = withUnistyles(Copy);
-const ThemedRotateCw = withUnistyles(RotateCw);
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedCopy = withTheme(Copy);
+const ThemedRotateCw = withTheme(RotateCw);
+const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -146,7 +146,7 @@ export function AppDiagnosticSheet({
 
   const handleCopyPress = useCallback(() => {
     if (!diagnostic) return;
-    void Clipboard.setStringAsync(diagnostic)
+    void Clipboard.writeText(diagnostic)
       .then(() => toast.copied(t("settings.diagnostics.app.copyLabel")))
       .catch(() => toast.error(t("settings.diagnostics.app.copyFailed")));
   }, [diagnostic, t, toast]);
@@ -163,7 +163,7 @@ export function AppDiagnosticSheet({
             className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50"
             aria-label={t("settings.diagnostics.app.copyAccessibility")}
           >
-            <ThemedCopy size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+            <ThemedCopy size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
           </button>
           <button
             type="button"
@@ -177,9 +177,9 @@ export function AppDiagnosticSheet({
             }
           >
             {loading ? (
-              <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedLoadingSpinner size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
             ) : (
-              <ThemedRotateCw size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+              <ThemedRotateCw size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
             )}
           </button>
         </div>
@@ -206,7 +206,10 @@ export function AppDiagnosticSheet({
           <div className="flex flex-col gap-3 p-4">
             {progress.length === 0 ? (
               <div className="flex min-h-6 flex-row items-center gap-2">
-                <ThemedLoadingSpinner size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+                <ThemedLoadingSpinner
+                  size={ICON_SIZE.sm}
+                  themeProps={foregroundMutedColorMapping}
+                />
                 <span className="flex-1 text-sm text-muted-foreground">
                   {t("settings.diagnostics.app.running")}
                 </span>
@@ -217,7 +220,7 @@ export function AppDiagnosticSheet({
                   {row.status === "running" || row.status === "pending" ? (
                     <ThemedLoadingSpinner
                       size={ICON_SIZE.sm}
-                      uniProps={foregroundMutedColorMapping}
+                      themeProps={foregroundMutedColorMapping}
                     />
                   ) : (
                     <div

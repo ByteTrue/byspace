@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/branch-switcher.tsx: the branch label in a toolbar that
+// Port of archive/expo-app:packages/app/src/components/branch-switcher.tsx: the branch label in a toolbar that
 // opens a searchable branch list. Switching is the shared useBranchSwitcher; the view is DOM.
 import { useCallback, useMemo, useRef, type ReactElement } from "react";
 import { useQueryClient } from "@tanstack/react-query";

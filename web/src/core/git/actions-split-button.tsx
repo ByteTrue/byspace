@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/actions-split-button.tsx: the header's git split button
+// Port of archive/expo-app:packages/app/src/git/actions-split-button.tsx: the header's git split button
 // (primary action, a caret menu of secondary actions, and a "more" menu), or a single menu
 // trigger when space is short. Same actions and test IDs; shadcn view.
 import { useCallback, useMemo } from "react";
@@ -82,7 +82,7 @@ function GitActionMenuItem({
   );
 }
 
-// packages/app's split button parts: 28px at every width (buttonControlHeight.xs below md,
+// The Expo app's split button parts: 28px at every width (buttonControlHeight.xs below md,
 // HEADER_CONTROL_HEIGHT from md up).
 const CONTROL_HEIGHT = "h-7";
 

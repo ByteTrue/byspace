@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-profiles/agent-profile-editor.tsx: the same file.
+// Port of archive/expo-app:packages/app/src/agent-profiles/agent-profile-editor.tsx: the same file.
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { AgentProfileEditModal } from "@/agent-profiles/settings/agent-profile-edit-modal";

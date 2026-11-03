@@ -63,68 +63,15 @@ const { theme, snapshotState, configState, patchConfigMock, openProviderSettings
   }),
 );
 
-vi.mock("react-native", () => ({
-  Platform: {
-    OS: "web",
-    // theme.ts resolves the default font stack through Platform.select.
-    select: (options: Record<string, unknown>) => options.default ?? options.ios,
-  },
-  View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) =>
-    React.createElement("div", { "data-testid": testID }, children),
-  Text: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("span", null, children),
-  Pressable: ({
-    children,
-    onPress,
-    onHoverIn,
-    onHoverOut,
-    accessibilityRole,
-    accessibilityLabel,
-    accessibilityState,
-    disabled,
-    testID,
-  }: {
-    children?:
-      | React.ReactNode
-      | ((state: { pressed: boolean; hovered: boolean }) => React.ReactNode);
-    onPress?: (event: React.MouseEvent) => void;
-    onHoverIn?: () => void;
-    onHoverOut?: () => void;
-    accessibilityRole?: string;
-    accessibilityLabel?: string;
-    accessibilityState?: { expanded?: boolean };
-    disabled?: boolean;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "div",
-      {
-        role: accessibilityRole,
-        "aria-label": accessibilityLabel,
-        "aria-expanded": accessibilityState?.expanded,
-        "aria-disabled": disabled ? "true" : undefined,
-        "data-testid": testID,
-        onClick: disabled ? undefined : onPress,
-        onMouseEnter: onHoverIn,
-        onMouseLeave: onHoverOut,
-      },
-      typeof children === "function" ? children({ pressed: false, hovered: false }) : children,
-    ),
-  ActivityIndicator: () => React.createElement("span", { "data-testid": "activity-indicator" }),
-}));
-
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
-  },
-  useUnistyles: () => ({ theme, rt: { breakpoint: "md" } }),
-  // Pass-through: the themed-icon wrapper only injects uniProps, which these
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
+  // Pass-through: the themed-icon wrapper only injects themeProps, which these
   // tests never assert on.
-  withUnistyles: (component: unknown) => component,
+  withTheme: (component: unknown) => component,
 }));
 
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const icon = (name: string) => () => React.createElement("span", { "data-icon": name });
   return {
     ChevronDown: icon("ChevronDown"),

@@ -27,7 +27,7 @@ const { mockTheme } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const StubIcon = () => null;
   return {
     ArrowLeftToLine: StubIcon,
@@ -41,18 +41,15 @@ vi.mock("lucide-react-native", () => {
   };
 });
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) =>
-      typeof factory === "function" ? (factory as (theme: unknown) => unknown)(mockTheme) : factory,
-  },
-  withUnistyles:
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  withTheme:
     (Component: React.ComponentType<Record<string, unknown>>) =>
     ({
-      uniProps,
+      themeProps,
       ...rest
-    }: { uniProps?: (theme: unknown) => Record<string, unknown> } & Record<string, unknown>) => {
-      const themed = uniProps ? uniProps(mockTheme) : {};
+    }: { themeProps?: (theme: unknown) => Record<string, unknown> } & Record<string, unknown>) => {
+      const themed = themeProps ? themeProps(mockTheme) : {};
       return React.createElement(Component, { ...rest, ...themed });
     },
 }));

@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter } from "~/app/navigation";
 import { useTranslation } from "react-i18next";
 import type {
   AgentForkContextOptions,

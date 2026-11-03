@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/agent-list.tsx: the History list (day sections, search marks, long press to archive); DOM view.
-// Converted from the Expo file by web/scripts/port/sessions-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/agent-list.tsx: the History list (day sections, search marks, long press to archive); DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
@@ -22,7 +22,7 @@ import type { MatchRange } from "@bytetrue/protocol/search/text-match";
 interface AgentListProps {
   agents: AggregatedAgent[];
   showCheckoutInfo?: boolean;
-  /** packages/app's pull-to-refresh; React Native Web renders none, so the web list ignores them. */
+  /** The Expo app's pull-to-refresh; React Native Web renders none, so the web list ignores them. */
   isRefreshing?: boolean;
   onRefresh?: () => void;
   selectedAgentId?: string;

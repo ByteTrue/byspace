@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/task-list/index.tsx: the agent's task list as a "2/7 tasks"
+// Port of archive/expo-app:packages/app/src/composer/task-list/index.tsx: the agent's task list as a "2/7 tasks"
 // pill above the composer; its panel lists every task in place.
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";

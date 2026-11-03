@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/keyboard-shortcuts-dialog.tsx: every shortcut with its effective keys, searchable; DOM view.
-// Converted from the Expo file by web/scripts/port/keyboard-shortcuts-dialog.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/keyboard-shortcuts-dialog.tsx: every shortcut with its effective keys, searchable; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/keyboard-shortcuts-dialog.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";

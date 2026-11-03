@@ -1,4 +1,4 @@
-// Port of packages/app/src/mobile-panels/presentation.tsx: a full-width panel over the page with
+// Port of archive/expo-app:packages/app/src/mobile-panels/presentation.tsx: a full-width panel over the page with
 // a 50% black backdrop under it. The runtime (mobile-panels/provider.tsx) moves both from
 // the shared position; React only decides what the overlay holds and whether it is interactive,
 // which it is once the panel has settled open.

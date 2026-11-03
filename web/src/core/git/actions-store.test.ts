@@ -7,7 +7,7 @@ import {
   useCheckoutGitActionsStore,
 } from "@/git/actions-store";
 
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("~/lib/local-storage-async", () => ({
   default: {
     getItem: vi.fn(async () => null),
     setItem: vi.fn(async () => undefined),

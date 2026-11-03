@@ -1,6 +1,6 @@
-// Port of packages/app/src/agent-profiles/settings/agent-profile-edit-modal.tsx: same form
+// Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-edit-modal.tsx: same form
 // model and open/close lifecycle, DOM view.
-// Converted from the Expo file by web/scripts/port/agent-profile-edit-modal.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profile-edit-modal.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";

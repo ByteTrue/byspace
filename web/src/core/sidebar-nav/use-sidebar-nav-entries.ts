@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { usePathname, router } from "expo-router";
+import { usePathname, router } from "~/app/navigation";
 import {
   ArrowRightLeft,
   CalendarClock,
@@ -7,7 +7,7 @@ import {
   Plus,
   Search,
   type LucideIcon,
-} from "lucide-react-native";
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";

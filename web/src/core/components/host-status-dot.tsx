@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/host-status-dot.tsx: the host's connection as a dot.
+// Port of archive/expo-app:packages/app/src/components/host-status-dot.tsx: the host's connection as a dot.
 import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { cn } from "cn";
 

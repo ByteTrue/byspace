@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
  * was referenced without an entry in that block.
  *
  * The scanner is intentionally simple: it walks the en.ts resource tree by
- * indentation and collects every `t("…")` literal under `packages/app/src`.
+ * indentation and collects every `t("…")` literal under `archive/expo-app:packages/app/src`.
  * Plural suffixes (`_one`/`_other`) are folded to their stem because i18next
  * resolves those at runtime. Dynamic keys built with template literals or by
  * concatenating a prefix with a variable cannot be checked here and are the

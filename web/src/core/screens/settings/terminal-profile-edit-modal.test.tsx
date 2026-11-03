@@ -24,16 +24,9 @@ const { theme } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  useUnistyles: () => ({ theme }),
-}));
-
-vi.mock("@/constants/platform", () => ({
-  isWeb: true,
-  isNative: false,
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
 }));
 
 vi.mock("react-i18next", () => ({

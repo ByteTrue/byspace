@@ -1,7 +1,7 @@
 import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { cn } from "cn";
 
-/** packages/app's HostStatusDot: green online, amber connecting, red otherwise. */
+/** The Expo app's HostStatusDot: green online, amber connecting, red otherwise. */
 export function HostStatusDot({ serverId, className }: { serverId: string; className?: string }) {
   const status = useHostRuntimeConnectionStatus(serverId);
   let color = "bg-status-danger";

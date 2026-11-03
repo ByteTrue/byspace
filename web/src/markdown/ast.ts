@@ -1,4 +1,4 @@
-// markdown-it tokens to the node tree packages/app's renderer worked on (react-native-markdown-display,
+// markdown-it tokens to the node tree the Expo app's renderer worked on (react-native-markdown-display,
 // MIT): same node types (`heading1`…, `bullet_list`, `list_item`, `fence`, …), the same `key`,
 // `index`, `markup`, `sourceInfo`, `sourceType` and `attributes`, and the same pruning of the
 // paragraph that opens a list item. Shared helpers (list markers and spacing, link sources) read

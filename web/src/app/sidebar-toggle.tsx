@@ -14,8 +14,8 @@ const MAC_TOGGLE_KEYS = ["mod", "B"];
 const OTHER_TOGGLE_KEYS = ["mod", "."];
 
 /**
- * packages/app's compact menu glyph: two 16px lines and a short 8px one, 1.5px thick, spread over
- * 12px. Boxes rather than an SVG, as packages/app draws it: the browser snaps a box's edges to device
+ * The Expo app's compact menu glyph: two 16px lines and a short 8px one, 1.5px thick, spread over
+ * 12px. Boxes rather than an SVG, as the Expo app draws it: the browser snaps a box's edges to device
  * pixels, so the middle line (at 5.25px) stays as sharp as the others instead of blurring.
  */
 function MobileMenuIcon() {
@@ -29,7 +29,7 @@ function MobileMenuIcon() {
 }
 
 /**
- * The sidebar toggle, as in packages/app's SidebarMenuToggle: exactly one host shows it, the
+ * The sidebar toggle, as in the Expo app's SidebarMenuToggle: exactly one host shows it, the
  * sidebar's top row while the pinned sidebar is open, otherwise the content header.
  */
 export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
@@ -50,18 +50,18 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          // packages/app's large header control: 28px on desktop, 32px on a phone.
+          // The Expo app's large header control: 28px on desktop, 32px on a phone.
           size={isCompact ? "icon" : "icon-sm"}
           data-testid="menu-button"
           aria-label={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
           aria-expanded={isOpen}
-          // As packages/app's leadingToggle: pulled 2px left so the glyph sits on the rows' 16px icon rail.
+          // As the Expo app's leadingToggle: pulled 2px left so the glyph sits on the rows' 16px icon rail.
           // aria-expanded reports the sidebar's state; it must not paint the ghost button's open look.
-          // No keyboard focus outline: packages/app's header controls set outlineWidth 0.
+          // No keyboard focus outline: the Expo app's header controls set outlineWidth 0.
           className="rounded-md text-muted-foreground outline-none aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-interaction-highlight md:-ml-0.5"
           onClick={toggle}
         >
-          {/* packages/app's toggle glyph keeps its colour on hover; only the fill changes. */}
+          {/* The Expo app's toggle glyph keeps its colour on hover; only the fill changes. */}
           {isCompact ? (
             <MobileMenuIcon />
           ) : (

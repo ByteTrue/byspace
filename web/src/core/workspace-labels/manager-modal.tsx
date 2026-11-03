@@ -1,5 +1,5 @@
-// Port of packages/app/src/workspace-labels/manager-modal.tsx: one host's label catalog and the label edit view, on AdaptiveModalSheet; DOM view.
-// Converted from the Expo file by web/scripts/port/workspace-label-manager.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/workspace-labels/manager-modal.tsx: one host's label catalog and the label edit view, on AdaptiveModalSheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/workspace-label-manager.py; edit it directly.
 import {
   useCallback,
   useEffect,

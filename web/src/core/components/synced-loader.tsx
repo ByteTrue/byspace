@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/synced-loader.tsx: the six-dot working glyph. Every
+// Port of archive/expo-app:packages/app/src/components/synced-loader.tsx: the six-dot working glyph. Every
 // loader on the page reads one clock (performance time, 950ms per cycle), so they step together;
 // a retained, hidden panel's loader stops ticking.
 import { useLayoutEffect, useMemo, useRef } from "react";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/autocomplete.tsx: the slash-command and @-file list
+// Port of archive/expo-app:packages/app/src/components/ui/autocomplete.tsx: the slash-command and @-file list
 // above the composer. The list starts scrolled to its end (the match nearest the input) and keeps
 // the keyboard-selected row in view; a selected command's description sits in a card above.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MouseEvent } from "react";

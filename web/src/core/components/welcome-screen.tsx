@@ -1,9 +1,9 @@
-// Port of packages/app/src/components/welcome-screen.tsx: the first-run screen; DOM view.
-// Converted from the Expo file by web/scripts/port/welcome-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/welcome-screen.tsx: the first-run screen; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/welcome-screen.py; edit it directly.
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "expo-router";
-import { QrCode, Link2, ClipboardPaste, Settings, Terminal } from "lucide-react";
+import { useRouter } from "~/app/navigation";
+import { Link2, ClipboardPaste, Settings, Terminal, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
@@ -17,14 +17,13 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/utils/format-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
-import { isWeb } from "@/constants/platform";
 
 interface WelcomeAction {
-  key: "scan-qr" | "direct-connection" | "remote-ssh" | "paste-pairing-link" | "setup-guide";
+  key: "direct-connection" | "paste-pairing-link" | "setup-guide";
   label: string;
   testID: string;
   primary: boolean;
-  icon: typeof QrCode;
+  icon: LucideIcon;
   onPress: () => void;
 }
 
@@ -103,9 +102,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleClosePasteLink = useCallback(() => setIsPasteLinkOpen(false), []);
   const handleOpenSetupGuide = useCallback(() => setIsSetupGuideOpen(true), []);
   const handleCloseSetupGuide = useCallback(() => setIsSetupGuideOpen(false), []);
-  const handleScanQr = useCallback(() => {
-    router.push("/pair-scan?source=onboarding");
-  }, [router]);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -123,58 +119,31 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     key: "setup-guide",
     label: t("pairing.connectionMethods.setupGuide.title"),
     testID: "welcome-setup-guide",
-    primary: isWeb && !isHostedWeb,
+    primary: !isHostedWeb,
     icon: Terminal,
     onPress: handleOpenSetupGuide,
   };
 
-  const actions: WelcomeAction[] = isWeb
-    ? [
-        ...(isHostedWeb ? [] : [setupGuideAction]),
-        {
-          key: "direct-connection",
-          label: t("pairing.connectionMethods.direct.title"),
-          testID: "welcome-direct-connection",
-          primary: isHostedWeb,
-          icon: Link2,
-          onPress: handleOpenDirect,
-        },
-        {
-          key: "paste-pairing-link",
-          label: t("pairing.connectionMethods.pasteLink.title"),
-          testID: "welcome-paste-pairing-link",
-          primary: false,
-          icon: ClipboardPaste,
-          onPress: handleOpenPasteLink,
-        },
-        ...(isHostedWeb ? [setupGuideAction] : []),
-      ]
-    : [
-        {
-          key: "scan-qr",
-          label: t("pairing.connectionMethods.scanQr.title"),
-          testID: "welcome-scan-qr",
-          primary: true,
-          icon: QrCode,
-          onPress: handleScanQr,
-        },
-        {
-          key: "direct-connection",
-          label: t("pairing.connectionMethods.direct.title"),
-          testID: "welcome-direct-connection",
-          primary: false,
-          icon: Link2,
-          onPress: handleOpenDirect,
-        },
-        {
-          key: "paste-pairing-link",
-          label: t("pairing.connectionMethods.pasteLink.title"),
-          testID: "welcome-paste-pairing-link",
-          primary: false,
-          icon: ClipboardPaste,
-          onPress: handleOpenPasteLink,
-        },
-      ];
+  const actions: WelcomeAction[] = [
+    ...(isHostedWeb ? [] : [setupGuideAction]),
+    {
+      key: "direct-connection",
+      label: t("pairing.connectionMethods.direct.title"),
+      testID: "welcome-direct-connection",
+      primary: isHostedWeb,
+      icon: Link2,
+      onPress: handleOpenDirect,
+    },
+    {
+      key: "paste-pairing-link",
+      label: t("pairing.connectionMethods.pasteLink.title"),
+      testID: "welcome-paste-pairing-link",
+      primary: false,
+      icon: ClipboardPaste,
+      onPress: handleOpenPasteLink,
+    },
+    ...(isHostedWeb ? [setupGuideAction] : []),
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">

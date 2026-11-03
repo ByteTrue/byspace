@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 const DEFAULT_DELAY_MS = 500;
 const SLOP_PX = 10;
 // Marks a press an inner element already tracks, so a trigger around it (a list's background menu
-// around a row's) does not long-press too: the innermost Pressable owned a press in packages/app.
+// around a row's) does not long-press too: the innermost Pressable owned a press in the Expo app.
 const claimedPresses = new WeakSet<Event>();
 
 /** Swallows the click that ends a long press, so the press does not also activate what it held. */

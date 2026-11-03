@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/schedules/schedule-row.tsx: one schedule in the Schedules list; DOM view.
-// Converted from the Expo file by web/scripts/port/schedules.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/schedules/schedule-row.tsx: one schedule in the Schedules list; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import { MoreVertical, Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-react";
 import { useCallback, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import { cn } from "cn";

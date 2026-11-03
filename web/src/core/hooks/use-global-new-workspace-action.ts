@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import { useHosts } from "@/runtime/host-runtime";

@@ -1,8 +1,8 @@
-// Port of packages/app/src/screens/open-project-screen.tsx: the home screen when no workspace is open; DOM view.
-// Converted from the Expo file by web/scripts/port/open-project-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/open-project-screen.tsx: the home screen when no workspace is open; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/open-project-screen.py; edit it directly.
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "expo-router";
+import { useRouter } from "~/app/navigation";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react";
 import { cn } from "cn";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";

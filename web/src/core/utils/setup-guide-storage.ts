@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 
 const RELAY_ENDPOINT_STORAGE_KEY = "@byspace:setup-guide-relay-endpoint-v1";
 
@@ -8,7 +8,7 @@ const RELAY_ENDPOINT_STORAGE_KEY = "@byspace:setup-guide-relay-endpoint-v1";
  */
 export async function readStoredRelayEndpoint(): Promise<string> {
   try {
-    return (await AsyncStorage.getItem(RELAY_ENDPOINT_STORAGE_KEY)) ?? "";
+    return (await localStorageAsync.getItem(RELAY_ENDPOINT_STORAGE_KEY)) ?? "";
   } catch {
     return "";
   }
@@ -17,9 +17,9 @@ export async function readStoredRelayEndpoint(): Promise<string> {
 export async function storeRelayEndpoint(value: string): Promise<void> {
   try {
     if (value.trim()) {
-      await AsyncStorage.setItem(RELAY_ENDPOINT_STORAGE_KEY, value.trim());
+      await localStorageAsync.setItem(RELAY_ENDPOINT_STORAGE_KEY, value.trim());
     } else {
-      await AsyncStorage.removeItem(RELAY_ENDPOINT_STORAGE_KEY);
+      await localStorageAsync.removeItem(RELAY_ENDPOINT_STORAGE_KEY);
     }
   } catch {
     // Best-effort persistence: the commands work without it.

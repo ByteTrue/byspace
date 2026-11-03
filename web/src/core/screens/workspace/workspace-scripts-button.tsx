@@ -1,9 +1,9 @@
-// Port of packages/app/src/screens/workspace/workspace-scripts-button.tsx: the header's
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-scripts-button.tsx: the header's
 // Scripts button and its panel (each script with run/stop/restart/view, services with their URL
 // and route choice). Same mutations, restart model and test IDs. The panel is a popover rather
 // than a menu: its rows hold several buttons each, which a menu's single-item focus model hides
 // from the keyboard.
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import {
   createContext,
   useCallback,
@@ -63,7 +63,7 @@ interface WorkspaceScriptsButtonProps {
   presentation?: "split" | "ghost";
 }
 
-/** Closes the scripts panel; actions that leave it (open, copy) call it first, as packages/app does. */
+/** Closes the scripts panel; actions that leave it (open, copy) call it first, as the Expo app does. */
 const ClosePanelContext = createContext<() => void>(() => undefined);
 
 const ROW_ICONS = {
@@ -520,7 +520,7 @@ export function WorkspaceScriptsButton({
   );
   const handleCopyUrl = useCallback(
     (url: string, label: string) => {
-      void Clipboard.setStringAsync(url);
+      void Clipboard.writeText(url);
       toast.copied(label);
     },
     [toast],

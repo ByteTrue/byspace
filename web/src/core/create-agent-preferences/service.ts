@@ -1,4 +1,4 @@
-import { AsyncStorageCreateAgentPreferenceStorage } from "./storage";
+import { LocalStorageCreateAgentPreferenceStorage } from "./storage";
 import {
   DEFAULT_FORM_PREFERENCES,
   parseFormPreferences,
@@ -59,5 +59,5 @@ export class CreateAgentPreferencesService {
 }
 
 export const createAgentPreferencesService = new CreateAgentPreferencesService(
-  new AsyncStorageCreateAgentPreferenceStorage(),
+  new LocalStorageCreateAgentPreferenceStorage(),
 );

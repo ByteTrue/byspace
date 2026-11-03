@@ -80,7 +80,7 @@ export function PullRequestStateIcon({
   return <Icon className={cn("size-3 shrink-0", PR_STATE_CLASS[state], className)} />;
 }
 
-/** packages/app's CheckIndicator: a ring with a tick, a cross, or a pie of finished checks. */
+/** The Expo app's CheckIndicator: a ring with a tick, a cross, or a pie of finished checks. */
 export function CheckIndicator({
   summary,
   className,
@@ -142,7 +142,7 @@ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
       data-testid={`host-badge-${badge.serverId}`}
       aria-label={badge.label}
     >
-      {/* The colour as the glyph's stroke, as packages/app's badge draws it. */}
+      {/* The colour as the glyph's stroke, as the Expo app's badge draws it. */}
       <Server className="size-3 shrink-0 text-muted-foreground" color={color} />
       {badge.showLabel ? (
         <span className="truncate" style={colorStyle}>
@@ -331,7 +331,7 @@ export function WorkspaceMetaRow({
   });
   if (items.length === 0) return null;
   return (
-    // packages/app's meta row: 6px between items and the dots, 3px inside an item.
+    // The Expo app's meta row: 6px between items and the dots, 3px inside an item.
     <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       {items.map((item, index) => (
         <Fragment key={item.kind}>
@@ -347,7 +347,7 @@ export function WorkspaceMetaRow({
   );
 }
 
-// packages/app's DiffStat, which the sidebar and the hover card share with the Changes pane.
+// The Expo app's DiffStat, which the sidebar and the hover card share with the Changes pane.
 export { DiffStat };
 
 function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {

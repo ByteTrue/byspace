@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/status-ring: the running ring, cut out of whatever it
+// Port of archive/expo-app:packages/app/src/components/status-ring: the running ring, cut out of whatever it
 // sits on so it reads over an icon.
 import { memo } from "react";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";

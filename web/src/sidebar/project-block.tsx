@@ -27,7 +27,7 @@ import {
   buildSidebarProjectRowModel,
   type SidebarProjectHostTarget,
 } from "@/utils/sidebar-project-row-model";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { cn } from "cn";
 import { contextMenuKit, dropdownMenuKit, type MenuKit } from "~/components/menu-kit";
 import { Shortcut } from "~/components/shortcut";
@@ -128,7 +128,7 @@ function NewWorkspaceButton({
             projectName: displayName,
           })}
           data-testid={`sidebar-project-new-worktree-${projectViewKey}`}
-          // Not a Tab stop, as packages/app's (a Pressable without a role on the web).
+          // Not a Tab stop, as the Expo app's (a Pressable without a role on the web).
           tabIndex={-1}
           onClick={handleClick}
           className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground"
@@ -316,7 +316,7 @@ export interface ProjectBlockProps {
 
 const workspaceKeyOf = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
-/** A project and its workspaces (packages/app's ProjectBlock). */
+/** A project and its workspaces (the Expo app's ProjectBlock). */
 export const ProjectBlock = memo(function ProjectBlock({
   project,
   workspaceEntriesByKey,

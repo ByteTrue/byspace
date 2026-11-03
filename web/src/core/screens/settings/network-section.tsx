@@ -1,10 +1,8 @@
-// Port of packages/app/src/screens/settings/network-section.tsx: access password and LAN exposure, DOM view.
-// Converted from the Expo file by web/scripts/port/settings-small-sections.py (tag archive/expo-app); edit it directly.
-import { Eye, EyeOff } from "lucide-react-native";
+// Port of archive/expo-app:packages/app/src/screens/settings/network-section.tsx: access password and LAN exposure, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
+import { Eye, EyeOff } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
-import { withUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -24,13 +22,15 @@ import {
   useHostMutations,
 } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { withTheme } from "~/app/theme-object";
+import { showAlert } from "~/lib/alert";
 
 const mutedColorMapping = (theme: { colors: { foregroundMuted: string } }) => ({
   color: theme.colors.foregroundMuted,
 });
 
-const ThemedEye = withUnistyles(Eye);
-const ThemedEyeOff = withUnistyles(EyeOff);
+const ThemedEye = withTheme(Eye);
+const ThemedEyeOff = withTheme(EyeOff);
 
 /**
  * Daemon network settings: access password and LAN exposure. Backed by the
@@ -93,7 +93,7 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           restartServer: (reason) => daemonClient.restartServer(reason),
         }).catch((err) => {
           console.error("[NetworkSection] Failed to restart daemon", err);
-          Alert.alert(t("settings.host.daemon.network.restartPrompt.failedTitle"));
+          showAlert(t("settings.host.daemon.network.restartPrompt.failedTitle"));
         });
       })
       .catch((err) => {
@@ -118,7 +118,7 @@ export function NetworkSection({ serverId }: { serverId: string }) {
         // Without the stored password the reconnect after the restart fails
         // with 401 — surface it instead of leaving a silent trap.
         console.error("[NetworkSection] Failed to update local connection password", err);
-        Alert.alert(t("settings.host.daemon.network.password.profileSyncFailed"));
+        showAlert(t("settings.host.daemon.network.password.profileSyncFailed"));
       });
     },
     [hosts, serverId, t, upsertDirectConnection],
@@ -332,9 +332,9 @@ function PasswordSheet({
             data-testid="host-page-network-password-visibility"
           >
             {isPasswordVisible ? (
-              <ThemedEyeOff size={16} uniProps={mutedColorMapping} />
+              <ThemedEyeOff size={16} themeProps={mutedColorMapping} />
             ) : (
-              <ThemedEye size={16} uniProps={mutedColorMapping} />
+              <ThemedEye size={16} themeProps={mutedColorMapping} />
             )}
           </button>
         </div>

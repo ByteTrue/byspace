@@ -1,5 +1,3 @@
-import { Path, Svg } from "react-native-svg";
-
 interface OmpIconProps {
   size?: number;
   color?: string;
@@ -7,8 +5,8 @@ interface OmpIconProps {
 
 export function OmpIcon({ size = 16, color = "currentColor" }: OmpIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="4 4 56 56" fill={color}>
-      <Path d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
-    </Svg>
+    <svg width={size} height={size} viewBox="4 4 56 56" fill={color}>
+      <path d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
+    </svg>
   );
 }

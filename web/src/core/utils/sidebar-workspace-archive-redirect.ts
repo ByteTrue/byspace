@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import {
   redirectIfArchivingActiveWorkspace as redirectIfArchivingActiveWorkspacePure,

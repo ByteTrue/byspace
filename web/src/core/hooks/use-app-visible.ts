@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { AppState } from "react-native";
 import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
-import { isWeb } from "@/constants/platform";
+import { AppState } from "~/lib/app-state";
 
 let visible = getIsAppVisible();
 let activelyVisible = getIsAppActivelyVisible();
@@ -28,7 +27,7 @@ function notify(): void {
 // AppState needs no environment guard of its own — react-native-web's implementation already
 // no-ops when there is no DOM, unlike the raw document/window listeners below.
 AppState.addEventListener("change", notify);
-if (isWeb && typeof document !== "undefined") {
+if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", notify);
   window.addEventListener("focus", notify);
   window.addEventListener("blur", notify);

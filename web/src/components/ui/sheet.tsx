@@ -45,7 +45,7 @@ function SheetOverlay({
   )
 }
 
-// BySpace: no shadow and no padding clip. The sheets here are packages/app's compact left sidebar
+// BySpace: no shadow and no padding clip. The sheets here are the Expo app's compact left sidebar
 // and explorer, full-width panels with neither.
 function SheetContent({
   className,

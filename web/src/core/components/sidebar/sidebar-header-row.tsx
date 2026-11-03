@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/sidebar/sidebar-header-row.tsx: the lone row at the top
+// Port of archive/expo-app:packages/app/src/components/sidebar/sidebar-header-row.tsx: the lone row at the top
 // of a sidebar (the settings sidebar's "Back to workspace"), 36px tall on desktop and 56px on a
 // phone, clearing the macOS traffic lights in the desktop app.
 import type { CSSProperties } from "react";

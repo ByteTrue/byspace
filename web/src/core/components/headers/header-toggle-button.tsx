@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/headers/header-toggle-button.tsx: a large header icon
+// Port of archive/expo-app:packages/app/src/components/headers/header-toggle-button.tsx: a large header icon
 // button (28px, 32px on a phone) with a tooltip naming it and its shortcut.
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { iconButtonChromeClassName } from "@/components/ui/icon-button-chrome";

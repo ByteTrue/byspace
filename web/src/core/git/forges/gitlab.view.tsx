@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/forges/gitlab.view.tsx: the GitLab brand, plus its merge-request
+// Port of archive/expo-app:packages/app/src/git/forges/gitlab.view.tsx: the GitLab brand, plus its merge-request
 // contributions to the PR pane — the approvals badge in the header and the pipeline section in
 // place of the checks list. Pipeline loading and job classification are the shared GitLab
 // modules'; the view is DOM.

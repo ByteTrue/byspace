@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { vi } from "vitest";
-import React from "react";
 
 const globalWithTestShims = globalThis as typeof globalThis & Record<string, unknown>;
 
@@ -38,34 +37,28 @@ if (typeof globalThis.cancelAnimationFrame !== "function") {
   };
 }
 
-// The router shim (src/shims/expo-router.tsx) drives React Router, which a unit test does not
-// mount; navigation calls are recorded instead.
-const RouterPassthrough = ({ children }: { children?: React.ReactNode }) => children;
-
-vi.mock("expo-router", () => ({
+// The app's router (~/app/navigation) drives React Router, which a unit test does not mount;
+// navigation calls are recorded instead.
+vi.mock("~/app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/navigation")>()),
   Redirect: () => null,
-  Stack: Object.assign(RouterPassthrough, {
-    Screen: () => null,
-    Protected: RouterPassthrough,
-  }),
   router: {
     back: vi.fn(),
     canGoBack: vi.fn(() => false),
+    dismissTo: vi.fn(),
     navigate: vi.fn(),
     push: vi.fn(),
     replace: vi.fn(),
-    setParams: vi.fn(),
   },
   useGlobalSearchParams: vi.fn(() => ({})),
   useLocalSearchParams: vi.fn(() => ({})),
   usePathname: vi.fn(() => "/"),
-  useRootNavigationState: vi.fn(() => ({ key: "root" })),
   useRouter: vi.fn(() => ({
     back: vi.fn(),
     canGoBack: vi.fn(() => false),
+    dismissTo: vi.fn(),
     navigate: vi.fn(),
     push: vi.fn(),
     replace: vi.fn(),
-    setParams: vi.fn(),
   })),
 }));

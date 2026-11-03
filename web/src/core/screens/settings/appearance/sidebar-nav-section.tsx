@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/settings/appearance/sidebar-nav-section.tsx: sidebar entries — shortcut, reorder and visibility. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/sidebar-nav-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/appearance/sidebar-nav-section.tsx: sidebar entries — shortcut, reorder and visibility. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/sidebar-nav-section.py; edit it directly.
 import { useCallback, useMemo, type ReactElement } from "react";
 import { cn } from "cn";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,6 @@ import {
   Search,
   type LucideIcon,
 } from "lucide-react";
-import { withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Switch } from "@/components/ui/switch";
@@ -30,14 +29,15 @@ import {
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { withTheme } from "~/app/theme-object";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedArrowDown = withUnistyles(ArrowDown);
+const ThemedArrowUp = withTheme(ArrowUp);
+const ThemedArrowDown = withTheme(ArrowDown);
 
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.xs} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.xs} uniProps={mutedColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.xs} themeProps={mutedColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.xs} themeProps={mutedColorMapping} />;
 
 const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
@@ -51,7 +51,7 @@ function NavIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {
   return <Icon size={ICON_SIZE.md} color={color} />;
 }
 
-const ThemedNavIcon = withUnistyles(NavIcon);
+const ThemedNavIcon = withTheme(NavIcon);
 
 function navItemIcon(item: SidebarNavItem): LucideIcon {
   // Plugin sidebar groups are retired (issue 025 C6); only builtin items remain.
@@ -107,7 +107,7 @@ function SidebarNavRow({
       data-testid={`sidebar-nav-item-${item.key}`}
     >
       <div className="flex flex-1 flex-row items-center gap-2">
-        <ThemedNavIcon Icon={navItemIcon(item)} uniProps={mutedColorMapping} />
+        <ThemedNavIcon Icon={navItemIcon(item)} themeProps={mutedColorMapping} />
         <span className={cn(settingsStyles.rowTitle, "truncate")}>{label}</span>
         <NavItemShortcut item={item} />
       </div>

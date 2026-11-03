@@ -1,10 +1,10 @@
-// Port of packages/app/src/navigation/workspace-route-navigation.ts. packages/app pops its stack
+// Port of archive/expo-app:packages/app/src/navigation/workspace-route-navigation.ts. The Expo app pops its stack
 // back to the host screen and hands it the new workspace (POP_TO), or replaces the current screen when
 // nothing sits above the host (dismissTo). In browser history that means a workspace never adds an
 // entry: it replaces the host entry (a workspace, /open-project or /), after popping the screens pushed
 // above it (Settings, History, Schedules...). So Back from a workspace leaves the app, as Android's
-// back button does in packages/app, instead of walking through every workspace visited.
-import { router } from "expo-router";
+// back button does in the Expo app, instead of walking through every workspace visited.
+import { router } from "~/app/navigation";
 import { parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
 
 // React Router keeps its history index in history.state; this records, per index, whether the entry is

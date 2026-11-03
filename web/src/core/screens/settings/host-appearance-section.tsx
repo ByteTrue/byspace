@@ -1,9 +1,8 @@
-// Port of packages/app/src/screens/settings/host-appearance-section.tsx: host name, colour and badge, with a preview row; DOM view.
-// Converted from the Expo file by web/scripts/port/host-appearance-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/host-appearance-section.tsx: host name, colour and badge, with a preview row; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/host-appearance-section.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { ChevronDown, Pencil } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,9 +27,10 @@ import { cn } from "cn";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedPencil = withUnistyles(Pencil);
+const ThemedChevronDown = withTheme(ChevronDown);
+const ThemedPencil = withTheme(Pencil);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -62,7 +62,7 @@ function HostRenameButton({ host }: { host: HostProfile }) {
         aria-label={t("settings.host.daemon.rename.editLabel")}
         data-testid="host-page-label-edit-button"
       >
-        <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <ThemedPencil size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
       </button>
 
       <AdaptiveRenameModal
@@ -131,7 +131,7 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
         >
           <ColorSwatch color={color} />
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {HOST_COLORS.map((option) => (
@@ -171,7 +171,7 @@ function BadgeDisplayRow({
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {HOST_BADGE_DISPLAYS.map((option) => (

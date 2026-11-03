@@ -1,15 +1,15 @@
-// Port of packages/app/src/components/add-host-method-modal.tsx: how to add a host: direct connection or a pasted pairing link; DOM view.
-// Converted from the Expo file by web/scripts/port/add-host-modals.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/add-host-method-modal.tsx: how to add a host: direct connection or a pasted pairing link; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { Link2, ClipboardPaste } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 
 import type { Theme } from "@/styles/theme";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedLink2 = withUnistyles(Link2);
-const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
+const ThemedLink2 = withTheme(Link2);
+const ThemedClipboardPaste = withTheme(ClipboardPaste);
 const foregroundIconMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 const OPTION = "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left";
@@ -53,7 +53,7 @@ export function AddHostMethodModal({
         aria-label={t("pairing.connectionMethods.direct.title")}
         data-testid="add-host-method-direct"
       >
-        <ThemedLink2 size={18} uniProps={foregroundIconMapping} />
+        <ThemedLink2 size={18} themeProps={foregroundIconMapping} />
         <span className="flex flex-1 flex-col">
           <span className="text-sm leading-[normal] font-normal text-foreground">
             {t("pairing.connectionMethods.direct.title")}
@@ -71,7 +71,7 @@ export function AddHostMethodModal({
         aria-label={t("pairing.connectionMethods.pasteLink.title")}
         data-testid="add-host-method-pair-link"
       >
-        <ThemedClipboardPaste size={18} uniProps={foregroundIconMapping} />
+        <ThemedClipboardPaste size={18} themeProps={foregroundIconMapping} />
         <span className="flex flex-1 flex-col">
           <span className="text-sm leading-[normal] font-normal text-foreground">
             {t("pairing.connectionMethods.pasteLink.title")}

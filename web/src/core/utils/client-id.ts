@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { z } from "zod";
 import { readValidatedString } from "@/storage/validated-storage";
 
@@ -65,7 +65,7 @@ function generateUuidFromGlobalCrypto(): string {
 }
 
 const defaultResolver = createClientIdResolver({
-  storage: AsyncStorage,
+  storage: localStorageAsync,
   generateUuid: generateUuidFromGlobalCrypto,
 });
 

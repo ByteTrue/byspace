@@ -1,4 +1,4 @@
-// Port of packages/app/src/hooks/use-file-picker.ts: the browser's file dialog only.
+// Port of archive/expo-app:packages/app/src/hooks/use-file-picker.ts: the browser's file dialog only.
 import { useCallback, useRef } from "react";
 import { getMimeTypeFromPath } from "@/attachments/file-types";
 import type { PickedFile } from "@/attachments/picked-file";

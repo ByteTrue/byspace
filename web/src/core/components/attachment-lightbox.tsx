@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/attachment-lightbox.tsx: an image over the whole window
+// Port of archive/expo-app:packages/app/src/components/attachment-lightbox.tsx: an image over the whole window
 // on a dark backdrop, zoomable, closed by Escape, the close action or a click outside it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";

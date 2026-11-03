@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { isWeb } from "@/constants/platform";
 
 const COMPACT_WEB_VIEWPORT_CONTENT =
   "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
@@ -7,10 +6,6 @@ const DEFAULT_WEB_VIEWPORT_CONTENT = "width=device-width, initial-scale=1, viewp
 
 export function useCompactWebViewportZoomLock(isCompactLayout: boolean) {
   useEffect(() => {
-    if (!isWeb) {
-      return;
-    }
-
     const viewportMeta =
       document.querySelector<HTMLMetaElement>('meta[name="viewport"]') ??
       document.createElement("meta");

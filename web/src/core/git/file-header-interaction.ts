@@ -1,5 +1,9 @@
 import { useCallback, useRef } from "react";
-import type { LayoutChangeEvent } from "react-native";
+
+/** A layout report: the header's measured box. */
+export interface LayoutChangeEvent {
+  nativeEvent: { layout: { x: number; y: number; width: number; height: number } };
+}
 
 interface FileHeaderInteractionInput {
   path: string;

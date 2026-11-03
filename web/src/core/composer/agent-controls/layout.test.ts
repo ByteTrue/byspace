@@ -3,7 +3,7 @@ import {
   COMPOSER_TOOLBAR_GEOMETRY,
   resolveComposerControlDensity,
   resolveComposerControlPresentation,
-  resolveComposerToolbarGlyphSize,
+  COMPOSER_TOOLBAR_GLYPH_SIZE,
 } from "./layout";
 
 describe("composer control layout", () => {
@@ -189,7 +189,6 @@ describe("composer control layout", () => {
       labelPadding: 8,
       caretSize: 14,
     });
-    expect(resolveComposerToolbarGlyphSize("web")).toBe(16);
-    expect(resolveComposerToolbarGlyphSize("native")).toBe(20);
+    expect(COMPOSER_TOOLBAR_GLYPH_SIZE).toBe(16);
   });
 });

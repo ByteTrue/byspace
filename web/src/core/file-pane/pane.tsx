@@ -1,10 +1,9 @@
-// Port of packages/app/src/file-pane/pane.tsx. The read, live-update, edit, save and
+// Port of archive/expo-app:packages/app/src/file-pane/pane.tsx. The read, live-update, edit, save and
 // conflict logic is the Expo file's; the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/file-pane.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/file-pane.py; edit it directly.
 import { Button } from "@/components/ui/button";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
@@ -16,7 +15,6 @@ import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
-import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useLiveFile } from "@/file-pane/live-file/hook";
 import { useFilePreview } from "@/file-pane/preview-lifecycle/hook";
@@ -39,6 +37,7 @@ import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attri
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 
 import { Spinner } from "~/components/ui/spinner";
+import { useThemeObject } from "~/app/theme-object";
 
 const CENTER_STATE = "flex flex-1 flex-col items-center justify-center gap-3 p-4";
 const EMPTY_TEXT = "text-center text-sm text-muted-foreground";
@@ -95,7 +94,7 @@ function ReadonlySource({
   location: WorkspaceFileLocation;
   navigationRevision: number;
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const visualTheme = useMemo(
     () => ({
@@ -321,10 +320,7 @@ function isEditableTextFile(input: {
   supportsEditing: boolean;
 }): boolean {
   return Boolean(
-    isWeb &&
-    input.supportsEditing &&
-    input.preview?.kind === "text" &&
-    input.preview.size <= 1024 * 1024,
+    input.supportsEditing && input.preview?.kind === "text" && input.preview.size <= 1024 * 1024,
   );
 }
 
@@ -517,7 +513,7 @@ function EditableFilePane({
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
   usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const visualTheme = useMemo(
     () => ({
       colorScheme: theme.colorScheme,

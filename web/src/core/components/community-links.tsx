@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/community-links.tsx: Star, Sponsor and Community.
+// Port of archive/expo-app:packages/app/src/components/community-links.tsx: Star, Sponsor and Community.
 import { useCallback } from "react";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";

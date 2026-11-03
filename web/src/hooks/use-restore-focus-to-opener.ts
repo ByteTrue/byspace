@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 
 /**
- * Focus goes back to whatever had it when a dialog opened, as packages/app's overlays did
+ * Focus goes back to whatever had it when a dialog opened, as the Expo app's overlays did
  * (lib/overlay-root.ts). Radix only returns focus to a Dialog.Trigger, and most of our dialogs are
  * opened from state without one, so on close focus fell to the body.
  *

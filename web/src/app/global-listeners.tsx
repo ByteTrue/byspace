@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { AppState, setAlertHandler } from "react-native";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { SessionProvider } from "@/contexts/session-context";
 import { useToast } from "@/contexts/toast-context";
@@ -22,9 +21,11 @@ import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
+import { AppState } from "~/lib/app-state";
+import { setAlertHandler } from "~/lib/alert";
 
-// The headless pieces of packages/app's root layout, one component each, same behaviour.
+// The headless pieces of the Expo app's root layout, one component each, same behaviour.
 
 /** A notification click (page notification or Web Push via the service worker) opens its target. */
 export function PushNotificationRouter() {
@@ -141,7 +142,7 @@ export function DraftFlushOnBackground() {
   return null;
 }
 
-/** Shows Alert.alert notices as error toasts (see the react-native shim). */
+/** Shows showAlert notices (~/lib/alert) as error toasts. */
 export function AlertToastBridge() {
   const toast = useToast();
   useEffect(() => {

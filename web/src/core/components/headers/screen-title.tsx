@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/headers/screen-title.tsx: 14px medium, one line.
+// Port of archive/expo-app:packages/app/src/components/headers/screen-title.tsx: 14px medium, one line.
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "cn";
 
@@ -14,7 +14,7 @@ export function ScreenTitle({ children, testID, style, className }: ScreenTitleP
   return (
     <span
       className={cn(
-        // packages/app sets no line height (normal); text-sm alone would make the line 20px.
+        // The Expo app sets no line height (normal); text-sm alone would make the line 20px.
         "min-w-0 shrink truncate text-sm leading-[normal] font-medium text-foreground",
         className,
       )}

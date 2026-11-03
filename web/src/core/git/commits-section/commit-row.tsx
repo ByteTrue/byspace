@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/commits-section/commit-row.tsx: one commit — graph node, short
+// Port of archive/expo-app:packages/app/src/git/commits-section/commit-row.tsx: one commit — graph node, short
 // sha, subject, age — opening its diff on press.
 import { memo, useCallback } from "react";
 import { CommitGraphNode } from "@/git/commits-section/commit-graph-node";
@@ -43,7 +43,7 @@ export const CommitRow = memo(function CommitRow({
         {formatTimeAgo(new Date(commit.authorDate), now)}
       </span>
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <ThemedChevron size={14} uniProps={chevronColorMapping} />
+        <ThemedChevron size={14} themeProps={chevronColorMapping} />
       </span>
     </button>
   );

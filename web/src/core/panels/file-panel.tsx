@@ -1,5 +1,5 @@
-// Port of packages/app/src/panels/file-panel.tsx: same descriptor and pane, DOM view.
-// Converted from the Expo file by web/scripts/port/file-pane.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/panels/file-panel.tsx: same descriptor and pane, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/file-pane.py; edit it directly.
 import { useMemo } from "react";
 import invariant from "tiny-invariant";
 import { useTranslation } from "react-i18next";

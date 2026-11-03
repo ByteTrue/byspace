@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/markdown/renderer.tsx: markdown outside agent prose
+// Port of archive/expo-app:packages/app/src/components/markdown/renderer.tsx: markdown outside agent prose
 // (plan cards, review comments, file previews, the changelog). The same HTML-ish pre-pass splits
 // out <details> and inline images; the markdown between them renders through web/src/markdown.
 import {

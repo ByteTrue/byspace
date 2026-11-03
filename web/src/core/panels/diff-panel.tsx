@@ -1,6 +1,6 @@
-// Port of packages/app/src/panels/diff-panel.tsx: the Changes and Diff tabs and a commit's
+// Port of archive/expo-app:packages/app/src/panels/diff-panel.tsx: the Changes and Diff tabs and a commit's
 // diff. Same descriptors and logic; the view is DOM.
-// Converted from the Expo file by web/scripts/port/diff-pane.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/diff-pane.py; edit it directly.
 import { useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileDiff, GitCommitHorizontal } from "lucide-react";
@@ -8,7 +8,6 @@ import invariant from "tiny-invariant";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
-import { isWeb } from "@/constants/platform";
 import { DiffDocument } from "@/git/diff-document";
 import { ChangesSurface, DiffLayoutToggle, resolveDiffLayout } from "@/git/diff-pane";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
@@ -27,7 +26,7 @@ function useDiffPanelPreferences() {
   const { settings } = useAppSettings();
   const { preferences, updatePreferences } = useChangesPreferences();
   const isCompact = useIsCompactFormFactor();
-  const canUseSplitLayout = isWeb && !isCompact;
+  const canUseSplitLayout = !isCompact;
   const effectiveLayout = resolveDiffLayout(preferences.layout, canUseSplitLayout);
   const displayPreferences = useMemo(
     () => ({

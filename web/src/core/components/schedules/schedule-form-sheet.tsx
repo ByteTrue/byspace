@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/schedules/schedule-form-sheet.tsx: the create / edit schedule sheet; DOM view.
-// Converted from the Expo file by web/scripts/port/schedules.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/schedules/schedule-form-sheet.tsx: the create / edit schedule sheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import equal from "fast-deep-equal";
 import {
   useCallback,

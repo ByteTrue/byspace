@@ -1,4 +1,4 @@
-// Port of packages/app/src/app/_layout.tsx. Shared routes and boundaries import the startup
+// Port of archive/expo-app:packages/app/src/app/_layout.tsx. Shared routes and boundaries import the startup
 // hooks from the Expo root layout; on the web the layout itself is web/src/app/root.tsx, and these
 // are the same hooks with the same give-up timing.
 import {
@@ -11,13 +11,13 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { AppState } from "react-native";
 import {
   bindHostRuntimeAppState,
   shouldRunStartupGiveUpTimer,
   startHostRuntimeBootstrap,
 } from "@/navigation/host-runtime-bootstrap";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { AppState } from "~/lib/app-state";
 
 export interface HostRuntimeBootstrapState {
   splashError: string | null;

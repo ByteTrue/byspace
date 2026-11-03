@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/sidebar-callout.tsx: the card the sidebar shows above its
+// Port of archive/expo-app:packages/app/src/components/sidebar-callout.tsx: the card the sidebar shows above its
 // footer (worktree setup hints and the like). Same props, testIDs and geometry: a full-width band
 // under a hairline, actions sharing the row.
 import type { ReactNode } from "react";
@@ -81,7 +81,7 @@ export function SidebarCallout({
       {visibleActions.length > 0 ? (
         <div className="mt-2 flex gap-2" data-testid={testID ? `${testID}-actions` : undefined}>
           {visibleActions.map((action, index) => (
-            // packages/app's callout buttons: a foreground fill or a bordered outline, no hover
+            // The Expo app's callout buttons: a foreground fill or a bordered outline, no hover
             // change, dimmed while pressed.
             <button
               type="button"

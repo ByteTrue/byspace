@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/toast-host.tsx in DOM: the same API, timing and look. A toast
+// Port of archive/expo-app:packages/app/src/components/toast-host.tsx in DOM: the same API, timing and look. A toast
 // drops in below the header (or 12px into its panel), fades and slides 8px over 140ms, pauses while
 // the pointer is on it, and has no close button.
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { z } from "zod";
@@ -161,7 +161,7 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
     }),
     {
       name: "sidebar-project-workspace-order",
-      storage: createValidatedPersistStorage(AsyncStorage, SidebarOrderPersistedStateSchema),
+      storage: createValidatedPersistStorage(localStorageAsync, SidebarOrderPersistedStateSchema),
       partialize: (state) => ({
         projectOrder: state.projectOrder,
         pinnedWorkspaceOrder: state.pinnedWorkspaceOrder,

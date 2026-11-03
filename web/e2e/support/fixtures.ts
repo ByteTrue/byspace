@@ -24,11 +24,11 @@ interface TrackedProjectPickerFixture extends ProjectPickerFixture {
 // reliably for every test that uses this `test` object.
 const metroTest = base.extend({
   baseURL: async ({}, provide) => {
-    const metroPort = process.env.E2E_METRO_PORT;
-    if (!metroPort) {
-      throw new Error("E2E_METRO_PORT not set - globalSetup must run first");
+    const webPort = process.env.E2E_WEB_PORT;
+    if (!webPort) {
+      throw new Error("E2E_WEB_PORT not set - globalSetup must run first");
     }
-    await provide(`http://localhost:${metroPort}`);
+    await provide(`http://localhost:${webPort}`);
   },
 });
 
@@ -117,10 +117,10 @@ const test = daemonTest.extend<{
   byspaceE2ESetup: [
     async ({ page }, provide, testInfo) => {
       const daemonPort = getE2EDaemonPort();
-      const metroPort = process.env.E2E_METRO_PORT;
-      if (!metroPort) {
+      const webPort = process.env.E2E_WEB_PORT;
+      if (!webPort) {
         throw new Error(
-          "E2E_METRO_PORT is not set. Ensure Playwright `globalSetup` starts Metro and exports E2E_METRO_PORT.",
+          "E2E_WEB_PORT is not set. Ensure Playwright `globalSetup` serves web/dist and exports E2E_WEB_PORT.",
         );
       }
 

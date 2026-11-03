@@ -26,7 +26,7 @@ import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { RootErrorBoundary } from "~/app/root-error-boundary";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
-// The provider order follows packages/app/src/app/_layout.tsx (RootLayout > RootProviders >
+// The provider order follows archive/expo-app:packages/app/src/app/_layout.tsx (RootLayout > RootProviders >
 // RuntimeProviders > ProvidersWrapper).
 
 function RootProviders({ children }: { children: ReactNode }) {

@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx: the "..."
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx: the "..."
 // beside each row of the phone tab switcher, holding that tab's menu.
 import { useMemo, type ReactElement } from "react";
 import {

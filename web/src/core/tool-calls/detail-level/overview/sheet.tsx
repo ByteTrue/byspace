@@ -1,4 +1,4 @@
-// Port of packages/app/src/tool-calls/detail-level/overview/sheet.tsx: a folded run of tool
+// Port of archive/expo-app:packages/app/src/tool-calls/detail-level/overview/sheet.tsx: a folded run of tool
 // calls on a phone, in a bottom drawer that keeps the newest call in view.
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Wrench, X } from "lucide-react";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/appearance/provider.tsx. The Expo version patches Unistyles themes;
+// Port of archive/expo-app:packages/app/src/appearance/provider.tsx. The Expo version patches Unistyles themes;
 // here the same settings land on <html>: `dark` plus a variant class pick the palette
 // (index.css, styles/themes.css), and CSS variables carry the type settings.
 import { type ReactNode, useEffect, useMemo } from "react";
@@ -54,7 +54,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     const root = document.documentElement;
-    // packages/app's scaleFontSize (appearance/apply.ts): each step scaled from 14px and rounded
+    // The Expo app's scaleFontSize (appearance/apply.ts): each step scaled from 14px and rounded
     // to a whole pixel, so a 12px interface makes the 12px step 10px, not 10.29px.
     const ratio = settings.uiBaseFontSize / DEFAULT_UI_BASE_FONT_SIZE;
     for (const [step, size] of UI_TEXT_STEPS) {

@@ -4,7 +4,6 @@ import type { SharedValue } from "~/lib/shared-flag";
 import type { ImageAttachment } from "@/composer/types";
 import { persistAttachmentFromBlob } from "@/attachments/service";
 import { isRasterImageFile, resolveRasterImageMimeType } from "@/attachments/file-types";
-import { isWeb } from "@/constants/platform";
 import type { DroppedItem, FileDropSink } from "./types";
 import {
   parseWorkspaceFileDragPayload,
@@ -59,8 +58,6 @@ export function useDropListeners({
   }, [disabled, isDragging]);
 
   useEffect(() => {
-    if (!isWeb) return;
-
     let cleanup: (() => void) | undefined;
 
     function setupDomDragDrop() {

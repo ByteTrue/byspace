@@ -1,8 +1,8 @@
-// Port of packages/app/src/screens/sessions-screen.tsx: the History page; DOM view.
-// Converted from the Expo file by web/scripts/port/sessions-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/sessions-screen.tsx: the History page; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
 import { useMemo, useState, useCallback, useEffect, type ReactElement } from "react";
-import { useIsFocused } from "@react-navigation/native";
-import { router } from "expo-router";
+import { useIsFocused } from "~/app/route-focus";
+import { router } from "~/app/navigation";
 import { ChevronLeft, Import } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";

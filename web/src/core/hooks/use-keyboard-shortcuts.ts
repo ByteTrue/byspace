@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { usePathname, useRouter } from "expo-router";
+import { usePathname, useRouter } from "~/app/navigation";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";

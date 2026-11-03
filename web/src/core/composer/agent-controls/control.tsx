@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/agent-controls/control.tsx: the trigger every composer
+// Port of archive/expo-app:packages/app/src/composer/agent-controls/control.tsx: the trigger every composer
 // control uses — a 28px toolbar chip (icon, value, optional caret), or a 44px sheet row (icon,
 // label, value) in the phone's controls sheet.
 import { forwardRef, type ComponentProps } from "react";
@@ -40,7 +40,7 @@ function triggerClassName({
 }): string {
   if (isSheet) {
     return cn(
-      // packages/app's sheet row: a surface1 card with a 16px radius, surface2 while hovered,
+      // The Expo app's sheet row: a surface1 card with a 16px radius, surface2 while hovered,
       // pressed or open
       "-mx-1 flex min-h-11 min-w-0 items-center gap-2 rounded-[16px] bg-card px-4 hover:bg-muted active:bg-muted",
       open && "bg-muted",

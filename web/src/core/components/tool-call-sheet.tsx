@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/tool-call-sheet.tsx: on a phone a tool call opens in a
+// Port of archive/expo-app:packages/app/src/components/tool-call-sheet.tsx: on a phone a tool call opens in a
 // bottom drawer (60% of the screen, dragged up to 95%) instead of expanding inline.
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
@@ -58,7 +58,7 @@ export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
         snapPoints={SNAP_POINTS}
         onAnimationEnd={handleAnimationEnd}
         aria-describedby={undefined}
-        // packages/app's ToolCallSheetModal: surface2 with the lg (10px) radius
+        // The Expo app's ToolCallSheetModal: surface2 with the lg (10px) radius
         className="bg-muted data-[vaul-drawer-direction=bottom]:rounded-t-[10px]"
         overlayClassName="bg-black/50"
       >

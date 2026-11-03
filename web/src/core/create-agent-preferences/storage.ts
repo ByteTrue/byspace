@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { readValidatedJson } from "@/storage/validated-storage";
 import {
   FormPreferencesSchema,
@@ -13,10 +13,10 @@ export interface CreateAgentPreferenceStorage {
   write(preferences: FormPreferences): Promise<void>;
 }
 
-export class AsyncStorageCreateAgentPreferenceStorage implements CreateAgentPreferenceStorage {
+export class LocalStorageCreateAgentPreferenceStorage implements CreateAgentPreferenceStorage {
   async read(): Promise<unknown> {
     return readValidatedJson(
-      AsyncStorage,
+      localStorageAsync,
       CREATE_AGENT_PREFERENCES_STORAGE_KEY,
       StoredFormPreferencesSchema,
     );
@@ -25,9 +25,12 @@ export class AsyncStorageCreateAgentPreferenceStorage implements CreateAgentPref
   async write(preferences: FormPreferences): Promise<void> {
     const result = FormPreferencesSchema.safeParse(preferences);
     if (!result.success) {
-      await AsyncStorage.removeItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY);
+      await localStorageAsync.removeItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY);
       return;
     }
-    await AsyncStorage.setItem(CREATE_AGENT_PREFERENCES_STORAGE_KEY, JSON.stringify(result.data));
+    await localStorageAsync.setItem(
+      CREATE_AGENT_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(result.data),
+    );
   }
 }

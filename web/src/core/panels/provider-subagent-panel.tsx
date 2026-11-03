@@ -1,5 +1,5 @@
-// Port of packages/app/src/panels/provider-subagent-panel.tsx: same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/provider-subagent-panel.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/panels/provider-subagent-panel.tsx: same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/provider-subagent-panel.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import invariant from "tiny-invariant";
 import { useShallow } from "zustand/react/shallow";

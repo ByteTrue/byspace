@@ -1,7 +1,7 @@
-// Port of packages/app/src/agent-stream/view.tsx. The stream logic is the Expo file's (tool-call
+// Port of archive/expo-app:packages/app/src/agent-stream/view.tsx. The stream logic is the Expo file's (tool-call
 // grouping and detail levels, nested codemode, subagents, forks, the outline, history paging);
-// the view is DOM and Tailwind. Keep the two in step until the cutover deletes packages/app.
-// Converted from the Expo file by web/scripts/port/agent-stream-view.py (tag archive/expo-app); edit it directly.
+// the view is DOM and Tailwind. Keep the two in step until the cutover deletes the Expo app.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-stream-view.py; edit it directly.
 import { Spinner } from "~/components/ui/spinner";
 import React, {
   forwardRef,
@@ -1315,10 +1315,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               hasOlderHistory: hasOlder,
               olderHistoryProgressKey: progressKey,
               scrollEnabled: true,
-              // The web strategy lays its list out itself; these React Native styles are unused.
-              listStyle: undefined,
-              baseListContentContainerStyle: undefined,
-              forwardListContentContainerStyle: undefined,
             })}
           </MessageOuterSpacingProvider>
           <ChatOutlineRail

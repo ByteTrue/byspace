@@ -54,7 +54,7 @@ import { ProjectStatusIndicator, WorkspaceStatusIndicator } from "~/sidebar/stat
 import { WorkspaceLabelsSubmenu } from "~/sidebar/workspace-labels-menu";
 import { WorkspaceHoverCard } from "~/sidebar/workspace-hover-card";
 
-// shortcut: copied from packages/app/src/components/sidebar-workspace-list.tsx, whose module
+// shortcut: copied from archive/expo-app:packages/app/src/components/sidebar-workspace-list.tsx, whose module
 // renders React Native; the copy there goes away at the cutover.
 const AGENT_WORKSPACE_RENAME_PROMPT =
   "Based on our current conversation and the actual repository changes, rename this workspace to reflect what the work has become. First set a concise, distinctive workspace title. If the current branch is still a BySpace-generated, unpublished worktree branch and the proposed name does not conflict, also set a matching branch name. Otherwise leave the branch unchanged and explain why. Generate the title and branch independently rather than mechanically slugifying the title. Never rename a default, published, upstream-tracking, or PR/MR branch. Use the BySpace skill to apply the changes and report the final title and branch.";
@@ -185,7 +185,7 @@ export interface WorkspaceRowProps {
   reserveIdleStatusIndicatorSpace?: boolean;
   isCreating?: boolean;
   onWorkspacePress?: () => void;
-  /** The status grouping leaves "Rename with agent" out, as packages/app does. */
+  /** The status grouping leaves "Rename with agent" out, as the Expo app does. */
   allowRenameWithAgent?: boolean;
   /** Present when the row sits in a reorderable list. */
   sortable?: SortableItemProps;
@@ -221,7 +221,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-/** Archive, with the selected row's keyboard shortcut, as packages/app's row wires it. */
+/** Archive, with the selected row's keyboard shortcut, as the Expo app's row wires it. */
 function useRowArchive(
   workspace: SidebarWorkspaceEntry,
   selected: boolean,
@@ -412,7 +412,7 @@ function WorkspaceRowText({
     (sidebarWorkspaceTrailing === "diff" && workspace.diffStat !== null) ||
     (sidebarWorkspaceTrailing === "timestamp" && workspace.statusEnteredAt !== null);
   return (
-    // The meta line sits right under the title, as in packages/app (no gap between the two).
+    // The meta line sits right under the title, as in the Expo app (no gap between the two).
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="flex h-5 min-w-0 items-center gap-2">
         <span
@@ -507,7 +507,7 @@ function WorkspaceRowKebab({
       <DropdownMenuTrigger
         aria-label={t("sidebar.workspace.actions.menu")}
         data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
-        // packages/app renders it only while the row is hovered (always on phones), so on desktop
+        // The Expo app renders it only while the row is hovered (always on phones), so on desktop
         // it is not a Tab stop, and out of hover it is hidden rather than transparent.
         tabIndex={isCompact ? undefined : -1}
         // The scrim fades the title out under the button instead of cutting it off.
@@ -599,7 +599,7 @@ function WorkspaceRowLink({
       aria-current={selected ? "page" : undefined}
       aria-disabled={isArchiving || undefined}
       data-active={selected}
-      // What the e2e helpers read for selection (packages/app's row carried aria-selected, which a
+      // What the e2e helpers read for selection (the Expo app's row carried aria-selected, which a
       // link does not take; aria-current is the link's).
       data-selected={selected ? "true" : "false"}
       data-testid={`sidebar-workspace-row-${workspace.workspaceKey}`}
@@ -656,7 +656,7 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
   const isDragging = sortable?.isDragging === true;
   const anyMenuOpen = menuOpen || contextMenuOpen;
   const showShortcut = props.showShortcutBadge && props.shortcutNumber !== null;
-  // As in packages/app, only rows that can be archived carry the kebab; the right-click menu is always there.
+  // As in the Expo app, only rows that can be archived carry the kebab; the right-click menu is always there.
   const hasKebab = actions.onArchive !== undefined;
 
   return (

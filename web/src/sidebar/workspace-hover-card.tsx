@@ -1,4 +1,4 @@
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import {
   useCallback,
   useMemo,
@@ -37,7 +37,7 @@ import { ForgeIcon } from "~/components/forge-icon";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card";
 import { DiffStat, PullRequestStateIcon } from "~/sidebar/meta-row";
 
-// Geometry follows packages/app/src/components/workspace-hover-card.tsx: a 260px card, 12px
+// Geometry follows archive/expo-app:packages/app/src/components/workspace-hover-card.tsx: a 260px card, 12px
 // info rows on a 12px rail, 12px icons, separators between the sections.
 
 const AGENT_STATUS_LABEL_KEYS = {
@@ -79,7 +79,7 @@ function CopyableInfoRow({
 }) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
-    void Clipboard.setStringAsync(copyValue);
+    void Clipboard.writeText(copyValue);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [copyValue]);
@@ -109,7 +109,7 @@ function CopyableInfoRow({
   );
 }
 
-/** packages/app's PrBadge on the info-row rail: state icon (external link on hover) and number. */
+/** The Expo app's PrBadge on the info-row rail: state icon (external link on hover) and number. */
 function PrRow({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const openPullRequest = useCallback(() => void openExternalUrl(hint.url), [hint.url]);
@@ -296,7 +296,7 @@ function preventFocusOpen(event: FocusEvent) {
 }
 
 /**
- * packages/app's WorkspaceHoverCard: the workspace's details beside its row on desktop, opening
+ * The Expo app's WorkspaceHoverCard: the workspace's details beside its row on desktop, opening
  * at once and closing after a 100ms grace. Compact layouts have no hover, so no card.
  */
 export function WorkspaceHoverCard({
@@ -316,11 +316,11 @@ export function WorkspaceHoverCard({
   if (isCompact) return children;
   return (
     <HoverCard open={isOpen} onOpenChange={handleOpenChange} openDelay={0} closeDelay={100}>
-      {/* Hover only, as in packages/app: a row that keeps focus after a click must not hold the card open. */}
+      {/* Hover only, as in the Expo app: a row that keeps focus after a click must not hold the card open. */}
       <HoverCardTrigger asChild onFocus={preventFocusOpen}>
         {children}
       </HoverCardTrigger>
-      {/* packages/app's card: 4px right of the row, top-aligned, kept 8px inside the window; a 1px
+      {/* The Expo app's card: 4px right of the row, top-aligned, kept 8px inside the window; a 1px
           borderAccent border, a 10px radius and its own 0 4px 8px black 20% shadow in every theme. */}
       <HoverCardContent
         side="right"
@@ -328,7 +328,7 @@ export function WorkspaceHoverCard({
         sideOffset={4}
         collisionPadding={8}
         className="w-[260px] rounded-[10px] border border-input p-0 pt-2 shadow-[0_4px_8px_rgba(0,0,0,0.2)] ring-0"
-        // packages/app's card is a menu named after its scripts list.
+        // The Expo app's card is a menu named after its scripts list.
         role="menu"
         aria-label={t("workspace.hoverCard.scriptsAccessibility")}
         data-testid="workspace-hover-card"

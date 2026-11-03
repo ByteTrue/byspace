@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/rename-modal.tsx: the rename dialog (hosts, workspaces, tabs); DOM view.
-// Converted from the Expo file by web/scripts/port/rename-modal.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/rename-modal.tsx: the rename dialog (hosts, workspaces, tabs); DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/rename-modal.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

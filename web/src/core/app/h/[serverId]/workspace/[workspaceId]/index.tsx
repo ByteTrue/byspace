@@ -1,7 +1,7 @@
-// Port of packages/app/src/app/h/[serverId]/workspace/[workspaceId]/index.tsx: the same open
+// Port of archive/expo-app:packages/app/src/app/h/[serverId]/workspace/[workspaceId]/index.tsx: the same open
 // intent handling and workspace deck, without React Navigation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { router, useGlobalSearchParams, useLocalSearchParams } from "expo-router";
+import { router, useGlobalSearchParams, useLocalSearchParams } from "~/app/navigation";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { RetainedPanel } from "@/components/retained-panel";
 import {

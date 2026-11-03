@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "~/app/navigation";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { NewWorkspaceScreen } from "@/screens/new-workspace-screen";
 

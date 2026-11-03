@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/ui/highlighted-text.tsx: text with search matches marked; DOM view.
-// Converted from the Expo file by web/scripts/port/sessions-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/ui/highlighted-text.tsx: text with search matches marked; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
 import { useMemo, type ReactElement } from "react";
 import { cn } from "cn";
 import type { MatchRange } from "@bytetrue/protocol/search/text-match";

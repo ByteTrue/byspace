@@ -1,4 +1,4 @@
-// Port of packages/app/src/file-pane/bar.tsx: the strip over a file — size and lines, editor
+// Port of archive/expo-app:packages/app/src/file-pane/bar.tsx: the strip over a file — size and lines, editor
 // status, Vim mode and cursor, the Preview/Source switch — and the conflict alert under it.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";

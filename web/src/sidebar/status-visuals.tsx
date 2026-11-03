@@ -10,7 +10,7 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { cn } from "cn";
 import { Spinner } from "~/components/ui/spinner";
 
-// Geometry from packages/app/src/components/status-ring/geometry.ts: a 6px dot inside a 1.5px
+// Geometry from archive/expo-app:packages/app/src/components/status-ring/geometry.ts: a 6px dot inside a 1.5px
 // ring with a 1.5px gap, turning once every 900ms.
 const RING_PERIOD_MS = 900;
 
@@ -55,7 +55,7 @@ const DOT_CLASS: Record<SidebarStateBucket, string | null> = {
   done: null,
 };
 
-/** packages/app's WorkspaceStatusIndicator: what a workspace row shows in its leading slot. */
+/** The Expo app's WorkspaceStatusIndicator: what a workspace row shows in its leading slot. */
 export function WorkspaceStatusIndicator({
   bucket,
   workspaceKind,
@@ -113,7 +113,7 @@ export function WorkspaceStatusIndicator({
       {dot ? (
         <span
           className={cn(
-            // packages/app's statusDotOverlay: an 8px dot with a 1px border in the page colour at
+            // The Expo app's statusDotOverlay: an 8px dot with a 1px border in the page colour at
             // the bottom-right of a 16x20 slot, i.e. 2px below this 16px one.
             "absolute right-0 -bottom-0.5 size-2 rounded-full border border-background",
             dot,
@@ -124,14 +124,14 @@ export function WorkspaceStatusIndicator({
   );
 }
 
-// packages/app's callers size the initial themselves: 9px in the project row, 8px in the
+// The Expo app's callers size the initial themselves: 9px in the project row, 8px in the
 // display-preferences project filter.
 const PROJECT_INITIAL_STYLE: Record<number, CSSProperties> = {
   16: { fontSize: 9 },
   14: { fontSize: 8 },
 };
 
-/** A project's icon, or its initial on the project's identity colour (packages/app's ProjectIconView). */
+/** A project's icon, or its initial on the project's identity colour (the Expo app's ProjectIconView). */
 export function ProjectIcon({
   iconDataUri,
   displayName,

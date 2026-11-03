@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/tool-call-details.tsx: what a tool call shows when
+// Port of archive/expo-app:packages/app/src/components/tool-call-details.tsx: what a tool call shows when
 // opened — the command and its output, the edit's diff, the file read or written, search hits,
 // fetched pages, sub-agent activity, BySpace tool fields, or the raw input and output. Same
 // sections and rules as the Expo file; the view is DOM.

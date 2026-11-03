@@ -47,60 +47,13 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
   };
 });
 
-vi.mock("react-native", async (importOriginal) => {
-  const ReactModule = await import("react");
-  const actual = await importOriginal<typeof import("react-native")>();
-  return {
-    ...actual,
-    Pressable: ({
-      accessibilityLabel,
-      children,
-      onPress,
-      ...props
-    }: {
-      accessibilityLabel?: string;
-      children?:
-        | React.ReactNode
-        | ((state: { hovered: boolean; pressed: boolean }) => React.ReactNode);
-      onPress?: () => void;
-      [key: string]: unknown;
-    }) => {
-      if (accessibilityLabel) {
-        pressablePropsByLabel.set(accessibilityLabel, props);
-      }
-      const resolvedChildren =
-        typeof children === "function" ? children({ hovered: false, pressed: false }) : children;
-      return ReactModule.createElement(
-        "button",
-        {
-          "aria-label": accessibilityLabel,
-          "data-testid": typeof props.testID === "string" ? props.testID : undefined,
-          disabled: props.disabled === true,
-          onClick: onPress,
-          type: "button",
-        },
-        resolvedChildren,
-      );
-    },
-  };
-});
-
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  withUnistyles: <T,>(component: T) => component,
-  useUnistyles: () => ({ theme, rt: { breakpoint: "md" } }),
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  withTheme: <T,>(component: T) => component,
+  useThemeObject: () => theme,
 }));
 
-vi.mock("@/constants/platform", () => ({
-  getIsElectron: () => false,
-  getIsElectronMac: () => false,
-  isNative: false,
-  isWeb: true,
-}));
-
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const createIcon = (name: string) => (props: Record<string, unknown>) =>
     React.createElement("span", { ...props, "data-icon": name });
   return {

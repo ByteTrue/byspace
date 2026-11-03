@@ -6,9 +6,9 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { useRouter, type Href } from "expo-router";
+import { useRouter, type Href } from "~/app/navigation";
 import { useTranslation } from "react-i18next";
-import { SquarePen, SquareTerminal } from "lucide-react-native";
+import { SquarePen, SquareTerminal } from "lucide-react";
 import invariant from "tiny-invariant";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";

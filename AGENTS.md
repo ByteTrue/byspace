@@ -12,7 +12,7 @@ This is an npm workspace monorepo with a unified Go single binary:
 - `internal/` — The Go daemon, CLI, Wails v3 desktop/Android host (`internal/gui`), self-updater (`internal/selfupdate`), agent providers (`internal/agent`), workspace/git (`internal/workspace`), terminal, tunnel, and embedded web UI (`internal/webui`)
 - `build/` — Native packaging templates (`build/darwin` for `BySpace.app` / `.dmg`, `build/android` for the Wails v3 Android sideload APK)
 - `workers/relay` — The Go relay compiled to WebAssembly and run as a Cloudflare Durable Object with WebSocket hibernation
-- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. `web/src/core` holds the modules ported from the retired Expo app; `web/src/shims` stands in for the React Native and Expo APIs they still call. Code comments that cite `packages/app` mean that Expo app, kept at the `archive/expo-app` tag (`git show archive/expo-app:packages/app/src/...`)
+- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. `web/src/core` holds the modules ported from the retired Expo app. Comments that say "the Expo app" or cite `archive/expo-app:packages/app/...` refer to it; `git show archive/expo-app:packages/app/src/<path>` prints the original
 - `packages/relay` — E2E encryption primitives
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade
@@ -145,22 +145,13 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 
 ## Platform gating
 
-The app builds only for web (browser and installed PWA); native mobile and the Electron
-wrapper were retired in issue 025. Prefer plain web code and gate only when a DOM API or
-an Electron-only capability forces it. Import gates from `@/constants/platform`.
-
-### The gates
-
-| Gate                       | Type     | When to use                                                                                                           |
-| -------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `isWeb`                    | constant | Always true in this build. Legacy branch guards; new code does not need it.                                           |
-| `useIsCompactFormFactor()` | hook     | Layout decisions — sidebar overlay vs pinned, modal vs full screen, single-panel vs split. From `@/constants/layout`. |
+The app is a web app (browser, installed PWA, and the Wails desktop and Android webviews). There
+are no platform gates: write plain web code. Use `useIsCompactFormFactor()` from
+`@/constants/layout` for layout decisions — sidebar overlay vs pinned, modal vs full screen,
+single-panel vs split — and `isDev` from `@/constants/platform` for development-only code.
 
 ### Rules
 
-- **Default to plain web code.** The retired gates still exist so existing call sites keep
-  type-checking; they are dead branches that are being removed over time, not a target to
-  write against.
 - **NEVER use raw DOM APIs in a module that can be imported outside a browser.** A DOM
   call at module scope breaks non-browser importers (the e2e harness and unit tests import
   `web/src/core` modules in Node).
@@ -168,9 +159,7 @@ an Electron-only capability forces it. Import gates from `@/constants/platform`.
   show them always on compact layouts (`max-md:visible`). Pointer-enter handlers are for code that
   must know about hover, never the only way to a control. [docs/hover.md](docs/hover.md) owns
   this pattern.
-- **Don't use platform checks as a proxy for layout capabilities.** Use breakpoints for
-  layout decisions (`useIsCompactFormFactor()`), not platform constants.
-- **Import gates from `@/constants/platform`.** Never write `const isWeb = Platform.OS === "web"` locally.
+- **Use breakpoints for layout decisions** (`useIsCompactFormFactor()`), not the user agent.
 
 ## Debugging
 

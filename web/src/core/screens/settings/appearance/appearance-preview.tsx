@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/settings/appearance/appearance-preview.tsx: a live preview of
+// Port of archive/expo-app:packages/app/src/screens/settings/appearance/appearance-preview.tsx: a live preview of
 // the content and code fonts and the syntax colours — a sentence in the content size, then a fixed
 // TypeScript snippet as a unified diff. Draft values (still being typed) apply as inline overrides.
 import { useMemo, type CSSProperties } from "react";

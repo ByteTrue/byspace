@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/explorer-sidebar.tsx: the docked right-hand pane,
+// Port of archive/expo-app:packages/app/src/screens/workspace/explorer-sidebar.tsx: the docked right-hand pane,
 // its tab rail over a hairline, and the active panel below.
 import { useCallback, useMemo, type ReactNode } from "react";
 import { RetainedPanel } from "@/components/retained-panel";
@@ -99,7 +99,7 @@ export function ExplorerSidebarDock({
             trailingAccessory={headerAction}
           />
           {/* Above the tab rail (its sortable items are z-1 flex items), so the separator covers
-              the lower pixel of the active tab's 2px underline, as in packages/app. */}
+              the lower pixel of the active tab's 2px underline, as in the Expo app. */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-px bg-border" />
         </div>
         <div className="flex min-h-0 flex-1 flex-col bg-sidebar">

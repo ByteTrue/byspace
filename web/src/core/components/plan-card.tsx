@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/plan-card.tsx: a plan as a card — title, optional
+// Port of archive/expo-app:packages/app/src/components/plan-card.tsx: a plan as a card — title, optional
 // description, the plan's markdown, and the caller's footer (approval buttons).
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/markdown/fence/mermaid/fullscreen-viewer.web.tsx: the
+// Port of archive/expo-app:packages/app/src/components/markdown/fence/mermaid/fullscreen-viewer.web.tsx: the
 // diagram over the whole window, Escape or a click outside it closes.
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";

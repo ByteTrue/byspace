@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/settings/web-push-section.tsx: browser notifications, one
+// Port of archive/expo-app:packages/app/src/screens/settings/web-push-section.tsx: browser notifications, one
 // row per host. Same logic, DOM view.
 import { useCallback, useEffect, useState } from "react";
 import type { TFunction } from "i18next";

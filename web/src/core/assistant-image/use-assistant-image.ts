@@ -7,11 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ImageLoadEvent } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { AttachmentMetadata } from "@/attachments/types";
-import { isWeb } from "@/constants/platform";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { retainAttachmentForGarbageCollection } from "@/attachments/gc-retention";
 import {
@@ -44,6 +42,14 @@ import {
 } from "./load-dimensions";
 import { runAssistantImageOperationWithRetry } from "./retry";
 
+/** An image load event: the loaded image is the native event's target. */
+interface ImageLoadEvent {
+  nativeEvent: {
+    source?: { width: number; height: number; uri?: string };
+    target?: EventTarget | null;
+  };
+}
+
 interface AssistantImageRenderBinding {
   uri: string;
   onRef: (instance: unknown) => void;
@@ -53,7 +59,7 @@ interface AssistantImageRenderBinding {
 
 const renderedDimensions: AssistantImageRenderedDimensionsReader = {
   read(renderedImage) {
-    if (!isWeb || !(renderedImage instanceof HTMLElement)) {
+    if (!(renderedImage instanceof HTMLElement)) {
       return null;
     }
     const image = renderedImage.querySelector("img");

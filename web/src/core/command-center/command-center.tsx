@@ -1,4 +1,4 @@
-// Port of packages/app/src/command-center/command-center.tsx. The state (built-in rows,
+// Port of archive/expo-app:packages/app/src/command-center/command-center.tsx. The state (built-in rows,
 // sections, ranking, scope, focus restore) is the Expo file's, unchanged; the view is shadcn's
 // CommandDialog. cmdk's own filtering and pointer selection are off: ranking and the active row
 // stay with results.ts, and keys go through the same handler as before.
@@ -497,8 +497,8 @@ const ResultRow = memo(function ResultRow({
       data-testid={
         result.kind === "file" ? `command-center-file-row-${result.filePath}` : choice?.testId
       }
-      // Hover highlights on its own; only the keys move the active row, as in packages/app.
-      // 36px rows (56 with a subtitle), as packages/app's command center lays them out.
+      // Hover highlights on its own; only the keys move the active row, as in the Expo app.
+      // 36px rows (56 with a subtitle), as the Expo app's command center lays them out.
       // The active row carries the same left bar as the sidebar's selected row.
       className="relative min-h-9 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-foreground before:opacity-0 hover:bg-accent/60 data-selected:before:opacity-100"
     >
@@ -553,7 +553,7 @@ export function CommandCenter() {
       onOpenChange={handleOpenChange}
       title={t("shell.commandCenter.placeholder")}
       description={t("shell.commandCenter.placeholder")}
-      // packages/app's panel: 640 wide, 560 tall, 48px below the top of the window, a 10px radius.
+      // The Expo app's panel: 640 wide, 560 tall, 48px below the top of the window, a 10px radius.
       className="top-12 h-[min(560px,calc(100vh-6rem))] rounded-[10px]! sm:max-w-[640px]"
     >
       <Command
@@ -610,7 +610,7 @@ export function CommandCenter() {
         {state.fileSearchError ? (
           <p
             aria-live="polite"
-            // packages/app's errorText: a bordered strip in the status danger colour.
+            // The Expo app's errorText: a bordered strip in the status danger colour.
             className="border-b px-4 py-3 text-sm text-status-danger"
             data-testid="command-center-file-search-error"
           >

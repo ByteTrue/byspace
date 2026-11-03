@@ -1,5 +1,5 @@
-// Port of packages/app/src/provider-usage/settings-section.tsx: the Usage page section; DOM view.
-// Converted from the Expo file by web/scripts/port/provider-usage-settings.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/provider-usage/settings-section.tsx: the Usage page section; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/provider-usage-settings.py; edit it directly.
 import { RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 import { cn } from "cn";

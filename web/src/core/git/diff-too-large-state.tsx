@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/diff-too-large-state.tsx: the notice shown instead of a diff too
+// Port of archive/expo-app:packages/app/src/git/diff-too-large-state.tsx: the notice shown instead of a diff too
 // large to preview.
 import { FileWarning } from "lucide-react";
 import { useTranslation } from "react-i18next";

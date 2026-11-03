@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
 import { persist, type StateStorage } from "zustand/middleware";
 import { z } from "zod";
@@ -46,4 +46,4 @@ export function createWorkspaceServiceRoutePreferencesStore(storage: StateStorag
 }
 
 export const useWorkspaceServiceRoutePreferencesStore =
-  createWorkspaceServiceRoutePreferencesStore(AsyncStorage);
+  createWorkspaceServiceRoutePreferencesStore(localStorageAsync);

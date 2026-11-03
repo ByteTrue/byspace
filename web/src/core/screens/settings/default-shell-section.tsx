@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/settings/default-shell-section.tsx: the default shell picker, DOM view.
-// Converted from the Expo file by web/scripts/port/settings-small-sections.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/default-shell-section.tsx: the default shell picker, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SelectField } from "@/components/ui/select-field";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/navigation/agent-route-resolution-view.tsx in shadcn/ui: what an
+// Port of archive/expo-app:packages/app/src/navigation/agent-route-resolution-view.tsx in shadcn/ui: what an
 // agent link shows while it waits for its host, looks the agent up, or fails.
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";

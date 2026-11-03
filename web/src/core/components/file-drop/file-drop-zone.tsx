@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/file-drop/file-drop-zone.tsx: a drag-and-drop area with
+// Port of archive/expo-app:packages/app/src/components/file-drop/file-drop-zone.tsx: a drag-and-drop area with
 // its dim backdrop. Files go to whichever descendant registered with `useFileDrop`; drag state
 // lives in flags outside React so a drag never re-renders the tree.
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/archived-agent-callout.tsx: in place of the composer for
+// Port of archive/expo-app:packages/app/src/components/archived-agent-callout.tsx: in place of the composer for
 // an archived agent — "This agent is archived" and an Unarchive button.
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";

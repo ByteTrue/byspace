@@ -169,7 +169,7 @@ function Sidebar({
     )
   }
 
-  // BySpace: packages/app's compact sidebar, a full-width panel the mobile panel runtime slides in
+  // BySpace: the Expo app's compact sidebar, a full-width panel the mobile panel runtime slides in
   // and the finger drags, inside the safe area.
   if (isMobile) {
     return (
@@ -200,7 +200,7 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          // BySpace: no slide, as packages/app's sidebar opens and closes at once.
+          // BySpace: no slide, as the Expo app's sidebar opens and closes at once.
           "relative w-(--sidebar-width) bg-transparent",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
@@ -214,7 +214,7 @@ function Sidebar({
         data-side={side}
         className={cn(
           // BySpace: collapsed, the sidebar is also hidden, so it leaves the tab order and the
-          // accessibility tree, as packages/app's closed sidebar does; no slide, as there.
+          // accessibility tree, as the Expo app's closed sidebar does; no slide, as there.
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) group-data-[collapsible=offcanvas]:invisible data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"

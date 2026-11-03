@@ -25,7 +25,7 @@ Root checkout dev is split across two terminals:
 - `npm run dev:daemon` builds `./bin/byspace` and runs the daemon on `127.0.0.1:6778` in development mode, so development-only providers such as Mock Load Test are available.
 - `npm run dev:app` (or `npm run dev`) runs the web app (`web/`, Vite) on `http://localhost:8082` and connects to the dev daemon.
 
-The launcher passes the current Git branch as `EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL`, which the app shows in the titlebar row. Production builds leave it unset and show no label.
+The launcher passes the current Git branch as `BYSPACE_DEV_BUILD_LABEL`, which the app shows in the titlebar row. Production builds leave it unset and show no label.
 
 Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
 

@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/section-kit.tsx: the PR pane's collapsible
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/section-kit.tsx: the PR pane's collapsible
 // sections, their summary pills, and the check-row classes the checks list and the GitLab pipeline
 // share. The Expo file exports React Native styles and colour mappings; here they are class names.
 import type { ReactNode } from "react";

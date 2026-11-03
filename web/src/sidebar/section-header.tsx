@@ -68,7 +68,7 @@ function HeaderNavButton({
 }
 
 /**
- * packages/app's WorkspacesSectionHeader: the "Workspaces" title with New workspace and History,
+ * The Expo app's WorkspacesSectionHeader: the "Workspaces" title with New workspace and History,
  * plus sorting and display preferences once there is a list to control.
  */
 export function WorkspacesSectionHeader({ onBeforeNavigate }: { onBeforeNavigate?: () => void }) {

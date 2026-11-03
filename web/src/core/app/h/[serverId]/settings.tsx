@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "~/app/navigation";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { buildSettingsHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 

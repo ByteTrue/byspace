@@ -7,7 +7,7 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { openHostOverview } from "@/navigation/settings-navigation";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { Shortcut } from "~/components/shortcut";
 import { SidebarFooter as SidebarFooterFrame } from "~/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
@@ -18,7 +18,7 @@ function sidebarHostOptionTestID(serverId: string): string {
   return `sidebar-host-row-${serverId}`;
 }
 
-/** packages/app's SidebarHostsButton: the shared host picker, opening upwards from the footer. */
+/** The Expo app's SidebarHostsButton: the shared host picker, opening upwards from the footer. */
 function SidebarHostsButton({
   onAddHost,
   onOpenHostSettings,
@@ -63,7 +63,7 @@ function SidebarHostsButton({
   );
 }
 
-/** packages/app's SidebarFooter: Add project on the left, hosts, import, help and settings on the right. */
+/** The Expo app's SidebarFooter: Add project on the left, hosts, import, help and settings on the right. */
 export function SidebarFooter({
   onBeforeNavigate,
   onImportSession,

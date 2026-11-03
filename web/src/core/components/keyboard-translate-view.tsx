@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/keyboard-translate-view.tsx: a plain container. The
+// Port of archive/expo-app:packages/app/src/components/keyboard-translate-view.tsx: a plain container. The
 // browser moves content for the on-screen keyboard itself.
 import type { ComponentProps, ReactNode } from "react";
 

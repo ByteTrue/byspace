@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClientConfig } from "@bytetrue/client/internal/daemon-client";
 
-vi.mock("@/constants/platform", () => ({
-  getIsElectron: () => false,
-  isWeb: true,
-}));
 import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
 
 class FakeDaemonClient implements DaemonProbeClient {

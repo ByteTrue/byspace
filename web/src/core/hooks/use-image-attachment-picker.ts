@@ -1,4 +1,4 @@
-// Port of packages/app/src/hooks/use-image-attachment-picker.ts: the browser's file dialog,
+// Port of archive/expo-app:packages/app/src/hooks/use-image-attachment-picker.ts: the browser's file dialog,
 // images only. No permission prompt exists on the web.
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";

@@ -1,4 +1,4 @@
-// Port of packages/app/src/panels/pull-request/index.tsx: the same hooks and content states
+// Port of archive/expo-app:packages/app/src/panels/pull-request/index.tsx: the same hooks and content states
 // (pane, error with retry, skeleton, "no pull request"); the empty state is DOM.
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";

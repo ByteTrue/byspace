@@ -1,7 +1,7 @@
-// Port of packages/app/src/screens/workspace/workspace-screen.tsx. The logic is the Expo
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-screen.tsx. The logic is the Expo
 // file's, unchanged; the view is DOM and Tailwind. Keep the two in step until the cutover deletes
-// packages/app.
-// Converted from the Expo file by web/scripts/port/workspace-screen.py (tag archive/expo-app); edit it directly.
+// The Expo app.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/workspace-screen.py; edit it directly.
 import { Spinner } from "~/components/ui/spinner";
 import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import { getOpenAgentTabLabel } from "@bytetrue/protocol/agent-labels";
@@ -17,10 +17,9 @@ import {
   type ReactNode,
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { Keyboard } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter, type Href } from "expo-router";
-import * as Clipboard from "expo-clipboard";
+import { useRouter, type Href } from "~/app/navigation";
+import * as Clipboard from "~/lib/clipboard";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import invariant from "tiny-invariant";
@@ -199,6 +198,7 @@ import {
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { useHasPullRequest } from "@/panels/pull-request";
+import { blurActiveElement } from "~/lib/blur-active-element";
 
 const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
@@ -631,7 +631,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   }, [tabs]);
 
   const handleOpenSwitcher = useCallback(() => {
-    Keyboard.dismiss();
+    blurActiveElement();
     setIsOpen(true);
   }, []);
 
@@ -697,7 +697,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
     ],
   );
 
-  // The phone switcher is packages/app's Combobox, which is a bottom sheet on compact layouts.
+  // The phone switcher is the Expo app's Combobox, which is a bottom sheet on compact layouts.
   return (
     <div className="flex items-center border-b bg-background" data-testid="workspace-tabs-row">
       <button
@@ -2583,7 +2583,7 @@ function WorkspaceScreenContent({
     async (agentId: string) => {
       if (!agentId) return;
       try {
-        await Clipboard.setStringAsync(agentId);
+        await Clipboard.writeText(agentId);
         toast.copied(t("workspace.tabs.toasts.agentIdCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2596,7 +2596,7 @@ function WorkspaceScreenContent({
     async (terminalId: string) => {
       if (!terminalId) return;
       try {
-        await Clipboard.setStringAsync(terminalId);
+        await Clipboard.writeText(terminalId);
         toast.copied(t("workspace.tabs.toasts.terminalIdCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2609,7 +2609,7 @@ function WorkspaceScreenContent({
     async (path: string) => {
       if (!path) return;
       try {
-        await Clipboard.setStringAsync(path);
+        await Clipboard.writeText(path);
         toast.copied(t("workspace.tabs.toasts.filePathCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2641,7 +2641,7 @@ function WorkspaceScreenContent({
         return;
       }
       try {
-        await Clipboard.setStringAsync(command);
+        await Clipboard.writeText(command);
         toast.copied(t("workspace.tabs.toasts.resumeCommandCopiedLabel"));
       } catch {
         toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2690,7 +2690,7 @@ function WorkspaceScreenContent({
     }
 
     try {
-      await Clipboard.setStringAsync(workspaceDirectory);
+      await Clipboard.writeText(workspaceDirectory);
       toast.copied(t("workspace.header.toasts.workspacePathCopiedLabel"));
     } catch {
       toast.error(t("workspace.tabs.toasts.copyFailed"));
@@ -2704,7 +2704,7 @@ function WorkspaceScreenContent({
     }
 
     try {
-      await Clipboard.setStringAsync(currentBranchName);
+      await Clipboard.writeText(currentBranchName);
       toast.copied(t("workspace.header.toasts.branchNameCopiedLabel"));
     } catch {
       toast.error(t("workspace.tabs.toasts.copyFailed"));

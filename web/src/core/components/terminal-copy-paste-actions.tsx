@@ -1,8 +1,8 @@
-// Port of packages/app/src/components/terminal-copy-paste-actions.tsx: the terminal's Paste key
+// Port of archive/expo-app:packages/app/src/components/terminal-copy-paste-actions.tsx: the terminal's Paste key
 // and the floating Copy button shown over a selection on a phone.
 import { useCallback, useMemo, type CSSProperties } from "react";
-import { useUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
+import { useThemeObject } from "~/app/theme-object";
 
 export interface TerminalPasteActionProps {
   hasClipboardText: boolean;
@@ -54,7 +54,7 @@ function TerminalActionButton({
   onPress: () => void;
   variant: "key" | "floating";
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   // The key sits in the terminal's key rows and takes the app's surface colors, as in the Expo app.
   const keyStyle = useMemo(
     () =>

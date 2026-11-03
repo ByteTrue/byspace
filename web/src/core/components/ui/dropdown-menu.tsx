@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/dropdown-menu.tsx: the press-to-open shape of the
+// Port of archive/expo-app:packages/app/src/components/ui/dropdown-menu.tsx: the press-to-open shape of the
 // menu engine (components/ui/menu).
 import { useCallback, type ReactElement } from "react";
 import { MenuSurface, useMenuContext, type MenuSurfaceProps } from "@/components/ui/menu";

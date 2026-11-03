@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/alert.tsx on shadcn's Alert. Same props: the variant
+// Port of archive/expo-app:packages/app/src/components/ui/alert.tsx on shadcn's Alert. Same props: the variant
 // colours the border, title and icon (success keeps the plain border), a string description is
 // muted text, and children are a row of actions under it.
 import type { ReactNode } from "react";
@@ -48,7 +48,7 @@ export function Alert({
   }
   const hasDescription = description != null && description !== "";
   return (
-    // packages/app's Alert geometry: a 14px-radius hairline box on the page background, 12/16
+    // The Expo app's Alert geometry: a 14px-radius hairline box on the page background, 12/16
     // padding, a 14px icon 12px from the text, 4px between title and description (a margin: the
     // icon spans two grid rows, so a row gap would pad an alert with no description).
     <ShadAlert

@@ -103,14 +103,14 @@ function FilterIndicator({ on }: { on: boolean }) {
 /** The current choice beside a submenu's label, pushed right against its chevron. */
 function SubValue({ children }: { children: string }) {
   return (
-    // -mr-0.5: packages/app keeps 6px between a submenu's value and its chevron (the row gap is 8).
+    // -mr-0.5: the Expo app keeps 6px between a submenu's value and its chevron (the row gap is 8).
     <span className="-mr-0.5 min-w-0 flex-1 truncate text-right text-muted-foreground">
       {children}
     </span>
   );
 }
 
-/** A checkbox row that toggles one value and keeps the menu open, as packages/app's multi-selects do. */
+/** A checkbox row that toggles one value and keeps the menu open, as the Expo app's multi-selects do. */
 function ToggleItem<T>({
   value,
   checked,
@@ -367,7 +367,7 @@ function LabelFilterSubmenu({
             onToggle={preferences.toggleLabelFilter}
             testId={`sidebar-label-filter-option-${label.name}`}
           >
-            {/* packages/app's menu leading slot: the dot centred in a 16px box, on the icons' rail */}
+            {/* The Expo app's menu leading slot: the dot centred in a 16px box, on the icons' rail */}
             <span className="flex size-4 shrink-0 items-center justify-center">
               <WorkspaceLabelDot color={label.color} />
             </span>
@@ -380,7 +380,7 @@ function LabelFilterSubmenu({
           onToggle={preferences.toggleLabelFilter}
           testId="sidebar-label-filter-option-unlabelled"
         >
-          {/* packages/app's UNLABELLED_MARK: the dot's hollow stand-in, 11px, in the same slot */}
+          {/* The Expo app's UNLABELLED_MARK: the dot's hollow stand-in, 11px, in the same slot */}
           <span className="flex size-4 shrink-0 items-center justify-center">
             <Circle size={11} className="text-muted-foreground" />
           </span>
@@ -403,7 +403,7 @@ function LabelFilterSubmenu({
   );
 }
 
-/** packages/app's SidebarDisplayPreferencesMenu: grouping, titles, what each row shows, and filters. */
+/** The Expo app's SidebarDisplayPreferencesMenu: grouping, titles, what each row shows, and filters. */
 export function SidebarDisplayPreferencesMenu() {
   const { t } = useTranslation();
   const preferences = useSidebarDisplayPreferences();

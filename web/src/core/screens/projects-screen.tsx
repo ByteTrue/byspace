@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/projects-screen.tsx: a host's project list in settings; DOM view.
-// Converted from the Expo file by web/scripts/port/projects-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/projects-screen.tsx: a host's project list in settings; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/projects-screen.py; edit it directly.
 import { useCallback, useMemo, type CSSProperties } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "cn";

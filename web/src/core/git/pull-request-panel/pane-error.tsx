@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/pane-error.tsx: the PR pane when its load
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/pane-error.tsx: the PR pane when its load
 // failed, with a retry.
 import { RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";

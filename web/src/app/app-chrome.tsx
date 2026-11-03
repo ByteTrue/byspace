@@ -34,14 +34,14 @@ import {
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
-import { useWindowDimensions } from "react-native";
 import { AppSidebar } from "~/app/app-sidebar";
 import { SidebarResizeHandle } from "~/app/sidebar-resize-handle";
 import { WorkspaceLayer } from "~/app/workspace-layer";
 import { Sidebar, SidebarInset, SidebarProvider, useSidebar } from "~/components/ui/sidebar";
 import { cn } from "cn";
+import { useWindowDimensions } from "~/hooks/use-window-dimensions";
 
-// Routes that stand alone without app chrome, as in packages/app's root layout.
+// Routes that stand alone without app chrome, as in the Expo app's root layout.
 const STANDALONE_ONBOARDING_ROUTES = new Set(["", "/", "/welcome", "/pair-scan"]);
 
 function isSettingsPathname(pathname: string): boolean {
@@ -80,7 +80,7 @@ function MobileSidebarSync() {
 
 export function AppChrome() {
   const isCompactLayout = useIsCompactFormFactor();
-  // As packages/app's AppContainer: on a phone the page does not zoom (pinch, or iOS zooming into
+  // As the Expo app's AppContainer: on a phone the page does not zoom (pinch, or iOS zooming into
   // a focused field).
   useCompactWebViewportZoomLock(isCompactLayout);
   // Phone panels slide and follow the finger; on a desktop the runtime only reports the panel.
@@ -155,7 +155,7 @@ function AppChromeContent() {
     }),
   });
   const sidebarActive = isCompactLayout ? chromeEnabled : desktopSidebarVisible;
-  // packages/app's MobileGestureWrapper: a swipe in from the left edge opens the sidebar.
+  // The Expo app's MobileGestureWrapper: a swipe in from the left edge opens the sidebar.
   useMobilePanelOpenGesture("agent-list", { enabled: isCompactLayout && chromeEnabled });
 
   // A drag previews its width locally and commits to the store on release.
@@ -207,7 +207,7 @@ function AppChromeContent() {
                 ) : null}
               </Sidebar>
             ) : null}
-            {/* BySpace: packages/app's framed card — 6px from the window, 12px radius, a 1px
+            {/* BySpace: the Expo app's framed card — 6px from the window, 12px radius, a 1px
                 border instead of shadcn's 8px margin and shadow. */}
             {/* One element for both, so a workspace covered by Settings stays mounted (the
                 workspace layer); Settings run full-bleed as a plain block. */}

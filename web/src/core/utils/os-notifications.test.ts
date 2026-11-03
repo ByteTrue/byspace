@@ -30,9 +30,8 @@ const originalGlobals: GlobalSnapshot = {
   location: (globalThis as { location?: unknown }).location,
 };
 
-async function loadModuleForPlatform(platform: "web" | "ios" | "android") {
+async function loadModule() {
   vi.resetModules();
-  vi.doMock("react-native", () => ({ Platform: { OS: platform } }));
   return import("./os-notifications");
 }
 
@@ -70,7 +69,6 @@ describe("sendOsNotification", () => {
   });
 
   afterEach(() => {
-    vi.doUnmock("react-native");
     vi.restoreAllMocks();
     vi.resetModules();
     restoreGlobals();
@@ -109,7 +107,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = dispatchEvent;
     (globalThis as { location?: unknown }).location = { assign };
 
-    const { sendOsNotification, WEB_NOTIFICATION_CLICK_EVENT } = await loadModuleForPlatform("web");
+    const { sendOsNotification, WEB_NOTIFICATION_CLICK_EVENT } = await loadModule();
 
     const sent = await sendOsNotification({
       title: "Agent finished",
@@ -169,7 +167,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = dispatchEvent;
     (globalThis as { location?: unknown }).location = { assign };
 
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
 
     await sendOsNotification({
       title: "Agent finished",
@@ -191,7 +189,7 @@ describe("sendOsNotification", () => {
 
   it("returns false when the Notification API is unavailable", async () => {
     (globalThis as { Notification?: unknown }).Notification = undefined;
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
     const sent = await sendOsNotification({
       title: "Agent finished",
       body: "Done",
@@ -228,7 +226,7 @@ describe("sendOsNotification", () => {
     (globalThis as { dispatchEvent?: unknown }).dispatchEvent = vi.fn();
     (globalThis as { location?: unknown }).location = { assign: vi.fn() };
 
-    const { sendOsNotification } = await loadModuleForPlatform("web");
+    const { sendOsNotification } = await loadModule();
 
     const sent = await sendOsNotification({
       title: "BySpace notification test",

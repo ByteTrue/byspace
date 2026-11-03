@@ -1,8 +1,7 @@
-// Port of packages/app/src/agent-skills/selection-sheet.tsx: the skills picker sheet; DOM view.
-// Converted from the Expo file by web/scripts/port/agent-skills.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/agent-skills/selection-sheet.tsx: the skills picker sheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-skills.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import { Check } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -19,8 +18,9 @@ import type {
   AgentSkillTargetId,
   AgentSkillTargets,
 } from "@bytetrue/protocol/messages";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedCheck = withUnistyles(Check);
+const ThemedCheck = withTheme(Check);
 const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 interface SkillSelectionSheetProps {
@@ -308,7 +308,7 @@ function SkillTargetRow({
       data-testid={`skill-selection-target-${id}`}
     >
       <span className={boxClassName}>
-        {checked ? <ThemedCheck size={12} strokeWidth={3} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={12} strokeWidth={3} themeProps={checkedIconMapping} /> : null}
       </span>
       <span className="flex flex-1 flex-col gap-1">
         <span className={settingsStyles.rowTitle}>{SKILL_TARGET_DIRS[id]}</span>
@@ -352,7 +352,7 @@ function SkillCheckboxRow({
       aria-checked={checked}
     >
       <span className={boxClassName}>
-        {checked ? <ThemedCheck size={12} strokeWidth={3} uniProps={checkedIconMapping} /> : null}
+        {checked ? <ThemedCheck size={12} strokeWidth={3} themeProps={checkedIconMapping} /> : null}
       </span>
       <span className={settingsStyles.rowTitle}>{name}</span>
     </button>

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/headers/header-icon-badge.tsx: the non-interactive icon
+// Port of archive/expo-app:packages/app/src/components/headers/header-icon-badge.tsx: the non-interactive icon
 // slot at the start of a screen header, the size of the header toggle button.
 import type { ReactNode } from "react";
 

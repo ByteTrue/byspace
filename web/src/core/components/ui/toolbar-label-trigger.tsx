@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/toolbar-label-trigger.tsx: the small label buttons in a
+// Port of archive/expo-app:packages/app/src/components/ui/toolbar-label-trigger.tsx: the small label buttons in a
 // pane toolbar (branch, diff mode, pull request). The Expo file returns React Native styles; here
 // the frame and label are class names. The label is muted until the button is hovered, pressed or
 // its menu is open (Radix's data-state).

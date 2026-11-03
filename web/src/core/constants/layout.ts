@@ -1,7 +1,6 @@
-// Port of packages/app/src/constants/layout.ts: identical except useIsCompactFormFactor, which
-// reads the compact breakpoint (below Unistyles' `md`, 720px) from matchMedia instead of Unistyles.
+// Port of archive/expo-app:packages/app/src/constants/layout.ts: identical except useIsCompactFormFactor, which
+// reads the compact breakpoint (below `md`, 720px) from matchMedia.
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -32,7 +31,7 @@ export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 36;
 export const WAILS_DRAG_DATA_SET = { wailsDrag: "true" } as const;
 
 function isMacWailsDesktopWindow(): boolean {
-  if (!isWeb || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return false;
   }
   const isWailsOrigin =
@@ -90,7 +89,6 @@ export const DESKTOP_WINDOW_CONTROLS_HEIGHT = HEADER_INNER_HEIGHT;
 
 /**
  * Reactive hook — re-renders the component when the breakpoint changes.
- * Always use this instead of reading UnistylesRuntime.breakpoint directly.
  */
 const COMPACT_QUERY = "(max-width: 719.98px)";
 
@@ -109,6 +107,9 @@ export function useIsCompactFormFactor(): boolean {
 // SplitContainer relies on dnd-kit and DOM-backed accessibility helpers.
 // Keep that capability distinct from desktop-width layout so touch tablets
 // can use the desktop shell without entering web-only code paths.
+// shortcut: always true now that every build is a browser; the no-split fallbacks behind it
+// (workspace-screen's shouldRenderDesktopPaneFallback, the explorer dock presentation) are
+// unreachable. Delete them with this the next time pane splits change.
 export function supportsDesktopPaneSplits(): boolean {
-  return isWeb;
+  return true;
 }

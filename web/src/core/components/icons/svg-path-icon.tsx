@@ -1,5 +1,3 @@
-import { Path, Svg } from "react-native-svg";
-
 export interface SvgPathIconProps {
   size?: number;
   color?: string;
@@ -17,8 +15,8 @@ export function SvgPathIcon({
   viewBox,
 }: SvgPathIconInput) {
   return (
-    <Svg width={size} height={size} viewBox={viewBox} fill={color}>
-      <Path d={path} />
-    </Svg>
+    <svg width={size} height={size} viewBox={viewBox} fill={color}>
+      <path d={path} />
+    </svg>
   );
 }

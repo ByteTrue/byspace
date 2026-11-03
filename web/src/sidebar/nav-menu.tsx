@@ -35,7 +35,7 @@ function NavRow({ entry, onBeforeNavigate }: { entry: NavEntry; onBeforeNavigate
 
 /**
  * The destinations the Workspaces header does not carry (Search, Schedules, Tunnels, in the order
- * and visibility set in Appearance), as rows at the top of the sidebar. packages/app folds them
+ * and visibility set in Appearance), as rows at the top of the sidebar. The Expo app folds them
  * into a "BySpace ⌄" dropdown at the top-left; on the web they are listed: a product name with a
  * chevron reads as an account switcher, and it hid the pages behind a click and never showed which
  * one was open. The rows scroll with the list, like the Workspaces header, so a long list keeps

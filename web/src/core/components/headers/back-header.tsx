@@ -1,8 +1,8 @@
-// Port of packages/app/src/components/headers/back-header.tsx.
+// Port of archive/expo-app:packages/app/src/components/headers/back-header.tsx.
 import { useCallback, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 

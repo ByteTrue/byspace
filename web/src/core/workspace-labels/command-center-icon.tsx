@@ -1,4 +1,4 @@
-// Port of packages/app/src/workspace-labels/command-center-icon.tsx: the label's colour dot,
+// Port of archive/expo-app:packages/app/src/workspace-labels/command-center-icon.tsx: the label's colour dot,
 // one stable component per colour.
 import type { WorkspaceLabelColor } from "@bytetrue/protocol/workspace-labels";
 import type { CommandCenterIcon } from "@/command-center/contributions";

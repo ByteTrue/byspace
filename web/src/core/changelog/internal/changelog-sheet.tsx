@@ -1,9 +1,8 @@
-// Port of packages/app/src/changelog/internal/changelog-sheet.tsx: What's new — the release notes, revealed a few at a time. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/changelog-sheet.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/changelog/internal/changelog-sheet.tsx: What's new — the release notes, revealed a few at a time. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/changelog-sheet.py; edit it directly.
 import { memo, useCallback, useMemo } from "react";
 import { ExternalLink, Gift } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
@@ -25,14 +24,15 @@ import {
   type ChangelogRelease,
   type ChangelogSection,
 } from "@/changelog/internal/parse-changelog";
+import { withTheme } from "~/app/theme-object";
 
 const WEBSITE_CHANGELOG_URL = "https://github.com/ByteTrue/byspace/releases";
 
-const ThemedGift = withUnistyles(Gift);
-const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedGift = withTheme(Gift);
+const ThemedExternalLink = withTheme(ExternalLink);
+const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
 const WEBSITE_BUTTON = iconButtonChromeClassName({ size: "large" });
 
 interface ChangelogSheetProps {
@@ -63,7 +63,7 @@ export function ChangelogSheet({ visible, onClose }: ChangelogSheetProps) {
         >
           <ThemedExternalLink
             size={iconButtonChromeGlyphSize("large")}
-            uniProps={mutedColorMapping}
+            themeProps={mutedColorMapping}
           />
         </button>
       ),
@@ -102,7 +102,7 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
   if (state.status === "loading") {
     return (
       <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3">
-        <ThemedLoadingSpinner size="large" uniProps={mutedColorMapping} />
+        <ThemedLoadingSpinner size="large" themeProps={mutedColorMapping} />
       </div>
     );
   }

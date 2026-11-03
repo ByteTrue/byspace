@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/split-drop-zone.tsx: the drop target over a pane while a
+// Port of archive/expo-app:packages/app/src/components/split-drop-zone.tsx: the drop target over a pane while a
 // tab is dragged, with the half (or centre) it would land in shaded.
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "cn";

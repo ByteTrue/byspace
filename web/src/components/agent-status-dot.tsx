@@ -17,7 +17,7 @@ function isAgentLifecycleStatus(value: string): value is AgentLifecycleStatus {
   return AGENT_LIFECYCLE_STATUSES.some((status) => status === value);
 }
 
-/** packages/app's AgentStatusDot: the agent's sidebar bucket as a 6px dot. */
+/** The Expo app's AgentStatusDot: the agent's sidebar bucket as a 6px dot. */
 export function AgentStatusDot({
   status,
   requiresAttention,

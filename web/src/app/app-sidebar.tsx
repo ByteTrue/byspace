@@ -17,9 +17,9 @@ import { SidebarNavRows } from "~/sidebar/nav-menu";
 import { SidebarFooter } from "~/sidebar/sidebar-footer";
 import { SidebarWorkspaceList } from "~/sidebar/workspace-list";
 
-const DEV_BUILD_LABEL = process.env.EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL?.trim() || null;
+const DEV_BUILD_LABEL = process.env.BYSPACE_DEV_BUILD_LABEL?.trim() || null;
 
-/** packages/app's LeftSidebar, inside shadcn's inset Sidebar: header, workspace list, callouts, footer. */
+/** The Expo app's LeftSidebar, inside shadcn's inset Sidebar: header, workspace list, callouts, footer. */
 export function AppSidebar() {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -45,7 +45,7 @@ export function AppSidebar() {
     closeOnNavigate?.();
     openAddProject();
   }, [closeOnNavigate, openAddProject]);
-  // As packages/app's sidebar: on a phone the drawer closes before the sheet opens.
+  // As the Expo app's sidebar: on a phone the drawer closes before the sheet opens.
   const importSession = useCallback(() => {
     closeOnNavigate?.();
     openImportSession();
@@ -59,7 +59,7 @@ export function AppSidebar() {
     <>
       <SidebarHeader
         data-wails-drag="true"
-        // Desktop: packages/app's 35px corner row (HEADER_INNER_HEIGHT minus the hairline it pairs
+        // Desktop: the Expo app's 35px corner row (HEADER_INNER_HEIGHT minus the hairline it pairs
         // with). Compact: its header band, 8px above and below a 32px close button, over a hairline.
         className={cn(
           "shrink-0 flex-row items-center gap-1",
@@ -81,15 +81,15 @@ export function AppSidebar() {
           </Button>
         ) : null}
       </SidebarHeader>
-      {/* Pinned above the list, as packages/app's header was: a wheel over them scrolls nothing,
+      {/* Pinned above the list, as the Expo app's header was: a wheel over them scrolls nothing,
           and they stay in reach when the list is scrolled. */}
       <div className="shrink-0 pt-0.5">
         <SidebarNavRows onBeforeNavigate={closeOnNavigate} />
       </div>
-      {/* overflow-x hidden as packages/app's list: it scrolls up and down only. */}
+      {/* overflow-x hidden as the Expo app's list: it scrolls up and down only. */}
       <SidebarContent
         className="gap-0 overflow-x-hidden pb-4"
-        // packages/app scrolls each grouping in its own list, so the id names the grouping.
+        // The Expo app scrolls each grouping in its own list, so the id names the grouping.
         data-testid={
           groupMode === "project"
             ? "sidebar-project-workspace-list-scroll"
@@ -114,7 +114,7 @@ export function AppSidebar() {
           />
         )}
       </SidebarContent>
-      {/* As packages/app's MobileSidebar, the phone panel has no callouts and no build label. */}
+      {/* As the Expo app's MobileSidebar, the phone panel has no callouts and no build label. */}
       {isCompact ? null : (
         <div className="shrink-0 empty:hidden">
           <SidebarCalloutViewport />

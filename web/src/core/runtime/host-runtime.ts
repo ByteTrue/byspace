@@ -1,5 +1,5 @@
 import { useSyncExternalStore, useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import equal from "fast-deep-equal/es6";
 import {
   DaemonClient,
@@ -28,7 +28,6 @@ import {
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
 import { ConnectionOfferSchema, type ConnectionOffer } from "@bytetrue/protocol/connection-offer";
-import { isWeb } from "@/constants/platform";
 import { assertDirectTcpConnectionAllowed, connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
 import { z } from "zod";
@@ -1295,7 +1294,7 @@ const InitialDaemonConnectionHintSchema: z.ZodType<InitialDaemonConnectionHint> 
 export function readInitialDaemonConnectionHint(input?: {
   isWebRuntime?: boolean;
 }): InitialDaemonConnectionHint | null {
-  const isWebRuntime = input?.isWebRuntime ?? isWeb;
+  const isWebRuntime = input?.isWebRuntime ?? true;
   if (!isWebRuntime || typeof globalThis === "undefined") {
     return null;
   }
@@ -1306,7 +1305,7 @@ export function readInitialDaemonConnectionHint(input?: {
 }
 
 function readConfiguredLocalDaemonOverride(): string | null {
-  const value = process.env.EXPO_PUBLIC_LOCAL_DAEMON?.trim();
+  const value = process.env.BYSPACE_LOCAL_DAEMON?.trim();
   return value && value.length > 0 ? value : null;
 }
 
@@ -1370,7 +1369,7 @@ export class HostRuntimeStore {
     revokePushNotifications?: typeof revokePushNotifications;
   }) {
     this.deps = input?.deps ?? createDefaultDeps();
-    this.storage = input?.storage ?? AsyncStorage;
+    this.storage = input?.storage ?? localStorageAsync;
     this.replicaCache = new ReplicaCache(input?.replicaRowStore ?? createReplicaRowStore());
     this.revokePushNotifications = input?.revokePushNotifications ?? revokePushNotifications;
   }

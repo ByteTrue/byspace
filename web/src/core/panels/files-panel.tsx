@@ -1,5 +1,5 @@
-// Port of packages/app/src/panels/files-panel.tsx: same panel, DOM view.
-// Converted from the Expo file by web/scripts/port/file-explorer.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/panels/files-panel.tsx: same panel, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/file-explorer.py; edit it directly.
 import { Files } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";

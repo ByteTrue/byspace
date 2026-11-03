@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/schedules/schedules-table.tsx: the Schedules list card; DOM view.
-// Converted from the Expo file by web/scripts/port/schedules.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/schedules/schedules-table.tsx: the Schedules list card; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import { useCallback, useState, type ReactElement } from "react";
 import { ScheduleRow, type ScheduleRowPending } from "@/components/schedules/schedule-row";
 import { useScheduleMutations } from "@/hooks/use-schedule-mutations";

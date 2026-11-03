@@ -109,7 +109,7 @@ const SKELETON_SECTIONS = [
   { key: "third", style: { opacity: 0.45 } },
 ];
 
-/** First-load placeholder: three fading project groups (packages/app's SidebarAgentListSkeleton). */
+/** First-load placeholder: three fading project groups (the Expo app's SidebarAgentListSkeleton). */
 export function SidebarListSkeleton() {
   return (
     <div className="flex flex-col gap-4 px-4 py-2" data-testid="sidebar-agent-list-skeleton">

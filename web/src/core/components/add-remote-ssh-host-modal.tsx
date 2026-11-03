@@ -1,8 +1,7 @@
-// Port of packages/app/src/components/add-remote-ssh-host-modal.tsx: the remote SSH host form; DOM view.
-// Converted from the Expo file by web/scripts/port/add-host-modals.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/add-remote-ssh-host-modal.tsx: the remote SSH host form; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { Eye, EyeOff, Terminal } from "lucide-react";
 import { parseSshTransportUri } from "@bytetrue/protocol/ssh-transport";
 import type { HostProfile } from "@/types/host-connection";
@@ -14,12 +13,13 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { normalizeSshTargetInput } from "@/utils/ssh-target-input";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedEye = withUnistyles(Eye, (theme) => ({
+const ThemedEye = withTheme(Eye, (theme) => ({
   size: 18,
   color: theme.colors.foregroundMuted,
 }));
-const ThemedEyeOff = withUnistyles(EyeOff, (theme) => ({
+const ThemedEyeOff = withTheme(EyeOff, (theme) => ({
   size: 18,
   color: theme.colors.foregroundMuted,
 }));

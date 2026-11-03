@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-profiles/internal/agent-profile-glyph.tsx: a profile's icon in
+// Port of archive/expo-app:packages/app/src/agent-profiles/internal/agent-profile-glyph.tsx: a profile's icon in
 // its identity colour (muted when it has none), the same everywhere a profile is drawn.
 import {
   BookOpen,

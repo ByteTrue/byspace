@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-stream/chat-outline/rail.web.tsx: one tick per prompt down the
+// Port of archive/expo-app:packages/app/src/agent-stream/chat-outline/rail.web.tsx: one tick per prompt down the
 // left edge of a wide conversation; hovering magnifies the ticks near the pointer and previews the
 // prompt, pressing jumps to it. Hover lives on the rail and slots, never on the button inside, so
 // magnifying a slot cannot move the box the pointer rests on (docs/hover.md).

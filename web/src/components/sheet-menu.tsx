@@ -33,21 +33,21 @@ export function MenuSheet({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      {/* The test id goes on the page (`<id>-content`) only, as packages/app's sheet carries it on
+      {/* The test id goes on the page (`<id>-content`) only, as the Expo app's sheet carries it on
           its scroll view and not on the sheet. */}
       <DrawerContent
         aria-describedby={undefined}
-        // packages/app's menu sheets (menu-surface.tsx): a 14px radius and a 1px border (its bottom
+        // The Expo app's menu sheets (menu-surface.tsx): a 14px radius and a 1px border (its bottom
         // edge sits below the screen there), and a 36px handle in surface2, 10px below the sheet's edge
         className="border border-b-0 bg-background data-[vaul-drawer-direction=bottom]:rounded-t-[14px]"
         handleClassName="mt-[9px] w-9 bg-muted"
       >
         {/* With a visible heading, the heading is the title (asSheetTitle), so its text is on the
-            page once, as in packages/app's sheets. */}
+            page once, as in the Expo app's sheets. */}
         {titleVisible ? null : <DrawerTitle className="sr-only">{title}</DrawerTitle>}
         <div
           role="menu"
-          // packages/app's MenuPage pads its rows 4px above and below, and the sheet adds 4px plus
+          // The Expo app's MenuPage pads its rows 4px above and below, and the sheet adds 4px plus
           // the safe area under that; a header sits outside the page, so with one the 4px above
           // moves into the header's bottom padding.
           className="min-h-0 overflow-y-auto pt-1 pb-[calc(env(safe-area-inset-bottom)+8px)] has-[[data-slot=menu-sheet-header]]:pt-0"

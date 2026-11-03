@@ -1,4 +1,4 @@
-// Port of packages/app/src/assistant-file-links/link.tsx: links in agent prose. A link that
+// Port of archive/expo-app:packages/app/src/assistant-file-links/link.tsx: links in agent prose. A link that
 // resolves to a workspace file opens it in the workspace and shows its path on hover; anything
 // else opens externally. The anchor keeps its href for copy, but navigation is ours.
 import { useCallback, useMemo, type MouseEvent, type ReactNode } from "react";

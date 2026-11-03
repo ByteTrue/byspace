@@ -1,6 +1,6 @@
-// Stand-in for `expo-router`. The navigation code ported from the Expo app (src/core) calls
-// `router.push("/h/...")` with the same URL strings the Expo app used; this forwards them to React
-// Router.
+// App navigation over React Router's data router. Code calls `router.push("/h/...")` with the
+// same URL strings the Expo app used, from components and from plain modules alike, so the router
+// is a module-level object bound once in main.tsx rather than a hook.
 import { createContext, useContext } from "react";
 import { Navigate, useLocation, useParams, type Location } from "react-router";
 
@@ -17,16 +17,16 @@ interface NavigationTarget {
 let target: NavigationTarget | null = null;
 
 /** Called once in main.tsx with the data router, before the first render. */
-export function bindExpoRouter(navigationTarget: NavigationTarget): void {
+export function bindRouter(navigationTarget: NavigationTarget): void {
   target = navigationTarget;
 }
 
 function requireTarget(): NavigationTarget {
-  if (!target) throw new Error("expo-router shim used before bindExpoRouter()");
+  if (!target) throw new Error("router used before bindRouter()");
   return target;
 }
 
-/** Fills `[param]` segments the way expo-router does; leftover params become the query. */
+/** Fills `[param]` segments from `params`; leftover params become the query. */
 export function hrefToPath(href: Href): string {
   if (typeof href === "string") return href;
   let path = href.pathname;
@@ -70,8 +70,8 @@ export function useRouter() {
 }
 
 // The location on screen. React Router hands the workspace kept mounted under a pushed screen its own
-// location (~/app/workspace-layer.tsx); expo-router's usePathname and useGlobalSearchParams are
-// global there, so they read this one.
+// location (~/app/workspace-layer.tsx); usePathname and useGlobalSearchParams report the screen on
+// top there, so they read this one. useLocalSearchParams reports the route's own.
 const GlobalLocationContext = createContext<Location | null>(null);
 export const GlobalLocationProvider = GlobalLocationContext.Provider;
 

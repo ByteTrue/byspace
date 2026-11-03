@@ -6,7 +6,7 @@ import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
 import { stopContextMenu } from "./menu-events"
 
-// BySpace: geometry follows packages/app's menu engine (components/ui/menu/menu-item.tsx,
+// BySpace: geometry follows the Expo app's menu engine (components/ui/menu/menu-item.tsx,
 // menu-overlay.tsx), so menus measure the same as in the Expo app: a 1px-bordered surface at least
 // 180px wide with 4px above and below its rows; rows inset 4px with a 1px transparent border, 8px
 // padding and gap, an 18px line, 28px tall (40px on a phone); a 16px leading slot (an icon given
@@ -65,7 +65,7 @@ function ContextMenuRadioGroup({
   )
 }
 
-// BySpace: as packages/app's menus did (lib/overlay-root.ts focusFirstElement), opening a menu
+// BySpace: as the Expo app's menus did (lib/overlay-root.ts focusFirstElement), opening a menu
 // focuses its first enabled row, so the row is highlighted and the arrow keys start from it. Radix
 // focuses the content itself on a pointer open; this moves that focus on to the first row.
 function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
@@ -100,13 +100,13 @@ function ContextMenuContent({
   const focusFirstRef = useFocusFirstMenuItem(ref)
   return (
     <ContextMenuPrimitive.Portal>
-      {/* BySpace: placed as packages/app places a context menu, 4px below the pointer and
+      {/* BySpace: placed as the Expo app places a context menu, 4px below the pointer and
           starting at it (flipping above when it does not fit), instead of Radix's 2px to the
           right of it. transition-none: shadcn's duration-100 sets a transition duration over the
           default transition-property `all`, so the transform origin glides from the centre to
-          the corner Radix computes and the opening zoom drifts sideways; packages/app's surfaces
+          the corner Radix computes and the opening zoom drifts sideways; the Expo app's surfaces
           scale from a fixed corner. The same holds for every surface below. No slide-in either:
-          packages/app's menus fade and scale in place, and a menu sliding in under the pointer
+          The Expo app's menus fade and scale in place, and a menu sliding in under the pointer
           takes the release of the right click as a press on its first item. */}
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
@@ -172,7 +172,7 @@ function ContextMenuSubTrigger({
 
 function ContextMenuSubContent({
   className,
-  // BySpace: a flyout overlaps its parent menu by 6px, as packages/app's did (SUBMENU_OVERLAP 5 from
+  // BySpace: a flyout overlaps its parent menu by 6px, as the Expo app's did (SUBMENU_OVERLAP 5 from
   // the row's full-width wrapper), so the pointer never crosses a gap. The row is inset 5px, hence -1.
   sideOffset = -1,
   collisionPadding = 8,

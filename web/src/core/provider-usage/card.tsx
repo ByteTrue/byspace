@@ -1,4 +1,4 @@
-// Port of packages/app/src/provider-usage/card.tsx: one provider's usage — name, plan, status,
+// Port of archive/expo-app:packages/app/src/provider-usage/card.tsx: one provider's usage — name, plan, status,
 // error, window and balance bars, detail rows and where the numbers came from.
 import { getProviderIcon } from "@/components/provider-icons";
 import { StatusBadge } from "@/components/ui/status-badge";

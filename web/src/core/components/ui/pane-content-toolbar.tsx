@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/pane-content-toolbar.tsx: the 36px bar on top of a
+// Port of archive/expo-app:packages/app/src/components/ui/pane-content-toolbar.tsx: the 36px bar on top of a
 // pane and its 20px icon buttons, each with a tooltip naming it and its shortcut.
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,7 +12,7 @@ import {
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { cn } from "cn";
 
-// packages/app/src/components/tree-primitives.tsx: the right rail trailing glyphs line up on.
+// archive/expo-app:packages/app/src/components/tree-primitives.tsx: the right rail trailing glyphs line up on.
 const WORKSPACE_PANE_TRAILING_GLYPH_RAIL = 8;
 
 export function PaneContentToolbar({

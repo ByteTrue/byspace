@@ -1,9 +1,9 @@
-// Port of packages/app/src/components/ui/segmented-control.tsx: shadcn's default tabs look (a
+// Port of archive/expo-app:packages/app/src/components/ui/segmented-control.tsx: shadcn's default tabs look (a
 // muted track holding a raised selected segment) as a row of buttons, same props.
 import { useCallback, type CSSProperties, type ReactNode } from "react";
-import { useUnistyles } from "react-native-unistyles";
 import { segmentedIconSize, type SegmentedControlSize } from "@/components/ui/control-geometry";
 import { cn } from "cn";
+import { useThemeObject } from "~/app/theme-object";
 
 type SegmentedControlIconRenderer = (props: { color: string; size: number }) => ReactNode;
 
@@ -85,7 +85,7 @@ function SegmentItem<T extends string>({
   currentValue: T;
   onValueChange: (value: T) => void;
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const handlePress = useCallback(() => {
     if (!option.disabled && option.value !== currentValue) onValueChange(option.value);
   }, [option.disabled, option.value, currentValue, onValueChange]);

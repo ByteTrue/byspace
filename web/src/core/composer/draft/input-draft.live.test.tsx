@@ -15,7 +15,7 @@ vi.hoisted(() => {
   (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
 });
 
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("~/lib/local-storage-async", () => ({
   default: {
     getItem: async (key: string) => asyncStorage.get(key) ?? null,
     setItem: async (key: string, value: string) => {

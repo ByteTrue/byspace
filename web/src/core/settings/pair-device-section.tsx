@@ -1,11 +1,10 @@
-// Port of packages/app/src/settings/pair-device-section.tsx: the pairing offer (relay consent, QR code, link), DOM view.
-// Converted from the Expo file by web/scripts/port/pair-device-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/settings/pair-device-section.tsx: the pairing offer (relay consent, QR code, link), DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/pair-device-section.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import * as QRCode from "qrcode";
 import { useMutation } from "@tanstack/react-query";
 import { Check, Copy, Network, RotateCw, ShieldCheck } from "lucide-react";
-import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -20,11 +19,12 @@ import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
+import { withTheme } from "~/app/theme-object";
 
 const RELAY_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/SECURITY.md";
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const ThemedShieldCheck = withUnistyles(ShieldCheck);
-const ThemedNetwork = withUnistyles(Network);
+const ThemedLoadingSpinner = withTheme(LoadingSpinner);
+const ThemedShieldCheck = withTheme(ShieldCheck);
+const ThemedNetwork = withTheme(Network);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -88,7 +88,7 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
 
   const handleCopyLink = useCallback(async () => {
     if (!pairingQuery.data?.url) return;
-    await Clipboard.setStringAsync(pairingQuery.data.url);
+    await Clipboard.writeText(pairingQuery.data.url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [pairingQuery.data?.url]);
@@ -241,7 +241,7 @@ function RelayConsent(props: PairDeviceBodyProps) {
 function RelayHeroBadge() {
   return (
     <div className="mb-1 flex size-12 items-center justify-center rounded-full border bg-muted">
-      <ThemedShieldCheck size={20} uniProps={accentBrightColorMapping} />
+      <ThemedShieldCheck size={20} themeProps={accentBrightColorMapping} />
     </div>
   );
 }
@@ -262,7 +262,7 @@ function PairingOffer(props: PairDeviceBodyProps & { offer: { url: string } }) {
         <div className="min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted">
           <TextInput
             ref={inputRef}
-            // UI font, as packages/app's root font rule renders it (see host-page.py)
+            // UI font, as the Expo app's root font rule renders it (see host-page.py)
             className="block w-full bg-transparent px-3 py-2 text-xs leading-[normal] text-muted-foreground outline-none"
             initialValue={props.offer.url}
             readOnly
@@ -305,5 +305,5 @@ function PairingQr({ svg, isError }: { svg: string | null; isError: boolean }) {
       </span>
     );
   }
-  return <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />;
+  return <ThemedLoadingSpinner size="small" themeProps={foregroundMutedColorMapping} />;
 }

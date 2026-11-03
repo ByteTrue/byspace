@@ -19,7 +19,7 @@ import type { MarkdownPhase } from "@/components/markdown/fence/types";
  * All of the policy — what is revealed when, and where it is safe to cut — lives
  * in that module and is tested there. This hook only owns the requestAnimationFrame
  * wiring, so the rendered behavior is covered end to end by
- * `packages/app/e2e/browser/agent-stream-smoothness.spec.ts`.
+ * `web/e2e/browser/agent-stream-smoothness.spec.ts`.
  */
 export function useRevealedText(text: string, phase: MarkdownPhase): string {
   const pacingSupported = isTextRevealPacingSupported();

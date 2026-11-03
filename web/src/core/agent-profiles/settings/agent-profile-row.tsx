@@ -1,9 +1,8 @@
-// Port of packages/app/src/agent-profiles/settings/agent-profile-row.tsx: one agent profile row; DOM view.
-// Converted from the Expo file by web/scripts/port/agent-profiles-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-row.tsx: one agent profile row; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profiles-section.py; edit it directly.
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp, FileText, Pencil, Trash2 } from "lucide-react";
-import { withUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
@@ -12,20 +11,21 @@ import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { AgentProfileGlyph } from "@/agent-profiles/internal/agent-profile-glyph";
 import { buildAgentProfileTags } from "@/agent-profiles/internal/profile-summary";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedArrowDown = withUnistyles(ArrowDown);
-const ThemedPencil = withUnistyles(Pencil);
-const ThemedTrash2 = withUnistyles(Trash2);
-const ThemedFileText = withUnistyles(FileText);
+const ThemedArrowUp = withTheme(ArrowUp);
+const ThemedArrowDown = withTheme(ArrowDown);
+const ThemedPencil = withTheme(Pencil);
+const ThemedTrash2 = withTheme(Trash2);
+const ThemedFileText = withTheme(FileText);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const editIcon = <ThemedPencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const removeIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const editIcon = <ThemedPencil size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const removeIcon = <ThemedTrash2 size={ICON_SIZE.sm} themeProps={destructiveColorMapping} />;
 
 export interface AgentProfileRowProps {
   profile: AgentProfile;
@@ -90,7 +90,7 @@ export function AgentProfileRow({
           </div>
           {profile.notes ? (
             <div className="mt-1 flex flex-row items-start gap-1">
-              <ThemedFileText size={ICON_SIZE.xs} uniProps={mutedColorMapping} />
+              <ThemedFileText size={ICON_SIZE.xs} themeProps={mutedColorMapping} />
               <span
                 className="line-clamp-2 flex-1 text-xs leading-[normal] text-muted-foreground"
                 data-testid={`agent-profile-notes-${profile.id}`}

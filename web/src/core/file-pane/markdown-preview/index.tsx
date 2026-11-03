@@ -1,4 +1,4 @@
-// Port of packages/app/src/file-pane/markdown-preview/index.tsx: a Markdown file rendered for
+// Port of archive/expo-app:packages/app/src/file-pane/markdown-preview/index.tsx: a Markdown file rendered for
 // reading, its front matter as a key/value table above the body.
 import { useMemo } from "react";
 import { MarkdownRenderer } from "@/components/markdown/renderer";

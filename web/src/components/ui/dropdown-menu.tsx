@@ -4,7 +4,7 @@ import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"
 import { stopContextMenu } from "./menu-events"
 
-// BySpace: geometry follows packages/app's menu engine (components/ui/menu/menu-item.tsx,
+// BySpace: geometry follows the Expo app's menu engine (components/ui/menu/menu-item.tsx,
 // menu-overlay.tsx), so menus measure the same as in the Expo app: a 1px-bordered surface at least
 // 180px wide with 4px above and below its rows; rows inset 4px with a 1px transparent border, 8px
 // padding and gap, an 18px line, 28px tall (40px on a phone); a 16px leading slot (an icon given
@@ -36,7 +36,7 @@ function DropdownMenuTrigger({
   )
 }
 
-// BySpace: as packages/app's menus did (lib/overlay-root.ts focusFirstElement), opening a menu
+// BySpace: as the Expo app's menus did (lib/overlay-root.ts focusFirstElement), opening a menu
 // focuses its first enabled row, so the row is highlighted and the arrow keys start from it. Radix
 // focuses the content itself on a pointer open; this moves that focus on to the first row.
 function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
@@ -56,10 +56,10 @@ function useFocusFirstMenuItem(ref: React.Ref<HTMLDivElement> | undefined) {
   )
 }
 
-// BySpace: no exit animation, as packages/app's menus on the web (menu-overlay.tsx passes no
+// BySpace: no exit animation, as the Expo app's menus on the web (menu-overlay.tsx passes no
 // `exiting` there): a closing menu stays mounted while it animates out, and its outside-press
 // handler would close a menu a quick press on the trigger had just reopened.
-// BySpace: every menu surface stays 8px inside the window (packages/app's menu-anchor EDGE_PADDING)
+// BySpace: every menu surface stays 8px inside the window (the Expo app's menu-anchor EDGE_PADDING)
 // and draws the md shadow, submenus too.
 function DropdownMenuContent({
   className,
@@ -274,7 +274,7 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
   className,
-  // BySpace: a flyout overlaps its parent menu by 6px, as packages/app's did (SUBMENU_OVERLAP 5 from
+  // BySpace: a flyout overlaps its parent menu by 6px, as the Expo app's did (SUBMENU_OVERLAP 5 from
   // the row's full-width wrapper), so the pointer never crosses a gap. The row is inset 5px, hence -1.
   sideOffset = -1,
   collisionPadding = 8,

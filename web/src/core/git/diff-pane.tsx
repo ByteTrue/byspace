@@ -1,7 +1,7 @@
-// Port of packages/app/src/git/diff-pane.tsx: the Changes surface — branch and pull request
+// Port of archive/expo-app:packages/app/src/git/diff-pane.tsx: the Changes surface — branch and pull request
 // row, diff mode and toolbar, the changed-file tree, the diff document and the commits strip.
 // The logic is the Expo file's; the view is DOM.
-// Converted from the Expo file by web/scripts/port/diff-pane.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/diff-pane.py; edit it directly.
 import {
   Fragment,
   useState,
@@ -59,7 +59,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -94,7 +94,6 @@ import { FOCUSED_PANE_PLACEMENT, useWorkspaceLayoutStore } from "@/stores/worksp
 import type { WorkspaceTabPlacement } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-import { isWeb } from "@/constants/platform";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
@@ -1482,7 +1481,7 @@ export function ChangesSurface({
   const { preferences, updatePreferences } = useChangesPreferences();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const canUseSplitLayout = isWeb && !isMobile;
+  const canUseSplitLayout = !isMobile;
   const instanceState = changesState ?? defaultChangesState;
   const updateState = onStateChange ?? noopStateChange;
   const wrapLines = preferences.wrapLines;
@@ -1637,14 +1636,12 @@ export function ChangesSurface({
   const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
   const handleCopyPath = useCallback(
     (path: string) => {
-      void Clipboard.setStringAsync(
-        buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
-      );
+      void Clipboard.writeText(buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }));
     },
     [cwd],
   );
   const handleCopyRelativePath = useCallback((path: string) => {
-    void Clipboard.setStringAsync(path);
+    void Clipboard.writeText(path);
   }, []);
   const handleDownloadPath = useCallback(
     (path: string) => {

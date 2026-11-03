@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/explorer-sidebar-tab-rail.tsx: the explorer pane's
+// Port of archive/expo-app:packages/app/src/screens/workspace/explorer-sidebar-tab-rail.tsx: the explorer pane's
 // line tabs (Files, Changes, ...), draggable in the split container's drag context, with a
 // right-click menu per tab and one on the rail for adding or removing tabs.
 import { useCallback, useMemo, useState, type ComponentType, type ReactNode } from "react";

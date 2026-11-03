@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/icon-button-chrome.ts. The Expo file returns React
+// Port of archive/expo-app:packages/app/src/components/ui/icon-button-chrome.ts. The Expo file returns React
 // Native styles; here the same frames are class names. Small: 20px (32px on a phone), large: 28px
 // (32px on a phone), md radius, highlighted with the accent fill. Only an open menu (Radix's
 // data-state) fills; aria-expanded on a panel toggle reports the panel, not a pressed look.
@@ -34,7 +34,7 @@ export function iconButtonChromeClassName({
   let frame = "size-8 md:size-7";
   if (size === "small") frame = compact ? "size-8" : "size-5";
   return cn(
-    // As packages/app's chrome: hovered, pressed, open or active fills with the interaction
+    // As the Expo app's chrome: hovered, pressed, open or active fills with the interaction
     // highlight; the glyph keeps the colour its caller gave it. No keyboard focus outline: the
     // chrome sets outlineWidth 0 there.
     "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-highlight active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",

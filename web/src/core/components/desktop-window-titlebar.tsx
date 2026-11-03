@@ -1,15 +1,14 @@
-// Port of packages/app/src/components/desktop-window-titlebar.tsx: the framed content card
+// Port of archive/expo-app:packages/app/src/components/desktop-window-titlebar.tsx: the framed content card
 // (6px from the window edges, 12px radius, 1px border) and, in the Windows desktop app's frameless
 // window, the 36px title bar above it with minimize, maximize and close.
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
-import { isWeb } from "@/constants/platform";
 import { cn } from "cn";
 
 /** Running inside the Wails desktop container (not a phone's Wails webview). */
 export function isWailsDesktopShell(): boolean {
-  if (!isWeb || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return false;
   }
   const isWailsOrigin =

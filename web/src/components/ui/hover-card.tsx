@@ -18,7 +18,7 @@ function HoverCardTrigger({
   )
 }
 
-// BySpace: packages/app's popover chrome (menu-overlay.tsx): a 1px border, not shadcn's 10% ring.
+// BySpace: the Expo app's popover chrome (menu-overlay.tsx): a 1px border, not shadcn's 10% ring.
 function HoverCardContent({
   className,
   align = "center",

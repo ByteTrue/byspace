@@ -41,7 +41,7 @@ export function SnapDrawer({
   const fraction = typeof snap === "number" ? snap : (snapPoints[0] ?? 1);
   const points = useMemo(() => [...snapPoints], [snapPoints]);
   const bodyStyle = useMemo(() => ({ height: `calc(${fraction * 100}dvh - 1.5rem)` }), [fraction]);
-  // packages/app's sheet (keyboardBehavior="extend") rises to its top snap point when a text field
+  // The Expo app's sheet (keyboardBehavior="extend") rises to its top snap point when a text field
   // takes focus, so the field stays above the keyboard.
   const handleFocusCapture = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {

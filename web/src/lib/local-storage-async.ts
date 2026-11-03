@@ -1,7 +1,6 @@
-// Stand-in for @react-native-async-storage/async-storage: its web build, localStorage behind
-// promises, for the methods src/core calls. The package itself would pull react-native back in as a
-// peer dependency.
-const AsyncStorage = {
+// localStorage behind the promise API the app's stores and caches persist through. It is what
+// React Native's AsyncStorage was on the web, which they were written against.
+const localStorageAsync = {
   getItem: async (key: string): Promise<string | null> => window.localStorage.getItem(key),
   setItem: async (key: string, value: string): Promise<void> => {
     window.localStorage.setItem(key, value);
@@ -17,4 +16,4 @@ const AsyncStorage = {
   },
 };
 
-export default AsyncStorage;
+export default localStorageAsync;

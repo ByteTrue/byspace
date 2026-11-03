@@ -1,5 +1,5 @@
-// Port of packages/app/src/screens/settings/host-page.tsx: a host's Host, Connections, Agents and Usage pages; DOM view.
-// Converted from the Expo file by web/scripts/port/host-page.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/host-page.tsx: a host's Host, Connections, Agents and Usage pages; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/host-page.py; edit it directly.
 import {
   ArrowDown,
   ArrowUp,
@@ -16,8 +16,6 @@ import {
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
-import { useUnistyles, withUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import {
@@ -73,13 +71,15 @@ import {
   type DaemonConnectionMarker,
 } from "@/screens/settings/daemon-reconnect";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
+import { useThemeObject, withTheme } from "~/app/theme-object";
+import { showAlert } from "~/lib/alert";
 
-const ThemedArrowUp = withUnistyles(ArrowUp);
-const ThemedArrowDown = withUnistyles(ArrowDown);
-const ThemedProfilePencil = withUnistyles(Pencil);
-const ThemedTrash2 = withUnistyles(Trash2);
-const ThemedProfileSquareTerminal = withUnistyles(SquareTerminal);
-const ThemedPlus = withUnistyles(Plus);
+const ThemedArrowUp = withTheme(ArrowUp);
+const ThemedArrowDown = withTheme(ArrowDown);
+const ThemedProfilePencil = withTheme(Pencil);
+const ThemedTrash2 = withTheme(Trash2);
+const ThemedProfileSquareTerminal = withTheme(SquareTerminal);
+const ThemedPlus = withTheme(Plus);
 
 interface DynamicProviderIconProps {
   iconKey: string;
@@ -92,16 +92,16 @@ function DynamicProviderIcon({ iconKey, size, color = "" }: DynamicProviderIconP
   return <Icon size={size} color={color} />;
 }
 
-const ThemedDynamicProviderIcon = withUnistyles(DynamicProviderIcon);
+const ThemedDynamicProviderIcon = withTheme(DynamicProviderIcon);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const editProfileIcon = <ThemedProfilePencil size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const removeProfileIcon = <ThemedTrash2 size={ICON_SIZE.sm} uniProps={destructiveColorMapping} />;
-const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const editProfileIcon = <ThemedProfilePencil size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const removeProfileIcon = <ThemedTrash2 size={ICON_SIZE.sm} themeProps={destructiveColorMapping} />;
+const addProfileIcon = <ThemedPlus size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
 
 function formatHostConnectionLabel(connection: HostConnection, t: TFunction): string {
   if (connection.type === "relay") {
@@ -118,7 +118,7 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
 
 function formatActiveConnectionBadge(
   activeConnection: { type: HostConnection["type"]; display: string } | null,
-  theme: ReturnType<typeof useUnistyles>["theme"],
+  theme: Theme,
   t: TFunction,
 ): { icon: React.ReactNode; text: string } | null {
   if (!activeConnection) return null;
@@ -172,7 +172,7 @@ function HostNotFound() {
 
 function HostStatusBadges({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const snapshot = useHostRuntimeSnapshot(serverId);
   const daemonVersion = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.version ?? null,
@@ -397,7 +397,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        Alert.alert(
+        showAlert(
           t("settings.host.connections.removeErrorTitle"),
           t("settings.host.connections.removeErrorMessage"),
         );
@@ -477,7 +477,7 @@ function ConnectionRow({
   onRemove: (connection: HostConnection) => void;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const title = formatHostConnectionLabel(connection, t);
 
   const latencyText = (() => {
@@ -516,7 +516,7 @@ const delay = (ms: number) =>
 
 function RestartDaemonCard({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
@@ -572,7 +572,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       if (restartResult.status === "rejected" && !restartResult.disconnectedAfterFailure) {
         console.error(`[HostPage] Failed to restart daemon ${host.label}`, restartResult.error);
         setIsRestarting(false);
-        Alert.alert(
+        showAlert(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.requestFailedMessage"),
         );
@@ -588,7 +588,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       if (isMountedRef.current) {
         setIsRestarting(false);
         if (!reconnected) {
-          Alert.alert(
+          showAlert(
             t("settings.host.daemon.restart.unableToReconnectTitle"),
             t("settings.host.daemon.restart.unableToReconnectMessage", { name: host.label }),
           );
@@ -600,14 +600,14 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      Alert.alert(
+      showAlert(
         t("settings.host.daemon.restart.unavailableTitle"),
         t("settings.host.daemon.restart.unavailableMessage"),
       );
       return;
     }
     if (!isHostConnected()) {
-      Alert.alert(
+      showAlert(
         t("settings.host.daemon.restart.offlineTitle"),
         t("settings.host.daemon.restart.offlineMessage"),
       );
@@ -636,7 +636,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        Alert.alert(
+        showAlert(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.dialogFailedMessage"),
         );
@@ -679,7 +679,7 @@ type DaemonUpdateState =
 
 function UpdateDaemonCard({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
@@ -969,7 +969,7 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
     (next: boolean) => {
       void patchConfig({ autoArchiveAfterMerge: next }).catch((error) => {
         console.error("[HostPage] Failed to update auto-archive after merge", error);
-        Alert.alert(
+        showAlert(
           "Unable to update workspaces",
           error instanceof Error ? error.message : String(error),
         );
@@ -1120,7 +1120,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
 
 function PairDeviceRow({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleOpen = useCallback(() => setIsModalOpen(true), []);
@@ -1161,7 +1161,7 @@ function RemoveHostSection({
   onRemoved?: () => void;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { removeHost } = useHostMutations();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -1195,7 +1195,7 @@ function RemoveHostSection({
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        Alert.alert(
+        showAlert(
           t("settings.host.daemon.remove.errorTitle"),
           isServingDaemon
             ? t("settings.host.daemon.remove.localErrorMessage")
@@ -1338,10 +1338,10 @@ function TerminalProfileRow({
           <ThemedDynamicProviderIcon
             iconKey={icon}
             size={ICON_SIZE.md}
-            uniProps={mutedColorMapping}
+            themeProps={mutedColorMapping}
           />
         ) : (
-          <ThemedProfileSquareTerminal size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+          <ThemedProfileSquareTerminal size={ICON_SIZE.md} themeProps={mutedColorMapping} />
         )}
       </div>
       <div className={settingsStyles.rowContent}>
@@ -1488,7 +1488,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         try {
           await saveProfiles(profiles.filter((p) => p.id !== id));
         } catch (error) {
-          Alert.alert(
+          showAlert(
             t("common.errors.unableToSave"),
             error instanceof Error ? error.message : String(error),
           );
@@ -1510,7 +1510,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
         );
@@ -1530,7 +1530,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
         );

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/task-list-row.tsx: one task with its status mark.
+// Port of archive/expo-app:packages/app/src/components/task-list-row.tsx: one task with its status mark.
 import { memo } from "react";
 import { Circle, CircleCheck, CircleDot } from "lucide-react";
 import type { TodoEntry } from "@/types/stream";

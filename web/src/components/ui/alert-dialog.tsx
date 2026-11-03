@@ -46,7 +46,7 @@ function AlertDialogOverlay({
 }
 
 // BySpace: the app's modal card, as DialogContent: a 1px border and the lg shadow.
-// BySpace: fades without shadcn's zoom, as packages/app's modals fade.
+// BySpace: fades without shadcn's zoom, as the Expo app's modals fade.
 function AlertDialogContent({
   className,
   size = "default",
@@ -55,7 +55,7 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm"
 }) {
-  // BySpace: focus returns to the opener on close, as packages/app's overlays did.
+  // BySpace: focus returns to the opener on close, as the Expo app's overlays did.
   const restoreFocus = useRestoreFocusToOpener(onCloseAutoFocus)
   return (
     <AlertDialogPortal>

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
@@ -28,7 +28,7 @@ export const useSidebarCollapsedSectionsStore = create<SidebarCollapsedSectionsS
     }),
     {
       name: "sidebar-collapsed-sections",
-      storage: createValidatedPersistStorage(AsyncStorage, PersistedCollapsedProjectsSchema),
+      storage: createValidatedPersistStorage(localStorageAsync, PersistedCollapsedProjectsSchema),
       partialize: (state) => serializeCollapsedProjects(state),
       merge: (persistedState, currentState) =>
         mergePersistedCollapsedProjects(persistedState, currentState),

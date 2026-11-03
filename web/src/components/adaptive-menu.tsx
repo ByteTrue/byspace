@@ -1,4 +1,4 @@
-// shadcn's DropdownMenu and ContextMenu, plus packages/app's `compactMode="sheet"`: on a phone such
+// shadcn's DropdownMenu and ContextMenu, plus the Expo app's `compactMode="sheet"`: on a phone such
 // a menu is a bottom sheet (~/components/sheet-menu) that shows one page at a time — a submenu
 // becomes a page with a back button. Everywhere else every export is the shadcn component itself.
 // Same names and props as ~/components/ui/dropdown-menu and ~/components/ui/context-menu.
@@ -431,7 +431,7 @@ export const DropdownMenuShortcut = Dropdown.DropdownMenuShortcut;
 
 // ---- context ----
 
-/** Context menus are sheets on a phone unless told otherwise, as in packages/app. */
+/** Context menus are sheets on a phone unless told otherwise, as in the Expo app. */
 export function ContextMenu({
   compactMode = "sheet",
   ...props

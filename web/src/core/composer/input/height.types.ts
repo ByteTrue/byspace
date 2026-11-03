@@ -1,14 +1,14 @@
-import type { TextStyle } from "react-native";
+import type { CSSProperties } from "react";
 
 export type ComposerHeightResult =
   | {
       mode: "intrinsic";
-      style: TextStyle;
+      style: CSSProperties;
       scrollEnabled: true;
     }
   | {
       mode: "measured";
-      style: TextStyle;
+      style: CSSProperties;
       scrollEnabled: boolean;
       onTextChange: (previousText: string, nextText: string) => void;
       reset: () => void;

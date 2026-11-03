@@ -24,8 +24,8 @@ export function spawnTsx(entrypoint: string, args: string[], options: SpawnOptio
  * Terminates a child and everything it forked, then waits for the exit.
  *
  * `child.kill()` on Windows maps to `TerminateProcess` against the direct child
- * only. Metro and the daemon supervisor both fork workers, so the signal leaves
- * grandchildren holding the listening port and the next run fails to bind.
+ * only. The daemon supervisor forks workers, so the signal leaves grandchildren
+ * holding the listening port and the next run fails to bind.
  * `taskkill /T` walks the tree; POSIX keeps the SIGTERM-then-SIGKILL ladder.
  */
 export async function killProcessTree(child: ChildProcess | null): Promise<void> {

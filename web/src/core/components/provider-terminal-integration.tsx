@@ -1,8 +1,7 @@
-// Port of packages/app/src/components/provider-terminal-integration.tsx: the Terminal tab of a provider's settings sheet; DOM view.
-// Converted from the Expo file by web/scripts/port/provider-diagnostic-sheet.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/provider-terminal-integration.tsx: the Terminal tab of a provider's settings sheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/provider-diagnostic-sheet.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
 import type { TerminalAgentHookProviderId } from "@bytetrue/protocol/messages";
 import {
   DEFAULT_TERMINAL_PROFILES,
@@ -25,6 +24,7 @@ import {
   applyProviderProfileDraft,
   draftFromProfile,
 } from "@/components/provider-terminal-profile-save";
+import { showAlert } from "~/lib/alert";
 
 /**
  * The Terminal tab of a provider's detail sheet: how BySpace talks to this
@@ -60,7 +60,7 @@ export function ProviderTerminalIntegration({
   const handleHookChange = useCallback(
     (next: boolean) => {
       void patchConfig(createTerminalAgentHookPatch(provider, next)).catch((error) => {
-        Alert.alert(
+        showAlert(
           t("settings.host.terminalAgentHooks.updateErrorTitle"),
           error instanceof Error ? error.message : String(error),
         );

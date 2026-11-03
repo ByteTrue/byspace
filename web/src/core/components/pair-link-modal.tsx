@@ -1,8 +1,7 @@
-// Port of packages/app/src/components/pair-link-modal.tsx: the paste-a-pairing-link form; DOM view.
-// Converted from the Expo file by web/scripts/port/add-host-modals.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/pair-link-modal.tsx: the paste-a-pairing-link form; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useUnistyles } from "react-native-unistyles";
 import { Link } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -14,6 +13,7 @@ import {
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { useThemeObject } from "~/app/theme-object";
 
 export interface PairLinkModalProps {
   visible: boolean;
@@ -28,7 +28,7 @@ export interface PairLinkModalProps {
 }
 
 export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkModalProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();

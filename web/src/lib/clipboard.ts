@@ -1,7 +1,7 @@
-// Stand-in for `expo-clipboard`, backed by the async Clipboard API.
-// As expo-clipboard's web module: when the Clipboard API is missing or refuses (no permission, an
-// insecure origin, a sandboxed frame), copy through a hidden textarea and report whether that
-// worked. It never rejects, so callers that do not catch do not raise an unhandled rejection.
+// Clipboard text through the async Clipboard API. When the API is missing or refuses (no
+// permission, an insecure origin, a sandboxed frame), copying falls back to a hidden textarea and
+// reports whether that worked. It never rejects, so callers that do not catch do not raise an
+// unhandled rejection.
 function copyWithTextarea(text: string): boolean {
   const field = document.createElement("textarea");
   field.textContent = text;
@@ -16,7 +16,7 @@ function copyWithTextarea(text: string): boolean {
   }
 }
 
-export async function setStringAsync(text: string): Promise<boolean> {
+export async function writeText(text: string): Promise<boolean> {
   try {
     if (!navigator.clipboard) return copyWithTextarea(text);
     await navigator.clipboard.writeText(text);
@@ -26,12 +26,12 @@ export async function setStringAsync(text: string): Promise<boolean> {
   }
 }
 
-export async function getStringAsync(): Promise<string> {
+export async function readText(): Promise<string> {
   return await navigator.clipboard.readText();
 }
 
-export async function hasStringAsync(): Promise<boolean> {
-  return (await getStringAsync()).length > 0;
+export async function hasText(): Promise<boolean> {
+  return (await readText()).length > 0;
 }
 
 async function readImageBlob(): Promise<Blob | null> {
@@ -43,21 +43,14 @@ async function readImageBlob(): Promise<Blob | null> {
   return null;
 }
 
-export async function hasImageAsync(): Promise<boolean> {
-  return (await readImageBlob()) !== null;
-}
-
-/** The clipboard's image as a data URL, as expo-clipboard returns it. */
-export async function getImageAsync(_options: {
-  format: "png" | "jpeg";
-}): Promise<{ data: string } | null> {
+/** The clipboard's image as a data URL, or null when it holds none. */
+export async function readImageDataUrl(): Promise<string | null> {
   const blob = await readImageBlob();
   if (!blob) return null;
-  const data = await new Promise<string>((resolve, reject) => {
+  return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result)));
     reader.addEventListener("error", () => reject(reader.error));
     reader.readAsDataURL(blob);
   });
-  return { data };
 }

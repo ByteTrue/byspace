@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/form-field.tsx: a labelled field (label, control,
+// Port of archive/expo-app:packages/app/src/components/ui/form-field.tsx: a labelled field (label, control,
 // then the error or the hint) and shadcn's input for its text control.
 import { forwardRef, type ReactNode } from "react";
 import { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/adaptive-text-input";
@@ -62,7 +62,7 @@ export const FormTextInput = forwardRef<
       multiline={multiline}
       className={formInputClassName(
         size,
-        // packages/app's multiline field keeps the size's padding (sm 5 / 3, md 11 / 5) and grows
+        // The Expo app's multiline field keeps the size's padding (sm 5 / 3, md 11 / 5) and grows
         // by 20px lines.
         cn(
           multiline &&

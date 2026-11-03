@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import {
   createContext,
   type ReactNode,
@@ -40,12 +40,11 @@ const SidebarCalloutApiContext = createContext<SidebarCalloutsApi | null>(null);
 const SidebarCalloutStateContext = createContext<SidebarCalloutEntry | null>(null);
 
 function persistDismissedCalloutKeys(keys: ReadonlySet<string>): void {
-  void AsyncStorage.setItem(
-    DISMISSED_CALLOUTS_STORAGE_KEY,
-    serializeDismissedCalloutKeys(keys),
-  ).catch((error) => {
-    console.error("[SidebarCallouts] Failed to persist dismissed callouts", error);
-  });
+  void localStorageAsync
+    .setItem(DISMISSED_CALLOUTS_STORAGE_KEY, serializeDismissedCalloutKeys(keys))
+    .catch((error) => {
+      console.error("[SidebarCallouts] Failed to persist dismissed callouts", error);
+    });
 }
 
 export function SidebarCalloutProvider({ children }: { children: ReactNode }) {
@@ -64,7 +63,7 @@ export function SidebarCalloutProvider({ children }: { children: ReactNode }) {
       let dismissedKeys: ReadonlySet<string>;
       try {
         const value = await readValidatedJson(
-          AsyncStorage,
+          localStorageAsync,
           DISMISSED_CALLOUTS_STORAGE_KEY,
           DismissedCalloutKeysSchema,
         );

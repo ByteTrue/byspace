@@ -1,9 +1,8 @@
-// Port of packages/app/src/screens/settings/appearance/appearance-section.tsx: theme, terminal scheme, detail level, fonts, syntax theme. Same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/appearance-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/appearance/appearance-section.tsx: theme, terminal scheme, detail level, fonts, syntax theme. Same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/appearance-section.py; edit it directly.
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react";
 import {
   SYNTAX_THEME_OPTIONS,
@@ -46,17 +45,17 @@ import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "@/screens/settings/appearance/appearance-preview";
 import { SidebarNavSection } from "@/screens/settings/appearance/sidebar-nav-section";
 import type { CSSProperties } from "react";
+import { withTheme } from "~/app/theme-object";
 
 // ---------------------------------------------------------------------------
-// Theme-reactive leaf icons (withUnistyles + uniProps color mapping — no
-// useUnistyles). Icon sizes read the static ICON_SIZE token; the appearance
+// Theme-reactive leaf icons (withTheme + themeProps color mapping). Icon sizes read the static ICON_SIZE token; the appearance
 // feature does not scale icons.
 // ---------------------------------------------------------------------------
 
-const ThemedSun = withUnistyles(Sun);
-const ThemedMoon = withUnistyles(Moon);
-const ThemedMonitor = withUnistyles(Monitor);
-const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedSun = withTheme(Sun);
+const ThemedMoon = withTheme(Moon);
+const ThemedMonitor = withTheme(Monitor);
+const ThemedChevronDown = withTheme(ChevronDown);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -96,11 +95,11 @@ interface ThemeLeadingProps {
 function ThemeLeading({ themeValue }: ThemeLeadingProps) {
   switch (themeValue) {
     case "light":
-      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedSun size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
     case "dark":
-      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMoon size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
     case "auto":
-      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMonitor size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
     default:
       return <ThemeSwatch color={THEME_SWATCHES[themeValue]} />;
   }
@@ -156,7 +155,7 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
         >
           <ThemeLeading themeValue={value} />
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {THEME_OPTIONS.map((option, index) => {
@@ -196,11 +195,11 @@ function getTerminalAppearanceLabel(t: TFunction, value: TerminalAppearance): st
 function TerminalAppearanceLeading({ value }: { value: TerminalAppearance }) {
   switch (value) {
     case "dark":
-      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMoon size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
     case "light":
-      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedSun size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
     case "match":
-      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+      return <ThemedMonitor size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
   }
 }
 
@@ -248,7 +247,7 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
         >
           <TerminalAppearanceLeading value={value} />
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {TERMINAL_APPEARANCE_OPTIONS.map((option) => (
@@ -328,7 +327,7 @@ function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {TIMELINE_DETAIL_LEVELS.map((option) => (
@@ -500,7 +499,7 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
           {SYNTAX_THEME_OPTIONS.map((option) => (

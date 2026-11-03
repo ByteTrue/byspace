@@ -352,8 +352,6 @@ The factory is invoked with `(logger, runtimeSettings, options)`; `options.works
 Create `web/src/core/components/icons/my-provider-icon.tsx` following the pattern from existing icons (e.g., `claude-icon.tsx`):
 
 ```tsx
-import { Path, Svg } from "react-native-svg";
-
 interface MyProviderIconProps {
   size?: number;
   color?: string;
@@ -361,9 +359,9 @@ interface MyProviderIconProps {
 
 export function MyProviderIcon({ size = 16, color = "currentColor" }: MyProviderIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Path d="..." />
-    </Svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="..." />
+    </svg>
   );
 }
 ```

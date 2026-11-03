@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "~/app/navigation";
 import { buildSettingsHostSectionRoute, buildSettingsRoute } from "@/utils/host-routes";
 
 export default function SettingsHostIndexRoute() {

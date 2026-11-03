@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/headers/menu-header.tsx. The toggle is web/src/app's
+// Port of archive/expo-app:packages/app/src/components/headers/menu-header.tsx. The toggle is web/src/app's
 // SidebarToggle; MenuHeader frames it like the Expo version does.
 import type { ReactNode } from "react";
 import { ScreenHeader } from "@/components/headers/screen-header";

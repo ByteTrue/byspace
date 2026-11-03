@@ -1,4 +1,4 @@
-import { usePathname } from "expo-router";
+import { usePathname } from "~/app/navigation";
 import { useCallback, useEffect, useRef } from "react";
 
 const NEW_WORKSPACE_PATHNAME = "/new";

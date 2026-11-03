@@ -1,5 +1,4 @@
 import { Fragment, useMemo, type ReactElement } from "react";
-import { withUnistyles } from "react-native-unistyles";
 import {
   ArrowRightToLine,
   Copy,
@@ -15,7 +14,7 @@ import {
   Trash2,
   Undo2,
   type LucideIcon,
-} from "lucide-react-native";
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
@@ -23,6 +22,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import { withTheme } from "~/app/theme-object";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -276,11 +276,11 @@ export function FileActionsContextMenuContent({
 
 function FileActionMenuItem({ action }: { action: FileAction }): ReactElement {
   const leading = useMemo(() => {
-    const ThemedIcon = withUnistyles(action.icon);
+    const ThemedIcon = withTheme(action.icon);
     return (
       <ThemedIcon
         size={ICON_SIZE.sm}
-        uniProps={action.destructive ? destructiveColorMapping : foregroundMutedColorMapping}
+        themeProps={action.destructive ? destructiveColorMapping : foregroundMutedColorMapping}
       />
     );
   }, [action.destructive, action.icon]);

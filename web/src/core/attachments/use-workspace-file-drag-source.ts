@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, type RefCallback } from "react";
-import type { View } from "react-native";
 import { createWorkspaceFileAttachment } from "./workspace-file";
 import { serializeWorkspaceFileDragPayload, WORKSPACE_FILE_DRAG_MIME } from "./workspace-file-drag";
 import type { WorkspaceFileDragSourceInput } from "./workspace-file-drag-source.types";
@@ -11,9 +10,9 @@ export function useWorkspaceFileDragSource({
   workspaceId,
   path,
   selection,
-}: WorkspaceFileDragSourceInput): RefCallback<View> {
+}: WorkspaceFileDragSourceInput): RefCallback<HTMLElement> {
   const [element, setElement] = useState<HTMLElement | null>(null);
-  const dragSourceRef = useCallback((node: View | null) => {
+  const dragSourceRef = useCallback((node: HTMLElement | null) => {
     setElement(node as unknown as HTMLElement | null);
   }, []);
 

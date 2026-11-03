@@ -8,7 +8,7 @@ import {
   useSidebarViewStore,
 } from "./sidebar-view-store";
 
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("~/lib/local-storage-async", () => ({
   default: {
     getItem: vi.fn().mockResolvedValue(null),
     setItem: vi.fn().mockResolvedValue(undefined),

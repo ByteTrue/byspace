@@ -1,11 +1,10 @@
-// Port of packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
-// Converted from the Expo file by web/scripts/port/settings-small-sections.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Alert as InlineAlert } from "@/components/ui/alert";
-import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
@@ -28,7 +27,7 @@ interface ServiceView {
 }
 
 function isWailsDesktopContainer(): boolean {
-  if (!isWeb || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return false;
   }
   const isWailsOrigin =

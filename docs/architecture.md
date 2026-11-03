@@ -108,9 +108,9 @@ host's client; plugin subprocesses use the same facade over a host-owned IPC tra
 ### `web` — Web client
 
 React, Vite, and shadcn/ui client that connects to one or more daemons. `web/src/core` holds the
-modules ported from the Expo app (state, daemon runtime, screens, i18n); `web/src/shims` stands in
-for the React Native and Expo APIs they still call; the rest of `web/src` is the shell (router,
-sidebar, shadcn components).
+modules ported from the Expo app (state, daemon runtime, screens, i18n); the rest of `web/src` is
+the shell (router, sidebar, shadcn components) and the web APIs `web/src/core` calls in place of the
+React Native and Expo ones (`~/app/navigation`, `~/app/route-focus`, `~/lib/*`).
 
 - React Router routes at the Expo app's URLs (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.); see [routing.md](routing.md). The `workspaceId` URL segment is an opaque workspace id, not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state. Direct TCP and relay connections use the ordinary client transport. (The Electron desktop transports — socket, pipe, and SSH — were retired with the desktop app; LAN access uses the daemon's bundled same-origin web UI, remote access the relay.)

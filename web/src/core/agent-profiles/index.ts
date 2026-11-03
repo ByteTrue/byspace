@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-profiles/index.ts: the same barrel through `@/`, so the web
+// Port of archive/expo-app:packages/app/src/agent-profiles/index.ts: the same barrel through `@/`, so the web
 // glyph and editor apply.
 export type { AgentProfile } from "@bytetrue/protocol/messages";
 export type { MaterializedAgentProfile } from "@/agent-profiles/internal/materialize-profile";

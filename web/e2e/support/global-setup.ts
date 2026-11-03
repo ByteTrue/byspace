@@ -132,11 +132,11 @@ export default async function globalSetup() {
   const repoRoot = path.resolve(import.meta.dirname, "../../..");
   await loadHarnessEnvironment(repoRoot);
 
-  const metroPort = await getAvailableE2EPort();
+  const webPort = await getAvailableE2EPort();
   const staticDir = resolveStaticWebDir(repoRoot);
-  const staticServer = await startStaticWebServer(metroPort, staticDir);
-  process.env.E2E_METRO_PORT = String(metroPort);
-  console.log(`[e2e] Static web bundle served on port ${metroPort} from ${staticDir}`);
+  const staticServer = await startStaticWebServer(webPort, staticDir);
+  process.env.E2E_WEB_PORT = String(webPort);
+  console.log(`[e2e] Static web bundle served on port ${webPort} from ${staticDir}`);
   return async () => {
     await new Promise<void>((resolve) => staticServer.close(() => resolve()));
     console.log("[e2e] Static web server stopped");

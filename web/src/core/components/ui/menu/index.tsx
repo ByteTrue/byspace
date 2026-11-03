@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/menu (the menu engine). Same vocabulary — root,
+// Port of archive/expo-app:packages/app/src/components/ui/menu (the menu engine). Same vocabulary — root,
 // trigger, surface, items, labels, hints, sub pages — rendered with shadcn's DropdownMenu or
 // ContextMenu, whichever root the items sit under. A menu with `compactMode="sheet"` on a phone is
 // a bottom sheet instead, showing one page at a time with a back button (docs/menus.md).
@@ -93,7 +93,7 @@ export interface MenuContextValue {
 const MenuKindContext = createContext<MenuKind>("dropdown");
 const MenuStateContext = createContext<MenuContextValue | null>(null);
 const MenuPagesContext = createContext<ReadonlyMap<string, MenuPageDefinition>>(new Map());
-// The surface's minimum width: packages/app's flyouts took it (MenuFlyout's minWidth), not the
+// The surface's minimum width: the Expo app's flyouts took it (MenuFlyout's minWidth), not the
 // surface's width; they size to their rows.
 const MenuSurfaceMinWidthContext = createContext<CSSProperties["minWidth"]>(undefined);
 

@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/file-header.tsx: a changed file's row — in the Changes tree, or
+// Port of archive/expo-app:packages/app/src/git/file-header.tsx: a changed file's row — in the Changes tree, or
 // as the header above its hunks in the diff document. Press, select, the file menu, the path tooltip
 // and dragging the file into the composer are the Expo file's; the view is DOM. Over the canvas
 // diff the header is painted, so this row is a transparent hit layer that reports hover and press.
@@ -87,7 +87,7 @@ function headerClassName(input: {
 }): string {
   const { showsBodyState, canvasRendered, isHovered, isSelected, interactive } = input;
   // Over the canvas the painted header shows hover and press; the hit layer stays clear.
-  // No outline-none: keyboard focus draws the app-wide outline, as on packages/app's Pressable.
+  // No outline-none: keyboard focus draws the app-wide outline, as on the Expo app's Pressable.
   if (canvasRendered) return "relative z-2 flex h-7 min-w-0 items-center";
   if (showsBodyState) {
     return cn(

@@ -1,4 +1,4 @@
-// Port of packages/app/src/styles/settings.ts: the same keys as class strings, so a settings
+// Port of archive/expo-app:packages/app/src/styles/settings.ts: the same keys as class strings, so a settings
 // page port turns `style={settingsStyles.row}` into `className={settingsStyles.row}`. Values are
 // the Expo file's: a 14px-radius hairline card, 56px rows split by the border colour.
 export const settingsStyles = {

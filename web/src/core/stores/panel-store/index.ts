@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import {
   buildExplorerCheckoutKey,
   coerceExplorerTabForCheckout,
@@ -30,7 +30,6 @@ import {
   type PanelLayoutInput,
   type SortOption,
 } from "./state";
-import { isWeb } from "@/constants/platform";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 export type { ExplorerTab } from "../explorer-tab-memory";
 export type { ExplorerCheckoutContext } from "../explorer-checkout-context";
@@ -109,7 +108,7 @@ export interface PanelState {
   toggleFileTreeVisible: () => void;
 }
 
-const DEFAULT_DESKTOP_OPEN = isWeb;
+const DEFAULT_DESKTOP_OPEN = true;
 
 function setMobilePanelTargetPatch(
   state: PanelState,
@@ -288,7 +287,7 @@ export const usePanelStore = create<PanelState>()(
     {
       name: "panel-state",
       version: 16,
-      storage: createValidatedPersistStorage(AsyncStorage, PanelPersistedStateSchema),
+      storage: createValidatedPersistStorage(localStorageAsync, PanelPersistedStateSchema),
       migrate: (persistedState, version) => migratePanelState(persistedState, version),
       partialize: (state) => ({
         desktop: state.desktop,

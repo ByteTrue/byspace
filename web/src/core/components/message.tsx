@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/message.tsx: the conversation's rows — user message,
+// Port of archive/expo-app:packages/app/src/components/message.tsx: the conversation's rows — user message,
 // assistant prose, tool calls, todo and custom-message badges, notifications, the compaction
 // marker. Behaviour is the Expo file's (paced reveal, block splitting, file links, rewind and
 // fork menus, the loading shimmer); the view is DOM, and the prose goes through web/src/markdown.

@@ -1,6 +1,6 @@
-// Port of packages/app/src/composer/agent-controls/index.tsx. The control logic is the Expo
+// Port of archive/expo-app:packages/app/src/composer/agent-controls/index.tsx. The control logic is the Expo
 // file's (live and draft controls, density, profiles, command-center registration); the view is DOM.
-// Converted from the Expo file by web/scripts/port/agent-controls.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-controls.py; edit it directly.
 import {
   memo,
   useCallback,
@@ -13,12 +13,10 @@ import {
   type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { router } from "expo-router";
-import { Keyboard, useWindowDimensions } from "react-native";
-import { useUnistyles } from "react-native-unistyles";
+import { router } from "~/app/navigation";
 import { cn } from "cn";
 import { useShallow } from "zustand/shallow";
-import { Settings2 } from "lucide-react-native";
+import { Settings2 } from "lucide-react";
 import { getAgentFeatureIcon, ThinkingIcon } from "@/agent-controls/icons";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -71,7 +69,7 @@ import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import {
   resolveComposerControlDensity,
   resolveComposerControlPresentation,
-  resolveComposerToolbarGlyphSize,
+  COMPOSER_TOOLBAR_GLYPH_SIZE,
   type ComposerControlDensity,
   type ComposerControlPresentation,
 } from "@/composer/agent-controls/layout";
@@ -90,6 +88,9 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { useThemeObject } from "~/app/theme-object";
+import { blurActiveElement } from "~/lib/blur-active-element";
+import { useWindowDimensions } from "~/hooks/use-window-dimensions";
 
 interface AgentControlOption {
   id: string;
@@ -504,7 +505,7 @@ function ControlledAgentControls({
   modelSelectorServerId = null,
   isCompactLayout,
 }: ControlledAgentControlsProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompact = isCompactLayout ?? isCompactFormFactor;
@@ -583,7 +584,7 @@ function ControlledAgentControls({
   const presentation = useMemo(() => resolveComposerControlPresentation(density), [density]);
   const layoutContextValue = useMemo(
     () => ({
-      glyphSize: resolveComposerToolbarGlyphSize("web"),
+      glyphSize: COMPOSER_TOOLBAR_GLYPH_SIZE,
       presentation,
     }),
     [presentation],
@@ -708,7 +709,7 @@ function ControlledAgentControls({
   );
 
   const handleOpenSheet = useCallback((sheet: Exclude<ActiveSheet, null>) => {
-    Keyboard.dismiss();
+    blurActiveElement();
     setActiveSheet(sheet);
   }, []);
 
@@ -1298,7 +1299,7 @@ function DesktopFeatureItem({
   onSetFeature?: (featureId: string, value: unknown) => void;
   onActionComplete?: () => void;
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
 
   const handleFeatureOpenChange = useMemo(
@@ -1393,7 +1394,7 @@ function SheetFeatureItem({
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   onSetFeature?: (featureId: string, value: unknown) => void;
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   // A sheet toggle is a two-item list ("on"/"off"), so it anchors a combobox of

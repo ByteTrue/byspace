@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/checks-section.tsx: the PR pane's CI block —
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/checks-section.tsx: the PR pane's CI block —
 // the summary line with its ring, then the checks grouped by status. Grouping, identity and the
 // "Add to chat" gate are the Expo file's; the view is DOM.
 import {

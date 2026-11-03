@@ -1,7 +1,6 @@
-// Port of packages/app/src/git/diff-document/index.tsx: unchanged but for `@/` imports.
-// Converted from the Expo file by web/scripts/port/diff-document.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/git/diff-document/index.tsx: unchanged but for `@/` imports.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/diff-document.py; edit it directly.
 import { useCallback, useMemo, useRef, useState } from "react";
-import { withUnistyles } from "react-native-unistyles";
 import { RenderProfile } from "@/utils/render-profiler";
 import { createDiffPalette, retainDiffPalette } from "@/git/diff-document/palette";
 import { DiffSurface } from "@/git/diff-document/surface";
@@ -10,6 +9,7 @@ import type {
   DiffHeaderTypography,
   DiffPalette,
 } from "@/git/diff-document/types";
+import { withTheme } from "~/app/theme-object";
 
 export type { DiffDocumentProps, WorkingDiffMode } from "@/git/diff-document/types";
 
@@ -50,7 +50,7 @@ function ThemedDiffDocument(props: ThemedDiffDocumentProps) {
   );
 }
 
-const StyledDiffDocument = withUnistyles(ThemedDiffDocument, (theme) => ({
+const StyledDiffDocument = withTheme(ThemedDiffDocument, (theme) => ({
   palette: createDiffPalette(theme),
   headerTypography: {
     family: theme.fontFamily.ui,

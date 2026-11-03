@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/terminal-profile-icon.tsx: the profile's provider icon,
+// Port of archive/expo-app:packages/app/src/components/terminal-profile-icon.tsx: the profile's provider icon,
 // or a terminal glyph, in the muted colour.
 import type { ReactElement } from "react";
 import { SquareTerminal } from "lucide-react";

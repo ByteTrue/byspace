@@ -1,10 +1,8 @@
-// Port of packages/app/src/agent-profiles/settings/agent-profiles-section.tsx: the agent profiles list of a host's Agents page; DOM view.
-// Converted from the Expo file by web/scripts/port/agent-profiles-section.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profiles-section.tsx: the agent profiles list of a host's Agents page; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profiles-section.py; edit it directly.
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
-import { withUnistyles } from "react-native-unistyles";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { Button } from "@/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
@@ -18,10 +16,12 @@ import { generateAgentProfileId } from "@/agent-profiles/internal/profile-id";
 import type { AgentProfileValue } from "@/agent-profiles/internal/profile-form-model";
 import { AgentProfileEditModal } from "@/agent-profiles/settings/agent-profile-edit-modal";
 import { AgentProfileRow } from "@/agent-profiles/settings/agent-profile-row";
+import { withTheme } from "~/app/theme-object";
+import { showAlert } from "~/lib/alert";
 
-const ThemedPlus = withUnistyles(Plus);
+const ThemedPlus = withTheme(Plus);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const addIcon = <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const addIcon = <ThemedPlus size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
 
 interface EditTarget {
   mode: "create" | "edit";
@@ -80,7 +80,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
         );
@@ -111,7 +111,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         try {
           await saveProfiles(profiles.filter((entry) => entry.id !== id));
         } catch (error) {
-          Alert.alert(
+          showAlert(
             t("common.errors.unableToSave"),
             error instanceof Error ? error.message : String(error),
           );

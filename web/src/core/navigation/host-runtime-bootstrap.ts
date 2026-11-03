@@ -1,11 +1,11 @@
-import type { AppState } from "react-native";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import type { Href } from "expo-router";
+import type { Href } from "~/app/navigation";
 import {
   buildHostRootRoute,
   buildHostWorkspaceRoute,
   buildOpenProjectRoute,
 } from "@/utils/host-routes";
+import type { AppState } from "~/lib/app-state";
 
 export interface HostRuntimeBootstrapStore {
   boot: () => Promise<void>;

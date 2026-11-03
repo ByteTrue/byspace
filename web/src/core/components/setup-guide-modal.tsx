@@ -1,9 +1,9 @@
-// Port of packages/app/src/components/setup-guide-modal.tsx: the setup guide sheet; DOM view.
-// Converted from the Expo file by web/scripts/port/welcome-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/setup-guide-modal.tsx: the setup guide sheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/welcome-screen.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ClipboardPaste, Copy } from "lucide-react";
-import * as Clipboard from "expo-clipboard";
+import * as Clipboard from "~/lib/clipboard";
 import { useToast } from "@/contexts/toast-context";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
@@ -36,11 +36,11 @@ function CommandBlock({
 }: CommandBlockProps) {
   const toast = useToast();
   const handleCopyPress = useCallback(() => {
-    void Clipboard.setStringAsync(command)
+    void Clipboard.writeText(command)
       .then(() => toast.copied(copiedLabel))
       .catch(() => toast.error(copyFailedLabel));
   }, [command, copyFailedLabel, copiedLabel, toast]);
-  // size-4 keeps the 16px packages/app draws; the button would size an unsized icon to its own.
+  // size-4 keeps the 16px the Expo app draws; the button would size an unsized icon to its own.
   const copyIcon = useMemo(() => <Copy size={16} className="size-4 text-muted-foreground" />, []);
   return (
     <div

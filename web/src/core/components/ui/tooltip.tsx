@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/tooltip.tsx on shadcn's Tooltip. Same props; a
+// Port of archive/expo-app:packages/app/src/components/ui/tooltip.tsx on shadcn's Tooltip. Same props; a
 // tooltip that is off for the current form factor never opens, and a hint never covers the menu or
 // picker its trigger has open.
 import {

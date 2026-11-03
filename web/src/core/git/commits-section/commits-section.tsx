@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/commits-section/commits-section.tsx: the collapsible "Commits"
+// Port of archive/expo-app:packages/app/src/git/commits-section/commits-section.tsx: the collapsible "Commits"
 // strip under the Changes view — the branch's commits ahead of its base, refreshed every 10s while
 // open. The query and timing are the Expo file's; the view is DOM.
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -144,7 +144,7 @@ export function CommitsSection({
             !collapsed && "rotate-90",
           )}
         >
-          <ThemedChevron size={14} uniProps={chevronColorMapping} />
+          <ThemedChevron size={14} themeProps={chevronColorMapping} />
         </span>
         <span className="text-sm text-foreground">{t("workspace.git.diff.commits.title")}</span>
         {commitCount === null ? (

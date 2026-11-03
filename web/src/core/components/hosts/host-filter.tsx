@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/hosts/host-filter.tsx: the host filter pill over the shared host picker; DOM view.
-// Converted from the Expo file by web/scripts/port/host-filter.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/hosts/host-filter.tsx: the host filter pill over the shared host picker; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/host-filter.py; edit it directly.
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { ChevronDown, Server } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";

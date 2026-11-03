@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/text-input: a DOM-owned text field. The DOM holds
+// Port of archive/expo-app:packages/app/src/components/ui/text-input: a DOM-owned text field. The DOM holds
 // the text between publications; `onChangeText` reports it, and the handle reads and replaces it
 // without a controlled `value` round-trip. Composition (IME) input reports once it ends.
 import {

@@ -1,4 +1,4 @@
-// Port of packages/app/src/subagents/track.tsx: the subagents pill above the composer and its
+// Port of archive/expo-app:packages/app/src/subagents/track.tsx: the subagents pill above the composer and its
 // panel — one row per subagent (open it; archive or detach a BySpace one on hover, always on a
 // phone) and "archive finished" above the rows.
 import { useCallback, useMemo, type MouseEvent, type ReactElement } from "react";

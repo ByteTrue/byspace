@@ -27,17 +27,10 @@ const { theme } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  useUnistyles: () => ({ theme }),
-  withUnistyles: (comp: unknown) => comp,
-}));
-
-vi.mock("@/constants/platform", () => ({
-  isWeb: true,
-  isNative: false,
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
+  withTheme: (comp: unknown) => comp,
 }));
 
 vi.mock("@/components/host-status-dot", () => ({

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/download-toast.tsx: the bar along the bottom of the
+// Port of archive/expo-app:packages/app/src/components/download-toast.tsx: the bar along the bottom of the
 // window for the active file download — spinner while it runs, a check or an error when it ends,
 // dismissed automatically 3 seconds after it ends. On the web a download hands straight to the
 // browser, so the bar mostly shows the result, or why the download link could not be made.

@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/project-edit-sheet.tsx: renaming a project and choosing its icon; DOM view.
-// Converted from the Expo file by web/scripts/port/project-edit-sheet.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/project-edit-sheet.tsx: renaming a project and choosing its icon; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/project-edit-sheet.py; edit it directly.
 import { Buffer } from "buffer";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";

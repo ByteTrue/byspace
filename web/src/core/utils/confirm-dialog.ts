@@ -1,4 +1,4 @@
-// Port of packages/app/src/utils/confirm-dialog.ts. Same contract and the same native Wails
+// Port of archive/expo-app:packages/app/src/utils/confirm-dialog.ts. Same contract and the same native Wails
 // dialog on desktop; in a browser it opens shadcn's AlertDialog (ConfirmDialogHost) instead of
 // window.confirm.
 export interface ConfirmDialogInput {

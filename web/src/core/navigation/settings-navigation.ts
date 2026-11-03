@@ -1,4 +1,4 @@
-import { router, type Href } from "expo-router";
+import { router, type Href } from "~/app/navigation";
 import { navigateToLastWorkspace } from "@/stores/navigation-active-workspace-store";
 import {
   buildOpenProjectRoute,

@@ -11,7 +11,7 @@ import { findPaneById, findPaneContainingTab } from "./workspace-layout-actions"
 import { useWorkspaceLayoutStore } from "./workspace-layout-store";
 import { useSessionStore, type Agent } from "./session-store";
 
-vi.mock("@react-native-async-storage/async-storage", () => {
+vi.mock("~/lib/local-storage-async", () => {
   const storage = new Map<string, string>();
   return {
     default: {

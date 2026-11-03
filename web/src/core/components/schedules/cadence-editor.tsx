@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/schedules/cadence-editor.tsx: the cadence field of the schedule form; DOM view.
-// Converted from the Expo file by web/scripts/port/schedules.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/schedules/cadence-editor.tsx: the cadence field of the schedule form; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import { useCallback, useMemo, useReducer, useState, type ReactNode } from "react";
 import type { ScheduleCadence } from "@bytetrue/protocol/schedule/types";
 import type { FieldControlSize } from "@/components/ui/control-geometry";

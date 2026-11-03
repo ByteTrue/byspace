@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/settings/headings/settings-section.tsx: the one section
+// Port of archive/expo-app:packages/app/src/components/settings/headings/settings-section.tsx: the one section
 // primitive across settings — a muted header (optional info tip, collapsed summary, trailing
 // slot) over its children; collapsible sections toggle from the header.
 import { ChevronRight } from "lucide-react";
@@ -42,7 +42,7 @@ export function SettingsSection({
   const handleToggle = useCallback(() => setIsExpanded((current) => !current), []);
 
   const header = (
-    // min-w-0 as packages/app's title row (a react-native-web View): on a phone a wide trailing slot
+    // min-w-0 as the Expo app's title row (a react-native-web View): on a phone a wide trailing slot
     // squeezes the title instead of pushing the trailing controls out.
     <span className="flex min-w-0 shrink items-center gap-2">
       <span className={settingsStyles.sectionHeaderTitle}>{title}</span>

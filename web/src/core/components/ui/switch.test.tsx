@@ -21,50 +21,9 @@ const { theme } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("react-native", () => ({
-  Platform: {
-    select: (values: Record<string, unknown>) => values.web ?? values.default,
-  },
-  Pressable: ({
-    "aria-checked": ariaChecked,
-    accessibilityLabel,
-    accessibilityRole,
-    accessibilityState,
-    children,
-    disabled,
-    onPress,
-    testID,
-  }: {
-    "aria-checked"?: boolean;
-    accessibilityLabel?: string;
-    accessibilityRole?: string;
-    accessibilityState?: { checked?: boolean; disabled?: boolean };
-    children: React.ReactNode;
-    disabled?: boolean;
-    onPress?: (event: { stopPropagation: () => void }) => void;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        "aria-checked": ariaChecked ?? accessibilityState?.checked,
-        "aria-disabled": accessibilityState?.disabled,
-        "aria-label": accessibilityLabel,
-        "data-disabled": disabled,
-        "data-testid": testID,
-        onClick: () => onPress?.({ stopPropagation: vi.fn() }),
-        role: accessibilityRole,
-        type: "button",
-      },
-      children,
-    ),
-}));
-
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  withUnistyles:
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  withTheme:
     (
       Component: React.ComponentType<Record<string, unknown>>,
       mapping?: (theme: unknown) => object,

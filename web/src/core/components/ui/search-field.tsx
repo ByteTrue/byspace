@@ -1,5 +1,5 @@
-// Port of packages/app/src/components/ui/search-field.tsx: the search box on a screen's filter row; DOM view.
-// Converted from the Expo file by web/scripts/port/sessions-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/ui/search-field.tsx: the search box on a screen's filter row; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
 import { useCallback, useRef, type ReactElement } from "react";
 import { Search, X } from "lucide-react";
 import {
@@ -61,7 +61,7 @@ export function SearchField({
           data-testid={clearTestID}
           onClick={handleClear}
           aria-label={clearAccessibilityLabel}
-          // hitSlop 8, as packages/app's Pressable
+          // hitSlop 8, as the Expo app's Pressable
           className="-m-2 flex shrink-0 p-2"
         >
           <X size={14} />

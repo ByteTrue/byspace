@@ -21,71 +21,8 @@ const { projectsState, push } = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 
-vi.mock("react-native", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react-native")>();
-  const passthrough = ({
-    children,
-    testID,
-    accessibilityLabel,
-    accessibilityRole,
-    onPress,
-    onHoverIn,
-    onHoverOut,
-    ...rest
-  }: {
-    children?:
-      | React.ReactNode
-      | ((state: { pressed: boolean; hovered: boolean }) => React.ReactNode);
-    testID?: string;
-    accessibilityLabel?: string;
-    accessibilityRole?: string;
-    onPress?: (event: { stopPropagation: () => void }) => void;
-    onHoverIn?: () => void;
-    onHoverOut?: () => void;
-  } & Record<string, unknown>) => {
-    const dataAttrs: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rest)) {
-      if (key.startsWith("data-")) {
-        dataAttrs[key] = value;
-      }
-    }
-    return React.createElement(
-      "div",
-      {
-        role: accessibilityRole,
-        "aria-label": accessibilityLabel,
-        "data-testid": testID,
-        onClick: onPress
-          ? (event: React.MouseEvent) => {
-              onPress({ stopPropagation: () => event.stopPropagation() });
-            }
-          : undefined,
-        onMouseEnter: onHoverIn,
-        onMouseLeave: onHoverOut,
-        ...dataAttrs,
-      },
-      typeof children === "function" ? children({ pressed: false, hovered: false }) : children,
-    );
-  };
-
-  return {
-    ...actual,
-    View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) =>
-      React.createElement("div", { "data-testid": testID }, children),
-    Text: ({ children }: { children?: React.ReactNode }) =>
-      React.createElement("span", null, children),
-    Pressable: passthrough,
-    Image: ({ source }: { source?: { uri?: string } }) =>
-      React.createElement("img", { src: source?.uri ?? "" }),
-    Platform: {
-      OS: "web",
-      select: <T,>(options: { web?: T; default?: T }) => options.web ?? options.default,
-    },
-  };
-});
-
-vi.mock("lucide-react-native", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("lucide-react-native")>();
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
   const icon = (name: string) => {
     const Icon = () => React.createElement("span", { "data-icon": name });
     Icon.displayName = name;
@@ -101,7 +38,7 @@ vi.mock("lucide-react-native", async (importOriginal) => {
   };
 });
 
-vi.mock("expo-router", () => ({
+vi.mock("~/app/navigation", () => ({
   router: { push },
 }));
 

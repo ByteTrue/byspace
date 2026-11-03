@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/adaptive-modal-sheet.tsx: a dialog on desktop and a
+// Port of archive/expo-app:packages/app/src/components/adaptive-modal-sheet.tsx: a dialog on desktop and a
 // bottom drawer on a phone, with the same header (back, leading icon, title, actions, close,
 // search), body and footer strip.
 import {
@@ -61,7 +61,7 @@ const ICON_BUTTON =
 /** A Radix (or vaul) dialog title: it labels the dialog through the visible header text. */
 export type SheetTitleSlot = React.ComponentType<{ asChild?: boolean; children: React.ReactNode }>;
 
-/** The desktop card. Focus returns to the opener on close, as packages/app's overlays did. */
+/** The desktop card. Focus returns to the opener on close, as the Expo app's overlays did. */
 function DesktopSheetContent(props: ComponentProps<typeof DialogPrimitive.Content>) {
   const restoreFocus = useRestoreFocusToOpener(props.onCloseAutoFocus);
   return (
@@ -201,7 +201,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
 }
 
 /**
- * packages/app centres the card in an overlay padded 24px on every side, so a percentage height
+ * The Expo app centres the card in an overlay padded 24px on every side, so a percentage height
  * is of the viewport less 48px; here the card is fixed to the viewport, so the inset is put back.
  */
 function insetPercent(height: number | string | undefined): number | string | undefined {
@@ -285,7 +285,7 @@ export function AdaptiveModalSheet({
     () => ({ maxWidth: desktopMaxWidth ?? 520, height: insetPercent(desktopHeight) }),
     [desktopHeight, desktopMaxWidth],
   );
-  // On open packages/app focuses an autoFocus header search, and otherwise shows no focus at all.
+  // On open the Expo app focuses an autoFocus header search, and otherwise shows no focus at all.
   // Radix's own open focus takes the first button (the close X), and after a menu or the keyboard
   // the browser draws its ring, so the card itself takes focus instead (Tab still reaches the X).
   // A field the body focuses itself is already focused by now, and Radix leaves it there.
@@ -366,7 +366,7 @@ export function AdaptiveModalSheet({
   return (
     <DialogPrimitive.Root open={visible} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
-        {/* The card sits inside the overlay (Radix's "scrollable overlay" shape), as packages/app's
+        {/* The card sits inside the overlay (Radix's "scrollable overlay" shape), as the Expo app's
             card sits inside its overlay view: the testID names both, so a test can reach the
             card's controls through it and the overlay still covers the page. As there, the sheet
             appears at once and fades out over WEB_EXIT_DURATION_MS, covering the page until it

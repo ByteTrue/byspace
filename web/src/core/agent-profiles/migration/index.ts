@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { z } from "zod";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
@@ -211,4 +211,4 @@ export class LegacyFavoriteProfileMigration {
   }
 }
 
-export const legacyFavoriteProfileMigration = new LegacyFavoriteProfileMigration(AsyncStorage);
+export const legacyFavoriteProfileMigration = new LegacyFavoriteProfileMigration(localStorageAsync);

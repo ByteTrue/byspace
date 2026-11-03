@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { FolderTree } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
+import { FolderTree } from "lucide-react";
 import { paneContentToolbarIconSize, ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedFolderTree = withUnistyles(FolderTree);
+const ThemedFolderTree = withTheme(FolderTree);
 /**
  * Opens and closes a `TreeRail`. Every panel that owns a tree rail uses this one
  * button so the affordance reads the same wherever the rail appears; only the
@@ -31,7 +31,7 @@ export function TreeRailToggle({
     >
       <ThemedFolderTree
         size={paneContentToolbarIconSize(false)}
-        uniProps={extraMutedIconColorMapping}
+        themeProps={extraMutedIconColorMapping}
       />
     </ToolbarButton>
   );

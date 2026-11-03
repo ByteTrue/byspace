@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/action-icons.tsx: the git action glyphs in the muted text colour.
+// Port of archive/expo-app:packages/app/src/git/action-icons.tsx: the git action glyphs in the muted text colour.
 import {
   Archive,
   ArrowDownUp,

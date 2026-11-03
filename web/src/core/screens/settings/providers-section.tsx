@@ -1,10 +1,9 @@
-// Port of packages/app/src/screens/settings/providers-section.tsx: the provider list and the add-provider section; DOM view.
-// Converted from the Expo file by web/scripts/port/providers-section.py (tag archive/expo-app); edit it directly.
+import type { Theme } from "@/styles/theme";
+// Port of archive/expo-app:packages/app/src/screens/settings/providers-section.tsx: the provider list and the add-provider section; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/providers-section.py; edit it directly.
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Alert } from "react-native";
-import { useUnistyles } from "react-native-unistyles";
 import { cn } from "cn";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
@@ -32,6 +31,8 @@ import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react";
+import { useThemeObject } from "~/app/theme-object";
+import { showAlert } from "~/lib/alert";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -166,7 +167,7 @@ function ProviderRow({
   onRemove,
 }: ProviderRowProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const isCompact = useIsCompactFormFactor();
   const ProviderIcon = getProviderIcon(def.id, serverId);
   const providerError =
@@ -259,7 +260,7 @@ function ProviderRow({
   );
 }
 
-function getDotColor(tone: StatusTone, theme: ReturnType<typeof useUnistyles>["theme"]): string {
+function getDotColor(tone: StatusTone, theme: Theme): string {
   switch (tone) {
     case "success":
       return theme.colors.statusSuccess;
@@ -274,7 +275,7 @@ function getDotColor(tone: StatusTone, theme: ReturnType<typeof useUnistyles>["t
 
 function StatusIndicator({ status, compact }: { status: ProviderStatus; compact: boolean }) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const dotStyle = useMemo(
     () => ({ backgroundColor: getDotColor(status.tone, theme) }),
     [status.tone, theme],
@@ -359,7 +360,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("settings.providers.updateErrorTitle"),
           error instanceof Error ? error.message : String(error),
         );
@@ -388,7 +389,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
 
         await patchConfig({ removeProviders: [providerId] });
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("settings.providers.remove.errorTitle"),
           error instanceof Error ? error.message : String(error),
         );
@@ -474,7 +475,7 @@ export function AddProviderSection({ serverId }: ProvidersSectionProps) {
         await patchConfig(buildAcpProviderConfigPatch(entry));
         await refresh([entry.id]);
       } catch (error) {
-        Alert.alert(
+        showAlert(
           t("settings.providers.addErrorTitle"),
           error instanceof Error ? error.message : String(error),
         );

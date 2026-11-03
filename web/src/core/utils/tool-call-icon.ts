@@ -9,7 +9,7 @@ import {
   Sparkles,
   SquareTerminal,
   Wrench,
-} from "lucide-react-native";
+} from "lucide-react";
 import type { ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { resolveToolCallIconName, type ToolCallIcon } from "./tool-call-icon-name";

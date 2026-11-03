@@ -53,8 +53,8 @@ console.log("══════════════════════�
 // The modules ported from the Expo app read these two names (see web/vite.config.ts).
 const env = {
   ...process.env,
-  EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL: devBuildLabel,
-  EXPO_PUBLIC_LOCAL_DAEMON: daemonEndpoint,
+  BYSPACE_DEV_BUILD_LABEL: devBuildLabel,
+  BYSPACE_LOCAL_DAEMON: daemonEndpoint,
 };
 
 await runDevChild(

@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/activity-skeleton.tsx: three placeholder
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/activity-skeleton.tsx: three placeholder
 // activity rows on shadcn's pulsing Skeleton (the Expo file animates opacity with Animated).
 import { Skeleton } from "~/components/ui/skeleton";
 

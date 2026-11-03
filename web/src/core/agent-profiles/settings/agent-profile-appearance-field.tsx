@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-profiles/settings/agent-profile-appearance-field.tsx: icon and
+// Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-appearance-field.tsx: icon and
 // colour in one popover — the swatch row above, the icon grid redrawn in the chosen colour below.
 // A colour keeps the popover open; an icon commits and closes.
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";

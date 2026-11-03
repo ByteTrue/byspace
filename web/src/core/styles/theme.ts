@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { darkHighlightColors, lightHighlightColors } from "@bytetrue/highlight";
 
 export const baseColors = {
@@ -674,27 +673,18 @@ export const OPACITY = {
   100: 1,
 } as const;
 
-// Platform default font stacks — copied verbatim from constants/theme.ts `Fonts`
-// (sans -> ui, mono -> mono). These seed the dynamic `fontFamily` theme token and
-// are the fallback an empty user-supplied family resolves to at apply time.
-// Geist is self-hosted (public/fonts, declared in public/index.html); CJK falls through to the
-// platform UI faces.
-export const DEFAULT_UI_FONT_STACK: string = Platform.select({
-  ios: "system-ui",
-  default: "normal",
-  web: "Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', Roboto, system-ui, sans-serif",
-});
+// Default font stacks. They seed the `fontFamily` theme token and are the fallback an empty
+// user-supplied family resolves to. Geist is bundled (@fontsource-variable/geist in index.css);
+// CJK falls through to the system UI faces.
+export const DEFAULT_UI_FONT_STACK: string =
+  "Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', Roboto, system-ui, sans-serif";
 
-export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
-  ios: "ui-monospace, Menlo, Monaco, monospace",
-  default: "monospace",
-  web: "'Berkeley Mono', 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-});
+export const DEFAULT_MONO_FONT_STACK: string =
+  "'Berkeley Mono', 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
 
 // `fontSize`, `fontFamily`, and `lineHeight` are deliberately widened to plain
-// `number`/`string` (not narrowed by `as const`) so the appearance updater can patch
-// them at runtime via `UnistylesRuntime.updateTheme`. The remaining tokens keep their
-// literal types.
+// `number`/`string` (not narrowed by `as const`) so the appearance settings can patch
+// them at runtime. The remaining tokens keep their literal types.
 interface CommonTheme {
   spacing: typeof SPACING;
   fontSize: Record<keyof typeof FONT_SIZE, number>;
@@ -826,14 +816,12 @@ export const THEME_OPTIONS = [
   {
     name: "light",
     group: "primary",
-    unistylesName: "light",
     theme: lightTheme,
     swatch: "#ffffff",
   },
   {
     name: "dark",
     group: "primary",
-    unistylesName: "dark",
     theme: darkTheme,
     swatch: "#171717",
   },
@@ -841,35 +829,30 @@ export const THEME_OPTIONS = [
   {
     name: "zinc",
     group: "variant",
-    unistylesName: "darkZinc",
     theme: darkZincTheme,
     swatch: "#808080",
   },
   {
     name: "midnight",
     group: "variant",
-    unistylesName: "darkMidnight",
     theme: darkMidnightTheme,
     swatch: "#4A6BA8",
   },
   {
     name: "claude",
     group: "variant",
-    unistylesName: "darkClaude",
     theme: darkClaudeTheme,
     swatch: "#D97757",
   },
   {
     name: "ghostty",
     group: "variant",
-    unistylesName: "darkGhostty",
     theme: darkGhosttyTheme,
     swatch: "#8caaee",
   },
   {
     name: "pureBlack",
     group: "variant",
-    unistylesName: "darkPureBlack",
     theme: darkPureBlackTheme,
     swatch: "#000000",
   },
@@ -884,29 +867,13 @@ const CONCRETE_THEME_OPTIONS = THEME_OPTIONS.filter(
   (option): option is ConcreteThemeOption => option.name !== "auto",
 );
 
-type ThemeToUnistyles = {
-  [Name in ThemeName]: Extract<ConcreteThemeOption, { name: Name }>["unistylesName"];
-};
-
 type ThemeSwatches = {
   [Name in ThemeName]: Extract<ConcreteThemeOption, { name: Name }>["swatch"];
 };
 
-type RegisteredThemes = {
-  [Option in ConcreteThemeOption as Option["unistylesName"]]: Option["theme"];
-};
-
-export const THEME_TO_UNISTYLES = Object.fromEntries(
-  CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.unistylesName]),
-) as ThemeToUnistyles;
-
 export const THEME_SWATCHES = Object.fromEntries(
   CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.swatch]),
 ) as ThemeSwatches;
-
-export const REGISTERED_THEMES = Object.fromEntries(
-  CONCRETE_THEME_OPTIONS.map((option) => [option.unistylesName, option.theme]),
-) as RegisteredThemes;
 
 export function getNextThemePreference(current: ThemePreference): ThemePreference {
   const currentIndex = THEME_OPTIONS.findIndex((option) => option.name === current);

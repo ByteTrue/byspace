@@ -1,4 +1,4 @@
-// Port of packages/app/src/provider-usage/window-bar.tsx: a usage window's label, percent and
+// Port of archive/expo-app:packages/app/src/provider-usage/window-bar.tsx: a usage window's label, percent and
 // reset (or run-out) time over a 4px bar in its tone.
 import { useContext, useMemo } from "react";
 import { TooltipSurfaceContext } from "@/components/ui/tooltip";

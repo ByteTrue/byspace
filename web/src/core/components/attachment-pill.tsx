@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/attachment-pill.tsx: attachment chips, 48px tall so a
+// Port of archive/expo-app:packages/app/src/components/attachment-pill.tsx: attachment chips, 48px tall so a
 // mixed tray lines up; the composer's has a remove button that shows on hover (always on a phone).
 import type { ReactNode } from "react";
 import { X } from "lucide-react";

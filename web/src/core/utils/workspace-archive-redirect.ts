@@ -1,4 +1,4 @@
-import type { Href } from "expo-router";
+import type { Href } from "~/app/navigation";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { buildWorkspaceArchiveRedirectRoute } from "@/utils/workspace-archive-navigation";

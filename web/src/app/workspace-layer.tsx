@@ -1,4 +1,4 @@
-// packages/app pushes Settings, History, Schedules and the other app-wide screens over the
+// The Expo app pushes Settings, History, Schedules and the other app-wide screens over the
 // workspace on its navigation stack, so the workspace stays mounted under them: a terminal keeps its
 // emulator, a chat its scroll position and drafts, and Back shows the same screen again. React
 // Router unmounts a route it leaves, so the workspace route renders here instead, in a layer the
@@ -6,11 +6,11 @@
 // those screens, or going back to the project picker, replaces it, as the stack did.
 import { useState, type ReactNode } from "react";
 import { useLocation, useRoutes, type Location, type RouteObject } from "react-router";
-import { RouteFocusProvider } from "@react-navigation/native";
+import { RouteFocusProvider } from "~/app/route-focus";
 import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import { parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
 import { HostLayout } from "~/app/routes";
-import { GlobalLocationProvider } from "~/shims/expo-router";
+import { GlobalLocationProvider } from "~/app/navigation";
 
 /** The data router's entry for the route (it matches it; this layer renders it). */
 export const WORKSPACE_ROUTE: RouteObject = {
@@ -29,7 +29,7 @@ export function isWorkspacePathname(pathname: string): boolean {
   return parseHostWorkspaceRouteFromPathname(pathname) !== null;
 }
 
-/** Screens that replace the workspace on packages/app's stack instead of covering it. */
+/** Screens that replace the workspace on the Expo app's stack instead of covering it. */
 function replacesWorkspace(pathname: string): boolean {
   return pathname === "/" || pathname === "/open-project" || pathname === "/welcome";
 }

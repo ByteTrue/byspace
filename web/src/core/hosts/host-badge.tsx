@@ -1,4 +1,4 @@
-// Port of packages/app/src/hosts/host-badge.tsx: a server glyph in the host's colour, with the
+// Port of archive/expo-app:packages/app/src/hosts/host-badge.tsx: a server glyph in the host's colour, with the
 // host name beside it when the badge shows a label.
 import { useMemo } from "react";
 import { Server } from "lucide-react";
@@ -19,7 +19,7 @@ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
       aria-label={badge.label}
       style={style}
     >
-      {/* The colour as the glyph's stroke, as packages/app's badge draws it. */}
+      {/* The colour as the glyph's stroke, as the Expo app's badge draws it. */}
       <Server size={HOST_BADGE_ICON_SIZE} color={color} className="shrink-0" />
       {badge.showLabel ? (
         <span className="min-w-0 shrink truncate text-xs leading-4">{badge.label}</span>

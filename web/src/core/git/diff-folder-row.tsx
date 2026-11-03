@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/diff-folder-row.tsx: a folder in the Changes tree — press to
+// Port of archive/expo-app:packages/app/src/git/diff-folder-row.tsx: a folder in the Changes tree — press to
 // collapse or expand, its summed diff stat, and the folder menu. The view is DOM.
 import { useCallback, useMemo } from "react";
 import { DiffStat } from "@/components/diff-stat";

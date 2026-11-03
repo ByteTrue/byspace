@@ -1,4 +1,4 @@
-import type { Href } from "expo-router";
+import type { Href } from "~/app/navigation";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { buildHostRootRoute, buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-identity";

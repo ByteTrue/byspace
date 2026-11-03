@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/project-icon-view.tsx: a project's chosen image, or a
+// Port of archive/expo-app:packages/app/src/components/project-icon-view.tsx: a project's chosen image, or a
 // rounded square in its identity colour carrying its initial. `textStyle` sizes the initial.
 import { useMemo, type CSSProperties } from "react";
 import { deriveIdentityColorName, identityColor } from "@/styles/identity-colors";
@@ -38,7 +38,7 @@ export function ProjectIconView({
   }
   return (
     <span className="flex shrink-0 items-center justify-center" style={fallbackStyle}>
-      {/* Its own line box, centred, as packages/app's Text in the square: the initial sits
+      {/* Its own line box, centred, as the Expo app's Text in the square: the initial sits
           where it does there (a box-height line put it half a pixel higher). */}
       <span className="leading-[normal] text-white" style={textStyle}>
         {initial}

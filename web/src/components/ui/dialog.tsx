@@ -46,8 +46,8 @@ function DialogOverlay({
   )
 }
 
-// BySpace: packages/app's modal card (adaptive-modal-sheet.tsx): a 1px border and the lg shadow,
-// where shadcn draws a 10% ring. It fades without shadcn's zoom, as packages/app's modals fade.
+// BySpace: the Expo app's modal card (adaptive-modal-sheet.tsx): a 1px border and the lg shadow,
+// where shadcn draws a 10% ring. It fades without shadcn's zoom, as the Expo app's modals fade.
 function DialogContent({
   className,
   children,
@@ -57,7 +57,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
-  // BySpace: focus returns to the opener on close, as packages/app's overlays did.
+  // BySpace: focus returns to the opener on close, as the Expo app's overlays did.
   const restoreFocus = useRestoreFocusToOpener(onCloseAutoFocus)
   return (
     <DialogPortal>

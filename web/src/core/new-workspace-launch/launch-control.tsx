@@ -1,9 +1,9 @@
-// Port of packages/app/src/new-workspace-launch/launch-control.tsx: what New workspace submits
+// Port of archive/expo-app:packages/app/src/new-workspace-launch/launch-control.tsx: what New workspace submits
 // to — the chat agent or a terminal (blank or a profile). Same props, except the trigger takes the
 // meta row's badge classes instead of a React Native style.
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "expo-router";
+import { useRouter } from "~/app/navigation";
 import { ChevronDown, MessageCircle, SquareTerminal } from "lucide-react";
 import {
   DropdownMenu,

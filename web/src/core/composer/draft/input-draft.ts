@@ -24,7 +24,6 @@ import {
 import { useDraftStore } from "@/stores/draft-store";
 import { toDraftInputIfReady } from "@/stores/draft-store/state";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
-import { isWeb } from "@/constants/platform";
 
 type AttachmentUpdater =
   | UserComposerAttachment[]
@@ -138,13 +137,9 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
 
   const editText = useCallback(
     (nextText: string) => {
-      if (isWeb) {
-        textPublication.stage(nextText);
-      } else {
-        saveDraft((current) => ({ ...current, text: nextText }));
-      }
+      textPublication.stage(nextText);
     },
-    [saveDraft, textPublication],
+    [textPublication],
   );
 
   const replaceText = useCallback(
@@ -180,15 +175,15 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     };
     const flush = () => textPublication.flush();
     const canListenForPageHide =
-      isWeb && typeof window !== "undefined" && typeof window.addEventListener === "function";
-    if (isWeb && typeof document !== "undefined") {
+      typeof window !== "undefined" && typeof window.addEventListener === "function";
+    if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", flushWhenHidden);
     }
     if (canListenForPageHide) {
       window.addEventListener("pagehide", flush);
     }
     return () => {
-      if (isWeb && typeof document !== "undefined") {
+      if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", flushWhenHidden);
       }
       if (canListenForPageHide) {

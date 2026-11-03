@@ -1,4 +1,4 @@
-import { AppState } from "react-native";
+import { AppState } from "~/lib/app-state";
 
 interface AppVisibilityInput {
   appState: string;

@@ -1,6 +1,6 @@
-// Port of packages/app/src/panels/setup-panel.tsx: the worktree setup log — one collapsible
+// Port of archive/expo-app:packages/app/src/panels/setup-panel.tsx: the worktree setup log — one collapsible
 // row per setup command, the running one open, its output below. Same logic; the view is DOM.
-// Converted from the Expo file by web/scripts/port/setup-panel.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/setup-panel.py; edit it directly.
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

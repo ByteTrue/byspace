@@ -9,7 +9,7 @@ const { navigate, hostsState } = vi.hoisted(() => ({
   hostsState: { current: [] as unknown[] },
 }));
 
-vi.mock("expo-router", () => ({
+vi.mock("~/app/navigation", () => ({
   router: { navigate },
 }));
 

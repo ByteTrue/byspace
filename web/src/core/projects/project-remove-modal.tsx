@@ -1,5 +1,5 @@
-// Port of packages/app/src/projects/project-remove-modal.tsx: removing a multi-host project from one host or all, on AdaptiveModalSheet; DOM view.
-// Converted from the Expo file by web/scripts/port/project-remove-modal.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/projects/project-remove-modal.tsx: removing a multi-host project from one host or all, on AdaptiveModalSheet; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/project-remove-modal.py; edit it directly.
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";

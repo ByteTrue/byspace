@@ -2,7 +2,7 @@ import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 
 /**
  * Message the service worker posts to an open window when a Web Push notification
- * is clicked. Must stay in sync with `packages/app/public/sw.js`.
+ * is clicked. Must stay in sync with `archive/expo-app:packages/app/public/sw.js`.
  */
 export const SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE = "byspace:notification-click";
 

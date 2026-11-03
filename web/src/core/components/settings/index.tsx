@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/settings/index.tsx: the settings card, row and the
+// Port of archive/expo-app:packages/app/src/components/settings/index.tsx: the settings card, row and the
 // switch / select / input / action rows built on it. Same props; the view is DOM.
 import {
   Children,

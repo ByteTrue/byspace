@@ -26,9 +26,9 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: { create: () => ({}) },
-  withUnistyles: (Component: React.ComponentType) => Component,
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  withTheme: (Component: React.ComponentType) => Component,
 }));
 
 function userMessage(index: number): StreamItem {
@@ -141,9 +141,6 @@ describe("createWebStreamStrategy", () => {
             hasOlderHistory: false,
             olderHistoryProgressKey: null,
             scrollEnabled: true,
-            listStyle: null,
-            baseListContentContainerStyle: null,
-            forwardListContentContainerStyle: null,
           })}
         </>,
       );
@@ -184,9 +181,6 @@ describe("createWebStreamStrategy", () => {
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
           scrollEnabled: true,
-          listStyle: null,
-          baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
         }),
       );
     });
@@ -230,9 +224,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -288,9 +279,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     const unrevised = {
       contentById: new Set<string>(),
@@ -351,9 +339,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -426,9 +411,6 @@ describe("createWebStreamStrategy", () => {
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
           scrollEnabled: true,
-          listStyle: null,
-          baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
         }),
       );
     });
@@ -470,9 +452,6 @@ describe("createWebStreamStrategy", () => {
           hasOlderHistory: false,
           olderHistoryProgressKey: null,
           scrollEnabled: true,
-          listStyle: null,
-          baseListContentContainerStyle: null,
-          forwardListContentContainerStyle: null,
         }),
       );
     });
@@ -550,9 +529,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -643,9 +619,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -752,9 +725,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: true,
       olderHistoryProgressKey: "epoch-1:20",
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -857,9 +827,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -956,9 +923,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -1053,9 +1017,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -1172,9 +1133,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -1405,9 +1363,6 @@ describe("createWebStreamStrategy", () => {
       hasOlderHistory: false,
       olderHistoryProgressKey: null,
       scrollEnabled: true,
-      listStyle: null,
-      baseListContentContainerStyle: null,
-      forwardListContentContainerStyle: null,
     };
     const renderWithActivity = (active: boolean, input: StreamRenderInput = renderInput) => (
       <RetainedPanelActivity active={active}>{strategy.render(input)}</RetainedPanelActivity>

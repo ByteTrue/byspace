@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/workspace-new-tab-menu.tsx.
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-new-tab-menu.tsx.
 import { Fragment, useCallback, useMemo, type ComponentType, type ReactElement } from "react";
 import {
   DropdownMenuContent,

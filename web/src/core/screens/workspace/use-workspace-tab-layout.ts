@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useWindowDimensions } from "react-native";
 import {
   computeWorkspaceTabLayout,
   type WorkspaceTabLayoutMetrics,
   type WorkspaceTabLayoutResult,
 } from "@/screens/workspace/workspace-tab-layout";
+import { useWindowDimensions } from "~/hooks/use-window-dimensions";
 
 interface UseWorkspaceTabLayoutInput {
   tabLabelWidths: number[];

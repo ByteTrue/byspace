@@ -1,4 +1,4 @@
-// Port of packages/app/src/command-center/icon.tsx: the same per-icon adapter cache, painting
+// Port of archive/expo-app:packages/app/src/command-center/icon.tsx: the same per-icon adapter cache, painting
 // with the muted text colour through CSS instead of a Unistyles theme mapping.
 import type { AgentControlIcon } from "@/agent-controls/icons";
 import type { CommandCenterIcon, CommandCenterIconProps } from "@/command-center/contributions";

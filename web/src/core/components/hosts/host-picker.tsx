@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/hosts/host-picker.tsx: the host list as a combobox —
+// Port of archive/expo-app:packages/app/src/components/hosts/host-picker.tsx: the host list as a combobox —
 // local daemon first, optional All hosts / Add host / Enable built-in daemon rows, each host with
 // its connection dot and, when asked, its active connection and a settings button. Same props;
 // the rows are DOM.
@@ -103,7 +103,7 @@ export function HostPickerOption({
         tabIndex={-1}
         onClick={handleSettingsPress}
         aria-label={`Open ${label} settings`}
-        // packages/app: the bare 14px gear, no padding (its 8px hit slop is invisible), no hover tint
+        // The Expo app: the bare 14px gear, no padding (its 8px hit slop is invisible), no hover tint
         className="flex text-muted-foreground"
       >
         <Settings size={ICON_SIZE.sm} />

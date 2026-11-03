@@ -1,5 +1,4 @@
-import type { ReactElement } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
+import type { CSSProperties, ReactElement } from "react";
 
 export interface DraggableListDragHandleProps {
   /**
@@ -24,10 +23,10 @@ export interface DraggableListProps<T> {
   keyExtractor: (item: T, index: number) => string;
   renderItem: (info: DraggableRenderItemInfo<T>) => ReactElement;
   onDragEnd: (data: T[]) => void;
-  style?: StyleProp<ViewStyle>;
+  style?: CSSProperties;
   /** Outer container style (useful for nested, non-scrolling lists). */
-  containerStyle?: StyleProp<ViewStyle>;
-  contentContainerStyle?: StyleProp<ViewStyle>;
+  containerStyle?: CSSProperties;
+  contentContainerStyle?: CSSProperties;
   testID?: string;
   ListFooterComponent?: ReactElement | null;
   ListHeaderComponent?: ReactElement | null;

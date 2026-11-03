@@ -1,9 +1,7 @@
-// Port of packages/app/src/components/provider-catalog-list.tsx: the searchable ACP provider catalog; DOM view.
-// Converted from the Expo file by web/scripts/port/provider-catalog-list.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/provider-catalog-list.tsx: the searchable ACP provider catalog; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/provider-catalog-list.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SvgXml } from "react-native-svg";
-import { withUnistyles } from "react-native-unistyles";
 import { ExternalLink, PackagePlus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +12,8 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { withTheme } from "~/app/theme-object";
+import { SvgXml } from "~/components/svg-xml";
 
 interface ProviderCatalogListProps {
   serverId: string;
@@ -25,10 +25,10 @@ const SEARCH_ICON_SIZE = 16;
 const PROVIDER_FALLBACK_ICON_SIZE = 20;
 const PROVIDER_REMOTE_ICON_SIZE = 24;
 
-const ThemedPackagePlus = withUnistyles(PackagePlus);
-const ThemedSvgXml = withUnistyles(SvgXml);
-const ThemedSearch = withUnistyles(Search);
-const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedPackagePlus = withTheme(PackagePlus);
+const ThemedSvgXml = withTheme(SvgXml);
+const ThemedSearch = withTheme(Search);
+const ThemedExternalLink = withTheme(ExternalLink);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -70,10 +70,13 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
             xml={entry.iconSvg}
             width={PROVIDER_REMOTE_ICON_SIZE}
             height={PROVIDER_REMOTE_ICON_SIZE}
-            uniProps={foregroundColorMapping}
+            themeProps={foregroundColorMapping}
           />
         ) : (
-          <ThemedPackagePlus size={PROVIDER_FALLBACK_ICON_SIZE} uniProps={foregroundColorMapping} />
+          <ThemedPackagePlus
+            size={PROVIDER_FALLBACK_ICON_SIZE}
+            themeProps={foregroundColorMapping}
+          />
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -100,7 +103,7 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
           <span className="truncate text-xs leading-[normal] text-muted-foreground">
             {t("providerCatalog.actions.installInstructions")}
           </span>
-          <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
+          <ThemedExternalLink size={12} themeProps={foregroundMutedColorMapping} />
         </button>
       </div>
       <Button
@@ -145,7 +148,7 @@ export function ProviderCatalogList({
     <div>
       <div className="mb-3 flex flex-row items-center gap-2 rounded-lg border bg-muted px-3">
         <div className="flex w-[18px] items-center justify-center">
-          <ThemedSearch size={SEARCH_ICON_SIZE} uniProps={foregroundMutedColorMapping} />
+          <ThemedSearch size={SEARCH_ICON_SIZE} themeProps={foregroundMutedColorMapping} />
         </div>
         <TextInput
           testID="provider-catalog-search"

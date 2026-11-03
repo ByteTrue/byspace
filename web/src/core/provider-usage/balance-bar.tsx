@@ -1,4 +1,4 @@
-// Port of packages/app/src/provider-usage/balance-bar.tsx: a balance's label and amount, with
+// Port of archive/expo-app:packages/app/src/provider-usage/balance-bar.tsx: a balance's label and amount, with
 // a bar when there is a limit to measure against.
 import { useMemo } from "react";
 import { clampPct, formatAmount, formatResetLabel } from "@/provider-usage/format";

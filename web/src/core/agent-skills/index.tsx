@@ -1,9 +1,8 @@
-// Port of packages/app/src/agent-skills/index.tsx: the BySpace skills card of a host's Agents page; DOM view.
-// Converted from the Expo file by web/scripts/port/agent-skills.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/agent-skills/index.tsx: the BySpace skills card of a host's Agents page; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-skills.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useFocusEffect } from "@react-navigation/native";
-import { withUnistyles } from "react-native-unistyles";
+import { useFocusEffect } from "~/app/route-focus";
 import { ArrowUpRight, Blocks, Check, Settings2 } from "lucide-react";
 import type { AgentSkillOperation, AgentSkillsStatus } from "@bytetrue/protocol/messages";
 import type { TFunction } from "i18next";
@@ -17,16 +16,17 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { SkillSelectionSheet } from "@/agent-skills/selection-sheet";
 import { useAgentSkills } from "@/agent-skills/use-agent-skills";
+import { withTheme } from "~/app/theme-object";
 
 const OP_KIND_ORDER: Record<AgentSkillOperation["kind"], number> = {
   add: 0,
   update: 1,
   delete: 2,
 };
-const ThemedBlocks = withUnistyles(Blocks);
-const ThemedCheck = withUnistyles(Check);
-const ThemedSettings = withUnistyles(Settings2);
-const ThemedArrowUpRight = withUnistyles(ArrowUpRight);
+const ThemedBlocks = withTheme(Blocks);
+const ThemedCheck = withTheme(Check);
+const ThemedSettings = withTheme(Settings2);
+const ThemedArrowUpRight = withTheme(ArrowUpRight);
 const SKILLS_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/public-docs/skills.md";
 const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -112,7 +112,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     if (confirmed) await skills.uninstall();
   }, [skills, t]);
   const chooseIcon = useMemo(
-    () => <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedMapping} />,
+    () => <ThemedSettings size={ICON_SIZE.sm} themeProps={mutedMapping} />,
     [],
   );
   const handleOpen = useCallback(() => setIsChoosing(true), []);
@@ -121,7 +121,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     void openExternalUrl(SKILLS_DOCS_URL);
   }, []);
   const docsIcon = useMemo(
-    () => <ThemedArrowUpRight size={ICON_SIZE.sm} uniProps={mutedMapping} />,
+    () => <ThemedArrowUpRight size={ICON_SIZE.sm} themeProps={mutedMapping} />,
     [],
   );
   const trailing = useMemo(
@@ -162,7 +162,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
         <div className={settingsStyles.row}>
           <div className={settingsStyles.rowContent}>
             <div className="flex flex-row items-center gap-2">
-              <ThemedBlocks size={ICON_SIZE.md} uniProps={foregroundMapping} />
+              <ThemedBlocks size={ICON_SIZE.md} themeProps={foregroundMapping} />
               <span className={settingsStyles.rowTitle}>{t("settings.host.skills.title")}</span>
             </div>
             <span className={settingsStyles.rowHint}>
@@ -235,7 +235,7 @@ function SkillsActions({
     return (
       <div className="flex flex-row items-center gap-2">
         <div className="flex flex-row items-center gap-1">
-          <ThemedCheck size={14} uniProps={mutedMapping} />
+          <ThemedCheck size={14} themeProps={mutedMapping} />
           <span className="text-xs leading-[normal] text-muted-foreground">
             {t("settings.host.skills.actions.installed")}
           </span>

@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/settings/headings/settings-group.tsx: a titled group
+// Port of archive/expo-app:packages/app/src/components/settings/headings/settings-group.tsx: a titled group
 // above one or more SettingsSection blocks.
 import type { CSSProperties, ReactNode } from "react";
 import { SettingsInfoTip } from "@/components/settings/headings/settings-info-tip";

@@ -7,7 +7,7 @@ import viteConfig from "./vite.config";
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const BROWSER_TESTS = "src/**/*.browser.{test,spec}.{ts,tsx}";
 
-// The app's own resolution (src/core under `@/`, the shims), so a test loads what the build loads.
+// The app's own resolution (src/core under `@/`), so a test loads what the build loads.
 export default defineConfig((env) =>
   mergeConfig(viteConfig(env), {
     define: {

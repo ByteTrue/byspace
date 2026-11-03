@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { type Href, useRouter } from "expo-router";
+import { type Href, useRouter } from "~/app/navigation";
 import { useTranslation } from "react-i18next";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostChooser } from "@/hosts/host-chooser";

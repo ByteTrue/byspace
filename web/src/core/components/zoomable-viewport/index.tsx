@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/zoomable-viewport/index.web.tsx: pan, pinch and wheel
+// Port of archive/expo-app:packages/app/src/components/zoomable-viewport/index.web.tsx: pan, pinch and wheel
 // zoom over a fixed-size content box. The gesture code is the Expo web file's; the root is a div.
 import {
   useCallback,

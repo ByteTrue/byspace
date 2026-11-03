@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ComposerAttachment } from "@/attachments/types";
@@ -152,7 +152,7 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
     {
       name: "@byspace:review-draft-store",
       version: STORE_VERSION,
-      storage: createValidatedPersistStorage(AsyncStorage, SerializedReviewDraftStateSchema),
+      storage: createValidatedPersistStorage(localStorageAsync, SerializedReviewDraftStateSchema),
       partialize: (state) => serializeReviewDraftState(state),
       migrate: async (state) => normalizePersistedState(state),
     },

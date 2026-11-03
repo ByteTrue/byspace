@@ -1,4 +1,4 @@
-// Port of packages/app/src/tool-calls/detail-level/overview/view.tsx: a run of tool calls
+// Port of archive/expo-app:packages/app/src/tool-calls/detail-level/overview/view.tsx: a run of tool calls
 // folded into one row; open, it lists them in a 400px scroll that follows the newest (on a phone
 // it opens a drawer instead).
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";

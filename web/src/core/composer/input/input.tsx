@@ -1,7 +1,6 @@
-// Port of packages/app/src/composer/input/input.tsx. The input logic is the Expo file's (send,
+// Port of archive/expo-app:packages/app/src/composer/input/input.tsx. The input logic is the Expo file's (send,
 // queue, steer, IME, paste, height, keyboard actions); the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/composer-input.py (tag archive/expo-app); edit it directly.
-import { useWindowDimensions } from "react-native";
+// Converted from the Expo file by archive/expo-app:web/scripts/port/composer-input.py; edit it directly.
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   useState,
@@ -40,7 +39,6 @@ import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
-import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -58,6 +56,7 @@ import {
   runDefaultSendAction,
   runMessageInputKeyboardAction,
 } from "@/composer/input/state";
+import { useWindowDimensions } from "~/hooks/use-window-dimensions";
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
 
@@ -160,11 +159,9 @@ export interface MessageInputRef {
   getNativeElement?: () => HTMLElement | null;
 }
 
-const MIN_INPUT_HEIGHT_MOBILE = 30;
-const MIN_INPUT_HEIGHT_DESKTOP = 46;
+const MIN_INPUT_HEIGHT = 46;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
-const MIN_INPUT_HEIGHT = isWeb ? MIN_INPUT_HEIGHT_DESKTOP : MIN_INPUT_HEIGHT_MOBILE;
 const READ_ONLY_STYLE: CSSProperties = { minHeight: MIN_INPUT_HEIGHT };
 type WebTextInputKeyPressEvent = ReactKeyboardEvent<HTMLInputElement & HTMLTextAreaElement>;
 
@@ -361,7 +358,7 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
   const { getWebTextArea, isConnected, disabled, onAddImages } = args;
 
   useEffect(() => {
-    if (!isWeb || !onAddImages) return;
+    if (!onAddImages) return;
 
     const textarea = getWebTextArea() as
       | (TextAreaHandle & {
@@ -411,7 +408,7 @@ function useAutoFocusOnWebEffect(
   autoFocusKey: string | undefined,
 ): void {
   useEffect(() => {
-    if (!isWeb || !autoFocus) return;
+    if (!autoFocus) return;
     return focusWithRetries({
       focus: () => textInputRef.current?.focus(),
       isFocused: () => {
@@ -946,7 +943,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         runMessageInputKeyboardAction(action, {
           focusInput: () => textInputRef.current?.focus(),
         }),
-      getNativeElement: () => (isWeb ? getTextInputNativeElement(textInputRef.current) : null),
+      getNativeElement: () => getTextInputNativeElement(textInputRef.current),
     }));
     useEffect(() => {
       if (appliedTextReplacementKeyRef.current === textReplacement.key) return;
@@ -1039,9 +1036,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     );
 
     useLayoutEffect(() => {
-      if (isWeb) {
-        webTextareaRef.current = getWebTextArea() as HTMLElement | null;
-      }
+      webTextareaRef.current = getWebTextArea() as HTMLElement | null;
     }, [getWebTextArea]);
 
     usePasteImagesEffect({
@@ -1059,19 +1054,30 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [onSelectionChangeCallback],
     );
 
-    const shouldHandleWebKeyPress = isWeb;
-    const shouldSubmitOnEnter = isWeb && !isCompact;
+    const shouldSubmitOnEnter = !isCompact;
 
-    function handleDesktopKeyPress(event: WebTextInputKeyPressEvent) {
-      if (!shouldHandleWebKeyPress) return;
-      handleDesktopKeyPressImpl(event, {
+    const handleDesktopKeyPress = useCallback(
+      (event: WebTextInputKeyPressEvent) => {
+        handleDesktopKeyPressImpl(event, {
+          onKeyPressCallback,
+          input: getComposerInputSnapshot(
+            textInputRef.current,
+            valueRef.current,
+            selectionRef.current,
+          ),
+          submitOnEnter: shouldSubmitOnEnter,
+          isAgentRunning,
+          onQueue,
+          isSubmitDisabled,
+          isSubmitLoading,
+          disabled,
+          handleAlternateSendAction,
+          handleDefaultSendAction,
+        });
+      },
+      [
         onKeyPressCallback,
-        input: getComposerInputSnapshot(
-          textInputRef.current,
-          valueRef.current,
-          selectionRef.current,
-        ),
-        submitOnEnter: shouldSubmitOnEnter,
+        shouldSubmitOnEnter,
         isAgentRunning,
         onQueue,
         isSubmitDisabled,
@@ -1079,8 +1085,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         handleAlternateSendAction,
         handleDefaultSendAction,
-      });
-    }
+      ],
+    );
 
     const hasSendableContent = hasSendableComposerContent({
       hasText: hasLiveText,
@@ -1216,7 +1222,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               onBlur={handleInputBlur}
               editable={!disabled}
               autoFocus={false}
-              onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
+              onKeyPress={handleDesktopKeyPress}
               onSelectionChange={handleSelectionChange}
               onPasteImages={onPasteImages}
               onPasteError={handlePasteError}

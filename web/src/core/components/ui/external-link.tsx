@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/external-link.tsx: the inline "Docs ↗" link — muted
+// Port of archive/expo-app:packages/app/src/components/ui/external-link.tsx: the inline "Docs ↗" link — muted
 // text and an arrow, opened with the platform's external opener, with an optional tooltip.
 import { useCallback, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";

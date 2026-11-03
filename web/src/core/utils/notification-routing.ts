@@ -1,4 +1,4 @@
-import type { Href } from "expo-router";
+import type { Href } from "~/app/navigation";
 import { buildHostRootRoute, buildHostWorkspaceOpenRoute } from "@/utils/host-routes";
 
 type NotificationData = Record<string, unknown> | null | undefined;

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
 import { persist, type StateStorage } from "zustand/middleware";
 import { z } from "zod";
@@ -160,7 +160,7 @@ function normalizeSidebarLabelFilter(filter: SidebarLabelFilter): SidebarLabelFi
 }
 
 export function createSidebarViewStorage(
-  backingStorage: StateStorage = AsyncStorage,
+  backingStorage: StateStorage = localStorageAsync,
 ): StateStorage {
   return {
     getItem: async (name) => {

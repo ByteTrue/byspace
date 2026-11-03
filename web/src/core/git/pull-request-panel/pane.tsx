@@ -1,6 +1,6 @@
-// Port of packages/app/src/git/pull-request-panel/pane.tsx. The pane's logic is the Expo
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/pane.tsx. The pane's logic is the Expo
 // file's; the view is DOM, and the activity cards are web/src/pull-request/activity-cards.tsx.
-// Converted from the Expo file by web/scripts/port/pull-request-pane.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/pull-request-pane.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
 import {
   ExternalLink,

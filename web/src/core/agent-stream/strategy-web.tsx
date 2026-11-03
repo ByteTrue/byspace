@@ -8,7 +8,6 @@ import React, {
   useState,
 } from "react";
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual";
-import { withUnistyles } from "react-native-unistyles";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -38,6 +37,7 @@ import {
   type HistoryStartSettleScheduler,
 } from "./history-start-settle-scheduler";
 import { useScrollToMessage } from "./use-scroll-to-message";
+import { withTheme } from "~/app/theme-object";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -65,7 +65,7 @@ const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADD
 // reading position, so a row resting exactly on the edge does not flip back and forth.
 const READING_POSITION_OFFSET_PX = 8;
 
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -1219,7 +1219,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       <div style={historyStartSlotStyle} data-testid="older-history-slot">
         {isLoadingOperation ? (
           <div data-testid="load-older-history-spinner">
-            <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+            <ThemedLoadingSpinner size="small" themeProps={foregroundMutedColorMapping} />
           </div>
         ) : null}
       </div>

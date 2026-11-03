@@ -1,11 +1,11 @@
-// Port of packages/app/src/components/ui/autocomplete-popover.tsx: the autocomplete list
+// Port of archive/expo-app:packages/app/src/components/ui/autocomplete-popover.tsx: the autocomplete list
 // floating above the composer input, as wide as it, never taller than the space above it. Focus
 // stays in the composer, which owns visibility and the keyboard.
 //
-// Placed as packages/app places it: by its bottom edge, OFFSET above the input, so a list that
+// Placed as the Expo app places it: by its bottom edge, OFFSET above the input, so a list that
 // grows or shrinks as results arrive keeps its bottom where it was; measured before the first paint,
 // so it never shows at a stale position; and under the phone's sidebar panel (z-40, below the
-// panels' z-50), as packages/app's portal host sits under it.
+// panels' z-50), as the Expo app's portal host sits under it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactElement, RefObject } from "react";
 import { createPortal } from "react-dom";

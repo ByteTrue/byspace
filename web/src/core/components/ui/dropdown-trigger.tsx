@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/dropdown-trigger.tsx: a dropdown trigger with its
+// Port of archive/expo-app:packages/app/src/components/ui/dropdown-trigger.tsx: a dropdown trigger with its
 // label and a trailing chevron (pass `chevron={null}` to drop it).
 import type { ReactElement, ReactNode } from "react";
 import { ChevronDown } from "lucide-react";

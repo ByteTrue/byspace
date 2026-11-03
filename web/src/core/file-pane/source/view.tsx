@@ -29,7 +29,7 @@ export function FileSourceView({
   theme,
   tooLargeMessage,
 }: FileSourceViewProps) {
-  const presentation = selectSourcePresentation({ size, platform: "web" });
+  const presentation = selectSourcePresentation({ size });
   if (presentation === "unsupported") {
     return (
       <div data-testid="file-source-too-large" style={UNSUPPORTED_STYLE}>

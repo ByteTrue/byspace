@@ -1,4 +1,4 @@
-// Port of packages/app/src/agent-stream/turn-footer.tsx: the row after a turn — the working
+// Port of archive/expo-app:packages/app/src/agent-stream/turn-footer.tsx: the row after a turn — the working
 // glyph and elapsed time while it runs, then copy, fork and the turn's duration.
 import { memo, useCallback, type ReactNode } from "react";
 import type { TurnTiming } from "@/timeline/turn-time";

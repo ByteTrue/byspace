@@ -20,7 +20,7 @@ import {
 
 /**
  * The menu primitives an item list renders with. The same list shows in a kebab dropdown and a
- * right-click context menu, as in packages/app; Radix keeps those two primitive sets separate.
+ * right-click context menu, as in the Expo app; Radix keeps those two primitive sets separate.
  */
 export interface MenuKit {
   Item: ComponentType<ComponentProps<typeof DropdownMenuItem>>;
@@ -52,7 +52,7 @@ export const contextMenuKit: MenuKit = {
   SubContent: ContextMenuSubContent as MenuKit["SubContent"],
 };
 
-/** onSelect handler that runs the action but keeps the menu open (packages/app's closeOnSelect={false}). */
+/** onSelect handler that runs the action but keeps the menu open (the Expo app's closeOnSelect={false}). */
 export function keepOpen(action: () => void) {
   return (event: Event) => {
     event.preventDefault();

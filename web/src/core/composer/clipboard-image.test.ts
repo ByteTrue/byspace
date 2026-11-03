@@ -6,9 +6,7 @@ function createClipboard(input: {
   imageData?: string | null;
 }): ClipboardImageReader {
   return {
-    hasImageAsync: async () => input.hasImage,
-    getImageAsync: async () =>
-      input.imageData === undefined || input.imageData === null ? null : { data: input.imageData },
+    readImageDataUrl: async () => (input.hasImage ? (input.imageData ?? null) : null),
   };
 }
 

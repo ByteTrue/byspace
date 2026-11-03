@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/commits-section/commit-graph-node.tsx: the commit's dot on the
+// Port of archive/expo-app:packages/app/src/git/commits-section/commit-graph-node.tsx: the commit's dot on the
 // branch rail — accent for the workspace's own commits, muted for base, hollow until pushed.
 import type { ClassifiedCheckoutCommit } from "@/git/use-commits-query";
 import { cn } from "cn";

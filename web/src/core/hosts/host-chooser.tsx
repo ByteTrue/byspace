@@ -1,7 +1,7 @@
-// Port of packages/app/src/hosts/host-chooser.tsx: the same chooser store and hook (no hosts:
+// Port of archive/expo-app:packages/app/src/hosts/host-chooser.tsx: the same chooser store and hook (no hosts:
 // go add one; one host: use it; several: ask), with the picker on shadcn's CommandDialog.
 import { useCallback, useMemo } from "react";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import { Server } from "lucide-react";
 import { create } from "zustand";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";

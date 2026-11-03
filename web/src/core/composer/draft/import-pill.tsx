@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/draft/import-pill.tsx: "Import session" as a pill above the
+// Port of archive/expo-app:packages/app/src/composer/draft/import-pill.tsx: "Import session" as a pill above the
 // new-agent composer.
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";

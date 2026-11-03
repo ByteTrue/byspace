@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/tracks.tsx: the strip of pills above the composer
+// Port of archive/expo-app:packages/app/src/composer/tracks.tsx: the strip of pills above the composer
 // (subagents, tasks, diff stat, stream controls) and the panel each tracker opens. The bar floats
 // over the transcript with no background; its host gives the scroll a small bottom inset only
 // while the bar exists.

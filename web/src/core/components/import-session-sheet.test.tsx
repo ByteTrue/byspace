@@ -40,20 +40,18 @@ vi.hoisted(() => {
   (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
 });
 
-vi.mock("react-native-unistyles", () => ({
-  StyleSheet: {
-    create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),
-  },
-  useUnistyles: () => ({ theme }),
-  withUnistyles:
+vi.mock("~/app/theme-object", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/app/theme-object")>()),
+  useThemeObject: () => theme,
+  withTheme:
     (Component: React.ComponentType<Record<string, unknown>>) =>
     ({
-      uniProps,
+      themeProps,
       ...rest
     }: {
-      uniProps?: (theme: unknown) => Record<string, unknown>;
+      themeProps?: (theme: unknown) => Record<string, unknown>;
     } & Record<string, unknown>) => {
-      const themed = uniProps ? uniProps(theme) : {};
+      const themed = themeProps ? themeProps(theme) : {};
       return React.createElement(Component, { ...rest, ...themed });
     },
 }));
@@ -66,7 +64,7 @@ vi.mock("@/components/provider-icons", () => ({
   getProviderIcon: () => () => null,
 }));
 
-vi.mock("lucide-react-native", () => {
+vi.mock("lucide-react", () => {
   const icon = (name: string) => {
     const Icon = () => React.createElement("span", { "data-icon": name });
     Icon.displayName = name;
@@ -173,11 +171,6 @@ vi.mock("@/components/ui/form-field", () => ({
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: () => null,
 }));
-
-vi.mock("react-native", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("react-native");
-  return actual;
-});
 
 const mockSnapshot = vi.hoisted(() => ({
   current: {

@@ -7,14 +7,14 @@ import {
   GitPullRequest,
   MessageSquareCode,
   MousePointer2,
-} from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
+} from "lucide-react";
 import type { AgentAttachment } from "@bytetrue/protocol/messages";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { isPullRequestContextAttachment } from "@/attachments/workspace-attachment-utils";
 import { getForgePresentation } from "@/git/forge";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { withTheme } from "~/app/theme-object";
 
 export interface AttachmentPillContent {
   icon: ReactNode;
@@ -140,26 +140,26 @@ export function getWorkspaceAttachmentPillContent(
   };
 }
 
-const ThemedAttachmentFileText = withUnistyles(FileText);
-const ThemedAttachmentGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedAttachmentCircleDot = withUnistyles(CircleDot);
-const ThemedAttachmentMessageSquareCode = withUnistyles(MessageSquareCode);
-const ThemedAttachmentMousePointer = withUnistyles(MousePointer2);
+const ThemedAttachmentFileText = withTheme(FileText);
+const ThemedAttachmentGitPullRequest = withTheme(GitPullRequest);
+const ThemedAttachmentCircleDot = withTheme(CircleDot);
+const ThemedAttachmentMessageSquareCode = withTheme(MessageSquareCode);
+const ThemedAttachmentMousePointer = withTheme(MousePointer2);
 
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 const attachmentReviewIcon = (
-  <ThemedAttachmentMessageSquareCode size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentMessageSquareCode size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
 const attachmentGithubPrIcon = (
-  <ThemedAttachmentGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentGitPullRequest size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
 const attachmentGithubIssueIcon = (
-  <ThemedAttachmentCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentCircleDot size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
 const attachmentFileIcon = (
-  <ThemedAttachmentFileText size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentFileText size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
 const attachmentBrowserIcon = (
-  <ThemedAttachmentMousePointer size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedAttachmentMousePointer size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );

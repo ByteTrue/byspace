@@ -1,4 +1,4 @@
-// Port of packages/app/src/panels/new-tab-panel.tsx: the launcher a new tab opens on, with the
+// Port of archive/expo-app:packages/app/src/panels/new-tab-panel.tsx: the launcher a new tab opens on, with the
 // same keyboard model (arrows move between rows, Enter opens, workspace shortcuts pick a row) and
 // the same 380px column of 44px rows.
 import {

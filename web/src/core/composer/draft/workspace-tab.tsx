@@ -1,8 +1,7 @@
-// Port of packages/app/src/composer/draft/workspace-tab.tsx: the new-agent tab. The draft and
+// Port of archive/expo-app:packages/app/src/composer/draft/workspace-tab.tsx: the new-agent tab. The draft and
 // create-flow logic is the Expo file's; the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/draft-workspace-tab.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/draft-workspace-tab.py; edit it directly.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Keyboard } from "react-native";
 import { useTranslation } from "react-i18next";
 import { CHIEF_ROLE_NAME, isHomeWorkspace } from "@/chief/home-workspace";
 import invariant from "tiny-invariant";
@@ -47,13 +46,13 @@ import {
   useIsCompactFormFactor,
 } from "@/constants/layout";
 import type { CSSProperties } from "react";
-import { isWeb } from "@/constants/platform";
 import {
   buildWorkspaceTabPersistenceKey,
   type WorkspaceDraftTabSetup,
 } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
 import { useSettings } from "@/hooks/use-settings";
+import { blurActiveElement } from "~/lib/blur-active-element";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
 const DRAFT_CAPABILITIES: AgentCapabilityFlags = {
@@ -518,10 +517,7 @@ export function WorkspaceDraftAgentTab({
     },
     onBeforeSubmit: async () => {
       await composerState.persistFormPreferences();
-      if (isWeb) {
-        (document.activeElement as HTMLElement | null)?.blur?.();
-      }
-      Keyboard.dismiss();
+      blurActiveElement();
     },
     buildDraftAgent: (attempt) =>
       buildDraftAgentSnapshot({

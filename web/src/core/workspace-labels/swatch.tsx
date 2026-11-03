@@ -1,5 +1,5 @@
-// Port of packages/app/src/workspace-labels/swatch.tsx: a label's colour as a dot and as the swatch row it is picked from; DOM view.
-// Converted from the Expo file by web/scripts/port/workspace-label-swatch.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/workspace-labels/swatch.tsx: a label's colour as a dot and as the swatch row it is picked from; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/workspace-label-swatch.py; edit it directly.
 import { useCallback, useMemo, type CSSProperties, type ReactElement } from "react";
 import {
   WORKSPACE_LABEL_COLORS,
@@ -33,9 +33,9 @@ export function workspaceLabelColorName(color: WorkspaceLabelColor): string {
 }
 
 /**
- * One stable mapping per color for the life of the module, for lucide glyphs that carry a
- * label's color (`withUnistyles` re-subscribes when `uniProps` changes identity). The scheme is
- * read inside the mapping, so switching themes repaints the glyph without a React render.
+ * One mapping per color for the life of the module, for lucide glyphs that carry a label's
+ * color through `withTheme`. The scheme is read inside the mapping, so switching themes repaints
+ * the glyph.
  */
 export const WORKSPACE_LABEL_ICON_MAPPINGS: Record<
   WorkspaceLabelColor,

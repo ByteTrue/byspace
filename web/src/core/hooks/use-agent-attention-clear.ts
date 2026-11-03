@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import {
   shouldClearAgentAttention,
   type AgentAttentionClearTrigger,
 } from "@/utils/agent-attention";
 import { getIsAppActivelyVisible } from "@/utils/app-visibility";
-import { isWeb } from "@/constants/platform";
+import { AppState } from "~/lib/app-state";
 
 type AttentionReason = "finished" | "error" | "permission" | null | undefined;
 
@@ -71,7 +70,7 @@ export function useAgentAttentionClear({
 
     const appStateSubscription = AppState.addEventListener("change", updateVisibility);
 
-    if (isWeb && typeof document !== "undefined") {
+    if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", updateVisibility);
       window.addEventListener("focus", updateVisibility);
       window.addEventListener("blur", updateVisibility);

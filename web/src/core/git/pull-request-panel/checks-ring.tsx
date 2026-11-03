@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/pull-request-panel/checks-ring.tsx: the same ring, drawn as DOM
+// Port of archive/expo-app:packages/app/src/git/pull-request-panel/checks-ring.tsx: the same ring, drawn as DOM
 // SVG and coloured by class instead of the Unistyles palette.
 import type { CheckPresentation } from "@/git/check-presentation";
 import type { ChecksSummary } from "@/git/pull-request-panel/checks-summary";

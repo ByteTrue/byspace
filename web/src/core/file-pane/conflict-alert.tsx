@@ -1,4 +1,4 @@
-// Port of packages/app/src/file-pane/conflict-alert.tsx: the amber strip under the file bar when
+// Port of archive/expo-app:packages/app/src/file-pane/conflict-alert.tsx: the amber strip under the file bar when
 // the file changed or vanished on disk while it was being edited.
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";

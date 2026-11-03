@@ -1,4 +1,4 @@
-// Port of packages/app/src/changelog/changelog-host.tsx: the same host, with the web sheet.
+// Port of archive/expo-app:packages/app/src/changelog/changelog-host.tsx: the same host, with the web sheet.
 import { useChangelogStore } from "@/changelog/internal/changelog-store";
 import { ChangelogSheet } from "@/changelog/internal/changelog-sheet";
 

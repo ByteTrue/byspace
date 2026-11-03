@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/zoomable-viewport/image.tsx: an image in the zoomable
+// Port of archive/expo-app:packages/app/src/components/zoomable-viewport/image.tsx: an image in the zoomable
 // viewport once its size is known; until then the image fills the box.
 import { useEffect, useState, type CSSProperties } from "react";
 import type { ViewportFitOptions, ViewportSize } from "@/components/zoomable-viewport/geometry";

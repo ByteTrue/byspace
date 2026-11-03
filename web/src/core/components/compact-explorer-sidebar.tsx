@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/compact-explorer-sidebar.tsx: the explorer on a phone — a
+// Port of archive/expo-app:packages/app/src/components/compact-explorer-sidebar.tsx: the explorer on a phone — a
 // full-screen sheet from the right with the Changes, Files and pull request tabs and a close button.
 // The tab state, PR availability and the panes are the Expo file's; the mobile panel runtime slides
 // it in and the swipes drag it (mobile-panels/provider.tsx). Not ported: the native tablet's docked
@@ -7,7 +7,6 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { shouldUseCompactExplorerKeyboardPadding } from "@/hooks/keyboard-shift-policy";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useUnistyles } from "react-native-unistyles";
 import { FileExplorerPane } from "@/components/file-explorer-pane";
 import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-panel";
 import { PullRequestTabIcon } from "@/git/pull-request-panel/tab-icon";
@@ -22,6 +21,7 @@ import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePanelStore, type ExplorerTab } from "@/stores/panel-store";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { cn } from "cn";
+import { useThemeObject } from "~/app/theme-object";
 
 interface ExplorerSidebarProps {
   serverId: string;
@@ -67,7 +67,7 @@ export function CompactExplorerSidebar({
         panel="file-explorer"
         className={cn(
           "flex flex-col bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] text-sm text-sidebar-foreground",
-          // As packages/app: the bottom inset here, except on a repository's Changes tab, whose
+          // As the Expo app: the bottom inset here, except on a repository's Changes tab, whose
           // commits section pads itself (shouldUseCompactExplorerKeyboardPadding).
           shouldUseCompactExplorerKeyboardPadding({ isGit, explorerTab }) &&
             "pb-[env(safe-area-inset-bottom)]",
@@ -146,7 +146,7 @@ function ExplorerSidebarContent({
   isOpen,
   onOpenFile,
 }: SidebarContentProps) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const { prPane, showPullRequest: showPrTab } = usePullRequestPanelAvailability({
     serverId,

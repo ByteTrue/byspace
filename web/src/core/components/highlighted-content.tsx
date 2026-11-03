@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/highlighted-content.tsx: pre-tokenized code lines, with
+// Port of archive/expo-app:packages/app/src/components/highlighted-content.tsx: pre-tokenized code lines, with
 // an optional line-number gutter (Read carries a server-normalized offset).
 import { memo } from "react";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";

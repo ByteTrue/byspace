@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/diff-stat-pill.tsx: the workspace's uncommitted line counts
+// Port of archive/expo-app:packages/app/src/composer/diff-stat-pill.tsx: the workspace's uncommitted line counts
 // above the composer; pressing opens the Changes tab.
 import { memo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";

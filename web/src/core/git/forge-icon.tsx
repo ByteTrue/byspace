@@ -5,14 +5,14 @@
  * bundle and references it from its view module. Unknown icon kinds fall back to
  * a generic pull-request glyph.
  */
-import { withUnistyles } from "react-native-unistyles";
-import { GitPullRequest } from "lucide-react-native";
+import { GitPullRequest } from "lucide-react";
 import {
   type ForgeBrandColor,
   type ForgeIconColorMapping,
   type ForgeIconComponent,
 } from "@/git/client-forge-module";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
+import { withTheme } from "~/app/theme-object";
 
 const FORGE_ICON_BY_KIND = new Map(
   CLIENT_FORGE_VIEW_MODULES.map((module) => [module.id, module.icon]),
@@ -27,9 +27,9 @@ export function getForgeIconComponent(iconKind: string): ForgeIconComponent {
 }
 
 const THEMED_ICON_BY_KIND = Object.fromEntries(
-  CLIENT_FORGE_VIEW_MODULES.map((module) => [module.id, withUnistyles(module.icon)]),
+  CLIENT_FORGE_VIEW_MODULES.map((module) => [module.id, withTheme(module.icon)]),
 );
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedGitPullRequest = withTheme(GitPullRequest);
 
 /** Theme-driven color mapping, e.g. `(theme) => ({ color: theme.colors.foregroundMuted })`. */
 export type { ForgeIconColorMapping };
@@ -55,18 +55,18 @@ export function getForgeBrandColorMapping(iconKind: string): ForgeIconColorMappi
 }
 
 /**
- * Themed brand icon for an `iconKind`, for call sites that color via a unistyles
- * mapping. Falls back to a generic pull-request glyph for unknown forges.
+ * Themed brand icon for an `iconKind`, for call sites that color through a theme
+ * mapping (`themeProps`). Falls back to a generic pull-request glyph for unknown forges.
  */
 export function ForgeBrandIcon({
   iconKind,
   size,
-  uniProps,
+  themeProps,
 }: {
   iconKind: string;
   size: number;
-  uniProps: ForgeIconColorMapping;
+  themeProps: ForgeIconColorMapping;
 }) {
   const ThemedIcon = THEMED_ICON_BY_KIND[iconKind] ?? ThemedGitPullRequest;
-  return <ThemedIcon size={size} uniProps={uniProps} />;
+  return <ThemedIcon size={size} themeProps={themeProps} />;
 }

@@ -1,6 +1,6 @@
-// Port of packages/app/src/components/split-container.tsx. The drag-and-drop, split, resize,
+// Port of archive/expo-app:packages/app/src/components/split-container.tsx. The drag-and-drop, split, resize,
 // maximize and explorer-dock logic is the Expo file's; the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/split-container.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/split-container.py; edit it directly.
 import {
   Fragment,
   useCallback,

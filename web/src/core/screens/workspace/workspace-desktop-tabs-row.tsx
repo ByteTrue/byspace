@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx. Same behaviour:
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-desktop-tabs-row.tsx. Same behaviour:
 // label widths are measured and fed to the shared tab layout (widths, labels, close buttons,
 // scroll fallback), tabs reorder by dragging (inside the split container's drag context when
 // there is one), each tab has a tooltip, a right-click menu, a close button and middle-click
@@ -85,7 +85,7 @@ import { cn } from "cn";
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 const PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING = 2;
-// As packages/app: the split menu's glyph sits on the pane's trailing glyph rail (3px margin).
+// As the Expo app: the split menu's glyph sits on the pane's trailing glyph rail (3px margin).
 const PANE_SPLIT_ACTIONS_OUTER_MARGIN =
   paneContentToolbarTrailingPadding(false) - PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING;
 const PANE_SPLIT_ACTIONS_RESERVED_WIDTH =
@@ -107,7 +107,7 @@ const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 20;
 const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
 const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 
-// packages/app draws these toolbar glyphs extra-muted (extraMutedColorMapping), on hover too.
+// The Expo app draws these toolbar glyphs extra-muted (extraMutedColorMapping), on hover too.
 const SPLIT_RIGHT_ICON = <Columns2 className="text-extra-muted-foreground" />;
 const SPLIT_DOWN_ICON = <Rows2 className="text-extra-muted-foreground" />;
 const TAB_SCROLL_PADDING_STYLE = {
@@ -180,7 +180,7 @@ function WorkspaceNewTabButton({
         label={t("workspace.tabs.actions.newTab")}
         shortcut={shortcutKeys}
         testID="workspace-new-tab-button"
-        // packages/app's inline button is buttonControlHeight.xs, 28px.
+        // The Expo app's inline button is buttonControlHeight.xs, 28px.
         className={placement === "inline" ? "size-7" : undefined}
       >
         <Plus size={14} className="text-extra-muted-foreground" />
@@ -886,7 +886,7 @@ function useLabelMeasurements(labels: WorkspaceTabLabel[]) {
       const key = element.dataset.key;
       const label = element.dataset.label;
       if (key === undefined || label === undefined) continue;
-      // offsetWidth, as packages/app's onLayout (react-native-web reports offsetWidth, a rounded
+      // offsetWidth, as the Expo app's onLayout (react-native-web reports offsetWidth, a rounded
       // width); the fractional width rounded up made tabs a pixel wider.
       next.set(key, { label, width: element.offsetWidth });
     }

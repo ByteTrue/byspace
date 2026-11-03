@@ -1,7 +1,7 @@
-// Port of packages/app/src/components/add-project-flow.tsx: the Add project palette; a Radix dialog laid out like the Expo overlay, DOM view.
-// Converted from the Expo file by web/scripts/port/add-project-flow.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/components/add-project-flow.tsx: the Add project palette; a Radix dialog laid out like the Expo overlay, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/add-project-flow.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { router } from "expo-router";
+import { router } from "~/app/navigation";
 import type { WorkspaceProjectDescriptorPayload } from "@bytetrue/protocol/messages";
 import {
   ArrowLeft,
@@ -251,7 +251,7 @@ function pathTestId(path: string): string {
 }
 
 function FlowRow({ option, active }: { option: FlowRowOption; active: boolean }) {
-  // The active row is muted, not packages/app's surface1: in the light theme surface1 is the
+  // The active row is muted, not the Expo app's surface1: in the light theme surface1 is the
   // panel's own white, so neither the keyboard selection nor the hover showed.
   return (
     <button
@@ -825,7 +825,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   return (
     <DialogPrimitive.Root open onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
-        {/* The dialog is the whole overlay, as packages/app's Modal: the backdrop is a sibling of
+        {/* The dialog is the whole overlay, as the Expo app's Modal: the backdrop is a sibling of
             the panel inside it, and a click on it closes the flow. */}
         <DialogPrimitive.Content
           aria-describedby={undefined}

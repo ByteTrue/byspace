@@ -1,7 +1,7 @@
-// Port of packages/app/src/composer/index.tsx. The composer logic is the Expo file's (drafts,
+// Port of archive/expo-app:packages/app/src/composer/index.tsx. The composer logic is the Expo file's (drafts,
 // attachments, forge links, slash commands, autocomplete, queue, send/steer/interrupt, keyboard
 // actions); the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/composer.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/composer.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { TFunction } from "i18next";
@@ -18,7 +18,6 @@ import {
 } from "react";
 import { cn } from "cn";
 import { useTranslation } from "react-i18next";
-import { withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useShallow } from "zustand/shallow";
 import {
@@ -31,8 +30,8 @@ import {
   Image as ImageIcon,
   ClipboardPaste,
   Paperclip,
-} from "lucide-react-native";
-import * as Clipboard from "expo-clipboard";
+} from "lucide-react";
+import * as Clipboard from "~/lib/clipboard";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
 import {
   AgentControls,
@@ -100,7 +99,6 @@ import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/compo
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
-import { isWeb } from "@/constants/platform";
 import type { ForgeSearchItem } from "@bytetrue/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -137,6 +135,7 @@ import {
   resolveWorkspaceFileDrop,
   type WorkspaceFileDragPayload,
 } from "@/attachments/workspace-file-drag";
+import { withTheme } from "~/app/theme-object";
 
 const composerImageAttachmentPersister: Pick<
   AttachmentPersister,
@@ -159,7 +158,7 @@ function noop() {}
 const noopCallback = () => {};
 
 function resolveComposerButtonIconSize(): number {
-  return isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
+  return ICON_SIZE.md;
 }
 
 function resolveIsComposerLocked(
@@ -174,7 +173,7 @@ function resolveKeyboardPriority(isMessageInputFocused: boolean): number {
 }
 
 function resolveIsDesktopWebBreakpoint(isMobile: boolean): boolean {
-  return isWeb && !isMobile;
+  return !isMobile;
 }
 
 function resolveCompactLayout(override: boolean | undefined, formFactor: boolean): boolean {
@@ -799,9 +798,9 @@ function GithubPickerOption({
   const leadingSlot = useMemo(
     () =>
       item.kind === "change_request" ? (
-        <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedGitPullRequest size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
       ) : (
-        <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+        <ThemedCircleDot size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
       ),
     [item.kind],
   );
@@ -1774,7 +1773,7 @@ function ComposerContentImpl({
       {
         id: "image",
         label: t("composer.attachments.addImage"),
-        icon: <ThemedImageIcon size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedImageIcon size={ICON_SIZE.md} themeProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePickImage();
         },
@@ -1784,7 +1783,7 @@ function ComposerContentImpl({
       {
         id: "paste-image",
         label: t("composer.attachments.pasteImage"),
-        icon: <ThemedClipboardPaste size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedClipboardPaste size={ICON_SIZE.md} themeProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePasteImage();
         },
@@ -1802,7 +1801,7 @@ function ComposerContentImpl({
       {
         id: "file",
         label: t("composer.attachments.addFile"),
-        icon: <ThemedPaperclip size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        icon: <ThemedPaperclip size={ICON_SIZE.md} themeProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePickFile();
         },
@@ -1850,11 +1849,7 @@ function ComposerContentImpl({
 
   const handleSelectionChange = useCallback(
     (selection: { start: number; end: number }) => {
-      if (isWeb) {
-        cursorPublication.stage(selection.start);
-      } else {
-        setCursorIndex(selection.start);
-      }
+      cursorPublication.stage(selection.start);
     },
     [cursorPublication],
   );
@@ -2096,24 +2091,24 @@ function ComposerContentImpl({
 const INPUT_AREA_STYLE: CSSProperties = { minHeight: FOOTER_HEIGHT };
 const INPUT_AREA_CONTENT_STYLE: CSSProperties = { maxWidth: MAX_CONTENT_WIDTH };
 
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedCircleDot = withUnistyles(CircleDot);
-const ThemedPaperclip = withUnistyles(Paperclip);
-const ThemedImageIcon = withUnistyles(ImageIcon);
-const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
-const ThemedFileText = withUnistyles(FileText);
+const ThemedGitPullRequest = withTheme(GitPullRequest);
+const ThemedCircleDot = withTheme(CircleDot);
+const ThemedPaperclip = withTheme(Paperclip);
+const ThemedImageIcon = withTheme(ImageIcon);
+const ThemedClipboardPaste = withTheme(ClipboardPaste);
+const ThemedFileText = withTheme(FileText);
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function renderForgeAttachmentIcon(icon: string): ReactElement {
   return (
-    <ForgeBrandIcon iconKind={icon} size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />
+    <ForgeBrandIcon iconKind={icon} size={ICON_SIZE.md} themeProps={iconForegroundMutedMapping} />
   );
 }
 
 const githubPrPillIcon = (
-  <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedGitPullRequest size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
 const githubIssuePillIcon = (
-  <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
+  <ThemedCircleDot size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />
 );
-const filePillIcon = <ThemedFileText size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />;
+const filePillIcon = <ThemedFileText size={ICON_SIZE.sm} themeProps={iconForegroundMutedMapping} />;

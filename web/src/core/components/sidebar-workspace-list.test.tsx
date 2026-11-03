@@ -18,7 +18,7 @@ const pathnameState = vi.hoisted(() => ({
   value: "/",
 }));
 
-vi.mock("expo-router", () => ({
+vi.mock("~/app/navigation", () => ({
   router: {
     dismissTo: vi.fn(),
   },
@@ -44,7 +44,7 @@ import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { defaultHostAppearance } from "@/hosts/appearance";
 
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("~/lib/local-storage-async", () => ({
   default: {
     getItem: vi.fn().mockResolvedValue(null),
     setItem: vi.fn().mockResolvedValue(undefined),

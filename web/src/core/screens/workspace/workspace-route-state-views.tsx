@@ -1,4 +1,4 @@
-// Port of packages/app/src/screens/workspace/workspace-route-state-views.tsx: what the
+// Port of archive/expo-app:packages/app/src/screens/workspace/workspace-route-state-views.tsx: what the
 // workspace page shows while its host or workspace is not ready (connecting, offline, archived,
 // missing, needs a host update). Same states and actions; DOM view.
 import type { ReactNode } from "react";
@@ -103,7 +103,7 @@ function StateFrame({ children }: { children: ReactNode }) {
 
 function TextStack({ children }: { children: ReactNode }) {
   return (
-    // packages/app's title and description set no line height (normal); its error text is 20px.
+    // The Expo app's title and description set no line height (normal); its error text is 20px.
     <div className="flex max-w-[520px] flex-col items-center gap-2 text-center text-sm leading-[normal]">
       {children}
     </div>

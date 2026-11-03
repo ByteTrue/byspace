@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/ui/overlay-scrollbar (the DOM half): a thin scrollbar
+// Port of archive/expo-app:packages/app/src/components/ui/overlay-scrollbar (the DOM half): a thin scrollbar
 // thumb over a scroll container, draggable, faint until hovered or dragged.
 import {
   useCallback,

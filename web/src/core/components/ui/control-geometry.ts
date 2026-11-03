@@ -1,4 +1,3 @@
-import type { StyleProp, ViewStyle } from "react-native";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
@@ -13,13 +12,6 @@ export interface ControlInteractionState {
   open?: boolean;
   active?: boolean;
   disabled?: boolean;
-}
-
-export interface ControlInteractionStyleMap {
-  controlRest: StyleProp<ViewStyle>;
-  controlHover: StyleProp<ViewStyle>;
-  controlActive: StyleProp<ViewStyle>;
-  controlDisabled?: StyleProp<ViewStyle>;
 }
 
 const TIGHT_CONTROL_HEIGHT = 28;
@@ -117,19 +109,6 @@ export function getControlInteractionPhase(
     return "hover";
   }
   return "rest";
-}
-
-export function resolveControlInteractionStyles(
-  styles: ControlInteractionStyleMap,
-  state: ControlInteractionState,
-): StyleProp<ViewStyle> {
-  const phase = getControlInteractionPhase(state);
-  return [
-    styles.controlRest,
-    phase === "hover" ? styles.controlHover : null,
-    phase === "active" ? styles.controlActive : null,
-    state.disabled ? styles.controlDisabled : null,
-  ];
 }
 
 export function createControlGeometry(theme: Theme) {

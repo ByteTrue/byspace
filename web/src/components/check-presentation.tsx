@@ -5,7 +5,7 @@ import { ManualStatusIcon } from "~/components/forge-icon";
 
 export type CheckPresentationTone = "success" | "danger" | "warning" | "muted";
 
-// packages/app/src/git/check-presentation.view.tsx: one icon and tone per check presentation.
+// archive/expo-app:packages/app/src/git/check-presentation.view.tsx: one icon and tone per check presentation.
 const POLICY: Record<
   CheckPresentation,
   { tone: CheckPresentationTone; Icon: typeof CircleCheck | typeof ManualStatusIcon }

@@ -24,7 +24,7 @@ import {
   fetchCheckoutStatus,
 } from "./checkout-status-cache";
 
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("~/lib/local-storage-async", () => ({
   default: {
     getItem: vi.fn(async () => null),
     setItem: vi.fn(async () => undefined),

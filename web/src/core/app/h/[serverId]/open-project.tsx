@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect } from "~/app/navigation";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 

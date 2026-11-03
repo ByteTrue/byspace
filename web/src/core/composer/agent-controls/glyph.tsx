@@ -1,4 +1,4 @@
-// Port of packages/app/src/composer/agent-controls/glyph.tsx: a fixed square slot for a
+// Port of archive/expo-app:packages/app/src/composer/agent-controls/glyph.tsx: a fixed square slot for a
 // toolbar icon, hidden from assistive tech (the control carries the label).
 import type { ReactNode } from "react";
 import { cn } from "cn";

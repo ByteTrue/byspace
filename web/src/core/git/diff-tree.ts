@@ -9,7 +9,7 @@ import type { ParsedDiffFile } from "@/git/use-diff-query";
 // (diff-order.ts) builds this tree and reads its file sequence back out — so
 // changing `sortTree` reorders both surfaces together, by construction.
 //
-// Directory nodes are keyed by their FULL uncompressed path (e.g. "packages/app/src").
+// Directory nodes are keyed by their FULL uncompressed path (e.g. "archive/expo-app:packages/app/src").
 // That path is the stable identity used to persist folder-collapse state, so the
 // state survives path-compression changes as the diff mutates: if a compressed
 // row later splits because a sibling appears, the logical directories keep the
@@ -25,9 +25,9 @@ export interface DiffTreeFileNode {
 
 export interface DiffTreeDirNode {
   kind: "dir";
-  /** full uncompressed directory path, e.g. "packages/app/src"; "" for the virtual root */
+  /** full uncompressed directory path, e.g. "archive/expo-app:packages/app/src"; "" for the virtual root */
   dirPath: string;
-  /** display label; a compressed chain joins segments, e.g. "packages/app/src" */
+  /** display label; a compressed chain joins segments, e.g. "archive/expo-app:packages/app/src" */
   name: string;
   children: DiffTreeNode[];
 }
@@ -38,7 +38,7 @@ export interface DiffTreeFolderRow {
   kind: "folder";
   /** full uncompressed path of the DEEPEST directory this row represents */
   dirPath: string;
-  /** compressed display label, e.g. "packages/app/src" */
+  /** compressed display label, e.g. "archive/expo-app:packages/app/src" */
   displayName: string;
   depth: number;
   additions: number;
@@ -105,7 +105,7 @@ export function buildDiffTree(files: ParsedDiffFile[]): DiffTreeDirNode {
 
 // Collapse runs of single-child directories into one row, like VS Code / GitHub:
 // a directory whose only child is another directory absorbs it. The merged row
-// displays the joined segments ("packages/app/src") but keeps the DEEPEST
+// displays the joined segments ("archive/expo-app:packages/app/src") but keeps the DEEPEST
 // directory's full path as its identity.
 function compressNode(node: DiffTreeDirNode): DiffTreeDirNode {
   let name = node.name;

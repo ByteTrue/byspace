@@ -79,7 +79,7 @@ interface ListContext {
   onWorkspaceReorder: (projectViewKey: string, workspaces: SidebarWorkspacePlacement[]) => void;
   /**
    * Whether a row may show as selected. Project mode only marks it on a workspace route; the
-   * status grouping marks the active workspace anywhere, as packages/app does.
+   * status grouping marks the active workspace anywhere, as the Expo app does.
    */
   selectionEnabled: boolean;
 }
@@ -408,7 +408,7 @@ function useHostLookups(projects: SidebarProjectEntry[]) {
   };
 }
 
-/** packages/app's SidebarWorkspaceList: pinned workspaces, the Workspaces header, then projects (or status groups). */
+/** The Expo app's SidebarWorkspaceList: pinned workspaces, the Workspaces header, then projects (or status groups). */
 export function SidebarWorkspaceList({
   workspaceGroups,
   projectIconTargets,

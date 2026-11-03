@@ -1,7 +1,7 @@
-// Port of packages/app/src/screens/tunnels-screen.tsx: the Tunnels page and its add / edit sheets; DOM view.
-// Converted from the Expo file by web/scripts/port/tunnels-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/tunnels-screen.tsx: the Tunnels page and its add / edit sheets; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/tunnels-screen.py; edit it directly.
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "~/app/route-focus";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "cn";

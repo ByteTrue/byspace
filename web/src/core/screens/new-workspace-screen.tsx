@@ -1,11 +1,10 @@
-// Port of packages/app/src/screens/new-workspace-screen.tsx: same logic, DOM view.
-// Converted from the Expo file by web/scripts/port/new-workspace-screen.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/new-workspace-screen.tsx: same logic, DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/new-workspace-screen.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { useUnistyles, withUnistyles } from "react-native-unistyles";
 import { createNameId } from "mnemonic-id";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "lucide-react";
@@ -136,11 +135,12 @@ import {
   createWorkspaceAgentInBackground,
 } from "@/screens/new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "@/screens/new-workspace/screen-presence";
+import { useThemeObject, withTheme } from "~/app/theme-object";
 
-const ThemedFolderPlus = withUnistyles(FolderPlus);
+const ThemedFolderPlus = withTheme(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const addProjectIcon = (
-  <ThemedFolderPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+  <ThemedFolderPlus size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
 );
 
 function useIsNewWorkspaceDraftHandoffActive(input: {
@@ -208,7 +208,7 @@ const PROJECT_ICON_FALLBACK_TEXT: CSSProperties = {
   fontSize: PROJECT_ICON_FALLBACK_FONT_SIZE,
   fontWeight: 600,
 };
-const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronDown = withTheme(ChevronDown);
 const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundExtraMuted });
 
 // Every picker chip on this screen shares one chevron so they stay a single
@@ -217,7 +217,7 @@ const chevronExtraMutedMapping = (theme: Theme) => ({ color: theme.colors.foregr
 function MetaChevron(): ReactElement {
   return (
     <span className="flex shrink-0 translate-y-px">
-      <ThemedChevronDown size={ICON_SIZE.sm} uniProps={chevronExtraMutedMapping} />
+      <ThemedChevronDown size={ICON_SIZE.sm} themeProps={chevronExtraMutedMapping} />
     </span>
   );
 }
@@ -542,7 +542,7 @@ function NewWorkspacePickerOption({
   itemById: Map<string, PickerItem>;
   isPending: boolean;
 }) {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const item = itemById.get(option.id);
   if (!item) return null;
@@ -1525,7 +1525,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
 }
 
 function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactElement {
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
@@ -1697,7 +1697,7 @@ export function NewWorkspaceScreen({
   draftId,
 }: NewWorkspaceScreenProps) {
   const queryClient = useQueryClient();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const toast = useToast();

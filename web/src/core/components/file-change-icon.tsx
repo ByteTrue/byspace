@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/file-change-icon.tsx: the file's change kind beside its
+// Port of archive/expo-app:packages/app/src/components/file-change-icon.tsx: the file's change kind beside its
 // diff stat — the square plus, minus and dot in the status colours, labelled for screen readers.
 import type { ReactElement } from "react";
 import { SquareDot, SquareMinus, SquarePlus } from "lucide-react";

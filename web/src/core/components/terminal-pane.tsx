@@ -1,11 +1,10 @@
-// Port of packages/app/src/components/terminal-pane.tsx. The terminal logic is the Expo file's
+// Port of archive/expo-app:packages/app/src/components/terminal-pane.tsx. The terminal logic is the Expo file's
 // (stream attach and replay, size claims, focus, keys and modifiers, paste, copy, local file links,
 // the phone's key rows); the view is DOM and Tailwind.
-// Converted from the Expo file by web/scripts/port/terminal-pane.py (tag archive/expo-app); edit it directly.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/terminal-pane.py; edit it directly.
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import * as Clipboard from "expo-clipboard";
-import { useUnistyles } from "react-native-unistyles";
+import * as Clipboard from "~/lib/clipboard";
 import { Keyboard as KeyboardIcon, KeyboardOff as KeyboardOffIcon } from "lucide-react";
 import type { TerminalKeyInput } from "@bytetrue/protocol/terminal-key-input";
 import type { TerminalState } from "@bytetrue/protocol/messages";
@@ -86,6 +85,7 @@ import {
   type OpenFileDisposition,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
+import { useThemeObject } from "~/app/theme-object";
 
 interface TerminalPaneProps {
   serverId: string;
@@ -239,7 +239,7 @@ export function TerminalPane({
   const toast = useToast();
   const retainedPanelActive = useRetainedPanelActive();
   const isAppActivelyVisible = useAppActivelyVisible();
-  const { theme } = useUnistyles();
+  const theme = useThemeObject();
   const { settings } = useAppSettings();
   // The terminal keeps its own scheme, independent of the app theme when the
   // user forces one. Everything painted over the terminal surface — xterm
@@ -359,7 +359,7 @@ export function TerminalPane({
       return;
     }
     try {
-      const hasText = await Clipboard.hasStringAsync();
+      const hasText = await Clipboard.hasText();
       setHasClipboardText(hasText);
     } catch {
       setHasClipboardText(false);
@@ -894,7 +894,7 @@ export function TerminalPane({
   const handleTerminalPaste = useCallback(() => {
     requestTerminalReflow();
     void pasteTerminalClipboard({
-      clipboard: { readText: () => Clipboard.getStringAsync() },
+      clipboard: { readText: () => Clipboard.readText() },
       terminal: { paste: (text) => emulatorRef.current?.paste(text) },
     }).then(() => refreshClipboardAvailability());
   }, [requestTerminalReflow, refreshClipboardAvailability]);
@@ -903,7 +903,7 @@ export function TerminalPane({
     void emulatorRef.current
       ?.copySelection({
         writeText: async (text: string) => {
-          await Clipboard.setStringAsync(text);
+          await Clipboard.writeText(text);
         },
       })
       .then(() => refreshClipboardAvailability());

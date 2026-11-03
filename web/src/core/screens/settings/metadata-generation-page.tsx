@@ -1,7 +1,6 @@
-// Port of packages/app/src/screens/settings/metadata-generation-page.tsx: the metadata generation model section; DOM view.
-// Converted from the Expo file by web/scripts/port/agents-page-sections.py (tag archive/expo-app); edit it directly.
+// Port of archive/expo-app:packages/app/src/screens/settings/metadata-generation-page.tsx: the metadata generation model section; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agents-page-sections.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert } from "react-native";
 import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
@@ -14,6 +13,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
+import { showAlert } from "~/lib/alert";
 
 const METADATA_GENERATION_DOCS_URL =
   "https://github.com/ByteTrue/byspace/blob/main/public-docs/metadata-generation.md";
@@ -53,7 +53,7 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
         await patchConfig({ metadataGeneration: { providers: providersPatch } });
       } catch (error) {
         setDraftMode(null);
-        Alert.alert(
+        showAlert(
           t("settings.metadataGeneration.saveError"),
           error instanceof Error ? error.message : String(error),
         );

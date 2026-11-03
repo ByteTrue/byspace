@@ -1,4 +1,4 @@
-// Port of packages/app/src/components/adaptive-text-input.tsx: a text field whose content is
+// Port of archive/expo-app:packages/app/src/components/adaptive-text-input.tsx: a text field whose content is
 // replaced by `initialValue` whenever `resetKey` changes.
 import { forwardRef, useCallback, useEffect, useRef } from "react";
 import {
@@ -37,7 +37,7 @@ export const AdaptiveTextInput = forwardRef<EditingTextInputHandle, AdaptiveText
         {...props}
         ref={setInputRef}
         initialValue={initialValue}
-        // No outline-none: like packages/app's TextInput, the field shows the app's focus ring
+        // No outline-none: like the Expo app's TextInput, the field shows the app's focus ring
         // unless its caller turns it off.
         className={cn("text-foreground placeholder:text-muted-foreground", className)}
       />

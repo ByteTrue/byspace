@@ -1,11 +1,11 @@
-import { GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
+import { GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react";
 import type { Theme } from "@/styles/theme";
 import type { PrHint } from "@/git/pr-hint";
+import { withTheme } from "~/app/theme-object";
 
-const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const ThemedGitMerge = withUnistyles(GitMerge);
-const ThemedGitPullRequestClosed = withUnistyles(GitPullRequestClosed);
+const ThemedGitPullRequest = withTheme(GitPullRequest);
+const ThemedGitMerge = withTheme(GitMerge);
+const ThemedGitPullRequestClosed = withTheme(GitPullRequestClosed);
 
 const successMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 const mergedMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
@@ -28,5 +28,5 @@ export function PullRequestStateIcon({
   strokeWidth?: number;
 }) {
   const { Icon, color } = PRESENTATION[state];
-  return <Icon size={size} strokeWidth={strokeWidth} uniProps={color} />;
+  return <Icon size={size} strokeWidth={strokeWidth} themeProps={color} />;
 }

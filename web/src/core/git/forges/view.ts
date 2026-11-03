@@ -1,4 +1,4 @@
-// Port of packages/app/src/git/forges/view.ts: the same registry, imported through `@/` so the
+// Port of archive/expo-app:packages/app/src/git/forges/view.ts: the same registry, imported through `@/` so the
 // web overrides of the individual forge views apply (overrides only replace `@/` imports).
 import type { ClientForgeViewModule } from "@/git/client-forge-module";
 import { codebergForgeView } from "@/git/forges/codeberg.view";
