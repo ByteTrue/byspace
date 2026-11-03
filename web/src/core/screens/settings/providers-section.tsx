@@ -126,7 +126,7 @@ function ProviderActionsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={isRemoving}
-        className="flex size-8 items-center justify-center rounded-lg hover:bg-muted active:bg-(--surface-3) data-[state=open]:bg-muted"
+        className="flex size-8 items-center justify-center rounded-lg hover:bg-muted active:bg-accent data-[state=open]:bg-muted"
         accessibilityLabel={t("settings.providers.actions.menu", { name: providerLabel })}
         testID={`provider-actions-${providerId}`}
       >
@@ -207,7 +207,7 @@ function ProviderRow({
       className={cn(
         settingsStyles.row,
         !isFirst && settingsStyles.rowBorder,
-        "group/provider min-h-14 cursor-pointer gap-3 hover:bg-muted active:bg-(--surface-3)",
+        "group/provider min-h-14 cursor-pointer gap-3 hover:bg-muted active:bg-accent",
       )}
       onClick={handlePress}
       onKeyDown={handleKeyDown}

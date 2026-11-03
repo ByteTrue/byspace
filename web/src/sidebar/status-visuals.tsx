@@ -99,7 +99,7 @@ export function WorkspaceStatusIndicator({
   if (bucket === "done") {
     return reserveIdleSpace ? (
       <span className={slot} data-testid="workspace-status-indicator-done">
-        <span className="size-1.5 rounded-full bg-extra-muted-foreground opacity-30" />
+        <span className="size-1.5 rounded-full bg-muted-foreground opacity-30" />
       </span>
     ) : null;
   }

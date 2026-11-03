@@ -1,16 +1,11 @@
+// @vitest-environment jsdom
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdaptiveRenameModal } from "./rename-modal";
 
-const { theme, adaptiveInputState } = vi.hoisted(() => ({
-  adaptiveInputState: {
-    latestProps: null as {
-      onChangeText?: (next: string) => void;
-      onSubmitEditing?: () => void;
-    } | null,
-  },
+const { theme } = vi.hoisted(() => ({
   theme: {
     spacing: { 2: 8, 3: 12 },
     fontSize: { sm: 13, base: 15 },
@@ -61,47 +56,7 @@ vi.mock("@/components/adaptive-modal-sheet", async () => {
       children,
     );
   };
-  // Mirrors production AdaptiveTextInput: native-owned input seeded by
-  // initialValue, remounted (via key) when resetKey changes so the new
-  // initialValue takes effect. Its ref is the EditingTextInputHandle subset the modal uses.
-  const AdaptiveTextInput = ReactModule.forwardRef<
-    { focus(): void; getNativeRef(): HTMLInputElement | null },
-    Record<string, unknown>
-  >((props, ref) => {
-    const inputRef = ReactModule.useRef<HTMLInputElement>(null);
-    ReactModule.useImperativeHandle(ref, () => ({
-      focus: () => inputRef.current?.focus(),
-      getNativeRef: () => inputRef.current,
-    }));
-    const p = props as {
-      initialValue?: string;
-      defaultValue?: string;
-      editable?: boolean;
-      maxLength?: number;
-      testID?: string;
-      onChangeText?: (next: string) => void;
-      onSubmitEditing?: () => void;
-    };
-    adaptiveInputState.latestProps = {
-      onChangeText: p.onChangeText,
-      onSubmitEditing: p.onSubmitEditing,
-    };
-    return ReactModule.createElement("input", {
-      ref: inputRef,
-      defaultValue: p.initialValue ?? p.defaultValue ?? "",
-      disabled: p.editable === false,
-      maxLength: p.maxLength,
-      "data-testid": p.testID,
-      onChange: (e: { target: { value: string } }) => p.onChangeText?.(e.target.value),
-      onKeyDown: (e: { key: string; preventDefault: () => void }) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          p.onSubmitEditing?.();
-        }
-      },
-    });
-  });
-  return { AdaptiveModalSheet, AdaptiveTextInput };
+  return { AdaptiveModalSheet };
 });
 
 vi.mock("@/components/ui/button", async () => {
@@ -143,13 +98,13 @@ beforeEach(() => {
   vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
   vi.stubGlobal("HTMLInputElement", dom.window.HTMLInputElement);
   vi.stubGlobal("KeyboardEvent", dom.window.KeyboardEvent);
+  vi.stubGlobal("Event", dom.window.Event);
   vi.stubGlobal("Node", dom.window.Node);
   vi.stubGlobal("navigator", dom.window.navigator);
 
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  adaptiveInputState.latestProps = null;
 });
 
 afterEach(() => {
@@ -229,16 +184,28 @@ function click(element: Element | null): void {
   });
 }
 
-function typeInto(value: string): void {
+function setInputValue(input: HTMLInputElement | null, value: string): void {
+  if (!input) throw new Error("input not found");
   act(() => {
-    adaptiveInputState.latestProps?.onChangeText?.(value);
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
 }
 
-function pressEnter(): void {
+function pressEnterIn(input: HTMLInputElement | null): void {
+  if (!input) throw new Error("input not found");
   act(() => {
-    adaptiveInputState.latestProps?.onSubmitEditing?.();
+    input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
+}
+
+function typeInto(value: string): void {
+  setInputValue(queryInput(), value);
+}
+
+function pressEnter(): void {
+  pressEnterIn(queryInput());
 }
 
 async function flush(): Promise<void> {

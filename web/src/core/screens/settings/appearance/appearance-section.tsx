@@ -1,6 +1,15 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/appearance/appearance-section.tsx: theme, terminal scheme, detail level, fonts, syntax theme. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/appearance-section.py; edit it directly.
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type FocusEvent,
+} from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react";
@@ -18,7 +27,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SettingsCard, SettingsSwitch } from "@/components/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import {
   MAX_CODE_FONT_SIZE,
   MAX_CONTENT_FONT_SIZE,
@@ -46,6 +54,11 @@ import { AppearancePreview } from "@/screens/settings/appearance/appearance-prev
 import { SidebarNavSection } from "@/screens/settings/appearance/sidebar-nav-section";
 import type { CSSProperties } from "react";
 import { withTheme } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
+
+function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
+  event.currentTarget.select();
+}
 
 // ---------------------------------------------------------------------------
 // Theme-reactive leaf icons (withTheme + themeProps color mapping). Icon sizes read the static ICON_SIZE token; the appearance
@@ -371,9 +384,19 @@ function FontFamilyRow({
   onChangeDraft,
   onCommit,
 }: FontFamilyRowProps) {
+  const handleChangeDraftInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onChangeDraft(event.target.value),
+    [onChangeDraft],
+  );
   const handleCommit = useCallback(() => {
     onCommit(draft);
   }, [draft, onCommit]);
+  const handleCommitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCommit();
+    },
+    [handleCommit],
+  );
 
   // Resync from the committed value when it changes elsewhere.
   useEffect(() => {
@@ -388,17 +411,17 @@ function FontFamilyRow({
         <span className={settingsStyles.rowTitle}>{title}</span>
         <span className={settingsStyles.rowHint}>{hint}</span>
       </div>
-      <TextInput
-        initialValue={draft}
-        onChangeText={onChangeDraft}
+      <Input
+        defaultValue={draft}
+        onChange={handleChangeDraftInput}
         onBlur={handleCommit}
-        onSubmitEditing={handleCommit}
+        onKeyDown={handleCommitEnter}
         placeholder={placeholder}
         autoCapitalize="none"
-        autoCorrect={false}
+        autoCorrect="off"
         spellCheck={false}
-        className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 max-w-[380px] shrink grow text-left text-xs"
-        accessibilityLabel={accessibilityLabel}
+        className="max-w-[380px] shrink grow text-left text-xs"
+        aria-label={accessibilityLabel}
       />
     </div>
   );
@@ -423,6 +446,16 @@ function FontSizeRow({
   onChangeDraft,
   onCommit,
 }: FontSizeRowProps) {
+  const handleCommitEnter2 = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) onCommit();
+    },
+    [onCommit],
+  );
+  const handleChangeDraftInput2 = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onChangeDraft(event.target.value),
+    [onChangeDraft],
+  );
   return (
     <div className={withBorder ? ROW_WITH_BORDER : settingsStyles.row}>
       <div className={settingsStyles.rowContent}>
@@ -430,16 +463,15 @@ function FontSizeRow({
         <span className={settingsStyles.rowHint}>{hint}</span>
       </div>
       <div className="flex flex-row items-center gap-2">
-        <TextInput
-          initialValue={draft}
-          onChangeText={onChangeDraft}
+        <Input
+          defaultValue={draft}
+          onChange={handleChangeDraftInput2}
           onBlur={onCommit}
-          onSubmitEditing={onCommit}
-          keyboardType="number-pad"
+          onKeyDown={handleCommitEnter2}
           inputMode="numeric"
-          selectTextOnFocus
-          className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 w-16 text-right text-sm"
-          accessibilityLabel={accessibilityLabel}
+          onFocus={selectOnFocus}
+          className="w-16 text-right"
+          aria-label={accessibilityLabel}
         />
         <span className="text-sm text-muted-foreground">px</span>
       </div>

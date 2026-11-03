@@ -19,9 +19,9 @@ import {
 } from "@/agent-profiles/internal/profile-appearance";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field } from "@/components/ui/form-field";
 import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
+import { Field, FieldLabel } from "~/components/ui/field";
 
 const CELL_SIZE = 40;
 const CELL_GAP = 4;
@@ -155,7 +155,8 @@ export function AgentProfileAppearanceField({
   );
   const header = useMemo(() => ({ title: label }), [label]);
   return (
-    <Field label={label} testID={testID}>
+    <Field data-testid={testID}>
+      <FieldLabel>{label}</FieldLabel>
       <button
         ref={anchorRef}
         type="button"

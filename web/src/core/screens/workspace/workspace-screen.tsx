@@ -903,7 +903,7 @@ function WorkspaceHeaderProjectRow({
         </span>
       ) : null}
       {showProject && hostBadge ? (
-        <span className="shrink-0 text-xs leading-[normal] text-extra-muted-foreground">·</span>
+        <span className="shrink-0 text-xs leading-[normal] text-muted-foreground">·</span>
       ) : null}
       {hostBadge ? <HostBadge badge={hostBadge} /> : null}
     </span>
@@ -965,7 +965,7 @@ function WorkspaceHeaderTitleBar({
     <div className="flex min-w-0 flex-1 shrink items-center gap-1 overflow-hidden md:gap-2">
       {isLoading ? (
         <div className={HEADER_TITLE_TEXT_GROUP}>
-          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-(--surface-3) opacity-25" />
+          <div className="h-[22px] w-[220px] max-w-full rounded-full bg-accent opacity-25" />
         </div>
       ) : (
         <div className={HEADER_TITLE_TEXT_GROUP}>

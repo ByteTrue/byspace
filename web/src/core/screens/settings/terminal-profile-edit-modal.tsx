@@ -1,11 +1,19 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/terminal-profile-edit-modal.tsx: the add/edit terminal profile sheet; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agents-page-sections.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { Field, FormTextInput } from "@/components/ui/form-field";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { Input } from "~/components/ui/input";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
 export interface ProfileDraft {
   name: string;
@@ -42,23 +50,35 @@ export function TerminalProfileEditModal({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const nameInputRef = useRef<EditingTextInputHandle>(null);
-  const commandInputRef = useRef<EditingTextInputHandle>(null);
-  const argsInputRef = useRef<EditingTextInputHandle>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null);
+  const argsInputRef = useRef<HTMLInputElement>(null);
 
   const handleNameChange = useCallback((value: string) => {
     setName(value);
     setFieldErrors((current) => ({ ...current, name: undefined }));
   }, []);
+  const handleNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleNameChange(event.target.value),
+    [handleNameChange],
+  );
 
   const handleCommandChange = useCallback((value: string) => {
     setCommand(value);
     setFieldErrors((current) => ({ ...current, command: undefined }));
   }, []);
+  const handleCommandInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleCommandChange(event.target.value),
+    [handleCommandChange],
+  );
 
   const handleArgsChange = useCallback((value: string) => {
     setArgs(value);
   }, []);
+  const handleArgsInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleArgsChange(event.target.value),
+    [handleArgsChange],
+  );
 
   const sheetHeader = useMemo<SheetHeader>(() => ({ title }), [title]);
 
@@ -119,14 +139,32 @@ export function TerminalProfileEditModal({
   const handleNameSubmit = useCallback(() => {
     commandInputRef.current?.focus();
   }, []);
+  const handleNameSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleNameSubmit();
+    },
+    [handleNameSubmit],
+  );
 
   const handleCommandSubmit = useCallback(() => {
     argsInputRef.current?.focus();
   }, []);
+  const handleCommandSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCommandSubmit();
+    },
+    [handleCommandSubmit],
+  );
 
   const handleArgsSubmit = useCallback(() => {
     void handleSave();
   }, [handleSave]);
+  const handleArgsSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleArgsSubmit();
+    },
+    [handleArgsSubmit],
+  );
 
   const nameError = fieldErrors.name;
   const commandError = fieldErrors.command;
@@ -140,67 +178,63 @@ export function TerminalProfileEditModal({
       desktopMaxWidth={480}
     >
       <div className="flex flex-col gap-4 pb-2">
-        <Field
-          label={t("settings.host.terminalProfiles.nameLabel")}
-          error={nameError}
-          testID="terminal-profile-name-field"
-        >
-          <FormTextInput
+        <Field data-testid="terminal-profile-name-field" data-invalid={Boolean(nameError)}>
+          <FieldLabel>{t("settings.host.terminalProfiles.nameLabel")}</FieldLabel>
+          <Input
             ref={nameInputRef}
-            initialValue={initialDraft.name}
-            resetKey={visible ? "open" : "closed"}
-            onChangeText={handleNameChange}
+            defaultValue={initialDraft.name}
+            key={visible ? "open" : "closed"}
+            onChange={handleNameInput}
             placeholder={t("settings.host.terminalProfiles.namePlaceholder")}
             autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isPending}
+            autoCorrect="off"
+            readOnly={isPending}
             enterKeyHint="next"
-            onSubmitEditing={handleNameSubmit}
-            accessibilityLabel={t("settings.host.terminalProfiles.nameLabel")}
-            testID="terminal-profile-name-input"
+            onKeyDown={handleNameSubmitEnter}
+            aria-label={t("settings.host.terminalProfiles.nameLabel")}
+            data-testid="terminal-profile-name-input"
           />
+          <FieldError data-testid="terminal-profile-name-field-error">{nameError}</FieldError>
         </Field>
 
-        <Field
-          label={t("settings.host.terminalProfiles.commandLabel")}
-          error={commandError}
-          testID="terminal-profile-command-field"
-        >
-          <FormTextInput
+        <Field data-testid="terminal-profile-command-field" data-invalid={Boolean(commandError)}>
+          <FieldLabel>{t("settings.host.terminalProfiles.commandLabel")}</FieldLabel>
+          <Input
             ref={commandInputRef}
-            initialValue={initialDraft.command}
-            resetKey={visible ? "open" : "closed"}
-            onChangeText={handleCommandChange}
+            defaultValue={initialDraft.command}
+            key={visible ? "open" : "closed"}
+            onChange={handleCommandInput}
             placeholder={t("settings.host.terminalProfiles.commandPlaceholder")}
             autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isPending}
+            autoCorrect="off"
+            readOnly={isPending}
             enterKeyHint="next"
-            onSubmitEditing={handleCommandSubmit}
-            accessibilityLabel={t("settings.host.terminalProfiles.commandLabel")}
-            testID="terminal-profile-command-input"
+            onKeyDown={handleCommandSubmitEnter}
+            aria-label={t("settings.host.terminalProfiles.commandLabel")}
+            data-testid="terminal-profile-command-input"
           />
+          <FieldError data-testid="terminal-profile-command-field-error">{commandError}</FieldError>
         </Field>
 
-        <Field
-          label={t("settings.host.terminalProfiles.argsLabel")}
-          hint={t("settings.host.terminalProfiles.argsHint")}
-          testID="terminal-profile-args-field"
-        >
-          <FormTextInput
+        <Field data-testid="terminal-profile-args-field">
+          <FieldLabel>{t("settings.host.terminalProfiles.argsLabel")}</FieldLabel>
+          <Input
             ref={argsInputRef}
-            initialValue={initialDraft.args}
-            resetKey={visible ? "open" : "closed"}
-            onChangeText={handleArgsChange}
+            defaultValue={initialDraft.args}
+            key={visible ? "open" : "closed"}
+            onChange={handleArgsInput}
             placeholder={t("settings.host.terminalProfiles.argsPlaceholder")}
             autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isPending}
+            autoCorrect="off"
+            readOnly={isPending}
             enterKeyHint="done"
-            onSubmitEditing={handleArgsSubmit}
-            accessibilityLabel={t("settings.host.terminalProfiles.argsLabel")}
-            testID="terminal-profile-args-input"
+            onKeyDown={handleArgsSubmitEnter}
+            aria-label={t("settings.host.terminalProfiles.argsLabel")}
+            data-testid="terminal-profile-args-input"
           />
+          <FieldDescription data-testid="terminal-profile-args-field-hint">
+            {t("settings.host.terminalProfiles.argsHint")}
+          </FieldDescription>
         </Field>
 
         {submitError ? (

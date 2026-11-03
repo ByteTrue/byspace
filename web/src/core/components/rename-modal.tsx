@@ -1,14 +1,18 @@
 // Port of archive/expo-app:packages/app/src/components/rename-modal.tsx: the rename dialog (hosts, workspaces, tabs); DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/rename-modal.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { Input } from "~/components/ui/input";
 
 export interface AdaptiveRenameModalProps {
   visible: boolean;
@@ -39,7 +43,7 @@ export function AdaptiveRenameModal({
   const [draft, setDraft] = useState(initialValue);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const inputRef = useRef<EditingTextInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -56,7 +60,7 @@ export function AdaptiveRenameModal({
       if (!node) return;
       node.focus();
       // The whole name selected, so typing replaces it.
-      node.getNativeRef()?.setSelectionRange(0, length);
+      node.setSelectionRange(0, length);
     }, 50);
     return () => clearTimeout(timeout);
   }, [visible, initialValue]);
@@ -73,6 +77,10 @@ export function AdaptiveRenameModal({
     setDraft(value);
     setError(null);
   }, []);
+  const handleFieldInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleChange(event.target.value),
+    [handleChange],
+  );
 
   const handleSubmit = useCallback(async () => {
     if (isPending) return;
@@ -104,6 +112,12 @@ export function AdaptiveRenameModal({
   const handleSubmitVoid = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
+  const handleSubmitVoidEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleSubmitVoid();
+    },
+    [handleSubmitVoid],
+  );
 
   const submitDisabled = isPending || draft === initialValue || computeError(draft) !== null;
   const inputTestID = testID ? `${testID}-input` : undefined;
@@ -120,18 +134,17 @@ export function AdaptiveRenameModal({
       testID={testID}
     >
       <div className="flex flex-col gap-3 pb-2">
-        <AdaptiveTextInput
+        <Input
           ref={inputRef}
-          initialValue={initialValue}
-          onChangeText={handleChange}
+          defaultValue={initialValue}
+          onChange={handleFieldInput}
           placeholder={placeholder}
           autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isPending}
+          autoCorrect="off"
+          readOnly={isPending}
           maxLength={maxLength}
-          onSubmitEditing={handleSubmitVoid}
-          className="rounded-md border bg-background p-3 text-sm leading-[normal]"
-          testID={inputTestID}
+          onKeyDown={handleSubmitVoidEnter}
+          data-testid={inputTestID}
         />
         {error ? (
           <span className="text-sm leading-[normal] text-red-300" data-testid={errorTestID}>

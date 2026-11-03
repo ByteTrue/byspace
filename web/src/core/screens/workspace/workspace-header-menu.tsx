@@ -104,7 +104,7 @@ function HeaderMenuTrigger() {
       accessibilityLabel={t("workspace.header.actions.workspaceActions")}
       className={iconButtonChromeClassName({ size: "large" })}
     >
-      <Ellipsis size={iconButtonChromeGlyphSize("large")} className="text-extra-muted-foreground" />
+      <Ellipsis size={iconButtonChromeGlyphSize("large")} className="text-muted-foreground" />
     </DropdownMenuTrigger>
   );
 }

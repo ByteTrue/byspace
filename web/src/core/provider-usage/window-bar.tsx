@@ -19,7 +19,7 @@ export function useUsageTextTones() {
   const onTooltip = useContext(TooltipSurfaceContext);
   return onTooltip
     ? { strong: "text-background", muted: "text-background/65", track: "bg-background/20" }
-    : { strong: "text-foreground", muted: "text-muted-foreground", track: "bg-(--surface-3)" };
+    : { strong: "text-foreground", muted: "text-muted-foreground", track: "bg-accent" };
 }
 
 function resolveUsedPct(window: ProviderUsageWindow): number | null {

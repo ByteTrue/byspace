@@ -1,5 +1,5 @@
 // Port of archive/expo-app:packages/app/src/constants/layout.ts: identical except useIsCompactFormFactor, which
-// reads the compact breakpoint (below `md`, 720px) from matchMedia.
+// reads the compact breakpoint (below Tailwind's `md`, 768px, shadcn's useIsMobile) from matchMedia.
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 export const FOOTER_HEIGHT = 75;
@@ -90,7 +90,7 @@ export const DESKTOP_WINDOW_CONTROLS_HEIGHT = HEADER_INNER_HEIGHT;
 /**
  * Reactive hook — re-renders the component when the breakpoint changes.
  */
-const COMPACT_QUERY = "(max-width: 719.98px)";
+const COMPACT_QUERY = "(max-width: 767.98px)";
 
 function subscribeCompact(onChange: () => void) {
   const query = window.matchMedia(COMPACT_QUERY);

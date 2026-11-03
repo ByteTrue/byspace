@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/components/project-edit-sheet.tsx: renaming a project and choosing its icon; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/project-edit-sheet.py; edit it directly.
 import { Buffer } from "buffer";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -10,7 +10,6 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { ProjectIconView } from "@/components/project-icon-view";
 import { Button } from "@/components/ui/button";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useFilePicker } from "@/hooks/use-file-picker";
@@ -23,6 +22,8 @@ import {
 } from "@/projects/edit-form";
 import { importProjectIconFromUrl } from "@/projects/import-project-icon";
 import { toErrorMessage } from "@/utils/error-messages";
+import { Input } from "~/components/ui/input";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
 export interface ProjectEditSheetProps {
   visible: boolean;
@@ -52,6 +53,14 @@ export function ProjectEditSheet({
   const { pickFiles } = useFilePicker();
   const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const [form] = useState(() => openProjectEditForm(snapshot));
+  const handleImageUrlInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => form.setImageUrl(event.target.value),
+    [form],
+  );
+  const handleNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => form.setName(event.target.value),
+    [form],
+  );
   const state = useSyncExternalStore(form.subscribe, form.getState, form.getState);
 
   const mutation = useMutation({
@@ -124,29 +133,24 @@ export function ProjectEditSheet({
       sizeContentToCurrentSnapPoint
       testID="project-edit-sheet"
     >
-      <Field
-        label={t("settings.project.edit.name")}
-        error={state.error?.scope === "name" ? state.error.message : null}
-      >
-        <FormTextInput
-          size={size}
-          testID="project-edit-name"
-          accessibilityLabel={t("settings.project.edit.nameLabel")}
-          initialValue={state.name}
-          onChangeText={form.setName}
+      <Field data-invalid={Boolean(state.error?.scope === "name" ? state.error.message : null)}>
+        <FieldLabel>{t("settings.project.edit.name")}</FieldLabel>
+        <Input
+          data-testid="project-edit-name"
+          aria-label={t("settings.project.edit.nameLabel")}
+          defaultValue={state.name}
+          onChange={handleNameInput}
           placeholder={snapshot.projectName}
-          editable={!isSaving}
+          readOnly={isSaving}
           autoCapitalize="none"
-          autoCorrect={false}
+          autoCorrect="off"
         />
+        <FieldError>{state.error?.scope === "name" ? state.error.message : null}</FieldError>
       </Field>
 
       {supportsCustomIcon ? (
-        <Field
-          label={t("settings.project.edit.icon")}
-          hint={state.pickedFileName ?? undefined}
-          error={state.error?.scope === "icon" ? state.error.message : null}
-        >
+        <Field data-invalid={Boolean(state.error?.scope === "icon" ? state.error.message : null)}>
+          <FieldLabel>{t("settings.project.edit.icon")}</FieldLabel>
           <div className="flex flex-col gap-2">
             <div className="flex flex-row flex-wrap items-center gap-2">
               <ProjectIconView
@@ -177,20 +181,23 @@ export function ProjectEditSheet({
                 </Button>
               ) : null}
             </div>
-            <FormTextInput
-              size={size}
-              testID="project-edit-image-url"
-              accessibilityLabel={t("settings.project.edit.imageUrl")}
-              initialValue=""
-              resetKey={state.urlResetKey}
-              onChangeText={form.setImageUrl}
+            <Input
+              data-testid="project-edit-image-url"
+              aria-label={t("settings.project.edit.imageUrl")}
+              defaultValue=""
+              key={state.urlResetKey}
+              onChange={handleImageUrlInput}
               placeholder={t("settings.project.edit.imageUrl")}
-              editable={!isSaving}
+              readOnly={isSaving}
               autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
+              autoCorrect="off"
+              inputMode="url"
             />
           </div>
+          {(state.pickedFileName ?? undefined) ? (
+            <FieldDescription>{state.pickedFileName ?? undefined}</FieldDescription>
+          ) : null}
+          <FieldError>{state.error?.scope === "icon" ? state.error.message : null}</FieldError>
         </Field>
       ) : null}
     </AdaptiveModalSheet>

@@ -7,6 +7,8 @@ import {
   useState,
   useSyncExternalStore,
   type ReactElement,
+  type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
 import { Pencil } from "lucide-react";
 import {
@@ -17,8 +19,6 @@ import {
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { Button } from "@/components/ui/button";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHosts } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -31,6 +31,8 @@ import {
 import { WorkspaceLabelDot, WorkspaceLabelSwatchRow } from "./swatch";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
+import { Input } from "~/components/ui/input";
+import { Field, FieldLabel } from "~/components/ui/field";
 
 /** The size the host pill's own glyphs use, so the row's trailing mark matches the controls above it. */
 const EDIT_ICON_SIZE = 14;
@@ -307,25 +309,35 @@ function WorkspaceLabelEditView({
   onChangeColor: (color: WorkspaceLabelColor) => void;
   onSubmit: () => void;
 }): ReactElement {
+  const handleSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) onSubmit();
+    },
+    [onSubmit],
+  );
+  const handleChangeNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onChangeName(event.target.value),
+    [onChangeName],
+  );
   const { t } = useTranslation();
-  const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   return (
     <>
-      <Field label={t("workspaceLabels.manage.name")}>
-        <FormTextInput
-          size={size}
-          initialValue={draft.name}
-          resetKey={draft.name}
-          onChangeText={onChangeName}
-          onSubmitEditing={onSubmit}
-          editable={!disabled}
+      <Field>
+        <FieldLabel>{t("workspaceLabels.manage.name")}</FieldLabel>
+        <Input
+          defaultValue={draft.name}
+          key={draft.name}
+          onChange={handleChangeNameInput}
+          onKeyDown={handleSubmitEnter}
+          readOnly={disabled}
           autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityLabel={t("workspaceLabels.manage.name")}
-          testID="workspace-label-manager-name"
+          autoCorrect="off"
+          aria-label={t("workspaceLabels.manage.name")}
+          data-testid="workspace-label-manager-name"
         />
       </Field>
-      <Field label={t("workspaceLabels.manage.color")}>
+      <Field>
+        <FieldLabel>{t("workspaceLabels.manage.color")}</FieldLabel>
         <WorkspaceLabelSwatchRow
           value={draft.color}
           onChange={onChangeColor}

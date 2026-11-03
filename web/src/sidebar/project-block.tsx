@@ -216,7 +216,7 @@ function ProjectHeaderRow({
             <span className="truncate font-medium">{displayName}</span>
             {nameCue ? (
               <span
-                className="truncate text-xs leading-[14px] text-extra-muted-foreground"
+                className="truncate text-xs leading-[14px] text-muted-foreground"
                 data-testid={`sidebar-project-name-cue-${project.viewKey}`}
               >
                 {nameCue}
@@ -255,7 +255,7 @@ function ProjectHeaderRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="menu-icons-sm w-[220px]"
+              className="w-[220px]"
               sheetTitle={t("sidebar.project.actions.menu")}
             >
               <ProjectMenuItems
@@ -277,7 +277,7 @@ function ProjectHeaderRow({
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent
-        className="menu-icons-sm w-[220px]"
+        className="w-[220px]"
         data-testid={`sidebar-project-context-menu-${project.viewKey}`}
         sheetTitle={t("sidebar.project.actions.menu")}
       >

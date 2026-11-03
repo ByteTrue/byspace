@@ -1,12 +1,6 @@
-// Port of archive/expo-app:packages/app/src/components/settings-textarea.tsx: a multiline settings field, a bare textarea in a settings card.
-// Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
-import { useEffect, useRef } from "react";
-import { cn } from "cn";
-import { settingsStyles } from "@/styles/settings";
-import {
-  EditingTextInput as TextInput,
-  type EditingTextInputHandle,
-} from "@/components/ui/text-input";
+import { useCallback } from "react";
+import type { ChangeEvent } from "react";
+import { Textarea } from "~/components/ui/textarea";
 
 interface SettingsTextAreaProps {
   accessibilityLabel: string;
@@ -14,7 +8,6 @@ interface SettingsTextAreaProps {
   onChangeText: (text: string) => void;
   placeholder?: string;
   testID?: string;
-  /** Classes for the textarea (the Expo prop is a style). */
   className?: string;
 }
 
@@ -26,36 +19,18 @@ export function SettingsTextArea({
   testID,
   className,
 }: SettingsTextAreaProps) {
-  // The Expo app hands `value` over once, so a parent that resets it (the system prompt's Reset)
-  // left the edited text on screen with Save disabled. Show what the parent holds; typing keeps
-  // the two equal, so this only acts on an outside change.
-  const inputRef = useRef<EditingTextInputHandle>(null);
-  useEffect(() => {
-    if (inputRef.current && inputRef.current.getText() !== value)
-      inputRef.current.replaceText(value);
-  }, [value]);
-
-  return (
-    <TextInput
-      ref={inputRef}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
-      multiline
-      initialValue={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      className={cn(
-        "block min-h-24 w-full resize-none bg-transparent px-4 py-3 text-sm leading-[normal] text-foreground placeholder:text-muted-foreground",
-        className,
-      )}
-    />
+  const handleFieldInput = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => onChangeText(event.target.value),
+    [onChangeText],
   );
-}
-
-export function SettingsTextAreaCard(props: SettingsTextAreaProps) {
   return (
-    <div className={settingsStyles.card}>
-      <SettingsTextArea {...props} />
-    </div>
+    <Textarea
+      data-testid={testID}
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={handleFieldInput}
+      placeholder={placeholder}
+      className={className}
+    />
   );
 }

@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/setup-guide-modal.tsx: the setup guide sheet; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/welcome-screen.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ClipboardPaste, Copy } from "lucide-react";
 import * as Clipboard from "~/lib/clipboard";
@@ -11,13 +11,9 @@ import { buildSetupCommands } from "@/utils/setup-commands";
 import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
 import { readStoredRelayEndpoint, storeRelayEndpoint } from "@/utils/setup-guide-storage";
 import { isBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { Input } from "~/components/ui/input";
 
 interface CommandBlockProps {
   command: string;
@@ -80,8 +76,8 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const offerUrlRef = useRef("");
-  const inputRef = useRef<EditingTextInputHandle>(null);
-  const relayInputRef = useRef<EditingTextInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const relayInputRef = useRef<HTMLInputElement>(null);
 
   // Web-only API: read inside component scope, never at module scope.
   const webOrigin =
@@ -121,10 +117,18 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     setRelayEndpoint(next);
     void storeRelayEndpoint(next);
   }, []);
+  const handleRelayEndpointInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleRelayEndpointChange(event.target.value),
+    [handleRelayEndpointChange],
+  );
 
   const handleChangePairingLink = useCallback((next: string) => {
     offerUrlRef.current = next;
   }, []);
+  const handleChangePairingLinkInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleChangePairingLink(event.target.value),
+    [handleChangePairingLink],
+  );
 
   const showError = useCallback((message: string) => {
     setErrorMessage(message);
@@ -192,18 +196,17 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
         {isSelfHosted ? (
           <div className="flex flex-col gap-2">
             <span className={FIELD_LABEL}>{t("pairing.setupGuide.fields.relayEndpoint")}</span>
-            <AdaptiveTextInput
+            <Input
               ref={relayInputRef}
-              initialValue={relayEndpoint}
-              resetKey={relayEndpoint}
-              onChangeText={handleRelayEndpointChange}
+              defaultValue={relayEndpoint}
+              key={relayEndpoint}
+              onChange={handleRelayEndpointInput}
               placeholder={t("pairing.setupGuide.fields.relayEndpointPlaceholder")}
-              className={INPUT}
-              testID="setup-guide-relay-endpoint-input"
-              accessibilityLabel={t("pairing.setupGuide.fields.relayEndpoint")}
+              data-testid="setup-guide-relay-endpoint-input"
+              aria-label={t("pairing.setupGuide.fields.relayEndpoint")}
               autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
+              autoCorrect="off"
+              inputMode="url"
             />
             <span className={MUTED_TEXT}>{t("pairing.setupGuide.fields.relayEndpointHelper")}</span>
           </div>
@@ -222,16 +225,15 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
         <span className={MUTED_TEXT}>{t("pairing.setupGuide.descriptions.pair")}</span>
         <div className="flex flex-col gap-2">
           <span className={FIELD_LABEL}>{t("pairing.setupGuide.fields.pairingLink")}</span>
-          <AdaptiveTextInput
+          <Input
             ref={inputRef}
-            onChangeText={handleChangePairingLink}
+            onChange={handleChangePairingLinkInput}
             placeholder="https://…/#offer=…"
-            className={INPUT}
-            testID="setup-guide-pairing-link-input"
-            accessibilityLabel={t("pairing.setupGuide.fields.pairingLink")}
+            data-testid="setup-guide-pairing-link-input"
+            aria-label={t("pairing.setupGuide.fields.pairingLink")}
             autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
+            autoCorrect="off"
+            inputMode="url"
           />
           {errorMessage ? (
             <span className="text-sm leading-[normal] text-destructive">{errorMessage}</span>
@@ -271,5 +273,3 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
 const STEP_TITLE = "text-sm leading-[normal] font-medium text-foreground";
 const MUTED_TEXT = "text-sm leading-[normal] text-muted-foreground";
 const FIELD_LABEL = "text-sm leading-[normal] font-medium text-muted-foreground";
-const INPUT =
-  "rounded-[10px] border bg-muted px-4 py-3 text-sm leading-[normal] text-foreground placeholder:text-muted-foreground";

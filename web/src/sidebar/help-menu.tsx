@@ -93,7 +93,7 @@ export function SidebarHelpMenu() {
         side="top"
         align="end"
         sideOffset={8}
-        className="menu-icons-sm w-70"
+        className="w-70"
         data-testid="sidebar-help-menu"
       >
         <DropdownMenuLabel>{t("sidebar.help.sectionHelp")}</DropdownMenuLabel>

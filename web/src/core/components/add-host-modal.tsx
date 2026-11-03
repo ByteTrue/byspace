@@ -1,6 +1,13 @@
 // Port of archive/expo-app:packages/app/src/components/add-host-modal.tsx: the direct connection form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
-import { useCallback, useMemo, useReducer, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react";
@@ -12,13 +19,10 @@ import {
   serializeConnectionUriForStorage,
 } from "@/utils/daemon-endpoints";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useThemeObject } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
 
 interface DirectConnectionDraft {
   host: string;
@@ -49,7 +53,6 @@ interface DirectConnectionLabels {
 }
 
 const LABEL = "text-sm leading-[normal] font-medium text-muted-foreground";
-const INPUT = "rounded-lg border bg-muted px-4 py-3 text-sm leading-[normal]";
 
 function isIpv6Host(host: string): boolean {
   return host.includes(":") && !host.startsWith("[") && !host.endsWith("]");
@@ -211,12 +214,28 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [host, setHost] = useState("");
+  const handleHostInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setHost(event.target.value),
+    [setHost],
+  );
   const [port, setPort] = useState("6777");
+  const handlePortInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setPort(event.target.value),
+    [setPort],
+  );
   const [useTls, setUseTls] = useState(false);
   const [password, setPassword] = useState("");
+  const handlePasswordInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setPassword(event.target.value),
+    [setPassword],
+  );
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [advancedUri, setAdvancedUri] = useState("");
+  const handleAdvancedUriInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setAdvancedUri(event.target.value),
+    [setAdvancedUri],
+  );
   const [inputResetKey, bumpInputResetKey] = useReducer((key: number) => key + 1, 0);
 
   const clearInput = useCallback(() => {
@@ -336,6 +355,12 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
   const handleSubmitEditing = useCallback(() => {
     void handleSave();
   }, [handleSave]);
+  const handleSubmitEditingEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleSubmitEditing();
+    },
+    [handleSubmitEditing],
+  );
 
   const handleSavePress = useCallback(() => {
     void handleSave();
@@ -377,6 +402,12 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     }
     setIsAdvancedOpen(false);
   }, [advancedUri, directConnectionLabels, host, isAdvancedOpen, password, port, useTls]);
+  const handleToggleAdvancedEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleToggleAdvanced();
+    },
+    [handleToggleAdvanced],
+  );
 
   const AdvancedIcon = isAdvancedOpen ? ChevronDown : ChevronRight;
   const PasswordIcon = isPasswordVisible ? EyeOff : Eye;
@@ -395,37 +426,35 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       <div className="flex flex-row gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <span className={LABEL}>{t("pairing.direct.fields.host")}</span>
-          <AdaptiveTextInput
-            testID="direct-host-input"
-            accessibilityLabel={t("pairing.direct.fields.host")}
-            initialValue={host}
-            resetKey={`direct-host-${inputResetKey}`}
-            onChangeText={setHost}
+          <Input
+            data-testid="direct-host-input"
+            aria-label={t("pairing.direct.fields.host")}
+            defaultValue={host}
+            key={`direct-host-${inputResetKey}`}
+            onChange={handleHostInput}
             placeholder="localhost"
-            className={INPUT}
             autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            editable={!isSaving}
+            autoCorrect="off"
+            inputMode="url"
+            readOnly={isSaving}
             enterKeyHint="next"
           />
         </div>
         <div className="flex w-28 flex-col gap-2">
           <span className={LABEL}>{t("pairing.direct.fields.port")}</span>
-          <AdaptiveTextInput
-            testID="direct-port-input"
-            accessibilityLabel={t("pairing.direct.fields.port")}
-            initialValue={port}
-            resetKey={`direct-port-${inputResetKey}`}
-            onChangeText={setPort}
+          <Input
+            data-testid="direct-port-input"
+            aria-label={t("pairing.direct.fields.port")}
+            defaultValue={port}
+            key={`direct-port-${inputResetKey}`}
+            onChange={handlePortInput}
             placeholder="6777"
-            className={INPUT}
             autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="number-pad"
-            editable={!isSaving}
+            autoCorrect="off"
+            inputMode="numeric"
+            readOnly={isSaving}
             enterKeyHint="done"
-            onSubmitEditing={handleSubmitEditing}
+            onKeyDown={handleSubmitEditingEnter}
           />
         </div>
       </div>
@@ -458,20 +487,20 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       <div className="flex flex-col gap-2">
         <span className={LABEL}>{t("pairing.direct.fields.password")}</span>
         <div className="flex flex-row items-center gap-2">
-          <AdaptiveTextInput
-            testID="direct-password-input"
-            accessibilityLabel={t("pairing.direct.fields.password")}
-            initialValue={password}
-            resetKey={`direct-password-${inputResetKey}`}
-            onChangeText={setPassword}
+          <Input
+            data-testid="direct-password-input"
+            aria-label={t("pairing.direct.fields.password")}
+            defaultValue={password}
+            key={`direct-password-${inputResetKey}`}
+            onChange={handlePasswordInput}
             placeholder={t("pairing.direct.fields.optional")}
-            className={cn(INPUT, "min-w-0 flex-1")}
+            className="min-w-0 flex-1"
             autoCapitalize="none"
-            autoCorrect={false}
+            autoCorrect="off"
             type={isPasswordVisible ? "text" : "password"}
-            editable={!isSaving}
+            readOnly={isSaving}
             enterKeyHint="done"
-            onSubmitEditing={handleSubmitEditing}
+            onKeyDown={handleSubmitEditingEnter}
           />
           <button
             type="button"
@@ -507,20 +536,19 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
           </span>
         </button>
         {isAdvancedOpen ? (
-          <AdaptiveTextInput
-            testID="direct-host-uri-input"
-            accessibilityLabel={t("pairing.direct.fields.connectionUri")}
-            initialValue={advancedUri}
-            resetKey={`direct-host-uri-${inputResetKey}`}
-            onChangeText={setAdvancedUri}
+          <Input
+            data-testid="direct-host-uri-input"
+            aria-label={t("pairing.direct.fields.connectionUri")}
+            defaultValue={advancedUri}
+            key={`direct-host-uri-${inputResetKey}`}
+            onChange={handleAdvancedUriInput}
             placeholder="tcp://localhost:6777?ssl=true"
-            className={INPUT}
             autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            editable={!isSaving}
+            autoCorrect="off"
+            inputMode="url"
+            readOnly={isSaving}
             enterKeyHint="done"
-            onSubmitEditing={handleToggleAdvanced}
+            onKeyDown={handleToggleAdvancedEnter}
           />
         ) : null}
         {errorMessage ? (

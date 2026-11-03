@@ -141,7 +141,7 @@ function ProjectRow({ project, host, isFirst, iconDataUri }: ProjectRowProps) {
       className={cn(
         settingsStyles.row,
         !isFirst && settingsStyles.rowBorder,
-        "gap-3 text-left hover:bg-muted active:bg-(--surface-3)",
+        "gap-3 text-left hover:bg-muted active:bg-accent",
       )}
       onClick={handleNavigate}
       aria-label={t("settings.projectList.editProject", { projectName })}

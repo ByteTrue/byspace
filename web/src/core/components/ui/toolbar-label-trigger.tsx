@@ -29,7 +29,7 @@ export const TOOLBAR_LABEL_TRIGGER_FRAME =
 /** The frame of a label button: highlighted on hover, press, and while its menu is open. */
 export const TOOLBAR_LABEL_TRIGGER_CLASS = cn(
   TOOLBAR_LABEL_TRIGGER_FRAME,
-  "group/toolbar-label hover:bg-interaction-highlight active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
+  "group/toolbar-label hover:bg-muted active:bg-muted data-[state=open]:bg-muted",
 );
 
 /** The label inside TOOLBAR_LABEL_TRIGGER_CLASS: muted until the button is highlighted. */
@@ -91,7 +91,7 @@ export const ToolbarLabelSelectTrigger = forwardRef<
       {leadingIcon ? <ToolbarLabelTriggerIcon>{leadingIcon}</ToolbarLabelTriggerIcon> : null}
       <span className={TOOLBAR_LABEL_TRIGGER_TEXT}>{label}</span>
       <ToolbarLabelTriggerIcon>
-        <ChevronDown size={12} className="text-extra-muted-foreground" />
+        <ChevronDown size={12} className="text-muted-foreground" />
       </ToolbarLabelTriggerIcon>
     </button>
   );

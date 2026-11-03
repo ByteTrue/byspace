@@ -1,7 +1,15 @@
 // Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-edit-modal.tsx: same form
 // model and open/close lifecycle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profile-edit-modal.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ChangeEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import type { AgentFeature } from "@bytetrue/protocol/agent-types";
@@ -9,7 +17,6 @@ import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { type FieldControlSize } from "@/components/ui/control-geometry";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import {
   SelectField,
   type SelectFieldDisplay,
@@ -33,6 +40,9 @@ import {
   useAgentProfileFormModel,
   useAgentProfileFormState,
 } from "@/agent-profiles/internal/use-profile-form-model";
+import { Input } from "~/components/ui/input";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import { Textarea } from "~/components/ui/textarea";
 
 export interface AgentProfileEditModalProps {
   serverId: string;
@@ -141,6 +151,14 @@ function OpenAgentProfileEditModal({
     [mode, profile, seed],
   );
   const model = useAgentProfileFormModel(snapshot);
+  const handleNotesInput = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => model.setNotes(event.target.value),
+    [model],
+  );
+  const handleNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => model.setName(event.target.value),
+    [model],
+  );
   const state = useAgentProfileFormState(model);
   useAgentProfileFormCatalog({ serverId, model });
   useAgentProfileFormFeatures({ serverId, model, state });
@@ -240,20 +258,17 @@ function OpenAgentProfileEditModal({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <Field
-              label={t("settings.host.agentProfiles.nameLabel")}
-              testID="agent-profile-name-field"
-            >
-              <FormTextInput
-                initialValue={seed?.name ?? profile?.name ?? ""}
-                onChangeText={model.setName}
+            <Field data-testid="agent-profile-name-field">
+              <FieldLabel>{t("settings.host.agentProfiles.nameLabel")}</FieldLabel>
+              <Input
+                defaultValue={seed?.name ?? profile?.name ?? ""}
+                onChange={handleNameInput}
                 placeholder={t("settings.host.agentProfiles.namePlaceholder")}
                 autoCapitalize="none"
                 autoCorrect="off"
-                editable={!state.isSubmitting}
-                size={controlSize}
-                accessibilityLabel={t("settings.host.agentProfiles.nameLabel")}
-                testID="agent-profile-name-input"
+                readOnly={state.isSubmitting}
+                aria-label={t("settings.host.agentProfiles.nameLabel")}
+                data-testid="agent-profile-name-input"
               />
             </Field>
           </div>
@@ -331,10 +346,8 @@ function OpenAgentProfileEditModal({
         ) : null}
 
         {state.disclosure.showFeaturesField ? (
-          <Field
-            label={t("settings.host.agentProfiles.featuresLabel")}
-            testID="agent-profile-features-field"
-          >
+          <Field data-testid="agent-profile-features-field">
+            <FieldLabel>{t("settings.host.agentProfiles.featuresLabel")}</FieldLabel>
             <div
               className="rounded-md border bg-muted px-3"
               data-testid="agent-profile-features-card"
@@ -353,23 +366,20 @@ function OpenAgentProfileEditModal({
           </Field>
         ) : null}
 
-        <Field
-          label={t("settings.host.agentProfiles.notesLabel")}
-          hint={t("settings.host.agentProfiles.notesHint")}
-          testID="agent-profile-notes-field"
-        >
-          <FormTextInput
-            initialValue={profile?.notes ?? ""}
-            onChangeText={model.setNotes}
+        <Field data-testid="agent-profile-notes-field">
+          <FieldLabel>{t("settings.host.agentProfiles.notesLabel")}</FieldLabel>
+          <Textarea
+            defaultValue={profile?.notes ?? ""}
+            onChange={handleNotesInput}
             placeholder={t("settings.host.agentProfiles.notesPlaceholder")}
-            multiline
             rows={4}
-            className="min-h-[88px]"
-            editable={!state.isSubmitting}
-            size={controlSize}
-            accessibilityLabel={t("settings.host.agentProfiles.notesLabel")}
-            testID="agent-profile-notes-input"
+            readOnly={state.isSubmitting}
+            aria-label={t("settings.host.agentProfiles.notesLabel")}
+            data-testid="agent-profile-notes-input"
           />
+          <FieldDescription data-testid="agent-profile-notes-field-hint">
+            {t("settings.host.agentProfiles.notesHint")}
+          </FieldDescription>
         </Field>
 
         {state.submitError ? (

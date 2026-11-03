@@ -22,7 +22,7 @@ export function TreeChevron({ expanded }: { expanded: boolean }) {
   return (
     <span
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center text-extra-muted-foreground",
+        "flex size-4 shrink-0 items-center justify-center text-muted-foreground",
         expanded && "rotate-90",
       )}
     >

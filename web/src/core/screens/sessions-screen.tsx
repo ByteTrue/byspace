@@ -1,6 +1,13 @@
 // Port of archive/expo-app:packages/app/src/screens/sessions-screen.tsx: the History page; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
-import { useMemo, useState, useCallback, useEffect, type ReactElement } from "react";
+import {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  type ChangeEvent,
+  type ReactElement,
+} from "react";
 import { useIsFocused } from "~/app/route-focus";
 import { router } from "~/app/navigation";
 import { ChevronLeft, Import } from "lucide-react";
@@ -10,7 +17,13 @@ import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { AgentList } from "@/components/agent-list";
-import { SearchField } from "@/components/ui/search-field";
+import { Search, X } from "lucide-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "~/components/ui/input-group";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
 import { type AgentHistoryHostError, useAgentHistory } from "@/hooks/use-agent-history";
@@ -73,12 +86,57 @@ export function SessionsScreen() {
   return <SessionsScreenContent />;
 }
 
+function SessionsSearch({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <InputGroup className="max-w-[420px] min-w-0 flex-1">
+      <InputGroupAddon>
+        <Search />
+      </InputGroupAddon>
+      <InputGroupInput
+        data-testid="sessions-search-input"
+        value={value}
+        onChange={onChange}
+        placeholder={t("sessions.searchPlaceholder")}
+        aria-label={t("sessions.searchPlaceholder")}
+        autoCapitalize="none"
+        autoCorrect="off"
+        enterKeyHint="search"
+      />
+      {value.length > 0 ? (
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            size="icon-xs"
+            onClick={onClear}
+            aria-label={t("sessions.actions.clearSearch")}
+            data-testid="sessions-search-clear"
+          >
+            <X />
+          </InputGroupButton>
+        </InputGroupAddon>
+      ) : null}
+    </InputGroup>
+  );
+}
+
 function SessionsScreenContent() {
   const { t } = useTranslation();
   const importSession = useImportSession();
   const hosts = useHosts();
   const [selectedHost, setSelectedHost] = useState(ALL_HOSTS_OPTION_ID);
   const [searchInput, setSearchInput] = useState("");
+  const handleSearchInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setSearchInput(event.target.value),
+    [],
+  );
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS).trim();
   const historyServerId = selectedHost === ALL_HOSTS_OPTION_ID ? null : selectedHost;
   const {
@@ -161,13 +219,10 @@ function SessionsScreenContent() {
       {showFilterRow ? (
         <div className="flex flex-row items-center gap-2 px-3 pt-4 md:px-6">
           {isSearchSupported ? (
-            <SearchField
+            <SessionsSearch
               value={searchInput}
-              onChangeText={setSearchInput}
-              placeholder={t("sessions.searchPlaceholder")}
-              clearAccessibilityLabel={t("sessions.actions.clearSearch")}
-              testID="sessions-search-input"
-              clearTestID="sessions-search-clear"
+              onChange={handleSearchInput}
+              onClear={handleClearSearch}
             />
           ) : null}
           {showHostFilter ? (

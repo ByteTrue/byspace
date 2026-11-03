@@ -178,7 +178,7 @@ export function ScheduleRow({
       data-testid={`schedule-row-${schedule.id}`}
       className={cn(
         settingsStyles.row,
-        "relative cursor-pointer gap-3 active:bg-(--surface-3)",
+        "relative cursor-pointer gap-3 active:bg-accent",
         !isFirst && settingsStyles.rowBorder,
         !isCompact && "hover:bg-muted",
       )}

@@ -1,8 +1,16 @@
 // Port of archive/expo-app:packages/app/src/screens/settings-screen.tsx: the settings sidebar, detail pane, General and About. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-screen.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type FocusEvent,
+} from "react";
 import type { ComponentType, ReactNode } from "react";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { Switch } from "~/components/ui/switch";
 import { useRouter } from "~/app/navigation";
 import { useFocusEffect } from "~/app/route-focus";
@@ -93,6 +101,11 @@ import {
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { useThemeObject } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
+
+function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
+  event.currentTarget.select();
+}
 
 // ---------------------------------------------------------------------------
 // View model
@@ -252,6 +265,11 @@ function GeneralSection({
   const handleTerminalScrollbackChangeText = useCallback((value: string) => {
     setTerminalScrollbackValue(value.replace(/[^\d]/g, ""));
   }, []);
+  const handleTerminalScrollbackInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) =>
+      handleTerminalScrollbackChangeText(event.target.value),
+    [handleTerminalScrollbackChangeText],
+  );
 
   const commitTerminalScrollback = useCallback(() => {
     const parsed = parseTerminalScrollbackLines(terminalScrollbackValue);
@@ -265,6 +283,12 @@ function GeneralSection({
     settings.terminalScrollbackLines,
     terminalScrollbackValue,
   ]);
+  const handleCommitTerminalScrollbackEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) commitTerminalScrollback();
+    },
+    [commitTerminalScrollback],
+  );
 
   useEffect(() => {
     setTerminalScrollbackValue(String(settings.terminalScrollbackLines));
@@ -337,16 +361,15 @@ function GeneralSection({
               {t("settings.general.terminalScrollback.description")}
             </span>
           </div>
-          <TextInput
-            initialValue={terminalScrollbackValue}
-            onChangeText={handleTerminalScrollbackChangeText}
+          <Input
+            defaultValue={terminalScrollbackValue}
+            onChange={handleTerminalScrollbackInput}
             onBlur={commitTerminalScrollback}
-            onSubmitEditing={commitTerminalScrollback}
-            keyboardType="number-pad"
+            onKeyDown={handleCommitTerminalScrollbackEnter}
             inputMode="numeric"
-            selectTextOnFocus
-            className="min-h-9 rounded-[10px] border border-input bg-transparent px-2.5 py-2 text-foreground placeholder:text-muted-foreground md:min-h-8 md:py-1 dark:bg-input/30 w-28 text-right text-sm"
-            accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
+            onFocus={selectOnFocus}
+            className="w-28 text-right"
+            aria-label={t("settings.general.terminalScrollback.accessibilityLabel")}
           />
         </div>
         <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>

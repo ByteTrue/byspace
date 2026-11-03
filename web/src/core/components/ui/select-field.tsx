@@ -4,10 +4,10 @@ import { useCallback, useMemo, useRef, useState, type ReactElement, type ReactNo
 import { ChevronDown } from "lucide-react";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field } from "@/components/ui/form-field";
 import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
 import { Spinner } from "~/components/ui/spinner";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
 export interface SelectFieldDisplay {
   label: string;
@@ -265,8 +265,15 @@ export function SelectField<TValue>({
   );
   if (!field) return <div data-testid={testID}>{control}</div>;
   return (
-    <Field label={label} hint={selectedDisplay?.description ?? hint} error={error} testID={testID}>
+    <Field data-testid={testID} data-invalid={Boolean(error)}>
+      <FieldLabel>{label}</FieldLabel>
       {control}
+      {(selectedDisplay?.description ?? hint) ? (
+        <FieldDescription data-testid={`${testID}-hint`}>
+          {selectedDisplay?.description ?? hint}
+        </FieldDescription>
+      ) : null}
+      <FieldError data-testid={`${testID}-error`}>{error}</FieldError>
     </Field>
   );
 }

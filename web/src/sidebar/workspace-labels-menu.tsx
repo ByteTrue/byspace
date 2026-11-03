@@ -206,7 +206,7 @@ export function WorkspaceLabelsSubmenu({
         <Tag />
         {t("workspaceLabels.title")}
       </kit.SubTrigger>
-      <kit.SubContent className="menu-icons-sm">
+      <kit.SubContent>
         {snapshot.rows.map((row) => (
           <LabelRow
             key={row.name.toLocaleLowerCase()}
@@ -223,7 +223,7 @@ export function WorkspaceLabelsSubmenu({
             <Plus />
             {t("workspaceLabels.create")}
           </kit.SubTrigger>
-          <kit.SubContent className="menu-icons-sm">
+          <kit.SubContent>
             <CreateLabelForm
               kit={kit}
               serverId={serverId}
@@ -234,7 +234,7 @@ export function WorkspaceLabelsSubmenu({
         </kit.Sub>
         {snapshot.error ? (
           <p
-            className="px-2 py-1.5 text-xs text-destructive-text"
+            className="px-2 py-1.5 text-xs text-destructive"
             data-testid="workspace-label-picker-error"
           >
             {snapshot.error}

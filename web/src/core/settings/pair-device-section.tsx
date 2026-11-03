@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/settings/pair-device-section.tsx: the pairing offer (relay consent, QR code, link), DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/pair-device-section.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState, type FocusEvent } from "react";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 import * as Clipboard from "~/lib/clipboard";
 import * as QRCode from "qrcode";
@@ -23,11 +23,12 @@ import { daemonPairingOfferQueryKey } from "@/data/daemon-pairing";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
-import {
-  EditingTextInput as TextInput,
-  type EditingTextInputHandle,
-} from "@/components/ui/text-input";
 import { withTheme } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
+
+function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
+  event.currentTarget.select();
+}
 
 const RELAY_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/SECURITY.md";
 const ThemedShieldCheck = withTheme(ShieldCheck);
@@ -264,8 +265,6 @@ function RelayHeroBadge() {
 
 function PairingOffer(props: PairDeviceBodyProps & { offer: { url: string } }) {
   const { t } = useTranslation();
-  const inputRef = useRef<EditingTextInputHandle>(null);
-  useEffect(() => inputRef.current?.replaceText(props.offer.url), [props.offer.url]);
   return (
     <div className="flex flex-col gap-4">
       <span className="text-center text-sm leading-[normal] text-muted-foreground">
@@ -275,15 +274,12 @@ function PairingOffer(props: PairDeviceBodyProps & { offer: { url: string } }) {
         <PairingQr svg={props.qrSvg} isError={props.qrError} />
       </div>
       <div className="flex flex-row items-center gap-2">
-        <div className="min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted">
-          <TextInput
-            ref={inputRef}
-            // UI font, as the Expo app's root font rule renders it (see host-page.py)
-            className="block w-full bg-transparent px-3 py-2 text-xs leading-[normal] text-muted-foreground outline-none"
-            initialValue={props.offer.url}
+        <div className="min-w-0 flex-1">
+          <Input
+            value={props.offer.url}
             readOnly
-            selectTextOnFocus
-            accessibilityLabel={t("pairing.link.label")}
+            onFocus={selectOnFocus}
+            aria-label={t("pairing.link.label")}
           />
         </div>
         <Button

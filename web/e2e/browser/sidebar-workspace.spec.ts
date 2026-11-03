@@ -360,7 +360,8 @@ test.describe("Mobile sidebar panelState transition", () => {
 });
 
 test.describe("Half-screen desktop layout", () => {
-  test.use({ viewport: { width: 751, height: 982 } });
+  // Above the 768px compact breakpoint, so the sidebar is the pinned desktop one.
+  test.use({ viewport: { width: 800, height: 982 } });
 
   test("keeps the sidebar scroll position across close and reopen", async ({ page }) => {
     const workspace = await seedWorkspace({ repoPrefix: "sidebar-retained-scroll-" });

@@ -561,7 +561,7 @@ export function WorkspaceScriptsButton({
                   {t("workspace.scripts.title")}
                 </span>
               )}
-              {ghost ? null : <ChevronDown size={16} className="text-extra-muted-foreground" />}
+              {ghost ? null : <ChevronDown size={16} className="text-muted-foreground" />}
             </span>
           </button>
         </PopoverTrigger>

@@ -5,7 +5,6 @@ import { cn } from "cn"
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
 import { Button } from "~/components/ui/button"
-import { useRestoreFocusToOpener } from "~/hooks/use-restore-focus-to-opener"
 
 function AlertDialog({
   ...props
@@ -37,7 +36,7 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -45,27 +44,21 @@ function AlertDialogOverlay({
   )
 }
 
-// BySpace: the app's modal card, as DialogContent: a 1px border and the lg shadow.
-// BySpace: fades without shadcn's zoom, as the Expo app's modals fade.
 function AlertDialogContent({
   className,
   size = "default",
-  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm"
 }) {
-  // BySpace: focus returns to the opener on close, as the Expo app's overlays did.
-  const restoreFocus = useRestoreFocusToOpener(onCloseAutoFocus)
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
-        onCloseAutoFocus={restoreFocus}
         data-size={size}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-popover-foreground border shadow-lg duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}

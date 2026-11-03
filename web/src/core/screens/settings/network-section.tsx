@@ -2,13 +2,12 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
 import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
@@ -24,6 +23,8 @@ import {
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { withTheme } from "~/app/theme-object";
 import { showAlert } from "~/lib/alert";
+import { Input } from "~/components/ui/input";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
 const mutedColorMapping = (theme: { colors: { foregroundMuted: string } }) => ({
   color: theme.colors.foregroundMuted,
@@ -269,6 +270,10 @@ function PasswordSheet({
 }) {
   const { t } = useTranslation();
   const [password, setPassword] = useState("");
+  const handlePasswordInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setPassword(event.target.value),
+    [setPassword],
+  );
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const handleToggleVisibility = useCallback(
     () => setIsPasswordVisible((previous) => !previous),
@@ -288,6 +293,12 @@ function PasswordSheet({
     if (!canSave || isBusy) return;
     onSave(password.trim());
   }, [canSave, isBusy, onSave, password]);
+  const handleSaveEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleSave();
+    },
+    [handleSave],
+  );
 
   const handleClear = useCallback(() => {
     if (isBusy) return;
@@ -302,24 +313,19 @@ function PasswordSheet({
       testID="host-page-network-password-sheet"
       desktopMaxWidth={480}
     >
-      <Field
-        label={t("settings.host.daemon.network.password.fieldLabel")}
-        hint={t("settings.host.daemon.network.password.fieldHint")}
-        error={error}
-        testID="host-page-network-password"
-      >
+      <Field data-testid="host-page-network-password" data-invalid={Boolean(error)}>
+        <FieldLabel>{t("settings.host.daemon.network.password.fieldLabel")}</FieldLabel>
         <div className="flex flex-row items-center gap-2">
           <div className="min-w-0 flex-1">
-            <FormTextInput
-              size="sm"
-              testID="host-page-network-password-input"
-              accessibilityLabel={t("settings.host.daemon.network.password.fieldLabel")}
-              onChangeText={setPassword}
+            <Input
+              data-testid="host-page-network-password-input"
+              aria-label={t("settings.host.daemon.network.password.fieldLabel")}
+              onChange={handlePasswordInput}
               autoCapitalize="none"
-              autoCorrect={false}
+              autoCorrect="off"
               type={isPasswordVisible ? "text" : "password"}
               enterKeyHint="done"
-              onSubmitEditing={handleSave}
+              onKeyDown={handleSaveEnter}
             />
           </div>
           <button
@@ -336,6 +342,10 @@ function PasswordSheet({
             )}
           </button>
         </div>
+        <FieldDescription data-testid="host-page-network-password-hint">
+          {t("settings.host.daemon.network.password.fieldHint")}
+        </FieldDescription>
+        <FieldError data-testid="host-page-network-password-error">{error}</FieldError>
       </Field>
       <div className="mt-4 flex flex-row items-center justify-end gap-2">
         {canClear ? (

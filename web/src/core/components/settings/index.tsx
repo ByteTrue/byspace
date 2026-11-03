@@ -1,18 +1,8 @@
 // Port of archive/expo-app:packages/app/src/components/settings/index.tsx: the settings card, row and the
 // switch / select / input / action rows built on it. Same props; the view is DOM.
-import {
-  Children,
-  isValidElement,
-  useCallback,
-  useImperativeHandle,
-  useRef,
-  type ReactNode,
-  type Ref,
-} from "react";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { Children, isValidElement, useCallback, type ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { FormTextInput } from "@/components/ui/form-field";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -44,14 +34,6 @@ export interface SettingsInputHandle {
   blur(): void;
   getText(): string;
   replaceText(text: string): void;
-}
-export interface SettingsInputProps extends SettingsRowProps {
-  initialValue?: string;
-  onChangeText(text: string): void;
-  placeholder?: string;
-  disabled?: boolean;
-  secureTextEntry?: boolean;
-  ref?: Ref<SettingsInputHandle>;
 }
 export interface SettingsActionProps extends SettingsRowProps {
   actionLabel: string;
@@ -148,44 +130,6 @@ export function SettingsSelect<Value extends string>({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </SettingsRow>
-  );
-}
-
-export function SettingsInput({
-  initialValue,
-  onChangeText,
-  placeholder,
-  disabled,
-  secureTextEntry,
-  ref,
-  ...row
-}: SettingsInputProps) {
-  const compact = useIsCompactFormFactor();
-  const input = useRef<EditingTextInputHandle>(null);
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: () => input.current?.focus(),
-      blur: () => input.current?.blur(),
-      getText: () => input.current?.getText() ?? "",
-      replaceText: (text) => input.current?.replaceText(text),
-    }),
-    [],
-  );
-  return (
-    <SettingsRow {...row}>
-      <FormTextInput
-        ref={input}
-        initialValue={initialValue}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        editable={!disabled}
-        type={secureTextEntry ? "password" : undefined}
-        accessibilityLabel={row.label}
-        size={compact ? "md" : "sm"}
-        className="min-w-[180px]"
-      />
     </SettingsRow>
   );
 }

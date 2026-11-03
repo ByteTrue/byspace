@@ -27,7 +27,7 @@ import {
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { SettingsTextAreaCard } from "@/components/settings-textarea";
+import { SettingsTextArea } from "@/components/settings-textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
@@ -1086,7 +1086,7 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
           testID="host-page-append-system-prompt-sheet"
           desktopMaxWidth={560}
         >
-          <SettingsTextAreaCard
+          <SettingsTextArea
             testID="host-page-append-system-prompt-input"
             accessibilityLabel={t("settings.host.orchestration.systemPrompt.accessibilityLabel")}
             value={draft}

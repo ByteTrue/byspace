@@ -5,13 +5,12 @@ import type { TodoEntry } from "@/types/stream";
 import { cn } from "cn";
 
 function TaskStatusIcon({ isCompleted, isRunning }: { isCompleted: boolean; isRunning: boolean }) {
-  if (isCompleted)
-    return <CircleCheck size={16} className="shrink-0 text-extra-muted-foreground" />;
+  if (isCompleted) return <CircleCheck size={16} className="shrink-0 text-muted-foreground" />;
   if (isRunning) return <CircleDot size={16} className="shrink-0 text-status-dot-running" />;
   // A pending task's ring is a status mark, not a checkbox. At the muted step it carries the
   // weight of an enabled control and invites a click that does nothing, so it sits one step back
   // from the text it marks.
-  return <Circle size={16} className="shrink-0 text-extra-muted-foreground" />;
+  return <Circle size={16} className="shrink-0 text-muted-foreground" />;
 }
 
 export const TaskListRow = memo(function TaskListRow({ task }: { task: TodoEntry }) {
@@ -26,7 +25,7 @@ export const TaskListRow = memo(function TaskListRow({ task }: { task: TodoEntry
         className={cn(
           "min-w-0 shrink grow basis-auto truncate text-sm",
           isRunning && "text-foreground",
-          isCompleted && "text-extra-muted-foreground line-through",
+          isCompleted && "text-muted-foreground line-through",
           !isRunning && !isCompleted && "text-muted-foreground",
         )}
       >

@@ -54,7 +54,7 @@ export function FilePanelBar({
     <div className="shrink-0">
       <PaneContentToolbar testID="file-panel-bar">
         <div className="flex h-full items-center gap-3 px-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-extra-muted-foreground">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
             <span aria-label={t("panels.file.editor.fileSize", { size: formatFileSize(size) })}>
               {formatFileSize(size)}
             </span>
@@ -74,7 +74,7 @@ export function FilePanelBar({
           >
             {editorStatus === "dirty" ? (
               <span
-                className="size-1.5 rounded-full bg-extra-muted-foreground"
+                className="size-1.5 rounded-full bg-muted-foreground"
                 aria-label={t("panels.file.editor.unsavedChanges")}
               />
             ) : null}
@@ -97,7 +97,7 @@ export function FilePanelBar({
             ) : null}
             {cursor ? (
               <span
-                className="text-extra-muted-foreground"
+                className="text-muted-foreground"
                 aria-label={t("panels.file.editor.cursor", cursor)}
               >
                 Ln {cursor.line}, Col {cursor.column}

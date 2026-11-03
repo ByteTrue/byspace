@@ -107,7 +107,7 @@ export function ContextWindowMeter({
       cy={center}
       r={radius}
       fill="none"
-      stroke="var(--surface-3)"
+      stroke="varaccent"
       strokeWidth={strokeWidth}
     />
   );
@@ -128,7 +128,7 @@ export function ContextWindowMeter({
         >
           {track}
         </svg>
-        {showPercentage ? <span className="h-3.5 w-[22px] rounded-full bg-(--surface-3)" /> : null}
+        {showPercentage ? <span className="h-3.5 w-[22px] rounded-full bg-accent" /> : null}
       </span>
     );
   }

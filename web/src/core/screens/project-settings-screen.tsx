@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/project-settings-screen.tsx: one project's settings, scripts and their edit modal; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/project-settings-screen.py; edit it directly.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -29,8 +29,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ProjectEditSheet } from "@/components/project-edit-sheet";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
-import { SettingsTextAreaCard } from "@/components/settings-textarea";
+import { SettingsTextArea } from "@/components/settings-textarea";
 import { SelectField } from "@/components/ui/select-field";
 import { SettingsGroup } from "@/components/settings/headings/settings-group";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -66,6 +65,8 @@ import {
   type ProjectSummary,
 } from "@/utils/projects";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
+import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -1031,7 +1032,7 @@ function ProjectConfigForm({
               </AlertDescription>
             </Alert>
           ) : null}
-          <SettingsTextAreaCard
+          <SettingsTextArea
             testID="worktree-setup-input"
             accessibilityLabel={t("settings.project.worktree.setupAccessibility")}
             value={draft.setupText}
@@ -1046,7 +1047,7 @@ function ProjectConfigForm({
           trailing={teardownDocsLink}
           flush
         >
-          <SettingsTextAreaCard
+          <SettingsTextArea
             testID="worktree-teardown-input"
             accessibilityLabel={t("settings.project.worktree.teardownAccessibility")}
             value={draft.teardownText}
@@ -1372,7 +1373,7 @@ function MetadataPromptSection({ promptKey, value, onChange, flush }: MetadataPr
   );
   return (
     <SettingsSection title={title} testID={meta.sectionTestID} flush={flush}>
-      <SettingsTextAreaCard
+      <SettingsTextArea
         testID={meta.inputTestID}
         accessibilityLabel={title}
         value={value}
@@ -1491,9 +1492,17 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
     (text: string) => onChange({ ...script, name: text }),
     [onChange, script],
   );
+  const handleNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleNameChange(event.target.value),
+    [handleNameChange],
+  );
   const handleCommandChange = useCallback(
     (text: string) => onChange({ ...script, commandText: text }),
     [onChange, script],
+  );
+  const handleCommandInput = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => handleCommandChange(event.target.value),
+    [handleCommandChange],
   );
   const handleServiceToggle = useCallback(
     (next: boolean) => onChange({ ...script, type: next ? SCRIPT_SERVICE_TYPE : "" }),
@@ -1537,14 +1546,13 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
         <span className="text-xs leading-[normal] text-muted-foreground">
           {t("settings.project.scripts.name")}
         </span>
-        <TextInput
-          testID="script-edit-name"
-          accessibilityLabel={t("settings.project.scripts.nameAccessibility")}
-          initialValue={script.name}
-          onChangeText={handleNameChange}
+        <Input
+          data-testid="script-edit-name"
+          aria-label={t("settings.project.scripts.nameAccessibility")}
+          defaultValue={script.name}
+          onChange={handleNameInput}
           onBlur={handleNameBlur}
           placeholder="dev"
-          className="rounded-md border bg-muted px-3 py-2 text-sm leading-[normal] text-foreground placeholder:text-muted-foreground"
         />
         {showNameError ? (
           <span
@@ -1559,15 +1567,14 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
         <span className="text-xs leading-[normal] text-muted-foreground">
           {t("settings.project.scripts.command")}
         </span>
-        <TextInput
-          testID="script-edit-command"
-          accessibilityLabel={t("settings.project.scripts.commandAccessibility")}
-          multiline
-          initialValue={script.commandText}
-          onChangeText={handleCommandChange}
+        <Textarea
+          data-testid="script-edit-command"
+          aria-label={t("settings.project.scripts.commandAccessibility")}
+          defaultValue={script.commandText}
+          onChange={handleCommandInput}
           onBlur={handleCommandBlur}
           placeholder="npm run dev"
-          className="min-h-[100px] rounded-md border bg-muted px-3 py-2 text-sm leading-[normal] text-foreground placeholder:text-muted-foreground"
+          className="min-h-[100px] font-mono"
         />
         {showCommandError ? (
           <span

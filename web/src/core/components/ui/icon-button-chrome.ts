@@ -37,9 +37,9 @@ export function iconButtonChromeClassName({
     // As the Expo app's chrome: hovered, pressed, open or active fills with the interaction
     // highlight; the glyph keeps the colour its caller gave it. No keyboard focus outline: the
     // chrome sets outlineWidth 0 there.
-    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-highlight active:bg-interaction-highlight data-[state=open]:bg-interaction-highlight",
+    "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted active:bg-muted data-[state=open]:bg-muted",
     frame,
-    active && "bg-interaction-highlight",
+    active && "bg-muted",
     disabled && "pointer-events-none opacity-50",
     className,
   );

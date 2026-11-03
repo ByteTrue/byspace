@@ -98,7 +98,7 @@ function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
           onClick={onPress}
           aria-label={t("modelSelector.editProfilesLabel")}
           data-testid="model-profiles-edit"
-          className={cn(ICON_BUTTON, "text-extra-muted-foreground")}
+          className={cn(ICON_BUTTON, "text-muted-foreground")}
         >
           <Pencil size={ICON_SIZE.xs} />
         </button>

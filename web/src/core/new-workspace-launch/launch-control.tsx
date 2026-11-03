@@ -141,10 +141,10 @@ export function LaunchControl({
               <span className="min-w-0 shrink truncate text-sm text-muted-foreground">
                 {triggerLabel}
                 {selectedProfile ? (
-                  <span className="text-extra-muted-foreground"> {selectedProfile.name}</span>
+                  <span className="text-muted-foreground"> {selectedProfile.name}</span>
                 ) : null}
               </span>
-              <ChevronDown size={ICON_SIZE.sm} className="shrink-0 text-extra-muted-foreground" />
+              <ChevronDown size={ICON_SIZE.sm} className="shrink-0 text-muted-foreground" />
             </DropdownMenuTrigger>
           </span>
         </TooltipTrigger>

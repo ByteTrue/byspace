@@ -10,9 +10,9 @@ import {
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
+  type ChangeEvent,
 } from "react";
 import { Brain, Folder, GitBranch } from "lucide-react";
-import { cn } from "cn";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -23,7 +23,6 @@ import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field, FormTextInput, formInputClassName } from "@/components/ui/form-field";
 import { Switch } from "~/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
@@ -58,6 +57,9 @@ import type {
 import { validateCron } from "@/utils/schedule-format";
 import { toErrorMessage } from "@/utils/error-messages";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
+import { Input } from "~/components/ui/input";
+import { Field, FieldLabel } from "~/components/ui/field";
+import { Textarea } from "~/components/ui/textarea";
 
 export interface ScheduleFormSheetProps {
   serverId?: string;
@@ -469,10 +471,22 @@ function ScheduleFormFields({
   cadenceError,
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
+  const handleMaxRunsInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => model.setMaxRuns(event.target.value),
+    [model],
+  );
+  const handlePromptInput = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => model.setPrompt(event.target.value),
+    [model],
+  );
+  const handleNameInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => model.setName(event.target.value),
+    [model],
+  );
   if (state.targetKind === "agent") {
     return (
       <>
-        <ScheduleAgentTargetField label={agentTargetLabel} size={controlSize} />
+        <ScheduleAgentTargetField label={agentTargetLabel} />
         <CadenceEditor
           value={state.cadence}
           onChange={model.setCadence}
@@ -488,29 +502,28 @@ function ScheduleFormFields({
 
   return (
     <>
-      <Field label="Name">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-name-input"
-          accessibilityLabel="Schedule name"
-          initialValue={state.name}
-          onChangeText={model.setName}
+      <Field>
+        <FieldLabel>Name</FieldLabel>
+        <Input
+          data-testid="schedule-name-input"
+          aria-label="Schedule name"
+          defaultValue={state.name}
+          onChange={handleNameInput}
           placeholder="Optional"
           autoCapitalize="none"
-          autoCorrect={false}
+          autoCorrect="off"
         />
       </Field>
 
-      <Field label="Prompt">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-prompt-input"
-          accessibilityLabel="Prompt"
-          initialValue={state.prompt}
-          onChangeText={model.setPrompt}
+      <Field>
+        <FieldLabel>Prompt</FieldLabel>
+        <Textarea
+          data-testid="schedule-prompt-input"
+          aria-label="Prompt"
+          defaultValue={state.prompt}
+          onChange={handlePromptInput}
           placeholder="What should the agent do each run?"
-          multiline
-          numberOfLines={4}
+          rows={4}
         />
       </Field>
 
@@ -530,15 +543,15 @@ function ScheduleFormFields({
         size={controlSize}
       />
 
-      <Field label="Max runs">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-max-runs-input"
-          accessibilityLabel="Max runs"
-          initialValue={state.maxRuns}
-          onChangeText={model.setMaxRuns}
+      <Field>
+        <FieldLabel>Max runs</FieldLabel>
+        <Input
+          data-testid="schedule-max-runs-input"
+          aria-label="Max runs"
+          defaultValue={state.maxRuns}
+          onChange={handleMaxRunsInput}
           placeholder="Unlimited"
-          keyboardType="number-pad"
+          inputMode="numeric"
         />
       </Field>
 
@@ -694,7 +707,7 @@ function ScheduleTargetFields({
   );
 
   if (state.targetKind === "agent") {
-    return <ScheduleAgentTargetField label={agentTargetLabel} size={controlSize} />;
+    return <ScheduleAgentTargetField label={agentTargetLabel} />;
   }
 
   return (
@@ -738,7 +751,8 @@ function ScheduleTargetFields({
       ) : null}
 
       {state.disclosure.showModelField ? (
-        <Field label="Model">
+        <Field>
+          <FieldLabel>Model</FieldLabel>
           <CombinedModelSelector
             providers={state.modelSelectorProviders}
             selectedProvider={state.selectedProvider ?? ""}
@@ -796,7 +810,8 @@ function ScheduleTargetFields({
       ) : null}
 
       {state.disclosure.showArchiveOnFinishField ? (
-        <Field label="Archive on finish">
+        <Field>
+          <FieldLabel>Archive on finish</FieldLabel>
           <Switch
             checked={state.archiveOnFinish}
             onCheckedChange={model.setArchiveOnFinish}
@@ -880,26 +895,11 @@ function ScheduleIsolationField({
   );
 }
 
-function ScheduleAgentTargetField({
-  label,
-  size,
-}: {
-  label: string | null;
-  size: FieldControlSize;
-}): ReactElement {
+function ScheduleAgentTargetField({ label }: { label: string | null }): ReactElement {
   return (
-    <Field label="Target">
-      <div
-        className={cn(
-          formInputClassName(size),
-          "flex flex-row items-center border-border bg-muted hover:border-border dark:bg-muted",
-        )}
-        data-testid="schedule-agent-target"
-      >
-        <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
-          {label}
-        </span>
-      </div>
+    <Field>
+      <FieldLabel>Target</FieldLabel>
+      <Input value={label ?? ""} readOnly data-testid="schedule-agent-target" />
     </Field>
   );
 }

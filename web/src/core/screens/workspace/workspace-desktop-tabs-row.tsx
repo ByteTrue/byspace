@@ -108,8 +108,8 @@ const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
 const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 
 // The Expo app draws these toolbar glyphs extra-muted (extraMutedColorMapping), on hover too.
-const SPLIT_RIGHT_ICON = <Columns2 className="text-extra-muted-foreground" />;
-const SPLIT_DOWN_ICON = <Rows2 className="text-extra-muted-foreground" />;
+const SPLIT_RIGHT_ICON = <Columns2 className="text-muted-foreground" />;
+const SPLIT_DOWN_ICON = <Rows2 className="text-muted-foreground" />;
 const TAB_SCROLL_PADDING_STYLE = {
   paddingLeft: TAB_ROW_PADDING_HORIZONTAL,
   paddingRight: TAB_ROW_PADDING_HORIZONTAL,
@@ -183,7 +183,7 @@ function WorkspaceNewTabButton({
         // The Expo app's inline button is buttonControlHeight.xs, 28px.
         className={placement === "inline" ? "size-7" : undefined}
       >
-        <Plus size={14} className="text-extra-muted-foreground" />
+        <Plus size={14} className="text-muted-foreground" />
       </ToolbarButton>
       <WorkspaceNewTabMenuContent
         serverId={serverId}
@@ -255,9 +255,9 @@ function WorkspacePaneToolbarActions({
           onPress={onTogglePaneMaximized}
         >
           {paneMaximized ? (
-            <Minimize size={14} className="text-extra-muted-foreground" />
+            <Minimize size={14} className="text-muted-foreground" />
           ) : (
-            <Maximize size={14} className="text-extra-muted-foreground" />
+            <Maximize size={14} className="text-muted-foreground" />
           )}
         </ToolbarButton>
       ) : null}
@@ -268,7 +268,7 @@ function WorkspacePaneToolbarActions({
             label={t("workspace.git.actions.moreActions")}
             testID="workspace-split-pane-menu"
           >
-            <Ellipsis size={14} className="text-extra-muted-foreground" />
+            <Ellipsis size={14} className="text-muted-foreground" />
           </ToolbarButton>
           <DropdownMenuContent
             side="bottom"

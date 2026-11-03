@@ -50,7 +50,7 @@ export function HighlightedText({
     <span className={textClassName} data-testid={testID}>
       {segments.map((segment) =>
         segment.marked ? (
-          <span key={segment.start} className="bg-(--surface-3) text-foreground">
+          <span key={segment.start} className="bg-accent text-foreground">
             {segment.text}
           </span>
         ) : (

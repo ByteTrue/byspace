@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/provider-catalog-list.tsx: the searchable ACP provider catalog; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/provider-catalog-list.py; edit it directly.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, PackagePlus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,9 @@ import {
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { withTheme } from "~/app/theme-object";
 import { SvgXml } from "~/components/svg-xml";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 
 interface ProviderCatalogListProps {
   serverId: string;
@@ -21,13 +21,11 @@ interface ProviderCatalogListProps {
   onInstall: (entry: AcpProviderCatalogItem) => Promise<void> | void;
 }
 
-const SEARCH_ICON_SIZE = 16;
 const PROVIDER_FALLBACK_ICON_SIZE = 20;
 const PROVIDER_REMOTE_ICON_SIZE = 24;
 
 const ThemedPackagePlus = withTheme(PackagePlus);
 const ThemedSvgXml = withTheme(SvgXml);
-const ThemedSearch = withTheme(Search);
 const ThemedExternalLink = withTheme(ExternalLink);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -130,6 +128,10 @@ export function ProviderCatalogList({
   const { entries: catalogEntries } = useAcpProviderCatalog();
   const { entries: providerEntries } = useProvidersSnapshot(serverId);
   const [search, setSearch] = useState("");
+  const handleSearchInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value),
+    [setSearch],
+  );
 
   const installedIds = useMemo(
     () => new Set(providerEntries?.map((entry) => entry.provider) ?? []),
@@ -146,21 +148,20 @@ export function ProviderCatalogList({
 
   return (
     <div>
-      <div className="mb-3 flex flex-row items-center gap-2 rounded-lg border bg-muted px-3">
-        <div className="flex w-[18px] items-center justify-center">
-          <ThemedSearch size={SEARCH_ICON_SIZE} themeProps={foregroundMutedColorMapping} />
-        </div>
-        <TextInput
-          testID="provider-catalog-search"
-          initialValue={search}
-          onChangeText={setSearch}
-          accessibilityLabel={t("providerCatalog.search")}
+      <InputGroup className="mb-3">
+        <InputGroupAddon>
+          <Search />
+        </InputGroupAddon>
+        <InputGroupInput
+          data-testid="provider-catalog-search"
+          value={search}
+          onChange={handleSearchInput}
+          aria-label={t("providerCatalog.search")}
           placeholder={t("providerCatalog.search")}
-          className="min-w-0 flex-1 bg-transparent py-3 text-sm leading-[normal] text-foreground outline-none placeholder:text-muted-foreground"
           autoCapitalize="none"
-          autoCorrect={false}
+          autoCorrect="off"
         />
-      </div>
+      </InputGroup>
 
       {availableEntries.length === 0 ? (
         <div className="flex min-h-24 flex-col items-center justify-center gap-3 rounded-lg border bg-card p-4">

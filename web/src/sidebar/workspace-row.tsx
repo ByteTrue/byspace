@@ -517,7 +517,7 @@ function WorkspaceRowKebab({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="menu-icons-sm w-[260px]"
+        className="w-[260px]"
         sheetTitle={t("sidebar.workspace.actions.menu")}
       >
         <WorkspaceMenuItems kit={dropdownMenuKit} actions={actions} />
@@ -688,7 +688,7 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
           </ContextMenuTrigger>
         </WorkspaceHoverCard>
         <ContextMenuContent
-          className="menu-icons-sm w-[260px]"
+          className="w-[260px]"
           data-testid={`sidebar-workspace-context-menu-${workspace.workspaceKey}`}
           sheetTitle={t("sidebar.workspace.actions.menu")}
         >

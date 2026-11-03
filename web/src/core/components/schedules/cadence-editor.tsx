@@ -1,9 +1,15 @@
 // Port of archive/expo-app:packages/app/src/components/schedules/cadence-editor.tsx: the cadence field of the schedule form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
-import { useCallback, useMemo, useReducer, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  useState,
+  type ReactNode,
+  type ChangeEvent,
+} from "react";
 import type { ScheduleCadence } from "@bytetrue/protocol/schedule/types";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import {
   CADENCE_PRESET_OPTIONS,
@@ -13,6 +19,8 @@ import {
 } from "@/schedules/schedule-cadence-options";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
 import { describeCron, validateCron } from "@/utils/schedule-format";
+import { Input } from "~/components/ui/input";
+import { Field, FieldLabel } from "~/components/ui/field";
 
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
@@ -78,6 +86,10 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
     },
     [cronTimeZone, onChange],
   );
+  const handleCronInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleCronChange(event.target.value),
+    [handleCronChange],
+  );
 
   let feedback: ReactNode = null;
   if (effectiveError) {
@@ -87,7 +99,8 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
   }
 
   return (
-    <Field label="Cadence">
+    <Field>
+      <FieldLabel>Cadence</FieldLabel>
       <div className="flex flex-col gap-3">
         <SelectField
           label="Cadence"
@@ -104,16 +117,15 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
           field={false}
         />
 
-        <FormTextInput
-          size={size}
-          testID="cadence-cron-expression"
-          accessibilityLabel="Cron expression"
-          initialValue={cronText}
-          resetKey={`cadence-cron-${fieldResetKey}`}
-          onChangeText={handleCronChange}
+        <Input
+          data-testid="cadence-cron-expression"
+          aria-label="Cron expression"
+          defaultValue={cronText}
+          key={`cadence-cron-${fieldResetKey}`}
+          onChange={handleCronInput}
           placeholder="0 9 * * *"
           autoCapitalize="none"
-          autoCorrect={false}
+          autoCorrect="off"
           spellCheck={false}
         />
         {feedback}

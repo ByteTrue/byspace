@@ -64,7 +64,7 @@ export function HostFilter({
         <button
           type="button"
           onClick={handleFilterOpen}
-          className="flex flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 outline-none hover:bg-muted active:bg-(--surface-3)"
+          className="flex flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 outline-none hover:bg-muted active:bg-accent"
           data-testid={triggerTestID}
           aria-label={`Filter: ${selectedHostLabel}`}
         >

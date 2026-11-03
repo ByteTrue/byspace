@@ -3,14 +3,18 @@
 import * as Clipboard from "~/lib/clipboard";
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react";
 import type { TFunction } from "i18next";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
@@ -34,6 +38,7 @@ import {
   type ProviderDiscoveredModelsCache,
 } from "@/components/provider-diagnostic-models";
 import { useThemeObject } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -142,6 +147,10 @@ function AddCustomModelSubSheet({
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [input, setInput] = useState("");
+  const handleInputInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setInput(event.target.value),
+    [setInput],
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -177,6 +186,12 @@ function AddCustomModelSubSheet({
       })
       .finally(() => setSaving(false));
   }, [additionalModels, canAdd, onClose, patchConfig, provider, refresh, t, trimmed]);
+  const handleAddEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleAdd();
+    },
+    [handleAdd],
+  );
 
   const header = useMemo<SheetHeader>(
     () => ({ title: t("settings.providers.models.addCustomTitle") }),
@@ -196,16 +211,15 @@ function AddCustomModelSubSheet({
         <span className="text-sm leading-[normal] font-medium text-foreground">
           {t("settings.providers.models.modelId")}
         </span>
-        <AdaptiveTextInput
-          initialValue={input}
-          resetKey={`add-custom-${visible}`}
-          onChangeText={setInput}
-          onSubmitEditing={handleAdd}
+        <Input
+          defaultValue={input}
+          key={`add-custom-${visible}`}
+          onChange={handleInputInput}
+          onKeyDown={handleAddEnter}
           placeholder={t("settings.providers.models.modelIdPlaceholder")}
           autoCapitalize="none"
-          autoCorrect={false}
+          autoCorrect="off"
           enterKeyHint="done"
-          className="rounded-lg border bg-muted px-4 py-3 text-sm leading-[normal] outline-none"
         />
         {error ? <span className="text-xs leading-[normal] text-destructive">{error}</span> : null}
         <div className="flex flex-row justify-end gap-2">

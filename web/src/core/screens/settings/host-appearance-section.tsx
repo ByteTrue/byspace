@@ -238,7 +238,7 @@ function BadgePreview({
       className="flex flex-col items-start gap-1 border-t bg-sidebar px-4 py-3"
       data-testid="host-appearance-preview"
     >
-      <span className="mb-0.5 text-xs leading-[normal] font-medium tracking-[0.5px] text-extra-muted-foreground uppercase">
+      <span className="mb-0.5 text-xs leading-[normal] font-medium tracking-[0.5px] text-muted-foreground uppercase">
         PREVIEW
       </span>
       <span className="max-w-full shrink truncate text-sm leading-[normal] text-muted-foreground">

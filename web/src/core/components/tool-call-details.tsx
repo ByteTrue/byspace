@@ -666,9 +666,9 @@ function buildSections(input: {
 function DetailSkeleton({ fill }: { fill: boolean }) {
   return (
     <div className={cn("flex flex-col gap-2 p-3", fill && FILL)}>
-      <div className="h-3 w-full rounded-full bg-(--surface-3)" />
-      <div className="h-3 w-[72%] rounded-full bg-(--surface-3)" />
-      <div className="h-3 w-[48%] rounded-full bg-(--surface-3)" />
+      <div className="h-3 w-full rounded-full bg-accent" />
+      <div className="h-3 w-[72%] rounded-full bg-accent" />
+      <div className="h-3 w-[48%] rounded-full bg-accent" />
     </div>
   );
 }

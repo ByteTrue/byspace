@@ -22,13 +22,10 @@ import {
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
   useLayoutEffect,
+  type ChangeEvent,
 } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
-import {
-  EditingTextInput as TextInput,
-  type EditingTextInputHandle,
-} from "@/components/ui/text-input";
 import {
   applyAvailableAddProjectHosts,
   backAddProjectPage,
@@ -81,6 +78,7 @@ import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
 import type { AddProjectFlowRequest } from "@/stores/add-project-flow-store";
 import { shortenPath } from "@/utils/shorten-path";
 import { buildNewWorkspaceRoute, buildSettingsAddHostRoute } from "@/utils/host-routes";
+import { Input } from "~/components/ui/input";
 
 interface AddProjectFlowProps {
   request: AddProjectFlowRequest;
@@ -369,7 +367,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     [],
   );
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
-  const inputRef = useRef<EditingTextInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const submissionInFlightRef = useRef(false);
   const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
   const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
@@ -390,7 +388,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   // Before the page paints, not after: keys typed as soon as the page shows must land in the
   // input, and a late reset would wipe the first of them.
   useLayoutEffect(() => {
-    inputRef.current?.replaceText(pageInputValueRef.current);
+    if (inputRef.current) inputRef.current.value = pageInputValueRef.current;
     inputRef.current?.focus();
   }, [page.kind]);
 
@@ -800,6 +798,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         : setAddProjectPageInput(current, value),
     );
   }, []);
+  const handleInputInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleInputChange(event.target.value),
+    [handleInputChange],
+  );
   const isSubmitting = "isSubmitting" in page && page.isSubmitting;
   const currentGithubSearch =
     page.kind === "github-search" && githubQuery.data?.query === page.query
@@ -852,17 +854,16 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
                 onBack={state.pages.length > 1 ? handleBack : null}
               />
               {page.kind !== "method" ? (
-                <TextInput
+                <Input
                   ref={inputRef}
-                  initialValue={pageInput(page)}
-                  onChangeText={handleInputChange}
+                  defaultValue={pageInput(page)}
+                  onChange={handleInputInput}
                   placeholder={pagePlaceholder(page)}
-                  className="py-1 text-sm leading-[normal] text-foreground outline-none placeholder:text-muted-foreground"
                   autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isSubmitting}
+                  autoCorrect="off"
+                  readOnly={isSubmitting}
                   enterKeyHint="go"
-                  testID="add-project-flow-input"
+                  data-testid="add-project-flow-input"
                 />
               ) : null}
             </div>

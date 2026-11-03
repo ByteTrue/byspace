@@ -1,6 +1,13 @@
 // Port of archive/expo-app:packages/app/src/screens/tunnels-screen.tsx: the Tunnels page and its add / edit sheets; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/tunnels-screen.py; edit it directly.
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useIsFocused } from "~/app/route-focus";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react";
@@ -12,7 +19,6 @@ import { Spinner } from "~/components/ui/spinner";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
@@ -25,6 +31,8 @@ import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunne
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE } from "@/styles/theme";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
+import { Input } from "~/components/ui/input";
+import { Field, FieldLabel } from "~/components/ui/field";
 
 type FormState =
   | { mode: "closed" }
@@ -637,6 +645,10 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [draft, setDraft] = useState("");
+  const handleDraftInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value),
+    [setDraft],
+  );
   const [resetSeq, setResetSeq] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -678,6 +690,12 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   const addPort = useCallback(() => {
     void addPortAsync();
   }, [addPortAsync]);
+  const handleAddPortEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) addPort();
+    },
+    [addPort],
+  );
 
   const removePort = useCallback(
     async (port: number) => {
@@ -707,18 +725,17 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
     <SettingsSection title={t("tunnels.allowlist.title")}>
       <div className={settingsStyles.card}>
         <div className={cn(settingsStyles.row, "gap-2")}>
-          <FormTextInput
-            size="sm"
+          <Input
             className="flex-1"
-            initialValue={draft}
-            resetKey={resetSeq}
-            onChangeText={setDraft}
-            onSubmitEditing={addPort}
+            defaultValue={draft}
+            key={resetSeq}
+            onChange={handleDraftInput}
+            onKeyDown={handleAddPortEnter}
             placeholder={
               isZh ? "输入端口号（可填多个，如 3425, 3430）" : "Enter port(s), e.g. 3425, 3430"
             }
-            keyboardType="number-pad"
-            testID="tunnels-allowlist-input"
+            inputMode="numeric"
+            data-testid="tunnels-allowlist-input"
           />
           <Button
             variant="secondary"
@@ -825,9 +842,25 @@ function AddTunnelSheet({
     selectableTargets[0]?.serverId ?? PASTE_OFFER_OPTION_ID,
   );
   const [offerUrl, setOfferUrl] = useState("");
+  const handleOfferUrlInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setOfferUrl(event.target.value),
+    [setOfferUrl],
+  );
   const [password, setPassword] = useState(selectableTargets[0]?.password ?? "");
+  const handlePasswordInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setPassword(event.target.value),
+    [setPassword],
+  );
   const [remotePort, setRemotePort] = useState("");
+  const handleRemotePortInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setRemotePort(event.target.value),
+    [setRemotePort],
+  );
   const [localPort, setLocalPort] = useState("");
+  const handleLocalPortInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setLocalPort(event.target.value),
+    [setLocalPort],
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -982,6 +1015,12 @@ function AddTunnelSheet({
   const submit = useCallback(() => {
     void submitAsync();
   }, [submitAsync]);
+  const handleSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
+    },
+    [submit],
+  );
 
   const header = useMemo<SheetHeader>(() => ({ title: t("tunnels.addForm.title") }), [t]);
 
@@ -1000,56 +1039,56 @@ function AddTunnelSheet({
         triggerTestID="tunnels-add-peer-trigger"
       />
       {isPastingOffer ? (
-        <Field label={t("tunnels.addForm.offerLabel")}>
-          <FormTextInput
-            initialValue={offerUrl}
-            onChangeText={setOfferUrl}
+        <Field>
+          <FieldLabel>{t("tunnels.addForm.offerLabel")}</FieldLabel>
+          <Input
+            defaultValue={offerUrl}
+            onChange={handleOfferUrlInput}
             placeholder={t("tunnels.addForm.offerPlaceholder")}
             autoCapitalize="none"
-            autoCorrect={false}
-            testID="tunnels-add-offer-input"
+            autoCorrect="off"
+            data-testid="tunnels-add-offer-input"
           />
         </Field>
       ) : undefined}
       {!passwordOptional ? (
-        <Field label={t("tunnels.addForm.passwordLabel")}>
-          <FormTextInput
-            initialValue={password}
-            resetKey={selectedPeerId}
-            onChangeText={setPassword}
+        <Field>
+          <FieldLabel>{t("tunnels.addForm.passwordLabel")}</FieldLabel>
+          <Input
+            defaultValue={password}
+            key={selectedPeerId}
+            onChange={handlePasswordInput}
             placeholder={t("tunnels.addForm.passwordPlaceholder")}
             type="password"
-            testID="tunnels-add-password-input"
+            data-testid="tunnels-add-password-input"
           />
         </Field>
       ) : undefined}
-      <Field
-        label={
-          isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")
-        }
-      >
-        <FormTextInput
-          initialValue={remotePort}
-          onChangeText={setRemotePort}
+      <Field>
+        <FieldLabel>
+          {isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")}
+        </FieldLabel>
+        <Input
+          defaultValue={remotePort}
+          onChange={handleRemotePortInput}
           placeholder="3425, 3430"
-          keyboardType="number-pad"
-          testID="tunnels-add-port-input"
+          inputMode="numeric"
+          data-testid="tunnels-add-port-input"
         />
       </Field>
-      <Field
-        label={
-          isZh
+      <Field>
+        <FieldLabel>
+          {isZh
             ? "本地固定端口（可选，不填默认与远端端口相同）"
-            : "Local port (optional, defaults to same as remote port)"
-        }
-      >
-        <FormTextInput
-          initialValue={localPort}
-          onChangeText={setLocalPort}
-          onSubmitEditing={submit}
+            : "Local port (optional, defaults to same as remote port)"}
+        </FieldLabel>
+        <Input
+          defaultValue={localPort}
+          onChange={handleLocalPortInput}
+          onKeyDown={handleSubmitEnter}
           placeholder={remotePort.trim() || "3425, 3430"}
-          keyboardType="number-pad"
-          testID="tunnels-add-local-port-input"
+          inputMode="numeric"
+          data-testid="tunnels-add-local-port-input"
         />
       </Field>
       {error ? (
@@ -1094,8 +1133,16 @@ function EditTunnelSheet({
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(entry.serverId);
   const [remotePort, setRemotePort] = useState(String(entry.remotePort));
+  const handleRemotePortInput2 = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setRemotePort(event.target.value),
+    [setRemotePort],
+  );
   const [localPort, setLocalPort] = useState(
     entry.localPort != null ? String(entry.localPort) : String(entry.remotePort),
+  );
+  const handleLocalPortInput2 = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setLocalPort(event.target.value),
+    [setLocalPort],
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1145,6 +1192,12 @@ function EditTunnelSheet({
   const save = useCallback(() => {
     void saveAsync();
   }, [saveAsync]);
+  const handleSaveEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) save();
+    },
+    [save],
+  );
 
   const header = useMemo<SheetHeader>(
     () => ({
@@ -1155,24 +1208,28 @@ function EditTunnelSheet({
 
   return (
     <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-edit-sheet">
-      <Field label={isZh ? "本地监听端口 (127.0.0.1)" : "Local port (127.0.0.1)"}>
-        <FormTextInput
-          initialValue={localPort}
-          onChangeText={setLocalPort}
-          onSubmitEditing={save}
+      <Field>
+        <FieldLabel>{isZh ? "本地监听端口 (127.0.0.1)" : "Local port (127.0.0.1)"}</FieldLabel>
+        <Input
+          defaultValue={localPort}
+          onChange={handleLocalPortInput2}
+          onKeyDown={handleSaveEnter}
           placeholder="3425"
-          keyboardType="number-pad"
-          testID="tunnels-edit-local-port-input"
+          inputMode="numeric"
+          data-testid="tunnels-edit-local-port-input"
         />
       </Field>
-      <Field label={isZh ? `远端目标端口 (${peerLabel})` : `Remote port (${peerLabel})`}>
-        <FormTextInput
-          initialValue={remotePort}
-          onChangeText={setRemotePort}
-          onSubmitEditing={save}
+      <Field>
+        <FieldLabel>
+          {isZh ? `远端目标端口 (${peerLabel})` : `Remote port (${peerLabel})`}
+        </FieldLabel>
+        <Input
+          defaultValue={remotePort}
+          onChange={handleRemotePortInput2}
+          onKeyDown={handleSaveEnter}
           placeholder="3425"
-          keyboardType="number-pad"
-          testID="tunnels-edit-remote-port-input"
+          inputMode="numeric"
+          data-testid="tunnels-edit-remote-port-input"
         />
       </Field>
       {error ? (

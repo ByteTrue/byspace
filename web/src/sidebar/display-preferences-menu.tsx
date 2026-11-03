@@ -183,7 +183,7 @@ function RadioSubmenu<T extends string>({
         {label}
         {showValue && current ? <SubValue>{t(current)}</SubValue> : null}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="menu-icons-sm">
+      <DropdownMenuSubContent>
         <DropdownMenuRadioGroup value={value} onValueChange={handleChange}>
           {options.map(([option, ItemIcon, labelKey]) => (
             <DropdownMenuRadioItem key={option} value={option} data-testid={optionTestId(option)}>
@@ -217,7 +217,7 @@ function ShowSubmenu({ preferences }: { preferences: DisplayPreferences }) {
       <DropdownMenuSubTrigger data-testid="sidebar-display-show">
         {t("sidebar.display.show.label")}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="menu-icons-sm">
+      <DropdownMenuSubContent>
         {SIDEBAR_ROW_ITEMS.map((item) => {
           const [ItemIcon, labelKey] = ROW_ITEMS[item];
           return (
@@ -270,7 +270,7 @@ function HostFilterSubmenu({ preferences }: { preferences: DisplayPreferences })
         {t("sidebar.display.hostFilter.label")}
         <FilterIndicator on={preferences.hostFilters.length > 0} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="menu-icons-sm">
+      <DropdownMenuSubContent>
         <ActionToggleItem
           checked={preferences.hostFilters.length === 0}
           onSelect={preferences.clearHostFilters}
@@ -308,7 +308,7 @@ function ProjectFilterSubmenu({ preferences }: { preferences: DisplayPreferences
         {t("sidebar.display.projectFilter.label")}
         <FilterIndicator on={resolvedProjectFilters.length > 0} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="menu-icons-sm max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto">
+      <DropdownMenuSubContent className="max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto">
         <ActionToggleItem
           checked={resolvedProjectFilters.length === 0}
           onSelect={preferences.clearProjectFilters}
@@ -358,7 +358,7 @@ function LabelFilterSubmenu({
         {t("workspaceLabels.title")}
         <FilterIndicator on={labelFilterActive} />
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="menu-icons-sm">
+      <DropdownMenuSubContent>
         {labels.map((label) => (
           <ToggleItem
             key={workspaceLabelKey(label.name)}
@@ -430,7 +430,7 @@ export function SidebarDisplayPreferencesMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="menu-icons-sm w-[232px]"
+          className="w-[232px]"
           data-testid="sidebar-display-preferences-content"
           sheetTitle={t("sidebar.display.heading")}
         >

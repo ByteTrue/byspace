@@ -7,8 +7,8 @@
 /*
  * This is what `shadcn init --base radix --preset nova` (shadcn 4.23.0) generates, with
  * shadcn/tailwind.css vendored into src/styles. Keep it that way so components added with
- * `npx shadcn add` look as shipped. BySpace changes are marked "BySpace:"; they are the
- * deviations recorded in byissue/epics/2026-10-31-o-ui-style-refresh.
+ * `npx shadcn add` look as shipped. BySpace additions are marked "BySpace:": app settings and
+ * tokens shadcn has no slot for, never a restyle of a shadcn component.
  */
 
 @custom-variant dark (&:is(.dark *));
@@ -35,8 +35,6 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
-  /* BySpace: text on a destructive tint (see --destructive-text below). */
-  --color-destructive-text: var(--destructive-text);
   /* BySpace: status colours from packages/app/src/styles/theme.ts. The plain ones colour
      metadata (check icons, PR state, diff counts); the dot ones are the louder row status dots. */
   --color-status-success: var(--status-success);
@@ -50,11 +48,6 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
-  /* BySpace: packages/app's foregroundExtraMuted, a step below muted (timestamps, chevrons, icons). */
-  --color-extra-muted-foreground: var(--extra-muted-foreground);
-  /* BySpace: packages/app's interactionHighlight, the translucent hover/open fill of icon controls
-     and ghost buttons; translucent, so it reads the same on every surface. */
-  --color-interaction-highlight: var(--interaction-highlight);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
@@ -70,115 +63,23 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
-  /* BySpace: packages/app's 2xl is 16px; every rounded-2xl here is a port of it. */
-  --radius-2xl: 1rem;
+  --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/*
- * BySpace: `md` is the app's compact breakpoint (720px, as in packages/app), and the text scale
- * follows the interface font size setting (--ui-text-*, set by the appearance provider) while
- * spacing stays put, the same split the Expo app makes.
- */
-/*
- * BySpace: shadows are packages/app's theme.shadow (sm / md / lg), which are shadcn's first layers
- * in light and darker, wider ones in every dark theme. xs and sm both mean the Expo `sm`.
- */
-@theme inline {
-  --shadow-xs: var(--app-shadow-sm);
-  --shadow-sm: var(--app-shadow-sm);
-  --shadow-md: var(--app-shadow-md);
-  --shadow-lg: var(--app-shadow-lg);
-}
-
-/* BySpace: packages/app's palette (baseColors in its styles/theme.ts, Tailwind v3's hex values) in
-   place of Tailwind v4's oklch ones, so `text-red-300` here is its `palette.red[300]`. Shades the
-   old palette lacks keep Tailwind's value. */
+/* BySpace: the text scale follows the interface font size setting (--ui-text-*, set by the
+   appearance provider); spacing stays put. */
 @theme {
-  --color-zinc-50: #fafafa;
-  --color-zinc-100: #f4f4f5;
-  --color-zinc-200: #e4e4e7;
-  --color-zinc-300: #d4d4d8;
-  --color-zinc-400: #a1a1aa;
-  --color-zinc-500: #71717a;
-  --color-zinc-600: #52525b;
-  --color-zinc-700: #3f3f46;
-  --color-zinc-800: #27272a;
-  --color-zinc-850: #1a1a1d;
-  --color-zinc-900: #18181b;
-  --color-zinc-950: #121214;
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
-  --color-slate-200: #e2e8f0;
-  --color-blue-50: #eff6ff;
-  --color-blue-100: #dbeafe;
-  --color-blue-200: #bfdbfe;
-  --color-blue-300: #93c5fd;
-  --color-blue-400: #60a5fa;
-  --color-blue-500: #3b82f6;
-  --color-blue-600: #2563eb;
-  --color-blue-700: #1d4ed8;
-  --color-blue-800: #1e40af;
-  --color-blue-900: #1e3a8a;
-  --color-blue-950: #172554;
-  --color-green-100: #dcfce7;
-  --color-green-200: #bbf7d0;
-  --color-green-400: #4ade80;
-  --color-green-500: #22c55e;
-  --color-green-600: #16a34a;
-  --color-green-800: #166534;
-  --color-green-900: #14532d;
-  --color-red-100: #fee2e2;
-  --color-red-200: #fecaca;
-  --color-red-300: #fca5a5;
-  --color-red-500: #ef4444;
-  --color-red-600: #dc2626;
-  --color-red-700: #b91c1c;
-  --color-red-800: #991b1b;
-  --color-red-900: #7f1d1d;
-  --color-teal-200: #99f6e4;
-  --color-amber-500: #f59e0b;
-  --color-amber-700: #b45309;
-  --color-yellow-400: #fbbf24;
-  --color-purple-500: #a855f7;
-  --color-purple-600: #9333ea;
-  --color-orange-500: #f97316;
-  --color-orange-600: #ea580c;
-}
-
-@theme {
-  --breakpoint-md: 45rem;
   --text-xs: var(--ui-text-xs, 12px);
   --text-sm: var(--ui-text-sm, 14px);
   --text-base: var(--ui-text-base, 16px);
   --text-lg: var(--ui-text-lg, 18px);
   --text-xl: var(--ui-text-xl, 20px);
   --text-2xl: var(--ui-text-2xl, 24px);
-  /* packages/app's text leaves have no line height of their own (react-native-web: `normal`), so
-     neither do these. Tailwind's ratios also come out a hair under the pixel (12px x 1/0.75 is
-     15.99...), which WebKit floors: every text-xs line in the desktop window and iOS Safari was
-     1px short, and the rows below drifted. */
-  --text-xs--line-height: normal;
-  --text-sm--line-height: normal;
-  --text-base--line-height: normal;
-  --text-lg--line-height: normal;
-  --text-xl--line-height: normal;
-  --text-2xl--line-height: normal;
 }
 
 :root {
-  --app-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --app-shadow-md: 0 4px 6px 0 rgba(0, 0, 0, 0.1);
-  --app-shadow-lg: 0 10px 15px 0 rgba(0, 0, 0, 0.1);
   /* BySpace: the default stacks of packages/app/src/styles/theme.ts (DEFAULT_UI_FONT_STACK,
      DEFAULT_MONO_FONT_STACK); Geist is "Geist Variable" here, the name @fontsource registers. */
   --app-font-sans:
@@ -201,15 +102,10 @@
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f5f5f5;
-  /* BySpace: #6e6e6e instead of #737373 (#737373, 4.35:1 on muted); clears 4.5:1. */
-  --muted-foreground: #6e6e6e;
-  --extra-muted-foreground: #a1a1a1;
-  --interaction-highlight: rgba(0, 0, 0, 0.04);
+  --muted-foreground: #737373;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
   --destructive: #e7000b;
-  /* BySpace: destructive on its 10% tint is 4.01:1; red-700 clears 4.5:1. */
-  --destructive-text: #b91c1c;
   --status-success: #3e704a;
   --status-danger: #9d433b;
   --status-warning: #7b5d39;
@@ -238,9 +134,6 @@
 }
 
 .dark {
-  --app-shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
-  --app-shadow-md: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
-  --app-shadow-lg: 0 12px 24px 0 rgba(0, 0, 0, 0.4);
   --background: #0a0a0a;
   --foreground: #fafafa;
   --card: #171717;
@@ -253,12 +146,9 @@
   --secondary-foreground: #fafafa;
   --muted: #262626;
   --muted-foreground: #a1a1a1;
-  --extra-muted-foreground: #737373;
-  --interaction-highlight: rgba(255, 255, 255, 0.06);
   --accent: #262626;
   --accent-foreground: #fafafa;
   --destructive: #ff6467;
-  --destructive-text: var(--destructive);
   --status-success: #6cb17b;
   --status-danger: #d8847b;
   --status-warning: #c09664;
@@ -289,20 +179,8 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* BySpace: packages/app's focus ring (its public/index.html): nothing on a mouse focus, and on a
-     keyboard focus or in a text field a 3px ring of one translucent grey, flush with the border.
-     A component that draws its own ring says outline-none. */
-  *:focus {
-    outline: none;
-  }
-  *:focus-visible {
-    outline: 3px solid rgba(161, 161, 161, 0.5);
-    outline-offset: 0;
-  }
-  /* BySpace: grayscale text smoothing, as packages/app's public/index.html. Without it macOS draws
-     every glyph a little heavier than the old app. */
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
@@ -312,17 +190,6 @@
   body,
   #root {
     height: 100%;
-  }
-  /* BySpace: menu icons in the muted colour, as packages/app's menus draw them. */
-  [data-slot*="menu-"]:not([data-slot="dropdown-menu-trigger"]):not(
-      [data-slot="context-menu-trigger"]
-    )
-    > svg:not([class*="text-"]) {
-    color: var(--muted-foreground);
-  }
-  /* BySpace: selected text is a faint wash of the foreground, not the system blue. */
-  ::selection {
-    background: color-mix(in oklab, var(--foreground) 15%, transparent);
   }
 }
 
@@ -610,17 +477,4 @@
 [data-slot="sidebar"][data-mobile="true"] {
   width: 100%;
   max-width: none;
-}
-
-/* BySpace: packages/app's sidebar menus pass 14px icons (ICON_SIZE.sm) where the workspace's menus
-   pass 16px; a sidebar menu surface carries this class. Unlayered, so it beats the menu item's
-   default icon size. The icon stays centred in the row's 16px leading slot. */
-.menu-icons-sm [role^="menuitem"] > svg[width="24"]:not([class*="size-"]) {
-  width: 14px;
-  height: 14px;
-}
-.menu-icons-sm
-  [role^="menuitem"]
-  > svg[width="24"]:first-of-type:not(.ml-auto):not([class*="size-"]) {
-  margin-inline: 1px;
 }

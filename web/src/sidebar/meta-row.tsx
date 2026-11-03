@@ -264,11 +264,11 @@ function MetaItem({
           <span className="truncate">{item.name}</span>
           {item.kind === "project" && item.cue ? (
             <>
-              <span aria-hidden="true" className="text-extra-muted-foreground">
+              <span aria-hidden="true" className="text-muted-foreground">
                 ·
               </span>
               <span
-                className="truncate text-extra-muted-foreground"
+                className="truncate text-muted-foreground"
                 data-testid="sidebar-workspace-project-cue"
               >
                 {item.cue}
@@ -336,7 +336,7 @@ export function WorkspaceMetaRow({
       {items.map((item, index) => (
         <Fragment key={item.kind}>
           {index > 0 ? (
-            <span aria-hidden="true" className="text-extra-muted-foreground">
+            <span aria-hidden="true" className="text-muted-foreground">
               ·
             </span>
           ) : null}
@@ -354,7 +354,7 @@ function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {
   const label = useCompactTimeAgo(enteredAt);
   return (
     <span
-      className="h-5 shrink-0 text-xs leading-5 text-extra-muted-foreground"
+      className="h-5 shrink-0 text-xs leading-5 text-muted-foreground"
       data-testid="sidebar-workspace-timestamp"
     >
       {label}

@@ -59,7 +59,7 @@ export function AgentRouteResolutionView({
       <State testId="agent-route-lookup-error">
         <div className="flex flex-col gap-1">
           <p className="text-sm font-medium">{t("agentPanel.states.failedToLoad")}</p>
-          <p className="text-sm text-destructive-text">{resolution.error}</p>
+          <p className="text-sm text-destructive">{resolution.error}</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" onClick={onRetry}>
@@ -96,7 +96,7 @@ export function AgentRouteResolutionView({
                 status: formatConnectionStatus(resolution.connectionStatus),
               })}
         </p>
-        {lastHostError ? <p className="text-sm text-destructive-text">{lastHostError}</p> : null}
+        {lastHostError ? <p className="text-sm text-destructive">{lastHostError}</p> : null}
       </div>
       {isConnecting ? null : (
         <div className="flex gap-2">

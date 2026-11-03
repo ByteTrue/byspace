@@ -1,19 +1,15 @@
 // Port of archive/expo-app:packages/app/src/components/pair-link-modal.tsx: the paste-a-pairing-link form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { useThemeObject } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
 
 export interface PairLinkModalProps {
   visible: boolean;
@@ -34,13 +30,13 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
 
   const offerUrlRef = useRef("");
-  const inputRef = useRef<EditingTextInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const clearInput = useCallback(() => {
     offerUrlRef.current = "";
-    inputRef.current?.replaceText("");
+    if (inputRef.current) inputRef.current.value = "";
   }, []);
 
   const pairIcon = useMemo(
@@ -96,6 +92,10 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
   const handleChangeOfferUrl = useCallback((next: string) => {
     offerUrlRef.current = next;
   }, []);
+  const handleChangeOfferUrlInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleChangeOfferUrl(event.target.value),
+    [handleChangeOfferUrl],
+  );
 
   const handleSavePress = useCallback(() => {
     void handleSave();
@@ -118,17 +118,16 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         <span className="text-sm leading-[normal] font-medium text-muted-foreground">
           {t("pairing.link.label")}
         </span>
-        <AdaptiveTextInput
+        <Input
           ref={inputRef}
-          testID="pair-link-input"
-          accessibilityLabel={t("pairing.link.label")}
-          onChangeText={handleChangeOfferUrl}
+          data-testid="pair-link-input"
+          aria-label={t("pairing.link.label")}
+          onChange={handleChangeOfferUrlInput}
           placeholder="https://app.byspace.cc.cd/#offer=..."
-          className="rounded-lg border bg-muted px-4 py-3 text-sm leading-[normal]"
           autoFocus
           autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
+          autoCorrect="off"
+          inputMode="url"
         />
         {errorMessage ? (
           <span className="whitespace-pre-line text-sm leading-[normal] text-destructive">

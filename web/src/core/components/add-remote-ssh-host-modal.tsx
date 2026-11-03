@@ -1,19 +1,25 @@
 // Port of archive/expo-app:packages/app/src/components/add-remote-ssh-host-modal.tsx: the remote SSH host form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, Terminal } from "lucide-react";
 import { parseSshTransportUri } from "@bytetrue/protocol/ssh-transport";
 import type { HostProfile } from "@/types/host-connection";
 import { useHostMutations, useHosts } from "@/runtime/host-runtime";
 import { Button } from "@/components/ui/button";
-import { Field, FormTextInput } from "@/components/ui/form-field";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { normalizeSshTargetInput } from "@/utils/ssh-target-input";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { withTheme } from "~/app/theme-object";
+import { Input } from "~/components/ui/input";
+import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 
 const ThemedEye = withTheme(Eye, (theme) => ({
   size: 18,
@@ -44,11 +50,10 @@ export function AddRemoteSshHostModal({
 }: AddRemoteSshHostModalProps) {
   const { t } = useTranslation();
   const hosts = useHosts();
-  const isCompact = useIsCompactFormFactor();
   const { probeAndUpsertRemoteSshConnection } = useHostMutations();
   const targetRef = useRef("");
   const passwordRef = useRef("");
-  const inputRef = useRef<EditingTextInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -57,7 +62,7 @@ export function AddRemoteSshHostModal({
   const clear = useCallback(() => {
     targetRef.current = "";
     passwordRef.current = "";
-    inputRef.current?.replaceText("");
+    if (inputRef.current) inputRef.current.value = "";
     setErrorMessage("");
     setIsPasswordVisible(false);
   }, []);
@@ -120,13 +125,27 @@ export function AddRemoteSshHostModal({
   const handleTargetChange = useCallback((value: string) => {
     targetRef.current = value;
   }, []);
+  const handleTargetInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handleTargetChange(event.target.value),
+    [handleTargetChange],
+  );
   const handlePasswordChange = useCallback((value: string) => {
     passwordRef.current = value;
   }, []);
+  const handlePasswordInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => handlePasswordChange(event.target.value),
+    [handlePasswordChange],
+  );
   const handleTogglePasswordVisibility = useCallback(() => {
     setIsPasswordVisible((previous) => !previous);
   }, []);
   const handleSubmit = useCallback(() => void handleSave(), [handleSave]);
+  const handleSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) handleSubmit();
+    },
+    [handleSubmit],
+  );
 
   const PasswordVisibilityIcon = isPasswordVisible ? ThemedEyeOff : ThemedEye;
 
@@ -140,42 +159,39 @@ export function AddRemoteSshHostModal({
       <span className="text-xs leading-[normal] text-muted-foreground">
         {t("pairing.remoteSsh.helper")}
       </span>
-      <Field
-        label={t("pairing.remoteSsh.fields.target")}
-        error={errorMessage}
-        testID="remote-ssh-target"
-      >
-        <FormTextInput
+      <Field data-testid="remote-ssh-target" data-invalid={Boolean(errorMessage)}>
+        <FieldLabel>{t("pairing.remoteSsh.fields.target")}</FieldLabel>
+        <Input
           ref={inputRef}
-          size={isCompact ? "md" : "sm"}
-          testID="remote-ssh-target-input"
-          accessibilityLabel={t("pairing.remoteSsh.fields.target")}
-          initialValue=""
-          onChangeText={handleTargetChange}
+          data-testid="remote-ssh-target-input"
+          aria-label={t("pairing.remoteSsh.fields.target")}
+          defaultValue=""
+          onChange={handleTargetInput}
           placeholder="user@host"
           autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isSaving}
+          autoCorrect="off"
+          readOnly={isSaving}
           enterKeyHint="done"
-          onSubmitEditing={handleSubmit}
+          onKeyDown={handleSubmitEnter}
         />
+        <FieldError data-testid="remote-ssh-target-error">{errorMessage}</FieldError>
       </Field>
-      <Field label={t("pairing.remoteSsh.fields.password")} testID="remote-ssh-password">
+      <Field data-testid="remote-ssh-password">
+        <FieldLabel>{t("pairing.remoteSsh.fields.password")}</FieldLabel>
         <div className="flex flex-row items-center gap-2">
           <div className="min-w-0 flex-1">
-            <FormTextInput
-              size={isCompact ? "md" : "sm"}
-              testID="remote-ssh-password-input"
-              accessibilityLabel={t("pairing.remoteSsh.fields.password")}
-              initialValue=""
-              onChangeText={handlePasswordChange}
+            <Input
+              data-testid="remote-ssh-password-input"
+              aria-label={t("pairing.remoteSsh.fields.password")}
+              defaultValue=""
+              onChange={handlePasswordInput}
               placeholder={t("pairing.remoteSsh.fields.passwordOptional")}
               autoCapitalize="none"
-              autoCorrect={false}
+              autoCorrect="off"
               type={isPasswordVisible ? "text" : "password"}
-              editable={!isSaving}
+              readOnly={isSaving}
               enterKeyHint="done"
-              onSubmitEditing={handleSubmit}
+              onKeyDown={handleSubmitEnter}
             />
           </div>
           <button

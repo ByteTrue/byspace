@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -35,10 +36,6 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-const inputPropsByTestID = vi.hoisted(() => ({
-  map: new Map<string, { onChangeText?: (next: string) => void; onSubmitEditing?: () => void }>(),
-}));
-
 vi.mock("@/components/adaptive-modal-sheet", async () => {
   const ReactModule = await import("react");
   const AdaptiveModalSheet = ({
@@ -70,44 +67,8 @@ vi.mock("@/components/adaptive-modal-sheet", async () => {
       children,
     );
   };
-  const AdaptiveTextInput = ReactModule.forwardRef<HTMLInputElement, Record<string, unknown>>(
-    (props, ref) => {
-      const p = props as {
-        initialValue?: string;
-        defaultValue?: string;
-        editable?: boolean;
-        testID?: string;
-        onChangeText?: (next: string) => void;
-        onSubmitEditing?: () => void;
-      };
-      if (p.testID) {
-        inputPropsByTestID.map.set(p.testID, {
-          onChangeText: p.onChangeText,
-          onSubmitEditing: p.onSubmitEditing,
-        });
-      }
-      return ReactModule.createElement("input", {
-        ref,
-        defaultValue: p.initialValue ?? p.defaultValue ?? "",
-        disabled: p.editable === false,
-        "data-testid": p.testID,
-        onChange: (e: { target: { value: string } }) => p.onChangeText?.(e.target.value),
-        onKeyDown: (e: { key: string; preventDefault: () => void }) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            p.onSubmitEditing?.();
-          }
-        },
-      });
-    },
-  );
-  return { AdaptiveModalSheet, AdaptiveTextInput };
+  return { AdaptiveModalSheet };
 });
-
-// The form field takes its input from here; the mocked one above captures its props.
-vi.mock("@/components/adaptive-text-input", async () => ({
-  AdaptiveTextInput: (await import("@/components/adaptive-modal-sheet")).AdaptiveTextInput,
-}));
 
 vi.mock("@/components/ui/button", async () => {
   const ReactModule = await import("react");
@@ -148,6 +109,7 @@ beforeEach(() => {
   vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
   vi.stubGlobal("HTMLInputElement", dom.window.HTMLInputElement);
   vi.stubGlobal("KeyboardEvent", dom.window.KeyboardEvent);
+  vi.stubGlobal("Event", dom.window.Event);
   vi.stubGlobal("Node", dom.window.Node);
   vi.stubGlobal("navigator", dom.window.navigator);
 
@@ -224,19 +186,32 @@ function click(element: Element | null): void {
   });
 }
 
-function typeInto(testID: string, value: string): void {
+function setInputValue(input: HTMLInputElement | null, value: string): void {
+  if (!input) throw new Error("input not found");
   act(() => {
-    const input = queryInput(testID);
-    if (!input) throw new Error(`Input ${testID} not found`);
-    input.value = value;
-    inputPropsByTestID.map.get(testID)?.onChangeText?.(value);
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
 }
 
-function pressEnter(testID: string): void {
+function pressEnterIn(input: HTMLInputElement | null): void {
+  if (!input) throw new Error("input not found");
   act(() => {
-    inputPropsByTestID.map.get(testID)?.onSubmitEditing?.();
+    input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
+}
+
+function inputByTestID(testID: string): HTMLInputElement | null {
+  return document.querySelector<HTMLInputElement>(`[data-testid="${testID}"]`);
+}
+
+function typeInto(testID: string, value: string): void {
+  setInputValue(inputByTestID(testID), value);
+}
+
+function pressEnter(testID: string): void {
+  pressEnterIn(inputByTestID(testID));
 }
 
 async function flush(): Promise<void> {

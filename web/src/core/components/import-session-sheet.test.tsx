@@ -162,11 +162,6 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     ) : null,
 }));
 
-vi.mock("@/components/ui/form-field", () => ({
-  Field: ({ children }: { children: ReactNode }) => children,
-  FormTextInput: () => null,
-}));
-
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: () => null,
 }));

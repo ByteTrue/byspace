@@ -1,6 +1,14 @@
 // Port of archive/expo-app:packages/app/src/components/import-session-sheet.tsx: importing a provider session started outside BySpace; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/import-session-sheet.py; edit it directly.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { keepPreviousData, useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type {
@@ -11,7 +19,6 @@ import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { Field, FormTextInput } from "@/components/ui/form-field";
 import { Spinner } from "~/components/ui/spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
@@ -48,6 +55,8 @@ import {
   requiresImportSessionsHostUpgrade,
   sumFilteredAlreadyImportedCount,
 } from "@/components/import-session-sheet-view-model";
+import { Input } from "~/components/ui/input";
+import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 
 const IMPORT_SHEET_SNAP_POINTS = ["70%", "92%"];
 /** Long enough that a typed word is one request, short enough to feel live. */
@@ -435,6 +444,16 @@ function ManualImportForm({
   onHandleChange,
   onSubmit,
 }: ManualImportFormProps) {
+  const handleSubmitEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) onSubmit();
+    },
+    [onSubmit],
+  );
+  const handleHandleInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => onHandleChange(event.target.value),
+    [onHandleChange],
+  );
   const { t } = useTranslation();
 
   if (!show) return null;
@@ -458,23 +477,25 @@ function ManualImportForm({
         triggerTestID="import-session-manual-provider-trigger"
       />
       <Field
-        label={t("importSession.manual.handleLabel")}
-        error={error?.field === "handle" ? error.message : null}
-        testID="import-session-manual-handle-field"
+        data-testid="import-session-manual-handle-field"
+        data-invalid={Boolean(error?.field === "handle" ? error.message : null)}
       >
-        <FormTextInput
-          size={controlSize}
-          testID="import-session-manual-handle"
-          initialValue=""
-          resetKey={resetKey}
+        <FieldLabel>{t("importSession.manual.handleLabel")}</FieldLabel>
+        <Input
+          data-testid="import-session-manual-handle"
+          defaultValue=""
+          key={resetKey}
           placeholder={t("importSession.manual.handlePlaceholder")}
-          accessibilityLabel={t("importSession.manual.handleLabel")}
+          aria-label={t("importSession.manual.handleLabel")}
           autoCapitalize="none"
-          autoCorrect={false}
-          onChangeText={onHandleChange}
-          onSubmitEditing={onSubmit}
-          editable={!isPending}
+          autoCorrect="off"
+          onChange={handleHandleInput}
+          onKeyDown={handleSubmitEnter}
+          readOnly={isPending}
         />
+        <FieldError data-testid="import-session-manual-handle-field-error">
+          {error?.field === "handle" ? error.message : null}
+        </FieldError>
       </Field>
       <Button
         variant="default"
@@ -990,7 +1011,7 @@ export function ImportSessionSheet({
           <button
             type="button"
             onClick={handleFilterOpen}
-            className="flex max-w-full flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 text-muted-foreground hover:bg-muted active:bg-(--surface-3)"
+            className="flex max-w-full flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 text-muted-foreground hover:bg-muted active:bg-accent"
             data-testid="import-session-filter-trigger"
             aria-label={`Filter: ${selectedProviderLabel}`}
           >
