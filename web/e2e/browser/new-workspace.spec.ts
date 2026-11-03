@@ -1092,9 +1092,11 @@ test.describe("New workspace flow", () => {
       prs: [{ title: "Checkout PR worktree", state: "open" }],
     });
     const pr = ghRepo.prs[0]!;
-    const mainCheckout = await cloneGithubRepoDefaultBranchOnly(ghRepo);
+    // Everything after the repository exists sits in the try, so a failed clone still deletes it.
+    let mainCheckout: Awaited<ReturnType<typeof cloneGithubRepoDefaultBranchOnly>> | null = null;
 
     try {
+      mainCheckout = await cloneGithubRepoDefaultBranchOnly(ghRepo);
       const openedProject = await openProjectViaDaemon(client, mainCheckout.path);
       localWorkspaceIds.add(openedProject.workspaceId);
 
@@ -1123,7 +1125,7 @@ test.describe("New workspace flow", () => {
       expect(branchInfo.currentBranch).toBe(pr.branch);
       expect(existsSync(path.join(worktree.workspaceDirectory, "pr-1.txt"))).toBe(true);
     } finally {
-      await mainCheckout.cleanup();
+      await mainCheckout?.cleanup();
       await ghRepo.cleanup();
     }
   });

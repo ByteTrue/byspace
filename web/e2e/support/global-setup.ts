@@ -3,6 +3,11 @@ import http from "node:http";
 import path from "node:path";
 import net from "node:net";
 import dotenv from "dotenv";
+import {
+  canCreateGithubFixtures,
+  startTempGithubFixtureRun,
+  sweepTempGithubFixtures,
+} from "./helpers/github-fixtures";
 
 const RESERVED_LOCAL_PORTS = new Set([
   6767, // Developer daemon.
@@ -122,6 +127,20 @@ async function startStaticWebServer(port: number, staticDir: string): Promise<ht
   return server;
 }
 
+// Setup removes what killed runs left (by age); teardown removes what this run left (by its id).
+async function sweepLeftoverGithubFixtures(runId?: string): Promise<void> {
+  try {
+    const { repos, checkouts } = await sweepTempGithubFixtures(runId);
+    if (repos.length > 0) {
+      console.log(`[e2e] Deleted leftover temporary GitHub repositories: ${repos.join(", ")}`);
+    }
+    if (checkouts > 0)
+      console.log(`[e2e] Removed ${checkouts} leftover temporary GitHub checkouts`);
+  } catch (error) {
+    console.warn(`[e2e] Could not sweep leftover temporary GitHub fixtures: ${String(error)}`);
+  }
+}
+
 export default async function globalSetup() {
   if (process.env.BYSPACE_REPLICA_CACHE_MEASUREMENT === "1") {
     if (!process.env.BYSPACE_REPLICA_CACHE_MEASUREMENT_URL) {
@@ -131,6 +150,11 @@ export default async function globalSetup() {
   }
   const repoRoot = path.resolve(import.meta.dirname, "../../..");
   await loadHarnessEnvironment(repoRoot);
+  // Only where the live GitHub specs run (gh logged in with the delete_repo scope): CI and machines
+  // without the scope never call GitHub here.
+  const githubFixtures = canCreateGithubFixtures();
+  const githubFixtureRun = startTempGithubFixtureRun();
+  if (githubFixtures) await sweepLeftoverGithubFixtures();
 
   const webPort = await getAvailableE2EPort();
   const staticDir = resolveStaticWebDir(repoRoot);
@@ -140,5 +164,6 @@ export default async function globalSetup() {
   return async () => {
     await new Promise<void>((resolve) => staticServer.close(() => resolve()));
     console.log("[e2e] Static web server stopped");
+    if (githubFixtures) await sweepLeftoverGithubFixtures(githubFixtureRun);
   };
 }

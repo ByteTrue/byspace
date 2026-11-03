@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { TEMP_CLEANUP_RETRIES, TEMP_CLEANUP_RETRY_DELAY_MS, resolveTempRoot } from "./workspace";
 
@@ -55,10 +55,6 @@ async function waitForGithubSearchIndex(args: {
  * leaks a repository, and GitHub eventually answers the next `repo create` with
  * "You have created too many repositories, too quickly" — a failure that looks
  * like a fixture bug and is not one.
- *
- * The server suite has the same gate as `canCreateTempGithubRepos()`
- * (`packages/server/src/server/test-utils/temp-github-repo.ts`). The app does not
- * depend on the server package, so the two are copies: fix both.
  */
 export function canCreateGithubFixtures(): boolean {
   try {
@@ -230,6 +226,62 @@ function seedIssue(args: { spec: IssueSpec; basePath: string }): GhIssueFixture 
 // (collides with real repos like `byspace`, `byspace-website`).
 const TEMP_GITHUB_REPO_PREFIX = "byspacetmp-";
 
+// Every temporary repository carries the id of the e2e run that created it (global setup sets it,
+// the workers inherit it), and the run's global teardown deletes whatever of its own is left: a
+// hook or test that timed out while its fixture was still being seeded never got a fixture back
+// to clean up, and the fixture finished seeding after its cleanup had already run.
+const RUN_ID_ENV = "E2E_GITHUB_FIXTURE_RUN";
+
+/** Starts a run: the id its temporary repositories carry. Called once, by global setup. */
+export function startTempGithubFixtureRun(): string {
+  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  process.env[RUN_ID_ENV] = runId;
+  return runId;
+}
+
+// A run killed before its teardown (SIGKILL, a power cut) leaves its repositories for the next
+// run's global setup, which deletes every temporary repository older than this. Younger ones may
+// belong to a run still in progress.
+const STALE_TEMP_GITHUB_FIXTURE_AGE_MS = 30 * 60_000;
+
+/**
+ * Deletes temporary repositories and their local clones: the ones of `runId` when given (the run
+ * is over, none is in use), otherwise the ones older than STALE_TEMP_GITHUB_FIXTURE_AGE_MS.
+ */
+export async function sweepTempGithubFixtures(
+  runId?: string,
+  now = Date.now(),
+): Promise<{ repos: string[]; checkouts: number }> {
+  const isLeftover = (name: string, createdMs: number) =>
+    runId ? name.includes(`-${runId}-`) : now - createdMs >= STALE_TEMP_GITHUB_FIXTURE_AGE_MS;
+  const listing = gh([
+    "api",
+    "--paginate",
+    "user/repos?per_page=100&affiliation=owner",
+    "--jq",
+    `.[] | select(.name | startswith("${TEMP_GITHUB_REPO_PREFIX}")) | "\\(.full_name) \\(.created_at)"`,
+  ]);
+  const repos: string[] = [];
+  for (const line of listing.split("\n").filter(Boolean)) {
+    const [fullName, createdAt] = line.split(" ");
+    if (!fullName || !createdAt) continue;
+    if (!isLeftover(fullName.slice(fullName.indexOf("/") + 1), Date.parse(createdAt))) continue;
+    gh(["repo", "delete", fullName, "--yes"]);
+    repos.push(fullName);
+  }
+  const root = await resolveTempRoot();
+  let checkouts = 0;
+  for (const entry of await readdir(root)) {
+    if (!entry.startsWith(TEMP_GITHUB_REPO_PREFIX)) continue;
+    const checkout = path.join(root, entry);
+    const info = await stat(checkout).catch(() => null);
+    if (!info || !isLeftover(entry, info.mtimeMs)) continue;
+    await rm(checkout, { recursive: true, force: true, ...RETRY });
+    checkouts += 1;
+  }
+  return { repos, checkouts };
+}
+
 function deleteTempGithubRepo(repoName: string): void {
   try {
     const owner = gh(["api", "user", "--jq", ".login"]);
@@ -250,8 +302,9 @@ export async function createTempGithubRepo(options: {
   waitForSearchIndex?: boolean;
 }): Promise<GhRepoFixture> {
   const { category, prs = [], issues = [], waitForSearchIndex = false } = options;
-  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const repoName = `${TEMP_GITHUB_REPO_PREFIX}${category}-${uniqueSuffix}`;
+  // A spec run without this config's global setup has no run; its repositories wait for the age rule.
+  const runId = process.env[RUN_ID_ENV] ?? "norun";
+  const repoName = `${TEMP_GITHUB_REPO_PREFIX}${category}-${runId}-${Math.random().toString(36).slice(2, 7)}`;
   const defaultBranch = "main";
 
   // Bootstrap local git repo
@@ -340,8 +393,9 @@ export async function createTempGithubRepo(options: {
       cleanup: async () => {
         try {
           gh(["repo", "delete", fullName, "--yes"]);
-        } catch {
-          // Best-effort cleanup
+        } catch (error) {
+          // Keep the test's own result; the next run's global setup deletes the repository.
+          console.warn(`[e2e] Could not delete ${fullName}: ${String(error)}`);
         }
         await Promise.all([
           rm(basePath, { recursive: true, force: true, ...RETRY }),

@@ -97,8 +97,9 @@ test.describe("Composer attachments", () => {
       // The picker searches by title; GitHub indexes a new issue seconds later.
       waitForSearchIndex: true,
     });
-    const handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
+    let handle: Awaited<ReturnType<typeof openGithubWorkspace>> | null = null;
     try {
+      handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
       await clickNewChat(page);
       await expectComposerVisible(page);
 
@@ -113,7 +114,7 @@ test.describe("Composer attachments", () => {
         title: ghRepo.issues[0].title,
       });
     } finally {
-      await handle.cleanup();
+      await handle?.cleanup();
       await ghRepo.cleanup();
     }
   });
@@ -129,8 +130,9 @@ test.describe("Composer attachments", () => {
       prs: [{ title: "feat: attach-pr-unique-beta", state: "open" }],
       waitForSearchIndex: true,
     });
-    const handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
+    let handle: Awaited<ReturnType<typeof openGithubWorkspace>> | null = null;
     try {
+      handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
       await clickNewChat(page);
       await expectComposerVisible(page);
 
@@ -147,7 +149,7 @@ test.describe("Composer attachments", () => {
         title: ghRepo.prs[0].title,
       });
     } finally {
-      await handle.cleanup();
+      await handle?.cleanup();
       await ghRepo.cleanup();
     }
   });

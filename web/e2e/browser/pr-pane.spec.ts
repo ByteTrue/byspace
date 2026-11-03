@@ -29,6 +29,9 @@ test.describe("PR pane", () => {
 
   test.beforeAll(async () => {
     if (!CAN_CREATE_GITHUB_FIXTURES) return;
+    // Seeding six pull requests with checks and comments takes over a minute; under the default
+    // 60 s this hook timed out mid-seed.
+    test.setTimeout(240_000);
 
     seedClient = await connectWorkspaceSetupClient();
 
