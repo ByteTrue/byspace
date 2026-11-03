@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx: the "..."
 // beside each row of the phone tab switcher, holding that tab's menu.
-import { useMemo, type ReactElement } from "react";
+import { useMemo, type ReactElement, type SyntheticEvent } from "react";
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -72,29 +72,37 @@ export function MobileTabTrailingAccessory({
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        data-testid={`${menuTestIDBase}-trigger`}
-        aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
-        className="flex size-7 items-center justify-center rounded-md text-muted-foreground active:bg-muted aria-expanded:bg-muted"
-      >
-        <Ellipsis size={14} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side="bottom"
-        align="end"
-        data-testid={menuTestIDBase}
-        className="w-[220px]"
-        onCloseAutoFocus={keepFocusElsewhere}
-      >
-        {menuEntries.map((entry) =>
-          entry.kind === "separator" ? (
-            <DropdownMenuSeparator key={entry.key} />
-          ) : (
-            <MobileTabDropdownMenuItem key={entry.key} entry={entry} />
-          ),
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    // The accessory sits inside a sessions-list row (a Command item): a press or key here, or in
+    // the portaled menu (React events bubble through portals), must not also select the row.
+    <span className="contents" onClick={stopPropagation} onKeyDown={stopPropagation}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          data-testid={`${menuTestIDBase}-trigger`}
+          aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground active:bg-muted aria-expanded:bg-muted"
+        >
+          <Ellipsis size={14} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          data-testid={menuTestIDBase}
+          className="w-[220px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
+          {menuEntries.map((entry) =>
+            entry.kind === "separator" ? (
+              <DropdownMenuSeparator key={entry.key} />
+            ) : (
+              <MobileTabDropdownMenuItem key={entry.key} entry={entry} />
+            ),
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
   );
+}
+
+function stopPropagation(event: SyntheticEvent): void {
+  event.stopPropagation();
 }

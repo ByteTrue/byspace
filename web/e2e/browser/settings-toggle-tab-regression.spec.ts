@@ -122,28 +122,28 @@ test.describe("Settings toggle tab regression", () => {
       await pressSettingsToggleShortcut(page);
       await expect(page).toHaveURL(/\/settings\/general$/);
 
-      const defaultSendTrigger = page.getByRole("button", {
+      const defaultSendTrigger = page.getByRole("combobox", {
         name: "Default send: Steer",
         exact: true,
       });
       await expect(defaultSendTrigger).toBeVisible();
-      await expect(page.getByRole("menuitem", { name: "Queue", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("option", { name: "Queue", exact: true })).toHaveCount(0);
 
       await defaultSendTrigger.click();
-      await expect(page.getByRole("menuitem", { name: "Steer", exact: true })).toHaveAttribute(
-        "aria-checked",
-        "true",
+      await expect(page.getByRole("option", { name: "Steer", exact: true })).toHaveAttribute(
+        "data-state",
+        "checked",
       );
-      await page.getByRole("menuitem", { name: "Queue", exact: true }).click();
+      await page.getByRole("option", { name: "Queue", exact: true }).click();
       await expectSendBehavior(page, "queue");
-      const queuedDefaultSendTrigger = page.getByRole("button", {
+      const queuedDefaultSendTrigger = page.getByRole("combobox", {
         name: "Default send: Queue",
         exact: true,
       });
       await expect(queuedDefaultSendTrigger).toBeVisible();
 
       await queuedDefaultSendTrigger.click();
-      await page.getByRole("menuitem", { name: "Interrupt", exact: true }).click();
+      await page.getByRole("option", { name: "Interrupt", exact: true }).click();
       await expectSendBehavior(page, "interrupt");
 
       await pressSettingsToggleShortcut(page);

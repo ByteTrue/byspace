@@ -105,6 +105,9 @@ export async function startCommandCenterLayoutObservation(page: Page): Promise<v
       for (const [name, selector] of Object.entries(selectors)) {
         const element = document.querySelector<HTMLElement>(selector);
         if (!element) continue;
+        // The dialog zooms in as it opens; its box is only the layout once that is over.
+        const dialog = element.closest<HTMLElement>('[role="dialog"]') ?? element;
+        if (dialog.getAnimations().some((animation) => animation.playState === "running")) continue;
         const rect = element.getBoundingClientRect();
         (observation.samples[name] ??= []).push({
           height: rect.height,

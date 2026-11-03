@@ -173,7 +173,11 @@ export async function expectWorkspaceAbsentFromSidebar(
 // row. Every caller has to walk the same path, so it lives here: when the menu's shape moves
 // again, this is the only place that has to follow.
 export async function openSidebarDisplayPage(page: Page, branchTestID: string): Promise<void> {
+  // A menu that just closed is still fading out; a press then lands outside it and closes the
+  // reopened one. Wait for it to go, as a person's next click does.
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await page.getByTestId("sidebar-display-preferences-menu").click();
+  await expect(page.getByTestId("sidebar-display-preferences-content")).toBeVisible();
   await page.getByTestId(branchTestID).click();
 }
 

@@ -5,6 +5,11 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useThemeObject } from "~/app/theme-object";
 import { Toaster } from "~/components/ui/sonner";
+import {
+  HEADER_INNER_HEIGHT,
+  HEADER_INNER_HEIGHT_MOBILE,
+  HEADER_TOP_PADDING_MOBILE,
+} from "@/constants/layout";
 
 export type ToastVariant = "default" | "info" | "success" | "warning" | "error";
 
@@ -63,8 +68,22 @@ export function useToastApi(): ToastApi {
   );
 }
 
+// Below the workspace header and tab row (36 + 36 on desktop, the 56px phone header), so a toast
+// that stays up, like "Reconnecting", never covers the tabs or the header controls.
+const TOASTER_OFFSET = { top: HEADER_INNER_HEIGHT * 2 + 8 };
+const TOASTER_MOBILE_OFFSET = {
+  top: `calc(env(safe-area-inset-top) + ${HEADER_TOP_PADDING_MOBILE + HEADER_INNER_HEIGHT_MOBILE + 8}px)`,
+};
+
 /** The one Sonner toaster, in the app's light or dark scheme. */
 export function AppToaster() {
   const theme = useThemeObject();
-  return <Toaster theme={theme.colorScheme} position="top-center" />;
+  return (
+    <Toaster
+      theme={theme.colorScheme}
+      position="top-center"
+      offset={TOASTER_OFFSET}
+      mobileOffset={TOASTER_MOBILE_OFFSET}
+    />
+  );
 }

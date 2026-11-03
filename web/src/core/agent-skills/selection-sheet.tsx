@@ -164,7 +164,12 @@ export function SkillSelectionSheet({
 
   const footer = useMemo(
     () => (
-      <div className="flex flex-1 flex-row justify-end gap-2">
+      <div className="flex flex-1 flex-row items-center justify-end gap-2">
+        {saveError ? (
+          <p className="mr-auto text-sm text-destructive" role="alert">
+            {saveError}
+          </p>
+        ) : null}
         <Button variant="secondary" onClick={handleDismiss} disabled={isSaving}>
           {t("common.actions.cancel")}
         </Button>
@@ -179,7 +184,7 @@ export function SkillSelectionSheet({
         </Button>
       </div>
     ),
-    [confirmLabel, handleDismiss, handleSave, isSaving, noTargets, t],
+    [confirmLabel, handleDismiss, handleSave, isSaving, noTargets, saveError, t],
   );
 
   const allSkills = draft.mode === "all";
@@ -249,10 +254,6 @@ export function SkillSelectionSheet({
           )}
         </ItemGroup>
       </SettingsSection>
-
-      {saveError ? (
-        <ItemDescription className="text-destructive">{saveError}</ItemDescription>
-      ) : null}
     </AdaptiveModalSheet>
   );
 }

@@ -286,6 +286,7 @@ test.describe("Agent skills sheet inset", () => {
     test("keeps more space above the bundled skills label than below", async ({ page, skills }) => {
       await openAgentSkillsSettings(page, skills);
       await openSkillSelection(page);
+      await waitForSettledPosition(page.getByTestId("skill-selection-sheet"));
 
       expect({
         aboveLabel: await readVerticalGap(installTargetsCard(page), bundledSkillsLabel(page)),

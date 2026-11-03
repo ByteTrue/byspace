@@ -99,10 +99,10 @@ test.describe("Timeline detail level", () => {
       "Expand all thinking",
       "Expand all",
     ]) {
-      await expect(page.getByRole("menuitem", { name: option, exact: true })).toBeVisible();
+      await expect(page.getByRole("menuitemcheckbox", { name: option, exact: true })).toBeVisible();
     }
 
-    await page.getByRole("menuitem", { name: "Expand all thinking", exact: true }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Expand all thinking", exact: true }).click();
     await expect(page.getByLabel("Select timeline detail (Expand all thinking)")).toBeVisible();
     await expect.poll(() => readStoredTimelineDetailLevel(page)).toBe("thinking");
   });

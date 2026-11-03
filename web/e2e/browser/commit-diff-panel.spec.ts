@@ -60,10 +60,11 @@ test("commit history shows dates and shares diff layout preferences", async ({
     throw new Error("Commit-diff toolbar geometry could not be measured");
   }
   expect(commitToolbarBox.height).toBe(36);
-  expect(layoutToggleBox.width).toBe(20);
-  expect(layoutToggleBox.height).toBe(20);
-  expect(layoutToggleGlyphBox.width).toBe(14);
-  expect(layoutToggleGlyphBox.height).toBe(14);
+  // shadcn's icon-xs button: a 24px frame around a 12px glyph.
+  expect(layoutToggleBox.width).toBe(24);
+  expect(layoutToggleBox.height).toBe(24);
+  expect(layoutToggleGlyphBox.width).toBe(12);
+  expect(layoutToggleGlyphBox.height).toBe(12);
   await expect(layoutToggle).toHaveAccessibleName("Switch to side-by-side diff");
   await expect(panel.getByTestId("git-diff-canvas")).toBeVisible({ timeout: 30_000 });
   await expectCommitDiffHeaderGeometry(panel);

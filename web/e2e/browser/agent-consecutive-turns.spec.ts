@@ -203,18 +203,22 @@ async function recordTurnFrames(page: Page, prompt: string): Promise<void> {
       footer: Element | null | undefined,
       clip: Element | null,
     ): ElementFrame => {
-      const dots = Array.from(footer?.querySelectorAll("*") ?? []).filter((candidate) =>
-        hasColor(getComputedStyle(candidate).backgroundColor),
-      );
-      if (dots.length === 0) return emptyElement();
-      const opacities = dots.map((dot) => Number(getComputedStyle(dot).opacity));
+      // The working indicator's spinner: shadcn's Spinner, a stroked SVG.
+      const spinners = Array.from(footer?.querySelectorAll('[data-slot="spinner"]') ?? []);
+      if (spinners.length === 0) return emptyElement();
+      const opacities = spinners.map((spinner) => Number(getComputedStyle(spinner).opacity));
       return {
         mounted: true,
-        visible: dots.some((dot) => isVisible(dot, clip)),
-        painted: dots.some((dot, index) => opacities[index] > 0 && isVisible(dot, clip)),
-        rect: unionRect(dots),
+        visible: spinners.some((spinner) => isVisible(spinner, clip)),
+        painted: spinners.some(
+          (spinner, index) =>
+            opacities[index] > 0 &&
+            isVisible(spinner, clip) &&
+            hasColor(getComputedStyle(spinner).stroke),
+        ),
+        rect: unionRect(spinners),
         opacity: Math.max(...opacities),
-        backgroundColor: getComputedStyle(dots[0]).backgroundColor,
+        backgroundColor: getComputedStyle(spinners[0]).backgroundColor,
       };
     };
     const findImageAttachment = (row: Element | undefined) =>

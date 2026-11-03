@@ -193,10 +193,11 @@ test("compact Changes keeps its actions compact and menu-only", async ({ page })
   }
   expect(actionsBox.width).toBe(48);
   expect(actionsBox.height).toBe(28);
-  expect(optionsBox.width).toBe(32);
-  expect(optionsBox.height).toBe(32);
-  expect(glyphBox.width).toBe(18);
-  expect(glyphBox.height).toBe(18);
+  // shadcn's icon-xs button: a 24px frame around a 12px glyph.
+  expect(optionsBox.width).toBe(24);
+  expect(optionsBox.height).toBe(24);
+  expect(glyphBox.width).toBe(12);
+  expect(glyphBox.height).toBe(12);
 
   await expect(actions).not.toContainText("Commit");
   await expect(actions.locator("svg")).toHaveCount(2);

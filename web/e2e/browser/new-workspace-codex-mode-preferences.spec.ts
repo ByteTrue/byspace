@@ -119,7 +119,7 @@ async function selectMode(page: Page, label: string): Promise<void> {
   await expect(popup).toBeVisible({ timeout: 10_000 });
   await expectNoTruncation(popup);
 
-  const searchInput = page.getByRole("textbox", { name: /search mode/i });
+  const searchInput = page.getByRole("combobox", { name: /search mode/i });
   await expect(searchInput).toBeVisible({ timeout: 10_000 });
   await searchInput.fill(label);
 

@@ -222,7 +222,7 @@ export function AdaptiveModalSheet({
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-4",
-        scrollable ? "overflow-y-auto" : "overflow-hidden",
+        scrollable ? "overflow-y-auto *:shrink-0" : "overflow-hidden",
         bodyClassName,
         contentClassName,
       )}

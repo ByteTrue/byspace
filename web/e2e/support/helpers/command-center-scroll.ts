@@ -163,11 +163,13 @@ export async function expectTightTwoLineResultSpacing(
   title: string,
 ): Promise<void> {
   const row = panel.getByText(title, { exact: true }).locator("..");
-  const titleTop = await row
-    .getByText(title, { exact: true })
-    .evaluate((element) => element.getBoundingClientRect().top);
+  const titleBox = await row.getByText(title, { exact: true }).evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top, height: rect.height };
+  });
   const subtitleTop = await row
     .getByTestId("command-center-workspace-subtitle")
     .evaluate((element) => element.getBoundingClientRect().top);
-  expect(subtitleTop - titleTop).toBeLessThanOrEqual(18);
+  // The subtitle sits on the line right under the title, with no gap between them.
+  expect(subtitleTop - titleBox.top).toBeLessThanOrEqual(titleBox.height + 1);
 }

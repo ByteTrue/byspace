@@ -322,8 +322,8 @@ async function selectSendBehaviorInSettings(
   behaviorLabel: string,
   stored: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: /^Default send: / }).click();
-  await page.getByRole("menuitem", { name: behaviorLabel, exact: true }).click();
+  await page.getByRole("combobox", { name: /^Default send: / }).click();
+  await page.getByRole("option", { name: behaviorLabel, exact: true }).click();
   await expect
     .poll(async () => {
       const raw = await page.evaluate(() => localStorage.getItem("@byspace:app-settings"));

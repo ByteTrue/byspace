@@ -410,7 +410,7 @@ export const selectMode = async (page: Page, mode: string) => {
   }
 
   // Wait for the mode dropdown to open
-  const searchInput = page.getByRole("textbox", { name: /search mode/i });
+  const searchInput = page.getByRole("combobox", { name: /search mode/i });
   await expect(searchInput).toBeVisible({ timeout: 10000 });
 
   // Type to filter modes

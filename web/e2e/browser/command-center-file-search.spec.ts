@@ -100,6 +100,14 @@ test("dropping the files scope leaves the search row the same height", async ({ 
 
     const panel = page.getByTestId("command-center-panel");
     await expect(panel).toBeVisible({ timeout: 30_000 });
+    // The dialog zooms in as it opens; measure once it has.
+    await panel.evaluate((element) =>
+      Promise.all(
+        (element.closest('[role="dialog"]') ?? element)
+          .getAnimations()
+          .map((animation) => animation.finished),
+      ),
+    );
     const header = panel.getByTestId("command-center-header");
     const scoped = await header.boundingBox();
 
