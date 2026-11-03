@@ -1,10 +1,10 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/balance-bar.tsx: a balance's label and amount, with
 // a bar when there is a limit to measure against.
-import { useMemo } from "react";
 import { clampPct, formatAmount, formatResetLabel } from "@/provider-usage/format";
 import type { ProviderUsageBalance } from "@/provider-usage/types";
 import { FILL_TONE, useUsageTextTones } from "@/provider-usage/window-bar";
 import { cn } from "cn";
+import { Progress } from "~/components/ui/progress";
 
 function resolveBalance(balance: ProviderUsageBalance): {
   amountText: string;
@@ -28,7 +28,6 @@ export function ProviderUsageBalanceBar({ balance }: { balance: ProviderUsageBal
   const { amountText, usedPct } = resolveBalance(balance);
   const resetLabel = formatResetLabel(balance.resetsAt);
   const fillWidth = clampPct(usedPct ?? 0);
-  const fillStyle = useMemo(() => ({ width: `${fillWidth}%` }), [fillWidth]);
   return (
     <div className="flex flex-col gap-[3px]">
       <div className="flex items-center justify-between gap-2 text-xs">
@@ -41,12 +40,10 @@ export function ProviderUsageBalanceBar({ balance }: { balance: ProviderUsageBal
         </span>
       </div>
       {usedPct != null ? (
-        <div className={cn("h-1 overflow-hidden rounded-full", tones.track)}>
-          <div
-            className={cn("h-1 rounded-full", FILL_TONE[balance.tone ?? "default"])}
-            style={fillStyle}
-          />
-        </div>
+        <Progress
+          value={fillWidth}
+          className={cn(tones.track, FILL_TONE[balance.tone ?? "default"])}
+        />
       ) : null}
     </div>
   );

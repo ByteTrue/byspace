@@ -281,6 +281,8 @@ test.describe("Rewind sheet", () => {
       await expect(page.getByTestId("app-toast-message")).toHaveText(rewindError);
       await expect(page.getByText("Uncaught Error")).toHaveCount(0);
 
+      // The first menu is still fading out; a press during that closes the reopened one too.
+      await expect(page.getByRole("menu")).toHaveCount(0);
       await userMessage(page, firstPrompt).hover();
       await page.getByTestId("rewind-menu-trigger").first().click();
       await expect(page.getByTestId("rewind-menu-content")).toBeVisible();

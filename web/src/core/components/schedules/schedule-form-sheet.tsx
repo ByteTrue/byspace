@@ -187,6 +187,7 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
   const [sheetVisible, setSheetVisible] = useState(props.visible);
   const livePropsRef = useRef(props);
   const closeRequestedRef = useRef(false);
+  const closedKeyRef = useRef<string | null>(null);
   livePropsRef.current = props;
 
   useEffect(() => {
@@ -205,16 +206,23 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
 
   const requestClose = useCallback(() => {
     closeRequestedRef.current = true;
+    closedKeyRef.current = openKey(livePropsRef.current);
     setSheetVisible(false);
   }, []);
 
   const handleDismiss = useCallback(() => {
-    const dismissedProps = livePropsRef.current;
+    const liveProps = livePropsRef.current;
     closeRequestedRef.current = false;
+    // The parent opened another form while this one was closing: show that one, don't close it.
+    if (liveProps.visible && openKey(liveProps) !== closedKeyRef.current) {
+      setRenderedProps(liveProps);
+      setSheetVisible(true);
+      return;
+    }
     setRenderedProps(null);
     setSheetVisible(false);
-    if (dismissedProps.visible) {
-      dismissedProps.onClose();
+    if (liveProps.visible) {
+      liveProps.onClose();
     }
   }, []);
 

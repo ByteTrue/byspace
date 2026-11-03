@@ -10,6 +10,7 @@ import {
   type CheckPresentationTone,
 } from "@/git/check-presentation.view";
 import { cn } from "cn";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 
 export const sectionKitClassNames = {
   emptyText: "px-3 py-2 text-xs text-muted-foreground",
@@ -48,20 +49,17 @@ export function Section({
 }: SectionProps) {
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
-    <div>
-      <button
-        type="button"
+    <Collapsible open={open} onOpenChange={onToggle}>
+      <CollapsibleTrigger
         aria-label={accessibilityLabel}
-        aria-expanded={open}
-        onClick={onToggle}
         className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
         <Chevron size={14} className="shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
         <span className="ml-auto flex items-center gap-2">{summary}</span>
-      </button>
-      {open ? <div className="pb-3">{children}</div> : null}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pb-3">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 

@@ -9,6 +9,7 @@ import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import { useCheckoutCommitsQuery, type CheckoutCommitsQueryResult } from "@/git/use-commits-query";
 import { normalizeBranchOptionName } from "@/utils/branch-suggestions";
 import { cn } from "cn";
+import { Skeleton } from "~/components/ui/skeleton";
 
 interface CommitsSectionProps {
   serverId: string;
@@ -17,8 +18,6 @@ interface CommitsSectionProps {
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
-
-const SKELETON_BAR = "rounded-sm bg-muted";
 
 function CommitsSectionSkeleton() {
   const { t } = useTranslation();
@@ -29,10 +28,10 @@ function CommitsSectionSkeleton() {
       data-testid="commits-section-skeleton"
     >
       <div className="flex min-h-5 items-center gap-2 px-2 py-1">
-        <span className="size-2 rounded-full bg-muted" />
-        <span className={cn(SKELETON_BAR, "h-2.5 w-12")} />
-        <span className={cn(SKELETON_BAR, "h-3 min-w-0 flex-1")} />
-        <span className={cn(SKELETON_BAR, "h-2.5 w-10 shrink-0")} />
+        <Skeleton className="size-2 rounded-full" />
+        <Skeleton className="h-2.5 w-12" />
+        <Skeleton className="h-3 min-w-0 flex-1" />
+        <Skeleton className="h-2.5 w-10 shrink-0" />
         <span className="size-4 shrink-0" />
       </div>
     </div>

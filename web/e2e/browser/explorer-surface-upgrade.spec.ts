@@ -1,3 +1,4 @@
+import { pinnedSidebar } from "../support/helpers/sidebar-chrome";
 // Reported on 0.5.0-beta.1 desktop: after upgrading, the old docked explorer
 // sidebar and the new explorer pane were both visible, and on Windows the
 // sidebar had no close button because the window controls own that corner.
@@ -78,8 +79,9 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
         expect(persisted).not.toBeNull();
         expect(persisted).not.toContain("fileExplorerOpen");
         expect(persisted).not.toContain("explorerWidth");
+        expect(persisted).not.toContain("sidebarWidth");
         // Everything else the user had must survive the migration.
-        expect(persisted).toContain('"sidebarWidth":340');
+        expect(persisted).toContain('"explorerSortOption":"name"');
       });
     } finally {
       await workspace.cleanup();
@@ -96,7 +98,7 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
       await gotoWorkspace(page, workspace.workspaceId);
       await waitForWorkspaceTabsVisible(page);
 
-      const agentList = visible(page, "left-sidebar");
+      const agentList = pinnedSidebar(page);
       const toggle = visible(page, "workspace-explorer-toggle").first();
 
       await test.step("open the explorer so both sides are showing", async () => {

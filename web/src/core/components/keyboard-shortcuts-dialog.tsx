@@ -4,6 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Shortcut } from "~/components/shortcut";
+import { Empty, EmptyHeader, EmptyTitle } from "~/components/ui/empty";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "~/components/ui/item";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import {
@@ -62,44 +71,36 @@ export function KeyboardShortcutsDialog() {
       <div data-testid="keyboard-shortcuts-dialog-content" className="flex flex-col gap-4">
         {visibleSections.map((section) => (
           <div key={section.title} className="flex flex-col gap-2">
-            <span className="text-xs leading-[normal] font-medium text-muted-foreground">
-              {t(section.titleKey)}
-            </span>
-            <div className="flex flex-col overflow-hidden rounded-[10px] border border-muted">
+            <span className="text-xs font-medium text-muted-foreground">{t(section.titleKey)}</span>
+            <ItemGroup>
               {section.rows.map((row) => (
-                <div
-                  key={row.id}
-                  className="flex flex-row items-center justify-between gap-3 border-b border-muted px-4 py-3"
-                  data-testid={`shortcut-help-row-${row.id}`}
-                >
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm leading-[normal] text-foreground">
-                      {t(row.labelKey)}
-                    </span>
+                <Item key={row.id} variant="outline" data-testid={`shortcut-help-row-${row.id}`}>
+                  <ItemContent>
+                    <ItemTitle>{t(row.labelKey)}</ItemTitle>
                     {row.note ? (
-                      <span className="mt-0.5 text-xs leading-[normal] text-muted-foreground">
-                        {row.noteKey ? t(row.noteKey) : row.note}
-                      </span>
+                      <ItemDescription>{row.noteKey ? t(row.noteKey) : row.note}</ItemDescription>
                     ) : null}
-                  </div>
-                  {row.chord === null ? (
-                    <span className="self-start text-sm leading-[normal] text-muted-foreground">
-                      {t("settings.shortcuts.unassigned")}
-                    </span>
-                  ) : (
-                    <span className="flex self-start">
+                  </ItemContent>
+                  <ItemActions>
+                    {row.chord === null ? (
+                      <span className="text-sm text-muted-foreground">
+                        {t("settings.shortcuts.unassigned")}
+                      </span>
+                    ) : (
                       <Shortcut chord={row.chord} />
-                    </span>
-                  )}
-                </div>
+                    )}
+                  </ItemActions>
+                </Item>
               ))}
-            </div>
+            </ItemGroup>
           </div>
         ))}
         {visibleSections.length === 0 ? (
-          <span className="block py-6 text-center text-sm leading-[normal] text-muted-foreground">
-            {t("common.empty.noResults")}
-          </span>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>{t("common.empty.noResults")}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : null}
       </div>
     </AdaptiveModalSheet>

@@ -1,11 +1,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
- * The pinned desktop sidebar. The shell can keep a hidden copy mounted, so always read it
- * through `:visible` rather than a bare testID.
+ * The pinned desktop sidebar while it is open. shadcn's Sidebar keeps a closed sidebar mounted,
+ * slid off the left edge, so "open" is its data-state rather than visibility.
  */
 export function pinnedSidebar(page: Page): Locator {
-  return page.locator('[data-testid="left-sidebar"]:visible').first();
+  return page.locator('[data-slot="sidebar"][data-state="expanded"] [data-testid="left-sidebar"]');
 }
 
 /**

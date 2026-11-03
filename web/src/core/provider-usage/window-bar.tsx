@@ -1,16 +1,18 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/window-bar.tsx: a usage window's label, percent and
 // reset (or run-out) time over a 4px bar in its tone.
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext } from "react";
 import { clampPct, formatPct, formatResetLabel } from "@/provider-usage/format";
 import { deriveTone } from "@/provider-usage/tone";
 import type { ProviderUsageTone, ProviderUsageWindow } from "@/provider-usage/types";
 import { cn } from "cn";
+import { Progress } from "~/components/ui/progress";
 
+/** shadcn Progress's indicator in the usage tone. */
 export const FILL_TONE: Record<ProviderUsageTone, string> = {
-  default: "bg-muted-foreground",
-  ok: "bg-status-success",
-  warning: "bg-status-warning",
-  danger: "bg-status-danger",
+  default: "*:data-[slot=progress-indicator]:bg-muted-foreground",
+  ok: "*:data-[slot=progress-indicator]:bg-status-success",
+  warning: "*:data-[slot=progress-indicator]:bg-status-warning",
+  danger: "*:data-[slot=progress-indicator]:bg-status-danger",
 };
 
 /** True inside a tooltip, whose surface is the inverted foreground. */
@@ -35,7 +37,6 @@ export function ProviderUsageWindowBar({ window }: { window: ProviderUsageWindow
   const usedPct = resolveUsedPct(window);
   const tone = window.tone ?? deriveTone(usedPct);
   const fillWidth = clampPct(usedPct ?? 0);
-  const fillStyle = useMemo(() => ({ width: `${fillWidth}%` }), [fillWidth]);
   const isAtRisk = window.runsOutAt != null && window.shortfallPct != null;
   const trailing = isAtRisk
     ? `runs out ${formatResetLabel(window.runsOutAt)?.replace("resets ", "") ?? ""}`.trim()
@@ -53,9 +54,7 @@ export function ProviderUsageWindowBar({ window }: { window: ProviderUsageWindow
           ) : null}
         </span>
       </div>
-      <div className={cn("h-1 overflow-hidden rounded-full", tones.track)}>
-        <div className={cn("h-1 rounded-full", FILL_TONE[tone])} style={fillStyle} />
-      </div>
+      <Progress value={fillWidth} className={cn(tones.track, FILL_TONE[tone])} />
     </div>
   );
 }

@@ -126,6 +126,11 @@ async function exerciseProviderSettingsStack(page: Page) {
   await expectProviderSettingsVisible(page);
 }
 
+function waitForDialogAnimations(element: Element): Promise<unknown> {
+  const dialog = element.closest('[role="dialog"]') ?? element;
+  return Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+}
+
 test.describe("provider settings overlay stack", () => {
   test("provider settings covers the desktop model selector without closing it", async ({
     page,
@@ -159,6 +164,8 @@ test.describe("provider settings overlay stack", () => {
       const commandCenter = page.getByTestId("command-center-panel");
       await expect(commandCenter).toBeVisible({ timeout: 10_000 });
       await expect(commandCenter.getByTestId("command-center-input")).toBeFocused();
+      // Escape once the dialog has finished opening, as a person's would land.
+      await commandCenter.evaluate(waitForDialogAnimations);
       await page.keyboard.press("Escape");
       await expect(commandCenter).not.toBeVisible({ timeout: 10_000 });
       await expect(selector).toBeVisible();

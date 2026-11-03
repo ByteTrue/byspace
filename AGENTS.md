@@ -54,7 +54,6 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 何时读、怎么读、能回答什么、四个对齐守卫、何时可以删                                    |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                      |
-| [docs/mobile-panels.md](docs/mobile-panels.md)                       | Compact left/center/right panel ownership, the DOM gesture runtime, revisions, retained panels                 |
 | [docs/explorer-sidebar.md](docs/explorer-sidebar.md)                 | Explorer sidebar and ordinary side-pane host contracts, lifecycle, placement, and routing preferences          |
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md)       | Isolated in-process daemon test harness                                                                        |
 | [docs/docker.md](docs/docker.md)                                     | Self-hosted web+relay container, TLS, plain-HTTP tradeoffs, running the daemon in your own container           |

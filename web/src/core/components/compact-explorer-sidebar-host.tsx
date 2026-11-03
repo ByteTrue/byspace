@@ -1,5 +1,5 @@
 // Port of archive/expo-app:packages/app/src/components/compact-explorer-sidebar-host.tsx: on a phone the explorer
-// is a panel over the workspace that a swipe in from the right edge opens. Which workspace it shows
+// is a sheet over the workspace. Which workspace it shows
 // and how a file opens from it are the Expo file's.
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { CompactExplorerSidebar } from "@/components/compact-explorer-sidebar";
@@ -8,7 +8,6 @@ import {
   type CompactExplorerSidebarHostModel,
 } from "@/components/compact-explorer-sidebar-host-state";
 import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspace-cache";
-import { useIsMobilePanelActive, useMobilePanelOpenGesture } from "@/mobile-panels/provider";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { openWorkspaceFileFromExplorer } from "@/screens/workspace/workspace-file-open-command";
@@ -23,7 +22,7 @@ function useActiveCompactExplorerSidebarModel(
 ): CompactExplorerSidebarHostModel | null {
   const selection = useActiveWorkspaceSelection();
   const workspace = useWorkspace(selection?.serverId ?? null, selection?.workspaceId ?? null);
-  const isExplorerActive = useIsMobilePanelActive("file-explorer");
+  const isExplorerActive = usePanelStore((state) => state.mobilePanel.target === "file-explorer");
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
   const client = useHostRuntimeClient(selection?.serverId ?? "");
   const isConnected = useHostRuntimeIsConnected(selection?.serverId ?? "");
@@ -77,19 +76,6 @@ export function CompactExplorerSidebarHost({
 }) {
   const model = useActiveCompactExplorerSidebarModel(enabled);
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
-  const openCompactFileExplorer = usePanelStore((state) => state.openCompactFileExplorer);
-  const handleOpenExplorer = useCallback(() => {
-    if (!model?.workspaceRoot) return;
-    openCompactFileExplorer({
-      serverId: model.serverId,
-      cwd: model.workspaceRoot,
-      isGit: model.isGit,
-    });
-  }, [model, openCompactFileExplorer]);
-  useMobilePanelOpenGesture("file-explorer", {
-    enabled: enabled && Boolean(model?.workspaceRoot),
-    onOpen: handleOpenExplorer,
-  });
   const openTab = useWorkspaceLayoutStore((state) => state.openTab);
   const openWorkspaceTabInFocusedPane = useCallback(
     (workspaceKey: string, target: WorkspaceTabTarget) =>

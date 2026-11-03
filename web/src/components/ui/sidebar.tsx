@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
@@ -7,7 +9,13 @@ import { useIsMobile } from "~/hooks/use-mobile"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
-import { MobilePanelOverlay } from "@/mobile-panels/presentation"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "~/components/ui/sheet"
 import { Skeleton } from "~/components/ui/skeleton"
 import {
   Tooltip,
@@ -19,6 +27,7 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -152,7 +161,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -169,21 +178,29 @@ function Sidebar({
     )
   }
 
-  // BySpace: the Expo app's compact sidebar, a full-width panel the mobile panel runtime slides in
-  // and the finger drags, inside the safe area.
   if (isMobile) {
     return (
-      <MobilePanelOverlay panel="agent-list">
-        <div
+      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+        <SheetContent
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="flex h-full w-full flex-col bg-sidebar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-foreground"
+          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+            } as React.CSSProperties
+          }
+          side={side}
         >
-          {children}
-        </div>
-      </MobilePanelOverlay>
+          <SheetHeader className="sr-only">
+            <SheetTitle>Sidebar</SheetTitle>
+            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+          </SheetHeader>
+          <div className="flex h-full w-full flex-col">{children}</div>
+        </SheetContent>
+      </Sheet>
     )
   }
 
@@ -200,8 +217,7 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          // BySpace: no slide, as the Expo app's sidebar opens and closes at once.
-          "relative w-(--sidebar-width) bg-transparent",
+          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
@@ -213,9 +229,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          // BySpace: collapsed, the sidebar is also hidden, so it leaves the tab order and the
-          // accessibility tree, as the Expo app's closed sidebar does; no slide, as there.
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) group-data-[collapsible=offcanvas]:invisible data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"

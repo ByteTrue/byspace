@@ -2,10 +2,11 @@
 // primitive across settings — a muted header (optional info tip, collapsed summary, trailing
 // slot) over its children; collapsible sections toggle from the header.
 import { ChevronRight } from "lucide-react";
-import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { SettingsInfoTip } from "@/components/settings/headings/settings-info-tip";
 import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 
 interface SettingsSectionProps {
   title: string;
@@ -38,7 +39,6 @@ export function SettingsSection({
   children,
 }: SettingsSectionProps) {
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
-  const handleToggle = useCallback(() => setIsExpanded((current) => !current), []);
 
   const header = (
     // min-w-0 as the Expo app's title row (a react-native-web View): on a phone a wide trailing slot
@@ -55,14 +55,17 @@ export function SettingsSection({
   );
 
   return (
-    <div className={cn("flex flex-col", !flush && "mb-6")} style={style} data-testid={testID}>
+    <Collapsible
+      open={!collapsible || isExpanded}
+      onOpenChange={setIsExpanded}
+      className={cn("flex flex-col", !flush && "mb-6")}
+      style={style}
+      data-testid={testID}
+    >
       <div className="mb-3 ml-1 flex items-center justify-between gap-2">
         {collapsible ? (
-          <button
-            type="button"
-            aria-expanded={isExpanded}
+          <CollapsibleTrigger
             aria-label={title}
-            onClick={handleToggle}
             className="flex flex-1 items-center gap-2 text-left"
             data-testid={testID ? `${testID}-toggle` : undefined}
           >
@@ -71,13 +74,13 @@ export function SettingsSection({
               size={ICON_SIZE.sm}
               className={cn("shrink-0 text-muted-foreground", isExpanded && "rotate-90")}
             />
-          </button>
+          </CollapsibleTrigger>
         ) : (
           header
         )}
         {trailing}
       </div>
-      {!collapsible || isExpanded ? <div className="flex flex-col gap-3">{children}</div> : null}
-    </div>
+      <CollapsibleContent className="flex flex-col gap-3">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }

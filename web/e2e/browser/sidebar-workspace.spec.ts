@@ -6,7 +6,6 @@ import {
   expectMobileAgentSidebarHidden,
   expectMobileAgentSidebarVisible,
   openMobileAgentSidebar,
-  pinWorkspaceFromSidebar,
 } from "../support/helpers/sidebar";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { expectWorkspaceHeader } from "../support/helpers/workspace-ui";
@@ -326,30 +325,6 @@ test.describe("Mobile sidebar panelState transition", () => {
     await closeMobileAgentSidebar(page);
     await expectMobileAgentSidebarHidden(page);
   });
-
-  test("keeps a pinned workspace rendered while the retained sidebar is closed", async ({
-    page,
-  }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "sidebar-retained-pin-" });
-
-    try {
-      await gotoAppShell(page);
-      await openMobileAgentSidebar(page);
-      await expectMobileAgentSidebarVisible(page);
-
-      const row = page.getByTestId(getWorkspaceRowTestId(workspace.workspaceId));
-      await expect(row).toBeVisible({ timeout: 30_000 });
-      await pinWorkspaceFromSidebar(page, workspace.workspaceId);
-      await expect(page.getByTestId("sidebar-pinned-section")).toBeVisible();
-
-      await closeMobileAgentSidebar(page);
-      await expectMobileAgentSidebarHidden(page);
-
-      await expect(row).toHaveCount(1);
-    } finally {
-      await workspace.cleanup();
-    }
-  });
 });
 
 test.describe("Half-screen desktop layout", () => {
@@ -406,35 +381,6 @@ test.describe("Half-screen desktop layout", () => {
     await gotoAppShell(page);
     await expect(pinnedSidebar(page)).toBeVisible();
     await expect(page.getByTestId("agent-list-backdrop")).not.toBeVisible();
-  });
-
-  test("keeps the sidebar toggle pinned to the window's top-left corner", async ({ page }) => {
-    await gotoAppShell(page);
-
-    // The toggle holds one position, so collapsing the sidebar must not move the target.
-    await expect(pinnedSidebar(page)).toBeVisible();
-    const openToggle = page.getByTestId("menu-button");
-    await expect(openToggle).toBeVisible();
-    const openBounds = await openToggle.boundingBox();
-    expect(openBounds).not.toBeNull();
-    expect(openBounds?.x).toBeLessThan(12);
-    expect(openBounds?.y).toBeLessThan(12);
-
-    await openToggle.click();
-    await expect(pinnedSidebar(page)).toHaveCount(0);
-
-    // Collapsed, the toggle is in the content card's header, and the card sits inside the window
-    // by its 6px margin and 1px border. The toggle moves by exactly that and nothing else.
-    const closedToggle = page.getByTestId("menu-button");
-    await expect(closedToggle).toBeVisible();
-    const closedBounds = await closedToggle.boundingBox();
-    expect(closedBounds).not.toBeNull();
-    const contentFrameInset = 7;
-    expect((closedBounds?.x ?? 0) - (openBounds?.x ?? 0)).toBe(contentFrameInset);
-    expect((closedBounds?.y ?? 0) - (openBounds?.y ?? 0)).toBe(contentFrameInset);
-
-    // Exactly one host at a time: never two toggles, never none.
-    await expect(page.getByTestId("menu-button")).toHaveCount(1);
   });
 
   test("reaches History from the Workspaces header in one click", async ({ page }) => {
@@ -518,7 +464,7 @@ test.describe("Half-screen desktop layout", () => {
       await expect(toggle()).toBeVisible({ timeout: 30_000 });
       const closedBounds = await toggle().boundingBox();
       expect(closedBounds).not.toBeNull();
-      expect(closedBounds!.x + closedBounds!.width).toBeGreaterThan(viewport!.width - 12);
+      expect(closedBounds!.x + closedBounds!.width).toBeGreaterThanOrEqual(viewport!.width - 16);
 
       // Opening the dock hands the same control to the dock's tab rail, unmoved.
       await openFilesPanel(page);

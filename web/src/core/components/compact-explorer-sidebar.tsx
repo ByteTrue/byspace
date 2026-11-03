@@ -1,8 +1,6 @@
-// Port of archive/expo-app:packages/app/src/components/compact-explorer-sidebar.tsx: the explorer on a phone — a
-// full-screen sheet from the right with the Changes, Files and pull request tabs and a close button.
-// The tab state, PR availability and the panes are the Expo file's; the mobile panel runtime slides
-// it in and the swipes drag it (mobile-panels/provider.tsx). Not ported: the native tablet's docked
-// explorer, which the web never uses.
+// The explorer on a phone: a shadcn Sheet from the right with the Changes, Files and pull request
+// tabs and a close button. The tab state, PR availability and the panes are the Expo app's
+// (archive/expo-app:packages/app/src/components/compact-explorer-sidebar.tsx).
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { shouldUseCompactExplorerKeyboardPadding } from "@/hooks/keyboard-shift-policy";
 import { X } from "lucide-react";
@@ -11,7 +9,6 @@ import { FileExplorerPane } from "@/components/file-explorer-pane";
 import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-panel";
 import { PullRequestTabIcon } from "@/git/pull-request-panel/tab-icon";
 import { formatPrTabLabel } from "@/git/pull-request-panel/tab-label";
-import { useIsMobilePanelActive } from "@/mobile-panels/provider";
 import { ChangesSurface } from "@/git/diff-pane";
 import { changesStateSchema, defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { PullRequestContent } from "@/panels/pull-request";
@@ -19,7 +16,7 @@ import { usePullRequestPanelAvailability } from "@/panels/pull-request-availabil
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePanelStore, type ExplorerTab } from "@/stores/panel-store";
-import { MobilePanelOverlay } from "@/mobile-panels/presentation";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { cn } from "cn";
 import { useThemeObject } from "~/app/theme-object";
 
@@ -54,8 +51,15 @@ export function CompactExplorerSidebar({
   isGit,
   onOpenFile,
 }: ExplorerSidebarProps) {
-  const isActive = useIsMobilePanelActive("file-explorer");
+  const isActive = usePanelStore((state) => state.mobilePanel.target === "file-explorer");
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const { t } = useTranslation();
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) showMobileAgent();
+    },
+    [showMobileAgent],
+  );
   const { explorerTab, handleTabPress } = useExplorerSidebarSharedState({
     serverId,
     workspaceRoot,
@@ -63,29 +67,34 @@ export function CompactExplorerSidebar({
   });
   return (
     <RetainedPanelActivity active={isActive}>
-      <MobilePanelOverlay
-        panel="file-explorer"
-        className={cn(
-          "flex flex-col bg-sidebar pt-[calc(env(safe-area-inset-top)+8px)] text-sm text-sidebar-foreground",
-          // As the Expo app: the bottom inset here, except on a repository's Changes tab, whose
-          // commits section pads itself (shouldUseCompactExplorerKeyboardPadding).
-          shouldUseCompactExplorerKeyboardPadding({ isGit, explorerTab }) &&
-            "pb-[env(safe-area-inset-bottom)]",
-        )}
-        testID="compact-explorer-sidebar"
-      >
-        <ExplorerSidebarContent
-          activeTab={explorerTab}
-          onTabPress={handleTabPress}
-          onClose={showMobileAgent}
-          serverId={serverId}
-          workspaceId={workspaceId}
-          workspaceRoot={workspaceRoot}
-          isGit={isGit}
-          isOpen={isActive}
-          onOpenFile={onOpenFile}
-        />
-      </MobilePanelOverlay>
+      <Sheet open={isActive} onOpenChange={handleOpenChange}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          aria-describedby={undefined}
+          className={cn(
+            "gap-0 pt-[calc(env(safe-area-inset-top)+8px)] text-sm",
+            // As the Expo app: the bottom inset here, except on a repository's Changes tab, whose
+            // commits section pads itself (shouldUseCompactExplorerKeyboardPadding).
+            shouldUseCompactExplorerKeyboardPadding({ isGit, explorerTab }) &&
+              "pb-[env(safe-area-inset-bottom)]",
+          )}
+          data-testid="compact-explorer-sidebar"
+        >
+          <SheetTitle className="sr-only">{t("workspace.tabs.explorerSidebar.toggle")}</SheetTitle>
+          <ExplorerSidebarContent
+            activeTab={explorerTab}
+            onTabPress={handleTabPress}
+            onClose={showMobileAgent}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            workspaceRoot={workspaceRoot}
+            isGit={isGit}
+            isOpen={isActive}
+            onOpenFile={onOpenFile}
+          />
+        </SheetContent>
+      </Sheet>
     </RetainedPanelActivity>
   );
 }

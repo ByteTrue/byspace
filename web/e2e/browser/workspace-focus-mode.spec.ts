@@ -80,7 +80,8 @@ test("focus mode only applies to the active workspace screen", async ({ page, wi
   await pressFocusModeShortcut(page);
 
   await expect(exitFocusMode).toBeVisible();
-  await expect(settingsButton).toHaveCount(0);
+  // The sidebar holding Settings slides off the left edge.
+  await expect(settingsButton).not.toBeInViewport();
   const workspaceUrl = page.url();
 
   await pressSettingsShortcut(page);
