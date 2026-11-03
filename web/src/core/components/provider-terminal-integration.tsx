@@ -11,7 +11,6 @@ import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { settingsStyles } from "@/styles/settings";
 import {
   createTerminalAgentHookPatch,
   isTerminalAgentHookProviderEnabled,
@@ -25,6 +24,7 @@ import {
   draftFromProfile,
 } from "@/components/provider-terminal-profile-save";
 import { showAlert } from "~/lib/alert";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 /**
  * The Terminal tab of a provider's detail sheet: how BySpace talks to this
@@ -113,23 +113,21 @@ export function ProviderTerminalIntegration({
       {supportsHookSettings ? (
         <div className="flex flex-col gap-2">
           <div className="ml-1 flex flex-col gap-1">
-            <span className={settingsStyles.sectionHeaderTitle}>
+            <span className="text-xs text-muted-foreground">
               {t("settings.host.terminalAgentHooks.sectionTitle")}
             </span>
             <span className="text-xs leading-[normal] text-muted-foreground">
               {t("settings.host.terminalAgentHooks.sectionHint")}
             </span>
           </div>
-          <div className={settingsStyles.card} data-testid="provider-terminal-hooks-card">
-            <div className={settingsStyles.row}>
-              <div className={settingsStyles.rowContent}>
-                <span className={settingsStyles.rowTitle}>
-                  {t("settings.host.terminalAgentHooks.reportTitle")}
-                </span>
-                <span className={settingsStyles.rowHint}>
+          <ItemGroup data-testid="provider-terminal-hooks-card">
+            <Item variant="outline">
+              <ItemContent>
+                <ItemTitle>{t("settings.host.terminalAgentHooks.reportTitle")}</ItemTitle>
+                <ItemDescription>
                   {t("settings.host.terminalAgentHooks.reportHint")}
-                </span>
-              </div>
+                </ItemDescription>
+              </ItemContent>
               <Switch
                 checked={hookEnabled}
                 disabled={!config}
@@ -137,30 +135,30 @@ export function ProviderTerminalIntegration({
                 aria-label={t("settings.host.terminalAgentHooks.reportTitle")}
                 data-testid={`provider-terminal-hooks-${provider}-switch`}
               />
-            </div>
-          </div>
+            </Item>
+          </ItemGroup>
         </div>
       ) : null}
 
       <div className="flex flex-col gap-2">
         <div className="ml-1 flex flex-col gap-1">
-          <span className={settingsStyles.sectionHeaderTitle}>
+          <span className="text-xs text-muted-foreground">
             {t("settings.host.terminalProfiles.providerTitle")}
           </span>
           <span className="text-xs leading-[normal] text-muted-foreground">
             {t("settings.host.terminalProfiles.providerHint")}
           </span>
         </div>
-        <div className={settingsStyles.card} data-testid="provider-terminal-profile-card">
-          <div className={settingsStyles.row}>
-            <div className={settingsStyles.rowContent}>
-              <span className={settingsStyles.rowTitle}>
+        <ItemGroup data-testid="provider-terminal-profile-card">
+          <Item variant="outline">
+            <ItemContent>
+              <ItemTitle>
                 {profile ? profile.name : t("settings.host.terminalProfiles.providerEmpty")}
-              </span>
+              </ItemTitle>
               <span className="line-clamp-2 text-xs leading-[normal] text-muted-foreground">
                 {commandText ?? t("settings.host.terminalProfiles.providerMissingHint")}
               </span>
-            </div>
+            </ItemContent>
             <Button
               variant="outline"
               size="sm"
@@ -172,8 +170,8 @@ export function ProviderTerminalIntegration({
                 ? t("settings.host.terminalProfiles.editProfile")
                 : t("settings.host.terminalProfiles.addProfile")}
             </Button>
-          </div>
-        </div>
+          </Item>
+        </ItemGroup>
       </div>
 
       {isEditing ? (

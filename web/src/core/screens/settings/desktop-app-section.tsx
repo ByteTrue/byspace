@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Switch } from "~/components/ui/switch";
-import { settingsStyles } from "@/styles/settings";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "~/components/ui/item";
 
 type KeepAwakeLevel = "off" | "system" | "display";
 type DockMode = "hide" | "window" | "show";
@@ -326,24 +326,22 @@ export function DesktopGeneralRows() {
 
   return (
     <>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{isZh ? "开机自启" : "Open at login"}</span>
-        </div>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{isZh ? "开机自启" : "Open at login"}</ItemTitle>
+        </ItemContent>
         <Switch
           checked={Boolean(state?.openAtLogin)}
           onCheckedChange={handleOpenAtLoginChange}
           aria-label={isZh ? "开机自启" : "Open at login"}
           data-testid="desktop-open-at-login-toggle"
         />
-      </div>
+      </Item>
       {isMac ? (
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {isZh ? "程序坞 (Dock) 图标" : "Show in Dock"}
-            </span>
-          </div>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{isZh ? "程序坞 (Dock) 图标" : "Show in Dock"}</ItemTitle>
+          </ItemContent>
           <Tabs value={dockMode} onValueChange={handleDockModeChange}>
             <TabsList>
               {dockOptions.map((option) => (
@@ -353,33 +351,33 @@ export function DesktopGeneralRows() {
               ))}
             </TabsList>
           </Tabs>
-        </div>
+        </Item>
       ) : null}
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{isZh ? "轻量模式" : "Lightweight mode"}</span>
-          <span className={settingsStyles.rowHint}>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{isZh ? "轻量模式" : "Lightweight mode"}</ItemTitle>
+          <ItemDescription>
             {isZh
               ? "窗口关闭 1 分钟后释放约 100 MB 内存；后台 Daemon 与 Agent 继续运行，仅下次打开时重载页面"
               : "A closed window frees about 100 MB after a minute; the daemon and agents keep running, only the page reloads"}
-          </span>
-        </div>
+          </ItemDescription>
+        </ItemContent>
         <Switch
           checked={prefs.lightweight}
           onCheckedChange={handleLightweightChange}
           aria-label={isZh ? "轻量模式" : "Lightweight mode"}
           data-testid="desktop-lightweight-toggle"
         />
-      </div>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{isZh ? "防止休眠" : "Prevent sleep"}</span>
-          <span className={settingsStyles.rowHint}>
+      </Item>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{isZh ? "防止休眠" : "Prevent sleep"}</ItemTitle>
+          <ItemDescription>
             {isZh
               ? "当 BySpace 正在运行 Agent 任务时阻止电脑进入休眠"
               : "Keeps this computer awake while BySpace runs agents"}
-          </span>
-        </div>
+          </ItemDescription>
+        </ItemContent>
         <Tabs value={keepAwake} onValueChange={handleKeepAwakeChange}>
           <TabsList>
             {sleepOptions.map((option) => (
@@ -389,7 +387,7 @@ export function DesktopGeneralRows() {
             ))}
           </TabsList>
         </Tabs>
-      </div>
+      </Item>
     </>
   );
 }
@@ -469,12 +467,10 @@ function DesktopCommandLineBlock({
   const shells = cli?.shells ?? [];
   const allOurs = Boolean(cli?.ours && shells.every((s) => s.ours));
   return (
-    <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>
-          {isZh ? "命令行 (Command line)" : "Command line"}
-        </span>
-        <span className={settingsStyles.rowHint}>{resolveCLIHint(isZh, cli)}</span>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{isZh ? "命令行 (Command line)" : "Command line"}</ItemTitle>
+        <ItemDescription>{resolveCLIHint(isZh, cli)}</ItemDescription>
         {shells.length > 0 ? (
           <div className="mt-2 flex flex-col gap-1">
             {shells.map((sh) => (
@@ -495,7 +491,7 @@ function DesktopCommandLineBlock({
             ))}
           </div>
         ) : null}
-      </div>
+      </ItemContent>
       {!allOurs ? (
         <Button
           variant="secondary"
@@ -506,7 +502,7 @@ function DesktopCommandLineBlock({
           {isZh ? "添加到 PATH" : "Add to PATH"}
         </Button>
       ) : null}
-    </div>
+    </Item>
   );
 }
 
@@ -566,13 +562,13 @@ export function DesktopAboutCardContent({
   if (!prefs) {
     return (
       <>
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>{t("settings.about.appVersion")}</span>
-            <span className={settingsStyles.rowHint}>{t("settings.about.thisDevice")}</span>
-          </div>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.about.appVersion")}</ItemTitle>
+            <ItemDescription>{t("settings.about.thisDevice")}</ItemDescription>
+          </ItemContent>
           <span className="text-xs text-muted-foreground">{appVersionText}</span>
-        </div>
+        </Item>
         {whatsNewRow}
         {diagnosticRow}
       </>
@@ -590,13 +586,11 @@ export function DesktopAboutCardContent({
 
   return (
     <>
-      <div className={settingsStyles.row}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.versionTitle}</span>
-          <span className={settingsStyles.rowHint}>
-            {resolveVersionSubtitle(isZh, state?.update)}
-          </span>
-        </div>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.versionTitle}</ItemTitle>
+          <ItemDescription>{resolveVersionSubtitle(isZh, state?.update)}</ItemDescription>
+        </ItemContent>
         <div className="flex flex-row items-center gap-2">
           <span className="text-xs text-muted-foreground">{currentVersion}</span>
           <Button
@@ -609,25 +603,25 @@ export function DesktopAboutCardContent({
             {resolveVersionActionLabel(isZh, updState)}
           </Button>
         </div>
-      </div>
+      </Item>
       {whatsNewRow}
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.autoUpdateTitle}</span>
-          <span className={settingsStyles.rowHint}>{copy.autoUpdateHint}</span>
-        </div>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.autoUpdateTitle}</ItemTitle>
+          <ItemDescription>{copy.autoUpdateHint}</ItemDescription>
+        </ItemContent>
         <Switch
           checked={autoUpdateEnabled}
           onCheckedChange={handleAutoUpdateChange}
           aria-label={copy.autoUpdateTitle}
           data-testid="desktop-auto-update-toggle"
         />
-      </div>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.checkEveryTitle}</span>
-          <span className={settingsStyles.rowHint}>{copy.checkEveryHint}</span>
-        </div>
+      </Item>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.checkEveryTitle}</ItemTitle>
+          <ItemDescription>{copy.checkEveryHint}</ItemDescription>
+        </ItemContent>
         <Tabs value={updateEveryVal} onValueChange={handleUpdateEveryChange}>
           <TabsList>
             {UPDATE_EVERY_OPTIONS.map((option) => (
@@ -637,12 +631,12 @@ export function DesktopAboutCardContent({
             ))}
           </TabsList>
         </Tabs>
-      </div>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.autoDownloadTitle}</span>
-          <span className={settingsStyles.rowHint}>{copy.autoDownloadHint}</span>
-        </div>
+      </Item>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.autoDownloadTitle}</ItemTitle>
+          <ItemDescription>{copy.autoDownloadHint}</ItemDescription>
+        </ItemContent>
         <Switch
           checked={autoDownloadEnabled}
           onCheckedChange={handleAutoDownloadChange}
@@ -650,12 +644,12 @@ export function DesktopAboutCardContent({
           aria-label={copy.autoDownloadTitle}
           data-testid="desktop-auto-download-toggle"
         />
-      </div>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.autoRestartTitle}</span>
-          <span className={settingsStyles.rowHint}>{copy.autoRestartHint}</span>
-        </div>
+      </Item>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.autoRestartTitle}</ItemTitle>
+          <ItemDescription>{copy.autoRestartHint}</ItemDescription>
+        </ItemContent>
         <Switch
           checked={prefs.autoRestart}
           onCheckedChange={handleAutoRestartChange}
@@ -663,12 +657,12 @@ export function DesktopAboutCardContent({
           aria-label={copy.autoRestartTitle}
           data-testid="desktop-auto-restart-toggle"
         />
-      </div>
-      <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{copy.configFolderTitle}</span>
-          <span className={settingsStyles.rowHint}>{copy.configFolderHint}</span>
-        </div>
+      </Item>
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{copy.configFolderTitle}</ItemTitle>
+          <ItemDescription>{copy.configFolderHint}</ItemDescription>
+        </ItemContent>
         <div className="flex flex-row items-center gap-2">
           {state?.configFolder ? (
             <span className="text-xs text-muted-foreground">{state.configFolder}</span>
@@ -682,20 +676,18 @@ export function DesktopAboutCardContent({
             {copy.openText}
           </Button>
         </div>
-      </div>
+      </Item>
       <DesktopCommandLineBlock
         isZh={isZh}
         cli={state?.cliStatus}
         onAddCLIToPath={handleAddCLIToPath}
       />
       {daemonSt ? (
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>{copy.daemonUrlTitle}</span>
-            <span className={settingsStyles.rowHint}>
-              {resolveDaemonDescription(isZh, daemonSt)}
-            </span>
-          </div>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{copy.daemonUrlTitle}</ItemTitle>
+            <ItemDescription>{resolveDaemonDescription(isZh, daemonSt)}</ItemDescription>
+          </ItemContent>
           <div className="flex flex-row items-center gap-2">
             <span className="text-xs text-muted-foreground">{`http://${daemonSt.addr}`}</span>
             {daemonSt.reason === "external-byspace" ? (
@@ -709,7 +701,7 @@ export function DesktopAboutCardContent({
               </Button>
             ) : null}
           </div>
-        </div>
+        </Item>
       ) : null}
       {diagnosticRow}
     </>

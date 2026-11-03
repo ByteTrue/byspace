@@ -11,7 +11,6 @@ import {
 import { useIsFocused } from "~/app/route-focus";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react";
-import { cn } from "cn";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "~/components/ui/button";
@@ -28,11 +27,18 @@ import { useHostFeature } from "@/runtime/host-features";
 import { useHosts, useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SelectField, type SelectFieldDisplay } from "@/components/ui/select-field";
 import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunnel-peer-targets";
-import { settingsStyles } from "@/styles/settings";
-import { ICON_SIZE } from "@/styles/theme";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
 import { Input } from "~/components/ui/input";
 import { Field, FieldLabel } from "~/components/ui/field";
+import { Item, ItemGroup } from "~/components/ui/item";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 
 type FormState =
   | { mode: "closed" }
@@ -366,8 +372,8 @@ function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
   }, [patchConfig, t]);
 
   return (
-    <div className={settingsStyles.card} data-testid="tunnels-enable-card">
-      <div className={cn(settingsStyles.row, "gap-3")}>
+    <ItemGroup data-testid="tunnels-enable-card">
+      <Item variant="outline" className="gap-3">
         <div className={ROW_CONTENT}>
           <span className="mb-2 text-sm leading-[normal] font-medium text-foreground">
             {t("tunnels.enable.title")}
@@ -388,8 +394,8 @@ function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
         >
           {enabling ? t("tunnels.enable.enabling") : t("tunnels.enable.action")}
         </Button>
-      </div>
-    </div>
+      </Item>
+    </ItemGroup>
   );
 }
 
@@ -434,58 +440,55 @@ function TunnelsListBody({
   }
   if (loadState.status !== "loaded") {
     return (
-      <div className={settingsStyles.card}>
+      <ItemGroup>
         <div className={LOADING_ROW}>
           <MutedSpinner />
           <span className="mt-2 text-xs leading-[normal] text-muted-foreground">
             {t("common.states.loading")}
           </span>
         </div>
-      </div>
+      </ItemGroup>
     );
   }
   if (entries.length === 0) {
     return (
-      <div className={settingsStyles.card}>
-        <div className="flex flex-col items-center gap-4 px-4 py-6">
-          <ArrowRightLeft size={ICON_SIZE.lg} className="text-muted-foreground" />
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm leading-[normal] text-foreground">{t("tunnels.empty")}</span>
-            <span className="text-center text-xs leading-[normal] text-muted-foreground">
-              {t("tunnels.emptyDescription")}
-            </span>
-          </div>
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ArrowRightLeft />
+          </EmptyMedia>
+          <EmptyTitle>{t("tunnels.empty")}</EmptyTitle>
+          <EmptyDescription>{t("tunnels.emptyDescription")}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
           <Button variant="outline" size="sm" onClick={onAddTunnel} data-testid="tunnels-empty-add">
             <Plus data-icon="inline-start" />
             {t("tunnels.add")}
           </Button>
-        </div>
-      </div>
+        </EmptyContent>
+      </Empty>
     );
   }
   return (
-    <div className={settingsStyles.card}>
-      {entries.map((entry, index) => (
+    <ItemGroup>
+      {entries.map((entry) => (
         <TunnelRow
           key={entry.serverId + ":" + entry.tunnelId}
           entry={entry}
-          isLast={index === entries.length - 1}
           onEdit={onEditTunnel}
           onRemoved={onRemoved}
         />
       ))}
-    </div>
+    </ItemGroup>
   );
 }
 
 function TunnelRow({
   entry,
-  isLast,
   onEdit,
   onRemoved,
 }: {
   entry: AggregatedTunnelEntry;
-  isLast: boolean;
   onEdit: (entry: AggregatedTunnelEntry) => void;
   onRemoved: () => void;
 }): ReactElement {
@@ -560,8 +563,8 @@ function TunnelRow({
     : t("tunnels.inboundSubtitle", { host: entry.serverName });
 
   return (
-    <div
-      className={cn(settingsStyles.row, !isLast && settingsStyles.rowBorder)}
+    <Item
+      variant="outline"
       data-testid={isOutbound ? "tunnels-row-outbound" : "tunnels-row-inbound"}
     >
       <div className={ROW_CONTENT}>
@@ -632,7 +635,7 @@ function TunnelRow({
           </>
         ) : undefined}
       </div>
-    </div>
+    </Item>
   );
 }
 
@@ -719,8 +722,8 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
 
   return (
     <SettingsSection title={t("tunnels.allowlist.title")}>
-      <div className={settingsStyles.card}>
-        <div className={cn(settingsStyles.row, "gap-2")}>
+      <ItemGroup>
+        <Item variant="outline" className="gap-2">
           <Input
             className="flex-1"
             defaultValue={draft}
@@ -741,16 +744,16 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
           >
             {saving ? t("tunnels.allowlist.saving") : t("tunnels.allowlist.add")}
           </Button>
-        </div>
+        </Item>
         {allowedPorts.length === 0 ? (
-          <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
+          <Item variant="outline">
             <span className="text-xs leading-[normal] text-muted-foreground">
               {t("tunnels.allowlist.empty")}
             </span>
-          </div>
+          </Item>
         ) : (
           allowedPorts.map((port) => (
-            <div key={port} className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
+            <Item variant="outline" key={port}>
               <div className="flex flex-1 flex-row items-center gap-3">
                 <div className="rounded-[4px] bg-muted px-2 py-0.5">
                   <span className="text-xs leading-[normal] text-foreground">127.0.0.1:{port}</span>
@@ -767,10 +770,10 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
               >
                 {TRASH_ICON}
               </Button>
-            </div>
+            </Item>
           ))
         )}
-      </div>
+      </ItemGroup>
       {error ? (
         <span className="block mt-2 text-xs leading-[normal] text-red-300">{error}</span>
       ) : undefined}

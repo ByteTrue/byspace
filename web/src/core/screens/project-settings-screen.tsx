@@ -6,7 +6,6 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { router, type Href } from "~/app/navigation";
 import { useFocusEffect } from "~/app/route-focus";
-import { cn } from "cn";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -36,7 +35,6 @@ import { SelectField } from "@/components/ui/select-field";
 import { SettingsGroup } from "@/components/settings/headings/settings-group";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { persistAppSettings, useSettings } from "@/hooks/use-settings";
-import { settingsStyles } from "@/styles/settings";
 import { useProjects } from "@/hooks/use-projects";
 import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
 import { useProjectIcons } from "@/projects/icons";
@@ -76,6 +74,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -251,7 +250,7 @@ function DefaultHostSection({ project }: { project: ProjectSummary }) {
       info={t("settings.project.defaultHost.hint")}
       testID="default-host-section"
     >
-      <div className={settingsStyles.card} data-testid="default-host-card">
+      <ItemGroup data-testid="default-host-card">
         <SelectField<string>
           label={t("settings.project.defaultHost.label")}
           value={pinnedServerId}
@@ -264,7 +263,7 @@ function DefaultHostSection({ project }: { project: ProjectSummary }) {
           testID="default-host-field"
           triggerTestID="default-host-trigger"
         />
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
@@ -329,7 +328,7 @@ function DefaultIsolationSection({ project }: { project: ProjectSummary }) {
       info={t("settings.project.defaultIsolation.hint")}
       testID="default-isolation-section"
     >
-      <div className={settingsStyles.card} data-testid="default-isolation-card">
+      <ItemGroup data-testid="default-isolation-card">
         <SelectField<string>
           label={t("settings.project.defaultIsolation.label")}
           value={pinnedIsolation}
@@ -342,7 +341,7 @@ function DefaultIsolationSection({ project }: { project: ProjectSummary }) {
           testID="default-isolation-field"
           triggerTestID="default-isolation-trigger"
         />
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
@@ -435,7 +434,7 @@ function DefaultBaseBranchSection({ project }: { project: ProjectSummary }) {
       info={t("settings.project.defaultBaseBranch.hint")}
       testID="default-base-branch-section"
     >
-      <div className={settingsStyles.card} data-testid="default-base-branch-card">
+      <ItemGroup data-testid="default-base-branch-card">
         <SelectField<string>
           label={t("settings.project.defaultBaseBranch.label")}
           value={pinnedBranch}
@@ -448,7 +447,7 @@ function DefaultBaseBranchSection({ project }: { project: ProjectSummary }) {
           testID="default-base-branch-field"
           triggerTestID="default-base-branch-trigger"
         />
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
@@ -975,7 +974,7 @@ function ProjectConfigForm({
       <button
         type="button"
         onClick={handleAddScript}
-        className={cn(settingsStyles.sectionHeaderLink, "text-muted-foreground")}
+        className="flex flex-row items-center gap-1 text-muted-foreground"
         aria-label={t("settings.project.scripts.actions.add")}
         data-testid="scripts-add-button"
       >
@@ -1091,25 +1090,24 @@ function ProjectConfigForm({
         trailing={scriptsTrailing}
         testID="scripts-group"
       >
-        <div className={settingsStyles.card} data-testid="scripts-list">
+        <ItemGroup data-testid="scripts-list">
           {draft.scripts.length === 0 ? (
-            <div className={settingsStyles.row}>
+            <Item variant="outline">
               <span className="text-sm leading-[normal] text-muted-foreground">
                 {t("settings.project.scripts.empty")}
               </span>
-            </div>
+            </Item>
           ) : (
-            draft.scripts.map((script, index) => (
+            draft.scripts.map((script) => (
               <ScriptRow
                 key={script.id}
                 script={script}
-                isFirst={index === 0}
                 onEdit={handleEditScript}
                 onRemove={handleRemoveScript}
               />
             ))
           )}
-        </div>
+        </ItemGroup>
       </SettingsGroup>
 
       <SettingsGroup
@@ -1321,18 +1319,16 @@ function ProjectSetupAgentCard({
       title={t("settings.project.projectSetup.title")}
       testID="project-setup-agent-group"
     >
-      <div className={settingsStyles.card} data-testid="project-setup-agent-card">
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.project.projectSetup.actionTitle")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+      <ItemGroup data-testid="project-setup-agent-card">
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.project.projectSetup.actionTitle")}</ItemTitle>
+            <ItemDescription>
               {isSupported
                 ? t("settings.project.projectSetup.description")
                 : t("settings.project.projectSetup.updateHost")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           {isSupported ? (
             <Button
               variant="outline"
@@ -1345,7 +1341,7 @@ function ProjectSetupAgentCard({
               {statusQuery.isError ? t("common.actions.retry") : actionLabel}
             </Button>
           ) : null}
-        </div>
+        </Item>
         {error ? (
           <div className="mt-3 flex flex-col">
             <Alert variant="destructive" data-testid="project-setup-agent-error">
@@ -1357,7 +1353,7 @@ function ProjectSetupAgentCard({
             </Alert>
           </div>
         ) : null}
-      </div>
+      </ItemGroup>
     </SettingsGroup>
   );
 }
@@ -1413,29 +1409,25 @@ function MetadataPromptSection({ promptKey, value, onChange, flush }: MetadataPr
 
 interface ScriptRowProps {
   script: ProjectScriptDraft;
-  isFirst: boolean;
   onEdit: (script: ProjectScriptDraft) => void;
   onRemove: (script: ProjectScriptDraft) => void;
 }
 
-function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
+function ScriptRow({ script, onEdit, onRemove }: ScriptRowProps) {
   const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(script), [onEdit, script]);
   const handleRemove = useCallback(() => onRemove(script), [onRemove, script]);
   return (
-    <div
-      className={cn("flex flex-row items-center justify-between p-4", !isFirst && "border-t")}
-      data-testid={`script-row-${script.id}`}
-    >
+    <Item variant="outline" data-testid={`script-row-${script.id}`}>
       <button
         type="button"
         className="flex min-w-0 flex-1 flex-col gap-1 text-left"
         onClick={handleEdit}
       >
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>
+        <ItemTitle className="truncate">
           {script.name || t("settings.project.scripts.untitled")}
-        </span>
-        <span className={cn(settingsStyles.rowHint, "truncate")}>{scriptHint(script, t)}</span>
+        </ItemTitle>
+        <ItemDescription className="truncate">{scriptHint(script, t)}</ItemDescription>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -1462,7 +1454,7 @@ function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 

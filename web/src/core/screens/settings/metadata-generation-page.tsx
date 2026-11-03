@@ -1,7 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/metadata-generation-page.tsx: the metadata generation model section; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agents-page-sections.py; edit it directly.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import { ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -13,8 +12,8 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { settingsStyles } from "@/styles/settings";
 import { showAlert } from "~/lib/alert";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const METADATA_GENERATION_DOCS_URL =
   "https://github.com/ByteTrue/byspace/blob/main/public-docs/metadata-generation.md";
@@ -122,18 +121,16 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
       trailing={docsLink}
       testID="metadata-generation-settings"
     >
-      <div className={settingsStyles.card}>
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.metadataGeneration.selection")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+      <ItemGroup>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.metadataGeneration.selection")}</ItemTitle>
+            <ItemDescription>
               {mode === "automatic"
                 ? t("settings.metadataGeneration.automaticHint")
                 : t("settings.metadataGeneration.preferredHint")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           <Tabs
             value={mode}
             onValueChange={handleModeChange}
@@ -147,17 +144,13 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
               ))}
             </TabsList>
           </Tabs>
-        </div>
+        </Item>
         {mode === "preferred" ? (
-          <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-            <div className={settingsStyles.rowContent}>
-              <span className={settingsStyles.rowTitle}>
-                {t("settings.metadataGeneration.model")}
-              </span>
-              <span className={settingsStyles.rowHint}>
-                {t("settings.metadataGeneration.fallbackHint")}
-              </span>
-            </div>
+          <Item variant="outline">
+            <ItemContent>
+              <ItemTitle>{t("settings.metadataGeneration.model")}</ItemTitle>
+              <ItemDescription>{t("settings.metadataGeneration.fallbackHint")}</ItemDescription>
+            </ItemContent>
             <CombinedModelSelector
               providers={providers}
               selectedProvider={configuredProvider?.provider ?? ""}
@@ -175,9 +168,9 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
               desktopPlacement="top-start"
               desktopMinWidth={360}
             />
-          </div>
+          </Item>
         ) : null}
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }

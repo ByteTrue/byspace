@@ -17,8 +17,6 @@ import {
 } from "@/hosts/appearance";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { identityColor } from "@/styles/identity-colors";
-import { cn } from "cn";
-import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { withTheme } from "~/app/theme-object";
@@ -29,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Item, ItemContent, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const ThemedChevronDown = withTheme(ChevronDown);
 const ThemedPencil = withTheme(Pencil);
@@ -120,10 +119,10 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
   const { t } = useTranslation();
   const selectedLabel = colorLabel(t, color);
   return (
-    <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{t("settings.host.appearance.color.label")}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.host.appearance.color.label")}</ItemTitle>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
@@ -151,7 +150,7 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -165,10 +164,10 @@ function BadgeDisplayRow({
   const { t } = useTranslation();
   const selectedLabel = badgeDisplayLabel(t, badgeDisplay);
   return (
-    <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{t("settings.host.appearance.badge.label")}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.host.appearance.badge.label")}</ItemTitle>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           data-testid="host-appearance-badge-display"
@@ -196,7 +195,7 @@ function BadgeDisplayRow({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -296,24 +295,22 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
 
   return (
     <SettingsSection title={t("settings.host.appearance.title")}>
-      <div className={settingsStyles.card}>
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.host.appearance.name.label")}
-            </span>
-          </div>
+      <ItemGroup>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.appearance.name.label")}</ItemTitle>
+          </ItemContent>
           <div className="flex shrink flex-row items-center gap-2">
             <span className="shrink truncate text-sm leading-[normal] text-muted-foreground">
               {host.label}
             </span>
             <HostRenameButton host={host} />
           </div>
-        </div>
+        </Item>
         <ColorRow color={host.appearance.color} onChange={handleColorChange} />
         <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
         <BadgePreview host={host} badgeDisplay={badgeDisplay} />
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }

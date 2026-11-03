@@ -18,7 +18,6 @@ import type { TFunction } from "i18next";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import {
   getTerminalProfileIcon,
@@ -57,7 +56,6 @@ import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
-import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { isVersionMismatch } from "@/utils/version-display";
@@ -74,6 +72,7 @@ import {
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
 import { useThemeObject, withTheme } from "~/app/theme-object";
 import { showAlert } from "~/lib/alert";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const ThemedArrowUp = withTheme(ArrowUp);
 const ThemedArrowDown = withTheme(ArrowDown);
@@ -162,11 +161,11 @@ function HostNotFound() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col">
-      <div className={cn(settingsStyles.card, "items-center p-4")}>
+      <ItemGroup className="items-center p-4">
         <span className="text-sm leading-[normal] text-muted-foreground">
           {t("settings.host.notFound")}
         </span>
-      </div>
+      </ItemGroup>
     </div>
   );
 }
@@ -276,11 +275,11 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
-        <div className={cn(settingsStyles.card, "items-center p-4")}>
+        <ItemGroup className="items-center p-4">
           <span className="text-sm leading-[normal] text-muted-foreground">
             {t("settings.host.agents.unavailable")}
           </span>
-        </div>
+        </ItemGroup>
       )}
       <AgentSkillsSection serverId={serverId} />
       <TerminalProfilesSection serverId={serverId} />
@@ -411,14 +410,13 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
 
   return (
     <SettingsSection title={t("settings.host.connections.title")}>
-      <div className={settingsStyles.card} data-testid="host-page-connections-card">
-        {host.connections.map((conn, index) => {
+      <ItemGroup data-testid="host-page-connections-card">
+        {host.connections.map((conn) => {
           const probe = probeByConnectionId.get(conn.id);
           return (
             <ConnectionRow
               key={conn.id}
               connection={conn}
-              showBorder={index > 0}
               latencyMs={probe?.status === "available" ? probe.latencyMs : undefined}
               latencyLoading={!probe || probe.status === "pending"}
               latencyError={probe?.status === "unavailable"}
@@ -426,7 +424,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
             />
           );
         })}
-      </div>
+      </ItemGroup>
 
       {pendingRemoveConnection ? (
         <AdaptiveModalSheet
@@ -467,14 +465,12 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
 
 function ConnectionRow({
   connection,
-  showBorder,
   latencyMs,
   latencyLoading,
   latencyError,
   onRemove,
 }: {
   connection: HostConnection;
-  showBorder: boolean;
   latencyMs: number | null | undefined;
   latencyLoading: boolean;
   latencyError: boolean;
@@ -499,17 +495,17 @@ function ConnectionRow({
   const latencyTextStyle = useMemo(() => ({ color: latencyColor }), [latencyColor]);
 
   return (
-    <div className={cn(settingsStyles.row, showBorder && settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>{title}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle className="truncate">{title}</ItemTitle>
+      </ItemContent>
       <span className="mr-2 text-sm leading-[normal]" style={latencyTextStyle}>
         {latencyText}
       </span>
       <Button variant="ghost" size="sm" className="text-destructive" onClick={handlePressRemove}>
         {t("settings.host.connections.removeAction")}
       </Button>
-    </div>
+    </Item>
   );
 }
 
@@ -653,12 +649,12 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   );
 
   return (
-    <div className={settingsStyles.card} data-testid="host-page-restart-card">
-      <div className={settingsStyles.row}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{t("settings.host.daemon.restart.title")}</span>
-          <span className={settingsStyles.rowHint}>{t("settings.host.daemon.restart.hint")}</span>
-        </div>
+    <ItemGroup data-testid="host-page-restart-card">
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{t("settings.host.daemon.restart.title")}</ItemTitle>
+          <ItemDescription>{t("settings.host.daemon.restart.hint")}</ItemDescription>
+        </ItemContent>
         <Button
           variant="outline"
           size="sm"
@@ -671,8 +667,8 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
             ? t("settings.host.daemon.restart.restarting")
             : t("settings.host.daemon.restart.confirm")}
         </Button>
-      </div>
-    </div>
+      </Item>
+    </ItemGroup>
   );
 }
 
@@ -891,16 +887,16 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
   const buttonLabel = isUpdating ? updateState.phase : t("settings.host.daemon.update.confirm");
 
   return (
-    <div className={settingsStyles.card} data-testid="host-page-update-card">
-      <div className={settingsStyles.row}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{t("settings.host.daemon.update.title")}</span>
-          <span className={settingsStyles.rowHint}>
+    <ItemGroup data-testid="host-page-update-card">
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{t("settings.host.daemon.update.title")}</ItemTitle>
+          <ItemDescription>
             {desktopManaged
               ? t("settings.host.daemon.update.desktopManagedHint")
               : t("settings.host.daemon.update.hint")}
-          </span>
-        </div>
+          </ItemDescription>
+        </ItemContent>
         <Button
           variant="outline"
           size="sm"
@@ -911,7 +907,7 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
           {updateIcon}
           {buttonLabel}
         </Button>
-      </div>
+      </Item>
       {updateState.status === "failed" ? (
         <div className="mx-4 mb-4">
           <Alert variant="destructive" data-testid="host-page-update-error">
@@ -921,7 +917,7 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
           </Alert>
         </div>
       ) : null}
-    </div>
+    </ItemGroup>
   );
 }
 
@@ -944,23 +940,19 @@ function InjectBySpaceToolsCard({ serverId }: { serverId: string }) {
   if (!isConnected) return null;
 
   return (
-    <div className={settingsStyles.card} data-testid="host-page-inject-mcp-card">
-      <div className={settingsStyles.row}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>
-            {t("settings.host.orchestration.enableTools.title")}
-          </span>
-          <span className={settingsStyles.rowHint}>
-            {t("settings.host.orchestration.enableTools.hint")}
-          </span>
-        </div>
+    <ItemGroup data-testid="host-page-inject-mcp-card">
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>{t("settings.host.orchestration.enableTools.title")}</ItemTitle>
+          <ItemDescription>{t("settings.host.orchestration.enableTools.hint")}</ItemDescription>
+        </ItemContent>
         <Switch
           checked={config?.mcp.injectIntoAgents !== false}
           onCheckedChange={handleValueChange}
           aria-label={t("settings.host.orchestration.enableTools.accessibilityLabel")}
         />
-      </div>
-    </div>
+      </Item>
+    </ItemGroup>
   );
 }
 
@@ -984,25 +976,22 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
   if (!isConnected) return null;
 
   return (
-    <div
-      className={settingsStyles.card}
-      data-testid="host-page-auto-archive-merged-workspaces-card"
-    >
-      <div className={settingsStyles.row}>
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>Archive merged PR workspaces</span>
-          <span className={settingsStyles.rowHint}>
+    <ItemGroup data-testid="host-page-auto-archive-merged-workspaces-card">
+      <Item variant="outline">
+        <ItemContent>
+          <ItemTitle>Archive merged PR workspaces</ItemTitle>
+          <ItemDescription>
             Automatically archive clean BySpace workspaces after their pull request is merged
-          </span>
-        </div>
+          </ItemDescription>
+        </ItemContent>
         <Switch
           checked={config?.autoArchiveAfterMerge === true}
           onCheckedChange={handleValueChange}
           aria-label="Archive merged PR workspaces"
           data-testid="host-page-auto-archive-merged-workspaces-switch"
         />
-      </div>
-    </div>
+      </Item>
+    </ItemGroup>
   );
 }
 
@@ -1057,16 +1046,12 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
 
   return (
     <>
-      <div className={settingsStyles.card} data-testid="host-page-append-system-prompt-card">
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.host.orchestration.systemPrompt.title")}
-            </span>
-            <span className={settingsStyles.rowHint}>
-              {t("settings.host.orchestration.systemPrompt.hint")}
-            </span>
-          </div>
+      <ItemGroup data-testid="host-page-append-system-prompt-card">
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.orchestration.systemPrompt.title")}</ItemTitle>
+            <ItemDescription>{t("settings.host.orchestration.systemPrompt.hint")}</ItemDescription>
+          </ItemContent>
           <Button
             variant="outline"
             size="sm"
@@ -1075,8 +1060,8 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
           >
             {t("settings.host.orchestration.systemPrompt.edit")}
           </Button>
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
 
       {isEditing ? (
         <AdaptiveModalSheet
@@ -1130,19 +1115,16 @@ function PairDeviceRow({ serverId }: { serverId: string }) {
   const handleClose = useCallback(() => setIsModalOpen(false), []);
 
   return (
-    <div className={settingsStyles.card}>
-      <button
-        type="button"
-        className={cn(settingsStyles.row, "w-full text-left")}
-        onClick={handleOpen}
-        data-testid="host-page-pair-device-row"
-      >
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{t("settings.host.pairDevices.rowTitle")}</span>
-          <span className={settingsStyles.rowHint}>{t("settings.host.pairDevices.rowHint")}</span>
-        </div>
-        <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </button>
+    <ItemGroup>
+      <Item asChild variant="outline" className="w-full text-left">
+        <button type="button" onClick={handleOpen} data-testid="host-page-pair-device-row">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.pairDevices.rowTitle")}</ItemTitle>
+            <ItemDescription>{t("settings.host.pairDevices.rowHint")}</ItemDescription>
+          </ItemContent>
+          <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </button>
+      </Item>
 
       <PairDeviceModal
         serverId={serverId}
@@ -1150,7 +1132,7 @@ function PairDeviceRow({ serverId }: { serverId: string }) {
         onClose={handleClose}
         testID="host-page-pair-device-card"
       />
-    </div>
+    </ItemGroup>
   );
 }
 
@@ -1220,20 +1202,20 @@ function RemoveHostSection({
     >
       <RestartDaemonCard host={host} />
 
-      <div className={settingsStyles.card}>
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
+      <ItemGroup>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>
               {isServingDaemon
                 ? t("settings.host.daemon.remove.localTitle")
                 : t("settings.host.daemon.remove.title")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+            </ItemTitle>
+            <ItemDescription>
               {isServingDaemon
                 ? t("settings.host.daemon.remove.localHint")
                 : t("settings.host.daemon.remove.hint")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           <Button
             variant="outline"
             size="sm"
@@ -1244,8 +1226,8 @@ function RemoveHostSection({
             {removeIcon}
             {t("settings.host.connections.removeAction")}
           </Button>
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
 
       {isConfirming ? (
         <AdaptiveModalSheet
@@ -1332,8 +1314,9 @@ function TerminalProfileRow({
   const icon = getTerminalProfileIcon(profile);
 
   return (
-    <div
-      className={cn(settingsStyles.row, !isFirst && settingsStyles.rowBorder, "min-h-14 gap-2")}
+    <Item
+      variant="outline"
+      className="min-h-14 gap-2"
       data-testid={`terminal-profile-row-${profile.id}`}
     >
       <div className="flex w-4 items-center justify-center">
@@ -1347,10 +1330,10 @@ function TerminalProfileRow({
           <ThemedProfileSquareTerminal size={ICON_SIZE.md} themeProps={mutedColorMapping} />
         )}
       </div>
-      <div className={settingsStyles.rowContent}>
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>{profile.name}</span>
-        <span className={cn(settingsStyles.rowHint, "truncate")}>{commandText}</span>
-      </div>
+      <ItemContent>
+        <ItemTitle className="truncate">{profile.name}</ItemTitle>
+        <ItemDescription className="truncate">{commandText}</ItemDescription>
+      </ItemContent>
       <div className="flex flex-row items-center gap-0">
         <Button
           variant="ghost"
@@ -1391,7 +1374,7 @@ function TerminalProfileRow({
           {removeProfileIcon}
         </Button>
       </div>
-    </div>
+    </Item>
   );
 }
 
@@ -1563,13 +1546,13 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
 
   if (!isConnected) {
     return (
-      <div className={settingsStyles.card} data-testid="terminal-profiles-unavailable">
+      <ItemGroup data-testid="terminal-profiles-unavailable">
         <div className="flex flex-col items-center p-4">
           <span className="text-sm leading-[normal] text-muted-foreground text-center">
             {t("settings.host.terminalProfiles.unavailable")}
           </span>
         </div>
-      </div>
+      </ItemGroup>
     );
   }
 
@@ -1580,7 +1563,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         trailing={addButton}
         testID="terminal-profiles-section"
       >
-        <div className={settingsStyles.card} data-testid="terminal-profiles-card">
+        <ItemGroup data-testid="terminal-profiles-card">
           {profiles && profiles.length > 0 ? (
             profiles.map((profile, index) => (
               <TerminalProfileRow
@@ -1601,7 +1584,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
               </span>
             </div>
           )}
-        </div>
+        </ItemGroup>
       </SettingsSection>
 
       <TerminalProfileEditModal

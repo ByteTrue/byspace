@@ -4,7 +4,6 @@ import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useCallback, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "~/components/ui/button";
@@ -12,7 +11,6 @@ import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
 import { useSessionStore } from "@/stores/session-store";
-import { settingsStyles } from "@/styles/settings";
 import type { MutableDaemonConfigPatch } from "@bytetrue/protocol/messages";
 import {
   useHostRuntimeClient,
@@ -25,6 +23,7 @@ import { withTheme } from "~/app/theme-object";
 import { showAlert } from "~/lib/alert";
 import { Input } from "~/components/ui/input";
 import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const mutedColorMapping = (theme: { colors: { foregroundMuted: string } }) => ({
   color: theme.colors.foregroundMuted,
@@ -164,11 +163,9 @@ export function NetworkSection({ serverId }: { serverId: string }) {
   if (!isConnected) {
     return (
       <SettingsSection title={t("settings.host.daemon.network.sectionTitle")}>
-        <div className={settingsStyles.card}>
-          <span className={settingsStyles.rowHint}>
-            {t("settings.host.daemon.network.unavailable")}
-          </span>
-        </div>
+        <ItemGroup>
+          <ItemDescription>{t("settings.host.daemon.network.unavailable")}</ItemDescription>
+        </ItemGroup>
       </SettingsSection>
     );
   }
@@ -192,24 +189,23 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           </Alert>
         </div>
       ) : null}
-      <div className={settingsStyles.card} data-testid="host-page-network-card">
-        <div
-          className={cn(settingsStyles.row, settingsStyles.rowBorder, "cursor-pointer")}
+      <ItemGroup data-testid="host-page-network-card">
+        <Item
+          variant="outline"
+          className="cursor-pointer"
           onClick={handleOpenSheet}
           role="button"
           tabIndex={-1}
           data-testid="host-page-network-password-row"
         >
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.host.daemon.network.password.title")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+          <ItemContent>
+            <ItemTitle>{t("settings.host.daemon.network.password.title")}</ItemTitle>
+            <ItemDescription>
               {passwordSet
                 ? t("settings.host.daemon.network.password.setHint")
                 : t("settings.host.daemon.network.password.unsetHint")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           <Button
             variant="outline"
             size="sm"
@@ -219,15 +215,13 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           >
             {t("settings.host.daemon.network.password.edit")}
           </Button>
-        </div>
+        </Item>
 
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.host.daemon.network.allowLan.title")}
-            </span>
-            <span className={settingsStyles.rowHint}>{lanHint}</span>
-          </div>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.daemon.network.allowLan.title")}</ItemTitle>
+            <ItemDescription>{lanHint}</ItemDescription>
+          </ItemContent>
           <Switch
             checked={allowLanAccess}
             disabled={isBusy || tcpPort === null || (!passwordSet && !allowLanAccess)}
@@ -235,8 +229,8 @@ export function NetworkSection({ serverId }: { serverId: string }) {
             aria-label={t("settings.host.daemon.network.allowLan.title")}
             data-testid="host-page-network-allow-lan-switch"
           />
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
 
       <PasswordSheet
         visible={isSheetOpen}

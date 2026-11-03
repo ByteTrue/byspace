@@ -11,7 +11,7 @@ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { settingsStyles } from "@/styles/settings";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const SERVICE_STATES = new Set([
   "not-installed",
@@ -122,11 +122,9 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   if (!isConnected) {
     return (
       <SettingsSection title={t("settings.host.daemon.service.sectionTitle")}>
-        <div className={settingsStyles.card}>
-          <span className={settingsStyles.rowHint}>
-            {t("settings.host.daemon.service.unavailable")}
-          </span>
-        </div>
+        <ItemGroup>
+          <ItemDescription>{t("settings.host.daemon.service.unavailable")}</ItemDescription>
+        </ItemGroup>
       </SettingsSection>
     );
   }
@@ -142,23 +140,19 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
           </Alert>
         </div>
       ) : null}
-      <div className={settingsStyles.card} data-testid="host-page-service-card">
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.host.daemon.service.toggle.title")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+      <ItemGroup data-testid="host-page-service-card">
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.daemon.service.toggle.title")}</ItemTitle>
+            <ItemDescription>
               {stateKnown
                 ? t(`settings.host.daemon.service.state.${serviceView?.state}`)
                 : t("settings.host.daemon.service.state.unknown")}
-            </span>
+            </ItemDescription>
             {serviceView?.linger === false ? (
-              <span className={settingsStyles.rowHint}>
-                {t("settings.host.daemon.service.lingerHint")}
-              </span>
+              <ItemDescription>{t("settings.host.daemon.service.lingerHint")}</ItemDescription>
             ) : null}
-          </div>
+          </ItemContent>
           <Switch
             checked={managed}
             disabled={isBusy}
@@ -166,8 +160,8 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
             aria-label={t("settings.host.daemon.service.toggle.title")}
             data-testid="host-page-service-switch"
           />
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
     </SettingsSection>
   );
 }

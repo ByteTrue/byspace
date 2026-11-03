@@ -17,6 +17,7 @@ import {
   getPullRequestIdentity,
   resolvePullRequestContentState,
 } from "@/panels/pull-request/state";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "~/components/ui/empty";
 
 /**
  * Whether this workspace's branch has a pull request. Detection only offers the
@@ -73,15 +74,12 @@ export function PullRequestContent(input: {
     return <PullRequestPaneSkeleton />;
   }
   return (
-    <div
-      className="flex flex-1 flex-col items-center justify-center gap-2 p-6"
-      data-testid="pull-request-empty-state"
-    >
-      <span className="text-sm text-foreground">{t("panels.pullRequest.emptyTitle")}</span>
-      <span className="text-sm text-muted-foreground">
-        {t("panels.pullRequest.emptyDescription")}
-      </span>
-    </div>
+    <Empty data-testid="pull-request-empty-state">
+      <EmptyHeader>
+        <EmptyTitle>{t("panels.pullRequest.emptyTitle")}</EmptyTitle>
+        <EmptyDescription>{t("panels.pullRequest.emptyDescription")}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 

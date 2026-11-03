@@ -2,7 +2,6 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/projects-screen.py; edit it directly.
 import { useCallback, useMemo, type CSSProperties } from "react";
 import { ChevronRight } from "lucide-react";
-import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import { isHomeProjectViewKey } from "@/chief/home-workspace";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -10,9 +9,10 @@ import { Spinner } from "~/components/ui/spinner";
 import { useProjects, type ProjectHostError } from "@/hooks/use-projects";
 import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
-import { settingsStyles } from "@/styles/settings";
 import { openProjectSettings } from "@/navigation/settings-navigation";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
+import { Item, ItemGroup, ItemTitle } from "~/components/ui/item";
+import { Empty, EmptyDescription, EmptyHeader } from "~/components/ui/empty";
 
 interface ProjectsScreenProps {
   serverId: string;
@@ -72,31 +72,27 @@ export default function ProjectsScreen({ serverId }: ProjectsScreenProps) {
 
   if (hostProjects.length === 0) {
     return (
-      <div
-        className="flex flex-1 flex-col items-center justify-center p-6"
-        data-testid="projects-list"
-      >
-        <span className="text-sm leading-[normal] text-muted-foreground">
-          {t("sidebar.project.empty.title")}
-        </span>
-      </div>
+      <Empty data-testid="projects-list">
+        <EmptyHeader>
+          <EmptyDescription>{t("sidebar.project.empty.title")}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
   return (
     <div className="flex flex-col" data-testid="projects-list">
       {scopedErrors.length > 0 ? <HostErrorsBanner errors={scopedErrors} /> : null}
-      <div className={settingsStyles.card}>
-        {hostProjects.map(({ project, host }, index) => (
+      <ItemGroup>
+        {hostProjects.map(({ project, host }) => (
           <ProjectRow
             key={host.projectId}
             project={project}
             host={host}
-            isFirst={index === 0}
             iconDataUri={iconDataByProjectViewKey.get(project.viewKey) ?? null}
           />
         ))}
-      </div>
+      </ItemGroup>
     </div>
   );
 }
@@ -123,11 +119,10 @@ function HostErrorsBanner({ errors }: { errors: ProjectHostError[] }) {
 interface ProjectRowProps {
   project: ProjectSummary;
   host: ProjectHostEntry;
-  isFirst: boolean;
   iconDataUri: string | null;
 }
 
-function ProjectRow({ project, host, isFirst, iconDataUri }: ProjectRowProps) {
+function ProjectRow({ project, host, iconDataUri }: ProjectRowProps) {
   const { t } = useTranslation();
   const { viewKey } = project;
   const { projectName } = host;
@@ -136,29 +131,26 @@ function ProjectRow({ project, host, isFirst, iconDataUri }: ProjectRowProps) {
   }, [host.projectId, host.serverId]);
 
   return (
-    <button
-      type="button"
-      className={cn(
-        settingsStyles.row,
-        !isFirst && settingsStyles.rowBorder,
-        "gap-3 text-left hover:bg-muted active:bg-accent",
-      )}
-      onClick={handleNavigate}
-      aria-label={t("settings.projectList.editProject", { projectName })}
-      data-testid={`project-row-${viewKey}`}
-    >
-      <div className="flex min-w-0 flex-1 flex-row items-center gap-3">
-        <div className="flex size-4 shrink-0 items-center justify-center">
-          <ProjectRowIcon
-            iconDataUri={iconDataUri}
-            projectName={projectName}
-            projectViewKey={viewKey}
-          />
+    <Item asChild variant="outline" className="gap-3 text-left hover:bg-muted active:bg-accent">
+      <button
+        type="button"
+        onClick={handleNavigate}
+        aria-label={t("settings.projectList.editProject", { projectName })}
+        data-testid={`project-row-${viewKey}`}
+      >
+        <div className="flex min-w-0 flex-1 flex-row items-center gap-3">
+          <div className="flex size-4 shrink-0 items-center justify-center">
+            <ProjectRowIcon
+              iconDataUri={iconDataUri}
+              projectName={projectName}
+              projectViewKey={viewKey}
+            />
+          </div>
+          <ItemTitle className="truncate">{projectName}</ItemTitle>
         </div>
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>{projectName}</span>
-      </div>
-      <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
-    </button>
+        <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
+      </button>
+    </Item>
   );
 }
 

@@ -23,7 +23,6 @@ import { useToast } from "@/contexts/toast-context";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { TERMINAL_AGENT_HOOK_PROVIDERS } from "@/screens/settings/terminal-agent-hooks-config";
 import type { TerminalAgentHookProviderId } from "@bytetrue/protocol/messages";
@@ -39,6 +38,7 @@ import {
 } from "@/components/provider-diagnostic-models";
 import { useThemeObject } from "~/app/theme-object";
 import { Input } from "~/components/ui/input";
+import { ItemGroup } from "~/components/ui/item";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -117,15 +117,15 @@ function CustomModelRow({
 function SectionHeader({ title, count, hint }: { title: string; count?: number; hint?: string }) {
   return (
     <div className="mb-2 ml-1 flex flex-row items-center justify-between gap-2">
-      <span className={settingsStyles.sectionHeaderTitle}>{title}</span>
+      <span className="text-xs text-muted-foreground">{title}</span>
       <div className="flex flex-row items-center gap-1">
         {count !== undefined ? (
-          <span className={settingsStyles.sectionHeaderTitle}>{count}</span>
+          <span className="text-xs text-muted-foreground">{count}</span>
         ) : null}
         {count !== undefined && hint ? (
-          <span className={settingsStyles.sectionHeaderTitle}>·</span>
+          <span className="text-xs text-muted-foreground">·</span>
         ) : null}
-        {hint ? <span className={settingsStyles.sectionHeaderTitle}>{hint}</span> : null}
+        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
       </div>
     </div>
   );
@@ -521,11 +521,11 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
             title={t("settings.providers.models.discovered")}
             count={filteredDiscovered.length}
           />
-          <div className={settingsStyles.card}>
+          <ItemGroup>
             {filteredDiscovered.map((model) => (
               <DiscoveredModelRow key={model.id} model={model} />
             ))}
-          </div>
+          </ItemGroup>
         </div>
       ) : null}
       {filteredCustom.length > 0 ? (
@@ -534,7 +534,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
             title={t("settings.providers.models.custom")}
             count={filteredCustom.length}
           />
-          <div className={settingsStyles.card}>
+          <ItemGroup>
             {filteredCustom.map((model) => (
               <CustomModelRow
                 key={model.id}
@@ -543,7 +543,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
                 onDelete={onDeleteCustom}
               />
             ))}
-          </div>
+          </ItemGroup>
         </div>
       ) : null}
     </>

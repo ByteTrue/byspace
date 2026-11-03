@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SelectField } from "@/components/ui/select-field";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { settingsStyles } from "@/styles/settings";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { DetectedShell } from "@bytetrue/protocol/messages";
+import { ItemGroup } from "~/components/ui/item";
 
 const AUTO_SHELL_VALUE = "__auto__";
 
@@ -129,7 +129,7 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
       title={t("settings.host.terminalDefaultShell.sectionTitle")}
       testID="terminal-default-shell-section"
     >
-      <div className={settingsStyles.card} data-testid="terminal-default-shell-card">
+      <ItemGroup data-testid="terminal-default-shell-card">
         <div className="flex flex-col gap-2 p-4">
           <SelectField<ShellSelectValue>
             label={t("settings.host.terminalDefaultShell.label")}
@@ -159,7 +159,7 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
             </span>
           ) : null}
         </div>
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }

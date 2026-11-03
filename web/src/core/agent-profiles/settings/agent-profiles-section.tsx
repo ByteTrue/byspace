@@ -8,7 +8,6 @@ import { Button } from "~/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useAgentProfiles } from "@/agent-profiles/internal/use-agent-profiles";
@@ -18,6 +17,7 @@ import { AgentProfileEditModal } from "@/agent-profiles/settings/agent-profile-e
 import { AgentProfileRow } from "@/agent-profiles/settings/agent-profile-row";
 import { withTheme } from "~/app/theme-object";
 import { showAlert } from "~/lib/alert";
+import { ItemGroup } from "~/components/ui/item";
 
 const ThemedPlus = withTheme(Plus);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -144,7 +144,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         title={t("settings.host.agentProfiles.sectionTitle")}
         testID="agent-profiles-section"
       >
-        <div className={settingsStyles.card} data-testid="agent-profiles-unavailable">
+        <ItemGroup data-testid="agent-profiles-unavailable">
           <div className="flex flex-col items-center gap-3 px-4 py-6">
             <span className="text-center text-sm leading-[normal] text-muted-foreground">
               {isConnected
@@ -152,7 +152,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
                 : t("settings.host.agentProfiles.unavailable")}
             </span>
           </div>
-        </div>
+        </ItemGroup>
       </SettingsSection>
     );
   }
@@ -164,7 +164,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         trailing={addButton}
         testID="agent-profiles-section"
       >
-        <div className={settingsStyles.card} data-testid="agent-profiles-card">
+        <ItemGroup data-testid="agent-profiles-card">
           {profiles && profiles.length > 0 ? (
             profiles.map((profile, index) => (
               <AgentProfileRow
@@ -193,7 +193,7 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
               </Button>
             </div>
           )}
-        </div>
+        </ItemGroup>
       </SettingsSection>
 
       <AgentProfileEditModal

@@ -42,7 +42,6 @@ import {
   THEME_SWATCHES,
   type Theme,
 } from "@/styles/theme";
-import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "@/screens/settings/appearance/appearance-preview";
 import { SidebarNavSection } from "@/screens/settings/appearance/sidebar-nav-section";
 import type { CSSProperties } from "react";
@@ -56,6 +55,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
   event.currentTarget.select();
@@ -96,7 +96,6 @@ function sizeDraftToOverride(value: string): number | undefined {
 }
 
 const TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
-const ROW_WITH_BORDER = "flex flex-row items-center justify-between border-t p-4";
 
 // ---------------------------------------------------------------------------
 // Theme picker
@@ -157,10 +156,10 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
   const { t } = useTranslation();
   const selectedLabel = getThemeLabel(t, value);
   return (
-    <div className={settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{t("settings.appearance.theme.title")}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.appearance.theme.title")}</ItemTitle>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
@@ -195,7 +194,7 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
           })}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -254,11 +253,11 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
   const { t } = useTranslation();
   const selectedLabel = getTerminalAppearanceLabel(t, value);
   return (
-    <div className={settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{t("settings.appearance.terminal.title")}</span>
-        <span className={settingsStyles.rowHint}>{t("settings.appearance.terminal.hint")}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.appearance.terminal.title")}</ItemTitle>
+        <ItemDescription>{t("settings.appearance.terminal.hint")}</ItemDescription>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
@@ -286,7 +285,7 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -336,15 +335,11 @@ function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
   const { t } = useTranslation();
   const selectedLabel = getTimelineDetailLevelLabel(t, value);
   return (
-    <div className={settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>
-          {t("settings.general.timelineDetail.label")}
-        </span>
-        <span className={settingsStyles.rowHint}>
-          {t("settings.general.timelineDetail.description")}
-        </span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.general.timelineDetail.label")}</ItemTitle>
+        <ItemDescription>{t("settings.general.timelineDetail.description")}</ItemDescription>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
@@ -371,7 +366,7 @@ function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -386,7 +381,6 @@ interface FontFamilyRowProps {
   placeholder: string;
   value: string;
   draft: string;
-  withBorder: boolean;
   onChangeDraft: (value: string) => void;
   onCommit: (value: string) => void;
 }
@@ -398,7 +392,6 @@ function FontFamilyRow({
   placeholder,
   value,
   draft,
-  withBorder,
   onChangeDraft,
   onCommit,
 }: FontFamilyRowProps) {
@@ -424,11 +417,11 @@ function FontFamilyRow({
   }, [value]);
 
   return (
-    <div className={withBorder ? ROW_WITH_BORDER : settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{title}</span>
-        <span className={settingsStyles.rowHint}>{hint}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{title}</ItemTitle>
+        <ItemDescription>{hint}</ItemDescription>
+      </ItemContent>
       <Input
         defaultValue={draft}
         onChange={handleChangeDraftInput}
@@ -441,7 +434,7 @@ function FontFamilyRow({
         className="max-w-[380px] shrink grow text-left text-xs"
         aria-label={accessibilityLabel}
       />
-    </div>
+    </Item>
   );
 }
 
@@ -450,7 +443,6 @@ interface FontSizeRowProps {
   hint: string;
   accessibilityLabel: string;
   draft: string;
-  withBorder?: boolean;
   onChangeDraft: (value: string) => void;
   onCommit: () => void;
 }
@@ -460,7 +452,6 @@ function FontSizeRow({
   hint,
   accessibilityLabel,
   draft,
-  withBorder = true,
   onChangeDraft,
   onCommit,
 }: FontSizeRowProps) {
@@ -475,11 +466,11 @@ function FontSizeRow({
     [onChangeDraft],
   );
   return (
-    <div className={withBorder ? ROW_WITH_BORDER : settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{title}</span>
-        <span className={settingsStyles.rowHint}>{hint}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{title}</ItemTitle>
+        <ItemDescription>{hint}</ItemDescription>
+      </ItemContent>
       <div className="flex flex-row items-center gap-2">
         <Input
           defaultValue={draft}
@@ -493,7 +484,7 @@ function FontSizeRow({
         />
         <span className="text-sm text-muted-foreground">px</span>
       </div>
-    </div>
+    </Item>
   );
 }
 
@@ -532,15 +523,11 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
   const { t } = useTranslation();
   const selectedLabel = syntaxLabelForId(value);
   return (
-    <div className={settingsStyles.row}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>
-          {t("settings.appearance.syntax.highlightTheme")}
-        </span>
-        <span className={settingsStyles.rowHint}>
-          {t("settings.appearance.syntax.highlightThemeHint")}
-        </span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{t("settings.appearance.syntax.highlightTheme")}</ItemTitle>
+        <ItemDescription>{t("settings.appearance.syntax.highlightThemeHint")}</ItemDescription>
+      </ItemContent>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
@@ -567,7 +554,7 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Item>
   );
 }
 
@@ -726,13 +713,13 @@ export function AppearanceSection() {
   return (
     <div className="flex flex-col">
       <SettingsSection title={t("settings.appearance.theme.title")}>
-        <div className={settingsStyles.card}>
+        <ItemGroup>
           <ThemeRow value={settings.theme} onChange={handleThemeChange} />
           <TerminalAppearanceRow
             value={settings.terminalAppearance}
             onChange={handleTerminalAppearanceChange}
           />
-        </div>
+        </ItemGroup>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <SettingsCard>
@@ -745,7 +732,7 @@ export function AppearanceSection() {
       </SettingsSection>
       <SidebarNavSection />
       <SettingsSection title={t("settings.appearance.fonts.title")}>
-        <div className={settingsStyles.card}>
+        <ItemGroup>
           <FontFamilyRow
             title={t("settings.appearance.fonts.interfaceFont")}
             hint={t("settings.appearance.fonts.interfaceFontHint")}
@@ -753,7 +740,6 @@ export function AppearanceSection() {
             placeholder={uiFontPlaceholder}
             value={settings.uiFontFamily}
             draft={uiFontDraft}
-            withBorder={false}
             onChangeDraft={setUiFontDraft}
             onCommit={commitUiFontFamily}
           />
@@ -762,7 +748,6 @@ export function AppearanceSection() {
             hint={t("settings.appearance.fonts.interfaceSizeHint")}
             accessibilityLabel={t("settings.appearance.fonts.interfaceSizeAccessibility")}
             draft={uiBaseSizeDraft}
-            withBorder
             onChangeDraft={handleUiBaseSizeChange}
             onCommit={commitUiBaseSize}
           />
@@ -781,7 +766,6 @@ export function AppearanceSection() {
             placeholder={monoFontPlaceholder}
             value={settings.monoFontFamily}
             draft={monoFontDraft}
-            withBorder
             onChangeDraft={setMonoFontDraft}
             onCommit={commitMonoFontFamily}
           />
@@ -793,12 +777,12 @@ export function AppearanceSection() {
             onChangeDraft={handleCodeSizeChange}
             onCommit={commitCodeSize}
           />
-        </div>
+        </ItemGroup>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.syntax.title")}>
-        <div className={settingsStyles.card}>
+        <ItemGroup>
           <SyntaxRow value={settings.syntaxTheme} onChange={handleSyntaxThemeChange} />
-        </div>
+        </ItemGroup>
         <div className="mt-4">
           <AppearancePreview overrides={previewOverrides} />
         </div>

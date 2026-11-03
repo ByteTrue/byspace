@@ -9,7 +9,7 @@ import {
   type ReactElement,
 } from "react";
 import { useIsFocused } from "~/app/route-focus";
-import { ArrowUpRight, CalendarClock, Plus } from "lucide-react";
+import { CalendarClock, Plus } from "lucide-react";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
@@ -33,13 +33,20 @@ import {
   type ScheduleTargetAgent,
 } from "@/schedules/schedule-derivation";
 import { resolveSchedulesScreenBodyState } from "@/screens/schedules-screen-state";
-import { ICON_SIZE } from "@/styles/theme";
 import {
   buildProjectNameByCwd,
   buildScheduleProjectTargets,
 } from "@/schedules/schedule-project-targets";
 import type { ScheduleSummary } from "@bytetrue/protocol/schedule/types";
 import { cn } from "cn";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 
 type FormState =
   | { mode: "closed" }
@@ -321,38 +328,43 @@ function SchedulesEmptyState({
   testID?: string;
 }): ReactElement {
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-center gap-4" data-testid={testID}>
-      <CalendarClock size={ICON_SIZE.lg} className="text-muted-foreground" />
-      <div className="flex flex-col items-center gap-2">
-        <span className={EMPTY_TITLE}>No active schedules</span>
-        <span className={MUTED_TEXT}>Schedules run agents on a cadence.</span>
-        <Button variant="link" size="sm" asChild>
+    <Empty data-testid={testID}>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <CalendarClock />
+        </EmptyMedia>
+        <EmptyTitle>No active schedules</EmptyTitle>
+        <EmptyDescription>
+          Schedules run agents on a cadence.{" "}
           <a
             href="https://github.com/ByteTrue/byspace/blob/main/public-docs/schedules.md"
             target="_blank"
             rel="noreferrer"
           >
             See docs
-            <ArrowUpRight data-icon="inline-end" />
           </a>
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" onClick={onCreate} data-testid="schedules-empty-new">
+          <Plus data-icon="inline-start" />
+          New schedule
         </Button>
-      </div>
-      <Button variant="outline" onClick={onCreate} data-testid="schedules-empty-new">
-        <Plus data-icon="inline-start" />
-        New schedule
-      </Button>
-    </div>
+      </EmptyContent>
+    </Empty>
   );
 }
 
 function SchedulesEndedEmptyState(): ReactElement {
   return (
-    <div className={FILTER_EMPTY}>
-      <div className="flex flex-col items-center gap-3">
-        <CalendarClock size={ICON_SIZE.lg} className="text-muted-foreground" />
-        <span className={EMPTY_TITLE}>No ended schedules</span>
-      </div>
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <CalendarClock />
+        </EmptyMedia>
+        <EmptyTitle>No ended schedules</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
@@ -376,5 +388,4 @@ function ScheduleHostErrorsBanner({ errors }: { errors: ScheduleHostError[] }): 
 const CONTAINER = "flex min-h-0 flex-1 flex-col bg-background";
 const CENTERED = "flex flex-1 flex-col items-center justify-center gap-6 p-6";
 const FILTER_EMPTY = "flex grow flex-col items-center justify-center px-3 py-6 md:px-6";
-const EMPTY_TITLE = "text-center text-sm leading-[normal] font-normal text-foreground";
 const MUTED_TEXT = "text-center text-sm leading-[normal] text-muted-foreground";

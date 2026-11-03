@@ -78,7 +78,6 @@ import { WebPushSection } from "@/screens/settings/web-push-section";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
-import { settingsStyles } from "@/styles/settings";
 import {
   LANGUAGE_OPTIONS,
   formatLanguageOptionLabel,
@@ -107,6 +106,7 @@ import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { useThemeObject } from "~/app/theme-object";
 import { Input } from "~/components/ui/input";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
   event.currentTarget.select();
@@ -271,14 +271,12 @@ function GeneralSection({
 
   return (
     <SettingsSection title={t("settings.general.title")}>
-      <div className={settingsStyles.card}>
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.general.defaultSend.label")}
-            </span>
-            <span className={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</span>
-          </div>
+      <ItemGroup>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.general.defaultSend.label")}</ItemTitle>
+            <ItemDescription>{t(sendBehaviorDescriptionKey)}</ItemDescription>
+          </ItemContent>
           <Select value={settings.sendBehavior} onValueChange={handleSendBehaviorValue}>
             <SelectTrigger
               aria-label={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
@@ -293,14 +291,12 @@ function GeneralSection({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>{t("settings.general.language.label")}</span>
-            <span className={settingsStyles.rowHint}>
-              {t("settings.general.language.description")}
-            </span>
-          </div>
+        </Item>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.general.language.label")}</ItemTitle>
+            <ItemDescription>{t("settings.general.language.description")}</ItemDescription>
+          </ItemContent>
           <Select value={settings.language} onValueChange={handleLanguageValue}>
             <SelectTrigger aria-label={selectedLanguageLabel}>
               <SelectValue />
@@ -313,16 +309,14 @@ function GeneralSection({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>
-              {t("settings.general.terminalScrollback.label")}
-            </span>
-            <span className={settingsStyles.rowHint}>
+        </Item>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.general.terminalScrollback.label")}</ItemTitle>
+            <ItemDescription>
               {t("settings.general.terminalScrollback.description")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           <Input
             defaultValue={terminalScrollbackValue}
             onChange={handleTerminalScrollbackInput}
@@ -333,21 +327,21 @@ function GeneralSection({
             className="w-28 text-right"
             aria-label={t("settings.general.terminalScrollback.accessibilityLabel")}
           />
-        </div>
-        <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>{t("settings.editor.vimKeybindings")}</span>
-            <span className={settingsStyles.rowHint}>{t("settings.editor.vimHint")}</span>
-          </div>
+        </Item>
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.editor.vimKeybindings")}</ItemTitle>
+            <ItemDescription>{t("settings.editor.vimHint")}</ItemDescription>
+          </ItemContent>
           <Switch
             checked={settings.vimKeybindings}
             onCheckedChange={handleVimKeybindingsChange}
             aria-label={t("settings.editor.vimKeybindings")}
             data-testid="vim-keybindings-toggle"
           />
-        </div>
+        </Item>
         <DesktopGeneralRows />
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
@@ -363,31 +357,28 @@ function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
   const whatsNewRow = useMemo(() => <WhatsNewRow />, []);
   const diagnosticRow = useMemo(
     () => (
-      <div
-        className={cn(settingsStyles.row, settingsStyles.rowBorder)}
-        data-testid="app-diagnostic-row"
-      >
-        <div className={settingsStyles.rowContent}>
-          <span className={settingsStyles.rowTitle}>{t("settings.diagnostics.app.rowTitle")}</span>
-          <span className={settingsStyles.rowHint}>{t("settings.diagnostics.app.rowHint")}</span>
-        </div>
+      <Item variant="outline" data-testid="app-diagnostic-row">
+        <ItemContent>
+          <ItemTitle>{t("settings.diagnostics.app.rowTitle")}</ItemTitle>
+          <ItemDescription>{t("settings.diagnostics.app.rowHint")}</ItemDescription>
+        </ItemContent>
         <Button variant="secondary" size="sm" onClick={openAppDiagnostic}>
           {t("settings.diagnostics.app.run")}
         </Button>
-      </div>
+      </Item>
     ),
     [openAppDiagnostic, t],
   );
   return (
     <>
       <SettingsSection title={t("settings.about.title")}>
-        <div className={settingsStyles.card}>
+        <ItemGroup>
           <DesktopAboutCardContent
             appVersionText={appVersionText}
             whatsNewRow={whatsNewRow}
             diagnosticRow={diagnosticRow}
           />
-        </div>
+        </ItemGroup>
       </SettingsSection>
       <ConnectedHostsSection clientVersion={appVersion} />
       <div className="mt-4">
@@ -402,25 +393,18 @@ function WhatsNewRow() {
   const theme = useThemeObject();
 
   return (
-    <button
-      type="button"
-      className={cn(
-        settingsStyles.row,
-        settingsStyles.rowBorder,
-        "group/whats-new w-full text-left",
-      )}
-      onClick={openChangelog}
-      data-testid="settings-whats-new"
-    >
-      <span className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{t("changelog.title")}</span>
-        <span className={settingsStyles.rowHint}>{t("settings.about.whatsNewHint")}</span>
-      </span>
-      <ChevronRight
-        size={theme.iconSize.sm}
-        className="text-muted-foreground group-hover/whats-new:text-foreground"
-      />
-    </button>
+    <Item asChild variant="outline" className="group/whats-new w-full text-left">
+      <button type="button" onClick={openChangelog} data-testid="settings-whats-new">
+        <ItemContent>
+          <ItemTitle>{t("changelog.title")}</ItemTitle>
+          <ItemDescription>{t("settings.about.whatsNewHint")}</ItemDescription>
+        </ItemContent>
+        <ChevronRight
+          size={theme.iconSize.sm}
+          className="text-muted-foreground group-hover/whats-new:text-foreground"
+        />
+      </button>
+    </Item>
   );
 }
 
@@ -438,27 +422,20 @@ function ConnectedHostsSection({ clientVersion }: { clientVersion: string | null
   }
   return (
     <SettingsSection title={t("settings.about.connectedHosts")}>
-      <div className={settingsStyles.card}>
-        {hosts.map((host, index) => (
-          <HostVersionRow
-            key={host.serverId}
-            host={host}
-            showBorder={index > 0}
-            clientVersion={clientVersion}
-          />
+      <ItemGroup>
+        {hosts.map((host) => (
+          <HostVersionRow key={host.serverId} host={host} clientVersion={clientVersion} />
         ))}
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
 
 function HostVersionRow({
   host,
-  showBorder,
   clientVersion,
 }: {
   host: HostProfile;
-  showBorder: boolean;
   clientVersion: string | null;
 }) {
   const { t } = useTranslation();
@@ -482,17 +459,17 @@ function HostVersionRow({
   }
 
   return (
-    <div className={cn(settingsStyles.row, showBorder && settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>{host.label}</span>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle className="truncate">{host.label}</ItemTitle>
         {isMismatch ? (
-          <span className={settingsStyles.rowHint}>{t("settings.about.versionDiffers")}</span>
+          <ItemDescription>{t("settings.about.versionDiffers")}</ItemDescription>
         ) : null}
-      </div>
+      </ItemContent>
       <span className={cn("text-sm text-muted-foreground", isMismatch && "text-amber-500")}>
         {valueText}
       </span>
-    </div>
+    </Item>
   );
 }
 

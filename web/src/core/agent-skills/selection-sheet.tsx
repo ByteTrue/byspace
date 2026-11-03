@@ -2,15 +2,11 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-skills.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
-import { Check } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { settingsStyles } from "@/styles/settings";
-import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import type {
   AgentSkillSelection as SkillSelection,
@@ -19,10 +15,8 @@ import type {
   AgentSkillTargetId,
   AgentSkillTargets,
 } from "@bytetrue/protocol/messages";
-import { withTheme } from "~/app/theme-object";
-
-const ThemedCheck = withTheme(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
+import { Checkbox } from "~/components/ui/checkbox";
 
 interface SkillSelectionSheetProps {
   visible: boolean;
@@ -45,9 +39,6 @@ interface SkillSelectionSheetProps {
 }
 
 type AgentSkillTargetsStatus = NonNullable<AgentSkillsStatus["targets"]>;
-
-const CHECK_ROW = "w-full justify-start gap-3 text-left disabled:opacity-50";
-const BOX = "flex size-4 shrink-0 items-center justify-center rounded-[4px] border";
 
 function isSkillSelected(draft: SkillSelection, name: string): boolean {
   return draft.mode === "all" || draft.skills.includes(name);
@@ -201,14 +192,12 @@ export function SkillSelectionSheet({
       footer={footer}
       testID="skill-selection-sheet"
     >
-      <div className={settingsStyles.card} data-testid="skill-selection-all-card">
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
-            <span className={settingsStyles.rowTitle}>{t("settings.host.skills.chooseAll")}</span>
-            <span className={settingsStyles.rowHint}>
-              {t("settings.host.skills.chooseAllHint")}
-            </span>
-          </div>
+      <ItemGroup data-testid="skill-selection-all-card">
+        <Item variant="outline">
+          <ItemContent>
+            <ItemTitle>{t("settings.host.skills.chooseAll")}</ItemTitle>
+            <ItemDescription>{t("settings.host.skills.chooseAllHint")}</ItemDescription>
+          </ItemContent>
           <Switch
             checked={allSkills}
             onCheckedChange={handleToggleAll}
@@ -216,26 +205,25 @@ export function SkillSelectionSheet({
             aria-label={t("settings.host.skills.chooseAll")}
             data-testid="skill-selection-all"
           />
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
 
       {targets !== null ? (
         <SettingsSection title={t("settings.host.skills.targetsTitle")} flush>
-          <div className={settingsStyles.card} data-testid="skill-selection-targets-card">
-            {targets.available.map((id, index) => (
+          <ItemGroup data-testid="skill-selection-targets-card">
+            {targets.available.map((id) => (
               <SkillTargetRow
                 key={id}
                 id={id}
                 checked={draftTargets.includes(id)}
                 disabled={isSaving}
-                withBorder={index > 0}
                 hint={t(`settings.host.skills.targets.${id}`)}
                 onToggle={handleToggleTarget}
               />
             ))}
-          </div>
+          </ItemGroup>
           {noTargets ? (
-            <span className={settingsStyles.rowHint}>{t("settings.host.skills.targetsEmpty")}</span>
+            <ItemDescription>{t("settings.host.skills.targetsEmpty")}</ItemDescription>
           ) : null}
         </SettingsSection>
       ) : null}
@@ -243,29 +231,28 @@ export function SkillSelectionSheet({
       {/* The sheet body already spaces its blocks apart, so the section owns
           only the gap between its label and the list the label names. */}
       <SettingsSection title={t("settings.host.skills.chooseList")} flush>
-        <div className={settingsStyles.card} data-testid="skill-selection-list-card">
+        <ItemGroup data-testid="skill-selection-list-card">
           {available.length === 0 ? (
-            <div className={settingsStyles.row}>
-              <span className={settingsStyles.rowHint}>
-                {t("settings.host.skills.chooseEmpty")}
-              </span>
-            </div>
+            <Item variant="outline">
+              <ItemDescription>{t("settings.host.skills.chooseEmpty")}</ItemDescription>
+            </Item>
           ) : (
-            available.map((name, index) => (
+            available.map((name) => (
               <SkillCheckboxRow
                 key={name}
                 name={name}
                 checked={isSkillSelected(draft, name)}
                 disabled={allSkills || isSaving}
-                withBorder={index > 0}
                 onToggle={handleToggleSkill}
               />
             ))
           )}
-        </div>
+        </ItemGroup>
       </SettingsSection>
 
-      {saveError ? <span className={settingsStyles.rowError}>{saveError}</span> : null}
+      {saveError ? (
+        <ItemDescription className="text-destructive">{saveError}</ItemDescription>
+      ) : null}
     </AdaptiveModalSheet>
   );
 }
@@ -274,48 +261,30 @@ interface SkillTargetRowProps {
   id: AgentSkillTargetId;
   checked: boolean;
   disabled: boolean;
-  withBorder: boolean;
   hint: string;
   onToggle: (id: AgentSkillTargetId) => void;
 }
 
 /** A location row: the label is the directory, so it needs no translation. */
-function SkillTargetRow({
-  id,
-  checked,
-  disabled,
-  withBorder,
-  hint,
-  onToggle,
-}: SkillTargetRowProps) {
-  const handlePress = useCallback(() => onToggle(id), [id, onToggle]);
-  const rowClassName = cn(settingsStyles.row, withBorder && settingsStyles.rowBorder, CHECK_ROW);
-  // shadcn/ui checkbox: 16px, 4px radius, input border; checked fills with the primary.
-  const boxClassName = cn(
-    BOX,
-    checked ? "border-primary bg-primary" : "border-input bg-background dark:bg-input/30",
-  );
-
+function SkillTargetRow({ id, checked, disabled, hint, onToggle }: SkillTargetRowProps) {
+  const handleToggle = useCallback(() => onToggle(id), [id, onToggle]);
   return (
-    <button
-      type="button"
-      role="checkbox"
-      className={rowClassName}
-      onClick={handlePress}
-      disabled={disabled}
-      aria-label={SKILL_TARGET_DIRS[id]}
-      aria-description={hint}
-      aria-checked={checked}
-      data-testid={`skill-selection-target-${id}`}
-    >
-      <span className={boxClassName}>
-        {checked ? <ThemedCheck size={12} strokeWidth={3} themeProps={checkedIconMapping} /> : null}
-      </span>
-      <span className="flex flex-1 flex-col gap-1">
-        <span className={settingsStyles.rowTitle}>{SKILL_TARGET_DIRS[id]}</span>
-        <span className={settingsStyles.rowHint}>{hint}</span>
-      </span>
-    </button>
+    <Item variant="outline" asChild>
+      <label>
+        <Checkbox
+          checked={checked}
+          onCheckedChange={handleToggle}
+          disabled={disabled}
+          aria-label={SKILL_TARGET_DIRS[id]}
+          aria-description={hint}
+          data-testid={`skill-selection-target-${id}`}
+        />
+        <ItemContent>
+          <ItemTitle>{SKILL_TARGET_DIRS[id]}</ItemTitle>
+          <ItemDescription>{hint}</ItemDescription>
+        </ItemContent>
+      </label>
+    </Item>
   );
 }
 
@@ -323,39 +292,22 @@ interface SkillCheckboxRowProps {
   name: string;
   checked: boolean;
   disabled: boolean;
-  withBorder: boolean;
   onToggle: (name: string) => void;
 }
 
-function SkillCheckboxRow({
-  name,
-  checked,
-  disabled,
-  withBorder,
-  onToggle,
-}: SkillCheckboxRowProps) {
-  const handlePress = useCallback(() => onToggle(name), [name, onToggle]);
-  const rowClassName = cn(settingsStyles.row, withBorder && settingsStyles.rowBorder, CHECK_ROW);
-  // shadcn/ui checkbox: 16px, 4px radius, input border; checked fills with the primary.
-  const boxClassName = cn(
-    BOX,
-    checked ? "border-primary bg-primary" : "border-input bg-background dark:bg-input/30",
-  );
-
+function SkillCheckboxRow({ name, checked, disabled, onToggle }: SkillCheckboxRowProps) {
+  const handleToggle = useCallback(() => onToggle(name), [name, onToggle]);
   return (
-    <button
-      type="button"
-      role="checkbox"
-      className={rowClassName}
-      onClick={handlePress}
-      disabled={disabled}
-      aria-label={name}
-      aria-checked={checked}
-    >
-      <span className={boxClassName}>
-        {checked ? <ThemedCheck size={12} strokeWidth={3} themeProps={checkedIconMapping} /> : null}
-      </span>
-      <span className={settingsStyles.rowTitle}>{name}</span>
-    </button>
+    <Item variant="outline" asChild>
+      <label>
+        <Checkbox
+          checked={checked}
+          onCheckedChange={handleToggle}
+          disabled={disabled}
+          aria-label={name}
+        />
+        <ItemTitle>{name}</ItemTitle>
+      </label>
+    </Item>
   );
 }

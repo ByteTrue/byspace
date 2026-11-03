@@ -3,14 +3,13 @@
 import { CircleAlert, RefreshCw } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useMemo } from "react";
-import { cn } from "cn";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { providerUsageCopy } from "@/provider-usage/copy";
 import { ProviderUsageList } from "@/provider-usage/list";
 import type { ProviderUsageView } from "@/provider-usage/types";
+import { ItemGroup } from "~/components/ui/item";
 
 export function ProviderUsageSettingsSection({
   view,
@@ -57,11 +56,11 @@ function ProviderUsageBody({
 }) {
   if (view.kind === "loading") {
     return (
-      <div className={cn(settingsStyles.card, "items-center p-4")}>
+      <ItemGroup className="items-center p-4">
         <span className="text-sm leading-[normal] text-muted-foreground">
           {providerUsageCopy.loading}
         </span>
-      </div>
+      </ItemGroup>
     );
   }
 
@@ -82,11 +81,11 @@ function ProviderUsageBody({
 
   if (view.payload.providers.length === 0) {
     return (
-      <div className={cn(settingsStyles.card, "items-center p-4")}>
+      <ItemGroup className="items-center p-4">
         <span className="text-sm leading-[normal] text-muted-foreground">
           {providerUsageCopy.empty}
         </span>
-      </div>
+      </ItemGroup>
     );
   }
 

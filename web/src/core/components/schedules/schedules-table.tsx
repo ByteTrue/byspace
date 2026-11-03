@@ -5,9 +5,9 @@ import { ScheduleRow, type ScheduleRowPending } from "@/components/schedules/sch
 import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
 import type { AggregatedSchedule } from "@/hooks/use-schedules";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
-import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { resolveScheduleTitle, scheduleProductName } from "@/utils/schedule-format";
+import { ItemGroup } from "~/components/ui/item";
 
 /** A schedule plus the client-derived fields the row renders. */
 export interface ScheduleRowView {
@@ -39,16 +39,15 @@ interface SchedulesTableProps {
 export function SchedulesTable({ rows, onEditSchedule }: SchedulesTableProps): ReactElement {
   return (
     <div className="px-3 md:px-6" data-testid="schedules-table">
-      <div className={settingsStyles.card}>
-        {rows.map((row, index) => (
+      <ItemGroup>
+        {rows.map((row) => (
           <SchedulesTableRow
             key={`${row.schedule.serverId}:${row.schedule.id}`}
             row={row}
-            isFirst={index === 0}
             onEditSchedule={onEditSchedule}
           />
         ))}
-      </div>
+      </ItemGroup>
     </div>
   );
 }
@@ -64,11 +63,9 @@ const NO_PENDING: ScheduleRowPending = {};
 
 function SchedulesTableRow({
   row,
-  isFirst,
   onEditSchedule,
 }: {
   row: ScheduleRowView;
-  isFirst: boolean;
   onEditSchedule: (schedule: AggregatedSchedule) => void;
 }): ReactElement {
   const { schedule } = row;
@@ -136,7 +133,6 @@ function SchedulesTableRow({
       state={row.state}
       serverName={row.serverName}
       singleHost={row.singleHost}
-      isFirst={isFirst}
       pending={pending}
       onEdit={handleEdit}
       onPause={handlePause}

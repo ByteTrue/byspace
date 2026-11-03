@@ -10,13 +10,13 @@ import { Button } from "~/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostFeature } from "@/runtime/host-features";
-import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { SkillSelectionSheet } from "@/agent-skills/selection-sheet";
 import { useAgentSkills } from "@/agent-skills/use-agent-skills";
 import { withTheme } from "~/app/theme-object";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const OP_KIND_ORDER: Record<AgentSkillOperation["kind"], number> = {
   add: 0,
@@ -143,7 +143,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
   if (!skills.connected || !skills.supported) {
     return (
       <SettingsSection title={t("settings.host.skills.sectionTitle")} trailing={trailing}>
-        <div className={settingsStyles.card} data-testid="host-agent-skills-unavailable">
+        <ItemGroup data-testid="host-agent-skills-unavailable">
           <div className="p-4">
             <span className="text-xs leading-[normal] text-muted-foreground">
               {skills.connected
@@ -151,26 +151,26 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
                 : t("settings.host.skills.unavailable")}
             </span>
           </div>
-        </div>
+        </ItemGroup>
       </SettingsSection>
     );
   }
 
   return (
     <SettingsSection title={t("settings.host.skills.sectionTitle")} trailing={trailing}>
-      <div className={settingsStyles.card} data-testid="host-agent-skills-card">
-        <div className={settingsStyles.row}>
-          <div className={settingsStyles.rowContent}>
+      <ItemGroup data-testid="host-agent-skills-card">
+        <Item variant="outline">
+          <ItemContent>
             <div className="flex flex-row items-center gap-2">
               <ThemedBlocks size={ICON_SIZE.md} themeProps={foregroundMapping} />
-              <span className={settingsStyles.rowTitle}>{t("settings.host.skills.title")}</span>
+              <ItemTitle>{t("settings.host.skills.title")}</ItemTitle>
             </div>
-            <span className={settingsStyles.rowHint}>
+            <ItemDescription>
               {state === "drift"
                 ? t("settings.host.skills.updateAvailable")
                 : t("settings.host.skills.description")}
-            </span>
-          </div>
+            </ItemDescription>
+          </ItemContent>
           <div className="flex flex-row items-center gap-2">
             <Button
               variant="ghost"
@@ -192,8 +192,8 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
               />
             ) : null}
           </div>
-        </div>
-      </div>
+        </Item>
+      </ItemGroup>
       {skills.status ? (
         <SkillSelectionSheet
           visible={isChoosing}

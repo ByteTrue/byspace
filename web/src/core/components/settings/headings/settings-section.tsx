@@ -5,7 +5,6 @@ import { ChevronRight } from "lucide-react";
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { SettingsInfoTip } from "@/components/settings/headings/settings-info-tip";
 import { ICON_SIZE } from "@/styles/theme";
-import { settingsStyles } from "@/styles/settings";
 import { cn } from "cn";
 
 interface SettingsSectionProps {
@@ -45,7 +44,7 @@ export function SettingsSection({
     // min-w-0 as the Expo app's title row (a react-native-web View): on a phone a wide trailing slot
     // squeezes the title instead of pushing the trailing controls out.
     <span className="flex min-w-0 shrink items-center gap-2">
-      <span className={settingsStyles.sectionHeaderTitle}>{title}</span>
+      <span className="text-xs text-muted-foreground">{title}</span>
       {info ? (
         <SettingsInfoTip title={title} info={info} testID={testID ? `${testID}-info` : undefined} />
       ) : null}
@@ -56,11 +55,7 @@ export function SettingsSection({
   );
 
   return (
-    <div
-      className={cn("flex flex-col", !flush && settingsStyles.section)}
-      style={style}
-      data-testid={testID}
-    >
+    <div className={cn("flex flex-col", !flush && "mb-6")} style={style} data-testid={testID}>
       <div className="mb-3 ml-1 flex items-center justify-between gap-2">
         {collapsible ? (
           <button

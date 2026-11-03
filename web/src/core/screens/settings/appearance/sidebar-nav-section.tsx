@@ -1,7 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/appearance/sidebar-nav-section.tsx: sidebar entries — shortcut, reorder and visibility. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/sidebar-nav-section.py; edit it directly.
 import { useCallback, useMemo, type ReactElement } from "react";
-import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -27,9 +26,9 @@ import {
   type SidebarNavItem,
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
-import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { withTheme } from "~/app/theme-object";
+import { Item, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -102,13 +101,10 @@ function SidebarNavRow({
   );
 
   return (
-    <div
-      className={cn(settingsStyles.row, !isFirst && settingsStyles.rowBorder, "gap-2")}
-      data-testid={`sidebar-nav-item-${item.key}`}
-    >
+    <Item variant="outline" className="gap-2" data-testid={`sidebar-nav-item-${item.key}`}>
       <div className="flex flex-1 flex-row items-center gap-2">
         <ThemedNavIcon Icon={navItemIcon(item)} themeProps={mutedColorMapping} />
-        <span className={cn(settingsStyles.rowTitle, "truncate")}>{label}</span>
+        <ItemTitle className="truncate">{label}</ItemTitle>
         <NavItemShortcut item={item} />
       </div>
       <div className="flex flex-row items-center gap-3">
@@ -143,7 +139,7 @@ function SidebarNavRow({
           data-testid={`sidebar-nav-toggle-${item.key}`}
         />
       </div>
-    </div>
+    </Item>
   );
 }
 
@@ -164,7 +160,7 @@ export function SidebarNavSection(): ReactElement {
       info={t("settings.appearance.sidebar.description")}
       testID="sidebar-nav-section"
     >
-      <div className={settingsStyles.card}>
+      <ItemGroup>
         {items.map((item) => (
           <SidebarNavRow
             key={item.key}
@@ -175,7 +171,7 @@ export function SidebarNavSection(): ReactElement {
             onSetVisible={setVisible}
           />
         ))}
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }

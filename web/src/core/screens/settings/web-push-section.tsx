@@ -5,7 +5,6 @@ import { Info } from "lucide-react";
 import { Alert, AlertTitle } from "~/components/ui/alert";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
 import { Button } from "~/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
@@ -16,7 +15,7 @@ import {
   type WebPushState,
 } from "@/push-notifications";
 import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
-import { settingsStyles } from "@/styles/settings";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 /**
  * Browser notifications, one row per host: each daemon signs pushes with its own
@@ -48,7 +47,7 @@ export function WebPushSection() {
           <AlertTitle>{t("settings.notifications.webPush.iosHomeScreenHint")}</AlertTitle>
         </Alert>
       ) : null}
-      <div className={settingsStyles.card}>
+      <ItemGroup>
         {hosts.map((host, index) => (
           <WebPushHostRow
             key={host.serverId}
@@ -57,7 +56,7 @@ export function WebPushSection() {
             withBorder={index > 0}
           />
         ))}
-      </div>
+      </ItemGroup>
     </SettingsSection>
   );
 }
@@ -117,11 +116,11 @@ function WebPushHostRow(props: { serverId: string; label: string; withBorder: bo
   const hint = stateHint(state, t);
 
   return (
-    <div className={cn(settingsStyles.row, props.withBorder && settingsStyles.rowBorder)}>
-      <div className={settingsStyles.rowContent}>
-        <span className={settingsStyles.rowTitle}>{props.label}</span>
-        <span className={settingsStyles.rowHint}>{hint}</span>
-      </div>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{props.label}</ItemTitle>
+        <ItemDescription>{hint}</ItemDescription>
+      </ItemContent>
       {state === "prompt" ? (
         <Button
           variant="outline"
@@ -148,7 +147,7 @@ function WebPushHostRow(props: { serverId: string; label: string; withBorder: bo
             : t("settings.notifications.webPush.disable")}
         </Button>
       ) : null}
-    </div>
+    </Item>
   );
 }
 

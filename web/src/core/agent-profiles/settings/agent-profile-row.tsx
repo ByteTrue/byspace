@@ -3,15 +3,14 @@
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp, FileText, Pencil, Trash2 } from "lucide-react";
-import { cn } from "cn";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { Button } from "~/components/ui/button";
-import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { AgentProfileGlyph } from "@/agent-profiles/internal/agent-profile-glyph";
 import { buildAgentProfileTags } from "@/agent-profiles/internal/profile-summary";
 import { withTheme } from "~/app/theme-object";
+import { Item, ItemContent, ItemTitle } from "~/components/ui/item";
 
 const ThemedArrowUp = withTheme(ArrowUp);
 const ThemedArrowDown = withTheme(ArrowDown);
@@ -69,21 +68,18 @@ export function AgentProfileRow({
   const summary = useMemo(() => tags.map((tag) => tag.label).join(" · "), [tags]);
 
   return (
-    <div
-      className={cn(
-        settingsStyles.row,
-        !isFirst && settingsStyles.rowBorder,
-        "min-h-14 items-center gap-2 py-3",
-      )}
+    <Item
+      variant="outline"
+      className="min-h-14 items-center gap-2 py-3"
       data-testid={`agent-profile-row-${profile.id}`}
     >
       <div className="flex flex-1 flex-row items-start gap-2">
         <div className="mt-px flex w-4 items-center justify-center">
           <AgentProfileGlyph icon={profile.icon} color={profile.color} size={ICON_SIZE.md} />
         </div>
-        <div className={settingsStyles.rowContent}>
+        <ItemContent>
           <div className="flex min-w-0 flex-row items-baseline gap-2">
-            <span className={cn(settingsStyles.rowTitle, "truncate")}>{profile.name}</span>
+            <ItemTitle className="truncate">{profile.name}</ItemTitle>
             <span className="shrink truncate text-xs leading-[normal] text-muted-foreground">
               {summary}
             </span>
@@ -99,7 +95,7 @@ export function AgentProfileRow({
               </span>
             </div>
           ) : null}
-        </div>
+        </ItemContent>
       </div>
       <div className="flex flex-row items-center">
         <Button
@@ -141,6 +137,6 @@ export function AgentProfileRow({
           {removeIcon}
         </Button>
       </div>
-    </div>
+    </Item>
   );
 }

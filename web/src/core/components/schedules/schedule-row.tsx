@@ -12,7 +12,6 @@ import { cn } from "cn";
 import { Badge } from "~/components/ui/badge";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { settingsStyles } from "@/styles/settings";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
 import {
   formatCadence,
@@ -31,6 +30,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { Spinner } from "~/components/ui/spinner";
+import { Item, ItemDescription, ItemTitle } from "~/components/ui/item";
 
 const MENU_ICON_SIZE = 14;
 const PROVIDER_ICON_SIZE = 16;
@@ -66,7 +66,6 @@ interface ScheduleRowProps extends ScheduleRowActions {
   /** True when only one host exists and the host name would be redundant. */
   singleHost?: boolean;
   pending?: ScheduleRowPending;
-  isFirst: boolean;
 }
 
 function stateBadge(state: ScheduleDerivedState): { label: string; className?: string } {
@@ -151,7 +150,6 @@ export function ScheduleRow({
   serverName,
   singleHost,
   pending,
-  isFirst,
   onEdit,
   onPause,
   onResume,
@@ -177,7 +175,8 @@ export function ScheduleRow({
   const canRun = schedule.target.type === "new-agent" && (state === "active" || state === "paused");
 
   return (
-    <div
+    <Item
+      variant="outline"
       role="button"
       tabIndex={0}
       onClick={onEdit}
@@ -185,9 +184,7 @@ export function ScheduleRow({
       aria-label={`Edit ${productName.toLowerCase()} ${title}`}
       data-testid={`schedule-row-${schedule.id}`}
       className={cn(
-        settingsStyles.row,
         "relative cursor-pointer gap-3 active:bg-accent",
-        !isFirst && settingsStyles.rowBorder,
         !isCompact && "hover:bg-muted",
       )}
     >
@@ -196,11 +193,11 @@ export function ScheduleRow({
           <ProviderGlyph provider={provider} serverId={serverId} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className={cn(settingsStyles.rowTitle, "truncate")}>{title}</span>
+          <ItemTitle className="truncate">{title}</ItemTitle>
           <span className="mt-1 truncate text-sm leading-[normal] text-muted-foreground">
             {targetLabel}
           </span>
-          <span className={cn(settingsStyles.rowHint, "truncate")}>{meta}</span>
+          <ItemDescription className="truncate">{meta}</ItemDescription>
         </div>
       </div>
 
@@ -219,7 +216,7 @@ export function ScheduleRow({
           onDelete={onDelete}
         />
       </div>
-    </div>
+    </Item>
   );
 }
 

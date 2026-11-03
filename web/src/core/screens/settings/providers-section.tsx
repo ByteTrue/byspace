@@ -4,9 +4,7 @@ import type { Theme } from "@/styles/theme";
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { settingsStyles } from "@/styles/settings";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
@@ -34,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Item, ItemGroup, ItemTitle } from "~/components/ui/item";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -82,7 +81,6 @@ interface ProviderRowProps {
   isToggling: boolean;
   isRemoving: boolean;
   canRemove: boolean;
-  isFirst: boolean;
   onPress: (providerId: string) => void;
   onToggleEnabled: (providerId: string, enabled: boolean) => void;
   onRemove: (providerId: string, providerLabel: string) => void;
@@ -154,7 +152,6 @@ function ProviderRow({
   isToggling,
   isRemoving,
   canRemove,
-  isFirst,
   onPress,
   onToggleEnabled,
   onRemove,
@@ -194,14 +191,11 @@ function ProviderRow({
   );
 
   return (
-    <div
+    <Item
+      variant="outline"
       role="button"
       tabIndex={0}
-      className={cn(
-        settingsStyles.row,
-        !isFirst && settingsStyles.rowBorder,
-        "group/provider min-h-14 cursor-pointer gap-3 hover:bg-muted active:bg-accent",
-      )}
+      className="group/provider min-h-14 cursor-pointer gap-3 hover:bg-muted active:bg-accent"
       onClick={handlePress}
       onKeyDown={handleKeyDown}
       aria-label={t("settings.providers.providerDetails", { name: def.label })}
@@ -214,7 +208,7 @@ function ProviderRow({
         <ProviderIcon size={theme.iconSize.md} color={theme.colors.foreground} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-row items-center gap-2">
-            <span className={cn(settingsStyles.rowTitle, "truncate")}>{def.label}</span>
+            <ItemTitle className="truncate">{def.label}</ItemTitle>
             {!isCompact ? (
               <span className="text-sm leading-[normal] text-muted-foreground">·</span>
             ) : null}
@@ -247,7 +241,7 @@ function ProviderRow({
           ) : null}
         </div>
       </div>
-    </div>
+    </Item>
   );
 }
 
@@ -403,22 +397,22 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       collapsedSummary={collapsedSummary}
     >
       {!hasServer || !isConnected ? (
-        <div className={cn(settingsStyles.card, "items-center p-4")}>
+        <ItemGroup className="items-center p-4">
           <span className="text-sm leading-[normal] text-muted-foreground">
             {t("settings.providers.unavailable")}
           </span>
-        </div>
+        </ItemGroup>
       ) : null}
       {hasServer && isConnected && isLoading ? (
-        <div className={cn(settingsStyles.card, "items-center p-4")}>
+        <ItemGroup className="items-center p-4">
           <span className="text-sm leading-[normal] text-muted-foreground">
             {t("settings.providers.loading")}
           </span>
-        </div>
+        </ItemGroup>
       ) : null}
       {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
-        <div className={settingsStyles.card}>
-          {providerDefinitions.map((def, index) => {
+        <ItemGroup>
+          {providerDefinitions.map((def) => {
             const entry = entries?.find((candidate) => candidate.provider === def.id);
             if (!entry) return null;
             return (
@@ -431,14 +425,13 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
                 isToggling={pendingProviderId === def.id}
                 isRemoving={removingProviderId === def.id}
                 canRemove={supportsProviderRemoval && entry.source === "custom"}
-                isFirst={index === 0}
                 onPress={handleOpenProviderSettings}
                 onToggleEnabled={handleToggleEnabled}
                 onRemove={handleRemoveProvider}
               />
             );
           })}
-        </div>
+        </ItemGroup>
       ) : null}
     </SettingsSection>
   );
