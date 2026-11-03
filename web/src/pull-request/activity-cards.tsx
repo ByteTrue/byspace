@@ -22,12 +22,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Badge } from "~/components/ui/badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatPullRequestThreadPath } from "@/git/pull-request-panel/activity-location";
@@ -42,6 +36,13 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
 import { cn } from "cn";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const ADD_TO_CHAT_MENU_ICON = <MessageSquarePlus size={14} className="text-muted-foreground" />;
 const COPY_MENU_ICON = <Copy size={14} className="text-muted-foreground" />;
@@ -165,12 +166,16 @@ function KebabSlot({
     >
       <DropdownMenu onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger
-          accessibilityLabel={label}
+          aria-label={label}
           className="rounded p-0.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-muted data-[state=open]:text-foreground"
         >
           <MoreHorizontal size={14} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" width={200}>
+        <DropdownMenuContent
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {children}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -204,16 +209,19 @@ function ActivityKebab({
   return (
     <KebabSlot visible={visible} label="Comment actions" onMenuOpenChange={onMenuOpenChange}>
       {attachEnabled && canAddPullRequestActivityToChat(activity) ? (
-        <DropdownMenuItem leading={ADD_TO_CHAT_MENU_ICON} onSelect={handleAddToChat}>
+        <DropdownMenuItem onSelect={handleAddToChat}>
+          {ADD_TO_CHAT_MENU_ICON}
           Add to chat
         </DropdownMenuItem>
       ) : null}
       {activity.body.trim() !== "" ? (
-        <DropdownMenuItem leading={COPY_MENU_ICON} onSelect={handleCopy}>
+        <DropdownMenuItem onSelect={handleCopy}>
+          {COPY_MENU_ICON}
           Copy
         </DropdownMenuItem>
       ) : null}
-      <DropdownMenuItem leading={OPEN_MENU_ICON} onSelect={handleOpen}>
+      <DropdownMenuItem onSelect={handleOpen}>
+        {OPEN_MENU_ICON}
         {t("workspace.git.pr.actions.openOn", { brand: brandLabel })}
       </DropdownMenuItem>
     </KebabSlot>
@@ -533,7 +541,8 @@ function ThreadBlock({
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {collapsed ? <CountBadge count={thread.comments.length} /> : null}
           <KebabSlot visible={actionsVisible} label="Thread actions" onMenuOpenChange={setMenuOpen}>
-            <DropdownMenuItem leading={OPEN_MENU_ICON} onSelect={handleOpenThread}>
+            <DropdownMenuItem onSelect={handleOpenThread}>
+              {OPEN_MENU_ICON}
               {t("workspace.git.pr.actions.openOn", { brand: brandLabel })}
             </DropdownMenuItem>
           </KebabSlot>

@@ -1,10 +1,10 @@
 import type { ReactElement } from "react";
 
-import type { ActionStatus } from "@/components/ui/dropdown-menu";
 import { i18n } from "@/i18n/i18next";
 import type { CheckoutPrMergeMethod, PullRequestMergeable } from "@bytetrue/protocol/messages";
 
 import type { MergeCapability } from "./merge-capability";
+import type { CheckoutGitActionStatus as ActionStatus } from "@/git/actions-store";
 
 export type GitActionId =
   | "commit"

@@ -10,6 +10,9 @@ import {
   resolveTerminalProfiles,
 } from "@bytetrue/protocol/terminal-profiles";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
+import { buttonVariants } from "~/components/ui/button";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +20,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { buttonVariants } from "~/components/ui/button";
-import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const COPY_ICON = <Copy />;
 const IMPORT_ICON = <ImportIcon />;
@@ -53,38 +54,35 @@ function WorkspaceHeaderWorkspaceActionItems({
   return (
     <>
       <DropdownMenuItem
-        testID="workspace-header-copy-path"
-        leading={COPY_ICON}
+        data-testid="workspace-header-copy-path"
         disabled={copyPathDisabled}
         onSelect={onCopyWorkspacePath}
       >
+        {COPY_ICON}
         {t("workspace.header.actions.copyPath")}
       </DropdownMenuItem>
       {currentBranchName ? (
         <DropdownMenuItem
-          testID="workspace-header-copy-branch-name"
-          leading={COPY_ICON}
+          data-testid="workspace-header-copy-branch-name"
           onSelect={onCopyBranchName}
         >
+          {COPY_ICON}
           {t("workspace.header.actions.copyBranchName")}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem
-        testID="workspace-header-import-agent"
-        leading={IMPORT_ICON}
+        data-testid="workspace-header-import-agent"
         disabled={importAgentDisabled}
         onSelect={onOpenImportSheet}
       >
+        {IMPORT_ICON}
         {t("workspace.header.actions.importSession")}
       </DropdownMenuItem>
       {showWorkspaceSetup ? (
         <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            testID="workspace-header-show-setup"
-            leading={SETTINGS_ICON}
-            onSelect={onOpenSetupTab}
-          >
+          <DropdownMenuItem data-testid="workspace-header-show-setup" onSelect={onOpenSetupTab}>
+            {SETTINGS_ICON}
             {t("workspace.header.actions.showSetup")}
           </DropdownMenuItem>
         </>
@@ -97,8 +95,8 @@ function HeaderMenuTrigger() {
   const { t } = useTranslation();
   return (
     <DropdownMenuTrigger
-      testID="workspace-header-menu-trigger"
-      accessibilityLabel={t("workspace.header.actions.workspaceActions")}
+      data-testid="workspace-header-menu-trigger"
+      aria-label={t("workspace.header.actions.workspaceActions")}
       className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
     >
       <Ellipsis className="text-muted-foreground" />
@@ -110,7 +108,12 @@ export function WorkspaceHeaderMenuDesktop(props: WorkspaceHeaderWorkspaceAction
   return (
     <DropdownMenu>
       <HeaderMenuTrigger />
-      <DropdownMenuContent align="start" width={220} testID="workspace-header-menu">
+      <DropdownMenuContent
+        align="start"
+        data-testid="workspace-header-menu"
+        className="w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         <WorkspaceHeaderWorkspaceActionItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -135,7 +138,8 @@ function HeaderMenuProfileItem({
     [profile],
   );
   return (
-    <DropdownMenuItem leading={leading} disabled={disabled} onSelect={handleSelect}>
+    <DropdownMenuItem disabled={disabled} onSelect={handleSelect}>
+      {leading}
       {profile.name}
     </DropdownMenuItem>
   );
@@ -171,26 +175,23 @@ export function WorkspaceHeaderMenuMobile({
       <HeaderMenuTrigger />
       <DropdownMenuContent
         align="start"
-        width={220}
-        testID="workspace-header-menu"
-        sheetTitle={t("workspace.header.actions.workspaceActions")}
+        data-testid="workspace-header-menu"
+        className="w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
       >
-        <DropdownMenuItem
-          testID="workspace-header-new-agent"
-          leading={NEW_AGENT_ICON}
-          onSelect={onCreateDraftTab}
-        >
+        <DropdownMenuItem data-testid="workspace-header-new-agent" onSelect={onCreateDraftTab}>
+          {NEW_AGENT_ICON}
           {t("workspace.header.actions.newAgent")}
         </DropdownMenuItem>
         <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
         <DropdownMenuItem
-          testID="workspace-header-new-terminal"
-          leading={NEW_TERMINAL_ICON}
+          data-testid="workspace-header-new-terminal"
           disabled={createTerminalDisabled}
           onSelect={onCreateTerminal}
         >
+          {NEW_TERMINAL_ICON}
           {t("workspace.header.actions.newTerminal")}
         </DropdownMenuItem>
         {profiles.map((profile) => (
@@ -203,7 +204,7 @@ export function WorkspaceHeaderMenuMobile({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
+          data-testid="workspace-header-edit-terminal-profiles"
           onSelect={handleEditProfiles}
         >
           {t("workspace.tabs.actions.editTerminalProfiles")}

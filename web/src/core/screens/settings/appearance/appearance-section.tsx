@@ -18,13 +18,6 @@ import {
   type SyntaxThemeId,
   type SyntaxThemeOption,
 } from "@bytetrue/highlight";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SettingsCard, SettingsSwitch } from "@/components/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
@@ -55,6 +48,14 @@ import { SidebarNavSection } from "@/screens/settings/appearance/sidebar-nav-sec
 import type { CSSProperties } from "react";
 import { withTheme } from "~/app/theme-object";
 import { Input } from "~/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
   event.currentTarget.select();
@@ -140,9 +141,10 @@ function ThemeMenuItem({ themeValue, selected, onChange }: ThemeMenuItemProps) {
   }, [onChange, themeValue]);
   const leading = useMemo(() => <ThemeLeading themeValue={themeValue} />, [themeValue]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
+      {leading}
       {getThemeLabel(t, themeValue)}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -162,7 +164,7 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
-          accessibilityLabel={t("settings.appearance.theme.accessibilityLabel", {
+          aria-label={t("settings.appearance.theme.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
@@ -170,7 +172,12 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {THEME_OPTIONS.map((option, index) => {
             const previousOption = THEME_OPTIONS[index - 1];
             return (
@@ -231,9 +238,10 @@ function TerminalAppearanceMenuItem({
   const handleSelect = useCallback(() => onChange(value), [onChange, value]);
   const leading = useMemo(() => <TerminalAppearanceLeading value={value} />, [value]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
+      {leading}
       {getTerminalAppearanceLabel(t, value)}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -254,7 +262,7 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
-          accessibilityLabel={t("settings.appearance.terminal.accessibilityLabel", {
+          aria-label={t("settings.appearance.terminal.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
@@ -262,7 +270,12 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {TERMINAL_APPEARANCE_OPTIONS.map((option) => (
             <TerminalAppearanceMenuItem
               key={option}
@@ -308,9 +321,9 @@ function TimelineDetailMenuItem({ value, selected, onChange }: TimelineDetailMen
   const { t } = useTranslation();
   const handleSelect = useCallback(() => onChange(value), [onChange, value]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
       {getTimelineDetailLevelLabel(t, value)}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -335,14 +348,19 @@ function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
-          accessibilityLabel={t("settings.general.timelineDetail.accessibilityLabel", {
+          aria-label={t("settings.general.timelineDetail.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {TIMELINE_DETAIL_LEVELS.map((option) => (
             <TimelineDetailMenuItem
               key={option}
@@ -499,9 +517,9 @@ function SyntaxMenuItem({ option, selected, onChange }: SyntaxMenuItemProps) {
     onChange(option.id);
   }, [onChange, option.id]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
       {option.label}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -526,14 +544,19 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
-          accessibilityLabel={t("settings.appearance.syntax.highlightThemeAccessibility", {
+          aria-label={t("settings.appearance.syntax.highlightThemeAccessibility", {
             value: selectedLabel,
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {SYNTAX_THEME_OPTIONS.map((option) => (
             <SyntaxMenuItem
               key={option.id}

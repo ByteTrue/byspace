@@ -12,14 +12,17 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { WithTooltip } from "~/components/with-tooltip";
 
 const MENU_ICONS = {
   copy: Copy,
@@ -43,17 +46,18 @@ function MobileTabDropdownMenuItem({
     [entry.hint],
   );
   return (
-    <DropdownMenuItem
-      testID={entry.testID}
-      disabled={entry.disabled}
-      destructive={entry.destructive}
-      onSelect={entry.onSelect}
-      tooltip={entry.tooltip}
-      leading={leading}
-      trailing={trailing}
-    >
-      {entry.label}
-    </DropdownMenuItem>
+    <WithTooltip tooltip={entry.tooltip}>
+      <DropdownMenuItem
+        data-testid={entry.testID}
+        disabled={entry.disabled}
+        variant={entry.destructive ? "destructive" : "default"}
+        onSelect={entry.onSelect}
+      >
+        {leading}
+        {entry.label}
+        {trailing ? <DropdownMenuShortcut>{trailing}</DropdownMenuShortcut> : null}
+      </DropdownMenuItem>
+    </WithTooltip>
   );
 }
 
@@ -70,8 +74,8 @@ export function MobileTabTrailingAccessory({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        testID={`${menuTestIDBase}-trigger`}
-        accessibilityLabel={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
+        data-testid={`${menuTestIDBase}-trigger`}
+        aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
         className="flex size-7 items-center justify-center rounded-md text-muted-foreground active:bg-muted aria-expanded:bg-muted"
       >
         <Ellipsis size={14} />
@@ -79,9 +83,9 @@ export function MobileTabTrailingAccessory({
       <DropdownMenuContent
         side="bottom"
         align="end"
-        width={220}
-        sheetTitle={presentationLabel}
-        testID={menuTestIDBase}
+        data-testid={menuTestIDBase}
+        className="w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
       >
         {menuEntries.map((entry) =>
           entry.kind === "separator" ? (

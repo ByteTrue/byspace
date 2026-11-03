@@ -59,57 +59,6 @@ vi.mock("~/components/ui/spinner", () => ({
   Spinner: () => React.createElement("span", { "data-testid": "projects-loading-spinner" }),
 }));
 
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "dropdown-menu" }, children),
-  DropdownMenuTrigger: ({
-    children,
-    accessibilityLabel,
-    testID,
-  }: {
-    children?:
-      | React.ReactNode
-      | ((state: { pressed: boolean; hovered: boolean; open: boolean }) => React.ReactNode);
-    accessibilityLabel?: string;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        "aria-label": accessibilityLabel,
-        "data-testid": testID,
-        onClick: (event: React.MouseEvent) => event.stopPropagation(),
-      },
-      typeof children === "function"
-        ? children({ pressed: false, hovered: false, open: false })
-        : children,
-    ),
-  DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "dropdown-menu-content" }, children),
-  DropdownMenuItem: ({
-    children,
-    onSelect,
-    testID,
-  }: {
-    children?: React.ReactNode;
-    onSelect?: () => void;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        "data-testid": testID,
-        onClick: (event: React.MouseEvent) => {
-          event.stopPropagation();
-          onSelect?.();
-        },
-      },
-      children,
-    ),
-}));
-
 vi.mock("@/hooks/use-projects", () => ({
   useProjects: () => projectsState.current,
 }));

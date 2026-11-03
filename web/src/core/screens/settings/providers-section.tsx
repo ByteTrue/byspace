@@ -20,12 +20,6 @@ import { ProviderCatalogList } from "@/components/provider-catalog-list";
 import { getProviderIcon } from "@/components/provider-icons";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -33,6 +27,13 @@ import { filterSelectableModels } from "@/provider-selection/model-catalog";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react";
 import { useThemeObject } from "~/app/theme-object";
 import { showAlert } from "~/lib/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
 type ProviderEntry = NonNullable<ReturnType<typeof useProvidersSnapshot>["entries"]>[number];
@@ -100,8 +101,6 @@ interface ProviderActionsMenuProps {
   providerLabel: string;
   isRemoving: boolean;
   iconSize: number;
-  foregroundColor: string;
-  foregroundMutedColor: string;
   dangerColor: string;
   onRemove: (providerId: string, providerLabel: string) => void;
 }
@@ -111,8 +110,6 @@ function ProviderActionsMenu({
   providerLabel,
   isRemoving,
   iconSize,
-  foregroundColor,
-  foregroundMutedColor,
   dangerColor,
   onRemove,
 }: ProviderActionsMenuProps) {
@@ -126,27 +123,23 @@ function ProviderActionsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={isRemoving}
-        className="flex size-8 items-center justify-center rounded-lg hover:bg-muted active:bg-accent data-[state=open]:bg-muted"
-        accessibilityLabel={t("settings.providers.actions.menu", { name: providerLabel })}
-        testID={`provider-actions-${providerId}`}
+        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground active:bg-accent data-[state=open]:bg-muted data-[state=open]:text-foreground"
+        aria-label={t("settings.providers.actions.menu", { name: providerLabel })}
+        data-testid={`provider-actions-${providerId}`}
       >
-        {({ hovered, open }) => (
-          <MoreHorizontal
-            size={iconSize}
-            color={hovered || open ? foregroundColor : foregroundMutedColor}
-          />
-        )}
+        <MoreHorizontal size={iconSize} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={220}>
+      <DropdownMenuContent align="end" className="w-[220px]" onCloseAutoFocus={keepFocusElsewhere}>
         <DropdownMenuItem
-          destructive
-          leading={trashLeading}
+          variant="destructive"
+          disabled={isRemoving}
           onSelect={handleRemove}
-          status={isRemoving ? "pending" : "idle"}
-          pendingLabel={t("settings.providers.actions.removing")}
-          testID={`provider-remove-${providerId}`}
+          data-testid={`provider-remove-${providerId}`}
         >
-          {t("settings.providers.actions.remove")}
+          {isRemoving ? <Spinner /> : trashLeading}
+          {isRemoving
+            ? t("settings.providers.actions.removing")
+            : t("settings.providers.actions.remove")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -248,8 +241,6 @@ function ProviderRow({
               providerLabel={def.label}
               isRemoving={isRemoving}
               iconSize={theme.iconSize.sm}
-              foregroundColor={theme.colors.foreground}
-              foregroundMutedColor={theme.colors.foregroundMuted}
               dangerColor={theme.colors.statusDanger}
               onRemove={onRemove}
             />

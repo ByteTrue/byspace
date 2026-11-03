@@ -21,7 +21,6 @@ import {
   workspaceTreeRowClassNames,
   WORKSPACE_TREE_ICON_SIZE,
 } from "@/components/tree-primitives";
-import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useFileHeaderInteraction } from "@/git/file-header-interaction";
 import {
@@ -32,6 +31,8 @@ import {
 } from "@/git/file-header-presentation";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
 import { cn } from "cn";
+import { ContextMenu } from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
 
 export interface FileHeaderProps {
   file: ParsedDiffFile;

@@ -9,7 +9,6 @@ import {
   type ChangeEvent,
 } from "react";
 import type { ScheduleCadence } from "@bytetrue/protocol/schedule/types";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import {
   CADENCE_PRESET_OPTIONS,
@@ -28,7 +27,6 @@ export interface CadenceEditorProps {
   value: ScheduleCadence;
   onChange: (next: ScheduleCadence) => void;
   error?: string;
-  size?: FieldControlSize;
 }
 
 const PRESET_OPTIONS: SelectFieldOption<string>[] = CADENCE_PRESET_OPTIONS.map((option) => ({
@@ -49,7 +47,7 @@ function buildCronCadence(expression: string, timezone: string): CronCadence {
   return { type: "cron", expression, timezone };
 }
 
-export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEditorProps) {
+export function CadenceEditor({ value, onChange, error }: CadenceEditorProps) {
   const deviceTimeZone = useMemo(getDeviceTimeZone, []);
   const normalizedValue = normalizeScheduleFormCadence(value, deviceTimeZone);
   const [cronText, setCronText] = useState(() => normalizedValue.expression);
@@ -112,7 +110,6 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
           emptyText="No cadences found"
           searchable={false}
           title="Cadence"
-          size={size}
           triggerTestID="schedule-cadence-preset-trigger"
           field={false}
         />

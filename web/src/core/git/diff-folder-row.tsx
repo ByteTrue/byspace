@@ -8,8 +8,9 @@ import {
   treeRowPaddingLeft,
   workspaceTreeRowClassNames,
 } from "@/components/tree-primitives";
-import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "cn";
+import { ContextMenu } from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
 
 interface DiffFolderRowProps {
   /** full uncompressed directory path — the collapse identity */

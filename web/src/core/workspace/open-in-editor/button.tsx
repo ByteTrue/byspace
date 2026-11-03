@@ -4,12 +4,6 @@ import { useCallback, useMemo, type ReactElement } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/contexts/toast-context";
 import { getForgePresentation } from "@/git/forge";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
@@ -23,6 +17,14 @@ import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
 import { cn } from "cn";
 import { ForgeIcon } from "~/components/forge-icon";
 import { Spinner } from "~/components/ui/spinner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 interface WorkspaceOpenInEditorButtonProps {
   serverId: string;
@@ -52,12 +54,12 @@ function OpenTargetMenuItem({
   const handleSelect = useCallback(() => onSelect(target), [onSelect, target]);
   return (
     <DropdownMenuItem
-      testID={`workspace-open-in-editor-item-${target.id}`}
-      leading={target.icon}
-      trailing={isPreferred ? CHECK_ICON : undefined}
+      data-testid={`workspace-open-in-editor-item-${target.id}`}
       onSelect={handleSelect}
     >
+      {target.icon}
       {target.label}
+      <DropdownMenuShortcut>{isPreferred ? CHECK_ICON : undefined}</DropdownMenuShortcut>
     </DropdownMenuItem>
   );
 }
@@ -172,17 +174,17 @@ export function WorkspaceOpenInEditorButton({
         {targets.length > 1 ? (
           <DropdownMenu>
             <DropdownMenuTrigger
-              testID="workspace-open-in-editor-caret"
-              accessibilityLabel={t("workspace.git.openInEditor.chooseEditor")}
+              data-testid="workspace-open-in-editor-caret"
+              aria-label={t("workspace.git.openInEditor.chooseEditor")}
               className="flex w-8 items-center justify-center border-l text-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
             >
               <ChevronDown size={16} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              minWidth={148}
-              maxWidth={176}
-              testID="workspace-open-in-editor-menu"
+              data-testid="workspace-open-in-editor-menu"
+              className="w-max min-w-[148px] max-w-[176px]"
+              onCloseAutoFocus={keepFocusElsewhere}
             >
               {targets.map((target) => (
                 <OpenTargetMenuItem

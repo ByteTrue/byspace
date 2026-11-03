@@ -45,7 +45,6 @@ import type {
 } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
-import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -63,6 +62,8 @@ import {
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useToast } from "@/contexts/toast-context";
+import { ContextMenu } from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },

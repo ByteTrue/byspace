@@ -1,6 +1,6 @@
 import path from "node:path";
 import { test, expect } from "../support/fixtures";
-import { gotoAppShell, BOTTOM_SHEET_BACKDROP } from "../support/helpers/app";
+import { gotoAppShell } from "../support/helpers/app";
 import {
   closeMobileAgentSidebar,
   expectMobileAgentSidebarHidden,
@@ -263,10 +263,7 @@ test.describe("Workspace menu visibility", () => {
 
         await kebab.click();
         const menuItem = page.getByTestId(`sidebar-workspace-menu-copy-path-${workspaceKey}`);
-        await expect(page.locator(BOTTOM_SHEET_BACKDROP).first()).toBeVisible({
-          timeout: 10_000,
-        });
-        await expect(page.getByText("Workspace actions", { exact: true })).toBeVisible();
+        await expect(page.getByRole("menu")).toBeVisible({ timeout: 10_000 });
         await expect(menuItem).toBeVisible({ timeout: 10_000 });
 
         await page.mouse.move(2, 2);
@@ -283,12 +280,7 @@ test.describe("Workspace menu visibility", () => {
           contentType: "image/png",
         });
 
-        await page
-          .locator(BOTTOM_SHEET_BACKDROP)
-          .first()
-          .click({
-            position: { x: 12, y: 12 },
-          });
+        await page.keyboard.press("Escape");
         await expect(menuItem).toHaveCount(0);
       } finally {
         await workspace.cleanup();

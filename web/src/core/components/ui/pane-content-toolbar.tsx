@@ -1,9 +1,9 @@
 // The 36px bar on top of a pane and its icon buttons: shadcn ghost icon Buttons, each with a
-// shadcn Tooltip naming it and its shortcut.
+// shadcn Tooltip naming it and its shortcut. A "menu" button is a shadcn DropdownMenuTrigger.
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Shortcut } from "~/components/shortcut";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { cn } from "cn";
@@ -76,28 +76,6 @@ export function ToolbarButton({
   "aria-selected": ariaSelected,
 }: ToolbarButtonProps) {
   const variant = selected ? "secondary" : "ghost";
-  if (kind === "menu") {
-    // The menu engine's trigger renders its own button; it takes shadcn's button classes.
-    return (
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            disabled={disabled}
-            testID={testID}
-            accessibilityLabel={label}
-            aria-pressed={selected || undefined}
-            className={cn(buttonVariants({ variant, size: "icon-xs" }), className)}
-          >
-            {children}
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side={tooltipSide}>
-          {label}
-          {shortcut ? <Shortcut chord={shortcut} /> : null}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
   const button = (
     <Button
       variant={variant}
@@ -115,7 +93,9 @@ export function ToolbarButton({
   );
   return (
     <Tooltip delayDuration={300}>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        {kind === "menu" ? <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger> : button}
+      </TooltipTrigger>
       <TooltipContent side={tooltipSide}>
         {label}
         {shortcut ? <Shortcut chord={shortcut} /> : null}

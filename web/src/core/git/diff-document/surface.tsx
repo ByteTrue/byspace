@@ -12,13 +12,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { useToast } from "@/contexts/toast-context";
 import { InlineReviewAddButton, InlineReviewThread } from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
@@ -56,6 +49,14 @@ import type {
   TextMeasurer,
 } from "@/git/diff-document/types";
 import { useDiffDocumentWorkspaceCache } from "@/git/diff-document/workspace-cache";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const DEFAULT_MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const RESIZE_SETTLE_DELAY_MS = 120;
@@ -921,23 +922,27 @@ export function DiffSurface(props: DiffSurfaceProps) {
       <ContextMenuTrigger contextOnly className="flex min-h-0 flex-1 flex-col">
         {surface}
       </ContextMenuTrigger>
-      <ContextMenuContent align="start" minWidth={180} testID="diff-source-context-menu">
+      <ContextMenuContent
+        data-testid="diff-source-context-menu"
+        className="w-max min-w-[180px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         <ContextMenuItem
           disabled={!hasSelection}
           onSelect={copySelectedSource}
-          testID="diff-source-copy-selection"
+          data-testid="diff-source-copy-selection"
         >
           {t("common.actions.copy")}
         </ContextMenuItem>
         <ContextMenuItem
           disabled={!contextHit}
           onSelect={copyContextLine}
-          testID="diff-source-copy-line"
+          data-testid="diff-source-copy-line"
         >
           {t("common.actions.copyLine")}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={selectAll} testID="diff-source-select-all">
+        <ContextMenuItem onSelect={selectAll} data-testid="diff-source-select-all">
           {t("common.actions.selectAll")}
         </ContextMenuItem>
       </ContextMenuContent>

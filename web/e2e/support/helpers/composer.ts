@@ -7,7 +7,6 @@ import { connectWorkspaceSetupClient } from "./workspace-setup";
 import { selectWorkspaceInSidebar } from "./sidebar";
 import { getServerId } from "./server-id";
 import { waitForTabBar } from "./launcher";
-import { waitForSettledPosition } from "./sheet-layout";
 
 function composerInput(page: Page) {
   return page.getByRole("textbox", { name: "Message agent..." }).first();
@@ -85,23 +84,6 @@ export async function openAttachmentMenu(page: Page): Promise<void> {
       .getByTestId("message-input-attachment-menu")
       .or(page.getByTestId("message-input-attachment-menu-content")),
   ).toBeVisible({ timeout: 5_000 });
-}
-
-export async function expectAttachmentSheetRowsOnTitleRail(page: Page): Promise<void> {
-  const title = page.getByText("Add attachment", { exact: true });
-  const firstItemGlyph = page
-    .getByRole("menuitem", { name: "Add image", exact: true })
-    .locator("svg")
-    .first();
-  await waitForSettledPosition(title);
-  const [titleBox, glyphBox] = await Promise.all([
-    title.boundingBox(),
-    firstItemGlyph.boundingBox(),
-  ]);
-  if (!titleBox || !glyphBox) {
-    throw new Error("Attachment sheet geometry could not be measured");
-  }
-  expect(Math.abs(glyphBox.x - titleBox.x)).toBeLessThanOrEqual(1);
 }
 
 export async function expectAttachButtonDisabled(page: Page): Promise<void> {

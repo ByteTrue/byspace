@@ -4,18 +4,21 @@ import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { FileText, Layers, MessageSquare, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AgentCapabilityFlags } from "@bytetrue/protocol/agent-types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  type RewindMode,
+  useRewindCapabilities,
+} from "@/components/rewind/use-rewind-capabilities";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
-import {
-  type RewindMode,
-  useRewindCapabilities,
-} from "@/components/rewind/use-rewind-capabilities";
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Spinner } from "~/components/ui/spinner";
+import { keepOpen } from "~/components/menu-kit";
 
 export type { RewindMode };
 
@@ -79,9 +82,9 @@ export const RewindMenu = memo(function RewindMenu({
       <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            accessibilityLabel={t("rewind.tooltip")}
+            aria-label={t("rewind.tooltip")}
             disabled={isLocked}
-            testID={`${testID}-trigger`}
+            data-testid={`${testID}-trigger`}
             className="flex items-center justify-center self-center p-1 text-muted-foreground hover:text-foreground disabled:opacity-50 aria-expanded:text-foreground"
           >
             <Undo2 size={16} />
@@ -91,19 +94,23 @@ export const RewindMenu = memo(function RewindMenu({
           {t("rewind.tooltip")}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" minWidth={220} side="bottom" testID={`${testID}-content`}>
+      <DropdownMenuContent
+        align="end"
+        side="bottom"
+        data-testid={`${testID}-content`}
+        className="w-max min-w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         <div className="px-3 py-2 text-xs text-muted-foreground">{t("rewind.warning")}</div>
         <DropdownMenuSeparator />
         {items.map((item) => (
           <DropdownMenuItem
             key={item.mode}
-            closeOnSelect={false}
-            disabled={isLocked && pendingMode !== item.mode}
-            leading={ICONS[item.mode]}
-            onSelect={handleSelect(item.mode)}
-            status={pendingMode === item.mode ? "pending" : undefined}
-            testID={item.testID}
+            disabled={isLocked}
+            onSelect={keepOpen(handleSelect(item.mode))}
+            data-testid={item.testID}
           >
+            {pendingMode === item.mode ? <Spinner /> : ICONS[item.mode]}
             {item.label}
           </DropdownMenuItem>
         ))}

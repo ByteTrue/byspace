@@ -3,19 +3,17 @@
 // over the transcript with no background; its host gives the scroll a small bottom inset only
 // while the bar exists.
 import {
+  createContext,
   useCallback,
+  useContext,
   useState,
   type KeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
-import {
-  MenuRoot,
-  MenuSeparator,
-  MenuSurface,
-  MenuTrigger,
-  useMenuContext,
-} from "@/components/ui/menu";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { Separator } from "~/components/ui/separator";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { StatusRing } from "@/components/status-ring";
 import { composerPillClassName, composerPillLabelClassName } from "@/composer/pill-styles";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -50,59 +48,55 @@ export interface ComposerTrackPillProps {
   children: ReactNode;
 }
 
-// The panel, not the pill: rows carry real content, and the surface still shrinks to it.
-const PANEL_MIN_WIDTH = 280;
-const PANEL_MAX_WIDTH = 620;
-const PANEL_MAX_HEIGHT = 440;
-// Wider than a dropdown's gap: the panel is parked over the composer, not hanging off a control.
-const PANEL_OFFSET = 12;
+// A row that is done with the panel (it navigates away) closes it.
+const ClosePanelContext = createContext<() => void>(() => {});
 
+// The panel is a shadcn Popover, not a menu: rows carry buttons of their own.
 export function ComposerTrackPill({
   segments,
-  panelTitle,
   testID,
   accessibilityLabel,
   children,
 }: ComposerTrackPillProps): ReactElement {
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
   return (
-    <MenuRoot>
+    <Popover open={open} onOpenChange={setOpen}>
       <ComposerTrackPillTrigger
+        open={open}
         segments={segments}
         testID={testID}
         accessibilityLabel={accessibilityLabel ?? segments.map((segment) => segment.text).join(" ")}
       />
-      <MenuSurface
+      <PopoverContent
         side="top"
         align="start"
-        offset={PANEL_OFFSET}
-        sheetTitle={panelTitle}
-        minWidth={PANEL_MIN_WIDTH}
-        maxWidth={PANEL_MAX_WIDTH}
-        maxHeight={PANEL_MAX_HEIGHT}
-        scrollable
-        testID={`${testID}-panel`}
-        className="overflow-y-auto"
+        sideOffset={12}
+        data-testid={`${testID}-panel`}
+        onCloseAutoFocus={keepFocusElsewhere}
+        className="max-h-[440px] w-max max-w-[620px] min-w-[280px] overflow-y-auto p-1"
       >
-        {children}
-      </MenuSurface>
-    </MenuRoot>
+        <ClosePanelContext value={close}>{children}</ClosePanelContext>
+      </PopoverContent>
+    </Popover>
   );
 }
 
 function ComposerTrackPillTrigger({
+  open,
   segments,
   testID,
   accessibilityLabel,
 }: {
+  open: boolean;
   segments: readonly ComposerTrackPillSegment[];
   testID: string;
   accessibilityLabel: string;
 }): ReactElement {
-  const { open } = useMenuContext("ComposerTrackPill");
   return (
-    <MenuTrigger
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
+    <PopoverTrigger
+      data-testid={testID}
+      aria-label={accessibilityLabel}
       className={composerPillClassName(open, "pointer-events-auto min-w-0 shrink hover:bg-muted")}
     >
       {/* Segments sit twice as far apart as a mark from its own text, so a count reads as
@@ -119,7 +113,7 @@ function ComposerTrackPillTrigger({
           </span>
         ))}
       </span>
-    </MenuTrigger>
+    </PopoverTrigger>
   );
 }
 
@@ -138,7 +132,7 @@ export function ComposerTrackActions({
   return (
     <>
       {children}
-      {divided ? <MenuSeparator /> : null}
+      {divided ? <Separator className="my-1" /> : null}
     </>
   );
 }
@@ -170,13 +164,15 @@ export function ComposerTrackRow({
   accessibilityLabel,
   testID,
 }: ComposerTrackRowProps): ReactElement {
-  const { selectItem } = useMenuContext("ComposerTrackRow");
+  const closePanel = useContext(ClosePanelContext);
   const [hovered, setHovered] = useState(false);
   const handlePointerEnter = useCallback(() => setHovered(true), []);
   const handlePointerLeave = useCallback(() => setHovered(false), []);
   const handleSelect = useCallback(() => {
-    if (!disabled) selectItem(onPress, closeOnSelect);
-  }, [closeOnSelect, disabled, onPress, selectItem]);
+    if (disabled) return;
+    if (closeOnSelect) closePanel();
+    onPress?.();
+  }, [closeOnSelect, closePanel, disabled, onPress]);
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " "))

@@ -18,10 +18,10 @@ import {
   type AgentProfileIconKey,
 } from "@/agent-profiles/internal/profile-appearance";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
 import { Field, FieldLabel } from "~/components/ui/field";
+import { buttonVariants } from "~/components/ui/button";
 
 const CELL_SIZE = 40;
 const CELL_GAP = 4;
@@ -120,7 +120,6 @@ export function AgentProfileAppearanceField({
   icon,
   color,
   onChange,
-  size = "md",
   disabled = false,
   testID,
   triggerTestID,
@@ -129,7 +128,6 @@ export function AgentProfileAppearanceField({
   icon: string;
   color: string;
   onChange: (next: { icon: string; color: string }) => void;
-  size?: FieldControlSize;
   disabled?: boolean;
   testID?: string;
   triggerTestID?: string;
@@ -165,11 +163,7 @@ export function AgentProfileAppearanceField({
         aria-label={`${label} (${colorLabel(t, selectedColor)})`}
         aria-expanded={open}
         data-testid={triggerTestID}
-        className={cn(
-          "flex items-center justify-center gap-1 border border-input bg-transparent px-2 outline-none hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30",
-          size === "sm" ? "h-8 rounded-md md:h-7" : "h-11 rounded-lg md:h-8",
-          open && "border-ring",
-        )}
+        className={cn(buttonVariants({ variant: "outline" }), open && "bg-muted")}
       >
         <AgentProfileGlyph
           {...(selectedIcon ? { icon: selectedIcon } : {})}

@@ -52,13 +52,6 @@ import {
 import { CommitsSection } from "@/git/commits-section/commits-section";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import * as Clipboard from "~/lib/clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
@@ -100,6 +93,15 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -258,9 +260,9 @@ export function DiffModeMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        testID={`${testIDPrefix}-status-trigger`}
+        data-testid={`${testIDPrefix}-status-trigger`}
         className={TOOLBAR_LABEL_TRIGGER_CLASS}
-        accessibilityLabel={t("workspace.git.diff.diffMode")}
+        aria-label={t("workspace.git.diff.diffMode")}
       >
         <ToolbarLabelTriggerIcon>
           <FileDiff size={13} className="text-muted-foreground" />
@@ -272,23 +274,32 @@ export function DiffModeMenu({
           <ChevronDown size={12} className={EXTRA_MUTED_ICON} />
         </ToolbarLabelTriggerIcon>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" width={260} testID={`${testIDPrefix}-status-menu`}>
-        <DropdownMenuItem
-          testID={`${testIDPrefix}-mode-uncommitted`}
-          selected={diffMode === "uncommitted"}
+      <DropdownMenuContent
+        align="start"
+        data-testid={`${testIDPrefix}-status-menu`}
+        className="w-[260px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
+        <DropdownMenuCheckboxItem
+          checked={diffMode === "uncommitted"}
+          data-testid={`${testIDPrefix}-mode-uncommitted`}
           onSelect={onSelectUncommitted}
         >
           {uncommittedLabel}
-        </DropdownMenuItem>
+        </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID={`${testIDPrefix}-mode-committed`}
-          selected={diffMode === "base"}
-          description={committedDescription}
+        <DropdownMenuCheckboxItem
+          checked={diffMode === "base"}
           onSelect={onSelectBase}
+          data-testid={`${testIDPrefix}-mode-committed`}
         >
-          {committedLabel}
-        </DropdownMenuItem>
+          <span className="flex min-w-0 flex-col">
+            <span>{committedLabel}</span>
+            {committedDescription ? (
+              <span className="text-xs text-muted-foreground">{committedDescription}</span>
+            ) : null}
+          </span>
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -836,7 +847,12 @@ function ChangesOptionsMenu({ mode, compact }: { mode: ChangesOptionsMenuMode; c
       >
         <MoreHorizontal className={EXTRA_MUTED_ICON} />
       </ToolbarButton>
-      <DropdownMenuContent align="end" width={240} testID="changes-options-menu-content">
+      <DropdownMenuContent
+        align="end"
+        data-testid="changes-options-menu-content"
+        className="w-[240px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         {content}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -853,11 +869,8 @@ function ChangesTreeOptions({
   const { t } = useTranslation();
   return (
     <>
-      <DropdownMenuItem
-        leading={DIFF_OPTIONS_CHANGES_TAB_ICON}
-        testID="changes-open-tab"
-        onSelect={onOpenDiff}
-      >
+      <DropdownMenuItem data-testid="changes-open-tab" onSelect={onOpenDiff}>
+        {DIFF_OPTIONS_CHANGES_TAB_ICON}
         {t("workspace.git.diff.openDiffTab")}
       </DropdownMenuItem>
       {inlineDiff ? (
@@ -873,13 +886,13 @@ function ChangesTreeOptions({
 function ChangesInlineDiffOption({ toggle }: { toggle: ChangesToolbarInlineDiffToggle }) {
   const { t } = useTranslation();
   return (
-    <DropdownMenuItem
-      selected={toggle.value}
-      testID="changes-toggle-inline-diff"
+    <DropdownMenuCheckboxItem
+      checked={toggle.value}
+      data-testid="changes-toggle-inline-diff"
       onSelect={toggle.onToggle}
     >
       {t("workspace.git.diff.inlineDiff")}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -902,49 +915,47 @@ function ChangesDiffOptions({ options }: { options: ChangesToolbarDiffOptions })
       {options.collapse ? (
         <>
           <DropdownMenuItem
-            leading={
-              options.collapse.allFilesCollapsed
-                ? DIFF_OPTIONS_EXPAND_ICON
-                : DIFF_OPTIONS_COLLAPSE_ICON
-            }
-            testID="changes-toggle-collapse-all"
+            data-testid="changes-toggle-collapse-all"
             onSelect={
               options.collapse.allFilesCollapsed
                 ? options.collapse.onExpandAll
                 : options.collapse.onCollapseAll
             }
           >
+            {options.collapse.allFilesCollapsed
+              ? DIFF_OPTIONS_EXPAND_ICON
+              : DIFF_OPTIONS_COLLAPSE_ICON}
             {collapseLabel}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>
       ) : null}
       {options.layout ? (
-        <DropdownMenuItem
-          leading={DIFF_OPTIONS_SPLIT_ICON}
-          selected={options.layout.value === "split"}
-          testID="changes-toggle-layout"
+        <DropdownMenuCheckboxItem
+          checked={options.layout.value === "split"}
+          data-testid="changes-toggle-layout"
           onSelect={options.layout.onToggle}
         >
+          {DIFF_OPTIONS_SPLIT_ICON}
           {t("workspace.git.diff.split")}
-        </DropdownMenuItem>
+        </DropdownMenuCheckboxItem>
       ) : null}
-      <DropdownMenuItem
-        leading={DIFF_OPTIONS_WHITESPACE_ICON}
-        selected={options.hideWhitespace}
-        testID="changes-toggle-whitespace"
+      <DropdownMenuCheckboxItem
+        checked={options.hideWhitespace}
+        data-testid="changes-toggle-whitespace"
         onSelect={options.onToggleHideWhitespace}
       >
+        {DIFF_OPTIONS_WHITESPACE_ICON}
         {whitespaceLabel}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        leading={DIFF_OPTIONS_WRAP_ICON}
-        selected={options.wrapLines}
-        testID="changes-toggle-wrap-lines"
+      </DropdownMenuCheckboxItem>
+      <DropdownMenuCheckboxItem
+        checked={options.wrapLines}
+        data-testid="changes-toggle-wrap-lines"
         onSelect={options.onToggleWrapLines}
       >
+        {DIFF_OPTIONS_WRAP_ICON}
         {wrapLinesLabel}
-      </DropdownMenuItem>
+      </DropdownMenuCheckboxItem>
     </>
   );
 }

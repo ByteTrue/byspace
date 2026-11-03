@@ -154,7 +154,6 @@ type AttachmentListUpdater =
 
 const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
 
-function noop() {}
 const noopCallback = () => {};
 
 function resolveComposerButtonIconSize(): number {
@@ -781,20 +780,9 @@ interface GithubPickerOptionProps {
   active: boolean;
   selected: boolean;
   item: ForgeSearchItem;
-  onToggle: (item: ForgeSearchItem) => void;
 }
 
-function GithubPickerOption({
-  label,
-  testID,
-  active,
-  selected,
-  item,
-  onToggle,
-}: GithubPickerOptionProps) {
-  const handlePress = useCallback(() => {
-    onToggle(item);
-  }, [onToggle, item]);
+function GithubPickerOption({ label, testID, active, selected, item }: GithubPickerOptionProps) {
   const leadingSlot = useMemo(
     () =>
       item.kind === "change_request" ? (
@@ -810,7 +798,6 @@ function GithubPickerOption({
       label={label}
       selected={selected}
       active={active}
-      onPress={handlePress}
       leadingSlot={leadingSlot}
     />
   );
@@ -1882,6 +1869,14 @@ function ComposerContentImpl({
     [setGithubSearchQuery],
   );
 
+  const handleSelectGithubOption = useCallback(
+    (optionId: string) => {
+      const item = findForgeItemByOption(githubSearchItems, optionId);
+      if (item) handleToggleGithubItem(item);
+    },
+    [githubSearchItems, handleToggleGithubItem],
+  );
+
   const renderGithubPickerOption = useCallback(
     ({ option, active }: { option: ComboboxOption; selected: boolean; active: boolean }) => {
       const item = findForgeItemByOption(githubSearchItems, option.id);
@@ -1897,11 +1892,10 @@ function ComposerContentImpl({
           selected={selected}
           active={active}
           item={item}
-          onToggle={handleToggleGithubItem}
         />
       );
     },
-    [githubSearchItems, selectedAttachments, handleToggleGithubItem],
+    [githubSearchItems, selectedAttachments],
   );
 
   const inputAreaContainerClassName = cn(
@@ -2063,7 +2057,7 @@ function ComposerContentImpl({
               <Combobox
                 options={githubSearchOptions}
                 value=""
-                onSelect={noop}
+                onSelect={handleSelectGithubOption}
                 keepOpenOnSelect
                 searchable
                 searchPlaceholder={t("composer.github.searchPlaceholder", {

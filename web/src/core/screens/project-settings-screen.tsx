@@ -27,12 +27,6 @@ import type {
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -75,6 +69,13 @@ import {
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -1438,19 +1439,23 @@ function ScriptRow({ script, isFirst, onEdit, onRemove }: ScriptRowProps) {
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger
-          accessibilityLabel={t("settings.project.scripts.menuAccessibility")}
-          testID={`script-row-menu-${script.id}`}
+          aria-label={t("settings.project.scripts.menuAccessibility")}
+          data-testid={`script-row-menu-${script.id}`}
           className="p-1 text-muted-foreground"
         >
           <MoreVertical size={ICON_SIZE} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" minWidth={160}>
-          <DropdownMenuItem testID={`script-action-${script.id}-edit`} onSelect={handleEdit}>
+        <DropdownMenuContent
+          align="end"
+          className="w-max min-w-[160px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
+          <DropdownMenuItem data-testid={`script-action-${script.id}-edit`} onSelect={handleEdit}>
             {t("settings.project.scripts.actions.edit")}
           </DropdownMenuItem>
           <DropdownMenuItem
-            testID={`script-action-${script.id}-remove`}
-            destructive
+            data-testid={`script-action-${script.id}-remove`}
+            variant="destructive"
             onSelect={handleRemove}
           >
             {t("settings.project.scripts.actions.remove")}

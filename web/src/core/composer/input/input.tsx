@@ -28,12 +28,6 @@ import type { ImageAttachment, MessagePayload, TextReplacement } from "@/compose
 import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { Shortcut } from "~/components/shortcut";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
@@ -57,6 +51,13 @@ import {
   runMessageInputKeyboardAction,
 } from "@/composer/input/state";
 import { useWindowDimensions } from "~/hooks/use-window-dimensions";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
 
@@ -179,20 +180,15 @@ interface TextAreaHandle {
 }
 
 function AttachButtonIcon({
-  hovered,
   onAttachButtonRef,
   buttonIconSize,
 }: {
-  hovered: boolean;
   onAttachButtonRef: ((node: HTMLElement | null) => void) | undefined;
   buttonIconSize: number;
 }) {
   return (
     <span ref={onAttachButtonRef} className="flex size-7 items-center justify-center">
-      <Plus
-        size={buttonIconSize}
-        className={hovered ? "text-foreground" : "text-muted-foreground"}
-      />
+      <Plus size={buttonIconSize} />
     </span>
   );
 }
@@ -203,11 +199,11 @@ function AttachmentMenuList({ items }: { items: AttachmentMenuItem[] }) {
       {items.map((item) => (
         <DropdownMenuItem
           key={item.id}
-          testID={`message-input-attachment-menu-item-${item.id}`}
+          data-testid={`message-input-attachment-menu-item-${item.id}`}
           disabled={item.disabled}
           onSelect={item.onSelect}
-          leading={item.icon ?? null}
         >
+          {item.icon ?? null}
           {item.label}
         </DropdownMenuItem>
       ))}
@@ -226,7 +222,7 @@ function AttachmentDropdown({
   visible: boolean;
   isConnected: boolean;
   disabled: boolean;
-  renderAttachButtonIcon: (input: { hovered?: boolean }) => React.ReactElement;
+  renderAttachButtonIcon: React.ReactElement;
   attachmentMenuItems: AttachmentMenuItem[];
   addAttachmentLabel: string;
 }) {
@@ -238,9 +234,9 @@ function AttachmentDropdown({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             disabled={isButtonDisabled}
-            accessibilityLabel={addAttachmentLabel}
-            testID="message-input-attach-button"
-            className="flex size-7 items-center justify-center rounded-sm hover:bg-muted disabled:opacity-50"
+            aria-label={addAttachmentLabel}
+            data-testid="message-input-attach-button"
+            className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
             {renderAttachButtonIcon}
           </DropdownMenuTrigger>
@@ -252,10 +248,10 @@ function AttachmentDropdown({
       <DropdownMenuContent
         side="top"
         align="start"
-        offset={8}
-        minWidth={220}
-        testID="message-input-attachment-menu"
-        sheetTitle={addAttachmentLabel}
+        sideOffset={8}
+        data-testid="message-input-attachment-menu"
+        className="w-max min-w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
       >
         <AttachmentMenuList items={attachmentMenuItems} />
       </DropdownMenuContent>
@@ -1188,13 +1184,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       submitLabel && "w-auto min-w-7 rounded-md px-3",
       isSendButtonDisabled && "opacity-50",
     );
-    const renderAttachButtonIcon = useCallback(
-      ({ hovered }: { hovered?: boolean }) => (
-        <AttachButtonIcon
-          hovered={Boolean(hovered)}
-          onAttachButtonRef={onAttachButtonRef}
-          buttonIconSize={buttonIconSize}
-        />
+    const renderAttachButtonIcon = useMemo(
+      () => (
+        <AttachButtonIcon onAttachButtonRef={onAttachButtonRef} buttonIconSize={buttonIconSize} />
       ),
       [onAttachButtonRef, buttonIconSize],
     );

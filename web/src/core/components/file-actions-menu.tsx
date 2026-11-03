@@ -17,12 +17,13 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { withTheme } from "~/app/theme-object";
 import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-} from "@/components/ui/context-menu";
-import { withTheme } from "~/app/theme-object";
+} from "~/components/ui/context-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -260,9 +261,9 @@ export function FileActionsContextMenuContent({
   }
   return (
     <ContextMenuContent
-      align="start"
-      width={220}
-      testID={testIDPrefix ? `${testIDPrefix}-context-menu` : undefined}
+      data-testid={testIDPrefix ? `${testIDPrefix}-context-menu` : undefined}
+      className="w-[220px]"
+      onCloseAutoFocus={keepFocusElsewhere}
     >
       {actions.map((action) => (
         <Fragment key={action.key}>
@@ -286,11 +287,11 @@ function FileActionMenuItem({ action }: { action: FileAction }): ReactElement {
   }, [action.destructive, action.icon]);
   return (
     <ContextMenuItem
-      leading={leading}
       onSelect={action.onSelect}
-      destructive={action.destructive}
-      testID={action.testID}
+      variant={action.destructive ? "destructive" : "default"}
+      data-testid={action.testID}
     >
+      {leading}
       {action.label}
     </ContextMenuItem>
   );

@@ -29,7 +29,6 @@ import {
 import { getProviderIcon } from "@/components/provider-icons";
 import { formatTimeAgo } from "@/utils/time";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostProjects } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
@@ -422,7 +421,6 @@ interface ManualImportFormProps {
   providerLeading?: React.ReactNode;
   isPending: boolean;
   error: ManualImportError | null;
-  controlSize: "sm" | "md";
   resetKey: string;
   onProviderChange: (value: AgentProvider, display: SelectFieldDisplay) => void;
   onHandleChange: (value: string) => void;
@@ -437,7 +435,6 @@ function ManualImportForm({
   providerLeading,
   isPending,
   error,
-  controlSize,
   resetKey,
   onProviderChange,
   onHandleChange,
@@ -470,7 +467,6 @@ function ManualImportForm({
         disabled={isPending}
         error={error?.field === "provider" ? error.message : null}
         searchable={false}
-        size={controlSize}
         triggerLeading={providerLeading}
         testID="import-session-manual-provider-field"
         triggerTestID="import-session-manual-provider-trigger"
@@ -553,7 +549,6 @@ export function ImportSessionSheet({
 }: ImportSessionSheetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const formControlSize = useIsCompactFormFactor() ? "md" : "sm";
 
   // "Show all" widens a workspace-scoped sheet to the whole host. The sheet's own
   // `cwd` stays the scope it was opened with, because that is what decides where
@@ -997,7 +992,6 @@ export function ImportSessionSheet({
         providerLeading={manualProviderLeading}
         isPending={isManualImportPending(importMutation)}
         error={manualError}
-        controlSize={formControlSize}
         resetKey={visible ? "open" : "closed"}
         onProviderChange={handleManualProviderChange}
         onHandleChange={handleManualHandleChange}

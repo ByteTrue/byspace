@@ -3,13 +3,16 @@
 import { memo, useCallback, useState } from "react";
 import { Split } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Spinner } from "~/components/ui/spinner";
+import { keepOpen } from "~/components/menu-kit";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -51,9 +54,9 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
       <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            accessibilityLabel={t("message.actions.forkMenu")}
+            aria-label={t("message.actions.forkMenu")}
             disabled={isLocked}
-            testID={`${testID}-trigger`}
+            data-testid={`${testID}-trigger`}
             className="flex items-center justify-center self-center p-1 text-muted-foreground hover:text-foreground disabled:opacity-50 aria-expanded:text-foreground"
           >
             <Split size={14} />
@@ -63,25 +66,27 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
           {t("message.actions.forkMenu")}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" minWidth={220} side="bottom" testID={`${testID}-content`}>
+      <DropdownMenuContent
+        align="start"
+        side="bottom"
+        data-testid={`${testID}-content`}
+        className="w-max min-w-[220px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         <DropdownMenuItem
-          closeOnSelect={false}
-          disabled={isLocked && pendingTarget !== "tab"}
-          leading={FORK_ICON}
-          onSelect={handleSelect("tab")}
-          status={pendingTarget === "tab" ? "pending" : undefined}
-          testID={`${testID}-new-tab`}
+          disabled={isLocked}
+          onSelect={keepOpen(handleSelect("tab"))}
+          data-testid={`${testID}-new-tab`}
         >
+          {pendingTarget === "tab" ? <Spinner /> : FORK_ICON}
           {t("message.actions.forkInNewTab")}
         </DropdownMenuItem>
         <DropdownMenuItem
-          closeOnSelect={false}
-          disabled={isLocked && pendingTarget !== "workspace"}
-          leading={FORK_ICON}
-          onSelect={handleSelect("workspace")}
-          status={pendingTarget === "workspace" ? "pending" : undefined}
-          testID={`${testID}-new-workspace`}
+          disabled={isLocked}
+          onSelect={keepOpen(handleSelect("workspace"))}
+          data-testid={`${testID}-new-workspace`}
         >
+          {pendingTarget === "workspace" ? <Spinner /> : FORK_ICON}
           {t("message.actions.forkInNewWorkspace")}
         </DropdownMenuItem>
       </DropdownMenuContent>

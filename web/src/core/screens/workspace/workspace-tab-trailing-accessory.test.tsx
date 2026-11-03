@@ -9,15 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildWorkspaceTabMenuEntries } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import { MobileTabTrailingAccessory } from "@/screens/workspace/workspace-tab-trailing-accessory";
+import { TooltipProvider } from "~/components/ui/tooltip";
 
 void testI18n;
-
-/**
- * Records the props the accessory hands to the menu engine, so the test can assert the
- * compact presentation without rendering the real gorhom sheet in jsdom.
- */
-const capturedRootProps: { compactMode?: string }[] = [];
-const capturedContentProps: { sheetTitle?: string; testID?: string }[] = [];
 
 const { mockTheme } = vi.hoisted(() => ({
   mockTheme: {
@@ -52,60 +46,6 @@ vi.mock("~/app/theme-object", async (importOriginal) => ({
       const themed = themeProps ? themeProps(mockTheme) : {};
       return React.createElement(Component, { ...rest, ...themed });
     },
-}));
-
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({
-    children,
-    compactMode,
-  }: {
-    children: React.ReactNode;
-    compactMode?: string;
-  }) => {
-    capturedRootProps.push({ compactMode });
-    return <div>{children}</div>;
-  },
-  DropdownMenuTrigger: ({
-    children,
-    testID,
-  }: {
-    children:
-      | React.ReactNode
-      | ((state: { hovered: boolean; pressed: boolean; open: boolean }) => React.ReactNode);
-    testID?: string;
-  }) => (
-    <button type="button" data-testid={testID}>
-      {typeof children === "function"
-        ? children({ hovered: false, pressed: false, open: false })
-        : children}
-    </button>
-  ),
-  DropdownMenuContent: ({
-    children,
-    sheetTitle,
-    testID,
-  }: {
-    children: React.ReactNode;
-    sheetTitle?: string;
-    testID?: string;
-  }) => {
-    capturedContentProps.push({ sheetTitle, testID });
-    return <div data-testid={testID}>{children}</div>;
-  },
-  DropdownMenuSeparator: () => <div role="separator" />,
-  DropdownMenuItem: ({
-    children,
-    onSelect,
-    testID,
-  }: {
-    children: React.ReactNode;
-    onSelect?: () => void;
-    testID?: string;
-  }) => (
-    <button type="button" data-testid={testID} onClick={onSelect}>
-      {children}
-    </button>
-  ),
 }));
 
 function agentTab(): WorkspaceTabDescriptor {
@@ -153,11 +93,13 @@ function renderAccessory(
   document.body.appendChild(container);
   const root = createRoot(container);
   const element: ReactElement = (
-    <MobileTabTrailingAccessory
-      menuTestIDBase={base}
-      presentationLabel="My session"
-      menuEntries={menuEntries}
-    />
+    <TooltipProvider>
+      <MobileTabTrailingAccessory
+        menuTestIDBase={base}
+        presentationLabel="My session"
+        menuEntries={menuEntries}
+      />
+    </TooltipProvider>
   );
   act(() => {
     root.render(element);
@@ -180,8 +122,6 @@ describe("MobileTabTrailingAccessory", () => {
     vi.stubGlobal("React", React);
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     document.body.innerHTML = "";
-    capturedRootProps.length = 0;
-    capturedContentProps.length = 0;
   });
 
   afterEach(() => {
@@ -196,6 +136,10 @@ describe("MobileTabTrailingAccessory", () => {
     current = rendered;
 
     expect(document.querySelector(`[data-testid="${rendered.base}-trigger"]`)).not.toBeNull();
+    const trigger = document.querySelector(`[data-testid="${rendered.base}-trigger"]`);
+    act(() => {
+      fireEvent.keyDown(trigger as HTMLElement, { key: "Enter" });
+    });
     const renameButton = document.querySelector(`[data-testid="${rendered.base}-rename"]`);
     expect(renameButton).not.toBeNull();
     fireEvent.click(renameButton as HTMLElement);
@@ -209,6 +153,10 @@ describe("MobileTabTrailingAccessory", () => {
     const rendered = renderAccessory(terminalTab(), onRenameTab);
     current = rendered;
 
+    const trigger = document.querySelector(`[data-testid="${rendered.base}-trigger"]`);
+    act(() => {
+      fireEvent.keyDown(trigger as HTMLElement, { key: "Enter" });
+    });
     const renameButton = document.querySelector(`[data-testid="${rendered.base}-rename"]`);
     expect(renameButton).not.toBeNull();
     fireEvent.click(renameButton as HTMLElement);

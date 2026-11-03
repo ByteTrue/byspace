@@ -27,12 +27,6 @@ import {
   SquareTerminal,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
@@ -47,6 +41,13 @@ import {
 import { useWorkspaceServiceRoutePreferencesStore } from "@/workspace-service-routes/store";
 import { cn } from "cn";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 type RowActionIcon = "copy" | "open" | "restart" | "start" | "stop" | "terminal";
 type ScriptDescriptor = WorkspaceDescriptor["scripts"][number];
@@ -144,15 +145,16 @@ function ServiceRouteOption({
   const { t } = useTranslation();
   const handleSelect = useCallback(() => onSelect(target.kind), [onSelect, target.kind]);
   return (
-    <DropdownMenuItem
-      testID={`workspace-scripts-route-${scriptName}-${target.kind}`}
-      selected={target.kind === selectedKind}
-      showSelectedCheck
-      description={target.label}
+    <DropdownMenuCheckboxItem
+      checked={target.kind === selectedKind}
       onSelect={handleSelect}
+      data-testid={`workspace-scripts-route-${scriptName}-${target.kind}`}
     >
-      {t(routeLabelKey(target.kind))}
-    </DropdownMenuItem>
+      <span className="flex min-w-0 flex-col">
+        <span>{t(routeLabelKey(target.kind))}</span>
+        <span className="truncate text-xs text-muted-foreground">{target.label}</span>
+      </span>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -173,8 +175,8 @@ function ServiceRouteSelector({
       <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            accessibilityLabel={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
-            testID={`workspace-scripts-route-${scriptName}`}
+            aria-label={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
+            data-testid={`workspace-scripts-route-${scriptName}`}
             className="group/route flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
           >
             <span className="flex size-3.5 items-center justify-center text-muted-foreground group-hover/route:text-foreground">
@@ -189,7 +191,12 @@ function ServiceRouteSelector({
           {t("workspace.scripts.actions.chooseUrl")}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="bottom" align="end" minWidth={220} maxWidth={280}>
+      <DropdownMenuContent
+        side="bottom"
+        align="end"
+        className="w-max min-w-[220px] max-w-[280px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
         {targets.map((target) => (
           <ServiceRouteOption
             key={target.kind}

@@ -3,9 +3,8 @@
 import { useCallback, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { ICON_SIZE } from "@/styles/theme";
 import { cn } from "cn";
+import { buttonVariants } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
@@ -45,7 +44,6 @@ export interface SelectFieldProps<TValue> {
   searchable?: boolean;
   searchPlaceholder?: string;
   title?: string;
-  size?: FieldControlSize;
   getValueKey?: (value: TValue) => string;
   renderOption?: (input: SelectFieldRenderOptionInput<TValue>) => ReactElement;
   triggerLeading?: ReactNode;
@@ -63,11 +61,13 @@ export interface SelectFieldTriggerProps {
   disabled?: boolean;
   loading?: boolean;
   leading?: ReactNode;
-  size?: FieldControlSize;
   testID?: string;
 }
 
-/** The trigger's face: leading slot, value or placeholder, spinner, chevron. */
+/**
+ * The trigger's face, shadcn's outline button: leading slot, value or placeholder, spinner,
+ * chevron. It sits inside the button that opens the list (`group/select`), which owns focus.
+ */
 export function SelectFieldTrigger({
   display,
   label: explicitLabel,
@@ -77,7 +77,6 @@ export function SelectFieldTrigger({
   disabled = false,
   loading = false,
   leading,
-  size = "md",
   testID,
 }: SelectFieldTriggerProps): ReactElement {
   const label = explicitLabel ?? display?.label ?? placeholder;
@@ -86,30 +85,23 @@ export function SelectFieldTrigger({
     <span
       data-testid={testID}
       className={cn(
-        // The Expo app's control phases (control-geometry.ts): hover keeps the rest border; open,
-        // pressed or focused (by any means, not only the keyboard) draw the ring border and the 3px
-        // focus ring.
-        "pointer-events-none flex w-full items-center gap-1.5 border border-input bg-transparent transition-colors group-focus/select:border-ring group-focus/select:ring-3 group-focus/select:ring-ring/50 group-active/select:border-ring group-active/select:ring-3 group-active/select:ring-ring/50 dark:bg-input/30",
-        size === "sm" ? "h-8 rounded-md px-2.5 md:h-7" : "h-11 rounded-lg px-3 md:h-8 md:px-2.5",
-        active && "border-ring ring-3 ring-ring/50",
+        buttonVariants({ variant: "outline" }),
+        "pointer-events-none w-full justify-start font-normal group-focus-visible/select:border-ring group-focus-visible/select:ring-3 group-focus-visible/select:ring-ring/50",
+        active && "bg-muted",
         disabled && "opacity-50",
       )}
     >
       {leading}
       <span
         className={cn(
-          "min-w-0 flex-1 truncate text-left text-sm leading-5",
-          isPlaceholder ? "text-muted-foreground" : "text-foreground",
+          "min-w-0 flex-1 truncate text-left",
+          isPlaceholder && "text-muted-foreground",
         )}
       >
         {label}
       </span>
-      {loading ? (
-        <span className="flex w-4 shrink-0 items-center text-muted-foreground">
-          <Spinner className="size-3.5" />
-        </span>
-      ) : null}
-      <ChevronDown size={ICON_SIZE.md} className="shrink-0 text-muted-foreground" />
+      {loading ? <Spinner className="text-muted-foreground" /> : null}
+      <ChevronDown className="text-muted-foreground" />
     </span>
   );
 }
@@ -153,7 +145,6 @@ export function SelectField<TValue>({
   searchable = false,
   searchPlaceholder,
   title,
-  size = "md",
   getValueKey,
   renderOption,
   triggerLeading,
@@ -245,7 +236,6 @@ export function SelectField<TValue>({
           disabled={disabled}
           loading={loading}
           leading={triggerLeading}
-          size={size}
         />
       </button>
       <Combobox

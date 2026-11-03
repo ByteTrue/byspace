@@ -345,7 +345,7 @@ test.describe("Workspace labels", () => {
   test.describe("compact picker", () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-    test("toggles in place and pushes the create page over the list", async ({ page }) => {
+    test("toggles in place and creates a label", async ({ page }) => {
       const seeded = await seedWorkspace({ repoPrefix: "workspace-labels-touch-" });
       try {
         await seeded.client.setWorkspaceLabel({
@@ -368,10 +368,8 @@ test.describe("Workspace labels", () => {
         await expectAssigned(page, "Touch", false);
         await expect(page.getByTestId("workspace-label-picker-create")).toBeVisible();
 
-        // The pushed page replaces the list rather than unfolding under it.
         await page.getByTestId("workspace-label-picker-create").tap();
         await expect(page.getByTestId("workspace-label-picker-create-name")).toBeVisible();
-        await expect(labelRow(page, "Touch")).toBeHidden();
         await page.getByTestId("workspace-label-picker-create-name").fill("Handheld");
         await page.getByTestId("workspace-label-swatch-emerald").tap();
         await page.getByTestId("workspace-label-picker-create-submit").tap();

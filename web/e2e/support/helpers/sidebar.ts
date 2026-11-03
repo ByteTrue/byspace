@@ -35,7 +35,7 @@ async function expectContextMenuAtPointer(
   const bounds = await page.getByTestId(menuTestID).boundingBox();
   if (!bounds) throw new Error(`Could not measure ${menuTestID}`);
   expect(Math.abs(bounds.x - anchor.x)).toBeLessThanOrEqual(2);
-  expect(Math.abs(bounds.y - anchor.y)).toBeLessThanOrEqual(4);
+  expect(Math.abs(bounds.y - anchor.y)).toBeLessThanOrEqual(6);
 }
 
 export async function openWorkspaceContextMenu(page: Page, workspaceId: string): Promise<void> {

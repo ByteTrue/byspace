@@ -4,12 +4,6 @@ import { useCallback, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Pencil } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { AdaptiveRenameModal } from "@/components/rename-modal";
 import { WorkspaceMetaRow } from "~/sidebar/meta-row";
 import { useToast } from "@/contexts/toast-context";
@@ -28,6 +22,13 @@ import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { withTheme } from "~/app/theme-object";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const ThemedChevronDown = withTheme(ChevronDown);
 const ThemedPencil = withTheme(Pencil);
@@ -108,9 +109,10 @@ function ColorMenuItem({
   const handleSelect = useCallback(() => onChange(color), [color, onChange]);
   const leading = useMemo(() => <ColorSwatch color={color} />, [color]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
+      {leading}
       {colorLabel(t, color)}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -125,7 +127,7 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
       <DropdownMenu>
         <DropdownMenuTrigger
           className={TRIGGER}
-          accessibilityLabel={t("settings.host.appearance.color.accessibilityLabel", {
+          aria-label={t("settings.host.appearance.color.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
@@ -133,7 +135,12 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {HOST_COLORS.map((option) => (
             <ColorMenuItem
               key={option}
@@ -164,16 +171,21 @@ function BadgeDisplayRow({
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger
-          testID="host-appearance-badge-display"
+          data-testid="host-appearance-badge-display"
           className={TRIGGER}
-          accessibilityLabel={t("settings.host.appearance.badge.accessibilityLabel", {
+          aria-label={t("settings.host.appearance.badge.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
           <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
           <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={200}>
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-[200px]"
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {HOST_BADGE_DISPLAYS.map((option) => (
             <BadgeDisplayMenuItem
               key={option}
@@ -200,9 +212,9 @@ function BadgeDisplayMenuItem({
   const { t } = useTranslation();
   const handleSelect = useCallback(() => onChange(display), [display, onChange]);
   return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+    <DropdownMenuCheckboxItem checked={selected} onSelect={handleSelect}>
       {badgeDisplayLabel(t, display)}
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 

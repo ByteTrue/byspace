@@ -16,14 +16,12 @@ import type { AgentFeature } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "~/components/ui/button";
-import { type FieldControlSize } from "@/components/ui/control-geometry";
 import {
   SelectField,
   type SelectFieldDisplay,
   type SelectFieldOption,
 } from "@/components/ui/select-field";
 import { Switch } from "~/components/ui/switch";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { AgentProfileAppearanceField } from "@/agent-profiles/settings/agent-profile-appearance-field";
 import type {
@@ -145,7 +143,6 @@ function OpenAgentProfileEditModal({
   onSave,
 }: AgentProfileEditModalProps & { onDismiss: () => void }): ReactElement {
   const { t } = useTranslation();
-  const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const snapshot = useMemo(
     () => ({ mode, ...(profile ? { profile } : {}), ...(seed ? { seed } : {}) }),
     [mode, profile, seed],
@@ -252,7 +249,6 @@ function OpenAgentProfileEditModal({
               color={state.color}
               onChange={handleAppearanceChange}
               disabled={state.isSubmitting}
-              size={controlSize}
               testID="agent-profile-icon-field"
               triggerTestID="agent-profile-icon-trigger"
             />
@@ -286,7 +282,6 @@ function OpenAgentProfileEditModal({
           disabled={state.isSubmitting}
           searchable={providerOptions.length > 6}
           title={t("settings.host.agentProfiles.providerLabel")}
-          size={controlSize}
           testID="agent-profile-provider-field"
           triggerTestID="agent-profile-provider-trigger"
         />
@@ -303,7 +298,6 @@ function OpenAgentProfileEditModal({
             disabled={state.isSubmitting}
             searchable={modelOptions.length > 6}
             title={t("settings.host.agentProfiles.modelLabel")}
-            size={controlSize}
             testID="agent-profile-model-field"
             triggerTestID="agent-profile-model-trigger"
           />
@@ -321,7 +315,6 @@ function OpenAgentProfileEditModal({
             disabled={state.isSubmitting}
             searchable={modeOptions.length > 6}
             title={t("settings.host.agentProfiles.modeLabel")}
-            size={controlSize}
             testID="agent-profile-mode-field"
             triggerTestID="agent-profile-mode-trigger"
           />
@@ -339,7 +332,6 @@ function OpenAgentProfileEditModal({
             disabled={state.isSubmitting}
             searchable={thinkingOptions.length > 6}
             title={t("settings.host.agentProfiles.thinkingLabel")}
-            size={controlSize}
             testID="agent-profile-thinking-field"
             triggerTestID="agent-profile-thinking-trigger"
           />
@@ -358,7 +350,6 @@ function OpenAgentProfileEditModal({
                   feature={feature}
                   isFirst={index === 0}
                   disabled={state.isSubmitting}
-                  size={controlSize}
                   model={model}
                 />
               ))}
@@ -419,13 +410,11 @@ function AgentProfileFeatureRow({
   feature,
   isFirst,
   disabled,
-  size,
   model,
 }: {
   feature: AgentFeature;
   isFirst: boolean;
   disabled: boolean;
-  size: FieldControlSize;
   model: AgentProfileFormModel;
 }): ReactElement {
   const rowClassName = cn("flex items-center justify-between gap-3 py-3", !isFirst && "border-t");
@@ -472,7 +461,6 @@ function AgentProfileFeatureRow({
           disabled={disabled}
           {...(feature.description ? { hint: feature.description } : {})}
           title={feature.label}
-          size={size}
           testID={`agent-profile-feature-field-${feature.id}`}
           triggerTestID={`agent-profile-feature-trigger-${feature.id}`}
         />

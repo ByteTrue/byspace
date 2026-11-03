@@ -1,10 +1,8 @@
 // Port of archive/expo-app:packages/app/src/components/settings/index.tsx: the settings card, row and the
 // switch / select / input / action rows built on it. Same props; the view is DOM.
-import { Children, isValidElement, useCallback, type ReactNode } from "react";
+import { Children, isValidElement, type ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 import { cn } from "cn";
@@ -22,18 +20,6 @@ export interface SettingsSwitchProps extends SettingsRowProps {
   value: boolean;
   onValueChange(value: boolean): void;
   disabled?: boolean;
-}
-export interface SettingsSelectProps<Value extends string = string> extends SettingsRowProps {
-  value: Value;
-  options: readonly { label: string; value: Value }[];
-  onValueChange(value: Value): void;
-  disabled?: boolean;
-}
-export interface SettingsInputHandle {
-  focus(): void;
-  blur(): void;
-  getText(): string;
-  replaceText(text: string): void;
 }
 export interface SettingsActionProps extends SettingsRowProps {
   actionLabel: string;
@@ -83,53 +69,6 @@ export function SettingsSwitch({ value, onValueChange, disabled, ...row }: Setti
         disabled={disabled}
         aria-label={row.label}
       />
-    </SettingsRow>
-  );
-}
-
-function SettingsOption<Value extends string>({
-  option,
-  selected,
-  onValueChange,
-}: {
-  option: { label: string; value: Value };
-  selected: boolean;
-  onValueChange(value: Value): void;
-}) {
-  const select = useCallback(() => onValueChange(option.value), [onValueChange, option.value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={select}>
-      {option.label}
-    </DropdownMenuItem>
-  );
-}
-
-export function SettingsSelect<Value extends string>({
-  value,
-  options,
-  onValueChange,
-  disabled,
-  ...row
-}: SettingsSelectProps<Value>) {
-  return (
-    <SettingsRow {...row}>
-      <DropdownMenu>
-        <DropdownTrigger disabled={disabled} accessibilityLabel={row.label}>
-          <span className="text-sm text-foreground">
-            {options.find((option) => option.value === value)?.label ?? value}
-          </span>
-        </DropdownTrigger>
-        <DropdownMenuContent side="bottom" align="end" width={220}>
-          {options.map((option) => (
-            <SettingsOption
-              key={option.value}
-              option={option}
-              selected={option.value === value}
-              onValueChange={onValueChange}
-            />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
     </SettingsRow>
   );
 }

@@ -172,21 +172,29 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await nameInput.press("Enter");
   await expect(entry("folder")).toBeVisible();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("folder").click({ button: "right" });
   await page.getByText("New file", { exact: true }).click();
   await nameInput.fill("child.txt");
   await nameInput.press("Enter");
   await expect(entry("child.txt")).toBeVisible();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("folder").click({ button: "right" });
   await page.getByText("New folder", { exact: true }).click();
   await nameInput.fill("nested");
   await nameInput.press("Enter");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("nested").click({ button: "right" });
   await page.getByText("New folder", { exact: true }).click();
   await nameInput.fill("deep");
   await nameInput.press("Enter");
   await expect(entry("deep")).toBeVisible();
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
 
   await entry("folder").click({ button: "right" });
   await page.getByText("Collapse folder", { exact: true }).click();
@@ -260,6 +268,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
   await expect(entry("child.txt")).toBeVisible();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("folder").click({ button: "right" });
   await page.getByText("Rename", { exact: true }).click();
   await nameInput.fill("renamed-folder");
@@ -271,6 +281,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
     "xpath=ancestor::*[starts-with(@data-testid, 'file-explorer-row-')][1]",
   );
   await expect(renamedFolderRow).toHaveAttribute("aria-selected", "true");
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
 
   await entry("created.txt").click({ button: "right" });
   await expect(fileRow).toHaveAttribute("aria-selected", "true");
@@ -284,11 +296,15 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await pressOutsideMenu(page, menu, { button: "right" });
   await expect(menu).toBeHidden();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("created.txt").click({ button: "right" });
   await page.getByText("Rename", { exact: true }).click();
   await expect(nameInput).toHaveValue("created.txt");
   await nameInput.press("Escape");
   await expect(entry("created.txt")).toBeVisible();
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
 
   await entry("created.txt").click({ button: "right" });
   await page.getByText("Rename", { exact: true }).click();
@@ -297,6 +313,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await expect(page.getByText('"README.md" already exists', { exact: true })).toBeVisible();
   await expect(entry("created.txt")).toBeVisible();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("created.txt").click({ button: "right" });
   await page.getByText("Rename", { exact: true }).click();
   await nameInput.fill("renamed.txt");
@@ -304,9 +322,13 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await expect(entry("renamed.txt")).toBeVisible();
   await expect(entry("created.txt")).toBeHidden();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("renamed.txt").click({ button: "right" });
   await page.getByText("Copy relative path", { exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("renamed.txt");
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
 
   await entry("renamed.txt").click({ button: "right" });
   const deleteAction = page.getByTestId(/file-explorer-row-\d+-delete$/);
@@ -325,6 +347,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   expect(await cancelledConfirmation).toContain("renamed.txt");
   await expect(entry("renamed.txt")).toBeVisible();
 
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await entry("renamed.txt").click({ button: "right" });
   const confirmation = new Promise<string>((resolve) => {
     void onceConfirm(page, async (dialog) => {
@@ -336,6 +360,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await page.getByText("Delete", { exact: true }).click();
   expect(await confirmation).toContain("renamed.txt");
   await expect(entry("renamed.txt")).toBeHidden();
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
 
   await entry("renamed-folder").click({ button: "right" });
   const folderConfirmation = new Promise<string>((resolve) => {
@@ -365,6 +391,8 @@ test("duplicates files and folders with collision-free names", async ({ page }) 
     const tree = page.getByTestId("file-explorer-tree-scroll");
     const entry = (name: string) => tree.getByText(name, { exact: true }).first();
 
+    await expect(page.getByRole("menu")).toHaveCount(0);
+
     await entry("duplicate-source.txt").click({ button: "right" });
     await page.getByTestId(/file-explorer-row-\d+-duplicate$/).click();
     await expect(entry("duplicate-source copy.txt")).toBeVisible();
@@ -372,9 +400,13 @@ test("duplicates files and folders with collision-free names", async ({ page }) 
       .poll(() => readFile(path.join(workspace.repoPath, "duplicate-source copy.txt"), "utf8"))
       .toBe("duplicate contents");
 
+    await expect(page.getByRole("menu")).toHaveCount(0);
+
     await entry("duplicate-source.txt").click({ button: "right" });
     await page.getByTestId(/file-explorer-row-\d+-duplicate$/).click();
     await expect(entry("duplicate-source copy 2.txt")).toBeVisible();
+
+    await expect(page.getByRole("menu")).toHaveCount(0);
 
     await entry("duplicate-folder").click({ button: "right" });
     await page.getByTestId(/file-explorer-row-\d+-duplicate$/).click();
@@ -422,6 +454,8 @@ test("keeps an entry visible when deletion fails", async ({ page }) => {
   const readme = page
     .getByTestId("file-explorer-tree-scroll")
     .getByText("README.md", { exact: true });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await readme.click({ button: "right" });
   const confirmation = new Promise<void>((resolve) => {
     void onceConfirm(page, async (dialog) => {
@@ -456,6 +490,8 @@ test("hides unsupported file operations and revert actions", async ({ page }) =>
 
   await openChangesPanel(page);
   await expect(page.getByTestId("diff-file-0")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
   await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
   await expect(page.getByTestId("diff-file-0-duplicate")).toHaveCount(0);
   await expect(page.getByTestId("diff-file-0-revert")).toHaveCount(0);

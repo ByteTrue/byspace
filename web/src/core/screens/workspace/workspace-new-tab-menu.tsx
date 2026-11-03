@@ -1,11 +1,5 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-new-tab-menu.tsx.
 import { Fragment, useCallback, useMemo, type ComponentType, type ReactElement } from "react";
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { Shortcut } from "~/components/shortcut";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -16,6 +10,14 @@ import {
   type WorkspaceTabLaunchItem,
   type WorkspaceTabLaunchPurpose,
 } from "@/workspace-tabs/launcher";
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 function LaunchItemIcon({ item }: { item: WorkspaceTabLaunchItem }): ReactElement | null {
   if (item.Icon) {
@@ -47,13 +49,13 @@ function WorkspaceNewTabMenuItem({
   );
   return (
     <DropdownMenuItem
-      testID={`workspace-new-tab-menu-${item.id}`}
-      leading={leading}
-      trailing={trailing}
+      data-testid={`workspace-new-tab-menu-${item.id}`}
       disabled={item.disabled}
       onSelect={handleSelect}
     >
+      {leading}
       {item.label}
+      <DropdownMenuShortcut>{trailing}</DropdownMenuShortcut>
     </DropdownMenuItem>
   );
 }
@@ -74,9 +76,10 @@ export function WorkspaceNewTabMenuContent({
     <DropdownMenuContent
       side="bottom"
       align="start"
-      offset={4}
-      minWidth={200}
-      testID="workspace-new-tab-menu"
+      sideOffset={4}
+      data-testid="workspace-new-tab-menu"
+      className="w-max min-w-[200px]"
+      onCloseAutoFocus={keepFocusElsewhere}
     >
       {groups.map((group, index) => (
         <Fragment key={group.id}>
@@ -89,7 +92,7 @@ export function WorkspaceNewTabMenuContent({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                testID={`workspace-new-tab-menu-${group.accessory.id}`}
+                data-testid={`workspace-new-tab-menu-${group.accessory.id}`}
                 onSelect={group.accessory.run}
               >
                 {group.accessory.label}

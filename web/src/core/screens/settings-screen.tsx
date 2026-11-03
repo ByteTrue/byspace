@@ -31,7 +31,13 @@ import {
   FolderGit2,
   ChevronRight,
 } from "lucide-react";
-import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
@@ -64,7 +70,6 @@ import { PairLinkModal } from "@/components/pair-link-modal";
 import { Button } from "~/components/ui/button";
 
 import { CommunityLinks } from "@/components/community-links";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   DesktopAboutCardContent,
   DesktopGeneralRows,
@@ -160,8 +165,6 @@ function renderHostSettingsContent(
 // Trigger + sidebar style helpers
 // ---------------------------------------------------------------------------
 
-const THEME_TRIGGER =
-  "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
 const SIDEBAR_ITEM =
   "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent md:min-h-8";
 const SELECTED_INDICATOR =
@@ -192,48 +195,6 @@ interface GeneralSectionProps {
   handleVimKeybindingsChange: (enabled: boolean) => void;
 }
 
-interface SendBehaviorMenuItemProps {
-  value: SendBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: SendBehavior) => void;
-}
-
-function SendBehaviorMenuItem({ value, label, selected, onChange }: SendBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-interface LanguageMenuItemProps {
-  value: AppLanguage;
-  activeLocale: SupportedLocale;
-  selected: boolean;
-  onChange: (value: AppLanguage) => void;
-}
-
-function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageMenuItemProps) {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  const option = LANGUAGE_OPTIONS.find((entry) => entry.value === value);
-  const label = option
-    ? formatLanguageOptionLabel(option, activeLocale, t(option.labelKey))
-    : value;
-
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
 function GeneralSection({
   settings,
   handleSendBehaviorChange,
@@ -244,6 +205,20 @@ function GeneralSection({
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
   const sendBehaviorOptions = useMemo(() => getSendBehaviorOptions(t), [t]);
+  const handleSendBehaviorValue = useCallback(
+    (value: string) => {
+      const option = sendBehaviorOptions.find((candidate) => candidate.value === value);
+      if (option) handleSendBehaviorChange(option.value);
+    },
+    [handleSendBehaviorChange, sendBehaviorOptions],
+  );
+  const handleLanguageValue = useCallback(
+    (value: string) => {
+      const option = LANGUAGE_OPTIONS.find((candidate) => candidate.value === value);
+      if (option) handleLanguageChange(option.value);
+    },
+    [handleLanguageChange],
+  );
   const selectedSendBehaviorLabel =
     sendBehaviorOptions.find((option) => option.value === settings.sendBehavior)?.label ??
     settings.sendBehavior;
@@ -304,27 +279,20 @@ function GeneralSection({
             </span>
             <span className={settingsStyles.rowHint}>{t(sendBehaviorDescriptionKey)}</span>
           </div>
-          <DropdownMenu>
-            <DropdownTrigger
-              accessibilityLabel={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
-              className={THEME_TRIGGER}
+          <Select value={settings.sendBehavior} onValueChange={handleSendBehaviorValue}>
+            <SelectTrigger
+              aria-label={`${t("settings.general.defaultSend.label")}: ${selectedSendBehaviorLabel}`}
             >
-              <span className="text-sm leading-[normal] text-foreground">
-                {selectedSendBehaviorLabel}
-              </span>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={200}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
               {sendBehaviorOptions.map((option) => (
-                <SendBehaviorMenuItem
-                  key={option.value}
-                  value={option.value}
-                  label={option.label}
-                  selected={settings.sendBehavior === option.value}
-                  onChange={handleSendBehaviorChange}
-                />
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SelectContent>
+          </Select>
         </div>
         <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
           <div className={settingsStyles.rowContent}>
@@ -333,24 +301,18 @@ function GeneralSection({
               {t("settings.general.language.description")}
             </span>
           </div>
-          <DropdownMenu>
-            <DropdownTrigger accessibilityLabel={selectedLanguageLabel} className={THEME_TRIGGER}>
-              <span className="text-sm leading-[normal] text-foreground">
-                {selectedLanguageLabel}
-              </span>
-            </DropdownTrigger>
-            <DropdownMenuContent side="bottom" align="end" width={300}>
+          <Select value={settings.language} onValueChange={handleLanguageValue}>
+            <SelectTrigger aria-label={selectedLanguageLabel}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
               {LANGUAGE_OPTIONS.map((option) => (
-                <LanguageMenuItem
-                  key={option.value}
-                  value={option.value}
-                  activeLocale={activeLocale}
-                  selected={settings.language === option.value}
-                  onChange={handleLanguageChange}
-                />
+                <SelectItem key={option.value} value={option.value}>
+                  {formatLanguageOptionLabel(option, activeLocale, t(option.labelKey))}
+                </SelectItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SelectContent>
+          </Select>
         </div>
         <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
           <div className={settingsStyles.rowContent}>

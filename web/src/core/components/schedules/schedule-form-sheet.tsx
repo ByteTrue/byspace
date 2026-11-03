@@ -21,9 +21,7 @@ import { ComboboxItem } from "@/components/ui/combobox";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Switch } from "~/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
@@ -243,7 +241,6 @@ function OpenScheduleFormSheet({
   mode,
   schedule,
 }: ScheduleFormSheetProps & { onDismiss: () => void }): ReactElement {
-  const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const { projects } = useProjects();
   const hostProfiles = useHosts();
   const hosts = useStoreWithEqualityFn(
@@ -445,7 +442,6 @@ function OpenScheduleFormSheet({
         state={state}
         providerSnapshot={providerSnapshot}
         agentTargetLabel={agentTargetLabel}
-        controlSize={controlSize}
         cadenceError={cadenceError}
         mutationServerId={mutationServerId}
       />
@@ -458,7 +454,6 @@ interface ScheduleFormFieldsProps {
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
   agentTargetLabel: string | null;
-  controlSize: FieldControlSize;
   cadenceError: string | null;
   mutationServerId: string;
 }
@@ -468,7 +463,6 @@ function ScheduleFormFields({
   state,
   providerSnapshot,
   agentTargetLabel,
-  controlSize,
   cadenceError,
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
@@ -492,7 +486,6 @@ function ScheduleFormFields({
           value={state.cadence}
           onChange={model.setCadence}
           error={cadenceError ?? undefined}
-          size={controlSize}
         />
         {state.submitError ? (
           <span className="text-xs leading-[normal] text-red-300">{state.submitError}</span>
@@ -533,7 +526,6 @@ function ScheduleFormFields({
         state={state}
         providerSnapshot={providerSnapshot}
         agentTargetLabel={null}
-        controlSize={controlSize}
         mutationServerId={mutationServerId}
       />
 
@@ -541,7 +533,6 @@ function ScheduleFormFields({
         value={state.cadence}
         onChange={model.setCadence}
         error={cadenceError ?? undefined}
-        size={controlSize}
       />
 
       <Field>
@@ -568,7 +559,6 @@ interface ScheduleTargetFieldsProps {
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
   agentTargetLabel: string | null;
-  controlSize: FieldControlSize;
   mutationServerId: string;
 }
 
@@ -577,7 +567,6 @@ function ScheduleTargetFields({
   state,
   providerSnapshot,
   agentTargetLabel,
-  controlSize,
   mutationServerId,
 }: ScheduleTargetFieldsProps): ReactElement {
   const hostOptions = useMemo<SelectFieldOption<string>[]>(
@@ -699,12 +688,11 @@ function ScheduleTargetFields({
           leading={modelTriggerLeading}
           disabled={disabled}
           active={hovered || pressed || isOpen}
-          size={controlSize}
           testID="schedule-model-trigger"
         />
       );
     },
-    [controlSize, modelTriggerLeading, state.selectedModel, state.selectedModelDisplay],
+    [modelTriggerLeading, state.selectedModel, state.selectedModelDisplay],
   );
 
   if (state.targetKind === "agent") {
@@ -725,7 +713,6 @@ function ScheduleTargetFields({
           disabled={state.mode === "edit"}
           searchable={false}
           title="Host"
-          size={controlSize}
           triggerTestID="schedule-host-trigger"
           renderOption={renderHostOption}
         />
@@ -745,7 +732,6 @@ function ScheduleTargetFields({
           searchable
           searchPlaceholder="Search projects..."
           title="Select project"
-          size={controlSize}
           triggerTestID="schedule-project-trigger"
           renderOption={renderProjectOption}
         />
@@ -782,7 +768,6 @@ function ScheduleTargetFields({
           emptyText="No thinking options found"
           searchable={thinkingOptions.length > 6}
           title="Select thinking"
-          size={controlSize}
           triggerTestID="schedule-thinking-trigger"
           renderOption={renderThinkingOption}
         />
@@ -801,13 +786,12 @@ function ScheduleTargetFields({
           hint={modeOptions.length === 0 ? "No modes are available for this model." : undefined}
           searchable={modeOptions.length > 6}
           title="Select mode"
-          size={controlSize}
           triggerTestID="schedule-mode-trigger"
         />
       ) : null}
 
       {state.disclosure.showIsolationField ? (
-        <ScheduleIsolationField model={model} state={state} size={controlSize} />
+        <ScheduleIsolationField model={model} state={state} />
       ) : null}
 
       {state.disclosure.showArchiveOnFinishField ? (
@@ -828,11 +812,9 @@ function ScheduleTargetFields({
 function ScheduleIsolationField({
   model,
   state,
-  size,
 }: {
   model: ScheduleFormModel;
   state: ScheduleFormState;
-  size: FieldControlSize;
 }): ReactElement {
   const options = useMemo<SelectFieldOption<"local" | "worktree">[]>(
     () => [
@@ -887,7 +869,6 @@ function ScheduleIsolationField({
       emptyText="No isolation options found"
       searchable={false}
       title="Isolation"
-      size={size}
       testID="schedule-isolation"
       triggerTestID="schedule-isolation-trigger"
       triggerLeading={triggerLeading}

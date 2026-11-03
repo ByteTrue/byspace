@@ -1,15 +1,14 @@
 // Port of archive/expo-app:packages/app/src/components/schedules/schedule-row.tsx: one schedule in the Schedules list; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import { MoreVertical, Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-react";
-import { useCallback, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
-import { cn } from "cn";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  useCallback,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactElement,
+  type ComponentProps,
+} from "react";
+import { cn } from "cn";
 import { Badge } from "~/components/ui/badge";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -23,6 +22,15 @@ import {
 } from "@/utils/schedule-format";
 import { formatTimeAgo } from "@/utils/time";
 import type { ScheduleSummary } from "@bytetrue/protocol/schedule/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Spinner } from "~/components/ui/spinner";
 
 const MENU_ICON_SIZE = 14;
 const PROVIDER_ICON_SIZE = 16;
@@ -221,6 +229,27 @@ const resumeLeading = <Play size={MENU_ICON_SIZE} className="text-muted-foregrou
 const runLeading = <RotateCw size={MENU_ICON_SIZE} className="text-muted-foreground" />;
 const deleteLeading = <Trash2 size={MENU_ICON_SIZE} className="text-destructive" />;
 
+/** A menu row that shows a spinner and its pending label while its request runs. */
+function PendingMenuItem({
+  pending,
+  pendingLabel,
+  icon,
+  label,
+  ...props
+}: Omit<ComponentProps<typeof DropdownMenuItem>, "children"> & {
+  pending: boolean | undefined;
+  pendingLabel: string;
+  icon: ReactElement;
+  label: string;
+}): ReactElement {
+  return (
+    <DropdownMenuItem {...props} disabled={props.disabled || pending}>
+      {pending ? <Spinner /> : icon}
+      {pending ? pendingLabel : label}
+    </DropdownMenuItem>
+  );
+}
+
 function ScheduleExecutionMenuItems({
   schedule,
   canRun,
@@ -238,45 +267,42 @@ function ScheduleExecutionMenuItems({
   let cadenceAction: ReactElement;
   if (schedule.status === "paused") {
     cadenceAction = (
-      <DropdownMenuItem
-        leading={resumeLeading}
+      <PendingMenuItem
         disabled={!canRun}
-        status={pending?.resume ? "pending" : "idle"}
+        pending={pending?.resume}
         pendingLabel="Resuming..."
+        icon={resumeLeading}
+        label="Resume schedule"
         onSelect={onResume}
-        testID={`schedule-menu-resume-${schedule.id}`}
-      >
-        Resume schedule
-      </DropdownMenuItem>
+        data-testid={`schedule-menu-resume-${schedule.id}`}
+      />
     );
   } else {
     cadenceAction = (
-      <DropdownMenuItem
-        leading={pauseLeading}
+      <PendingMenuItem
         disabled={schedule.status === "completed" || !canRun}
-        status={pending?.pause ? "pending" : "idle"}
+        pending={pending?.pause}
         pendingLabel="Pausing..."
+        icon={pauseLeading}
+        label="Pause schedule"
         onSelect={onPause}
-        testID={`schedule-menu-pause-${schedule.id}`}
-      >
-        Pause schedule
-      </DropdownMenuItem>
+        data-testid={`schedule-menu-pause-${schedule.id}`}
+      />
     );
   }
 
   return (
     <>
       {cadenceAction}
-      <DropdownMenuItem
-        leading={runLeading}
+      <PendingMenuItem
         disabled={!canRun}
-        status={pending?.runNow ? "pending" : "idle"}
+        pending={pending?.runNow}
         pendingLabel="Starting..."
+        icon={runLeading}
+        label="Run now"
         onSelect={onRunNow}
-        testID={`schedule-menu-run-${schedule.id}`}
-      >
-        Run now
-      </DropdownMenuItem>
+        data-testid={`schedule-menu-run-${schedule.id}`}
+      />
     </>
   );
 }
@@ -301,18 +327,15 @@ function ScheduleKebabMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        accessibilityLabel={`${productName} actions`}
-        testID={`schedule-kebab-${schedule.id}`}
+        aria-label={`${productName} actions`}
+        data-testid={`schedule-kebab-${schedule.id}`}
         className="rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <MoreVertical size={MENU_ICON_SIZE} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={220}>
-        <DropdownMenuItem
-          leading={editLeading}
-          onSelect={onEdit}
-          testID={`schedule-menu-edit-${schedule.id}`}
-        >
+      <DropdownMenuContent align="end" className="w-[220px]" onCloseAutoFocus={keepFocusElsewhere}>
+        <DropdownMenuItem onSelect={onEdit} data-testid={`schedule-menu-edit-${schedule.id}`}>
+          {editLeading}
           Edit {productNameLower}
         </DropdownMenuItem>
         <ScheduleExecutionMenuItems
@@ -324,16 +347,15 @@ function ScheduleKebabMenu({
           onRunNow={onRunNow}
         />
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          leading={deleteLeading}
-          destructive
-          status={pending?.delete ? "pending" : "idle"}
+        <PendingMenuItem
+          variant="destructive"
+          pending={pending?.delete}
           pendingLabel="Deleting..."
+          icon={deleteLeading}
+          label={`Delete ${productNameLower}`}
           onSelect={onDelete}
-          testID={`schedule-menu-delete-${schedule.id}`}
-        >
-          Delete {productNameLower}
-        </DropdownMenuItem>
+          data-testid={`schedule-menu-delete-${schedule.id}`}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

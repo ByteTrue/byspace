@@ -121,68 +121,6 @@ vi.mock("@/components/settings/headings/settings-info-tip", () => ({
   SettingsInfoTip: () => null,
 }));
 
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("div", null, children),
-  DropdownMenuTrigger: ({
-    children,
-    onPressIn,
-    accessibilityRole,
-    accessibilityLabel,
-    testID,
-  }: {
-    children?:
-      | React.ReactNode
-      | ((state: { pressed: boolean; hovered: boolean; open: boolean }) => React.ReactNode);
-    onPressIn?: (event: { stopPropagation: () => void }) => void;
-    accessibilityRole?: string;
-    accessibilityLabel?: string;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        role: accessibilityRole,
-        "aria-label": accessibilityLabel,
-        "data-testid": testID,
-        onMouseDown: (event: React.MouseEvent) => onPressIn?.(event),
-        onClick: (event: React.MouseEvent) => event.stopPropagation(),
-      },
-      typeof children === "function"
-        ? children({ pressed: false, hovered: false, open: false })
-        : children,
-    ),
-  DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("div", null, children),
-  DropdownMenuItem: ({
-    children,
-    onSelect,
-    status,
-    pendingLabel,
-    testID,
-  }: {
-    children?: React.ReactNode;
-    onSelect?: () => void;
-    status?: "idle" | "pending" | "success";
-    pendingLabel?: string;
-    testID?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        type: "button",
-        "data-testid": testID,
-        disabled: status === "pending" || status === "success",
-        onClick: (event: React.MouseEvent) => {
-          event.stopPropagation();
-          onSelect?.();
-        },
-      },
-      status === "pending" ? pendingLabel : children,
-    ),
-}));
-
 vi.mock("@/components/provider-icons", () => ({
   getProviderIcon: (provider: string) => () =>
     React.createElement("span", { "data-icon": `provider-${provider}` }),

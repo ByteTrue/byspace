@@ -5,14 +5,6 @@ import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "~/app/navigation";
 import { ChevronDown, MessageCircle, SquareTerminal } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
@@ -31,6 +23,16 @@ import {
   terminalLaunchTarget,
   type LaunchTarget,
 } from "@/new-workspace-launch/target";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 const chatIcon = <MessageCircle size={ICON_SIZE.sm} className="text-muted-foreground" />;
 const blankTerminalIcon = <SquareTerminal size={ICON_SIZE.sm} className="text-muted-foreground" />;
@@ -55,15 +57,15 @@ function LaunchProfileMenuItem({
     [profile],
   );
   return (
-    <DropdownMenuItem
-      testID={`new-workspace-launch-option-${profile.id}`}
+    <DropdownMenuCheckboxItem
+      checked={selected}
+      data-testid={`new-workspace-launch-option-${profile.id}`}
       onSelect={handleSelect}
-      selected={selected}
-      leading={leading}
     >
+      {leading}
       {profile.name}{" "}
       <span className="font-mono text-xs text-muted-foreground">{commandPreview}</span>
-    </DropdownMenuItem>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -131,10 +133,10 @@ export function LaunchControl({
         <TooltipTrigger asChild>
           <span className="flex min-w-0">
             <DropdownMenuTrigger
-              testID="new-workspace-launch-trigger"
+              data-testid="new-workspace-launch-trigger"
               disabled={disabled}
               className={badgeClassName}
-              accessibilityLabel={t("newWorkspace.tooltips.launch")}
+              aria-label={t("newWorkspace.tooltips.launch")}
             >
               <span className="flex size-4 shrink-0 items-center justify-center">
                 <TriggerIcon target={target} profile={selectedProfile} />
@@ -155,30 +157,30 @@ export function LaunchControl({
       </Tooltip>
       <DropdownMenuContent
         align="end"
-        offset={8}
-        width={260}
-        sheetTitle={t("newWorkspace.launch.title")}
-        testID="new-workspace-launch-menu"
+        sideOffset={8}
+        data-testid="new-workspace-launch-menu"
+        className="w-[260px]"
+        onCloseAutoFocus={keepFocusElsewhere}
       >
         {/* Chat has no group label of its own; Terminal keeps its label because that grouping is
             what stops a profile named Codex reading as a chat Codex agent. */}
-        <DropdownMenuItem
-          testID="new-workspace-launch-option-chat"
+        <DropdownMenuCheckboxItem
+          checked={target.kind === "chat"}
+          data-testid="new-workspace-launch-option-chat"
           onSelect={selectChat}
-          selected={target.kind === "chat"}
-          leading={chatIcon}
         >
+          {chatIcon}
           {t("newWorkspace.launch.chat")}
-        </DropdownMenuItem>
+        </DropdownMenuCheckboxItem>
         <DropdownMenuLabel>{t("newWorkspace.launch.terminal")}</DropdownMenuLabel>
-        <DropdownMenuItem
-          testID="new-workspace-launch-option-blank"
+        <DropdownMenuCheckboxItem
+          checked={isBlankTerminalTarget(target)}
+          data-testid="new-workspace-launch-option-blank"
           onSelect={selectBlankTerminal}
-          selected={isBlankTerminalTarget(target)}
-          leading={blankTerminalIcon}
         >
+          {blankTerminalIcon}
           {t("newWorkspace.launch.terminal")}
-        </DropdownMenuItem>
+        </DropdownMenuCheckboxItem>
         {profiles.map((profile) => (
           <LaunchProfileMenuItem
             key={profile.id}
@@ -189,9 +191,9 @@ export function LaunchControl({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          testID="new-workspace-launch-manage-profiles"
+          data-testid="new-workspace-launch-manage-profiles"
           onSelect={openProfileSettings}
-          muted
+          className="text-muted-foreground"
         >
           {t("newWorkspace.launch.manageProfiles")}
         </DropdownMenuItem>

@@ -37,14 +37,6 @@ import type {
 } from "@/components/draggable-list.types";
 import { SortableInlineList } from "@/components/sortable-inline-list";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
@@ -80,8 +72,23 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { RenderProfile } from "@/utils/render-profiler";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
 import { cn } from "cn";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+} from "~/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+} from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { WithTooltip } from "~/components/with-tooltip";
 
-const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 // shadcn's icon-xs button.
 const ICON_BUTTON_FRAME = 24;
@@ -272,25 +279,20 @@ function WorkspacePaneToolbarActions({
           <DropdownMenuContent
             side="bottom"
             align="end"
-            offset={4}
-            width={220}
-            testID="workspace-split-pane-menu-content"
+            sideOffset={4}
+            data-testid="workspace-split-pane-menu-content"
+            className="w-[220px]"
+            onCloseAutoFocus={keepFocusElsewhere}
           >
-            <DropdownMenuItem
-              leading={SPLIT_RIGHT_ICON}
-              trailing={splitRightTrailing}
-              testID="workspace-split-pane-right"
-              onSelect={onSplitRight}
-            >
+            <DropdownMenuItem data-testid="workspace-split-pane-right" onSelect={onSplitRight}>
+              {SPLIT_RIGHT_ICON}
               {t("workspace.tabs.actions.splitRight")}
+              <DropdownMenuShortcut>{splitRightTrailing}</DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              leading={SPLIT_DOWN_ICON}
-              trailing={splitDownTrailing}
-              testID="workspace-split-pane-down"
-              onSelect={onSplitDown}
-            >
+            <DropdownMenuItem data-testid="workspace-split-pane-down" onSelect={onSplitDown}>
+              {SPLIT_DOWN_ICON}
               {t("workspace.tabs.actions.splitDown")}
+              <DropdownMenuShortcut>{splitDownTrailing}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -347,17 +349,18 @@ function TabContextMenuItem({
     [entry.hint],
   );
   return (
-    <ContextMenuItem
-      testID={entry.testID}
-      disabled={entry.disabled}
-      destructive={entry.destructive}
-      onSelect={entry.onSelect}
-      tooltip={entry.tooltip}
-      leading={leading}
-      trailing={trailing}
-    >
-      {entry.label}
-    </ContextMenuItem>
+    <WithTooltip tooltip={entry.tooltip}>
+      <ContextMenuItem
+        data-testid={entry.testID}
+        disabled={entry.disabled}
+        variant={entry.destructive ? "destructive" : "default"}
+        onSelect={entry.onSelect}
+      >
+        {leading}
+        {entry.label}
+        {trailing ? <ContextMenuShortcut>{trailing}</ContextMenuShortcut> : null}
+      </ContextMenuItem>
+    </WithTooltip>
   );
 }
 
@@ -761,7 +764,11 @@ function TabChip({
             setHoveredCloseTabKey={setHoveredCloseTabKey}
           />
         ) : null}
-        <ContextMenuContent align="start" width={DROPDOWN_WIDTH} testID={contextMenuTestId}>
+        <ContextMenuContent
+          className="w-[220px]"
+          data-testid={contextMenuTestId}
+          onCloseAutoFocus={keepFocusElsewhere}
+        >
           {menuEntries.map((entry) =>
             entry.kind === "separator" ? (
               <ContextMenuSeparator key={entry.key} />

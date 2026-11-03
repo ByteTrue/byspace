@@ -10,13 +10,6 @@ import type {
 } from "@/components/draggable-list.types";
 import { SortableInlineList } from "@/components/sortable-inline-list";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
@@ -36,6 +29,15 @@ import {
   type WorkspaceTabLaunchItem,
 } from "@/workspace-tabs/launcher";
 import { cn } from "cn";
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "~/components/ui/context-menu";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
+import { keepFocusElsewhere } from "~/lib/menu-focus";
 
 interface ExplorerSidebarTabRailProps {
   paneId: string;
@@ -129,14 +131,16 @@ function ExplorerSidebarTab({
           </TooltipTrigger>
           <TooltipContent side="bottom">{presentation.tooltip}</TooltipContent>
         </Tooltip>
-        <ContextMenuContent align="start" minWidth={180}>
+        <ContextMenuContent className="w-max min-w-[180px]" onCloseAutoFocus={keepFocusElsewhere}>
           {canMoveToMain ? (
-            <ContextMenuItem leading={MOVE_TO_MAIN_ICON} onSelect={handleMoveToMain}>
+            <ContextMenuItem onSelect={handleMoveToMain}>
+              {MOVE_TO_MAIN_ICON}
               {t("workspace.tabs.menu.moveToMain")}
             </ContextMenuItem>
           ) : null}
           {canMoveToMain ? <ContextMenuSeparator /> : null}
-          <ContextMenuItem leading={CLOSE_ICON} onSelect={handleClose}>
+          <ContextMenuItem onSelect={handleClose}>
+            {CLOSE_ICON}
             {t("workspace.tabs.menu.close")}
           </ContextMenuItem>
         </ContextMenuContent>
@@ -189,15 +193,14 @@ function ExplorerSidebarConfigurationItem({
     item.launch({ kind: "open", paneId });
   }, [item, onCloseTab, paneId, tab]);
   return (
-    <ContextMenuItem
-      leading={leading}
-      selected={Boolean(tab)}
-      showSelectedCheck
+    <ContextMenuCheckboxItem
+      checked={Boolean(tab)}
       disabled={!tab && item.disabled}
       onSelect={handleSelect}
     >
+      {leading}
       {item.label}
-    </ContextMenuItem>
+    </ContextMenuCheckboxItem>
   );
 }
 
@@ -317,8 +320,13 @@ export function ExplorerSidebarTabRail({
         </div>
         {trailingAccessory ? <div className="mr-3">{trailingAccessory}</div> : null}
       </ContextMenuTrigger>
-      <ContextMenuContent align="start" minWidth={200} testID="explorer-sidebar-tab-configuration">
-        <ContextMenuItem leading={NEW_TAB_ICON} onSelect={onCreateNewTab}>
+      <ContextMenuContent
+        data-testid="explorer-sidebar-tab-configuration"
+        className="w-max min-w-[200px]"
+        onCloseAutoFocus={keepFocusElsewhere}
+      >
+        <ContextMenuItem onSelect={onCreateNewTab}>
+          {NEW_TAB_ICON}
           {t("workspace.tabs.actions.newTab")}
         </ContextMenuItem>
         <ContextMenuSeparator />

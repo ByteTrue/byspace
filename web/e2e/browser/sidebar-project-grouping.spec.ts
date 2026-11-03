@@ -485,8 +485,8 @@ test.describe("Sidebar project grouping", () => {
     const secondaryHost = crossHostProject.hosts[0];
     if (!secondaryHost) throw new Error("Expected secondary host");
     await expect(
-      page.getByRole("button", { name: SECONDARY_HOST_LABEL, exact: true }),
+      page.getByRole("option", { name: SECONDARY_HOST_LABEL, exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: PRIMARY_HOST_LABEL, exact: true })).toBeVisible();
+    await expect(page.getByRole("option", { name: PRIMARY_HOST_LABEL, exact: true })).toBeVisible();
   });
 });
