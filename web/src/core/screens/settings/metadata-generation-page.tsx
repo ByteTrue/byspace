@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { ExternalLink } from "@/components/ui/external-link";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Spinner } from "~/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
@@ -65,13 +65,15 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
   );
 
   const handleModeChange = useCallback(
-    (next: SelectionMode) => {
+    (value: string) => {
+      const next = modeOptions.find((option) => option.value === value)?.value;
+      if (!next) return;
       setDraftMode(next);
       if (next === "automatic") {
         void saveProviders([]);
       }
     },
-    [saveProviders],
+    [modeOptions, saveProviders],
   );
 
   const handleModelSelect = useCallback(
@@ -105,7 +107,7 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
   if (isConfigLoading || !config) {
     return (
       <div className="flex min-h-[180px] items-center justify-center text-muted-foreground">
-        <LoadingSpinner size="large" />
+        <Spinner className="size-8" />
       </div>
     );
   }
@@ -129,13 +131,19 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
                 : t("settings.metadataGeneration.preferredHint")}
             </span>
           </div>
-          <SegmentedControl
-            options={modeOptions}
+          <Tabs
             value={mode}
             onValueChange={handleModeChange}
-            size="sm"
-            testID="metadata-generation-mode"
-          />
+            data-testid="metadata-generation-mode"
+          >
+            <TabsList>
+              {modeOptions.map((option) => (
+                <TabsTrigger key={option.value} value={option.value}>
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
         {mode === "preferred" ? (
           <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>

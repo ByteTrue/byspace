@@ -11,7 +11,7 @@ import {
 import type { TurnFooterHost } from "@/agent-stream/layout";
 import { AssistantTurnFooter, LiveElapsed, type AssistantForkTarget } from "@/components/message";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
-import { SyncedLoader } from "@/components/synced-loader";
+import { Spinner } from "~/components/ui/spinner";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { SPACING } from "@/styles/theme";
 
@@ -127,7 +127,7 @@ const WorkingIndicator = memo(function WorkingIndicator({
   return (
     <div className="flex h-6 items-center gap-3">
       <span className="-ml-0.5 flex text-foreground">
-        <SyncedLoader size={14} />
+        <Spinner className="size-3.5" />
       </span>
       {/* Match the completed-turn footer: actions precede timing metadata. */}
       {onForkInFlightTurn ? <AssistantForkMenu onFork={onForkInFlightTurn} /> : null}

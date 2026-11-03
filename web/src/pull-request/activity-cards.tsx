@@ -28,7 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "~/components/ui/badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatPullRequestThreadPath } from "@/git/pull-request-panel/activity-location";
 import { canAddPullRequestActivityToChat } from "@/git/pull-request-panel/context-attachment";
@@ -528,8 +528,12 @@ function ThreadBlock({
             ? formatPullRequestThreadPath(thread.location)
             : t("workspace.git.pr.thread.discussion")}
         </span>
-        {thread.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
-        {thread.location?.isOutdated ? <StatusBadge label="Outdated" /> : null}
+        {thread.isResolved ? (
+          <Badge variant="secondary" className="text-status-success">
+            Resolved
+          </Badge>
+        ) : null}
+        {thread.location?.isOutdated ? <Badge variant="secondary">Outdated</Badge> : null}
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {collapsed ? <CountBadge count={thread.comments.length} /> : null}
           <KebabSlot visible={actionsVisible} label="Thread actions" onMenuOpenChange={setMenuOpen}>

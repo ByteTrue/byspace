@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl } from "@/components/ui/segmented-control";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Switch } from "~/components/ui/switch";
 import { settingsStyles } from "@/styles/settings";
 
 type KeepAwakeLevel = "off" | "system" | "display";
@@ -298,16 +298,22 @@ export function DesktopGeneralRows() {
     [sendPatch],
   );
   const handleDockModeChange = useCallback(
-    (mode: DockMode) => sendPatch({ dockMode: mode }),
-    [sendPatch],
+    (value: string) => {
+      const mode = dockOptions.find((option) => option.value === value)?.value;
+      if (mode) sendPatch({ dockMode: mode });
+    },
+    [dockOptions, sendPatch],
   );
   const handleLightweightChange = useCallback(
     (value: boolean) => sendPatch({ lightweight: value }),
     [sendPatch],
   );
   const handleKeepAwakeChange = useCallback(
-    (level: KeepAwakeLevel) => sendPatch({ keepAwake: level }),
-    [sendPatch],
+    (value: string) => {
+      const level = sleepOptions.find((option) => option.value === value)?.value;
+      if (level) sendPatch({ keepAwake: level });
+    },
+    [sleepOptions, sendPatch],
   );
 
   if (!prefs) {
@@ -325,10 +331,10 @@ export function DesktopGeneralRows() {
           <span className={settingsStyles.rowTitle}>{isZh ? "开机自启" : "Open at login"}</span>
         </div>
         <Switch
-          value={Boolean(state?.openAtLogin)}
-          onValueChange={handleOpenAtLoginChange}
-          accessibilityLabel={isZh ? "开机自启" : "Open at login"}
-          testID="desktop-open-at-login-toggle"
+          checked={Boolean(state?.openAtLogin)}
+          onCheckedChange={handleOpenAtLoginChange}
+          aria-label={isZh ? "开机自启" : "Open at login"}
+          data-testid="desktop-open-at-login-toggle"
         />
       </div>
       {isMac ? (
@@ -338,12 +344,15 @@ export function DesktopGeneralRows() {
               {isZh ? "程序坞 (Dock) 图标" : "Show in Dock"}
             </span>
           </div>
-          <SegmentedControl
-            size="sm"
-            options={dockOptions}
-            value={dockMode}
-            onValueChange={handleDockModeChange}
-          />
+          <Tabs value={dockMode} onValueChange={handleDockModeChange}>
+            <TabsList>
+              {dockOptions.map((option) => (
+                <TabsTrigger key={option.value} value={option.value}>
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
       ) : null}
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
@@ -356,10 +365,10 @@ export function DesktopGeneralRows() {
           </span>
         </div>
         <Switch
-          value={prefs.lightweight}
-          onValueChange={handleLightweightChange}
-          accessibilityLabel={isZh ? "轻量模式" : "Lightweight mode"}
-          testID="desktop-lightweight-toggle"
+          checked={prefs.lightweight}
+          onCheckedChange={handleLightweightChange}
+          aria-label={isZh ? "轻量模式" : "Lightweight mode"}
+          data-testid="desktop-lightweight-toggle"
         />
       </div>
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
@@ -371,12 +380,15 @@ export function DesktopGeneralRows() {
               : "Keeps this computer awake while BySpace runs agents"}
           </span>
         </div>
-        <SegmentedControl
-          size="sm"
-          options={sleepOptions}
-          value={keepAwake}
-          onValueChange={handleKeepAwakeChange}
-        />
+        <Tabs value={keepAwake} onValueChange={handleKeepAwakeChange}>
+          <TabsList>
+            {sleepOptions.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
     </>
   );
@@ -527,7 +539,10 @@ export function DesktopAboutCardContent({
     [sendPatch],
   );
   const handleUpdateEveryChange = useCallback(
-    (val: UpdateEveryStr) => sendPatch({ updateEvery: Number.parseInt(val, 10) }),
+    (value: string) => {
+      const every = UPDATE_EVERY_OPTIONS.find((option) => option.value === value)?.value;
+      if (every) sendPatch({ updateEvery: Number.parseInt(every, 10) });
+    },
     [sendPatch],
   );
   const handleAutoDownloadChange = useCallback(
@@ -602,10 +617,10 @@ export function DesktopAboutCardContent({
           <span className={settingsStyles.rowHint}>{copy.autoUpdateHint}</span>
         </div>
         <Switch
-          value={autoUpdateEnabled}
-          onValueChange={handleAutoUpdateChange}
-          accessibilityLabel={copy.autoUpdateTitle}
-          testID="desktop-auto-update-toggle"
+          checked={autoUpdateEnabled}
+          onCheckedChange={handleAutoUpdateChange}
+          aria-label={copy.autoUpdateTitle}
+          data-testid="desktop-auto-update-toggle"
         />
       </div>
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
@@ -613,12 +628,15 @@ export function DesktopAboutCardContent({
           <span className={settingsStyles.rowTitle}>{copy.checkEveryTitle}</span>
           <span className={settingsStyles.rowHint}>{copy.checkEveryHint}</span>
         </div>
-        <SegmentedControl
-          size="sm"
-          options={UPDATE_EVERY_OPTIONS}
-          value={updateEveryVal}
-          onValueChange={handleUpdateEveryChange}
-        />
+        <Tabs value={updateEveryVal} onValueChange={handleUpdateEveryChange}>
+          <TabsList>
+            {UPDATE_EVERY_OPTIONS.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
         <div className={settingsStyles.rowContent}>
@@ -626,11 +644,11 @@ export function DesktopAboutCardContent({
           <span className={settingsStyles.rowHint}>{copy.autoDownloadHint}</span>
         </div>
         <Switch
-          value={autoDownloadEnabled}
-          onValueChange={handleAutoDownloadChange}
+          checked={autoDownloadEnabled}
+          onCheckedChange={handleAutoDownloadChange}
           disabled={!autoUpdateEnabled}
-          accessibilityLabel={copy.autoDownloadTitle}
-          testID="desktop-auto-download-toggle"
+          aria-label={copy.autoDownloadTitle}
+          data-testid="desktop-auto-download-toggle"
         />
       </div>
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>
@@ -639,11 +657,11 @@ export function DesktopAboutCardContent({
           <span className={settingsStyles.rowHint}>{copy.autoRestartHint}</span>
         </div>
         <Switch
-          value={prefs.autoRestart}
-          onValueChange={handleAutoRestartChange}
+          checked={prefs.autoRestart}
+          onCheckedChange={handleAutoRestartChange}
           disabled={!autoUpdateEnabled}
-          accessibilityLabel={copy.autoRestartTitle}
-          testID="desktop-auto-restart-toggle"
+          aria-label={copy.autoRestartTitle}
+          data-testid="desktop-auto-restart-toggle"
         />
       </div>
       <div className={cn(settingsStyles.row, settingsStyles.rowBorder)}>

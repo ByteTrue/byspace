@@ -6,7 +6,7 @@ import { Copy, RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -45,7 +45,6 @@ interface DiagnosticCollectionResult {
 const SNAP_POINTS = ["55%", "88%"];
 const ThemedCopy = withTheme(Copy);
 const ThemedRotateCw = withTheme(RotateCw);
-const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
@@ -177,7 +176,7 @@ export function AppDiagnosticSheet({
             }
           >
             {loading ? (
-              <ThemedLoadingSpinner size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
+              <Spinner className="text-muted-foreground" />
             ) : (
               <ThemedRotateCw size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
             )}
@@ -206,10 +205,7 @@ export function AppDiagnosticSheet({
           <div className="flex flex-col gap-3 p-4">
             {progress.length === 0 ? (
               <div className="flex min-h-6 flex-row items-center gap-2">
-                <ThemedLoadingSpinner
-                  size={ICON_SIZE.sm}
-                  themeProps={foregroundMutedColorMapping}
-                />
+                <Spinner className="text-muted-foreground" />
                 <span className="flex-1 text-sm text-muted-foreground">
                   {t("settings.diagnostics.app.running")}
                 </span>
@@ -218,10 +214,7 @@ export function AppDiagnosticSheet({
               progress.map((row) => (
                 <div key={row.id} className="flex min-h-6 flex-row items-center gap-2">
                   {row.status === "running" || row.status === "pending" ? (
-                    <ThemedLoadingSpinner
-                      size={ICON_SIZE.sm}
-                      themeProps={foregroundMutedColorMapping}
-                    />
+                    <Spinner className="text-muted-foreground" />
                   ) : (
                     <div
                       className={

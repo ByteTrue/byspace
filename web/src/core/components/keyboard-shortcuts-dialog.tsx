@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import {

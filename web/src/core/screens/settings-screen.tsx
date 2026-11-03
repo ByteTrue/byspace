@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { useRouter } from "~/app/navigation";
 import { useFocusEffect } from "~/app/route-focus";
 import { cn } from "cn";
@@ -355,10 +355,10 @@ function GeneralSection({
             <span className={settingsStyles.rowHint}>{t("settings.editor.vimHint")}</span>
           </div>
           <Switch
-            value={settings.vimKeybindings}
-            onValueChange={handleVimKeybindingsChange}
-            accessibilityLabel={t("settings.editor.vimKeybindings")}
-            testID="vim-keybindings-toggle"
+            checked={settings.vimKeybindings}
+            onCheckedChange={handleVimKeybindingsChange}
+            aria-label={t("settings.editor.vimKeybindings")}
+            data-testid="vim-keybindings-toggle"
           />
         </div>
         <DesktopGeneralRows />

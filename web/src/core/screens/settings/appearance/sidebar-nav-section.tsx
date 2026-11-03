@@ -15,8 +15,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Shortcut } from "@/components/ui/shortcut";
-import { Switch } from "@/components/ui/switch";
+import { Shortcut } from "~/components/shortcut";
+import { Switch } from "~/components/ui/switch";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
@@ -135,10 +135,10 @@ function SidebarNavRow({
           </div>
         ) : null}
         <Switch
-          value={item.visible}
-          onValueChange={handleVisibleChange}
-          accessibilityLabel={label}
-          testID={`sidebar-nav-toggle-${item.key}`}
+          checked={item.visible}
+          onCheckedChange={handleVisibleChange}
+          aria-label={label}
+          data-testid={`sidebar-nav-toggle-${item.key}`}
         />
       </div>
     </div>

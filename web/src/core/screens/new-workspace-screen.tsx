@@ -21,7 +21,7 @@ import { ProjectIconView } from "@/components/project-icon-view";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/components/ui/combobox";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";

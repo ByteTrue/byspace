@@ -24,7 +24,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput, formInputClassName } from "@/components/ui/form-field";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
 import {
@@ -798,10 +798,10 @@ function ScheduleTargetFields({
       {state.disclosure.showArchiveOnFinishField ? (
         <Field label="Archive on finish">
           <Switch
-            value={state.archiveOnFinish}
-            onValueChange={model.setArchiveOnFinish}
-            accessibilityLabel="Archive on finish"
-            testID="schedule-archive-on-finish-switch"
+            checked={state.archiveOnFinish}
+            onCheckedChange={model.setArchiveOnFinish}
+            aria-label="Archive on finish"
+            data-testid="schedule-archive-on-finish-switch"
           />
         </Field>
       ) : null}

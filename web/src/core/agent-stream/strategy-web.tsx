@@ -9,9 +9,8 @@ import React, {
 } from "react";
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual";
 import { useRetainedPanelActive } from "@/components/retained-panel";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import {
@@ -37,7 +36,6 @@ import {
   type HistoryStartSettleScheduler,
 } from "./history-start-settle-scheduler";
 import { useScrollToMessage } from "./use-scroll-to-message";
-import { withTheme } from "~/app/theme-object";
 
 interface CreateWebStreamStrategyInput {
   isMobileBreakpoint: boolean;
@@ -64,11 +62,6 @@ const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADD
 // A row has to clear this much of the viewport top before the next one takes over as the
 // reading position, so a row resting exactly on the edge does not flip back and forth.
 const READING_POSITION_OFFSET_PX = 8;
-
-const ThemedLoadingSpinner = withTheme(LoadingSpinner);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 
 function findHistoryRowElement(contentNode: HTMLElement, rowId: string): HTMLElement | null {
   for (const element of contentNode.querySelectorAll<HTMLElement>("[data-history-row-id]")) {
@@ -1219,7 +1212,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       <div style={historyStartSlotStyle} data-testid="older-history-slot">
         {isLoadingOperation ? (
           <div data-testid="load-older-history-spinner">
-            <ThemedLoadingSpinner size="small" themeProps={foregroundMutedColorMapping} />
+            <Spinner className="text-muted-foreground" />
           </div>
         ) : null}
       </div>

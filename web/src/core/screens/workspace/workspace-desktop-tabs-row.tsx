@@ -54,7 +54,7 @@ import {
   ToolbarButton,
   ToolbarControls,
 } from "@/components/ui/pane-content-toolbar";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";

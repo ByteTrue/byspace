@@ -2,7 +2,7 @@
 // pane and its 20px icon buttons, each with a tooltip naming it and its shortcut.
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   iconButtonChromeClassName,

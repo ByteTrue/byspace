@@ -10,7 +10,7 @@ import {
   type Ref,
 } from "react";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { FormTextInput } from "@/components/ui/form-field";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -96,10 +96,10 @@ export function SettingsSwitch({ value, onValueChange, disabled, ...row }: Setti
   return (
     <SettingsRow {...row}>
       <Switch
-        value={value}
-        onValueChange={onValueChange}
+        checked={value}
+        onCheckedChange={onValueChange}
         disabled={disabled}
-        accessibilityLabel={row.label}
+        aria-label={row.label}
       />
     </SettingsRow>
   );

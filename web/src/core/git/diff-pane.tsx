@@ -75,7 +75,7 @@ import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import {
@@ -814,7 +814,7 @@ function ChangesRefreshButton({
       onPress={refresh.onRefresh}
     >
       {refresh.isRefreshing ? (
-        <LoadingSpinner size={paneContentToolbarIconSize(compact)} className={EXTRA_MUTED_ICON} />
+        <Spinner className={EXTRA_MUTED_ICON} />
       ) : (
         <RotateCw size={paneContentToolbarIconSize(compact)} className={EXTRA_MUTED_ICON} />
       )}
@@ -997,7 +997,7 @@ function DiffBodyContent({
   if (isStatusLoading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center pt-16 gap-4">
-        <LoadingSpinner size="large" className="text-muted-foreground" />
+        <Spinner className="size-8 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">{checkingRepositoryLabel}</span>
       </div>
     );
@@ -1022,7 +1022,7 @@ function DiffBodyContent({
   if (isDiffLoading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center pt-16 gap-4">
-        <LoadingSpinner size="large" className="text-muted-foreground" />
+        <Spinner className="size-8 text-muted-foreground" />
       </div>
     );
   }

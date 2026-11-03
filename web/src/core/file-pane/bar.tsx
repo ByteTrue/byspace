@@ -1,9 +1,9 @@
 // Port of archive/expo-app:packages/app/src/file-pane/bar.tsx: the strip over a file — size and lines, editor
 // status, Vim mode and cursor, the Preview/Source switch — and the conflict alert under it.
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { FileConflictAlert, type FileConflictAlertState } from "@/file-pane/conflict-alert";
 import type { FileEditorStatus } from "@/file-pane/editor/model";
 import { Spinner } from "~/components/ui/spinner";
@@ -42,6 +42,13 @@ export function FilePanelBar({
       },
     ],
     [t],
+  );
+  const handleModeChange = useCallback(
+    (value: string) => {
+      const next = previewModes.find((option) => option.value === value)?.value;
+      if (next) onModeChange?.(next);
+    },
+    [onModeChange, previewModes],
   );
   return (
     <div className="shrink-0">
@@ -98,13 +105,15 @@ export function FilePanelBar({
             ) : null}
           </div>
           {mode && onModeChange ? (
-            <SegmentedControl
-              size="xs"
-              value={mode}
-              onValueChange={onModeChange}
-              testID="file-preview-mode"
-              options={previewModes}
-            />
+            <Tabs value={mode} onValueChange={handleModeChange} data-testid="file-preview-mode">
+              <TabsList>
+                {previewModes.map((option) => (
+                  <TabsTrigger key={option.value} value={option.value} data-testid={option.testID}>
+                    {option.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           ) : null}
         </div>
       </PaneContentToolbar>

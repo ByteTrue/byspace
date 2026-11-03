@@ -1,19 +1,19 @@
 // Port of archive/expo-app:packages/app/src/changelog/internal/changelog-sheet.tsx: What's new — the release notes, revealed a few at a time. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/changelog-sheet.py; edit it directly.
 import { memo, useCallback, useMemo } from "react";
-import { ExternalLink, Gift } from "lucide-react";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { CircleAlert, ExternalLink, Gift } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import {
   iconButtonChromeClassName,
   iconButtonChromeGlyphSize,
 } from "@/components/ui/icon-button-chrome";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "~/components/ui/badge";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -30,7 +30,6 @@ const WEBSITE_CHANGELOG_URL = "https://github.com/ByteTrue/byspace/releases";
 
 const ThemedGift = withTheme(Gift);
 const ThemedExternalLink = withTheme(ExternalLink);
-const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
 const WEBSITE_BUTTON = iconButtonChromeClassName({ size: "large" });
@@ -102,7 +101,7 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
   if (state.status === "loading") {
     return (
       <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3">
-        <ThemedLoadingSpinner size="large" themeProps={mutedColorMapping} />
+        <Spinner className="size-8 text-muted-foreground" />
       </div>
     );
   }
@@ -110,15 +109,15 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
   if (state.status === "error") {
     return (
       <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3">
-        <Alert
-          variant="error"
-          title={t("changelog.error.title")}
-          description={t("changelog.error.description")}
-          testID="changelog-error"
-        >
-          <Button variant="outline" size="sm" onPress={onRetry} testID="changelog-retry">
-            {t("common.actions.retry")}
-          </Button>
+        <Alert variant="destructive" data-testid="changelog-error">
+          <CircleAlert />
+          <AlertTitle>{t("changelog.error.title")}</AlertTitle>
+          <AlertDescription>{t("changelog.error.description")}</AlertDescription>
+          <AlertAction>
+            <Button variant="outline" size="sm" onPress={onRetry} testID="changelog-retry">
+              {t("common.actions.retry")}
+            </Button>
+          </AlertAction>
         </Alert>
       </div>
     );
@@ -164,7 +163,7 @@ const ReleaseView = memo(function ReleaseView({ release, isCurrent }: ReleaseVie
         <span className="text-base leading-[normal] font-medium text-foreground">
           {release.version}
         </span>
-        {isCurrent ? <StatusBadge label={t("changelog.installed")} /> : null}
+        {isCurrent ? <Badge variant="secondary">{t("changelog.installed")}</Badge> : null}
         <div className="flex-1" />
         {date ? (
           <span className="text-xs leading-[normal] text-muted-foreground">{date}</span>

@@ -8,9 +8,9 @@ import { cn } from "cn";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Switch } from "@/components/ui/switch";
+import { Spinner } from "~/components/ui/spinner";
+import { Badge } from "~/components/ui/badge";
+import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
@@ -34,7 +34,7 @@ type FormState =
 function MutedSpinner(): ReactElement {
   return (
     <span className="flex text-muted-foreground">
-      <LoadingSpinner size={14} />
+      <Spinner className="size-3.5" />
     </span>
   );
 }
@@ -285,7 +285,7 @@ function TunnelsEnabledBody({
   const sectionTrailing = useMemo(
     () => (
       <div className="flex shrink-0 flex-row items-center gap-2">
-        <StatusBadge label={t("tunnels.experimental")} variant="muted" />
+        <Badge variant="secondary">{t("tunnels.experimental")}</Badge>
         {hasDisabledOutbound ? (
           <Button
             variant="secondary"
@@ -385,10 +385,10 @@ function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
   );
 }
 
-function resolveBadgeVariant(state: AggregatedTunnelEntry["state"]): "success" | "error" | "muted" {
-  if (state === "connected") return "success";
-  if (state === "error") return "error";
-  return "muted";
+function resolveBadgeClassName(state: AggregatedTunnelEntry["state"]): string | undefined {
+  if (state === "connected") return "text-status-success";
+  if (state === "error") return "text-status-danger";
+  return undefined;
 }
 
 function AddTunnelButton({ onPress }: { onPress: () => void }): ReactElement {
@@ -509,7 +509,7 @@ function TunnelRow({
   }, [entry.state, isPaused, isZh, t]);
 
   const isOutbound = entry.direction === "outbound";
-  const badgeVariant = isPaused ? "muted" : resolveBadgeVariant(entry.state);
+  const badgeClassName = isPaused ? undefined : resolveBadgeClassName(entry.state);
 
   const handleToggleEnabled = useCallback(
     (enabled: boolean) => {
@@ -593,15 +593,17 @@ function TunnelRow({
         ) : undefined}
       </div>
       <div className="flex flex-row items-center gap-2">
-        <StatusBadge label={stateLabel} variant={badgeVariant} />
+        <Badge variant="secondary" className={badgeClassName}>
+          {stateLabel}
+        </Badge>
         {isOutbound ? (
           <>
             <Switch
-              value={!isPaused}
-              onValueChange={handleToggleEnabled}
+              checked={!isPaused}
+              onCheckedChange={handleToggleEnabled}
               disabled={!isConnected}
-              accessibilityLabel={isZh ? "启用或暂停此端口转发" : "Enable or pause port forward"}
-              testID="tunnels-row-toggle"
+              aria-label={isZh ? "启用或暂停此端口转发" : "Enable or pause port forward"}
+              data-testid="tunnels-row-toggle"
             />
             <Button
               variant="outline"

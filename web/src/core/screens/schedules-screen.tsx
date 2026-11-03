@@ -17,8 +17,8 @@ import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
 import { ScheduleFormSheet } from "@/components/schedules/schedule-form-sheet";
 import { SchedulesTable, type ScheduleRowView } from "@/components/schedules/schedules-table";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Spinner } from "~/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
 import {
@@ -107,6 +107,10 @@ function SchedulesScreenContent(): ReactElement {
   }, [hosts, selectedHost]);
 
   const openCreate = useCallback(() => setForm({ mode: "create" }), []);
+  const handleStatusFilterChange = useCallback((value: string) => {
+    const option = STATUS_FILTER_OPTIONS.find((candidate) => candidate.value === value);
+    if (option) setStatusFilter(option.value);
+  }, []);
   const openEdit = useCallback((schedule: AggregatedSchedule) => {
     setForm({ mode: "edit", serverId: schedule.serverId, schedule });
   }, []);
@@ -174,7 +178,7 @@ function SchedulesScreenContent(): ReactElement {
         hostErrors={hostErrors}
         showLoadError={showLoadError}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
         showHostFilter={showHostFilter}
         hosts={hosts}
         selectedHost={selectedHost}
@@ -214,7 +218,7 @@ function SchedulesScreenBody({
   hostErrors: ScheduleHostError[];
   showLoadError: boolean;
   statusFilter: ScheduleBucket;
-  onStatusFilterChange: (value: ScheduleBucket) => void;
+  onStatusFilterChange: (value: string) => void;
   showHostFilter: boolean;
   hosts: ReturnType<typeof useHosts>;
   selectedHost: string;
@@ -228,7 +232,7 @@ function SchedulesScreenBody({
   if (bodyState.kind === "loading") {
     return (
       <div className={cn(CENTERED, "text-muted-foreground")}>
-        <LoadingSpinner size="large" />
+        <Spinner className="size-8" />
       </div>
     );
   }
@@ -278,13 +282,19 @@ function SchedulesScreenBody({
               triggerTestID="schedules-host-filter-trigger"
             />
           ) : null}
-          <SegmentedControl
-            size="sm"
+          <Tabs
             value={statusFilter}
             onValueChange={onStatusFilterChange}
-            options={STATUS_FILTER_OPTIONS}
-            testID="schedules-status-filter"
-          />
+            data-testid="schedules-status-filter"
+          >
+            <TabsList>
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <TabsTrigger key={option.value} value={option.value} data-testid={option.testID}>
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
         <Button
           variant="outline"

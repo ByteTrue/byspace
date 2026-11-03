@@ -16,7 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
@@ -433,10 +433,7 @@ export function PullRequestPane({
               onPress={handleRefresh}
             >
               {isRefreshing ? (
-                <LoadingSpinner
-                  size={paneContentToolbarIconSize(isCompact)}
-                  className="text-muted-foreground"
-                />
+                <Spinner className="text-muted-foreground" />
               ) : (
                 <RotateCw
                   size={paneContentToolbarIconSize(isCompact)}

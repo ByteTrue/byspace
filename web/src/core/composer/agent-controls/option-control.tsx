@@ -5,7 +5,7 @@ import { useCallback, useRef, useState, type ReactElement } from "react";
 import type { AgentControlIcon } from "@/agent-controls/icons";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import type { ShortcutKey } from "@/utils/format-shortcut";

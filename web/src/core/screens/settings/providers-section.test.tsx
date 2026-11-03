@@ -117,34 +117,6 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/switch", () => ({
-  Switch: ({
-    value,
-    onValueChange,
-    disabled,
-    accessibilityLabel,
-    testID,
-  }: {
-    value: boolean;
-    onValueChange?: (next: boolean) => void;
-    disabled?: boolean;
-    accessibilityLabel?: string;
-    testID?: string;
-  }) =>
-    React.createElement("div", {
-      role: "switch",
-      "aria-checked": value ? "true" : "false",
-      "aria-disabled": disabled ? "true" : undefined,
-      "aria-label": accessibilityLabel,
-      "data-testid": testID ?? "provider-switch",
-      onClick: (event: React.MouseEvent) => {
-        event.stopPropagation();
-        if (disabled) return;
-        onValueChange?.(!value);
-      },
-    }),
-}));
-
 vi.mock("@/components/ui/loading-spinner", () => ({
   LoadingSpinner: () => React.createElement("span", { "data-testid": "loading-spinner" }),
 }));

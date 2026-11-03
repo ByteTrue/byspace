@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "~/components/ui/badge";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
@@ -61,21 +61,18 @@ interface ScheduleRowProps extends ScheduleRowActions {
   isFirst: boolean;
 }
 
-function stateBadge(state: ScheduleDerivedState): {
-  label: string;
-  variant: "success" | "error" | "muted";
-} {
+function stateBadge(state: ScheduleDerivedState): { label: string; className?: string } {
   switch (state) {
     case "active":
-      return { label: "Active", variant: "success" };
+      return { label: "Active", className: "text-status-success" };
     case "paused":
-      return { label: "Paused", variant: "muted" };
+      return { label: "Paused" };
     case "expired":
-      return { label: "Expired", variant: "muted" };
+      return { label: "Expired" };
     case "finished":
-      return { label: "Finished", variant: "muted" };
+      return { label: "Finished" };
     case "targetGone":
-      return { label: "Target gone", variant: "error" };
+      return { label: "Target gone", className: "text-status-danger" };
   }
 }
 
@@ -200,7 +197,9 @@ export function ScheduleRow({
       </div>
 
       <div className="flex flex-row items-center gap-2" onClick={stopClickPropagation}>
-        <StatusBadge label={badge.label} variant={badge.variant} />
+        <Badge variant="secondary" className={badge.className}>
+          {badge.label}
+        </Badge>
         <ScheduleKebabMenu
           schedule={schedule}
           canRun={canRun}

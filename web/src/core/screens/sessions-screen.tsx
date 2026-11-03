@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { AgentList } from "@/components/agent-list";
 import { SearchField } from "@/components/ui/search-field";
 import { HostFilter } from "@/components/hosts/host-filter";
@@ -184,7 +184,7 @@ function SessionsScreenContent() {
       {hostErrors.length > 0 ? <SessionHostErrorsBanner errors={hostErrors} t={t} /> : null}
       {isInitialLoad ? (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <LoadingSpinner size="large" />
+          <Spinner className="size-8" />
         </div>
       ) : null}
       {!isInitialLoad && showLoadError ? (

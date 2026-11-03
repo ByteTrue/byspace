@@ -55,12 +55,8 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/loading-spinner", () => ({
-  LoadingSpinner: ({ size }: { size?: string | number }) =>
-    React.createElement("span", {
-      "data-testid": "projects-loading-spinner",
-      "data-size": size,
-    }),
+vi.mock("~/components/ui/spinner", () => ({
+  Spinner: () => React.createElement("span", { "data-testid": "projects-loading-spinner" }),
 }));
 
 vi.mock("@/components/ui/dropdown-menu", () => ({

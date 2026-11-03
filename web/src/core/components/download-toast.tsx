@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Check, X, XCircle } from "lucide-react";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { useDownloadStore, formatSpeed, formatEta, type Download } from "@/stores/download-store";
 
 const AUTO_DISMISS_DELAY = 3000;
@@ -68,9 +68,7 @@ export function DownloadToast() {
         className="pointer-events-auto flex items-center gap-3 rounded-[10px] border bg-muted px-4 py-3 shadow-md"
         role="status"
       >
-        {activeDownload.status === "downloading" ? (
-          <LoadingSpinner size="small" className="text-foreground" />
-        ) : null}
+        {activeDownload.status === "downloading" ? <Spinner className="text-foreground" /> : null}
         {activeDownload.status === "complete" ? <Check size={18} className="text-primary" /> : null}
         {activeDownload.status !== "downloading" && activeDownload.status !== "complete" ? (
           <XCircle size={18} className="text-destructive" />

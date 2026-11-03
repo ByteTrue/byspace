@@ -1,15 +1,23 @@
 // Port of archive/expo-app:packages/app/src/settings/pair-device-section.tsx: the pairing offer (relay consent, QR code, link), DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/pair-device-section.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 import * as Clipboard from "~/lib/clipboard";
 import * as QRCode from "qrcode";
 import { useMutation } from "@tanstack/react-query";
-import { Check, Copy, Network, RotateCw, ShieldCheck } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  Network,
+  RotateCw,
+  ShieldCheck,
+  TriangleAlert,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "@/components/ui/external-link";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { useFetchQuery } from "@/data/query";
 import { daemonPairingOfferQueryKey } from "@/data/daemon-pairing";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -22,12 +30,8 @@ import {
 import { withTheme } from "~/app/theme-object";
 
 const RELAY_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/SECURITY.md";
-const ThemedLoadingSpinner = withTheme(LoadingSpinner);
 const ThemedShieldCheck = withTheme(ShieldCheck);
 const ThemedNetwork = withTheme(Network);
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
 const accentBrightColorMapping = (theme: Theme) => ({ color: theme.colors.accentBright });
 
 export interface PairDeviceSectionProps {
@@ -176,10 +180,14 @@ function PairDeviceBody(props: PairDeviceBodyProps) {
 function OfferLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
   const { t } = useTranslation();
   return (
-    <Alert variant="error" description={message}>
-      <Button variant="outline" size="sm" leftIcon={RotateCw} onPress={onRetry}>
-        {t("pairing.device.retry")}
-      </Button>
+    <Alert variant="destructive">
+      <CircleAlert />
+      <AlertDescription>{message}</AlertDescription>
+      <AlertAction>
+        <Button variant="outline" size="sm" leftIcon={RotateCw} onPress={onRetry}>
+          {t("pairing.device.retry")}
+        </Button>
+      </AlertAction>
     </Alert>
   );
 }
@@ -208,9 +216,17 @@ function RelayConsent(props: PairDeviceBodyProps) {
           accessibilityLabel={t("pairing.device.relayDocsAccessibility")}
         />
       </div>
-      {props.enableError ? <Alert variant="error" description={props.enableError.message} /> : null}
+      {props.enableError ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{props.enableError.message}</AlertDescription>
+        </Alert>
+      ) : null}
       {!props.canConfigureRelay ? (
-        <Alert variant="warning" description={t("pairing.device.updateRequired")} />
+        <Alert>
+          <TriangleAlert />
+          <AlertDescription>{t("pairing.device.updateRequired")}</AlertDescription>
+        </Alert>
       ) : null}
       <div className="flex flex-row gap-3">
         <Button variant="secondary" className="flex-1" onPress={props.onClose}>
@@ -279,7 +295,10 @@ function PairingOffer(props: PairDeviceBodyProps & { offer: { url: string } }) {
           {props.copied ? t("pairing.device.copied") : t("pairing.device.copy")}
         </Button>
       </div>
-      <Alert variant="warning" description={t("pairing.device.securityWarning")} />
+      <Alert>
+        <TriangleAlert />
+        <AlertDescription>{t("pairing.device.securityWarning")}</AlertDescription>
+      </Alert>
     </div>
   );
 }
@@ -305,5 +324,5 @@ function PairingQr({ svg, isError }: { svg: string | null; isError: boolean }) {
       </span>
     );
   }
-  return <ThemedLoadingSpinner size="small" themeProps={foregroundMutedColorMapping} />;
+  return <Spinner className="text-muted-foreground" />;
 }

@@ -12,7 +12,7 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
@@ -23,7 +23,7 @@ import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { TERMINAL_AGENT_HOOK_PROVIDERS } from "@/screens/settings/terminal-agent-hooks-config";
 import type { TerminalAgentHookProviderId } from "@bytetrue/protocol/messages";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { ProviderTerminalIntegration } from "@/components/provider-terminal-integration";
 import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@bytetrue/protocol/search/text-match";
@@ -299,7 +299,7 @@ function DiagnosticSubSheet({
             }
           >
             {loading ? (
-              <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+              <Spinner className="text-muted-foreground" />
             ) : (
               <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
             )}
@@ -323,7 +323,7 @@ function DiagnosticSubSheet({
     body = (
       <SurfaceCard key={visible ? "visible" : "hidden"}>
         <div className="flex flex-row items-center gap-2 p-4">
-          <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+          <Spinner className="text-muted-foreground" />
           <span className="text-sm leading-[normal] text-muted-foreground">
             {t("settings.providers.diagnostic.running")}
           </span>
@@ -471,7 +471,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
   if (discoveredCount === 0 && additionalCount === 0 && providerSnapshotRefreshing) {
     return (
       <div className="flex flex-col items-center gap-3 py-8">
-        <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        <Spinner className="text-muted-foreground" />
         <span className="text-sm leading-[normal] text-muted-foreground">
           {t("settings.providers.models.loading")}
         </span>
@@ -669,17 +669,26 @@ export function ProviderDiagnosticSheet({
     ],
     [t],
   );
+  const handleTabChange = useCallback(
+    (value: string) => {
+      const next = tabOptions.find((option) => option.value === value)?.value;
+      if (next) setTab(next);
+    },
+    [tabOptions],
+  );
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: providerLabel,
       actions: isTerminalProvider ? (
-        <SegmentedControl
-          options={tabOptions}
-          value={tab}
-          onValueChange={setTab}
-          size="xs"
-          testID="provider-sheet-tabs"
-        />
+        <Tabs value={tab} onValueChange={handleTabChange} data-testid="provider-sheet-tabs">
+          <TabsList>
+            {tabOptions.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       ) : undefined,
       search:
         tab === "agent"
@@ -690,7 +699,7 @@ export function ProviderDiagnosticSheet({
             }
           : undefined,
     }),
-    [providerLabel, isTerminalProvider, tab, tabOptions, t],
+    [providerLabel, isTerminalProvider, tab, tabOptions, handleTabChange, t],
   );
 
   return (

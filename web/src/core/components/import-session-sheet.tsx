@@ -12,7 +12,7 @@ import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
   SelectField,
@@ -219,7 +219,7 @@ function SheetStatusMessages({
       ) : null}
       {isLoadingSessions && !hasRows ? (
         <div className="flex flex-row items-center gap-2 py-2 text-muted-foreground">
-          <LoadingSpinner />
+          <Spinner />
           <span className={STATUS_TEXT}>{t("importSession.status.loading")}</span>
         </div>
       ) : null}
@@ -290,7 +290,7 @@ function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPre
       className="mr-1 rounded-[10px] p-2 text-muted-foreground active:bg-muted"
     >
       <span className="flex size-4 items-center justify-center">
-        {isRefreshing ? <LoadingSpinner /> : <RotateCw size={16} />}
+        {isRefreshing ? <Spinner /> : <RotateCw size={16} />}
       </span>
     </button>
   );

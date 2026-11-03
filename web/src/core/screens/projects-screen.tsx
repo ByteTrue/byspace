@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { useTranslation } from "react-i18next";
 import { isHomeProjectViewKey } from "@/chief/home-workspace";
 import { ProjectIconView } from "@/components/project-icon-view";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import { useProjects, type ProjectHostError } from "@/hooks/use-projects";
 import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
@@ -65,7 +65,7 @@ export default function ProjectsScreen({ serverId }: ProjectsScreenProps) {
         className="flex flex-1 flex-col items-center justify-center p-6 text-muted-foreground"
         data-testid="projects-list"
       >
-        <LoadingSpinner size="large" />
+        <Spinner className="size-8" />
       </div>
     );
   }

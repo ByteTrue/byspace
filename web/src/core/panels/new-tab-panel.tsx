@@ -13,7 +13,7 @@ import {
 import { Pencil, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";

@@ -65,7 +65,7 @@ import {
   buildProjectPickerOptions,
   type ProjectPickerOption,
 } from "@/components/project-picker-options";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { useFetchQuery } from "@/data/query";
 import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";

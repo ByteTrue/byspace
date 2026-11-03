@@ -3,7 +3,7 @@
 // actions); the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/composer.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "~/components/ui/spinner";
 import type { TFunction } from "i18next";
 import {
   useState,
@@ -75,7 +75,7 @@ import {
 } from "@/composer/actions";
 import { useToast } from "@/contexts/toast-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
@@ -923,7 +923,7 @@ function ComposerCancelButton({
     ? t("composer.cancel.cancelingAgent")
     : t("composer.cancel.stopAgent");
   const icon = isCancellingAgent ? (
-    <LoadingSpinner size="small" color="white" />
+    <Spinner className="text-primary-foreground" />
   ) : (
     <Square size={buttonIconSize} color="white" fill="white" />
   );

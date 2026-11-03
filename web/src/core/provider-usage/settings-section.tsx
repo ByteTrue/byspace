@@ -1,9 +1,9 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/settings-section.tsx: the Usage page section; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/provider-usage-settings.py; edit it directly.
-import { RefreshCw } from "lucide-react";
+import { CircleAlert, RefreshCw } from "lucide-react";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useMemo } from "react";
 import { cn } from "cn";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -66,10 +66,15 @@ function ProviderUsageBody({
 
   if (view.kind === "error") {
     return (
-      <Alert variant="error" title={providerUsageCopy.errorTitle} description={view.message}>
-        <Button variant="outline" size="sm" onPress={onRefresh}>
-          {providerUsageCopy.retry}
-        </Button>
+      <Alert variant="destructive">
+        <CircleAlert />
+        <AlertTitle>{providerUsageCopy.errorTitle}</AlertTitle>
+        <AlertDescription>{view.message}</AlertDescription>
+        <AlertAction>
+          <Button variant="outline" size="sm" onPress={onRefresh}>
+            {providerUsageCopy.retry}
+          </Button>
+        </AlertAction>
       </Alert>
     );
   }

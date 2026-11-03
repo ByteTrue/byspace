@@ -6,7 +6,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { PaneHost } from "@/panels/panel-manifest";

@@ -2,7 +2,7 @@
 // button (28px, 32px on a phone) with a tooltip naming it and its shortcut.
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { iconButtonChromeClassName } from "@/components/ui/icon-button-chrome";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 

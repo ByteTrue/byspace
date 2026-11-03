@@ -1,13 +1,14 @@
 // Port of archive/expo-app:packages/app/src/screens/project-settings-screen.tsx: one project's settings, scripts and their edit modal; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/project-settings-screen.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { router, type Href } from "~/app/navigation";
 import { useFocusEffect } from "~/app/route-focus";
 import { cn } from "cn";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, MoreVertical, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, CircleAlert, MoreVertical, Pencil, Plus, TriangleAlert } from "lucide-react";
 import { ProjectIconView } from "@/components/project-icon-view";
 import type {
   AgentSkillsStatus,
@@ -23,10 +24,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Alert } from "@/components/ui/alert";
 import { ExternalLink } from "@/components/ui/external-link";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { Switch } from "@/components/ui/switch";
+import { Spinner } from "~/components/ui/spinner";
+import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ProjectEditSheet } from "@/components/project-edit-sheet";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
@@ -659,7 +659,7 @@ function renderContent({
   if (readQuery.isLoading) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-muted-foreground">
-        <LoadingSpinner />
+        <Spinner />
       </div>
     );
   }
@@ -684,7 +684,7 @@ function renderContent({
   if (!loadedConfig) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-muted-foreground">
-        <LoadingSpinner />
+        <Spinner />
       </div>
     );
   }
@@ -726,10 +726,15 @@ function ReadFailureCallout({ kind, error, onReload }: ReadFailureCalloutProps) 
   });
   return (
     <div className="mt-2 flex flex-col">
-      <Alert testID={testID} variant="error" title={title} description={description}>
-        <Button testID={`${testID}-action-0`} onPress={onReload} variant="outline" size="sm">
-          {t("settings.project.actions.reload")}
-        </Button>
+      <Alert variant="destructive" data-testid={testID}>
+        <CircleAlert />
+        <AlertTitle>{title}</AlertTitle>
+        <AlertDescription>{description}</AlertDescription>
+        <AlertAction>
+          <Button testID={`${testID}-action-0`} onPress={onReload} variant="outline" size="sm">
+            {t("settings.project.actions.reload")}
+          </Button>
+        </AlertAction>
       </Alert>
     </div>
   );
@@ -1018,11 +1023,13 @@ function ProjectConfigForm({
           trailing={setupDocsLink}
         >
           {hasUncommittedWorktreeSetupChanges ? (
-            <Alert
-              variant="warning"
-              title={t("settings.project.worktree.uncommittedTitle")}
-              description={t("settings.project.worktree.uncommittedDescription")}
-            />
+            <Alert>
+              <TriangleAlert />
+              <AlertTitle>{t("settings.project.worktree.uncommittedTitle")}</AlertTitle>
+              <AlertDescription>
+                {t("settings.project.worktree.uncommittedDescription")}
+              </AlertDescription>
+            </Alert>
           ) : null}
           <SettingsTextAreaCard
             testID="worktree-setup-input"
@@ -1094,48 +1101,52 @@ function ProjectConfigForm({
 
       {isStale ? (
         <div className="mt-3 flex flex-col">
-          <Alert
-            testID="stale-callout"
-            variant="error"
-            title={t("settings.project.writeFailures.staleTitle")}
-            description={t("settings.project.writeFailures.staleDescription")}
-          >
-            <Button
-              testID="stale-callout-action-0"
-              onPress={handleReload}
-              variant="outline"
-              size="sm"
-            >
-              {t("settings.project.actions.reload")}
-            </Button>
+          <Alert variant="destructive" data-testid="stale-callout">
+            <CircleAlert />
+            <AlertTitle>{t("settings.project.writeFailures.staleTitle")}</AlertTitle>
+            <AlertDescription>
+              {t("settings.project.writeFailures.staleDescription")}
+            </AlertDescription>
+            <AlertAction>
+              <Button
+                testID="stale-callout-action-0"
+                onPress={handleReload}
+                variant="outline"
+                size="sm"
+              >
+                {t("settings.project.actions.reload")}
+              </Button>
+            </AlertAction>
           </Alert>
         </div>
       ) : null}
 
       {isWriteFailed ? (
         <div className="mt-3 flex flex-col">
-          <Alert
-            testID="write-failed-callout"
-            variant="error"
-            title={t("settings.project.writeFailures.failedTitle")}
-            description={t("settings.project.writeFailures.failedDescription")}
-          >
-            <Button
-              testID="write-failed-callout-action-0"
-              onPress={handleSave}
-              variant="outline"
-              size="sm"
-            >
-              {t("settings.project.actions.tryAgain")}
-            </Button>
-            <Button
-              testID="write-failed-callout-action-1"
-              onPress={handleReload}
-              variant="outline"
-              size="sm"
-            >
-              {t("settings.project.actions.reload")}
-            </Button>
+          <Alert variant="destructive" data-testid="write-failed-callout">
+            <CircleAlert />
+            <AlertTitle>{t("settings.project.writeFailures.failedTitle")}</AlertTitle>
+            <AlertDescription>
+              {t("settings.project.writeFailures.failedDescription")}
+            </AlertDescription>
+            <AlertAction>
+              <Button
+                testID="write-failed-callout-action-0"
+                onPress={handleSave}
+                variant="outline"
+                size="sm"
+              >
+                {t("settings.project.actions.tryAgain")}
+              </Button>
+              <Button
+                testID="write-failed-callout-action-1"
+                onPress={handleReload}
+                variant="outline"
+                size="sm"
+              >
+                {t("settings.project.actions.reload")}
+              </Button>
+            </AlertAction>
           </Alert>
         </div>
       ) : null}
@@ -1309,14 +1320,13 @@ function ProjectSetupAgentCard({
         </div>
         {error ? (
           <div className="mt-3 flex flex-col">
-            <Alert
-              variant="error"
-              title={t("settings.host.skills.updateFailed")}
-              description={
-                error instanceof Error ? error.message : t("settings.host.skills.statusFailed")
-              }
-              testID="project-setup-agent-error"
-            />
+            <Alert variant="destructive" data-testid="project-setup-agent-error">
+              <CircleAlert />
+              <AlertTitle>{t("settings.host.skills.updateFailed")}</AlertTitle>
+              <AlertDescription>
+                {error instanceof Error ? error.message : t("settings.host.skills.statusFailed")}
+              </AlertDescription>
+            </Alert>
           </div>
         ) : null}
       </div>
@@ -1579,10 +1589,10 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
             </span>
           </div>
           <Switch
-            value={isService}
-            onValueChange={handleServiceToggle}
-            accessibilityLabel={t("settings.project.scripts.runAsService")}
-            testID="script-edit-service-toggle"
+            checked={isService}
+            onCheckedChange={handleServiceToggle}
+            aria-label={t("settings.project.scripts.runAsService")}
+            data-testid="script-edit-service-toggle"
           />
         </div>
       </div>

@@ -20,7 +20,7 @@ async function openMetadataGenerationSettings(page: Page) {
 }
 
 async function openManualMetadataModelPicker(page: Page) {
-  await page.getByRole("button", { name: "Manual", exact: true }).click();
+  await page.getByRole("tab", { name: "Manual", exact: true }).click();
   await page.getByRole("button", { name: /Select model/ }).click();
 }
 
@@ -33,7 +33,7 @@ test("chooses a metadata model and can return to automatic selection", async ({
   await expect(page.getByTestId("metadata-generation-settings-info")).toHaveAccessibleName(
     "About Metadata generation",
   );
-  await expect(page.getByRole("button", { name: "Automatic", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Automatic", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -55,7 +55,7 @@ test("chooses a metadata model and can return to automatic selection", async ({
 
   await expect(page.getByRole("button", { name: /Ten second stream/ })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Manual", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Manual", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -65,10 +65,10 @@ test("chooses a metadata model and can return to automatic selection", async ({
     fullPage: true,
   });
 
-  await page.getByRole("button", { name: "Automatic", exact: true }).click();
+  await page.getByRole("tab", { name: "Automatic", exact: true }).click();
   await page.reload();
 
-  await expect(page.getByRole("button", { name: "Automatic", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Automatic", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -90,7 +90,7 @@ test("replaces only the first configured metadata model", async ({ page }) => {
     });
     await openMetadataGenerationSettings(page);
 
-    await expect(page.getByRole("button", { name: "Manual", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("tab", { name: "Manual", exact: true })).toHaveAttribute(
       "aria-selected",
       "true",
     );

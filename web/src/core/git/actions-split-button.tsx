@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import type { GitAction, GitActions } from "@/git/policy";
 import { useGitActionRunner } from "@/git/use-actions";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";

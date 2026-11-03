@@ -27,7 +27,7 @@ import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload, TextReplacement } from "@/composer/types";
 import { focusWithRetries } from "@/utils/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shortcut } from "@/components/ui/shortcut";
+import { Shortcut } from "~/components/shortcut";
 import {
   DropdownMenu,
   DropdownMenuContent,

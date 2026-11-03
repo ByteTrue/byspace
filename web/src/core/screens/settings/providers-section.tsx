@@ -18,8 +18,8 @@ import {
 } from "@/hooks/use-acp-provider-catalog";
 import { ProviderCatalogList } from "@/components/provider-catalog-list";
 import { getProviderIcon } from "@/components/provider-icons";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { Switch } from "@/components/ui/switch";
+import { Spinner } from "~/components/ui/spinner";
+import { Switch } from "~/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -236,10 +236,10 @@ function ProviderRow({
       </div>
       <div className="flex flex-row items-center gap-1" onClick={stopClickPropagation}>
         <Switch
-          value={enabled}
-          onValueChange={handleToggleValueChange}
+          checked={enabled}
+          onCheckedChange={handleToggleValueChange}
           disabled={isToggling || isRemoving}
-          accessibilityLabel={t("settings.providers.enableProvider", { name: def.label })}
+          aria-label={t("settings.providers.enableProvider", { name: def.label })}
         />
         <div className="size-8">
           {canRemove ? (
@@ -284,7 +284,7 @@ function StatusIndicator({ status, compact }: { status: ProviderStatus; compact:
   return (
     <div className="flex flex-row items-center gap-1.5">
       {status.tone === "loading" ? (
-        <LoadingSpinner size={10} color={theme.colors.foregroundMuted} />
+        <Spinner className="size-2.5 text-muted-foreground" />
       ) : (
         <span className="size-2 shrink-0 rounded-full" style={dotStyle} />
       )}

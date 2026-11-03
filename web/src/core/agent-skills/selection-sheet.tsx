@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { Check } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
@@ -209,11 +209,11 @@ export function SkillSelectionSheet({
             </span>
           </div>
           <Switch
-            value={allSkills}
-            onValueChange={handleToggleAll}
+            checked={allSkills}
+            onCheckedChange={handleToggleAll}
             disabled={isSaving}
-            accessibilityLabel={t("settings.host.skills.chooseAll")}
-            testID="skill-selection-all"
+            aria-label={t("settings.host.skills.chooseAll")}
+            data-testid="skill-selection-all"
           />
         </div>
       </div>

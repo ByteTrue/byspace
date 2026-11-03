@@ -1,15 +1,15 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/network-section.tsx: access password and LAN exposure, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
-import { Eye, EyeOff } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
 import { useSessionStore } from "@/stores/session-store";
@@ -176,21 +176,19 @@ export function NetworkSection({ serverId }: { serverId: string }) {
     <SettingsSection title={t("settings.host.daemon.network.sectionTitle")}>
       {error ? (
         <div className="mb-2">
-          <InlineAlert
-            variant="error"
-            title={t("settings.host.daemon.network.saveError")}
-            description={error}
-            testID="host-page-network-error"
-          />
+          <Alert variant="destructive" data-testid="host-page-network-error">
+            <CircleAlert />
+            <AlertTitle>{t("settings.host.daemon.network.saveError")}</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       ) : null}
       {needsRestart ? (
         <div className="mb-2">
-          <InlineAlert
-            variant="info"
-            title={t("settings.host.daemon.network.restartHint")}
-            testID="host-page-network-restart-hint"
-          />
+          <Alert data-testid="host-page-network-restart-hint">
+            <Info />
+            <AlertTitle>{t("settings.host.daemon.network.restartHint")}</AlertTitle>
+          </Alert>
         </div>
       ) : null}
       <div className={settingsStyles.card} data-testid="host-page-network-card">
@@ -230,11 +228,11 @@ export function NetworkSection({ serverId }: { serverId: string }) {
             <span className={settingsStyles.rowHint}>{lanHint}</span>
           </div>
           <Switch
-            value={allowLanAccess}
+            checked={allowLanAccess}
             disabled={isBusy || tcpPort === null || (!passwordSet && !allowLanAccess)}
-            onValueChange={handleAllowLanChange}
-            accessibilityLabel={t("settings.host.daemon.network.allowLan.title")}
-            testID="host-page-network-allow-lan-switch"
+            onCheckedChange={handleAllowLanChange}
+            aria-label={t("settings.host.daemon.network.allowLan.title")}
+            data-testid="host-page-network-allow-lan-switch"
           />
         </div>
       </div>

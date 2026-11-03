@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/card.tsx: one provider's usage — name, plan, status,
 // error, window and balance bars, detail rows and where the numbers came from.
 import { getProviderIcon } from "@/components/provider-icons";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "~/components/ui/badge";
 import { ProviderUsageBalanceBar } from "@/provider-usage/balance-bar";
 import { formatAgo } from "@/provider-usage/format";
 import type { ProviderUsage } from "@/provider-usage/types";
@@ -43,7 +43,7 @@ export function ProviderUsageCard({
         <span className={cn("min-w-0 shrink truncate text-sm leading-[normal]", tones.strong)}>
           {usage.displayName}
         </span>
-        {usage.planLabel ? <StatusBadge label={usage.planLabel} variant="muted" /> : null}
+        {usage.planLabel ? <Badge variant="secondary">{usage.planLabel}</Badge> : null}
         <span className="flex-1" />
         {status ? (
           <span className="flex items-center gap-1.5">

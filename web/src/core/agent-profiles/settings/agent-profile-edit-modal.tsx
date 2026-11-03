@@ -15,7 +15,7 @@ import {
   type SelectFieldDisplay,
   type SelectFieldOption,
 } from "@/components/ui/select-field";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { AgentProfileAppearanceField } from "@/agent-profiles/settings/agent-profile-appearance-field";
@@ -479,11 +479,11 @@ function AgentProfileFeatureRow({
         ) : null}
       </div>
       <Switch
-        value={feature.value === true}
-        onValueChange={handleToggle}
+        checked={feature.value === true}
+        onCheckedChange={handleToggle}
         disabled={disabled}
-        accessibilityLabel={feature.label}
-        testID={`agent-profile-feature-switch-${feature.id}`}
+        aria-label={feature.label}
+        data-testid={`agent-profile-feature-switch-${feature.id}`}
       />
     </div>
   );

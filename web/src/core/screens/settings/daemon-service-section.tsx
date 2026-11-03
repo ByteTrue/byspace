@@ -1,10 +1,11 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
 import { useCallback, useMemo, useState } from "react";
+import { CircleAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useTranslation } from "react-i18next";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { Switch } from "@/components/ui/switch";
-import { Alert as InlineAlert } from "@/components/ui/alert";
+import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
@@ -134,12 +135,11 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
     <SettingsSection title={t("settings.host.daemon.service.sectionTitle")}>
       {error ? (
         <div className="mb-2">
-          <InlineAlert
-            variant="error"
-            title={t("settings.host.daemon.service.errorTitle")}
-            description={error}
-            testID="host-page-service-error"
-          />
+          <Alert variant="destructive" data-testid="host-page-service-error">
+            <CircleAlert />
+            <AlertTitle>{t("settings.host.daemon.service.errorTitle")}</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       ) : null}
       <div className={settingsStyles.card} data-testid="host-page-service-card">
@@ -160,11 +160,11 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
             ) : null}
           </div>
           <Switch
-            value={managed}
+            checked={managed}
             disabled={isBusy}
-            onValueChange={handleToggle}
-            accessibilityLabel={t("settings.host.daemon.service.toggle.title")}
-            testID="host-page-service-switch"
+            onCheckedChange={handleToggle}
+            aria-label={t("settings.host.daemon.service.toggle.title")}
+            data-testid="host-page-service-switch"
           />
         </div>
       </div>

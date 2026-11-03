@@ -74,10 +74,7 @@ test.describe("Settings host page", () => {
       await page.getByRole("button", { name: `${label} provider details`, exact: true }).click();
       const sheet = page.getByTestId("provider-settings-sheet");
       await expect(sheet).toBeVisible();
-      await sheet
-        .getByTestId("provider-sheet-tabs")
-        .getByRole("button", { name: "Terminal" })
-        .click();
+      await sheet.getByTestId("provider-sheet-tabs").getByRole("tab", { name: "Terminal" }).click();
       await expect(
         page.getByTestId(`provider-terminal-hooks-${providerId}-switch`),
       ).toHaveAttribute("aria-checked", "false");

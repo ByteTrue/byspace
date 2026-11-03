@@ -59,7 +59,7 @@ function htmlPreview(page: Page) {
 }
 
 async function selectFileView(page: Page, view: "Preview" | "Source"): Promise<void> {
-  const option = page.getByTestId("file-panel-bar").getByRole("button", {
+  const option = page.getByTestId("file-panel-bar").getByRole("tab", {
     name: view,
     exact: true,
   });
@@ -526,7 +526,7 @@ test.describe("CodeMirror workspace file editing", () => {
 
     const visibleFilePane = page.getByTestId("workspace-file-pane").filter({ visible: true });
     await expect(visibleFilePane.getByText("First heading", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Preview", exact: true })).toBeVisible();
     await writeFile(markdownPath, "# Updated heading\n", "utf8");
     await expect(visibleFilePane.getByText("Updated heading", { exact: true })).toBeVisible();
 

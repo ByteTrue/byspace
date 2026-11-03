@@ -15,7 +15,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
-import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
+import { Badge } from "~/components/ui/badge";
 import type { AgentSearchMatch } from "@bytetrue/protocol/messages";
 import type { MatchRange } from "@bytetrue/protocol/search/text-match";
 
@@ -115,10 +115,15 @@ function SessionBadge({
   icon?: ReactElement;
   tone?: "neutral" | "warning" | "danger";
 }) {
-  let variant: StatusBadgeVariant = "muted";
-  if (tone === "warning") variant = "warning";
-  else if (tone === "danger") variant = "error";
-  return <StatusBadge label={label} variant={variant} leading={icon} />;
+  let className: string | undefined;
+  if (tone === "warning") className = "text-status-warning";
+  else if (tone === "danger") className = "text-status-danger";
+  return (
+    <Badge variant="secondary" className={className}>
+      {icon}
+      {label}
+    </Badge>
+  );
 }
 
 function WorkspaceTitlePrefix({

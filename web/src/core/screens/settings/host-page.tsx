@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ArrowUpToLine,
   ChevronRight,
+  CircleAlert,
   Globe,
   Monitor,
   Pencil,
@@ -14,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { TFunction } from "i18next";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
@@ -26,10 +28,9 @@ import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
-import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "~/components/ui/badge";
+import { Switch } from "~/components/ui/switch";
 import { DefaultShellSection } from "@/screens/settings/default-shell-section";
 import {
   ProfileDraft,
@@ -182,16 +183,16 @@ function HostStatusBadges({ serverId }: { serverId: string }) {
   const activeConnection = snapshot?.activeConnection ?? null;
   const statusLabel = formatConnectionStatus(connectionStatus);
   const statusTone = getConnectionStatusTone(connectionStatus);
-  let statusVariant: StatusBadgeVariant = "muted";
+  let statusClassName: string | undefined;
   let statusDotColor = theme.colors.foregroundMuted;
   if (statusTone === "success") {
-    statusVariant = "success";
+    statusClassName = "text-status-success";
     statusDotColor = theme.colors.statusDotSuccess;
   } else if (statusTone === "warning") {
-    statusVariant = "warning";
+    statusClassName = "text-status-warning";
     statusDotColor = theme.colors.statusDotWarning;
   } else if (statusTone === "error") {
-    statusVariant = "error";
+    statusClassName = "text-status-danger";
     statusDotColor = theme.colors.statusDotDanger;
   }
   const connectionBadge = formatActiveConnectionBadge(activeConnection, theme, t);
@@ -207,7 +208,10 @@ function HostStatusBadges({ serverId }: { serverId: string }) {
       className="mb-6 flex flex-row flex-wrap items-center gap-1"
       data-testid="host-page-identity"
     >
-      <StatusBadge label={statusLabel} variant={statusVariant} leading={statusLeading} />
+      <Badge variant="secondary" className={statusClassName}>
+        {statusLeading}
+        {statusLabel}
+      </Badge>
       {connectionBadge ? (
         <div className="flex max-w-[200px] flex-row items-center gap-1.5 rounded-sm border bg-muted px-2 py-0.5">
           {connectionBadge.icon}
@@ -910,12 +914,11 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
       </div>
       {updateState.status === "failed" ? (
         <div className="mx-4 mb-4">
-          <InlineAlert
-            variant="error"
-            title={updateState.title}
-            description={updateState.message}
-            testID="host-page-update-error"
-          />
+          <Alert variant="destructive" data-testid="host-page-update-error">
+            <CircleAlert />
+            <AlertTitle>{updateState.title}</AlertTitle>
+            <AlertDescription>{updateState.message}</AlertDescription>
+          </Alert>
         </div>
       ) : null}
     </div>
@@ -952,9 +955,9 @@ function InjectBySpaceToolsCard({ serverId }: { serverId: string }) {
           </span>
         </div>
         <Switch
-          value={config?.mcp.injectIntoAgents !== false}
-          onValueChange={handleValueChange}
-          accessibilityLabel={t("settings.host.orchestration.enableTools.accessibilityLabel")}
+          checked={config?.mcp.injectIntoAgents !== false}
+          onCheckedChange={handleValueChange}
+          aria-label={t("settings.host.orchestration.enableTools.accessibilityLabel")}
         />
       </div>
     </div>
@@ -993,10 +996,10 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
           </span>
         </div>
         <Switch
-          value={config?.autoArchiveAfterMerge === true}
-          onValueChange={handleValueChange}
-          accessibilityLabel="Archive merged PR workspaces"
-          testID="host-page-auto-archive-merged-workspaces-switch"
+          checked={config?.autoArchiveAfterMerge === true}
+          onCheckedChange={handleValueChange}
+          aria-label="Archive merged PR workspaces"
+          data-testid="host-page-auto-archive-merged-workspaces-switch"
         />
       </div>
     </div>

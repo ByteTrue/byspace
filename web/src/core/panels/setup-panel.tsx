@@ -1,11 +1,17 @@
 // Port of archive/expo-app:packages/app/src/panels/setup-panel.tsx: the worktree setup log — one collapsible
 // row per setup command, the running one open, its output below. Same logic; the view is DOM.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/setup-panel.py; edit it directly.
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { Alert } from "@/components/ui/alert";
+import { Spinner } from "~/components/ui/spinner";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronRight, CircleAlert, SquareTerminal } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  SquareTerminal,
+  TriangleAlert,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { usePaneContext } from "@/panels/pane-context";
@@ -77,7 +83,7 @@ type CommandStatus = "running" | "completed" | "failed";
 
 function CommandStatusIcon({ status }: { status: CommandStatus }) {
   if (status === "running") {
-    return <LoadingSpinner size={14} className="text-foreground" />;
+    return <Spinner className="size-3.5 text-foreground" />;
   }
   if (status === "completed") {
     return <CheckCircle2 size={14} className="text-green-500" />;
@@ -144,21 +150,33 @@ function BlockedSetupNotice({
 
   return (
     <>
-      <Alert
-        variant="warning"
-        title={t("workspace.setup.blocked.title")}
-        description={t("workspace.setup.blocked.description", {
-          repository: source.headRepository,
-        })}
-        testID="workspace-setup-blocked"
-      >
-        {supportsSetupRun ? (
-          <Button accessibilityRole="button" onPress={runSetup} loading={isRunningSetup} size="sm">
-            {t("workspace.setup.blocked.run")}
-          </Button>
-        ) : null}
+      <Alert data-testid="workspace-setup-blocked">
+        <TriangleAlert />
+        <AlertTitle>{t("workspace.setup.blocked.title")}</AlertTitle>
+        <AlertDescription>
+          {t("workspace.setup.blocked.description", {
+            repository: source.headRepository,
+          })}
+        </AlertDescription>
+        <AlertAction>
+          {supportsSetupRun ? (
+            <Button
+              accessibilityRole="button"
+              onPress={runSetup}
+              loading={isRunningSetup}
+              size="sm"
+            >
+              {t("workspace.setup.blocked.run")}
+            </Button>
+          ) : null}
+        </AlertAction>
       </Alert>
-      {runError ? <Alert variant="error" description={runError} /> : null}
+      {runError ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{runError}</AlertDescription>
+        </Alert>
+      ) : null}
     </>
   );
 }
@@ -350,7 +368,7 @@ function SetupPanelBody(props: SetupPanelBodyProps) {
   if (props.isWaiting) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <LoadingSpinner size="large" className="text-muted-foreground" />
+        <Spinner className="size-8 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">{t("workspace.setup.waiting")}</span>
       </div>
     );

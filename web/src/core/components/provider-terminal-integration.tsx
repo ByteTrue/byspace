@@ -8,7 +8,7 @@ import {
   findTerminalProfileForProvider,
 } from "@bytetrue/protocol/terminal-profiles";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { settingsStyles } from "@/styles/settings";
@@ -131,11 +131,11 @@ export function ProviderTerminalIntegration({
                 </span>
               </div>
               <Switch
-                value={hookEnabled}
+                checked={hookEnabled}
                 disabled={!config}
-                onValueChange={handleHookChange}
-                accessibilityLabel={t("settings.host.terminalAgentHooks.reportTitle")}
-                testID={`provider-terminal-hooks-${provider}-switch`}
+                onCheckedChange={handleHookChange}
+                aria-label={t("settings.host.terminalAgentHooks.reportTitle")}
+                data-testid={`provider-terminal-hooks-${provider}-switch`}
               />
             </div>
           </div>

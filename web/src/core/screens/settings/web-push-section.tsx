@@ -1,10 +1,11 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/web-push-section.tsx: browser notifications, one
 // row per host. Same logic, DOM view.
 import { useCallback, useEffect, useState } from "react";
+import { Info } from "lucide-react";
+import { Alert, AlertTitle } from "~/components/ui/alert";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
@@ -28,11 +29,10 @@ export function WebPushSection() {
   if (!isWebPushSupported()) {
     return (
       <SettingsSection title={t("settings.notifications.webPush.title")}>
-        <Alert
-          variant="info"
-          title={t("settings.notifications.webPush.unsupported")}
-          testID="web-push-unsupported"
-        />
+        <Alert data-testid="web-push-unsupported">
+          <Info />
+          <AlertTitle>{t("settings.notifications.webPush.unsupported")}</AlertTitle>
+        </Alert>
       </SettingsSection>
     );
   }
@@ -43,11 +43,10 @@ export function WebPushSection() {
       info={t("settings.notifications.webPush.description")}
     >
       {isIosBrowser() ? (
-        <Alert
-          variant="info"
-          title={t("settings.notifications.webPush.iosHomeScreenHint")}
-          testID="web-push-ios-hint"
-        />
+        <Alert data-testid="web-push-ios-hint">
+          <Info />
+          <AlertTitle>{t("settings.notifications.webPush.iosHomeScreenHint")}</AlertTitle>
+        </Alert>
       ) : null}
       <div className={settingsStyles.card}>
         {hosts.map((host, index) => (

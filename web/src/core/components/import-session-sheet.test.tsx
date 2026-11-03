@@ -80,9 +80,8 @@ vi.mock("lucide-react", () => {
   };
 });
 
-vi.mock("@/components/ui/loading-spinner", () => ({
-  LoadingSpinner: () =>
-    React.createElement("span", { "data-testid": "import-session-loading-spinner" }),
+vi.mock("~/components/ui/spinner", () => ({
+  Spinner: () => React.createElement("span", { "data-testid": "import-session-loading-spinner" }),
 }));
 
 vi.mock("@/components/ui/combobox", () => ({
