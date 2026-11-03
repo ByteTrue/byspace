@@ -33,7 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
@@ -99,7 +99,7 @@ function ScriptRowActionButton({
     [onPress],
   );
   return (
-    <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -112,7 +112,7 @@ function ScriptRowActionButton({
           <Icon size={size} fill={icon === "start" ? "transparent" : undefined} />
         </button>
       </TooltipTrigger>
-      <TooltipContent testID={`${testID}-tooltip`} side="top" offset={8}>
+      <TooltipContent data-testid={`${testID}-tooltip`} side="top">
         {tooltipLabel}
       </TooltipContent>
     </Tooltip>
@@ -170,7 +170,7 @@ function ServiceRouteSelector({
   const { t } = useTranslation();
   return (
     <DropdownMenu>
-      <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+      <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             accessibilityLabel={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
@@ -185,11 +185,7 @@ function ServiceRouteSelector({
             </span>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent
-          testID={`workspace-scripts-route-${scriptName}-tooltip`}
-          side="top"
-          offset={8}
-        >
+        <TooltipContent data-testid={`workspace-scripts-route-${scriptName}-tooltip`} side="top">
           {t("workspace.scripts.actions.chooseUrl")}
         </TooltipContent>
       </Tooltip>

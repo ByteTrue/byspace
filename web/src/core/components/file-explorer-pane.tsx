@@ -34,7 +34,6 @@ import {
 } from "@/components/tree-primitives";
 import {
   PaneContentToolbar,
-  paneContentToolbarIconSize,
   paneContentToolbarTrailingPadding,
   ToolbarButton,
   ToolbarControls,
@@ -1079,10 +1078,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const handleNewFolderAtRoot = useCallback(() => {
     onNewEntryAtRoot?.(".", "directory");
   }, [onNewEntryAtRoot]);
-  const headerStyle = useMemo(
-    () => ({ paddingRight: paneContentToolbarTrailingPadding(isCompact) }),
-    [isCompact],
-  );
+  const headerStyle = useMemo(() => ({ paddingRight: paneContentToolbarTrailingPadding() }), []);
 
   const hiddenFilesToggleAccessibilityLabel = showHiddenFiles
     ? t("workspace.fileExplorer.actions.hideHiddenFiles")
@@ -1119,8 +1115,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
       </div>
     );
   }
-
-  const iconSize = paneContentToolbarIconSize(isCompact);
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <PaneContentToolbar
@@ -1146,7 +1140,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-file"
                 onPress={handleNewFileAtRoot}
               >
-                <FilePlus size={iconSize} className="text-muted-foreground" />
+                <FilePlus className="text-muted-foreground" />
               </ToolbarButton>
               <ToolbarButton
                 label={t("workspace.fileActions.newFolder")}
@@ -1154,7 +1148,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 testID="files-new-folder"
                 onPress={handleNewFolderAtRoot}
               >
-                <FolderPlus size={iconSize} className="text-muted-foreground" />
+                <FolderPlus className="text-muted-foreground" />
               </ToolbarButton>
             </>
           ) : null}
@@ -1166,9 +1160,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
             onPress={handleToggleHiddenFiles}
           >
             {showHiddenFiles ? (
-              <Eye size={iconSize} className="text-muted-foreground" />
+              <Eye className="text-muted-foreground" />
             ) : (
-              <EyeOff size={iconSize} className="text-muted-foreground" />
+              <EyeOff className="text-muted-foreground" />
             )}
           </ToolbarButton>
           <ToolbarButton
@@ -1186,7 +1180,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
               {isRefreshFetching ? (
                 <Spinner className="size-3.5 text-muted-foreground" />
               ) : (
-                <RotateCw size={iconSize} className="text-muted-foreground" />
+                <RotateCw className="text-muted-foreground" />
               )}
             </span>
           </ToolbarButton>

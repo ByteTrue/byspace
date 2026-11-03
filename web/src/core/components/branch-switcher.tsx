@@ -6,7 +6,7 @@ import { Download, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { ToolbarLabelSelectTrigger } from "@/components/ui/toolbar-label-trigger";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher, type BranchSuggestionScope } from "@/hooks/use-branch-switcher";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -121,7 +121,7 @@ export function BranchSwitcher({
 
   return (
     <div ref={anchorRef} className="flex min-w-0 shrink">
-      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+      <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <ToolbarLabelSelectTrigger
             testID={testID}
@@ -147,7 +147,6 @@ export function BranchSwitcher({
         onOpenChange={setIsOpen}
         anchorRef={anchorRef}
         desktopPlacement="bottom-start"
-        desktopPreventInitialFlash
         desktopMinWidth={280}
         renderOption={renderBranchOption}
       />

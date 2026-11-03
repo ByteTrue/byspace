@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 
 export interface AdaptiveRenameModalProps {
@@ -156,9 +156,9 @@ export function AdaptiveRenameModal({
             variant="secondary"
             size="sm"
             className="flex-1"
-            onPress={handleCancel}
+            onClick={handleCancel}
+            data-testid={cancelTestID}
             disabled={isPending}
-            testID={cancelTestID}
           >
             {t("common.actions.cancel")}
           </Button>
@@ -166,9 +166,9 @@ export function AdaptiveRenameModal({
             variant="default"
             size="sm"
             className="flex-1"
-            onPress={handleSubmitVoid}
+            onClick={handleSubmitVoid}
+            data-testid={submitTestID}
             disabled={submitDisabled}
-            testID={submitTestID}
           >
             {isPending ? t("renameModal.saving") : (submitLabel ?? t("renameModal.rename"))}
           </Button>

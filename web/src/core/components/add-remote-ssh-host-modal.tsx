@@ -13,7 +13,7 @@ import { Eye, EyeOff, Terminal } from "lucide-react";
 import { parseSshTransportUri } from "@bytetrue/protocol/ssh-transport";
 import type { HostProfile } from "@/types/host-connection";
 import { useHostMutations, useHosts } from "@/runtime/host-runtime";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { normalizeSshTargetInput } from "@/utils/ssh-target-input";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -211,16 +211,17 @@ export function AddRemoteSshHostModal({
         </div>
       </Field>
       <div className="mt-2 flex flex-row gap-3">
-        <Button className="flex-1" variant="secondary" onPress={handleCancel} disabled={isSaving}>
+        <Button className="flex-1" variant="secondary" onClick={handleCancel} disabled={isSaving}>
           {t("pairing.remoteSsh.actions.cancel")}
         </Button>
         <Button
+          variant="secondary"
           className="flex-1"
-          onPress={handleSubmit}
+          onClick={handleSubmit}
+          data-testid="remote-ssh-submit"
           disabled={isSaving}
-          leftIcon={Terminal}
-          testID="remote-ssh-submit"
         >
+          <Terminal data-icon="inline-start" />
           {isSaving
             ? t("pairing.remoteSsh.actions.connecting")
             : t("pairing.remoteSsh.actions.connect")}

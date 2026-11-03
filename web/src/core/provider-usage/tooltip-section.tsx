@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/tooltip-section.tsx: the active agent's provider
 // usage under the context meter's tooltip; nothing when that provider has no usage entry.
 import { ProviderUsageCard } from "@/provider-usage/card";
+import { OnTooltipSurface } from "@/provider-usage/window-bar";
 import { providerUsageCopy } from "@/provider-usage/copy";
 import type { ProviderUsage, ProviderUsageView } from "@/provider-usage/types";
 
@@ -46,7 +47,9 @@ export function ProviderUsageTooltipSection({
   return (
     <>
       {DIVIDER}
-      <ProviderUsageCard usage={usage} compact />
+      <OnTooltipSurface value={true}>
+        <ProviderUsageCard usage={usage} compact />
+      </OnTooltipSurface>
     </>
   );
 }

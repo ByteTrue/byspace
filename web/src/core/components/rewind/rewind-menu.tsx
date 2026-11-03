@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   type RewindMode,
   useRewindCapabilities,
@@ -76,7 +76,7 @@ export const RewindMenu = memo(function RewindMenu({
   if (items.length === 0) return null;
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
-      <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+      <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             accessibilityLabel={t("rewind.tooltip")}
@@ -87,7 +87,7 @@ export const RewindMenu = memo(function RewindMenu({
             <Undo2 size={16} />
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="top" align="center">
           {t("rewind.tooltip")}
         </TooltipContent>
       </Tooltip>

@@ -8,9 +8,8 @@ import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { ProjectIconSource } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ProjectIconView } from "@/components/project-icon-view";
-import { Button } from "@/components/ui/button";
-import type { FieldControlSize } from "@/components/ui/control-geometry";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { useToast } from "@/contexts/toast-context";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import {
@@ -51,7 +50,6 @@ export function ProjectEditSheet({
   const queryClient = useQueryClient();
   const toast = useToast();
   const { pickFiles } = useFilePicker();
-  const size: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const [form] = useState(() => openProjectEditForm(snapshot));
   const handleImageUrlInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => form.setImageUrl(event.target.value),
@@ -103,17 +101,16 @@ export function ProjectEditSheet({
   const footer = useMemo(
     () => (
       <div className="flex flex-1 flex-row justify-end gap-2">
-        <Button variant="secondary" size="md" onPress={handleClose} disabled={isSaving}>
+        <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
           {t("common.actions.cancel")}
         </Button>
         <Button
           variant="default"
-          size="md"
-          onPress={handleSubmit}
-          disabled={!state.canSubmit}
-          loading={isSaving}
-          testID="project-edit-save"
+          onClick={handleSubmit}
+          data-testid="project-edit-save"
+          disabled={isSaving || !state.canSubmit}
         >
+          {isSaving ? <Spinner data-icon="inline-start" /> : null}
           {t("settings.project.edit.save")}
         </Button>
       </div>
@@ -130,7 +127,6 @@ export function ProjectEditSheet({
       desktopMaxWidth={440}
       // Bound the compact scroller to the live snap height so the footer stays
       // on screen instead of being pushed past the bottom of the sheet.
-      sizeContentToCurrentSnapPoint
       testID="project-edit-sheet"
     >
       <Field data-invalid={Boolean(state.error?.scope === "name" ? state.error.message : null)}>
@@ -162,20 +158,18 @@ export function ProjectEditSheet({
               />
               <Button
                 variant="outline"
-                size={size}
-                onPress={handleChooseImage}
+                onClick={handleChooseImage}
+                data-testid="project-edit-choose-image"
                 disabled={isSaving}
-                testID="project-edit-choose-image"
               >
                 {t("settings.project.edit.chooseImage")}
               </Button>
               {state.canUseAutomatic ? (
                 <Button
                   variant="ghost"
-                  size={size}
-                  onPress={form.useAutomaticIcon}
+                  onClick={form.useAutomaticIcon}
+                  data-testid="project-edit-use-automatic"
                   disabled={isSaving}
-                  testID="project-edit-use-automatic"
                 >
                   {t("settings.project.edit.useAutomatic")}
                 </Button>

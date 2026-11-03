@@ -26,6 +26,15 @@ async function sample(locator: Locator): Promise<Sample> {
 
 async function collectSamples(locator: Locator, options?: SettledOptions): Promise<Sample[]> {
   await expect(locator).toBeVisible({ timeout: options?.timeout ?? 30_000 });
+  // A dialog zooms in as it opens; settledness is measured once its open animation is over.
+  await locator.evaluate((element) =>
+    Promise.all(
+      [element, ...element.querySelectorAll("*")]
+        .concat(element.closest("[data-state]") ?? [])
+        .flatMap((node) => node.getAnimations())
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
 
   const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
   const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;

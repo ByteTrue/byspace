@@ -6,7 +6,7 @@ import { Alert, AlertTitle } from "~/components/ui/alert";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
   enableWebPush,
@@ -126,9 +126,9 @@ function WebPushHostRow(props: { serverId: string; label: string; withBorder: bo
         <Button
           variant="outline"
           size="sm"
-          onPress={handleEnable}
+          onClick={handleEnable}
+          data-testid={`web-push-enable-${props.serverId}`}
           disabled={!isConnected || isBusy}
-          testID={`web-push-enable-${props.serverId}`}
         >
           {isBusy
             ? t("settings.notifications.webPush.enabling")
@@ -139,9 +139,9 @@ function WebPushHostRow(props: { serverId: string; label: string; withBorder: bo
         <Button
           variant="outline"
           size="sm"
-          onPress={handleDisable}
+          onClick={handleDisable}
+          data-testid={`web-push-disable-${props.serverId}`}
           disabled={isBusy}
-          testID={`web-push-disable-${props.serverId}`}
         >
           {isBusy
             ? t("settings.notifications.webPush.disabling")

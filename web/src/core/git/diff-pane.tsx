@@ -62,7 +62,7 @@ import {
 import * as Clipboard from "~/lib/clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import type { GitActions } from "@/git/policy";
 import { BranchSwitcher } from "@/components/branch-switcher";
@@ -77,10 +77,9 @@ import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "cn";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   PaneContentToolbar,
-  paneContentToolbarIconSize,
   paneContentToolbarTrailingPadding,
   ToolbarButton,
   ToolbarControls,
@@ -227,13 +226,12 @@ export function DiffLayoutToggle({
     layout === "unified"
       ? t("workspace.git.diff.switchToSplit")
       : t("workspace.git.diff.switchToUnified");
-  const iconSize = isMobile ? 18 : 14;
   return (
     <ToolbarButton label={label} compact={isMobile} testID={testID} onPress={onToggle}>
       {layout === "unified" ? (
-        <Columns2 size={iconSize} className="text-muted-foreground" />
+        <Columns2 className="text-muted-foreground" />
       ) : (
-        <AlignJustify size={iconSize} className="text-muted-foreground" />
+        <AlignJustify className="text-muted-foreground" />
       )}
     </ToolbarButton>
   );
@@ -518,7 +516,7 @@ function ChangesDiffOnlyToolbar({
   sidebarSurface: boolean;
 }) {
   return (
-    <ChangesToolbarRow compact={compact} sidebarSurface={sidebarSurface} testID="changes-header">
+    <ChangesToolbarRow sidebarSurface={sidebarSurface} testID="changes-header">
       <ChangesToolbarLeading />
       <ChangesToolbarTrailing>
         <ChangesToolbarActions mode={mode} compact={compact} />
@@ -529,19 +527,14 @@ function ChangesDiffOnlyToolbar({
 
 function ChangesToolbarRow({
   children,
-  compact,
   sidebarSurface,
   testID,
 }: {
   children: ReactNode;
-  compact: boolean;
   sidebarSurface: boolean;
   testID: string;
 }) {
-  const toolbarStyle = useMemo(
-    () => ({ paddingRight: paneContentToolbarTrailingPadding(compact) }),
-    [compact],
-  );
+  const toolbarStyle = useMemo(() => ({ paddingRight: paneContentToolbarTrailingPadding() }), []);
   return (
     <PaneContentToolbar
       className={cn("flex items-center gap-2 pl-2", sidebarSurface && "bg-sidebar")}
@@ -573,11 +566,7 @@ function ChangesRepositoryToolbar({
   sidebarSurface: boolean;
 }) {
   return (
-    <ChangesToolbarRow
-      compact={compact}
-      sidebarSurface={sidebarSurface}
-      testID="changes-repository-header"
-    >
+    <ChangesToolbarRow sidebarSurface={sidebarSurface} testID="changes-repository-header">
       <ChangesToolbarLeading>
         <BranchSwitcher
           currentBranchName={model.branchName}
@@ -606,11 +595,11 @@ function ChangesPullRequestLink({ model }: { model: ChangesPullRequestLinkModel 
   const presentation = getForgePresentation(model.forge);
   const label = `${presentation.numberPrefix}${model.number}`;
   return (
-    <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={300}>
       <TooltipTrigger
-        testID="changes-open-pull-request"
-        accessibilityLabel={`${t("panels.pullRequest.label")} ${label}`}
-        onPress={model.onOpen}
+        data-testid="changes-open-pull-request"
+        aria-label={`${t("panels.pullRequest.label")} ${label}`}
+        onClick={model.onOpen}
         className={TOOLBAR_LABEL_TRIGGER_CLASS}
       >
         <ToolbarLabelTriggerIcon>
@@ -643,11 +632,7 @@ function ChangesPullRequestExternalLink({
       onPress={handlePress}
       testID="changes-open-pull-request-external"
     >
-      <ExternalLink
-        size={paneContentToolbarIconSize(compact)}
-        strokeWidth={1.5}
-        className={EXTRA_MUTED_ICON}
-      />
+      <ExternalLink strokeWidth={1.5} className={EXTRA_MUTED_ICON} />
     </ToolbarButton>
   );
 }
@@ -662,7 +647,7 @@ function ChangesComparisonToolbar({
   sidebarSurface: boolean;
 }) {
   return (
-    <ChangesToolbarRow compact={compact} sidebarSurface={sidebarSurface} testID="changes-header">
+    <ChangesToolbarRow sidebarSurface={sidebarSurface} testID="changes-header">
       <ChangesToolbarLeading>
         <DiffModeMenu
           diffMode={model.diffMode}
@@ -725,7 +710,6 @@ function ChangesDiffToolbar({
   compact: boolean;
 }) {
   const { t } = useTranslation();
-  const iconSize = paneContentToolbarIconSize(compact);
   const collapseLabel = t(
     options.collapse?.allFilesCollapsed
       ? "workspace.git.diff.expandAllFiles"
@@ -755,9 +739,9 @@ function ChangesDiffToolbar({
           }
         >
           {options.collapse.allFilesCollapsed ? (
-            <ListChevronsUpDown size={iconSize} className={EXTRA_MUTED_ICON} />
+            <ListChevronsUpDown className={EXTRA_MUTED_ICON} />
           ) : (
-            <ListChevronsDownUp size={iconSize} className={EXTRA_MUTED_ICON} />
+            <ListChevronsDownUp className={EXTRA_MUTED_ICON} />
           )}
         </ToolbarButton>
       ) : null}
@@ -769,7 +753,7 @@ function ChangesDiffToolbar({
           testID="changes-toggle-layout"
           onPress={options.layout.onToggle}
         >
-          <Columns2 size={iconSize} className={EXTRA_MUTED_ICON} />
+          <Columns2 className={EXTRA_MUTED_ICON} />
         </ToolbarButton>
       ) : null}
       <ToolbarButton
@@ -779,7 +763,7 @@ function ChangesDiffToolbar({
         testID="changes-toggle-whitespace"
         onPress={options.onToggleHideWhitespace}
       >
-        <Pilcrow size={iconSize} className={EXTRA_MUTED_ICON} />
+        <Pilcrow className={EXTRA_MUTED_ICON} />
       </ToolbarButton>
       <ToolbarButton
         compact={compact}
@@ -788,7 +772,7 @@ function ChangesDiffToolbar({
         testID="changes-toggle-wrap-lines"
         onPress={options.onToggleWrapLines}
       >
-        <WrapText size={iconSize} className={EXTRA_MUTED_ICON} />
+        <WrapText className={EXTRA_MUTED_ICON} />
       </ToolbarButton>
     </>
   );
@@ -816,7 +800,7 @@ function ChangesRefreshButton({
       {refresh.isRefreshing ? (
         <Spinner className={EXTRA_MUTED_ICON} />
       ) : (
-        <RotateCw size={paneContentToolbarIconSize(compact)} className={EXTRA_MUTED_ICON} />
+        <RotateCw className={EXTRA_MUTED_ICON} />
       )}
     </ToolbarButton>
   );
@@ -850,7 +834,7 @@ function ChangesOptionsMenu({ mode, compact }: { mode: ChangesOptionsMenuMode; c
         compact={compact}
         testID="changes-options-menu"
       >
-        <MoreHorizontal size={paneContentToolbarIconSize(compact)} className={EXTRA_MUTED_ICON} />
+        <MoreHorizontal className={EXTRA_MUTED_ICON} />
       </ToolbarButton>
       <DropdownMenuContent align="end" width={240} testID="changes-options-menu-content">
         {content}
@@ -1044,8 +1028,8 @@ function DiffBodyContent({
           <Button
             variant="ghost"
             size="xs"
-            testID="changes-empty-switch-mode"
-            onPress={emptyAction.onPress}
+            data-testid="changes-empty-switch-mode"
+            onClick={emptyAction.onPress}
           >
             {emptyAction.label}
           </Button>

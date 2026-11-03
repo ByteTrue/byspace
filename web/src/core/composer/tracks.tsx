@@ -65,7 +65,7 @@ export function ComposerTrackPill({
   children,
 }: ComposerTrackPillProps): ReactElement {
   return (
-    <MenuRoot compactMode="sheet">
+    <MenuRoot>
       <ComposerTrackPillTrigger
         segments={segments}
         testID={testID}

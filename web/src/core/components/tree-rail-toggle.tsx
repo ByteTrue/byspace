@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { FolderTree } from "lucide-react";
-import { paneContentToolbarIconSize, ToolbarButton } from "@/components/ui/pane-content-toolbar";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { extraMutedIconColorMapping } from "@/components/ui/icon-color";
 import { withTheme } from "~/app/theme-object";
 
 const ThemedFolderTree = withTheme(FolderTree);
@@ -29,10 +29,7 @@ export function TreeRailToggle({
       testID={testID}
       onPress={onToggle}
     >
-      <ThemedFolderTree
-        size={paneContentToolbarIconSize(false)}
-        themeProps={extraMutedIconColorMapping}
-      />
+      <ThemedFolderTree themeProps={extraMutedIconColorMapping} />
     </ToolbarButton>
   );
 }

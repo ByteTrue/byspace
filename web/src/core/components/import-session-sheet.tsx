@@ -18,7 +18,7 @@ import type {
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import {
@@ -58,7 +58,6 @@ import {
 import { Input } from "~/components/ui/input";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 
-const IMPORT_SHEET_SNAP_POINTS = ["70%", "92%"];
 /** Long enough that a typed word is one request, short enough to feel live. */
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -278,8 +277,8 @@ function ProviderErrorBannerRow({
       <Button
         variant="ghost"
         size="xs"
-        onPress={handleRetry}
-        testID={`import-session-retry-${row.provider}`}
+        onClick={handleRetry}
+        data-testid={`import-session-retry-${row.provider}`}
       >
         {t("common.actions.retry")}
       </Button>
@@ -329,8 +328,8 @@ function ScopeSubtitle({
         <Button
           variant="ghost"
           size="xs"
-          onPress={onShowAll}
-          testID="import-session-show-all"
+          onClick={onShowAll}
+          data-testid="import-session-show-all"
           className="-mx-2"
         >
           {t("importSession.actions.showAll")}
@@ -499,12 +498,11 @@ function ManualImportForm({
       </Field>
       <Button
         variant="default"
-        size={controlSize}
+        onClick={onSubmit}
+        data-testid="import-session-manual-submit"
         disabled={isPending}
-        loading={isPending}
-        onPress={onSubmit}
-        testID="import-session-manual-submit"
       >
+        {isPending ? <Spinner data-icon="inline-start" /> : null}
         {isPending ? t("importSession.row.importing") : t("importSession.title")}
       </Button>
     </div>
@@ -990,7 +988,6 @@ export function ImportSessionSheet({
       header={header}
       testID="import-session-sheet"
       desktopMaxWidth={560}
-      snapPoints={IMPORT_SHEET_SNAP_POINTS}
     >
       <ManualImportForm
         show={showManualImport}
@@ -1032,7 +1029,6 @@ export function ImportSessionSheet({
             onOpenChange={setIsFilterOpen}
             anchorRef={filterAnchorRef}
             desktopPlacement="bottom-start"
-            desktopPreventInitialFlash
           />
         </div>
       ) : null}
@@ -1061,9 +1057,9 @@ export function ImportSessionSheet({
         <div className="flex flex-col items-center pt-2">
           <Button
             variant="ghost"
-            onPress={handleLoadMore}
+            onClick={handleLoadMore}
+            data-testid="import-session-load-more"
             disabled={isRefreshing}
-            testID="import-session-load-more"
           >
             {t("importSession.actions.loadMore")}
           </Button>

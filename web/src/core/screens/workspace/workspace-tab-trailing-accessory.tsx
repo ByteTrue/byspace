@@ -68,7 +68,7 @@ export function MobileTabTrailingAccessory({
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    <DropdownMenu compactMode="sheet">
+    <DropdownMenu>
       <DropdownMenuTrigger
         testID={`${menuTestIDBase}-trigger`}
         accessibilityLabel={t("workspace.tabs.menu.openFor", { label: presentationLabel })}

@@ -18,7 +18,6 @@ import type { ProviderSelectorProvider } from "@/provider-selection/provider-sel
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { cn } from "cn";
 
-const SNAP_POINTS = ["80%", "90%"];
 const MODEL_LIST_TOP_INSET = 4;
 const MODEL_ROW_STRIDE = 44;
 const MODEL_VIEWPORT_VISIBLE_ROWS = 4.5;
@@ -256,7 +255,6 @@ export function CompactModelSheet({
         header={rootHeader}
         visible={isOpen}
         onClose={close}
-        snapPoints={SNAP_POINTS}
         scrollable={false}
         contentClassName="gap-0 p-0"
         testID="agent-controls-model-sheet"
@@ -301,9 +299,7 @@ export function CompactModelSheet({
           header={modelBrowser.header}
           visible={isModelBrowserOpen}
           onClose={closeModelBrowser}
-          snapPoints={SNAP_POINTS}
           scrollable={false}
-          presentation="push"
           contentClassName="gap-0 p-0"
           testID="agent-controls-model-browser-sheet"
         >

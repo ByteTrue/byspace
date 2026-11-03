@@ -6,7 +6,7 @@ import type { AgentControlIcon } from "@/agent-controls/icons";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 
@@ -33,7 +33,6 @@ export interface ComposerOptionControlProps {
   title?: string;
   desktopMinWidth?: number;
   renderOption?: ComboboxProps["renderOption"];
-  presentation?: ComboboxProps["presentation"];
   /** Controlled open. Omit both `open` and `onOpenChange` to self-manage. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -62,7 +61,6 @@ export function ComposerOptionControl({
   title,
   desktopMinWidth,
   renderOption,
-  presentation,
   open: controlledOpen,
   onOpenChange,
   onClose,
@@ -117,9 +115,9 @@ export function ComposerOptionControl({
   return (
     <>
       {hint ? (
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
+          <TooltipContent side="top" align="center">
             <span className="flex items-center gap-2">
               <span>{hint}</span>
               {hintShortcut ? <Shortcut chord={hintShortcut} /> : null}
@@ -142,7 +140,6 @@ export function ComposerOptionControl({
         desktopPlacement="top-start"
         desktopMinWidth={desktopMinWidth}
         renderOption={renderOption}
-        presentation={presentation}
       />
     </>
   );

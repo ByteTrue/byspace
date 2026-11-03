@@ -18,10 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  iconButtonChromeClassName,
-  iconButtonChromeGlyphSize,
-} from "@/components/ui/icon-button-chrome";
+import { buttonVariants } from "~/components/ui/button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
@@ -102,9 +99,9 @@ function HeaderMenuTrigger() {
     <DropdownMenuTrigger
       testID="workspace-header-menu-trigger"
       accessibilityLabel={t("workspace.header.actions.workspaceActions")}
-      className={iconButtonChromeClassName({ size: "large" })}
+      className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
     >
-      <Ellipsis size={iconButtonChromeGlyphSize("large")} className="text-muted-foreground" />
+      <Ellipsis className="text-muted-foreground" />
     </DropdownMenuTrigger>
   );
 }
@@ -170,7 +167,7 @@ export function WorkspaceHeaderMenuMobile({
     router.push(buildSettingsHostSectionRoute(normalizedServerId, "agents"));
   }, [normalizedServerId]);
   return (
-    <DropdownMenu compactMode="sheet">
+    <DropdownMenu>
       <HeaderMenuTrigger />
       <DropdownMenuContent
         align="start"

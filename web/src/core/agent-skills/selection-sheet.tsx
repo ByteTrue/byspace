@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Check } from "lucide-react";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
@@ -173,16 +174,16 @@ export function SkillSelectionSheet({
   const footer = useMemo(
     () => (
       <div className="flex flex-1 flex-row justify-end gap-2">
-        <Button variant="secondary" onPress={handleDismiss} disabled={isSaving}>
+        <Button variant="secondary" onClick={handleDismiss} disabled={isSaving}>
           {t("common.actions.cancel")}
         </Button>
         <Button
           variant="default"
-          onPress={handleSave}
-          loading={isSaving}
-          disabled={noTargets}
-          testID="skill-selection-save"
+          onClick={handleSave}
+          data-testid="skill-selection-save"
+          disabled={isSaving || noTargets}
         >
+          {isSaving ? <Spinner data-icon="inline-start" /> : null}
           {isSaving ? t("settings.host.skills.actions.saving") : confirmLabel}
         </Button>
       </div>

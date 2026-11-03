@@ -10,8 +10,6 @@ export interface PairDeviceModalProps {
   testID?: string;
 }
 
-const SNAP_POINTS: string[] = ["72%", "92%"];
-
 export function PairDeviceModal({ serverId, visible, onClose, testID }: PairDeviceModalProps) {
   const { t } = useTranslation();
   const header = useMemo<SheetHeader>(
@@ -24,7 +22,6 @@ export function PairDeviceModal({ serverId, visible, onClose, testID }: PairDevi
       header={header}
       visible={visible}
       onClose={onClose}
-      snapPoints={SNAP_POINTS}
       desktopMaxWidth={480}
       testID={testID}
     >

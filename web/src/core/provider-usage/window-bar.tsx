@@ -1,7 +1,6 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/window-bar.tsx: a usage window's label, percent and
 // reset (or run-out) time over a 4px bar in its tone.
-import { useContext, useMemo } from "react";
-import { TooltipSurfaceContext } from "@/components/ui/tooltip";
+import { createContext, useContext, useMemo } from "react";
 import { clampPct, formatPct, formatResetLabel } from "@/provider-usage/format";
 import { deriveTone } from "@/provider-usage/tone";
 import type { ProviderUsageTone, ProviderUsageWindow } from "@/provider-usage/types";
@@ -14,9 +13,12 @@ export const FILL_TONE: Record<ProviderUsageTone, string> = {
   danger: "bg-status-danger",
 };
 
+/** True inside a tooltip, whose surface is the inverted foreground. */
+export const OnTooltipSurface = createContext(false);
+
 /** Text colours on a page, and on the inverted tooltip surface. */
 export function useUsageTextTones() {
-  const onTooltip = useContext(TooltipSurfaceContext);
+  const onTooltip = useContext(OnTooltipSurface);
   return onTooltip
     ? { strong: "text-background", muted: "text-background/65", track: "bg-background/20" }
     : { strong: "text-foreground", muted: "text-muted-foreground", track: "bg-accent" };

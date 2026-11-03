@@ -6,6 +6,7 @@ import * as Clipboard from "~/lib/clipboard";
 import * as QRCode from "qrcode";
 import { useMutation } from "@tanstack/react-query";
 import {
+  ArrowUpRight,
   Check,
   CircleAlert,
   Copy,
@@ -15,8 +16,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { ExternalLink } from "@/components/ui/external-link";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useFetchQuery } from "@/data/query";
 import { daemonPairingOfferQueryKey } from "@/data/daemon-pairing";
@@ -185,7 +185,8 @@ function OfferLoadError({ message, onRetry }: { message: string; onRetry: () => 
       <CircleAlert />
       <AlertDescription>{message}</AlertDescription>
       <AlertAction>
-        <Button variant="outline" size="sm" leftIcon={RotateCw} onPress={onRetry}>
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          <RotateCw data-icon="inline-start" />
           {t("pairing.device.retry")}
         </Button>
       </AlertAction>
@@ -211,11 +212,17 @@ function RelayConsent(props: PairDeviceBodyProps) {
         <span className="text-sm leading-[21px] text-muted-foreground">
           {t("pairing.device.enableDescription")}
         </span>
-        <ExternalLink
-          href={RELAY_DOCS_URL}
-          label={t("pairing.device.relayDocs")}
-          accessibilityLabel={t("pairing.device.relayDocsAccessibility")}
-        />
+        <Button variant="link" size="sm" asChild>
+          <a
+            href={RELAY_DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t("pairing.device.relayDocsAccessibility")}
+          >
+            {t("pairing.device.relayDocs")}
+            <ArrowUpRight data-icon="inline-end" />
+          </a>
+        </Button>
       </div>
       {props.enableError ? (
         <Alert variant="destructive">
@@ -230,16 +237,17 @@ function RelayConsent(props: PairDeviceBodyProps) {
         </Alert>
       ) : null}
       <div className="flex flex-row gap-3">
-        <Button variant="secondary" className="flex-1" onPress={props.onClose}>
+        <Button variant="secondary" className="flex-1" onClick={props.onClose}>
           {t("pairing.device.notNow")}
         </Button>
         {props.canConfigureRelay ? (
           <Button
             variant="default"
             className="flex-1"
-            loading={props.enablePending}
-            onPress={props.onEnableRelay}
+            onClick={props.onEnableRelay}
+            disabled={props.enablePending}
           >
+            {props.enablePending ? <Spinner data-icon="inline-start" /> : null}
             {enableButtonLabel}
           </Button>
         ) : null}
@@ -282,12 +290,8 @@ function PairingOffer(props: PairDeviceBodyProps & { offer: { url: string } }) {
             aria-label={t("pairing.link.label")}
           />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={props.copied ? Check : Copy}
-          onPress={props.onCopy}
-        >
+        <Button variant="outline" size="sm" onClick={props.onCopy}>
+          {props.copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
           {props.copied ? t("pairing.device.copied") : t("pairing.device.copy")}
         </Button>
       </div>

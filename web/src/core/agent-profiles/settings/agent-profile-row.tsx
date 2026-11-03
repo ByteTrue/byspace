@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, FileText, Pencil, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { AgentProfileGlyph } from "@/agent-profiles/internal/agent-profile-glyph";
@@ -105,37 +105,41 @@ export function AgentProfileRow({
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={moveUpIcon}
-          onPress={handleMoveUp}
+          onClick={handleMoveUp}
+          aria-label={t("settings.host.agentProfiles.moveUp")}
+          data-testid={`agent-profile-move-up-${profile.id}`}
           disabled={isFirst}
-          accessibilityLabel={t("settings.host.agentProfiles.moveUp")}
-          testID={`agent-profile-move-up-${profile.id}`}
-        />
+        >
+          {moveUpIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={moveDownIcon}
-          onPress={handleMoveDown}
+          onClick={handleMoveDown}
+          aria-label={t("settings.host.agentProfiles.moveDown")}
+          data-testid={`agent-profile-move-down-${profile.id}`}
           disabled={isLast}
-          accessibilityLabel={t("settings.host.agentProfiles.moveDown")}
-          testID={`agent-profile-move-down-${profile.id}`}
-        />
+        >
+          {moveDownIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={editIcon}
-          onPress={handleEdit}
-          accessibilityLabel={t("settings.host.agentProfiles.editProfile")}
-          testID={`agent-profile-edit-${profile.id}`}
-        />
+          onClick={handleEdit}
+          aria-label={t("settings.host.agentProfiles.editProfile")}
+          data-testid={`agent-profile-edit-${profile.id}`}
+        >
+          {editIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={removeIcon}
-          onPress={handleRemove}
-          accessibilityLabel={t("settings.host.agentProfiles.remove")}
-          testID={`agent-profile-remove-${profile.id}`}
-        />
+          onClick={handleRemove}
+          aria-label={t("settings.host.agentProfiles.remove")}
+          data-testid={`agent-profile-remove-${profile.id}`}
+        >
+          {removeIcon}
+        </Button>
       </div>
     </div>
   );

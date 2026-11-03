@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, PackagePlus, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import {
   useAcpProviderCatalog,
   type AcpProviderCatalogItem,
@@ -107,12 +108,12 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
       <Button
         size="sm"
         variant="default"
-        disabled={installing}
-        loading={installing}
-        onPress={handleInstall}
+        onClick={handleInstall}
         className="w-[92px] shrink-0"
-        testID={`install-provider-${entry.id}`}
+        data-testid={`install-provider-${entry.id}`}
+        disabled={installing}
       >
+        {installing ? <Spinner data-icon="inline-start" /> : null}
         {actionLabel}
       </Button>
     </div>

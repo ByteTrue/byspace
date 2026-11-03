@@ -57,6 +57,7 @@ async function openWorkspaceReadAction(
 ) {
   const workspaceKey = `${getServerId()}:${workspaceId}`;
   const row = await waitForSidebarWorkspace(page, workspaceId);
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await row.hover();
   await page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`).click();
   const item = page.getByTestId(`sidebar-workspace-menu-mark-as-${action}-${workspaceKey}`);

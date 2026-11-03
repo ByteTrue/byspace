@@ -1,19 +1,18 @@
-// Port of archive/expo-app:packages/app/src/components/ui/pane-content-toolbar.tsx: the 36px bar on top of a
-// pane and its 20px icon buttons, each with a tooltip naming it and its shortcut.
+// The 36px bar on top of a pane and its icon buttons: shadcn ghost icon Buttons, each with a
+// shadcn Tooltip naming it and its shortcut.
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  iconButtonChromeClassName,
-  iconButtonChromeGlyphSize,
-  smallIconButtonChromeFrameSize,
-} from "@/components/ui/icon-button-chrome";
+import { Button, buttonVariants } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { cn } from "cn";
 
-// archive/expo-app:packages/app/src/components/tree-primitives.tsx: the right rail trailing glyphs line up on.
+// The right rail trailing glyphs line up on (tree-primitives), and shadcn's icon-xs button: a 24px
+// frame around a 12px glyph.
 const WORKSPACE_PANE_TRAILING_GLYPH_RAIL = 8;
+const ICON_BUTTON_FRAME = 24;
+const ICON_BUTTON_GLYPH = 12;
 
 export function PaneContentToolbar({
   children,
@@ -58,16 +57,15 @@ type ToolbarButtonProps = {
   shortcut?: ShortcutKey[][] | null;
   tooltipSide?: "left" | "right" | "top" | "bottom";
   className?: string;
-  style?: unknown;
   disabled?: boolean;
   testID?: string;
+  "aria-selected"?: boolean;
 } & ({ kind?: "action"; onPress: () => void } | { kind: "menu"; onPress?: never });
 
 export function ToolbarButton({
   children,
   label,
   selected = false,
-  compact = false,
   shortcut,
   tooltipSide = "bottom",
   className,
@@ -75,64 +73,57 @@ export function ToolbarButton({
   onPress,
   disabled,
   testID,
+  "aria-selected": ariaSelected,
 }: ToolbarButtonProps) {
-  const buttonClassName = iconButtonChromeClassName({
-    size: "small",
-    compact,
-    active: selected,
-    disabled,
-    className,
-  });
-  const tooltip = (
-    <TooltipContent side={tooltipSide} offset={8}>
-      <span className="flex items-center gap-2">
-        {label}
-        {shortcut ? <Shortcut chord={shortcut} /> : null}
-      </span>
-    </TooltipContent>
-  );
+  const variant = selected ? "secondary" : "ghost";
   if (kind === "menu") {
+    // The menu engine's trigger renders its own button; it takes shadcn's button classes.
     return (
-      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+      <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             disabled={disabled}
             testID={testID}
             accessibilityLabel={label}
             aria-pressed={selected || undefined}
-            className={buttonClassName}
+            className={cn(buttonVariants({ variant, size: "icon-xs" }), className)}
           >
             {children}
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        {tooltip}
+        <TooltipContent side={tooltipSide}>
+          {label}
+          {shortcut ? <Shortcut chord={shortcut} /> : null}
+        </TooltipContent>
       </Tooltip>
     );
   }
+  const button = (
+    <Button
+      variant={variant}
+      size="icon-xs"
+      disabled={disabled}
+      data-testid={testID}
+      aria-label={label}
+      aria-pressed={selected || undefined}
+      aria-selected={ariaSelected}
+      onClick={onPress}
+      className={className}
+    >
+      {children}
+    </Button>
+  );
   return (
-    <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        disabled={disabled}
-        testID={testID}
-        accessibilityLabel={label}
-        aria-pressed={selected || undefined}
-        onPress={onPress}
-        className={buttonClassName}
-      >
-        {children}
-      </TooltipTrigger>
-      {tooltip}
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side={tooltipSide}>
+        {label}
+        {shortcut ? <Shortcut chord={shortcut} /> : null}
+      </TooltipContent>
     </Tooltip>
   );
 }
 
-export function paneContentToolbarIconSize(isCompact: boolean): number {
-  return iconButtonChromeGlyphSize("small", isCompact);
-}
-
-export function paneContentToolbarTrailingPadding(isCompact: boolean): number {
-  const buttonSize = smallIconButtonChromeFrameSize(isCompact);
-  return (
-    WORKSPACE_PANE_TRAILING_GLYPH_RAIL - (buttonSize - paneContentToolbarIconSize(isCompact)) / 2
-  );
+export function paneContentToolbarTrailingPadding(): number {
+  return WORKSPACE_PANE_TRAILING_GLYPH_RAIL - (ICON_BUTTON_FRAME - ICON_BUTTON_GLYPH) / 2;
 }

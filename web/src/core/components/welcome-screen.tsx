@@ -12,7 +12,7 @@ import { AddHostModal } from "@/components/add-host-modal";
 import { AddRemoteSshHostModal } from "@/components/add-remote-ssh-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { SetupGuideModal } from "@/components/setup-guide-modal";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/utils/format-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
@@ -172,11 +172,11 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
             <Button
               variant="ghost"
               size="sm"
-              leftIcon={Settings}
-              onPress={handleOpenSettings}
+              onClick={handleOpenSettings}
               className="mt-6 self-center"
-              testID="welcome-open-settings"
+              data-testid="welcome-open-settings"
             >
+              <Settings data-icon="inline-start" />
               {t("onboarding.actions.settings")}
             </Button>
           </div>

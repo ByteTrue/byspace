@@ -2,7 +2,8 @@
 // the file changed or vanished on disk while it was being edited.
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { ICON_SIZE } from "@/styles/theme";
 
 export type FileConflictAlertState =
@@ -33,17 +34,18 @@ export function FileConflictAlert({ state }: { state: FileConflictAlertState }) 
       {state.kind !== "deleted" ? (
         <div className="ml-auto flex shrink-0 gap-2">
           {state.kind === "changed" && state.canOverwrite ? (
-            <Button variant="outline" size="sm" onPress={state.onOverwrite}>
+            <Button variant="outline" size="sm" onClick={state.onOverwrite}>
               {t("panels.file.editor.overwrite")}
             </Button>
           ) : null}
           {state.kind === "changed" ? (
-            <Button variant="outline" size="sm" onPress={state.onReload}>
+            <Button variant="outline" size="sm" onClick={state.onReload}>
               {t("panels.file.editor.reload")}
             </Button>
           ) : null}
           {state.kind === "checkFailed" ? (
-            <Button variant="outline" size="sm" onPress={state.onRetry} loading={state.retrying}>
+            <Button variant="outline" size="sm" onClick={state.onRetry} disabled={state.retrying}>
+              {state.retrying ? <Spinner data-icon="inline-start" /> : null}
               {t("common.actions.retry")}
             </Button>
           ) : null}

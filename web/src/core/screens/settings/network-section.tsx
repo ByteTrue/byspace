@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
@@ -213,9 +213,9 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           <Button
             variant="outline"
             size="sm"
-            onPress={handleOpenSheet}
+            onClick={handleOpenSheet}
+            data-testid="host-page-network-password-edit"
             disabled={isBusy}
-            testID="host-page-network-password-edit"
           >
             {t("settings.host.daemon.network.password.edit")}
           </Button>
@@ -353,9 +353,9 @@ function PasswordSheet({
             variant="ghost"
             size="sm"
             className="text-destructive"
-            onPress={handleClear}
+            onClick={handleClear}
+            data-testid="host-page-network-password-clear"
             disabled={isBusy}
-            testID="host-page-network-password-clear"
           >
             {t("settings.host.daemon.network.password.clear")}
           </Button>
@@ -363,9 +363,9 @@ function PasswordSheet({
         <Button
           variant="default"
           size="sm"
-          onPress={handleSave}
+          onClick={handleSave}
+          data-testid="host-page-network-password-save"
           disabled={!canSave || isBusy}
-          testID="host-page-network-password-save"
         >
           {t("settings.host.daemon.network.password.save")}
         </Button>

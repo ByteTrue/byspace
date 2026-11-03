@@ -15,7 +15,7 @@ import { cn } from "cn";
 import type { AgentFeature } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { type FieldControlSize } from "@/components/ui/control-geometry";
 import {
   SelectField,
@@ -392,18 +392,18 @@ function OpenAgentProfileEditModal({
           <Button
             variant="secondary"
             className="flex-1"
-            onPress={handleCancel}
+            onClick={handleCancel}
+            data-testid="agent-profile-cancel-button"
             disabled={state.isSubmitting}
-            testID="agent-profile-cancel-button"
           >
             {t("common.actions.cancel")}
           </Button>
           <Button
             variant="default"
             className="flex-1"
-            onPress={handleSavePress}
+            onClick={handleSavePress}
+            data-testid="agent-profile-save-button"
             disabled={!state.canSubmit}
-            testID="agent-profile-save-button"
           >
             {state.isSubmitting
               ? t("settings.host.agentProfiles.saving")

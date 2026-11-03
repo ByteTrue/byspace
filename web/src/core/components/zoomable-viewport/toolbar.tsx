@@ -3,11 +3,7 @@
 import { memo } from "react";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  iconButtonChromeClassName,
-  iconButtonChromeGlyphSize,
-} from "@/components/ui/icon-button-chrome";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { Button } from "~/components/ui/button";
 import { cn } from "cn";
 import type { ZoomableViewportAction } from "@/components/zoomable-viewport";
 
@@ -35,8 +31,6 @@ export const ViewportToolbar = memo(function ViewportToolbar({
   visible: boolean;
 }) {
   const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
-  const iconSize = iconButtonChromeGlyphSize("small", isCompact);
   const viewportActions: ResolvedViewportAction[] = [
     {
       icon: ZoomIn,
@@ -61,27 +55,18 @@ export const ViewportToolbar = memo(function ViewportToolbar({
       {viewportActions.map((action) => {
         const Icon = action.icon;
         return (
-          <button
+          <Button
             key={action.label}
-            type="button"
+            variant="secondary"
+            size="icon-xs"
             aria-label={action.label}
             disabled={action.disabled}
             onClick={action.onPress}
             data-testid={action.testID}
-            className={iconButtonChromeClassName({
-              size: "small",
-              compact: isCompact,
-              disabled: action.disabled,
-              // Shown, a disabled button keeps the chrome's dimmed look.
-              className: cn(
-                "bg-muted",
-                !visible && "opacity-0",
-                visible && !action.disabled && "pointer-events-auto opacity-100",
-              ),
-            })}
+            className={cn(!visible && "opacity-0", visible && "pointer-events-auto")}
           >
-            <Icon size={iconSize} />
-          </button>
+            <Icon />
+          </Button>
         );
       })}
     </div>

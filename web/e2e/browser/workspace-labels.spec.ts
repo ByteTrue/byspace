@@ -116,6 +116,7 @@ async function openWorkspaceLabels(page: import("@playwright/test").Page, worksp
   const serverId = getServerId();
   const row = page.getByTestId(`sidebar-workspace-row-${serverId}:${workspaceId}`).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await row.hover();
   await page.getByTestId(`sidebar-workspace-kebab-${serverId}:${workspaceId}`).first().click();
   await page.getByTestId(`sidebar-workspace-menu-labels-${serverId}:${workspaceId}`).click();
@@ -231,6 +232,7 @@ test.describe("Workspace labels", () => {
         const unlabelledRow = page.getByTestId(
           `sidebar-workspace-row-${getServerId()}:${unlabelled.workspaceId}`,
         );
+        await expect(page.getByRole("menu")).toHaveCount(0);
         await page.getByTestId("sidebar-display-preferences-menu").click();
         await page.getByTestId("sidebar-display-label-filter").click();
 
@@ -278,6 +280,7 @@ test.describe("Workspace labels", () => {
       });
 
       await test.step("editing a label is one operation and preserves its assignments", async () => {
+        await expect(page.getByRole("menu")).toHaveCount(0);
         await page.getByTestId("sidebar-display-preferences-menu").click();
         await page.getByTestId("sidebar-display-label-filter").click();
         await page.getByTestId("sidebar-label-manage").click();

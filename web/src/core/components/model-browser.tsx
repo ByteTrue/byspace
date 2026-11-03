@@ -24,8 +24,8 @@ import {
   type AgentProfileSeed,
 } from "@/agent-profiles";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -91,7 +91,7 @@ function ProviderSettingsAction({
 function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
   return (
-    <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -103,7 +103,7 @@ function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
           <Pencil size={ICON_SIZE.xs} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {t("modelSelector.editProfilesLabel")}
       </TooltipContent>
     </Tooltip>
@@ -481,7 +481,7 @@ function ModelRowProfileAction({
     [onPress],
   );
   return (
-    <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
         <span
           role="button"
@@ -495,7 +495,7 @@ function ModelRowProfileAction({
           {children}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {label}
       </TooltipContent>
     </Tooltip>
@@ -995,7 +995,7 @@ function ProviderErrorEmptyState({
     <EmptyState icon={ALERT_ICON}>
       <span className="text-sm">{message}</span>
       {onRetryProvider ? (
-        <Button variant="default" size="sm" onPress={handleRetry} disabled={isRetryingProvider}>
+        <Button variant="default" size="sm" onClick={handleRetry} disabled={isRetryingProvider}>
           {isRetryingProvider ? t("modelSelector.retrying") : t("modelSelector.retry")}
         </Button>
       ) : null}

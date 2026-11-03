@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -294,7 +294,8 @@ function CountBadge({ count }: { count: number }) {
 function AddToChatFooter({ onPress }: { onPress: () => void }) {
   return (
     <div className="flex pr-2 pb-2">
-      <Button variant="ghost" size="xs" leftIcon={MessageSquarePlus} onPress={onPress}>
+      <Button variant="ghost" size="xs" onClick={onPress}>
+        <MessageSquarePlus data-icon="inline-start" />
         Add to chat
       </Button>
     </div>
@@ -435,13 +436,8 @@ function ReviewCard({
       <PressableRow onPress={handleHeaderPress} className={ROW_HEADER}>
         <ActivityHeader activity={review} avatarSize={20}>
           {collapsed && canAddToChat ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              leftIcon={MessageSquarePlus}
-              onPress={handleAddToChat}
-              className="py-0"
-            >
+            <Button variant="ghost" size="xs" onClick={handleAddToChat} className="py-0">
+              <MessageSquarePlus data-icon="inline-start" />
               Add to chat
             </Button>
           ) : null}

@@ -22,7 +22,7 @@ import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/components/ui/combobox";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { HEADER_INNER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
@@ -284,7 +284,7 @@ function RefPickerTrigger({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild triggerRefProp="ref">
+      <TooltipTrigger asChild>
         <ComboboxTrigger
           chevron={metaChevron}
           ref={pickerAnchorRef}
@@ -302,7 +302,7 @@ function RefPickerTrigger({
           />
         </ComboboxTrigger>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {tooltipLabel}
       </TooltipContent>
     </Tooltip>
@@ -336,7 +336,7 @@ function ProjectPickerTrigger({
   const placeholderInitial = placeholderLabel.charAt(0).toUpperCase() || "?";
   return (
     <Tooltip>
-      <TooltipTrigger asChild triggerRefProp="ref">
+      <TooltipTrigger asChild>
         <ComboboxTrigger
           chevron={metaChevron}
           ref={pickerAnchorRef}
@@ -362,7 +362,7 @@ function ProjectPickerTrigger({
           <span className="min-w-0 shrink truncate text-sm text-muted-foreground">{label}</span>
         </ComboboxTrigger>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {tooltipLabel}
       </TooltipContent>
     </Tooltip>
@@ -665,7 +665,7 @@ function IsolationPickerTrigger({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild triggerRefProp="ref">
+      <TooltipTrigger asChild>
         <ComboboxTrigger
           chevron={metaChevron}
           ref={pickerAnchorRef}
@@ -685,7 +685,7 @@ function IsolationPickerTrigger({
           <span className="min-w-0 shrink truncate text-sm text-muted-foreground">{label}</span>
         </ComboboxTrigger>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {tooltipLabel}
       </TooltipContent>
     </Tooltip>
@@ -1496,7 +1496,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
         hostOptionTestID={newWorkspaceHostOptionTestID}
       >
         <Tooltip>
-          <TooltipTrigger asChild triggerRefProp="ref">
+          <TooltipTrigger asChild>
             <button
               type="button"
               ref={host.anchorRef}
@@ -1515,7 +1515,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
               {metaChevron}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
+          <TooltipContent side="top" align="center">
             {tooltipText}
           </TooltipContent>
         </Tooltip>

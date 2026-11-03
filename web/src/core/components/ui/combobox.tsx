@@ -1,39 +1,37 @@
-// Port of archive/expo-app:packages/app/src/components/ui/combobox.tsx: a searchable list anchored to a trigger
-// the caller owns — a popover on desktop, a bottom drawer on a phone. Filtering, ranking, the
-// custom-value row and the keyboard model are the shared modules the Expo combobox used.
+// A searchable list anchored to a trigger the caller owns: shadcn's Popover + Command on desktop and
+// Drawer + Command on a phone. The options are filtered and ranked by combobox-options (Command's
+// own filter is off), and Command owns the highlighted row and the arrow and Enter keys.
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
   type RefObject,
 } from "react";
-import { Check, File, Folder, Search } from "lucide-react";
-import { Popover as PopoverPrimitive } from "radix-ui";
+import { ArrowLeft, File, Folder } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  AdaptiveTextInput,
-  InlineHeaderView,
-  SheetHeaderView,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
-import { getNextActiveIndex } from "@/components/ui/combobox-keyboard";
+import { SheetSearchField, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import {
   buildVisibleComboboxOptions,
-  getComboboxFallbackIndex,
   type ComboboxOptionModel,
 } from "@/components/ui/combobox-options";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { cn } from "cn";
-import { SnapDrawer } from "~/components/snap-drawer";
-import { Drawer as DrawerPrimitive } from "vaul";
+import { Button } from "~/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "~/components/ui/drawer";
+import { Popover, PopoverAnchor, PopoverContent } from "~/components/ui/popover";
 
 export type ComboboxOption = ComboboxOptionModel;
 export type ComboboxDesktopPlacement = "top-start" | "bottom-start";
@@ -58,31 +56,25 @@ export interface ComboboxProps {
   customValueDescription?: string;
   customValueKind?: "directory" | "file";
   title?: string;
-  /**
-   * Structured header. When provided, replaces `title` + `stickyHeader` and
-   * is rendered via the shared SheetHeaderView (mobile) / InlineHeaderView
-   * (desktop).
-   */
+  /** A header row (back, leading, title, actions, search) above the list. */
   header?: SheetHeader;
   mobileChildrenScrollEnabled?: boolean;
   /** Let custom desktop children own scrolling, for example a virtualized list. */
   desktopChildrenScrollEnabled?: boolean;
-  /** Classes for the phone sheet's scrolling content around custom children. */
+  /** Classes for the phone drawer's scrolling content around custom children. */
   mobileChildrenContentClassName?: string;
-  presentation?: "push" | "replace";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   desktopPlacement?: ComboboxDesktopPlacement;
-  desktopPreventInitialFlash?: boolean;
   /** Minimum width for the desktop popover (overrides trigger-based width). */
   desktopMinWidth?: number;
   /** Keep the desktop popover at its opening width as its content changes. */
   desktopLockWidth?: boolean;
   /** Fixed height for the desktop popover (overrides default 400px max). */
   desktopFixedHeight?: number;
-  /** Content rendered above the scroll area on desktop (sticky header). */
+  /** Content rendered above the list. */
   stickyHeader?: ReactNode;
-  /** Content rendered below the scroll area. */
+  /** Content rendered below the list. */
   footer?: ReactNode;
   /** When true, selecting an option does not close the picker (multi-select mode). */
   keepOpenOnSelect?: boolean;
@@ -91,49 +83,6 @@ export interface ComboboxProps {
 }
 
 const DEFAULT_MAX_HEIGHT = 400;
-const MOBILE_SNAP_POINTS = [0.6, 0.9];
-
-function preventDismiss(event: Event): void {
-  event.preventDefault();
-}
-
-export function SearchInput({
-  placeholder,
-  onChangeText,
-  onSubmitEditing,
-  autoFocus = false,
-  resetKey,
-}: {
-  placeholder: string;
-  onChangeText: (text: string) => void;
-  onSubmitEditing?: () => void;
-  autoFocus?: boolean;
-  useBottomSheetInput?: boolean;
-  resetKey?: string | number;
-}): ReactElement {
-  const inputRef = useRef<EditingTextInputHandle>(null);
-  useEffect(() => {
-    if (!autoFocus) return;
-    const timer = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(timer);
-  }, [autoFocus]);
-  return (
-    <div className="flex shrink-0 items-center gap-2 border-b px-3">
-      <Search size={16} className="shrink-0 text-muted-foreground" />
-      <AdaptiveTextInput
-        ref={inputRef}
-        // The Expo app: 12px above and below one line of text.
-        className="min-w-0 flex-1 bg-transparent py-3 text-sm leading-[normal] outline-none"
-        placeholder={placeholder}
-        resetKey={resetKey}
-        onChangeText={onChangeText}
-        autoCapitalize="none"
-        autoCorrect="off"
-        onSubmitEditing={onSubmitEditing}
-      />
-    </div>
-  );
-}
 
 export interface ComboboxItemProps {
   label: string;
@@ -141,86 +90,72 @@ export interface ComboboxItemProps {
   kind?: "directory" | "file";
   leadingSlot?: ReactNode;
   trailingSlot?: ReactNode;
+  // The row inside a CommandItem, which owns selection, highlight and the press.
   selected?: boolean;
   active?: boolean;
   disabled?: boolean;
   accessibilityLabel?: string;
-  /** Rows on a raised background step one shade further on hover. */
   elevated?: boolean;
-  onPress: () => void;
+  onPress?: () => void;
   testID?: string;
 }
 
+// Inside the list a row is a Command item, which owns the press; elsewhere (a footer action) the
+// row is a button of its own.
+const InCommandListContext = createContext(false);
+
+/** A list row's content: leading icon, label, description, trailing slot. */
 export function ComboboxItem({
   label,
   description,
   kind,
   leadingSlot,
   trailingSlot,
-  selected,
-  active,
-  disabled,
   accessibilityLabel,
-  elevated,
+  disabled,
   onPress,
   testID,
 }: ComboboxItemProps): ReactElement {
-  let leading: ReactNode = null;
-  if (leadingSlot) leading = leadingSlot;
-  else if (kind === "directory") leading = <Folder size={16} className="text-muted-foreground" />;
-  else if (kind === "file") leading = <File size={16} className="text-muted-foreground" />;
+  const inList = useContext(InCommandListContext);
+  let leading: ReactNode = leadingSlot ?? null;
+  if (!leading && kind === "directory") leading = <Folder />;
+  else if (!leading && kind === "file") leading = <File />;
+  if (!inList) {
+    return (
+      <Button
+        variant="ghost"
+        className="w-full justify-start"
+        disabled={disabled}
+        onClick={onPress}
+        aria-label={accessibilityLabel ?? label}
+        data-testid={testID}
+      >
+        {leading}
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {trailingSlot}
+      </Button>
+    );
+  }
   return (
-    <button
-      type="button"
-      data-testid={testID}
-      disabled={disabled}
-      onClick={onPress}
+    <span
+      className="flex min-w-0 flex-1 items-center gap-2"
       aria-label={accessibilityLabel ?? label}
-      className={cn(
-        "flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left outline-none disabled:opacity-55",
-        // The Expo app fills the keyboard-active, hovered and pressed row with surface1 (surface2
-        // when elevated), the active fill winning. On light themes surface1 is the list's own white,
-        // so the selected row cannot be seen; there it takes muted instead (deliberate since step 4
-        // batch 2). Dark themes keep surface1 (card).
-        active && "bg-muted dark:bg-card",
-        !active &&
-          (elevated
-            ? "hover:bg-muted active:bg-muted"
-            : "hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card"),
-      )}
+      data-testid={testID}
     >
-      {leading ? (
-        <span className="flex w-4 shrink-0 items-center justify-center">{leading}</span>
-      ) : null}
-      <span className={cn("min-w-0 flex-1", description && "flex items-baseline gap-2")}>
-        <span className="block shrink-0 truncate text-sm text-foreground">{label}</span>
+      {leading}
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate">{label}</span>
         {description ? (
-          <span className="block min-w-0 shrink truncate text-xs text-muted-foreground">
-            {description}
-          </span>
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
       </span>
-      {selected || trailingSlot ? (
-        <span className="ml-auto flex items-center gap-1">
-          <span className="flex w-4 items-center justify-center">
-            {selected ? <Check size={16} className="text-muted-foreground" /> : null}
-          </span>
-          {trailingSlot}
-        </span>
-      ) : null}
-    </button>
+      {trailingSlot}
+    </span>
   );
 }
 
 export function ComboboxEmpty({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <span
-      data-testid="combobox-empty-text"
-      className="block px-3 py-2 text-sm text-muted-foreground"
-    >
-      {children}
-    </span>
-  );
+  return <CommandEmpty data-testid="combobox-empty-text">{children}</CommandEmpty>;
 }
 
 type RenderOptionFn = NonNullable<ComboboxProps["renderOption"]>;
@@ -228,81 +163,26 @@ type RenderOptionFn = NonNullable<ComboboxProps["renderOption"]>;
 function OptionRow({
   option,
   selected,
-  active,
   onSelect,
   renderOption,
 }: {
   option: ComboboxOption;
   selected: boolean;
-  active: boolean;
   onSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
 }) {
-  const rowRef = useRef<HTMLDivElement | null>(null);
-  const handlePress = useCallback(() => onSelect(option.id), [onSelect, option.id]);
-  useEffect(() => {
-    if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
-  }, [active]);
+  const handleSelect = useCallback(() => onSelect(option.id), [onSelect, option.id]);
   return (
-    <div ref={rowRef}>
-      {renderOption ? (
-        renderOption({ option, selected, active, onPress: handlePress })
-      ) : (
-        <ComboboxItem
-          label={option.label}
-          description={option.description}
-          kind={option.kind}
-          selected={selected}
-          active={active}
-          onPress={handlePress}
-        />
-      )}
-    </div>
+    <CommandItem value={option.id} onSelect={handleSelect} data-checked={selected}>
+      <InCommandListContext value>
+        {renderOption ? (
+          renderOption({ option, selected, active: false, onPress: handleSelect })
+        ) : (
+          <ComboboxItem label={option.label} description={option.description} kind={option.kind} />
+        )}
+      </InCommandListContext>
+    </CommandItem>
   );
-}
-
-function OptionsList({
-  options,
-  value,
-  activeIndex,
-  emptyText,
-  onSelect,
-  renderOption,
-}: {
-  options: ComboboxOption[];
-  value: string;
-  activeIndex: number;
-  emptyText: string;
-  onSelect: (id: string) => void;
-  renderOption: RenderOptionFn | undefined;
-}): ReactElement {
-  if (options.length === 0) return <ComboboxEmpty>{emptyText}</ComboboxEmpty>;
-  return (
-    <>
-      {options.map((option, index) => (
-        <OptionRow
-          key={option.id}
-          option={option}
-          selected={option.id === value}
-          active={index === activeIndex}
-          onSelect={onSelect}
-          renderOption={renderOption}
-        />
-      ))}
-    </>
-  );
-}
-
-function resolveInitialActiveIndex(
-  options: ComboboxOption[],
-  searching: boolean,
-  value: string,
-): number {
-  if (options.length === 0) return -1;
-  const fallbackIndex = getComboboxFallbackIndex(options.length, "below-search");
-  if (searching) return fallbackIndex;
-  const selectedIndex = options.findIndex((option) => option.id === value);
-  return selectedIndex >= 0 ? selectedIndex : fallbackIndex;
 }
 
 function useAnchorWidth(anchorRef: RefObject<HTMLElement | null>, isOpen: boolean): number | null {
@@ -313,20 +193,6 @@ function useAnchorWidth(anchorRef: RefObject<HTMLElement | null>, isOpen: boolea
     setWidth(measured > 0 ? measured : null);
   }, [anchorRef, isOpen]);
   return width;
-}
-
-function useComboboxCopy(input: {
-  searchPlaceholder: string | undefined;
-  placeholder: string | undefined;
-  emptyText: string | undefined;
-  title: string | undefined;
-}) {
-  const { t } = useTranslation();
-  return {
-    placeholder: input.searchPlaceholder ?? input.placeholder ?? t("common.placeholders.search"),
-    emptyText: input.emptyText ?? t("common.empty.noOptionsMatchSearch"),
-    title: input.title ?? t("common.actions.select"),
-  };
 }
 
 /** Open state (controlled or not) and the search query, which resets whenever the list opens. */
@@ -343,7 +209,6 @@ function useComboboxOpenState({
   const isControlled = typeof open === "boolean";
   const isOpen = isControlled ? open : internalOpen;
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResetKey, setSearchResetKey] = useState(0);
   const setOpen = useCallback(
     (nextOpen: boolean) => {
       if (!isControlled) setInternalOpen(nextOpen);
@@ -361,12 +226,9 @@ function useComboboxOpenState({
   const handleClose = useCallback(() => {
     setOpen(false);
     setQuery("");
-    setSearchResetKey((key) => key + 1);
   }, [setOpen, setQuery]);
   useEffect(() => {
-    if (!isOpen) return;
-    setQuery("");
-    setSearchResetKey((key) => key + 1);
+    if (isOpen) setQuery("");
   }, [isOpen, setQuery]);
   const handleRootOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -375,55 +237,213 @@ function useComboboxOpenState({
     },
     [handleClose, setOpen],
   );
-  return { isOpen, searchQuery, setQuery, searchResetKey, handleClose, handleRootOpenChange };
+  return { isOpen, searchQuery, setQuery, handleClose, handleRootOpenChange };
 }
 
-/** The keyboard-highlighted option: arrows move it, Enter picks it, opening starts it on the value. */
-function useComboboxNavigation({
-  isOpen,
-  options,
-  searching,
-  value,
-  enabled,
-  onSelect,
-}: {
-  isOpen: boolean;
-  options: ComboboxOption[];
-  searching: boolean;
-  value: string;
-  enabled: boolean;
-  onSelect: (id: string) => void;
-}) {
-  const [activeIndex, setActiveIndex] = useState(-1);
-  useEffect(() => {
-    if (!isOpen) return;
-    setActiveIndex(resolveInitialActiveIndex(options, searching, value));
-  }, [isOpen, options, searching, value]);
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (!enabled || event.nativeEvent.isComposing) return;
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const key = event.key;
-        setActiveIndex((current) =>
-          getNextActiveIndex({ currentIndex: current, itemCount: options.length, key }),
-        );
-        return;
-      }
-      if (event.key === "Enter" && options.length > 0) {
-        event.preventDefault();
-        const index = activeIndex >= 0 && activeIndex < options.length ? activeIndex : 0;
-        onSelect(options[index].id);
-      }
-    },
-    [activeIndex, enabled, onSelect, options],
+function HeaderRow({ header, title }: { header: SheetHeader | undefined; title: string }) {
+  const { t } = useTranslation();
+  if (!header) return <span className="truncate font-medium">{title}</span>;
+  const back = header.back;
+  return (
+    <div className="flex items-center gap-2">
+      {back ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={back.onPress}
+          aria-label={back.accessibilityLabel ?? back.label ?? t("common.actions.back")}
+          data-testid="sheet-header-back"
+        >
+          <ArrowLeft />
+        </Button>
+      ) : null}
+      {header.leading}
+      <span className="min-w-0 flex-1 truncate font-medium">{header.title}</span>
+      {header.actions ? <div className="flex items-center gap-2">{header.actions}</div> : null}
+    </div>
   );
-  return { activeIndex, handleKeyDown };
 }
 
-function popoverBody(hasChildren: boolean, childrenScroll: boolean): "list" | "scroll" | "fill" {
-  if (!hasChildren) return "list";
-  return childrenScroll ? "scroll" : "fill";
+/** At least the trigger's width (or `minWidth`), at most 400px unless locked; height capped. */
+function frameStyleFor(input: {
+  minWidth: number | undefined;
+  anchorWidth: number | null;
+  lockWidth: boolean;
+  fixedHeight: number | undefined;
+}): CSSProperties {
+  const floor = Math.max(input.minWidth ?? 0, input.anchorWidth ?? 200);
+  const heightCap = input.fixedHeight ?? DEFAULT_MAX_HEIGHT;
+  return {
+    ...(input.lockWidth
+      ? { width: floor, minWidth: floor, maxWidth: floor }
+      : { width: "auto", minWidth: floor, maxWidth: Math.max(400, floor) }),
+    maxHeight: `min(var(--radix-popover-content-available-height), ${heightCap}px)`,
+    ...(input.fixedHeight != null
+      ? { height: `min(var(--radix-popover-content-available-height), ${input.fixedHeight}px)` }
+      : null),
+  };
+}
+
+function preventDefault(event: Event): void {
+  event.preventDefault();
+}
+
+function focusCommandRoot(event: Event): void {
+  if (!(event.currentTarget instanceof HTMLElement)) return;
+  const target =
+    event.currentTarget.querySelector<HTMLElement>("[cmdk-input]") ??
+    event.currentTarget.querySelector<HTMLElement>("[cmdk-root]");
+  if (!target) return;
+  event.preventDefault();
+  target.focus();
+}
+
+// Command's own filter is off: the options arrive filtered and ranked.
+function ComboboxCommand({
+  search,
+  searchTestID,
+  searchPlaceholder,
+  onSearchChange,
+  emptyText,
+  options,
+  value,
+  onSelect,
+  renderOption,
+}: {
+  search: boolean;
+  searchTestID: string | undefined;
+  searchPlaceholder: string | undefined;
+  onSearchChange: (query: string) => void;
+  emptyText: string;
+  options: ComboboxOption[];
+  value: string;
+  onSelect: (id: string) => void;
+  renderOption: RenderOptionFn | undefined;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Command shouldFilter={false} tabIndex={-1} className="min-h-0 flex-1">
+      {search ? (
+        <CommandInput
+          placeholder={searchPlaceholder ?? t("common.placeholders.search")}
+          aria-label={searchPlaceholder ?? t("common.placeholders.search")}
+          onValueChange={onSearchChange}
+          autoFocus
+          data-testid={searchTestID}
+        />
+      ) : null}
+      <CommandList>
+        <ComboboxEmpty>{emptyText}</ComboboxEmpty>
+        {options.map((option) => (
+          <OptionRow
+            key={option.id}
+            option={option}
+            selected={option.id === value}
+            onSelect={onSelect}
+            renderOption={renderOption}
+          />
+        ))}
+      </CommandList>
+    </Command>
+  );
+}
+
+function resolvePlaceholder(...candidates: (string | undefined)[]): string | undefined {
+  return candidates.find((candidate) => candidate !== undefined);
+}
+
+function ComboboxChildren({
+  scroll,
+  contentClassName,
+  children,
+}: {
+  scroll: boolean;
+  contentClassName: string | undefined;
+  children: ReactNode;
+}) {
+  if (!scroll) return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={contentClassName}>{children}</div>
+    </div>
+  );
+}
+
+function ComboboxFrame({
+  isMobile,
+  open,
+  onOpenChange,
+  anchorRef,
+  placement,
+  frameStyle,
+  onInteractOutside,
+  header,
+  title,
+  stickyHeader,
+  footer,
+  children,
+}: {
+  isMobile: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  anchorRef: RefObject<HTMLElement | null>;
+  placement: ComboboxDesktopPlacement;
+  frameStyle: CSSProperties;
+  onInteractOutside: (event: { target: EventTarget | null; preventDefault: () => void }) => void;
+  header: SheetHeader | undefined;
+  title: string;
+  stickyHeader: ReactNode;
+  footer: ReactNode;
+  children: ReactNode;
+}) {
+  const footerView = footer ? <div className="shrink-0 border-t">{footer}</div> : null;
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent
+          aria-describedby={undefined}
+          data-testid={open ? "combobox-sheet" : undefined}
+        >
+          <DrawerHeader>
+            <DrawerTitle asChild>
+              <div>
+                <HeaderRow header={header} title={title} />
+              </div>
+            </DrawerTitle>
+          </DrawerHeader>
+          {stickyHeader}
+          {children}
+          {footerView}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverAnchor virtualRef={anchorRef as RefObject<HTMLElement>} />
+      <PopoverContent
+        side={placement === "top-start" ? "top" : "bottom"}
+        align="start"
+        collisionPadding={16}
+        data-testid={open ? "combobox-desktop-container" : undefined}
+        onOpenAutoFocus={focusCommandRoot}
+        onInteractOutside={onInteractOutside}
+        // A dialog opened over the list (provider settings, shortcuts) takes focus; the list stays.
+        onFocusOutside={preventDefault}
+        style={frameStyle}
+        className="overflow-hidden p-0"
+      >
+        {header ? (
+          <div className="px-2 pt-2">
+            <HeaderRow header={header} title={title} />
+          </div>
+        ) : null}
+        {stickyHeader}
+        {children}
+        {footerView}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function Combobox({
@@ -457,12 +477,12 @@ export function Combobox({
   anchorRef,
   children,
 }: ComboboxProps): ReactElement | null {
+  const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const copy = useComboboxCopy({ searchPlaceholder, placeholder, emptyText, title });
-  const { isOpen, searchQuery, setQuery, searchResetKey, handleClose, handleRootOpenChange } =
-    useComboboxOpenState({ open, onOpenChange, onSearchQueryChange });
+  const { isOpen, searchQuery, setQuery, handleClose, handleRootOpenChange } = useComboboxOpenState(
+    { open, onOpenChange, onSearchQueryChange },
+  );
   const anchorWidth = useAnchorWidth(anchorRef, isOpen && !isMobile);
-
   const visibleOptions = useMemo(
     () =>
       buildVisibleComboboxOptions({
@@ -491,15 +511,6 @@ export function Combobox({
     },
     [handleClose, keepOpenOnSelect, onSelect],
   );
-  const hasChildren = Boolean(children);
-  const { activeIndex, handleKeyDown } = useComboboxNavigation({
-    isOpen,
-    options: visibleOptions,
-    searching: searchable && searchQuery.trim().length > 0,
-    value,
-    enabled: !hasChildren,
-    onSelect: handleSelect,
-  });
   // The trigger toggles the list itself; a press on it is not an outside press.
   const handleInteractOutside = useCallback(
     (event: { target: EventTarget | null; preventDefault: () => void }) => {
@@ -509,246 +520,73 @@ export function Combobox({
     },
     [anchorRef],
   );
+  const headerSearch = header?.search;
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      if (headerSearch) headerSearch.onChange(query);
+      else setQuery(query);
+    },
+    [headerSearch, setQuery],
+  );
+  const frameStyle = useMemo(
+    () =>
+      frameStyleFor({
+        minWidth: desktopMinWidth,
+        anchorWidth,
+        lockWidth: desktopLockWidth,
+        fixedHeight: desktopFixedHeight,
+      }),
+    [anchorWidth, desktopFixedHeight, desktopLockWidth, desktopMinWidth],
+  );
 
-  const list = (
-    <OptionsList
+  const resolvedTitle = title ?? t("common.actions.select");
+  const body = children ? (
+    <>
+      {headerSearch ? (
+        <div className="p-2">
+          <SheetSearchField search={headerSearch} />
+        </div>
+      ) : null}
+      <ComboboxChildren
+        scroll={isMobile ? mobileChildrenScrollEnabled : desktopChildrenScrollEnabled}
+        contentClassName={isMobile ? mobileChildrenContentClassName : undefined}
+      >
+        {children}
+      </ComboboxChildren>
+    </>
+  ) : (
+    <ComboboxCommand
+      search={Boolean(headerSearch) || searchable}
+      searchTestID={headerSearch?.testID}
+      searchPlaceholder={resolvePlaceholder(
+        headerSearch?.placeholder,
+        searchPlaceholder,
+        placeholder,
+      )}
+      onSearchChange={handleSearchChange}
+      emptyText={emptyText ?? t("common.empty.noOptionsMatchSearch")}
       options={visibleOptions}
       value={value}
-      activeIndex={activeIndex}
-      emptyText={copy.emptyText}
       onSelect={handleSelect}
       renderOption={renderOption}
     />
   );
-  const body = hasChildren ? children : list;
-  const search = useMemo(
-    () => ({ placeholder: copy.placeholder, onChangeText: setQuery, resetKey: searchResetKey }),
-    [copy.placeholder, searchResetKey, setQuery],
-  );
-  const frame = useMemo(
-    () => ({
-      minWidth: desktopMinWidth,
-      anchorWidth,
-      lockWidth: desktopLockWidth,
-      fixedHeight: desktopFixedHeight,
-    }),
-    [anchorWidth, desktopFixedHeight, desktopLockWidth, desktopMinWidth],
-  );
-  if (isMobile) {
-    return (
-      <ComboboxSheet
-        open={isOpen}
-        onOpenChange={handleRootOpenChange}
-        onKeyDown={handleKeyDown}
-        onClose={handleClose}
-        title={copy.title}
-        header={header}
-        stickyHeader={stickyHeader}
-        search={!hasChildren && searchable ? search : null}
-        scrollBody={!hasChildren || mobileChildrenScrollEnabled}
-        bodyClassName={mobileChildrenContentClassName}
-        footer={footer}
-      >
-        {body}
-      </ComboboxSheet>
-    );
-  }
+
   return (
-    <ComboboxPopover
+    <ComboboxFrame
+      isMobile={isMobile}
       open={isOpen}
       onOpenChange={handleRootOpenChange}
       anchorRef={anchorRef}
       placement={desktopPlacement}
-      onKeyDown={handleKeyDown}
+      frameStyle={frameStyle}
       onInteractOutside={handleInteractOutside}
-      frame={frame}
       header={header}
+      title={resolvedTitle}
       stickyHeader={stickyHeader}
-      search={!hasChildren && !header && searchable ? search : null}
-      body={popoverBody(hasChildren, desktopChildrenScrollEnabled)}
       footer={footer}
     >
       {body}
-    </ComboboxPopover>
-  );
-}
-
-interface ComboboxSearch {
-  placeholder: string;
-  onChangeText: (text: string) => void;
-  resetKey: number;
-}
-
-function ComboboxSheet({
-  open,
-  onOpenChange,
-  onKeyDown,
-  onClose,
-  title,
-  header,
-  stickyHeader,
-  search,
-  scrollBody,
-  bodyClassName,
-  footer,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
-  onClose: () => void;
-  title: string;
-  header: SheetHeader | undefined;
-  stickyHeader: ReactNode;
-  search: ComboboxSearch | null;
-  scrollBody: boolean;
-  bodyClassName: string | undefined;
-  footer: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <SnapDrawer
-      open={open}
-      onOpenChange={onOpenChange}
-      snapPoints={MOBILE_SNAP_POINTS}
-      onKeyDown={onKeyDown}
-      aria-describedby={undefined}
-      className="bg-background"
-      bodyClassName="pb-[env(safe-area-inset-bottom)]"
-    >
-      {header ? (
-        <SheetHeaderView header={header} onClose={onClose} Title={DrawerPrimitive.Title} />
-      ) : null}
-      {header ? null : (
-        <>
-          <div className="px-6 pb-2">
-            <DrawerPrimitive.Title asChild>
-              <span className="block text-sm leading-[normal] font-medium text-foreground">
-                {title}
-              </span>
-            </DrawerPrimitive.Title>
-          </div>
-          {stickyHeader}
-          {search ? <SearchInput {...search} /> : null}
-        </>
-      )}
-      {scrollBody ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* The Expo app asks for 8px sides, 4 top and 32 bottom here, but gorhom's web scroll
-              view drops that contentContainerStyle, so its rows sit at the sheet's edges. */}
-          <div className={bodyClassName}>{children}</div>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-      )}
-      {footer ? <div className="shrink-0 border-t">{footer}</div> : null}
-    </SnapDrawer>
-  );
-}
-
-interface ComboboxFrame {
-  minWidth: number | undefined;
-  anchorWidth: number | null;
-  lockWidth: boolean;
-  fixedHeight: number | undefined;
-}
-
-/** At least the trigger's width (or `minWidth`), at most 400px unless locked; height capped. */
-function frameStyleFor({
-  minWidth,
-  anchorWidth,
-  lockWidth,
-  fixedHeight,
-}: ComboboxFrame): CSSProperties {
-  const floor = Math.max(minWidth ?? 0, anchorWidth ?? 200);
-  const heightCap = fixedHeight ?? DEFAULT_MAX_HEIGHT;
-  return {
-    ...(lockWidth
-      ? { width: floor, minWidth: floor, maxWidth: floor }
-      : { minWidth: floor, maxWidth: Math.max(400, floor) }),
-    maxHeight: `min(var(--radix-popover-content-available-height), ${heightCap}px)`,
-    ...(fixedHeight != null
-      ? { height: `min(var(--radix-popover-content-available-height), ${fixedHeight}px)` }
-      : null),
-  };
-}
-
-function ComboboxPopover({
-  open,
-  onOpenChange,
-  anchorRef,
-  placement,
-  onKeyDown,
-  onInteractOutside,
-  frame,
-  header,
-  stickyHeader,
-  search,
-  body,
-  footer,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  anchorRef: RefObject<HTMLElement | null>;
-  placement: ComboboxDesktopPlacement;
-  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
-  onInteractOutside: (event: { target: EventTarget | null; preventDefault: () => void }) => void;
-  frame: ComboboxFrame;
-  header: SheetHeader | undefined;
-  stickyHeader: ReactNode;
-  search: ComboboxSearch | null;
-  /** The options list, or custom children that scroll themselves ("fill") or in the frame. */
-  body: "list" | "scroll" | "fill";
-  footer: ReactNode;
-  children: ReactNode;
-}) {
-  const { minWidth, anchorWidth, lockWidth, fixedHeight } = frame;
-  const frameStyle = useMemo(
-    () => frameStyleFor({ minWidth, anchorWidth, lockWidth, fixedHeight }),
-    [anchorWidth, fixedHeight, lockWidth, minWidth],
-  );
-  return (
-    <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <PopoverPrimitive.Anchor virtualRef={anchorRef as RefObject<HTMLElement>} />
-      {open ? (
-        <PopoverPrimitive.Portal>
-          <PopoverPrimitive.Content
-            side={placement === "top-start" ? "top" : "bottom"}
-            align="start"
-            // The Expo app's floating middleware: 5px from the anchor on the web, 16px from the
-            // window edges.
-            sideOffset={5}
-            collisionPadding={16}
-            role="dialog"
-            data-testid="combobox-desktop-container"
-            onKeyDown={onKeyDown}
-            onInteractOutside={onInteractOutside}
-            // The Expo app's list closes on a press outside or Escape, not when focus leaves it: a
-            // dialog opened above it (shortcuts, ⌘K, provider settings) takes focus and the list
-            // is still there when it closes.
-            onFocusOutside={preventDismiss}
-            style={frameStyle}
-            // The Expo app's desktop surface is surface0 (the page colour), not shadcn's popover
-            // colour, which is lighter on dark themes; it fades in over 100ms without a zoom, and
-            // its size changes land at once (transition-none, see components/ui/context-menu.tsx).
-            className="z-50 flex flex-col overflow-hidden rounded-lg border bg-background text-sm text-popover-foreground shadow-md outline-none transition-none duration-100 data-open:animate-in data-open:fade-in-0"
-          >
-            {header ? <InlineHeaderView header={header} /> : stickyHeader}
-            {search ? <SearchInput {...search} autoFocus /> : null}
-            {body === "list" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto py-1">{children}</div>
-            ) : null}
-            {body === "scroll" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-            ) : null}
-            {body === "fill" ? (
-              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-            ) : null}
-            {footer ? <div className="shrink-0 border-t">{footer}</div> : null}
-          </PopoverPrimitive.Content>
-        </PopoverPrimitive.Portal>
-      ) : null}
-    </PopoverPrimitive.Root>
+    </ComboboxFrame>
   );
 }

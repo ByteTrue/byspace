@@ -22,7 +22,7 @@ import {
   WORKSPACE_TREE_ICON_SIZE,
 } from "@/components/tree-primitives";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useFileHeaderInteraction } from "@/git/file-header-interaction";
 import {
   diffFileChangeKind,
@@ -313,9 +313,9 @@ export const FileHeader = memo(function FileHeader({
       aria-label={accessibilityLabel}
     >
       <ContextMenu>
-        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent side="bottom" align="start" offset={6} maxWidth={520}>
+          <TooltipContent side="bottom" align="start" className="max-w-[520px]">
             {file.path}
           </TooltipContent>
         </Tooltip>

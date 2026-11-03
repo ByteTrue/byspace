@@ -243,7 +243,7 @@ async function chooseSelectFieldOption(
   await editModal(page).getByTestId(`agent-profile-${input.field}-trigger`).click();
   const option = page
     .getByTestId("combobox-desktop-container")
-    .getByRole("button", { name: input.option, exact: true });
+    .getByRole("option", { name: input.option, exact: true });
   await expect(option).toBeVisible({ timeout: 30_000 });
   await option.click();
   await expect(
@@ -357,6 +357,16 @@ export async function expectAgentProfileForm(
 /** Desktop web renders the model browser inside the combobox popover. */
 function pickerViewport(page: Page): Locator {
   return page.getByTestId("combobox-desktop-container");
+}
+
+// The popover zooms in as it opens; measure it once the animation is over.
+async function settledBox(locator: Locator) {
+  await locator.evaluate((element) =>
+    Promise.all(
+      element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
+  return locator.boundingBox();
 }
 
 export async function openModelPicker(page: Page): Promise<void> {
@@ -521,7 +531,7 @@ export async function expectModelSearchEmptyState(page: Page, query: string): Pr
 }
 
 export async function readModelPickerHeight(page: Page): Promise<number> {
-  const box = await pickerViewport(page).boundingBox();
+  const box = await settledBox(pickerViewport(page));
   if (!box) {
     throw new Error("Expected the model picker to be laid out");
   }
@@ -529,7 +539,7 @@ export async function readModelPickerHeight(page: Page): Promise<number> {
 }
 
 export async function readModelPickerWidth(page: Page): Promise<number> {
-  const box = await pickerViewport(page).boundingBox();
+  const box = await settledBox(pickerViewport(page));
   if (!box) {
     throw new Error("Expected the model picker to be laid out");
   }

@@ -59,33 +59,6 @@ vi.mock("@/components/adaptive-modal-sheet", async () => {
   return { AdaptiveModalSheet };
 });
 
-vi.mock("@/components/ui/button", async () => {
-  const ReactModule = await import("react");
-  return {
-    Button: ({
-      children,
-      onPress,
-      disabled,
-      testID,
-    }: {
-      children?: React.ReactNode;
-      onPress?: () => void;
-      disabled?: boolean;
-      testID?: string;
-    }) =>
-      ReactModule.createElement(
-        "button",
-        {
-          type: "button",
-          "data-testid": testID,
-          disabled: disabled || undefined,
-          onClick: () => !disabled && onPress?.(),
-        },
-        children,
-      ),
-  };
-});
-
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 

@@ -3,7 +3,7 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/setup-panel.py; edit it directly.
 import { Spinner } from "~/components/ui/spinner";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -160,12 +160,8 @@ function BlockedSetupNotice({
         </AlertDescription>
         <AlertAction>
           {supportsSetupRun ? (
-            <Button
-              accessibilityRole="button"
-              onPress={runSetup}
-              loading={isRunningSetup}
-              size="sm"
-            >
+            <Button variant="secondary" onClick={runSetup} size="sm" disabled={isRunningSetup}>
+              {isRunningSetup ? <Spinner data-icon="inline-start" /> : null}
               {t("workspace.setup.blocked.run")}
             </Button>
           ) : null}

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -127,12 +127,13 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={addIcon}
-        onPress={handleAddOpen}
+        onClick={handleAddOpen}
+        aria-label={t("settings.host.agentProfiles.addProfileTitle")}
+        data-testid="agent-profiles-add-button"
         disabled={!profiles}
-        accessibilityLabel={t("settings.host.agentProfiles.addProfileTitle")}
-        testID="agent-profiles-add-button"
-      />
+      >
+        {addIcon}
+      </Button>
     ),
     [handleAddOpen, profiles, t],
   );
@@ -186,7 +187,8 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
               >
                 {t("settings.host.agentProfiles.emptyState")}
               </span>
-              <Button size="sm" leftIcon={addIcon} onPress={handleAddOpen} disabled={!profiles}>
+              <Button variant="secondary" size="sm" onClick={handleAddOpen} disabled={!profiles}>
+                {addIcon}
                 {t("settings.host.agentProfiles.newProfile")}
               </Button>
             </div>

@@ -13,8 +13,6 @@ import {
 import { filterShortcutHelpSections } from "@/keyboard/shortcut-help-search";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 
-const SNAP_POINTS: string[] = ["70%", "92%"];
-
 export function KeyboardShortcutsDialog() {
   const { t } = useTranslation();
   const open = useKeyboardShortcutsStore((s) => s.shortcutsDialogOpen);
@@ -60,7 +58,6 @@ export function KeyboardShortcutsDialog() {
       visible={open}
       onClose={handleClose}
       testID="keyboard-shortcuts-dialog"
-      snapPoints={SNAP_POINTS}
     >
       <div data-testid="keyboard-shortcuts-dialog-content" className="flex flex-col gap-4">
         {visibleSections.map((section) => (

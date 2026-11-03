@@ -28,7 +28,7 @@ import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsTextArea } from "@/components/settings-textarea";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { DefaultShellSection } from "@/screens/settings/default-shell-section";
@@ -444,7 +444,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
             <Button
               variant="secondary"
               size="sm"
-              onPress={handleCancelConfirm}
+              onClick={handleCancelConfirm}
               disabled={isRemovingConnection}
             >
               {t("common.actions.cancel")}
@@ -452,9 +452,9 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
             <Button
               variant="destructive"
               size="sm"
-              onPress={handleConfirmRemove}
+              onClick={handleConfirmRemove}
+              data-testid="remove-connection-confirm"
               disabled={isRemovingConnection}
-              testID="remove-connection-confirm"
             >
               {t("settings.host.connections.removeAction")}
             </Button>
@@ -506,7 +506,7 @@ function ConnectionRow({
       <span className="mr-2 text-sm leading-[normal]" style={latencyTextStyle}>
         {latencyText}
       </span>
-      <Button variant="ghost" size="sm" className="text-destructive" onPress={handlePressRemove}>
+      <Button variant="ghost" size="sm" className="text-destructive" onClick={handlePressRemove}>
         {t("settings.host.connections.removeAction")}
       </Button>
     </div>
@@ -662,11 +662,11 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
         <Button
           variant="outline"
           size="sm"
-          leftIcon={restartIcon}
-          onPress={handleRestart}
+          onClick={handleRestart}
+          data-testid="host-page-restart-button"
           disabled={isRestarting || !daemonClient || !isConnected}
-          testID="host-page-restart-button"
         >
+          {restartIcon}
           {isRestarting
             ? t("settings.host.daemon.restart.restarting")
             : t("settings.host.daemon.restart.confirm")}
@@ -904,11 +904,11 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
         <Button
           variant="outline"
           size="sm"
-          leftIcon={updateIcon}
-          onPress={handleUpdate}
+          onClick={handleUpdate}
+          data-testid="host-page-update-button"
           disabled={desktopManaged || isUpdating || !daemonClient || !isConnected}
-          testID="host-page-update-button"
         >
+          {updateIcon}
           {buttonLabel}
         </Button>
       </div>
@@ -1070,8 +1070,8 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
           <Button
             variant="outline"
             size="sm"
-            onPress={handleOpen}
-            testID="host-page-append-system-prompt-edit"
+            onClick={handleOpen}
+            data-testid="host-page-append-system-prompt-edit"
           >
             {t("settings.host.orchestration.systemPrompt.edit")}
           </Button>
@@ -1097,18 +1097,18 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
             <Button
               variant="ghost"
               size="sm"
-              onPress={handleReset}
+              onClick={handleReset}
+              data-testid="host-page-append-system-prompt-reset"
               disabled={!hasChanges || isSaving}
-              testID="host-page-append-system-prompt-reset"
             >
               {t("settings.host.orchestration.systemPrompt.reset")}
             </Button>
             <Button
               variant="default"
               size="sm"
-              onPress={handleSave}
+              onClick={handleSave}
+              data-testid="host-page-append-system-prompt-save"
               disabled={!hasChanges || isSaving}
-              testID="host-page-append-system-prompt-save"
             >
               {isSaving
                 ? t("settings.host.orchestration.systemPrompt.saving")
@@ -1237,11 +1237,11 @@ function RemoveHostSection({
           <Button
             variant="outline"
             size="sm"
-            leftIcon={removeIcon}
             className="text-destructive"
-            onPress={handleOpenConfirm}
-            testID="host-page-remove-host-button"
+            onClick={handleOpenConfirm}
+            data-testid="host-page-remove-host-button"
           >
+            {removeIcon}
             {t("settings.host.connections.removeAction")}
           </Button>
         </div>
@@ -1260,15 +1260,15 @@ function RemoveHostSection({
               : t("settings.host.daemon.remove.confirmMessage", { name: host.label })}
           </span>
           <div className="mt-4 flex flex-row items-center justify-end gap-2">
-            <Button variant="secondary" size="sm" onPress={handleCancel} disabled={isRemoving}>
+            <Button variant="secondary" size="sm" onClick={handleCancel} disabled={isRemoving}>
               {t("common.actions.cancel")}
             </Button>
             <Button
               variant="destructive"
               size="sm"
-              onPress={handleConfirmRemove}
+              onClick={handleConfirmRemove}
+              data-testid="remove-host-confirm"
               disabled={isRemoving}
-              testID="remove-host-confirm"
             >
               {t("settings.host.connections.removeAction")}
             </Button>
@@ -1355,37 +1355,41 @@ function TerminalProfileRow({
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={moveUpIcon}
-          onPress={handleMoveUp}
+          onClick={handleMoveUp}
+          aria-label={t("settings.host.terminalProfiles.moveUp")}
+          data-testid={`terminal-profile-move-up-${profile.id}`}
           disabled={isFirst}
-          accessibilityLabel={t("settings.host.terminalProfiles.moveUp")}
-          testID={`terminal-profile-move-up-${profile.id}`}
-        />
+        >
+          {moveUpIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={moveDownIcon}
-          onPress={handleMoveDown}
+          onClick={handleMoveDown}
+          aria-label={t("settings.host.terminalProfiles.moveDown")}
+          data-testid={`terminal-profile-move-down-${profile.id}`}
           disabled={isLast}
-          accessibilityLabel={t("settings.host.terminalProfiles.moveDown")}
-          testID={`terminal-profile-move-down-${profile.id}`}
-        />
+        >
+          {moveDownIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={editProfileIcon}
-          onPress={handleEdit}
-          accessibilityLabel={t("settings.host.terminalProfiles.editProfile")}
-          testID={`terminal-profile-edit-${profile.id}`}
-        />
+          onClick={handleEdit}
+          aria-label={t("settings.host.terminalProfiles.editProfile")}
+          data-testid={`terminal-profile-edit-${profile.id}`}
+        >
+          {editProfileIcon}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
-          leftIcon={removeProfileIcon}
-          onPress={handleRemove}
-          accessibilityLabel={t("settings.host.terminalProfiles.remove")}
-          testID={`terminal-profile-remove-${profile.id}`}
-        />
+          onClick={handleRemove}
+          aria-label={t("settings.host.terminalProfiles.remove")}
+          data-testid={`terminal-profile-remove-${profile.id}`}
+        >
+          {removeProfileIcon}
+        </Button>
       </div>
     </div>
   );
@@ -1547,11 +1551,12 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={addProfileIcon}
-        onPress={handleAddOpen}
+        onClick={handleAddOpen}
+        data-testid="terminal-profiles-add-button"
         disabled={!isConnected || !profiles}
-        testID="terminal-profiles-add-button"
-      />
+      >
+        {addProfileIcon}
+      </Button>
     ),
     [handleAddOpen, isConnected, profiles],
   );

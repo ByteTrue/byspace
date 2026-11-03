@@ -117,10 +117,6 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/loading-spinner", () => ({
-  LoadingSpinner: () => React.createElement("span", { "data-testid": "loading-spinner" }),
-}));
-
 vi.mock("@/components/settings/headings/settings-info-tip", () => ({
   SettingsInfoTip: () => null,
 }));

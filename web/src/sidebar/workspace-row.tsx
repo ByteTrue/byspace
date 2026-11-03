@@ -45,8 +45,12 @@ import { cn } from "cn";
 import { contextMenuKit, dropdownMenuKit, type MenuKit } from "~/components/menu-kit";
 import type { SortableItemProps } from "~/components/sortable-list";
 import { Shortcut } from "~/components/shortcut";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/adaptive-menu";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "~/components/adaptive-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { SidebarMenuItem } from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
 import { WorkspaceMetaRow, WorkspaceTrailingContent } from "~/sidebar/meta-row";
@@ -503,7 +507,7 @@ function WorkspaceRowKebab({
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange} compactMode="sheet">
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         aria-label={t("sidebar.workspace.actions.menu")}
         data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
@@ -515,11 +519,7 @@ function WorkspaceRowKebab({
       >
         <EllipsisVertical className="size-3.5" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-[260px]"
-        sheetTitle={t("sidebar.workspace.actions.menu")}
-      >
+      <DropdownMenuContent align="end" className="w-[260px]">
         <WorkspaceMenuItems kit={dropdownMenuKit} actions={actions} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -637,7 +637,6 @@ function WorkspaceRowLink({
 
 /** One workspace in the sidebar: status, title, meta line, trailing info, its menus and its dialogs. */
 export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps) {
-  const { t } = useTranslation();
   const { workspace, selected, sortable } = props;
   const [renameOpen, setRenameOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -690,7 +689,6 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
         <ContextMenuContent
           className="w-[260px]"
           data-testid={`sidebar-workspace-context-menu-${workspace.workspaceKey}`}
-          sheetTitle={t("sidebar.workspace.actions.menu")}
         >
           <WorkspaceMenuItems kit={contextMenuKit} actions={actions} />
         </ContextMenuContent>

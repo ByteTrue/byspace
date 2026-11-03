@@ -18,7 +18,8 @@ import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/protocol/schedu
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
@@ -413,16 +414,16 @@ function OpenScheduleFormSheet({
   const footer = useMemo(
     () => (
       <div className="flex flex-1 flex-row justify-end gap-2">
-        <Button variant="secondary" onPress={onClose} disabled={isSubmitting}>
+        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button
           variant="default"
-          onPress={handleSubmitPress}
-          disabled={!canSubmit}
-          loading={isSubmitting}
-          testID="schedule-form-submit"
+          onClick={handleSubmitPress}
+          data-testid="schedule-form-submit"
+          disabled={isSubmitting || !canSubmit}
         >
+          {isSubmitting ? <Spinner data-icon="inline-start" /> : null}
           {mode === "edit" ? "Save changes" : "Create schedule"}
         </Button>
       </div>

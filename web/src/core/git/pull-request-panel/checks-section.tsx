@@ -9,7 +9,8 @@ import {
   type MouseEvent,
 } from "react";
 import { ChevronDown, ChevronRight, MessageSquarePlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { classifyCheck, type CheckPresentation } from "@/git/check-presentation";
 import { CheckPresentationIcon } from "@/git/check-presentation.view";
 import { useCheckGroupState } from "@/git/pull-request-panel/check-group-state";
@@ -226,11 +227,15 @@ function CheckRow({
           <Button
             variant="ghost"
             size="xs"
-            leftIcon={MessageSquarePlus}
-            loading={isAddingLogsToChat}
             onClick={handleAddLogsToChat}
             className="px-1"
+            disabled={isAddingLogsToChat}
           >
+            {isAddingLogsToChat ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <MessageSquarePlus data-icon="inline-start" />
+            )}
             {isAddingLogsToChat ? "Adding..." : "Add to chat"}
           </Button>
         ) : null}

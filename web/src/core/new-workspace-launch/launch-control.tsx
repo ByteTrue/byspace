@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
 import {
   formatResolvedCommand,
@@ -104,6 +104,7 @@ export function LaunchControl({
   const { t } = useTranslation();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   const selectedProfile = useMemo(() => resolveLaunchProfile(target, profiles), [target, profiles]);
   // Leading with the noun keeps a profile named "Codex" from reading as a chat Codex agent.
@@ -124,9 +125,9 @@ export function LaunchControl({
   }, [router, serverId]);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen} compactMode="sheet">
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       {/* Suppressed while the menu is open so the two surfaces never overlap. */}
-      <Tooltip delayDuration={300} enabledOnDesktop={!open}>
+      <Tooltip delayDuration={300} open={tooltipOpen && !open} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <span className="flex min-w-0">
             <DropdownMenuTrigger
@@ -148,7 +149,7 @@ export function LaunchControl({
             </DropdownMenuTrigger>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="top" align="center">
           {t("newWorkspace.tooltips.launch")}
         </TooltipContent>
       </Tooltip>

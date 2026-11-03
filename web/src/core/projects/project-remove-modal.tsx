@@ -3,7 +3,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { useToast } from "@/contexts/toast-context";
 import { useHosts, getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -57,11 +58,11 @@ function ProjectRemoveHostRow({
       <Button
         variant="secondary"
         size="sm"
-        loading={isRowPending}
-        disabled={isPending}
-        onPress={handlePress}
-        testID={`project-remove-host-button-${host.serverId}`}
+        onClick={handlePress}
+        data-testid={`project-remove-host-button-${host.serverId}`}
+        disabled={isRowPending || isPending}
       >
+        {isRowPending ? <Spinner data-icon="inline-start" /> : null}
         {t("sidebar.project.confirmations.removeFromHost", { hostName })}
       </Button>
     </div>
@@ -220,23 +221,21 @@ export function ProjectRemoveModal({
         <div className="mt-2 flex flex-col gap-2">
           <Button
             variant="destructive"
-            size="md"
-            loading={pendingServerId === "all"}
-            disabled={isPending}
-            onPress={handleRemoveAllHostsVoid}
+            onClick={handleRemoveAllHostsVoid}
             className="w-full"
-            testID="project-remove-all-hosts-button"
+            data-testid="project-remove-all-hosts-button"
+            disabled={pendingServerId === "all" || isPending}
           >
+            {pendingServerId === "all" ? <Spinner data-icon="inline-start" /> : null}
             {t("sidebar.project.confirmations.removeFromAllHosts")}
           </Button>
 
           <Button
             variant="secondary"
-            size="md"
-            disabled={isPending}
-            onPress={handleModalClose}
+            onClick={handleModalClose}
             className="w-full"
-            testID="project-remove-cancel-button"
+            data-testid="project-remove-cancel-button"
+            disabled={isPending}
           >
             {t("sidebar.project.confirmations.cancel")}
           </Button>

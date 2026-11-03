@@ -1,13 +1,10 @@
 // Port of archive/expo-app:packages/app/src/components/community-links.tsx: Star, Sponsor and Community.
 import { useCallback } from "react";
 import { Heart } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { GitHubIcon } from "@/components/icons/github-icon";
 import { DiscordIcon } from "@/components/icons/discord-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
-
-const renderGitHubIcon = (color: string) => <GitHubIcon color={color} size={14} />;
-const renderDiscordIcon = (color: string) => <DiscordIcon color={color} size={14} />;
 
 export function CommunityLinks() {
   const handleOpenGitHub = useCallback(() => {
@@ -25,28 +22,28 @@ export function CommunityLinks() {
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={renderGitHubIcon}
-        onPress={handleOpenGitHub}
-        testID="community-links-github-star"
+        onClick={handleOpenGitHub}
+        data-testid="community-links-github-star"
       >
+        <GitHubIcon color="currentColor" size={14} />
         Star
       </Button>
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={Heart}
-        onPress={handleOpenSponsor}
-        testID="community-links-sponsor"
+        onClick={handleOpenSponsor}
+        data-testid="community-links-sponsor"
       >
+        <Heart data-icon="inline-start" />
         Sponsor
       </Button>
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={renderDiscordIcon}
-        onPress={handleOpenDiscord}
-        testID="community-links-discord"
+        onClick={handleOpenDiscord}
+        data-testid="community-links-discord"
       >
+        <DiscordIcon color="currentColor" size={14} />
         Community
       </Button>
     </div>

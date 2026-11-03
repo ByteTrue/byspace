@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/file-pane/pane.tsx. The read, live-update, edit, save and
 // conflict logic is the Expo file's; the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/file-pane.py; edit it directly.
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { useTranslation } from "react-i18next";
@@ -414,7 +414,8 @@ function FilePanePresentation({
       <div className="flex min-h-0 flex-1 flex-col bg-background" data-testid="workspace-file-pane">
         <div className={CENTER_STATE}>
           <span className={ERROR_TEXT}>{errorMessage}</span>
-          <Button variant="outline" size="sm" onPress={onRetryRead} loading={retryingRead}>
+          <Button variant="outline" size="sm" onClick={onRetryRead} disabled={retryingRead}>
+            {retryingRead ? <Spinner data-icon="inline-start" /> : null}
             {retryLabel}
           </Button>
         </div>

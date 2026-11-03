@@ -2,7 +2,7 @@
 // switch / select / input / action rows built on it. Same props; the view is DOM.
 import { Children, isValidElement, useCallback, type ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -137,7 +137,7 @@ export function SettingsSelect<Value extends string>({
 export function SettingsAction({ actionLabel, onPress, disabled, ...row }: SettingsActionProps) {
   return (
     <SettingsRow {...row}>
-      <Button variant="outline" size="sm" onPress={onPress} disabled={disabled}>
+      <Button variant="outline" size="sm" onClick={onPress} disabled={disabled}>
         {actionLabel}
       </Button>
     </SettingsRow>

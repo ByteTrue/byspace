@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
@@ -250,18 +250,18 @@ export function TerminalProfileEditModal({
           <Button
             variant="secondary"
             className="flex-1"
-            onPress={handleCancel}
+            onClick={handleCancel}
+            data-testid="terminal-profile-cancel-button"
             disabled={isPending}
-            testID="terminal-profile-cancel-button"
           >
             {t("common.actions.cancel")}
           </Button>
           <Button
             variant="default"
             className="flex-1"
-            onPress={handleSave}
+            onClick={handleSave}
+            data-testid="terminal-profile-save-button"
             disabled={isPending}
-            testID="terminal-profile-save-button"
           >
             {isPending
               ? t("settings.host.terminalProfiles.saving")

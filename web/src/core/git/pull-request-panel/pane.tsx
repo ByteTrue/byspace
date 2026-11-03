@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -23,11 +23,7 @@ import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachment
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import {
-  PaneContentToolbar,
-  paneContentToolbarIconSize,
-  ToolbarButton,
-} from "@/components/ui/pane-content-toolbar";
+import { PaneContentToolbar, ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
 import type { PaneNativeContribution } from "@/git/client-forge-module";
@@ -412,11 +408,11 @@ export function PullRequestPane({
             <Button
               variant="ghost"
               size="xs"
-              leftIcon={ExternalLink}
-              onPress={handleOpenPrUrl}
+              onClick={handleOpenPrUrl}
               className="h-6 min-h-6 gap-1 rounded-md px-1 py-0"
-              testID="pr-pane-view-pr"
+              data-testid="pr-pane-view-pr"
             >
+              <ExternalLink data-icon="inline-start" />
               {t("workspace.git.pr.actions.viewPullRequest")}
             </Button>
           </div>
@@ -435,10 +431,7 @@ export function PullRequestPane({
               {isRefreshing ? (
                 <Spinner className="text-muted-foreground" />
               ) : (
-                <RotateCw
-                  size={paneContentToolbarIconSize(isCompact)}
-                  className="text-muted-foreground"
-                />
+                <RotateCw className="text-muted-foreground" />
               )}
             </ToolbarButton>
           ) : null}
@@ -502,10 +495,10 @@ export function PullRequestPane({
               <Button
                 variant="ghost"
                 size="xs"
-                leftIcon={MessageSquarePlus}
-                onPress={handleAddAllToChat}
+                onClick={handleAddAllToChat}
                 disabled={activityLoading}
               >
+                <MessageSquarePlus data-icon="inline-start" />
                 Add all to chat
               </Button>
             </div>

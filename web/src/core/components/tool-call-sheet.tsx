@@ -1,13 +1,18 @@
-// Port of archive/expo-app:packages/app/src/components/tool-call-sheet.tsx: on a phone a tool call opens in a
-// bottom drawer (60% of the screen, dragged up to 95%) instead of expanding inline.
+// On a phone a tool call opens in a shadcn bottom Drawer instead of expanding inline.
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import type { ToolCallIconComponent } from "@/utils/tool-call-icon";
-import { SnapDrawer } from "~/components/snap-drawer";
-import { DrawerTitle } from "~/components/ui/drawer";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "~/components/ui/drawer";
+import { Button } from "~/components/ui/button";
+import { X } from "lucide-react";
 
 export interface ToolCallSheetData {
   toolName: string;
@@ -32,8 +37,6 @@ export function useToolCallSheet(): ToolCallSheetContextValue {
   return context;
 }
 
-const SNAP_POINTS = [0.6, 0.95];
-
 export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
   const [sheetData, setSheetData] = useState<ToolCallSheetData | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -52,47 +55,36 @@ export function ToolCallSheetProvider({ children }: { children: ReactNode }) {
   return (
     <ToolCallSheetContext value={contextValue}>
       {children}
-      <SnapDrawer
-        open={isSheetOpen}
-        onOpenChange={setIsSheetOpen}
-        snapPoints={SNAP_POINTS}
-        onAnimationEnd={handleAnimationEnd}
-        aria-describedby={undefined}
-        // The Expo app's ToolCallSheetModal: surface2 with the lg (10px) radius
-        className="bg-muted data-[vaul-drawer-direction=bottom]:rounded-t-[10px]"
-      >
-        {sheetData ? <ToolCallSheetContent data={sheetData} onClose={closeToolCall} /> : null}
-      </SnapDrawer>
+      <Drawer open={isSheetOpen} onOpenChange={setIsSheetOpen} onAnimationEnd={handleAnimationEnd}>
+        <DrawerContent aria-describedby={undefined}>
+          {sheetData ? <ToolCallSheetContent data={sheetData} /> : null}
+        </DrawerContent>
+      </Drawer>
     </ToolCallSheetContext>
   );
 }
 
-function ToolCallSheetContent({ data, onClose }: { data: ToolCallSheetData; onClose: () => void }) {
+function ToolCallSheetContent({ data }: { data: ToolCallSheetData }) {
   const { t } = useTranslation();
   const { toolName, displayName, detail, errorText, icon: Icon, showLoadingSkeleton } = data;
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-muted">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex shrink-0 text-foreground">
-            <Icon size={20} color="currentColor" />
-          </span>
-          <DrawerTitle className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-            {displayName}
-          </DrawerTitle>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t("common.actions.close")}
-          data-testid="tool-call-sheet-close"
-          className="p-2 text-muted-foreground"
-        >
-          <X size={20} />
-        </button>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <DrawerHeader className="flex-row items-center gap-2">
+        <Icon size={16} color="currentColor" />
+        <DrawerTitle className="min-w-0 flex-1 truncate text-left">{displayName}</DrawerTitle>
+        <DrawerClose asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("common.actions.close")}
+            data-testid="tool-call-sheet-close"
+          >
+            <X />
+          </Button>
+        </DrawerClose>
+      </DrawerHeader>
       {/* The page colour: detail blocks are flat on their background. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-card">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <ToolCallDetailsContent
           toolName={toolName}
           detail={detail}

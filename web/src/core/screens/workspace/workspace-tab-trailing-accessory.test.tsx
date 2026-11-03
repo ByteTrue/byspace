@@ -190,17 +190,6 @@ describe("MobileTabTrailingAccessory", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the per-session actions as a bottom sheet on compact (so it is reachable over the sessions sheet)", () => {
-    const onRenameTab = vi.fn();
-    current = renderAccessory(agentTab(), onRenameTab);
-
-    // The fix: the menu must open as a sheet, not the default popover that stacks a
-    // fragile second native Modal over the sessions bottom sheet.
-    expect(capturedRootProps).toContainEqual({ compactMode: "sheet" });
-    expect(capturedContentProps[0]?.sheetTitle).toBe("My session");
-    expect(capturedContentProps[0]?.testID).toBe("workspace-tab-menu-agent_123");
-  });
-
   it("reaches Rename for an agent session", () => {
     const onRenameTab = vi.fn();
     const rendered = renderAccessory(agentTab(), onRenameTab);

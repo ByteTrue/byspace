@@ -15,7 +15,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -204,7 +204,6 @@ function AddCustomModelSubSheet({
       visible={visible}
       onClose={onClose}
       desktopMaxWidth={420}
-      snapPoints={ADD_SNAP_POINTS}
       testID="add-custom-model-sheet"
     >
       <div className="flex flex-col gap-3">
@@ -223,10 +222,10 @@ function AddCustomModelSubSheet({
         />
         {error ? <span className="text-xs leading-[normal] text-destructive">{error}</span> : null}
         <div className="flex flex-row justify-end gap-2">
-          <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
             {t("common.actions.cancel")}
           </Button>
-          <Button variant="default" size="sm" onPress={handleAdd} disabled={!canAdd || saving}>
+          <Button variant="default" size="sm" onClick={handleAdd} disabled={!canAdd || saving}>
             {saving ? t("settings.providers.models.adding") : t("settings.providers.models.add")}
           </Button>
         </div>
@@ -367,7 +366,6 @@ function DiagnosticSubSheet({
       header={header}
       visible={visible}
       onClose={onClose}
-      snapPoints={DIAGNOSTIC_SNAP_POINTS}
       scrollable={false}
       testID="provider-diagnostic-sheet"
     >
@@ -430,32 +428,22 @@ function renderProviderSheetFooter({
         </span>
       ) : null}
       <div className={cn("flex gap-2", isCompact ? "flex-col" : "flex-row items-center")}>
-        <Button
-          variant="secondary"
-          size="sm"
-          leftIcon={Plus}
-          onPress={onOpenAddSheet}
-          className={buttonClassName}
-        >
+        <Button variant="secondary" size="sm" onClick={onOpenAddSheet} className={buttonClassName}>
+          <Plus data-icon="inline-start" />
           {t("settings.providers.models.addModel")}
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          leftIcon={FileText}
-          onPress={onOpenDiagSheet}
-          className={buttonClassName}
-        >
+        <Button variant="secondary" size="sm" onClick={onOpenDiagSheet} className={buttonClassName}>
+          <FileText data-icon="inline-start" />
           {t("settings.providers.diagnostic.button")}
         </Button>
         <Button
           variant="default"
           size="sm"
-          leftIcon={modelsRefreshing ? undefined : RotateCw}
-          onPress={onRefreshModels}
-          disabled={modelsRefreshing}
+          onClick={onRefreshModels}
           className={buttonClassName}
+          disabled={modelsRefreshing}
         >
+          {modelsRefreshing ? null : <RotateCw data-icon="inline-start" />}
           {modelsRefreshing
             ? t("settings.providers.diagnostic.refreshing")
             : t("settings.providers.diagnostic.refresh")}
@@ -499,7 +487,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
         <span className="text-sm leading-[normal] text-muted-foreground text-center">
           {providerErrorMessage}
         </span>
-        <Button variant="default" size="sm" onPress={onRefresh} disabled={modelsRefreshing}>
+        <Button variant="default" size="sm" onClick={onRefresh} disabled={modelsRefreshing}>
           {modelsRefreshing
             ? t("settings.providers.models.retrying")
             : t("settings.providers.models.retry")}
@@ -736,7 +724,6 @@ export function ProviderDiagnosticSheet({
               })
             : undefined
         }
-        snapPoints={MAIN_SNAP_POINTS}
         // Fixed height across both faces: the Agent tab is a long model list and
         // the Terminal tab is two rows, so a content-sized card visibly resized
         // and re-centred when the switcher was used. It matches the sheet's own
@@ -785,7 +772,4 @@ export function ProviderDiagnosticSheet({
 // Open and expanded detents for the compact bottom sheet. The desktop card
 // pins to the first one so both faces of the sheet keep one height (see the
 // `desktopHeight` note on the sheet below).
-const MAIN_SNAP_POINTS = ["65%", "92%"];
 const DESKTOP_SHEET_HEIGHT = "65%";
-const ADD_SNAP_POINTS = ["40%"];
-const DIAGNOSTIC_SNAP_POINTS = ["50%", "85%"];

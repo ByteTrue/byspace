@@ -41,7 +41,7 @@ async function expectModelBrowserVisible(page: Page) {
 }
 
 async function closeTopSheet(page: Page) {
-  const closeTarget = page.getByLabel("Close", { exact: true }).last();
+  const closeTarget = page.getByRole("button", { name: "Close", exact: true }).last();
   if (await closeTarget.isVisible().catch(() => false)) {
     await closeTarget.click({ force: true });
     return;
@@ -60,9 +60,16 @@ async function closeTopSheet(page: Page) {
   await page.mouse.up();
 }
 
+// A dialog closes from its Close button; a phone's drawer has none.
 async function closeSheetByHeaderButton(page: Page, testId: string) {
   const sheet = page.getByTestId(testId);
-  await sheet.getByLabel("Close", { exact: true }).click();
+  const close = sheet.getByRole("button", { name: "Close", exact: true });
+  if (await close.isVisible().catch(() => false)) {
+    await close.click();
+  } else {
+    // A tap above the drawer lands on its overlay.
+    await page.mouse.click(10, 10);
+  }
   await expect(sheet).not.toBeVisible({ timeout: 10_000 });
 }
 

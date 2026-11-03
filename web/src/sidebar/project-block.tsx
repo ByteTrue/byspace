@@ -32,8 +32,12 @@ import { cn } from "cn";
 import { contextMenuKit, dropdownMenuKit, type MenuKit } from "~/components/menu-kit";
 import { Shortcut } from "~/components/shortcut";
 import { SortableList, type SortableItemProps } from "~/components/sortable-list";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/adaptive-menu";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "~/components/adaptive-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { SidebarMenu } from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
@@ -244,7 +248,7 @@ function ProjectHeaderRow({
           />
         ) : null}
         {onRemoveProject ? (
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} compactMode="sheet">
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger
               aria-label={t("sidebar.project.actions.menu")}
               data-testid={`sidebar-project-kebab-${project.viewKey}`}
@@ -253,11 +257,7 @@ function ProjectHeaderRow({
             >
               <EllipsisVertical className="size-3.5" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-[220px]"
-              sheetTitle={t("sidebar.project.actions.menu")}
-            >
+            <DropdownMenuContent align="end" className="w-[220px]">
               <ProjectMenuItems
                 kit={dropdownMenuKit}
                 projectViewKey={project.viewKey}
@@ -279,7 +279,6 @@ function ProjectHeaderRow({
       <ContextMenuContent
         className="w-[220px]"
         data-testid={`sidebar-project-context-menu-${project.viewKey}`}
-        sheetTitle={t("sidebar.project.actions.menu")}
       >
         <ProjectMenuItems
           kit={contextMenuKit}

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "cn";
 import { useTranslation } from "react-i18next";
+import { ArrowUpRight } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
-import { ExternalLink } from "@/components/ui/external-link";
 import { Spinner } from "~/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -96,10 +97,12 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
   );
   const docsLink = useMemo(
     () => (
-      <ExternalLink
-        href={METADATA_GENERATION_DOCS_URL}
-        label={t("settings.metadataGeneration.docs")}
-      />
+      <Button variant="link" size="sm" asChild>
+        <a href={METADATA_GENERATION_DOCS_URL} target="_blank" rel="noreferrer">
+          {t("settings.metadataGeneration.docs")}
+          <ArrowUpRight data-icon="inline-end" />
+        </a>
+      </Button>
     ),
     [t],
   );

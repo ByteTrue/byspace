@@ -6,7 +6,7 @@ import { useFocusEffect } from "~/app/route-focus";
 import { ArrowUpRight, Blocks, Check, Settings2 } from "lucide-react";
 import type { AgentSkillOperation, AgentSkillsStatus } from "@bytetrue/protocol/messages";
 import type { TFunction } from "i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostFeature } from "@/runtime/host-features";
@@ -129,11 +129,11 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={docsIcon}
         className="gap-1 text-xs text-muted-foreground"
-        onPress={handleOpenDocs}
-        accessibilityLabel={t("settings.host.skills.openDocs")}
+        onClick={handleOpenDocs}
+        aria-label={t("settings.host.skills.openDocs")}
       >
+        {docsIcon}
         {t("settings.host.skills.docs")}
       </Button>
     ),
@@ -175,11 +175,11 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
             <Button
               variant="ghost"
               size="sm"
-              leftIcon={chooseIcon}
-              onPress={handleOpen}
+              onClick={handleOpen}
+              aria-label={t("settings.host.skills.choose")}
               disabled={skills.status === null || skills.isWorking}
-              accessibilityLabel={t("settings.host.skills.choose")}
             >
+              {chooseIcon}
               {isCompact ? null : t("settings.host.skills.choose")}
             </Button>
             {hasSelected ? (
@@ -240,7 +240,7 @@ function SkillsActions({
             {t("settings.host.skills.actions.installed")}
           </span>
         </div>
-        <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>
+        <Button variant="outline" size="sm" onClick={onUninstall} disabled={isWorking}>
           {t("settings.host.skills.actions.uninstall")}
         </Button>
       </div>
@@ -249,19 +249,19 @@ function SkillsActions({
   if (state === "drift") {
     return (
       <div className="flex flex-row items-center gap-2">
-        <Button variant="outline" size="sm" onPress={onReconcile} disabled={isWorking}>
+        <Button variant="outline" size="sm" onClick={onReconcile} disabled={isWorking}>
           {isWorking
             ? t("settings.host.skills.actions.working")
             : t("settings.host.skills.actions.update")}
         </Button>
-        <Button variant="outline" size="sm" onPress={onUninstall} disabled={isWorking}>
+        <Button variant="outline" size="sm" onClick={onUninstall} disabled={isWorking}>
           {t("settings.host.skills.actions.uninstall")}
         </Button>
       </div>
     );
   }
   return (
-    <Button variant="outline" size="sm" onPress={onInstall} disabled={isWorking}>
+    <Button variant="outline" size="sm" onClick={onInstall} disabled={isWorking}>
       {isWorking
         ? t("settings.host.skills.actions.installing")
         : t("settings.host.skills.actions.install")}

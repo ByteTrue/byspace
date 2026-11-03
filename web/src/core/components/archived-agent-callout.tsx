@@ -2,7 +2,7 @@
 // an archived agent — "This agent is archived" and an Unarchive button.
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -34,7 +34,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: { serverId: string; 
             <Button
               size="sm"
               variant="secondary"
-              onPress={handleUnarchive}
+              onClick={handleUnarchive}
               disabled={!isConnected || isUnarchiving}
             >
               {t("agentPanel.archived.unarchive")}

@@ -3,7 +3,7 @@
 // restore); the view is DOM and Tailwind. Keep the two in step until the cutover.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-panel.py; edit it directly.
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { TFunction } from "i18next";
 import { ArrowDownToLine, ListChevronsDownUp, SquarePen } from "lucide-react";
@@ -37,13 +37,8 @@ import {
 import { getActiveMessageSubmissions } from "@/composer/submission/model";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
-import {
-  ToastViewport,
-  useToastHost,
-  type ToastApi,
-  type ToastState,
-} from "@/components/toast-host";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { type ToastApi, useToastApi } from "@/components/toast-host";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
@@ -126,6 +121,7 @@ interface ChatAgentStateShape {
 const RECONNECT_TOAST_DELAY_MS = 1_000;
 
 const reconnectToastStateByServerId = new Map<string, ReconnectToastState>();
+const RECONNECT_TOAST_ID = "agent-reconnecting";
 
 interface ChatAgentSelectedState extends ChatAgentStateShape {
   archivedAt: Date | null;
@@ -225,7 +221,12 @@ function AgentLoadErrorView({ message, onRetry }: { message: string; onRetry: ()
         </span>
         <span className="mt-2 text-center text-sm text-muted-foreground">{message}</span>
         <div className="mt-4">
-          <Button size="sm" variant="secondary" onPress={onRetry} testID="agent-load-error-retry">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onRetry}
+            data-testid="agent-load-error-retry"
+          >
             {t("common.actions.retry")}
           </Button>
         </div>
@@ -790,7 +791,7 @@ function ChatAgentContent({
 }) {
   const { t } = useTranslation();
   const isPaneVisible = useRetainedPanelActive();
-  const { api: toastApi, toast: toastState, dismiss: dismissToast } = useToastHost();
+  const toastApi = useToastApi();
   const { isArchivingAgent } = useArchiveAgent();
   const streamViewRef = useRef<AgentStreamViewHandle>(null);
   const clearOnAgentBlurRef = useRef<() => void>(() => {});
@@ -893,7 +894,7 @@ function ChatAgentContent({
     if (!shouldPresentReconnectToast) {
       if (reconnectToastPresentedRef.current) {
         reconnectToastPresentedRef.current = false;
-        dismissToast();
+        toastApi.dismiss(RECONNECT_TOAST_ID);
       }
       return;
     }
@@ -920,6 +921,7 @@ function ChatAgentContent({
             />
           ),
           testID: "agent-reconnecting-toast",
+          id: RECONNECT_TOAST_ID,
         });
       }
       return;
@@ -941,11 +943,12 @@ function ChatAgentContent({
           />
         ),
         testID: "agent-reconnecting-toast",
+        id: RECONNECT_TOAST_ID,
       });
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [connectionStatus, dismissToast, serverId, shouldPresentReconnectToast, toastApi, t]);
+  }, [connectionStatus, serverId, shouldPresentReconnectToast, toastApi, t]);
 
   const isArchivingCurrentAgent = Boolean(agentId && isArchivingAgent({ serverId, agentId }));
 
@@ -1194,8 +1197,6 @@ function ChatAgentContent({
       routeBottomAnchorRequest={routeBottomAnchorRequest}
       hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
       toastApi={toastApi}
-      toast={toastState}
-      dismiss={dismissToast}
       streamViewRef={streamViewRef}
       handleComposerHeightChange={handleComposerHeightChange}
       handleMessageSent={handleMessageSent}
@@ -1223,8 +1224,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   routeBottomAnchorRequest,
   hasAppliedAuthoritativeHistory,
   toastApi,
-  toast,
-  dismiss,
   streamViewRef,
   handleComposerHeightChange,
   handleMessageSent,
@@ -1248,8 +1247,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   routeBottomAnchorRequest: RouteBottomAnchorRequest;
   hasAppliedAuthoritativeHistory: boolean;
   toastApi: ToastApi;
-  toast: ToastState | null;
-  dismiss: () => void;
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   handleComposerHeightChange: (height: number) => void;
   handleMessageSent: () => void;
@@ -1429,9 +1426,9 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
                   <Button
                     size="sm"
                     variant="secondary"
-                    onPress={retryTimelineSync}
+                    onClick={retryTimelineSync}
+                    data-testid="agent-timeline-sync-retry"
                     disabled={isRetryingHistorySync}
-                    testID="agent-timeline-sync-retry"
                   >
                     {isRetryingHistorySync
                       ? t("agentPanel.states.timelineSyncRetrying")
@@ -1452,8 +1449,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
               <Spinner className="size-8 text-muted-foreground" />
             </div>
           ) : null}
-
-          <ToastViewport toast={toast} onDismiss={dismiss} placement="panel" />
         </DockedChatSurface>
 
         {isArchivingCurrentAgent ? (
@@ -1508,7 +1503,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   hasActiveComposer: boolean;
   hasVisibleAgentTracks: boolean;
-  toast: ReturnType<typeof useToastHost>["api"];
+  toast: ToastApi;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   onScrollToBottomVisibilityChange: (visible: boolean) => void;
 }) {
@@ -1648,7 +1643,7 @@ const AgentStreamControlButton = memo(function AgentStreamControlButton({
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   return (
-    <Tooltip delayDuration={300} enabledOnDesktop>
+    <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -1668,7 +1663,7 @@ const AgentStreamControlButton = memo(function AgentStreamControlButton({
           />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" align="center" offset={8}>
+      <TooltipContent side="bottom" align="center">
         {accessibilityLabel}
       </TooltipContent>
     </Tooltip>

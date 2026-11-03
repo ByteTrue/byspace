@@ -61,7 +61,7 @@ import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { AddRemoteSshHostModal } from "@/components/add-remote-ssh-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 
 import { CommunityLinks } from "@/components/community-links";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -409,7 +409,7 @@ function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
           <span className={settingsStyles.rowTitle}>{t("settings.diagnostics.app.rowTitle")}</span>
           <span className={settingsStyles.rowHint}>{t("settings.diagnostics.app.rowHint")}</span>
         </div>
-        <Button variant="secondary" size="sm" onPress={openAppDiagnostic}>
+        <Button variant="secondary" size="sm" onClick={openAppDiagnostic}>
           {t("settings.diagnostics.app.run")}
         </Button>
       </div>

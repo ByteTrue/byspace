@@ -5,7 +5,7 @@ import { useCallback, useMemo, type MouseEvent, type ReactElement } from "react"
 import { Archive, Unlink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getProviderIcon } from "@/components/provider-icons";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -285,7 +285,7 @@ function SubagentActionButton({
     [onPress],
   );
   return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={0}>
       <TooltipTrigger asChild disabled={!visible}>
         <button
           type="button"
@@ -298,7 +298,7 @@ function SubagentActionButton({
           <Icon size={ROW_ICON_SIZE} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         {tooltipLabel}
       </TooltipContent>
     </Tooltip>

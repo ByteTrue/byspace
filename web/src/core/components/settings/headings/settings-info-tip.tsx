@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
 
 interface SettingsInfoTipProps {
@@ -16,7 +16,7 @@ interface SettingsInfoTipProps {
 export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
   const { t } = useTranslation();
   return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile>
+    <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -27,7 +27,7 @@ export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
           <Info size={ICON_SIZE.sm} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" align="start" offset={8}>
+      <TooltipContent side="top" align="start">
         <span className="text-sm leading-[1.4]">{info}</span>
       </TooltipContent>
     </Tooltip>

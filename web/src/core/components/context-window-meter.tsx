@@ -4,7 +4,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatTokenCount } from "@/components/context-window-meter.utils";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ProviderUsageTooltipSection } from "@/provider-usage/tooltip-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { cn } from "cn";
@@ -139,13 +139,7 @@ export function ContextWindowMeter({
   const formattedSessionCost =
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
   return (
-    <Tooltip
-      open={isTooltipOpen}
-      onOpenChange={handleTooltipOpenChange}
-      delayDuration={0}
-      enabledOnDesktop
-      enabledOnMobile
-    >
+    <Tooltip open={isTooltipOpen} onOpenChange={handleTooltipOpenChange} delayDuration={0}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -180,7 +174,7 @@ export function ContextWindowMeter({
           ) : null}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         <div className="flex min-w-[200px] flex-col gap-1.5">
           <span>{t("contextWindow.title")}</span>
           <span className="leading-[1.4]">

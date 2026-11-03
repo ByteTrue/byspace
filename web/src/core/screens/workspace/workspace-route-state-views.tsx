@@ -4,8 +4,8 @@
 import type { ReactNode } from "react";
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
 import { formatConnectionStatus } from "@/utils/daemons";
 import { Spinner } from "~/components/ui/spinner";
@@ -170,11 +170,11 @@ function ArchivedWorkspaceRecovery({
         <Button
           size="sm"
           variant="default"
-          leftIcon={isRestoring ? undefined : RETRY_ICON}
-          onPress={onRecover}
+          onClick={onRecover}
+          data-testid="workspace-recovery-action"
           disabled={isRestoring}
-          testID="workspace-recovery-action"
         >
+          {isRestoring ? undefined : RETRY_ICON}
           {isRestoring ? t("workspace.route.recovery.restoringAction") : actionLabel}
         </Button>
       </Actions>
@@ -199,10 +199,12 @@ function WorkspaceRecoveryInspectionFailed({
         <p className="leading-5 text-destructive">{state.error}</p>
       </TextStack>
       <Actions>
-        <Button size="sm" variant="default" leftIcon={RETRY_ICON} onPress={onRetry}>
+        <Button size="sm" variant="default" onClick={onRetry}>
+          {RETRY_ICON}
           {t("common.actions.retry")}
         </Button>
-        <Button size="sm" variant="outline" leftIcon={BACK_ICON} onPress={onDismiss}>
+        <Button size="sm" variant="outline" onClick={onDismiss}>
+          {BACK_ICON}
           {t("common.actions.back")}
         </Button>
       </Actions>
@@ -235,11 +237,11 @@ function WorkspaceUnreachable({
               })}
         </p>
         {state.lastError ? (
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <p className="line-clamp-3 leading-5 text-destructive">{state.lastError}</p>
             </TooltipTrigger>
-            <TooltipContent side="top" offset={8} maxWidth={420}>
+            <TooltipContent side="top" className="max-w-[420px]">
               {state.lastError}
             </TooltipContent>
           </Tooltip>
@@ -247,10 +249,12 @@ function WorkspaceUnreachable({
       </TextStack>
       {canRetry ? (
         <Actions>
-          <Button size="sm" variant="default" leftIcon={RETRY_ICON} onPress={onRetry}>
+          <Button size="sm" variant="default" onClick={onRetry}>
+            {RETRY_ICON}
             {t("common.actions.retry")}
           </Button>
-          <Button size="sm" variant="outline" leftIcon={SETTINGS_ICON} onPress={onManageHost}>
+          <Button size="sm" variant="outline" onClick={onManageHost}>
+            {SETTINGS_ICON}
             {t("workspace.route.manageHost")}
           </Button>
         </Actions>
@@ -278,7 +282,8 @@ function WorkspaceEmptyState({
         <p className="text-muted-foreground">{description ?? hostName}</p>
       </TextStack>
       <Actions>
-        <Button size="sm" variant="default" leftIcon={BACK_ICON} onPress={onDismiss}>
+        <Button size="sm" variant="default" onClick={onDismiss}>
+          {BACK_ICON}
           {t("common.actions.back")}
         </Button>
       </Actions>

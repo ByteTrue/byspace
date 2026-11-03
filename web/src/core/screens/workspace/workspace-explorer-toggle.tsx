@@ -1,11 +1,7 @@
 import type { CSSProperties } from "react";
 import { PanelRight } from "lucide-react";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
-import {
-  extraMutedIconColorMapping,
-  iconButtonChromeGlyphSize,
-  mutedIconColorMapping,
-} from "@/components/ui/icon-button-chrome";
+import { extraMutedIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { withTheme } from "~/app/theme-object";
 
@@ -78,7 +74,7 @@ export function WorkspaceExplorerToggle({
       accessibilityState={accessibilityState}
     >
       <ThemedPanelRight
-        size={iconButtonChromeGlyphSize("large")}
+        size={16}
         strokeWidth={1.5}
         themeProps={mobile ? mutedIconColorMapping : extraMutedIconColorMapping}
       />

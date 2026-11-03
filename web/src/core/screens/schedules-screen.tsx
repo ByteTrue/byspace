@@ -9,14 +9,13 @@ import {
   type ReactElement,
 } from "react";
 import { useIsFocused } from "~/app/route-focus";
-import { CalendarClock, Plus } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Plus } from "lucide-react";
 import { MenuHeader } from "@/components/headers/menu-header";
-import { ExternalLink } from "@/components/ui/external-link";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
 import { ScheduleFormSheet } from "@/components/schedules/schedule-form-sheet";
 import { SchedulesTable, type ScheduleRowView } from "@/components/schedules/schedules-table";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
@@ -241,7 +240,7 @@ function SchedulesScreenBody({
     return (
       <div className={CENTERED}>
         <span className={MUTED_TEXT}>Unable to load schedules</span>
-        <Button variant="ghost" onPress={onRetry} testID="schedules-retry">
+        <Button variant="ghost" onClick={onRetry} data-testid="schedules-retry">
           Try again
         </Button>
       </div>
@@ -296,13 +295,8 @@ function SchedulesScreenBody({
             </TabsList>
           </Tabs>
         </div>
-        <Button
-          variant="outline"
-          leftIcon={Plus}
-          onPress={onCreate}
-          size="sm"
-          testID="schedules-new"
-        >
+        <Button variant="outline" onClick={onCreate} size="sm" data-testid="schedules-new">
+          <Plus data-icon="inline-start" />
           New schedule
         </Button>
       </div>
@@ -332,12 +326,19 @@ function SchedulesEmptyState({
       <div className="flex flex-col items-center gap-2">
         <span className={EMPTY_TITLE}>No active schedules</span>
         <span className={MUTED_TEXT}>Schedules run agents on a cadence.</span>
-        <ExternalLink
-          href="https://github.com/ByteTrue/byspace/blob/main/public-docs/schedules.md"
-          label="See docs"
-        />
+        <Button variant="link" size="sm" asChild>
+          <a
+            href="https://github.com/ByteTrue/byspace/blob/main/public-docs/schedules.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            See docs
+            <ArrowUpRight data-icon="inline-end" />
+          </a>
+        </Button>
       </div>
-      <Button variant="outline" leftIcon={Plus} onPress={onCreate} testID="schedules-empty-new">
+      <Button variant="outline" onClick={onCreate} data-testid="schedules-empty-new">
+        <Plus data-icon="inline-start" />
         New schedule
       </Button>
     </div>

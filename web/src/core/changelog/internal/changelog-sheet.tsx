@@ -7,12 +7,8 @@ import { useTranslation } from "react-i18next";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import {
-  iconButtonChromeClassName,
-  iconButtonChromeGlyphSize,
-} from "@/components/ui/icon-button-chrome";
 import { Badge } from "~/components/ui/badge";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -29,10 +25,8 @@ import { withTheme } from "~/app/theme-object";
 const WEBSITE_CHANGELOG_URL = "https://github.com/ByteTrue/byspace/releases";
 
 const ThemedGift = withTheme(Gift);
-const ThemedExternalLink = withTheme(ExternalLink);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const sheetLeadingIcon = <ThemedGift size={ICON_SIZE.md} themeProps={mutedColorMapping} />;
-const WEBSITE_BUTTON = iconButtonChromeClassName({ size: "large" });
 
 interface ChangelogSheetProps {
   visible: boolean;
@@ -53,18 +47,15 @@ export function ChangelogSheet({ visible, onClose }: ChangelogSheetProps) {
       title: t("changelog.title"),
       leading: sheetLeadingIcon,
       actions: (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={handleOpenWebsite}
-          className={WEBSITE_BUTTON}
           aria-label={t("changelog.openWebsite")}
           data-testid="changelog-open-website"
         >
-          <ThemedExternalLink
-            size={iconButtonChromeGlyphSize("large")}
-            themeProps={mutedColorMapping}
-          />
-        </button>
+          <ExternalLink />
+        </Button>
       ),
     }),
     [handleOpenWebsite, t],
@@ -75,7 +66,6 @@ export function ChangelogSheet({ visible, onClose }: ChangelogSheetProps) {
       header={header}
       visible={visible}
       onClose={onClose}
-      snapPoints={SNAP_POINTS}
       desktopMaxWidth={620}
       desktopHeight="85%"
       testID="changelog-sheet"
@@ -84,8 +74,6 @@ export function ChangelogSheet({ visible, onClose }: ChangelogSheetProps) {
     </AdaptiveModalSheet>
   );
 }
-
-const SNAP_POINTS = ["85%", "95%"];
 
 interface ChangelogBodyProps {
   state: ChangelogState;
@@ -114,7 +102,7 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
           <AlertTitle>{t("changelog.error.title")}</AlertTitle>
           <AlertDescription>{t("changelog.error.description")}</AlertDescription>
           <AlertAction>
-            <Button variant="outline" size="sm" onPress={onRetry} testID="changelog-retry">
+            <Button variant="outline" size="sm" onClick={onRetry} data-testid="changelog-retry">
               {t("common.actions.retry")}
             </Button>
           </AlertAction>
@@ -137,9 +125,9 @@ function ChangelogBody({ state, shownReleases, onShowMore, onRetry }: ChangelogB
       {state.releases.length > visibleReleases.length ? (
         <Button
           variant="ghost"
-          onPress={onShowMore}
+          onClick={onShowMore}
           className="self-center"
-          testID="changelog-show-more"
+          data-testid="changelog-show-more"
         >
           {t("changelog.showMore")}
         </Button>

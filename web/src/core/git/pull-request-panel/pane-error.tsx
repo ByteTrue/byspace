@@ -2,7 +2,7 @@
 // failed, with a retry.
 import { RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 
 export function PullRequestPaneError({
   onRetry,
@@ -20,7 +20,8 @@ export function PullRequestPaneError({
       <p className="text-center text-xs text-muted-foreground">
         {message ?? t("workspace.git.diff.failedRefresh")}
       </p>
-      <Button variant="ghost" size="xs" leftIcon={RotateCw} onPress={onRetry}>
+      <Button variant="ghost" size="xs" onClick={onRetry}>
+        <RotateCw data-icon="inline-start" />
         {t("common.actions.retry")}
       </Button>
     </div>

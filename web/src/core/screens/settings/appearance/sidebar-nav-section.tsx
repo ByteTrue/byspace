@@ -14,7 +14,7 @@ import {
   Search,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Shortcut } from "~/components/shortcut";
 import { Switch } from "~/components/ui/switch";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -117,21 +117,23 @@ function SidebarNavRow({
             <Button
               variant="ghost"
               size="xs"
-              leftIcon={moveUpIcon}
-              onPress={handleMoveUp}
+              onClick={handleMoveUp}
+              aria-label={t("settings.appearance.sidebar.moveUp")}
+              data-testid={`sidebar-nav-move-up-${item.key}`}
               disabled={isFirst}
-              accessibilityLabel={t("settings.appearance.sidebar.moveUp")}
-              testID={`sidebar-nav-move-up-${item.key}`}
-            />
+            >
+              {moveUpIcon}
+            </Button>
             <Button
               variant="ghost"
               size="xs"
-              leftIcon={moveDownIcon}
-              onPress={handleMoveDown}
+              onClick={handleMoveDown}
+              aria-label={t("settings.appearance.sidebar.moveDown")}
+              data-testid={`sidebar-nav-move-down-${item.key}`}
               disabled={isLast}
-              accessibilityLabel={t("settings.appearance.sidebar.moveDown")}
-              testID={`sidebar-nav-move-down-${item.key}`}
-            />
+            >
+              {moveDownIcon}
+            </Button>
           </div>
         ) : null}
         <Switch

@@ -14,7 +14,7 @@ import { ArrowRight, ArrowRightLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
@@ -298,9 +298,9 @@ function TunnelsEnabledBody({
           <Button
             variant="secondary"
             size="sm"
-            onPress={handleStartAll}
+            onClick={handleStartAll}
+            data-testid="tunnels-start-all"
             disabled={batchBusy}
-            testID="tunnels-start-all"
           >
             {isZh ? "全部开启" : "Start all"}
           </Button>
@@ -309,9 +309,9 @@ function TunnelsEnabledBody({
           <Button
             variant="secondary"
             size="sm"
-            onPress={handlePauseAll}
+            onClick={handlePauseAll}
+            data-testid="tunnels-pause-all"
             disabled={batchBusy}
-            testID="tunnels-pause-all"
           >
             {isZh ? "全部暂停" : "Pause all"}
           </Button>
@@ -382,9 +382,9 @@ function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
         <Button
           variant="secondary"
           size="sm"
-          onPress={enable}
+          onClick={enable}
+          data-testid="tunnels-enable"
           disabled={enabling}
-          testID="tunnels-enable"
         >
           {enabling ? t("tunnels.enable.enabling") : t("tunnels.enable.action")}
         </Button>
@@ -402,7 +402,8 @@ function resolveBadgeClassName(state: AggregatedTunnelEntry["state"]): string | 
 function AddTunnelButton({ onPress }: { onPress: () => void }): ReactElement {
   const { t } = useTranslation();
   return (
-    <Button variant="outline" size="sm" leftIcon={Plus} onPress={onPress} testID="tunnels-add">
+    <Button variant="outline" size="sm" onClick={onPress} data-testid="tunnels-add">
+      <Plus data-icon="inline-start" />
       {t("tunnels.add")}
     </Button>
   );
@@ -454,13 +455,8 @@ function TunnelsListBody({
               {t("tunnels.emptyDescription")}
             </span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={Plus}
-            onPress={onAddTunnel}
-            testID="tunnels-empty-add"
-          >
+          <Button variant="outline" size="sm" onClick={onAddTunnel} data-testid="tunnels-empty-add">
+            <Plus data-icon="inline-start" />
             {t("tunnels.add")}
           </Button>
         </div>
@@ -616,20 +612,20 @@ function TunnelRow({
             <Button
               variant="outline"
               size="xs"
-              leftIcon={Pencil}
-              onPress={handleEdit}
+              onClick={handleEdit}
+              data-testid="tunnels-row-edit"
               disabled={!isConnected}
-              testID="tunnels-row-edit"
             >
+              <Pencil data-icon="inline-start" />
               {isZh ? "改端口" : "Edit"}
             </Button>
             <Button
               variant="ghost"
               size="xs"
-              onPress={remove}
+              onClick={remove}
+              aria-label={isZh ? "删除此端口转发" : "Remove port forward"}
+              data-testid="tunnels-row-delete"
               disabled={!isConnected}
-              accessibilityLabel={isZh ? "删除此端口转发" : "Remove port forward"}
-              testID="tunnels-row-delete"
             >
               {TRASH_ICON}
             </Button>
@@ -740,7 +736,7 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
           <Button
             variant="secondary"
             size="sm"
-            onPress={addPort}
+            onClick={addPort}
             disabled={saving || draft.trim().length === 0}
           >
             {saving ? t("tunnels.allowlist.saving") : t("tunnels.allowlist.add")}
@@ -766,7 +762,7 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
               <Button
                 variant="ghost"
                 size="xs"
-                onPress={makeRemovePortHandler(port)}
+                onClick={makeRemovePortHandler(port)}
                 disabled={saving}
               >
                 {TRASH_ICON}
@@ -1098,10 +1094,10 @@ function AddTunnelSheet({
         {t("tunnels.addForm.hint")}
       </span>
       <div className={SHEET_ACTIONS}>
-        <Button variant="secondary" onPress={onClose} disabled={submitting}>
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>
           {t("common.actions.cancel")}
         </Button>
-        <Button variant="default" onPress={submit} disabled={submitting}>
+        <Button variant="default" onClick={submit} disabled={submitting}>
           {submitting ? t("tunnels.addForm.submitting") : t("tunnels.add")}
         </Button>
       </div>
@@ -1236,10 +1232,15 @@ function EditTunnelSheet({
         <span className="mt-2 text-xs leading-[normal] text-red-300">{error}</span>
       ) : undefined}
       <div className={SHEET_ACTIONS}>
-        <Button variant="secondary" onPress={onClose} disabled={submitting}>
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>
           {t("common.actions.cancel")}
         </Button>
-        <Button variant="default" onPress={save} disabled={submitting} testID="tunnels-edit-save">
+        <Button
+          variant="default"
+          onClick={save}
+          data-testid="tunnels-edit-save"
+          disabled={submitting}
+        >
           {resolveEditSaveButtonLabel(submitting, isZh, t)}
         </Button>
       </div>

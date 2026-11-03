@@ -48,14 +48,13 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
-import { smallIconButtonChromeFrameSize } from "@/components/ui/icon-button-chrome";
 import {
   paneContentToolbarTrailingPadding,
   ToolbarButton,
   ToolbarControls,
 } from "@/components/ui/pane-content-toolbar";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -84,16 +83,16 @@ import { cn } from "cn";
 
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
+// shadcn's icon-xs button.
+const ICON_BUTTON_FRAME = 24;
 const PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING = 2;
 // As the Expo app: the split menu's glyph sits on the pane's trailing glyph rail (3px margin).
 const PANE_SPLIT_ACTIONS_OUTER_MARGIN =
-  paneContentToolbarTrailingPadding(false) - PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING;
+  paneContentToolbarTrailingPadding() - PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING;
 const PANE_SPLIT_ACTIONS_RESERVED_WIDTH =
-  smallIconButtonChromeFrameSize(false) +
-  PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING * 2 +
-  PANE_SPLIT_ACTIONS_OUTER_MARGIN;
+  ICON_BUTTON_FRAME + PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING * 2 + PANE_SPLIT_ACTIONS_OUTER_MARGIN;
 const PANE_SPLIT_ACTIONS_STYLE = { marginRight: PANE_SPLIT_ACTIONS_OUTER_MARGIN };
-const PANE_MAXIMIZE_ACTION_RESERVED_WIDTH = smallIconButtonChromeFrameSize(false) + 1;
+const PANE_MAXIMIZE_ACTION_RESERVED_WIDTH = ICON_BUTTON_FRAME + 1;
 const TAB_CHIP_HORIZONTAL_PADDING = 10;
 const TAB_CHIP_GAP = 4;
 const TAB_ROW_PADDING_HORIZONTAL = 6;
@@ -708,7 +707,7 @@ function TabChip({
       onAuxClick={handleAuxClick}
     >
       <ContextMenu key={tab.key}>
-        <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <ContextMenuTrigger
               {...attributes}
@@ -738,9 +737,8 @@ function TabChip({
           </TooltipTrigger>
           <TooltipContent
             side="bottom"
-            offset={8}
-            maxWidth={720}
-            testID={`workspace-tab-tooltip-${testIdentity}`}
+            data-testid={`workspace-tab-tooltip-${testIdentity}`}
+            className="max-w-[720px]"
           >
             {tab.target.kind === "agent" ? (
               <AgentTabTooltipBody

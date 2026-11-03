@@ -299,7 +299,7 @@ export async function expectNewWorkspaceDraft(page: Page, draft: string): Promis
 export async function selectNewWorkspaceHost(page: Page, hostLabel: string): Promise<void> {
   const trigger = page.getByTestId("host-picker-trigger");
   await trigger.click();
-  await page.getByRole("button", { name: hostLabel, exact: true }).click();
+  await page.getByRole("option", { name: hostLabel, exact: true }).click();
   await expect(trigger).toContainText(hostLabel);
 }
 
@@ -402,7 +402,7 @@ export async function searchAndSelectBranchInPicker(page: Page, name: string): P
 // Ref picker rows are named for a user: "main, origin branch" is the upstream copy and
 // "main, local branch, 2 commits ahead of origin main" is the local one.
 export function startingRefRow(page: Page, accessibleName: string) {
-  return page.getByRole("button", { name: accessibleName, exact: true });
+  return page.getByRole("option", { name: accessibleName, exact: true });
 }
 
 export async function expectStartingRefRows(page: Page, accessibleNames: string[]): Promise<void> {

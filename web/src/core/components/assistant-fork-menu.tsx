@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
 export type AssistantForkTarget = "tab" | "workspace";
 
@@ -48,7 +48,7 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
   );
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
-      <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
+      <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             accessibilityLabel={t("message.actions.forkMenu")}
@@ -59,7 +59,7 @@ export const AssistantForkMenu = memo(function AssistantForkMenu({
             <Split size={14} />
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="top" align="center">
           {t("message.actions.forkMenu")}
         </TooltipContent>
       </Tooltip>

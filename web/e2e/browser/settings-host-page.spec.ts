@@ -23,7 +23,7 @@ import { onceConfirm } from "../support/helpers/confirm-dialog";
 
 async function closeProviderSheet(page: Page) {
   const sheet = page.getByTestId("provider-settings-sheet");
-  await sheet.getByLabel("Close", { exact: true }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
   await expect(sheet).not.toBeVisible({ timeout: 10_000 });
 }
 

@@ -74,7 +74,7 @@ import {
   type QueuedComposerMessage,
 } from "@/composer/actions";
 import { useToast } from "@/contexts/toast-context";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { Shortcut } from "~/components/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
@@ -929,16 +929,16 @@ function ComposerCancelButton({
   );
   const shortcutNode = agentInterruptKeys ? <Shortcut chord={agentInterruptKeys} /> : null;
   return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={0}>
       <TooltipTrigger
-        onPress={handleCancelAgent}
+        onClick={handleCancelAgent}
         disabled={!isConnected || isCancellingAgent}
-        accessibilityLabel={accessibilityLabel}
+        aria-label={accessibilityLabel}
         className={cancelButtonClassName}
       >
         {icon}
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         <span className="flex items-center gap-2">
           <span>{t("composer.cancel.interrupt")}</span>
           {shortcutNode}

@@ -137,11 +137,11 @@ test.describe("Branch switcher", () => {
 
       const picker = page.getByTestId("combobox-desktop-container");
       await expect(picker).toBeVisible({ timeout: 30_000 });
-      const remoteOnlyOption = picker.getByRole("button", {
+      const remoteOnlyOption = picker.getByRole("option", {
         name: "remote-only, Remote",
         exact: true,
       });
-      const bothOption = picker.getByRole("button", {
+      const bothOption = picker.getByRole("option", {
         name: "both-source, Local • Remote",
         exact: true,
       });
@@ -149,7 +149,7 @@ test.describe("Branch switcher", () => {
       await expect(bothOption).toBeVisible();
       await expect(picker.getByText("Remote", { exact: true })).toBeVisible();
       await expect(
-        picker.getByRole("button", { name: "both-source, Local • Remote", exact: true }),
+        picker.getByRole("option", { name: "both-source, Local • Remote", exact: true }),
       ).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("branch-switcher-source.png") });
 
@@ -162,7 +162,7 @@ test.describe("Branch switcher", () => {
       await expect(search).toBeVisible({ timeout: 30_000 });
       await search.fill("both-source");
       await expect(
-        picker.getByRole("button", { name: "both-source, Local • Remote", exact: true }),
+        picker.getByRole("option", { name: "both-source, Local • Remote", exact: true }),
       ).toBeVisible();
       await page.keyboard.press("ArrowDown");
       await page.keyboard.press("ArrowUp");

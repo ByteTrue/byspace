@@ -42,7 +42,6 @@ interface DiagnosticCollectionResult {
   status: ProgressStatus;
 }
 
-const SNAP_POINTS = ["55%", "88%"];
 const ThemedCopy = withTheme(Copy);
 const ThemedRotateCw = withTheme(RotateCw);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -192,7 +191,6 @@ export function AppDiagnosticSheet({
       header={header}
       visible={visible}
       onClose={onClose}
-      snapPoints={SNAP_POINTS}
       scrollable={false}
       testID="app-diagnostic-sheet"
     >

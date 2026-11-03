@@ -1,12 +1,10 @@
-// Port of archive/expo-app:packages/app/src/components/download-toast.tsx: the bar along the bottom of the
-// window for the active file download — spinner while it runs, a check or an error when it ends,
-// dismissed automatically 3 seconds after it ends. On the web a download hands straight to the
-// browser, so the bar mostly shows the result, or why the download link could not be made.
-import { useCallback, useEffect, useMemo, useRef } from "react";
+// The active file download as a Sonner toast: loading while it runs, then success or an error,
+// keyed by the download so each update replaces it. On the web a download hands straight to the
+// browser, so the toast mostly shows the result, or why the download link could not be made.
+import { useEffect } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Check, X, XCircle } from "lucide-react";
-import { Spinner } from "~/components/ui/spinner";
+import { toast } from "sonner";
 import { useDownloadStore, formatSpeed, formatEta, type Download } from "@/stores/download-store";
 
 const AUTO_DISMISS_DELAY = 3000;
@@ -22,86 +20,30 @@ function getDownloadStatusText(download: Download, t: TFunction): string {
   return download.message ?? t("common.states.downloadFailed");
 }
 
-export function DownloadToast() {
+export function DownloadToast(): null {
   const { t } = useTranslation();
   const downloads = useDownloadStore((state) => state.downloads);
   const activeDownloadId = useDownloadStore((state) => state.activeDownloadId);
   const dismissDownload = useDownloadStore((state) => state.dismissDownload);
-  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const activeDownload = activeDownloadId ? downloads.get(activeDownloadId) : null;
 
   useEffect(() => {
-    if (dismissTimeoutRef.current) {
-      clearTimeout(dismissTimeoutRef.current);
-      dismissTimeoutRef.current = null;
-    }
-    if (activeDownload && activeDownload.status !== "downloading") {
-      dismissTimeoutRef.current = setTimeout(() => {
-        dismissDownload(activeDownload.id);
-      }, AUTO_DISMISS_DELAY);
-    }
-    return () => {
-      if (dismissTimeoutRef.current) {
-        clearTimeout(dismissTimeoutRef.current);
-      }
+    if (!activeDownload) return;
+    const options = {
+      id: activeDownload.id,
+      description: getDownloadStatusText(activeDownload, t),
+      testId: "download-toast",
+      onDismiss: () => dismissDownload(activeDownload.id),
+      onAutoClose: () => dismissDownload(activeDownload.id),
     };
-  }, [activeDownload, dismissDownload]);
-
-  const handleDismiss = useCallback(() => {
-    if (activeDownload) {
-      dismissDownload(activeDownload.id);
+    if (activeDownload.status === "downloading") {
+      toast.loading(activeDownload.fileName, { ...options, duration: Number.POSITIVE_INFINITY });
+    } else if (activeDownload.status === "complete") {
+      toast.success(activeDownload.fileName, { ...options, duration: AUTO_DISMISS_DELAY });
+    } else {
+      toast.error(activeDownload.fileName, { ...options, duration: AUTO_DISMISS_DELAY });
     }
-  }, [activeDownload, dismissDownload]);
+  }, [activeDownload, dismissDownload, t]);
 
-  if (!activeDownload) {
-    return null;
-  }
-
-  const percent = activeDownload.progress ? Math.round(activeDownload.progress.percent * 100) : 0;
-  return (
-    <div
-      className="pointer-events-none fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[1000]"
-      data-testid="download-toast"
-    >
-      <div
-        className="pointer-events-auto flex items-center gap-3 rounded-[10px] border bg-muted px-4 py-3 shadow-md"
-        role="status"
-      >
-        {activeDownload.status === "downloading" ? <Spinner className="text-foreground" /> : null}
-        {activeDownload.status === "complete" ? <Check size={18} className="text-primary" /> : null}
-        {activeDownload.status !== "downloading" && activeDownload.status !== "complete" ? (
-          <XCircle size={18} className="text-destructive" />
-        ) : null}
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-sm font-semibold text-foreground">
-            {activeDownload.fileName}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {getDownloadStatusText(activeDownload, t)}
-          </span>
-          {activeDownload.status === "downloading" && activeDownload.progress ? (
-            <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-background">
-              <ProgressFill percent={percent} />
-            </div>
-          ) : null}
-        </div>
-        {activeDownload.status !== "downloading" ? (
-          <button
-            type="button"
-            onClick={handleDismiss}
-            aria-label={t("common.actions.dismiss")}
-            className="rounded-sm p-1 text-muted-foreground hover:text-foreground"
-          >
-            <X size={16} />
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function ProgressFill({ percent }: { percent: number }) {
-  const style = useMemo(() => ({ width: `${percent}%` }), [percent]);
-  return <div className="h-full rounded-full bg-primary" style={style} />;
+  return null;
 }

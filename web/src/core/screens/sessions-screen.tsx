@@ -14,7 +14,7 @@ import { ChevronLeft, Import } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { MenuHeader } from "@/components/headers/menu-header";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { AgentList } from "@/components/agent-list";
 import { Search, X } from "lucide-react";
@@ -206,7 +206,7 @@ function SessionsScreenContent() {
     }
     return (
       <div className="flex flex-col items-center py-4">
-        <Button variant="ghost" onPress={loadMore} disabled={isLoadingMore}>
+        <Button variant="ghost" onClick={loadMore} disabled={isLoadingMore}>
           {isLoadingMore ? "Loading..." : t("sessions.actions.loadMore")}
         </Button>
       </div>
@@ -245,7 +245,7 @@ function SessionsScreenContent() {
       {!isInitialLoad && showLoadError ? (
         <div className={EMPTY_CONTAINER}>
           <span className={EMPTY_TEXT}>Unable to load sessions</span>
-          <Button variant="ghost" onPress={handleRefresh}>
+          <Button variant="ghost" onClick={handleRefresh}>
             Try again
           </Button>
         </div>
@@ -254,15 +254,17 @@ function SessionsScreenContent() {
         <div className={EMPTY_CONTAINER} data-testid="sessions-empty">
           <span className={EMPTY_TEXT}>{emptyText}</span>
           {isSearching ? (
-            <Button variant="ghost" onPress={handleClearSearch}>
+            <Button variant="ghost" onClick={handleClearSearch}>
               {t("sessions.actions.clearSearch")}
             </Button>
           ) : (
-            <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
+            <Button variant="ghost" onClick={handleBack}>
+              <ChevronLeft data-icon="inline-start" />
               Back
             </Button>
           )}
-          <Button variant="ghost" leftIcon={Import} onPress={importSession.open}>
+          <Button variant="ghost" onClick={importSession.open}>
+            <Import data-icon="inline-start" />
             {t("importSession.title")}
           </Button>
         </div>

@@ -201,10 +201,13 @@ export async function switchPairDeviceToHost(page: Page, serverId: string): Prom
 }
 
 export async function openRelaySecurityDocs(page: Page): Promise<void> {
-  await page.getByRole("link", { name: "Read how BySpace relay works" }).click();
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("@byspace:e2e-opened-url")))
-    .toBe("https://github.com/ByteTrue/byspace/blob/main/SECURITY.md");
+  // A plain link that opens in a new tab, as markdown links do.
+  const link = page.getByRole("link", { name: "Read how BySpace relay works" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://github.com/ByteTrue/byspace/blob/main/SECURITY.md",
+  );
+  await expect(link).toHaveAttribute("target", "_blank");
 }
 
 export function expectDaemonPidUnchanged(

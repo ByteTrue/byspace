@@ -20,8 +20,7 @@ import {
   HorizontalScrollBoundaryShades,
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
-import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { PanelIconProps } from "@/panels/panel-registry";
 import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
 import type { WorkspaceDesktopTabRowItem } from "@/screens/workspace/workspace-desktop-tabs-row";
@@ -92,7 +91,7 @@ function ExplorerSidebarTab({
   const renderPresentation = useCallback(
     (presentation: WorkspaceTabPresentation) => (
       <ContextMenu>
-        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <ContextMenuTrigger
               {...(dragHandleProps?.attributes as object | undefined)}
@@ -114,7 +113,7 @@ function ExplorerSidebarTab({
               <WorkspaceTabIcon
                 presentation={presentation}
                 active={item.isActive}
-                size={iconButtonChromeGlyphSize("small")}
+                size={14}
                 strokeWidth={1.5}
                 backdrop="surfaceSidebar"
               />
@@ -128,9 +127,7 @@ function ExplorerSidebarTab({
               </span>
             </ContextMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom" offset={8}>
-            {presentation.tooltip}
-          </TooltipContent>
+          <TooltipContent side="bottom">{presentation.tooltip}</TooltipContent>
         </Tooltip>
         <ContextMenuContent align="start" minWidth={180}>
           {canMoveToMain ? (

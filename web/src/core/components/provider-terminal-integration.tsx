@@ -7,7 +7,7 @@ import {
   DEFAULT_TERMINAL_PROFILES,
   findTerminalProfileForProvider,
 } from "@bytetrue/protocol/terminal-profiles";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
@@ -164,9 +164,9 @@ export function ProviderTerminalIntegration({
             <Button
               variant="outline"
               size="sm"
-              onPress={handleOpenEdit}
+              onClick={handleOpenEdit}
+              data-testid={`provider-terminal-profile-edit-${provider}`}
               disabled={!config}
-              testID={`provider-terminal-profile-edit-${provider}`}
             >
               {profile
                 ? t("settings.host.terminalProfiles.editProfile")

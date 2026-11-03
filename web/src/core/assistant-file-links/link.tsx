@@ -3,7 +3,7 @@
 // else opens externally. The anchor keeps its href for copy, but navigation is ours.
 import { useCallback, useMemo, type MouseEvent, type ReactNode } from "react";
 import { MARKDOWN_COPY_UNWRAP_ATTRIBUTE } from "@/assistant-selection-copy/markup";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { copyTag } from "~/markdown/render";
 import { useAssistantFileLinkResolverContext } from "@/assistant-file-links/provider";
 import type { AssistantFileLinkSource } from "@/assistant-file-links/resolver";
@@ -55,7 +55,7 @@ export function AssistantMarkdownLink({
   return (
     <Tooltip delayDuration={400}>
       <TooltipTrigger asChild>{anchor}</TooltipTrigger>
-      <TooltipContent side="top" align="start" maxWidth={520}>
+      <TooltipContent side="top" align="start" className="max-w-[520px]">
         {tooltipPath}
       </TooltipContent>
     </Tooltip>

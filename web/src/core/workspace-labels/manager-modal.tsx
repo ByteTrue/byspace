@@ -18,7 +18,8 @@ import {
 } from "@bytetrue/protocol/workspace-labels";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { HostFilter } from "@/components/hosts/host-filter";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHosts } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -139,23 +140,21 @@ export function WorkspaceLabelManagerModal({
       isEditing ? (
         <div className="flex flex-1 flex-row items-center justify-between gap-2">
           <Button
-            // Red belongs to the confirm dialog, not to the surface that opens it — docs/design.md.
             variant="outline"
-            size="md"
+            onClick={remove}
+            data-testid="workspace-label-manager-delete"
             disabled={disabled}
-            onPress={remove}
-            testID="workspace-label-manager-delete"
           >
             {t("workspaceLabels.manage.delete")}
           </Button>
           <Button
-            size="md"
+            variant="secondary"
             className="min-w-28"
-            disabled={disabled || !state.dirty}
-            loading={state.pending}
-            onPress={save}
-            testID="workspace-label-manager-save"
+            onClick={save}
+            data-testid="workspace-label-manager-save"
+            disabled={state.pending || disabled || !state.dirty}
           >
+            {state.pending ? <Spinner data-icon="inline-start" /> : null}
             {t("workspaceLabels.manage.save")}
           </Button>
         </div>
@@ -171,7 +170,6 @@ export function WorkspaceLabelManagerModal({
       footer={footer}
       // Bound the compact scroller to the live snap height, so the edit view's footer stays on
       // screen instead of being pushed past the bottom of the sheet.
-      sizeContentToCurrentSnapPoint
       testID="workspace-label-manager"
     >
       {draft && editing ? (

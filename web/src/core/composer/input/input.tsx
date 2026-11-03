@@ -26,7 +26,7 @@ import {
 import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload, TextReplacement } from "@/composer/types";
 import { focusWithRetries } from "@/utils/web-focus";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { Shortcut } from "~/components/shortcut";
 import {
   DropdownMenu,
@@ -233,8 +233,8 @@ function AttachmentDropdown({
   const isButtonDisabled = !isConnected || disabled;
   if (!visible) return null;
   return (
-    <DropdownMenu compactMode="sheet">
-      <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+    <DropdownMenu>
+      <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             disabled={isButtonDisabled}
@@ -245,7 +245,7 @@ function AttachmentDropdown({
             {renderAttachButtonIcon}
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="top" align="center">
           {addAttachmentLabel}
         </TooltipContent>
       </Tooltip>
@@ -559,7 +559,7 @@ function SendButtonTooltip({
 }) {
   if (!shouldShow) return null;
   return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+    <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -577,7 +577,7 @@ function SendButtonTooltip({
           />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
+      <TooltipContent side="top" align="center">
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
       </TooltipContent>
     </Tooltip>

@@ -42,7 +42,7 @@ import {
   type AgentRoleControlValue,
 } from "@/composer/agent-controls/role-control";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type {
   AgentFeature,
   AgentMode,
@@ -908,6 +908,20 @@ const DESKTOP_SEARCH_THRESHOLD = 6;
 
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   const { t } = useTranslation();
+  // The "Change model" hint stays shut while the picker is open: the pointer is still on the
+  // trigger, and an open hint would take the picker's Escape.
+  const [modelHintOpen, setModelHintOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const notifyModelSelectorOpen = props.onModelSelectorOpen;
+  const notifyDropdownClose = props.onDropdownClose;
+  const handleModelSelectorOpen = useCallback(() => {
+    setModelPickerOpen(true);
+    notifyModelSelectorOpen?.();
+  }, [notifyModelSelectorOpen]);
+  const handleModelSelectorClose = useCallback(() => {
+    setModelPickerOpen(false);
+    notifyDropdownClose?.();
+  }, [notifyDropdownClose]);
   const {
     provider,
     providerOptions,
@@ -922,7 +936,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     onCreateAgentProfile,
     onEditAgentProfile,
     onDropdownClose,
-    onModelSelectorOpen,
     onRetryModelProvider,
     isRetryingModelProvider,
     agentProfiles,
@@ -1003,8 +1016,12 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {canSelectModel ? (
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild triggerRefProp="ref">
+        <Tooltip
+          delayDuration={0}
+          open={modelHintOpen && !modelPickerOpen}
+          onOpenChange={setModelHintOpen}
+        >
+          <TooltipTrigger asChild>
             <div className="min-w-0 shrink">
               <CombinedModelSelector
                 providers={modelSelectorProviders}
@@ -1018,8 +1035,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 onEditProfile={onEditAgentProfile}
                 isLoading={isModelLoading}
                 disabled={modelDisabled}
-                onOpen={onModelSelectorOpen}
-                onClose={onDropdownClose}
+                onOpen={handleModelSelectorOpen}
+                onClose={handleModelSelectorClose}
                 onRetryProvider={onRetryModelProvider}
                 isRetryingProvider={isRetryingModelProvider}
                 serverId={modelSelectorServerId}
@@ -1029,7 +1046,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
               />
             </div>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
+          <TooltipContent side="top" align="center">
             <span>{t(getAgentControlHintKey("model"))}</span>
           </TooltipContent>
         </Tooltip>
@@ -1229,7 +1246,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
           open={activeSheet === "thinking"}
           onOpenChange={handleThinkingSheetOpenChange}
           renderOption={renderThinkingOption}
-          presentation="push"
         />
       ) : null}
 
@@ -1331,8 +1347,8 @@ function DesktopFeatureItem({
   if (feature.type === "toggle") {
     const FeatureIcon = getAgentFeatureIcon(feature.icon);
     return (
-      <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-        <TooltipTrigger asChild triggerRefProp="ref">
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>
           <AgentControlTrigger
             icon={FeatureIcon}
             iconColor={getFeatureIconColor(
@@ -1350,7 +1366,7 @@ function DesktopFeatureItem({
             testID={`agent-feature-${feature.id}`}
           />
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" offset={8}>
+        <TooltipContent side="top" align="center">
           <span>{getFeatureTooltip(feature)}</span>
         </TooltipContent>
       </Tooltip>
@@ -1456,7 +1472,6 @@ function SheetFeatureItem({
           open={openSelector === featureSelector}
           onOpenChange={handleFeatureOpenChange}
           anchorRef={featureAnchorRef}
-          presentation="push"
           searchable={false}
           header={sheetHeader}
         />
@@ -1481,7 +1496,6 @@ function SheetFeatureItem({
         open={openSelector === featureSelector}
         onOpenChange={handleFeatureOpenChange}
         header={sheetHeader}
-        presentation="push"
       />
     );
   }

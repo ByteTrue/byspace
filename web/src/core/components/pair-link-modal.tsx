@@ -7,7 +7,7 @@ import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useThemeObject } from "~/app/theme-object";
 import { Input } from "~/components/ui/input";
 
@@ -140,24 +140,22 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         <Button
           className="flex-1"
           variant="secondary"
-          onPress={handleCancel}
+          onClick={handleCancel}
+          data-testid="pair-link-cancel"
+          aria-label={t("pairing.link.actions.cancel")}
           disabled={isSaving}
-          testID="pair-link-cancel"
-          accessibilityRole="button"
-          accessibilityLabel={t("pairing.link.actions.cancel")}
         >
           {t("pairing.link.actions.cancel")}
         </Button>
         <Button
           className="flex-1"
           variant="default"
-          onPress={handleSavePress}
+          onClick={handleSavePress}
+          data-testid="pair-link-submit"
+          aria-label={t("pairing.link.actions.pair")}
           disabled={isSaving}
-          testID="pair-link-submit"
-          accessibilityRole="button"
-          accessibilityLabel={t("pairing.link.actions.pair")}
-          leftIcon={pairIcon}
         >
+          {pairIcon}
           {isSaving ? t("pairing.link.actions.pairing") : t("pairing.link.actions.pair")}
         </Button>
       </div>

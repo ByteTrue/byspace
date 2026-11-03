@@ -12,7 +12,7 @@ import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
 import { readStoredRelayEndpoint, storeRelayEndpoint } from "@/utils/setup-guide-storage";
 import { isBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 
 interface CommandBlockProps {
@@ -49,7 +49,8 @@ function CommandBlock({
       >
         {command}
       </span>
-      <Button variant="ghost" size="sm" leftIcon={copyIcon} onPress={handleCopyPress}>
+      <Button variant="ghost" size="sm" onClick={handleCopyPress}>
+        {copyIcon}
         {copyLabel}
       </Button>
     </div>
@@ -245,24 +246,22 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
         <Button
           className="flex-1"
           variant="secondary"
-          onPress={handleClose}
+          onClick={handleClose}
+          data-testid="setup-guide-cancel"
+          aria-label={t("pairing.setupGuide.actions.cancel")}
           disabled={isSaving}
-          testID="setup-guide-cancel"
-          accessibilityRole="button"
-          accessibilityLabel={t("pairing.setupGuide.actions.cancel")}
         >
           {t("pairing.setupGuide.actions.cancel")}
         </Button>
         <Button
           className="flex-1"
           variant="default"
-          onPress={handlePairPress}
+          onClick={handlePairPress}
+          data-testid="setup-guide-submit"
+          aria-label={t("pairing.link.actions.pair")}
           disabled={isSaving}
-          testID="setup-guide-submit"
-          accessibilityRole="button"
-          accessibilityLabel={t("pairing.link.actions.pair")}
-          leftIcon={pairIcon}
         >
+          {pairIcon}
           {isSaving ? t("pairing.link.actions.pairing") : t("pairing.link.actions.pair")}
         </Button>
       </div>

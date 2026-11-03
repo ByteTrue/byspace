@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Switch } from "~/components/ui/switch";
 import { settingsStyles } from "@/styles/settings";
@@ -500,8 +500,8 @@ function DesktopCommandLineBlock({
         <Button
           variant="secondary"
           size="sm"
-          onPress={onAddCLIToPath}
-          testID="desktop-add-to-path-button"
+          onClick={onAddCLIToPath}
+          data-testid="desktop-add-to-path-button"
         >
           {isZh ? "添加到 PATH" : "Add to PATH"}
         </Button>
@@ -602,9 +602,9 @@ export function DesktopAboutCardContent({
           <Button
             variant={actionVariant}
             size="sm"
-            onPress={handleVersionAction}
+            onClick={handleVersionAction}
+            data-testid="desktop-version-action-button"
             disabled={isUpdateBusy}
-            testID="desktop-version-action-button"
           >
             {resolveVersionActionLabel(isZh, updState)}
           </Button>
@@ -676,8 +676,8 @@ export function DesktopAboutCardContent({
           <Button
             variant="secondary"
             size="sm"
-            onPress={handleOpenConfigFolder}
-            testID="desktop-open-config-folder-button"
+            onClick={handleOpenConfigFolder}
+            data-testid="desktop-open-config-folder-button"
           >
             {copy.openText}
           </Button>
@@ -702,8 +702,8 @@ export function DesktopAboutCardContent({
               <Button
                 variant="secondary"
                 size="sm"
-                onPress={handleTakeOverDaemon}
-                testID="desktop-daemon-takeover-button"
+                onClick={handleTakeOverDaemon}
+                data-testid="desktop-daemon-takeover-button"
               >
                 {copy.takeOverText}
               </Button>

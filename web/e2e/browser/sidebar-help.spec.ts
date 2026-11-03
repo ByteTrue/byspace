@@ -26,7 +26,7 @@ async function expectDiagnosticReport(page: Page): Promise<void> {
 
 async function closeSheet(page: Page, testID: string): Promise<void> {
   const sheet = page.getByTestId(testID);
-  await sheet.getByLabel("Close").click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
   await expect(sheet).not.toBeVisible();
 }
 

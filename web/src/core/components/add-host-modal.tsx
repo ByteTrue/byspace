@@ -20,7 +20,7 @@ import {
 } from "@/utils/daemon-endpoints";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useThemeObject } from "~/app/theme-object";
 import { Input } from "~/components/ui/input";
 
@@ -559,17 +559,17 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       </div>
 
       <div className="mt-2 flex flex-row gap-3">
-        <Button className="flex-1" variant="secondary" onPress={handleCancel} disabled={isSaving}>
+        <Button className="flex-1" variant="secondary" onClick={handleCancel} disabled={isSaving}>
           {t("pairing.direct.actions.cancel")}
         </Button>
         <Button
           className="flex-1"
           variant="default"
-          onPress={handleSavePress}
+          onClick={handleSavePress}
+          data-testid="direct-host-submit"
           disabled={isSaving}
-          leftIcon={connectIcon}
-          testID="direct-host-submit"
         >
+          {connectIcon}
           {isSaving ? t("pairing.direct.actions.connecting") : t("pairing.direct.actions.connect")}
         </Button>
       </div>

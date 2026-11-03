@@ -7,7 +7,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   useReviewDraftComments,
   useReviewDraftStore,
@@ -347,21 +347,21 @@ export function InlineReviewEditor({
       />
       <div className="flex items-center justify-end gap-2">
         <Button
-          accessibilityLabel={t("review.comment.cancelAccessibility")}
-          testID={testID ? `${testID}-cancel` : undefined}
-          onPress={onCancel}
+          aria-label={t("review.comment.cancelAccessibility")}
+          data-testid={testID ? `${testID}-cancel` : undefined}
+          onClick={onCancel}
           variant="ghost"
           size="xs"
         >
           {t("review.comment.cancel")}
         </Button>
         <Button
-          accessibilityLabel={t("review.comment.saveAccessibility")}
-          testID={testID ? `${testID}-save` : undefined}
-          disabled={!canSave}
-          onPress={handleSave}
+          aria-label={t("review.comment.saveAccessibility")}
+          data-testid={testID ? `${testID}-save` : undefined}
+          onClick={handleSave}
           variant="default"
           size="xs"
+          disabled={!canSave}
         >
           {t("review.comment.save")}
         </Button>

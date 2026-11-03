@@ -6,10 +6,11 @@ import { escapeRegex } from "./regex";
  * Radix dialog, which hides everything outside the sheet (the overlay included) from the
  * accessibility tree.
  */
-export const BOTTOM_SHEET_BACKDROP = '[aria-label="Bottom sheet backdrop"]:visible';
+export const BOTTOM_SHEET_BACKDROP = '[data-slot="drawer-overlay"]:visible';
 
 /** A bottom sheet's grab handle. */
-export const BOTTOM_SHEET_HANDLE = '[data-slot="drawer-handle"]:visible';
+// shadcn's drawer draws its handle as the content's first child.
+export const BOTTOM_SHEET_HANDLE = '[data-slot="drawer-content"]:visible > div:first-child';
 
 export const gotoAppShell = async (page: Page) => {
   await page.goto("/");

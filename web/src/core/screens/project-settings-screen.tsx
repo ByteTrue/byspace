@@ -8,7 +8,15 @@ import { router, type Href } from "~/app/navigation";
 import { useFocusEffect } from "~/app/route-focus";
 import { cn } from "cn";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CircleAlert, MoreVertical, Pencil, Plus, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  CircleAlert,
+  MoreVertical,
+  Pencil,
+  Plus,
+  TriangleAlert,
+} from "lucide-react";
 import { ProjectIconView } from "@/components/project-icon-view";
 import type {
   AgentSkillsStatus,
@@ -17,14 +25,14 @@ import type {
   ProjectConfigRpcError,
 } from "@bytetrue/protocol/messages";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ExternalLink } from "@/components/ui/external-link";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -460,10 +468,9 @@ function NoEditableTarget({
       </span>
       {showBackToProjects ? (
         <Button
-          testID="project-settings-back-button"
-          onPress={onBackToProjects}
+          data-testid="project-settings-back-button"
+          onClick={onBackToProjects}
           variant="secondary"
-          size="md"
         >
           {t("settings.project.backToProjects")}
         </Button>
@@ -476,14 +483,14 @@ function BackToProjectsButton({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
   return (
     <Button
-      testID="project-settings-back-link"
-      accessibilityLabel={t("settings.project.backToProjects")}
-      onPress={onPress}
+      data-testid="project-settings-back-link"
+      aria-label={t("settings.project.backToProjects")}
+      onClick={onPress}
       variant="ghost"
       size="sm"
-      leftIcon={ArrowLeft}
       className="self-start px-0"
     >
+      <ArrowLeft data-icon="inline-start" />
       {t("settings.project.backToProjects")}
     </Button>
   );
@@ -732,7 +739,7 @@ function ReadFailureCallout({ kind, error, onReload }: ReadFailureCalloutProps) 
         <AlertTitle>{title}</AlertTitle>
         <AlertDescription>{description}</AlertDescription>
         <AlertAction>
-          <Button testID={`${testID}-action-0`} onPress={onReload} variant="outline" size="sm">
+          <Button data-testid={`${testID}-action-0`} onClick={onReload} variant="outline" size="sm">
             {t("settings.project.actions.reload")}
           </Button>
         </AlertAction>
@@ -979,23 +986,43 @@ function ProjectConfigForm({
 
   const setupDocsLink = useMemo(
     () => (
-      <ExternalLink
-        href={WORKTREE_DOCS_URL}
-        label={t("settings.project.worktree.docs")}
-        tooltip={t("settings.project.worktree.docsTooltip")}
-        testID="worktree-setup-docs-link"
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="link" size="sm" asChild>
+            <a
+              href={WORKTREE_DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="worktree-setup-docs-link"
+            >
+              {t("settings.project.worktree.docs")}
+              <ArrowUpRight data-icon="inline-end" />
+            </a>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("settings.project.worktree.docsTooltip")}</TooltipContent>
+      </Tooltip>
     ),
     [t],
   );
   const teardownDocsLink = useMemo(
     () => (
-      <ExternalLink
-        href={WORKTREE_DOCS_URL}
-        label={t("settings.project.worktree.docs")}
-        tooltip={t("settings.project.worktree.docsTooltip")}
-        testID="worktree-teardown-docs-link"
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="link" size="sm" asChild>
+            <a
+              href={WORKTREE_DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="worktree-teardown-docs-link"
+            >
+              {t("settings.project.worktree.docs")}
+              <ArrowUpRight data-icon="inline-end" />
+            </a>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("settings.project.worktree.docsTooltip")}</TooltipContent>
+      </Tooltip>
     ),
     [t],
   );
@@ -1110,8 +1137,8 @@ function ProjectConfigForm({
             </AlertDescription>
             <AlertAction>
               <Button
-                testID="stale-callout-action-0"
-                onPress={handleReload}
+                data-testid="stale-callout-action-0"
+                onClick={handleReload}
                 variant="outline"
                 size="sm"
               >
@@ -1132,16 +1159,16 @@ function ProjectConfigForm({
             </AlertDescription>
             <AlertAction>
               <Button
-                testID="write-failed-callout-action-0"
-                onPress={handleSave}
+                data-testid="write-failed-callout-action-0"
+                onClick={handleSave}
                 variant="outline"
                 size="sm"
               >
                 {t("settings.project.actions.tryAgain")}
               </Button>
               <Button
-                testID="write-failed-callout-action-1"
-                onPress={handleReload}
+                data-testid="write-failed-callout-action-1"
+                onClick={handleReload}
                 variant="outline"
                 size="sm"
               >
@@ -1154,14 +1181,13 @@ function ProjectConfigForm({
 
       <div className="mt-4 flex flex-row justify-end">
         <Button
-          testID="save-button"
-          accessibilityLabel={t("settings.project.actions.save")}
+          data-testid="save-button"
+          aria-label={t("settings.project.actions.save")}
           variant="default"
-          size="md"
-          disabled={saveDisabled}
-          loading={saveMutation.isPending}
-          onPress={handleSave}
+          onClick={handleSave}
+          disabled={saveMutation.isPending || saveDisabled}
         >
+          {saveMutation.isPending ? <Spinner data-icon="inline-start" /> : null}
           {saveMutation.isPending
             ? t("settings.project.actions.saving")
             : t("settings.project.actions.save")}
@@ -1310,11 +1336,11 @@ function ProjectSetupAgentCard({
             <Button
               variant="outline"
               size="sm"
-              onPress={handleAction}
+              onClick={handleAction}
+              data-testid="project-setup-agent-action"
               disabled={isWorking}
-              loading={isWorking}
-              testID="project-setup-agent-action"
             >
+              {isWorking ? <Spinner data-icon="inline-start" /> : null}
               {statusQuery.isError ? t("common.actions.retry") : actionLabel}
             </Button>
           ) : null}
@@ -1604,10 +1630,10 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
         </div>
       </div>
       <div className="mt-2 flex flex-row justify-end gap-2">
-        <Button onPress={onCancel} variant="ghost" size="md" testID="script-edit-cancel">
+        <Button onClick={onCancel} variant="ghost" data-testid="script-edit-cancel">
           {t("settings.project.actions.cancel")}
         </Button>
-        <Button onPress={handleSavePress} variant="default" size="md" testID="script-edit-save">
+        <Button onClick={handleSavePress} variant="default" data-testid="script-edit-save">
           {t("settings.project.actions.save")}
         </Button>
       </div>

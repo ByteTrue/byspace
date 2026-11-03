@@ -1,9 +1,9 @@
 // Port of archive/expo-app:packages/app/src/components/headers/header-toggle-button.tsx: a large header icon
 // button (28px, 32px on a phone) with a tooltip naming it and its shortcut.
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { iconButtonChromeClassName } from "@/components/ui/icon-button-chrome";
+import { Button } from "~/components/ui/button";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 
 interface HeaderToggleButtonState {
@@ -42,27 +42,26 @@ export function HeaderToggleButton({
 }: HeaderToggleButtonProps): ReactElement {
   const expanded = accessibilityState?.expanded;
   return (
-    <Tooltip delayDuration={tooltipDelayDuration} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        testID={testID}
-        accessibilityLabel={accessibilityLabel}
-        aria-expanded={typeof expanded === "boolean" ? expanded : undefined}
-        disabled={disabled}
-        onPress={onPress}
-        className={iconButtonChromeClassName({ size: "large", disabled })}
-        style={
-          style && typeof style === "object" && !Array.isArray(style)
-            ? (style as CSSProperties)
-            : undefined
-        }
-      >
-        {typeof children === "function" ? children({ hovered: false, pressed: false }) : children}
+    <Tooltip delayDuration={tooltipDelayDuration}>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid={testID}
+          aria-label={accessibilityLabel}
+          aria-expanded={typeof expanded === "boolean" ? expanded : undefined}
+          disabled={disabled}
+          onClick={onPress}
+          style={
+            style && typeof style === "object" && !Array.isArray(style)
+              ? (style as CSSProperties)
+              : undefined
+          }
+        >
+          {typeof children === "function" ? children({ hovered: false, pressed: false }) : children}
+        </Button>
       </TooltipTrigger>
-      <TooltipContent
-        testID={testID ? `${testID}-tooltip` : undefined}
-        side={tooltipSide}
-        offset={8}
-      >
+      <TooltipContent data-testid={testID ? `${testID}-tooltip` : undefined} side={tooltipSide}>
         <span className="flex items-center gap-2">
           {tooltipLabel}
           <Shortcut keys={tooltipKeys} />

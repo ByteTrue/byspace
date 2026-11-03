@@ -49,6 +49,7 @@ async function openWorkspace(page: Page, workspaceId: string) {
 }
 
 async function chooseReadAction(page: Page, workspaceId: string, action: "read" | "unread") {
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await workspaceRow(page, workspaceId).hover();
   await page.getByTestId(`sidebar-workspace-kebab-${getServerId()}:${workspaceId}`).click();
   const item = page.getByRole("menuitem", { name: `Mark as ${action}`, exact: true });

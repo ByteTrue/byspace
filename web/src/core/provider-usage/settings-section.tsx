@@ -4,7 +4,8 @@ import { CircleAlert, RefreshCw } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { useMemo } from "react";
 import { cn } from "cn";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { providerUsageCopy } from "@/provider-usage/copy";
@@ -25,11 +26,11 @@ export function ProviderUsageSettingsSection({
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={RefreshCw}
-        loading={busy}
-        onPress={onRefresh}
-        accessibilityLabel={providerUsageCopy.refresh}
+        onClick={onRefresh}
+        aria-label={providerUsageCopy.refresh}
+        disabled={busy}
       >
+        {busy ? <Spinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}
         {busy ? providerUsageCopy.refreshing : providerUsageCopy.refresh}
       </Button>
     ),
@@ -71,7 +72,7 @@ function ProviderUsageBody({
         <AlertTitle>{providerUsageCopy.errorTitle}</AlertTitle>
         <AlertDescription>{view.message}</AlertDescription>
         <AlertAction>
-          <Button variant="outline" size="sm" onPress={onRefresh}>
+          <Button variant="outline" size="sm" onClick={onRefresh}>
             {providerUsageCopy.retry}
           </Button>
         </AlertAction>
