@@ -107,7 +107,7 @@ export function ContextWindowMeter({
       cy={center}
       r={radius}
       fill="none"
-      stroke="varaccent"
+      stroke="var(--accent)"
       strokeWidth={strokeWidth}
     />
   );

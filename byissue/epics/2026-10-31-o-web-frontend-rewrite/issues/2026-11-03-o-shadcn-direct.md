@@ -17,42 +17,42 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 
 ## 对照表
 
-| 现在自己写的                                                                                 | 换成 shadcn                                                           | 批  |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --- |
-| 开关 `core/components/ui/switch`                                                             | Switch                                                                | A1  |
-| 分段控件 `segmented-control`                                                                 | Tabs                                                                  | A1  |
-| 状态徽标 `status-badge`                                                                      | Badge（状态色用 `className`）                                         | A1  |
-| 快捷键 `shortcut`（两份）                                                                    | Kbd / KbdGroup                                                        | A1  |
-| 加载圈 `loading-spinner`、`synced-loader`                                                    | Spinner                                                               | A1  |
-| 提示框 `core/components/ui/alert`、各处提示条                                                | Alert                                                                 | A1  |
-| 外链 `external-link`                                                                         | Button `variant="link"`                                               | A1  |
-| 输入框 `text-input`、`adaptive-text-input`、`form-field`、`search-field`、设置行里的输入框   | Input / Textarea / InputGroup / Field / Label（手机上保留 44px 高）   | A2  |
-| 按钮封装 `core/components/ui/button`、`icon-button-chrome`、`control-geometry`、各种 trigger | Button（variant / size）                                              | A3  |
-| 提示 `core/components/ui/tooltip`                                                            | Tooltip                                                               | A3  |
-| 弹窗 `adaptive-modal-sheet` 及各个弹窗、确认框                                               | Dialog / Drawer / Sheet / AlertDialog                                 | B   |
-| 提示消息 `toast-host`                                                                        | Sonner                                                                | B   |
-| 菜单引擎 `menu/`、`adaptive-menu`、`sheet-menu`、`menu-kit`、`snap-drawer`                   | DropdownMenu / ContextMenu                                            | B   |
-| 下拉选择 `select-field`                                                                      | Select                                                                | B   |
-| 组合框 `combobox`（754 行）                                                                  | Combobox                                                              | B   |
-| 命令面板 ⌘K、输入框里的 @ 补全                                                               | Command / CommandDialog                                               | B   |
-| 侧栏行、手机侧栏                                                                             | Sidebar（手机上是它自带的 Sheet）                                     | C   |
-| 分屏 `split-container`、`resize-handle`                                                      | Resizable                                                             | C   |
-| 滚动区 `overlay-scrollbar`、`scrollable-code-surface`、`horizontal-scroll-boundary`          | ScrollArea                                                            | C   |
-| 设置卡片和行、提示卡片、空状态、骨架屏                                                       | Item / Card / Separator / Empty / Skeleton                            | C   |
-| 折叠区                                                                                       | Collapsible / Accordion                                               | C   |
-| 定时任务表格、快捷键列表                                                                     | Table                                                                 | C   |
-| 用量条                                                                                       | Progress                                                              | C   |
-| 对话时间线 `agent-stream`                                                                    | Chat（Message Scroller）                                              | D   |
-| 用户消息、助手回复、图片附件 `message.tsx`                                                   | Message / Bubble / Attachment                                         | D   |
-| 工具调用、思考过程、计划、待办、子 agent、终端输出、「Worked for 10s」                       | Trace（Tool / Reasoning / Plan / Queue / Subagent / Terminal / Task） | D   |
-| 权限请求                                                                                     | Confirmation                                                          | D   |
-| 提问卡片 `question-form-card`                                                                | Questionnaire                                                         | D   |
-| 输入框 `composer`                                                                            | Prompt Input                                                          | D   |
-| 模型和思考档位选择                                                                           | Model Selector                                                        | D   |
-| 上下文用量 `context-window-meter`                                                            | Context                                                               | D   |
-| 回退 `rewind`                                                                                | Checkpoint                                                            | D   |
-| Markdown 代码块                                                                              | Code Block                                                            | D   |
-| 文件树、改动树                                                                               | File Tree                                                             | D   |
+| 现在自己写的                                                                                 | 结果                                                                                                                    | 批  |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --- |
+| 开关 `core/components/ui/switch`                                                             | Switch                                                                                                                  | A1  |
+| 分段控件 `segmented-control`                                                                 | Tabs                                                                                                                    | A1  |
+| 状态徽标 `status-badge`                                                                      | Badge（状态色用 `className`）                                                                                           | A1  |
+| 快捷键 `shortcut`（两份）                                                                    | Kbd / KbdGroup                                                                                                          | A1  |
+| 加载圈 `loading-spinner`、`synced-loader`                                                    | Spinner                                                                                                                 | A1  |
+| 提示框 `core/components/ui/alert`、各处提示条                                                | Alert                                                                                                                   | A1  |
+| 外链 `external-link`                                                                         | Button `variant="link"`                                                                                                 | A1  |
+| 输入框 `text-input`、`adaptive-text-input`、`form-field`、`search-field`、设置行里的输入框   | Input / Textarea / InputGroup / Field / Label（手机上保留 44px 高）                                                     | A2  |
+| 按钮封装 `core/components/ui/button`、`icon-button-chrome`、`control-geometry`、各种 trigger | Button（variant / size）                                                                                                | A3  |
+| 提示 `core/components/ui/tooltip`                                                            | Tooltip                                                                                                                 | A3  |
+| 弹窗 `adaptive-modal-sheet` 及各个弹窗、确认框                                               | Dialog / Drawer / Sheet / AlertDialog                                                                                   | B   |
+| 提示消息 `toast-host`                                                                        | Sonner                                                                                                                  | B   |
+| 菜单引擎 `menu/`、`adaptive-menu`、`sheet-menu`、`menu-kit`、`snap-drawer`                   | DropdownMenu / ContextMenu                                                                                              | B   |
+| 下拉选择 `select-field`                                                                      | Select                                                                                                                  | B   |
+| 组合框 `combobox`（754 行）                                                                  | Combobox                                                                                                                | B   |
+| 命令面板 ⌘K、输入框里的 @ 补全                                                               | Command / CommandDialog                                                                                                 | B   |
+| 侧栏行、手机侧栏                                                                             | Sidebar（手机上是它自带的 Sheet）                                                                                       | C   |
+| 分屏 `split-container`、`resize-handle`                                                      | Resizable                                                                                                               | C   |
+| 滚动区 `overlay-scrollbar`、`scrollable-code-surface`、`horizontal-scroll-boundary`          | 浏览器原生细滚动条（`scrollbar-thin`）与 `scroll-fade`，shadcn 自己的 Command、Code Block 也是这样；代码框用 Code Block | C   |
+| 设置卡片和行、提示卡片、空状态、骨架屏                                                       | Item / Card / Separator / Empty / Skeleton                                                                              | C   |
+| 折叠区                                                                                       | Collapsible                                                                                                             | C   |
+| 定时任务表格、快捷键列表                                                                     | Item（两处都是列表，不是表格）；Markdown 表格用 Table                                                                   | C   |
+| 用量条                                                                                       | Progress                                                                                                                | C   |
+| 对话时间线 `agent-stream`                                                                    | 保留虚拟滚动（用户选定：Message Scroller 不虚拟化）                                                                     | D   |
+| 用户消息、助手回复、图片附件 `message.tsx`                                                   | Message / Bubble / Attachment                                                                                           | D   |
+| 工具调用、思考过程、计划、待办、子 agent、终端输出、「Worked for 10s」                       | Trace（Tool / Reasoning / Plan / Queue / Subagent / Terminal / Task）                                                   | D   |
+| 权限请求                                                                                     | Card（Confirmation 是 AI Elements，不用）                                                                               | D   |
+| 提问卡片 `question-form-card`                                                                | Questionnaire                                                                                                           | D   |
+| 输入框 `composer`                                                                            | 保留，里面用 shadcn 的 Button、Tooltip、Command（Prompt Input 是 AI Elements，不用）                                    | D   |
+| 模型和思考档位选择                                                                           | 保留 Combobox（Command + Popover/Drawer）（Model Selector 是 AI Elements，不用）                                        | D   |
+| 上下文用量 `context-window-meter`                                                            | 保留，Button + Tooltip（Context 是 AI Elements，不用）                                                                  | D   |
+| 回退 `rewind`                                                                                | DropdownMenu（Checkpoint 是 AI Elements，不用）                                                                         | D   |
+| Markdown 代码块                                                                              | Code Block                                                                                                              | D   |
+| 文件树、改动树                                                                               | 保留（虚拟化的树；File Tree 是 AI Elements，不用）                                                                      | D   |
 
 保留自己写的（shadcn 没有、也找不到替代）：终端（xterm.js）、文件编辑器（CodeMirror）、Diff 画布、Mermaid 图、Markdown 解析（markdown-it，渲染出来的代码块用 Code Block）、拖拽排序（dnd-kit）、图片缩放查看器、文件拖放、工作区标签栏（能拖动、能关闭，Tabs 做不了）、状态圆点和各种图标。
 
