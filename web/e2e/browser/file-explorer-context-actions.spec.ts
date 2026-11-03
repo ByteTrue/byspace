@@ -310,7 +310,8 @@ test("creates, renames, copies, and deletes entries through the file explorer", 
   await page.getByText("Rename", { exact: true }).click();
   await nameInput.fill("README.md");
   await nameInput.press("Enter");
-  await expect(page.getByText('"README.md" already exists', { exact: true })).toBeVisible();
+  // Toasts stack: the create step's identical error can still be on screen.
+  await expect(page.getByText('"README.md" already exists', { exact: true }).last()).toBeVisible();
   await expect(entry("created.txt")).toBeVisible();
 
   await expect(page.getByRole("menu")).toHaveCount(0);

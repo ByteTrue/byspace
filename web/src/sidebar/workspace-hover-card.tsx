@@ -320,16 +320,12 @@ export function WorkspaceHoverCard({
       <HoverCardTrigger asChild onFocus={preventFocusOpen}>
         {children}
       </HoverCardTrigger>
-      {/* The Expo app's card: 4px right of the row, top-aligned, kept 8px inside the window; a 1px
-          borderAccent border, a 10px radius and its own 0 4px 8px black 20% shadow in every theme. */}
       <HoverCardContent
         side="right"
         align="start"
         sideOffset={4}
         collisionPadding={8}
-        className="w-[260px] rounded-[10px] border border-input p-0 pt-2 shadow-[0_4px_8px_rgba(0,0,0,0.2)] ring-0"
-        // The Expo app's card is a menu named after its scripts list.
-        role="menu"
+        className="w-[260px] p-0 pt-2"
         aria-label={t("workspace.hoverCard.scriptsAccessibility")}
         data-testid="workspace-hover-card"
       >

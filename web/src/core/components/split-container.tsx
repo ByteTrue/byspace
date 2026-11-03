@@ -5,6 +5,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -30,11 +31,9 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useTranslation } from "react-i18next";
-import { ResizeHandle } from "@/components/resize-handle";
-import {
-  resolveExplorerSidebarDockSizes,
-  resolveExplorerSidebarWidth,
-} from "@/components/explorer-sidebar-layout";
+import type { Layout, LayoutChangedMeta } from "react-resizable-panels";
+import { useGroupRef, usePanelRef } from "react-resizable-panels";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { RetainedPanel } from "@/components/retained-panel";
 import {
   hasMultipleVisiblePanes,
@@ -78,32 +77,8 @@ import {
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { RenderProfile } from "@/utils/render-profiler";
 import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
-import { cn } from "cn";
 
 /** Width or height of an element, kept current with a ResizeObserver. */
-function useMeasuredSize(axis: "width" | "height") {
-  const [size, setSize] = useState(0);
-  const observerRef = useRef<ResizeObserver | null>(null);
-  const ref = useCallback(
-    (node: HTMLDivElement | null) => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-      if (!node) return;
-      const update = () => {
-        const rect = node.getBoundingClientRect();
-        const next = axis === "width" ? rect.width : rect.height;
-        setSize((current) => (current === next ? current : next));
-      };
-      update();
-      const observer = new ResizeObserver(update);
-      observer.observe(node);
-      observerRef.current = observer;
-    },
-    [axis],
-  );
-  return [size, ref] as const;
-}
-
 interface SplitContainerProps {
   layout: WorkspaceLayout;
   renderMainHeader?: () => ReactNode;
@@ -163,7 +138,13 @@ interface SplitPaneDropData {
 
 const EMPTY_SPLIT_NODES: SplitNode[] = [];
 const EMPTY_SPLIT_SIZES: number[] = [];
-const EXPLORER_SIDEBAR_RESIZE_GROUP_ID = "explorer-sidebar";
+// The explorer dock's width, and the space the workspace keeps beside it.
+const DEFAULT_EXPLORER_SIDEBAR_WIDTH = 320;
+const MIN_EXPLORER_SIDEBAR_WIDTH = 240;
+const MIN_WORKSPACE_BODY_WIDTH = 400;
+const RESIZE_TARGET_SIZE = { fine: 4, coarse: 20 };
+// A panel's content manages its own scrolling; the panel itself never scrolls.
+const PANEL_CONTENT_STYLE = { overflow: "hidden" } as const;
 
 function isWorkspaceTabDragData(data: unknown): data is WorkspaceTabDragData {
   return typeof data === "object" && data !== null && Reflect.get(data, "kind") === "workspace-tab";
@@ -430,59 +411,17 @@ export function SplitContainer({
     (state) => state.explorerSidebarWidthByWorkspace[workspaceKey],
   );
   const resizeExplorerSidebar = useWorkspaceLayoutStore((state) => state.resizeExplorerSidebar);
-  const [workspaceShellWidth, workspaceShellRef] = useMeasuredSize("width");
-  const [previewExplorerSidebarWidth, setPreviewExplorerSidebarWidth] = useState<number | null>(
-    null,
-  );
-  const requestedExplorerSidebarWidth = previewExplorerSidebarWidth ?? storedExplorerSidebarWidth;
-  const explorerSidebarWidth = resolveExplorerSidebarWidth({
-    requestedWidth: requestedExplorerSidebarWidth,
-    containerWidth: workspaceShellWidth,
-  });
-  const explorerSidebarDockSizes = useMemo(
-    () =>
-      resolveExplorerSidebarDockSizes({
-        requestedWidth: requestedExplorerSidebarWidth,
-        containerWidth: workspaceShellWidth,
-      }),
-    [requestedExplorerSidebarWidth, workspaceShellWidth],
-  );
   const renderExplorerSidebarDock = Boolean(
     !focusModeEnabled && explorerSidebarPane && explorerSidebarPane.hidden !== true,
   );
-  const explorerSidebarDockStyle = useMemo(
-    () => ({ width: explorerSidebarWidth }),
-    [explorerSidebarWidth],
-  );
-  const previewExplorerSidebarResize = useCallback(
-    (_groupId: string, sizes: number[]) => {
-      const nextRatio = sizes[1];
-      if (nextRatio !== undefined) {
-        setPreviewExplorerSidebarWidth(
-          resolveExplorerSidebarWidth({
-            requestedWidth: nextRatio * workspaceShellWidth,
-            containerWidth: workspaceShellWidth,
-          }),
-        );
-      }
+  const explorerPanelRef = usePanelRef();
+  const handleShellLayoutChanged = useCallback(
+    (_layout: Layout, meta: LayoutChangedMeta) => {
+      if (!meta.isUserInteraction) return;
+      const width = explorerPanelRef.current?.getSize().inPixels;
+      if (width) resizeExplorerSidebar(workspaceKey, Math.round(width));
     },
-    [workspaceShellWidth],
-  );
-  const commitExplorerSidebarResize = useCallback(
-    (_groupId: string, sizes: number[]) => {
-      setPreviewExplorerSidebarWidth(null);
-      const nextRatio = sizes[1];
-      if (nextRatio !== undefined) {
-        resizeExplorerSidebar(
-          workspaceKey,
-          resolveExplorerSidebarWidth({
-            requestedWidth: nextRatio * workspaceShellWidth,
-            containerWidth: workspaceShellWidth,
-          }),
-        );
-      }
-    },
-    [resizeExplorerSidebar, workspaceKey, workspaceShellWidth],
+    [explorerPanelRef, resizeExplorerSidebar, workspaceKey],
   );
   const renderRoot = useMemo(() => wrapRootPaneForStableMount(splitRoot.root), [splitRoot.root]);
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -653,8 +592,19 @@ export function SplitContainer({
         onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
-        <div ref={workspaceShellRef} className="flex min-h-0 min-w-0 flex-1 flex-row">
-          <div className="flex min-h-0 min-w-0 flex-1 shrink flex-col">
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-h-0 min-w-0 flex-1"
+          onLayoutChanged={handleShellLayoutChanged}
+          // The pane's scrollbar runs along the separator; a narrow target keeps them apart.
+          resizeTargetMinimumSize={RESIZE_TARGET_SIZE}
+        >
+          <ResizablePanel
+            id="workspace-main"
+            minSize={MIN_WORKSPACE_BODY_WIDTH}
+            className="flex min-h-0 min-w-0 flex-col"
+            style={PANEL_CONTENT_STYLE}
+          >
             {renderMainHeader?.()}
             {renderRoot ? (
               <SplitNodeView
@@ -697,23 +647,18 @@ export function SplitContainer({
                 onExitFocusMode={onExitFocusMode}
               />
             ) : null}
-          </div>
+          </ResizablePanel>
           {renderExplorerSidebarDock && explorerSidebarPane ? (
             <>
-              <ResizeHandle
-                testID="workspace-explorer-sidebar-resize-handle"
-                direction="horizontal"
-                hitAreaAlignment="end"
-                groupId={EXPLORER_SIDEBAR_RESIZE_GROUP_ID}
-                index={0}
-                sizes={explorerSidebarDockSizes}
-                containerSize={workspaceShellWidth}
-                onPreviewResizeSplit={previewExplorerSidebarResize}
-                onResizeSplit={commitExplorerSidebarResize}
-              />
-              <div
-                className="flex min-h-0 min-w-60 shrink-0 flex-col bg-sidebar"
-                style={explorerSidebarDockStyle}
+              <ResizableHandle data-testid="workspace-explorer-sidebar-resize-handle" />
+              <ResizablePanel
+                id="workspace-explorer"
+                panelRef={explorerPanelRef}
+                defaultSize={storedExplorerSidebarWidth ?? DEFAULT_EXPLORER_SIDEBAR_WIDTH}
+                minSize={MIN_EXPLORER_SIDEBAR_WIDTH}
+                groupResizeBehavior="preserve-pixel-size"
+                className="flex min-h-0 flex-col bg-sidebar"
+                style={PANEL_CONTENT_STYLE}
               >
                 <ExplorerSidebarDock
                   pane={explorerSidebarPane}
@@ -732,10 +677,10 @@ export function SplitContainer({
                   tabDropPreview={tabDropPreview}
                   headerAction={renderExplorerSidebarHeaderAction?.()}
                 />
-              </div>
+              </ResizablePanel>
             </>
           ) : null}
-        </div>
+        </ResizablePanelGroup>
         <DragOverlay dropAnimation={null}>
           {activeDragTabId ? (
             <DragOverlayTabChip
@@ -816,38 +761,6 @@ function DragOverlayTabChipInner({
         );
       }}
     </WorkspaceTabPresentationResolver>
-  );
-}
-
-function SplitGroupChild({
-  flexGrow,
-  hidden,
-  nodeRef,
-  children,
-}: {
-  flexGrow: number;
-  hidden: boolean;
-  nodeRef: (node: HTMLDivElement | null) => void;
-  children: ReactNode;
-}) {
-  const style = useMemo(
-    () => ({
-      flexGrow,
-      flexShrink: hidden ? 0 : 1,
-      flexBasis: 0,
-      ...(hidden ? { width: 0, height: 0 } : {}),
-    }),
-    [flexGrow, hidden],
-  );
-  return (
-    <div
-      ref={nodeRef}
-      className="flex min-h-0 min-w-0 flex-col"
-      style={style}
-      data-testid={hidden ? "split-group-child-hidden" : "split-group-child"}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -940,10 +853,6 @@ function SplitNodeView({
 }: SplitNodeViewProps) {
   const groupId = node.kind === "group" ? node.group.id : null;
   const groupDirection = node.kind === "group" ? node.group.direction : null;
-  const [groupContainerSize, groupRef] = useMeasuredSize(
-    groupDirection === "horizontal" ? "width" : "height",
-  );
-
   const storedGroupSizes = useWorkspaceLayoutStore((state) =>
     groupId ? state.splitSizesByWorkspace[workspaceKey]?.[groupId] : undefined,
   );
@@ -954,24 +863,52 @@ function SplitNodeView({
     () => resolveVisibleGroupFlex(groupChildren, groupSizes, maximizedPaneId),
     [groupChildren, groupSizes, maximizedPaneId],
   );
-  // A drag previews by writing flex-grow straight onto the children, so the panes inside do not
-  // re-render on every pointer move; the store commit on release renders the same values.
-  const childNodesRef = useRef<(HTMLDivElement | null)[]>([]);
-  const childRefCallbacks = useMemo(
-    () =>
-      groupChildren.map((_child, index) => (childNode: HTMLDivElement | null) => {
-        childNodesRef.current[index] = childNode;
-      }),
-    [groupChildren],
-  );
-  const previewResizeSplit = useCallback(
-    (_groupId: string, sizes: number[]) => {
-      const flex = resolveVisibleGroupFlex(groupChildren, sizes, maximizedPaneId);
-      childNodesRef.current.forEach((childNode, index) => {
-        if (childNode) childNode.style.flexGrow = String(flex[index] ?? 0);
+  const groupHandleRef = useGroupRef();
+  // The group owns its layout while it is dragged; a size that changes elsewhere (a pane is
+  // maximized or hidden, the store is reset) is pushed into it.
+  useLayoutEffect(() => {
+    const group = groupHandleRef.current;
+    if (!group || groupChildren.length === 0) return;
+    const target: Layout = {};
+    let total = 0;
+    groupChildren.forEach((child, index) => {
+      const size = (visibleFlex[index] ?? 0) * 100;
+      target[getNodeKey(child)] = size;
+      total += size;
+    });
+    if (total <= 0) return;
+    const current = group.getLayout();
+    // A panel that just mounted registers after this runs; it starts at its defaultSize.
+    const currentIds = Object.keys(current);
+    if (currentIds.length !== groupChildren.length || currentIds.some((id) => !(id in target))) {
+      return;
+    }
+    const differs = Object.entries(target).some(
+      ([id, size]) => Math.abs((current[id] ?? -1) - size) > 0.5,
+    );
+    if (differs) group.setLayout(target);
+  }, [groupChildren, groupHandleRef, visibleFlex]);
+  const handleGroupLayoutChanged = useCallback(
+    (layout: Layout, meta: LayoutChangedMeta) => {
+      if (!groupId || !meta.isUserInteraction) return;
+      // Hidden children keep their stored size, so unhiding restores the width the user dragged.
+      const visibleTotal = groupChildren.reduce(
+        (total, child, index) =>
+          isSplitNodeHiddenForPresentation(child, maximizedPaneId)
+            ? total
+            : total + (groupSizes[index] ?? 1),
+        0,
+      );
+      const next = groupChildren.map((child, index) => {
+        const size = layout[getNodeKey(child)];
+        if (isSplitNodeHiddenForPresentation(child, maximizedPaneId) || size === undefined) {
+          return groupSizes[index] ?? 0;
+        }
+        return (size / 100) * visibleTotal;
       });
+      onResizeSplit(groupId, next);
     },
-    [groupChildren, maximizedPaneId],
+    [groupChildren, groupId, groupSizes, maximizedPaneId, onResizeSplit],
   );
 
   if (node.kind === "pane") {
@@ -1021,77 +958,73 @@ function SplitNodeView({
   }
 
   return (
-    <div
-      ref={groupRef}
-      className={cn(
-        "flex min-h-0 min-w-0 flex-1",
-        groupDirection === "horizontal" ? "flex-row" : "flex-col",
-      )}
+    <ResizablePanelGroup
+      orientation={groupDirection === "horizontal" ? "horizontal" : "vertical"}
+      className="min-h-0 min-w-0 flex-1"
+      groupRef={groupHandleRef}
+      onLayoutChanged={handleGroupLayoutChanged}
     >
-      {node.group.children.map((child, index) => (
-        <Fragment key={getNodeKey(child)}>
-          <SplitGroupChild
-            flexGrow={visibleFlex[index] ?? 0}
-            hidden={isSplitNodeHiddenForPresentation(child, maximizedPaneId)}
-            nodeRef={childRefCallbacks[index]}
-          >
-            <SplitNodeView
-              node={child}
-              workspaceKey={workspaceKey}
-              uiTabs={uiTabs}
-              focusedPaneId={focusedPaneId}
-              normalizedServerId={normalizedServerId}
-              normalizedWorkspaceId={normalizedWorkspaceId}
-              isWorkspaceFocused={isWorkspaceFocused}
-              hoveredCloseTabKey={hoveredCloseTabKey}
-              setHoveredCloseTabKey={setHoveredCloseTabKey}
-              closingTabIds={closingTabIds}
-              onNavigateTab={onNavigateTab}
-              onCloseTab={onCloseTab}
-              onCopyResumeCommand={onCopyResumeCommand}
-              onCopyAgentId={onCopyAgentId}
-              onCopyTerminalId={onCopyTerminalId}
-              onCopyFilePath={onCopyFilePath}
-              onReloadAgent={onReloadAgent}
-              onRenameTab={onRenameTab}
-              onCloseTabsToLeft={onCloseTabsToLeft}
-              onCloseTabsToRight={onCloseTabsToRight}
-              onCloseOtherTabs={onCloseOtherTabs}
-              onCreateNewTab={onCreateNewTab}
-              buildPaneContentModel={buildPaneContentModel}
-              onFocusPane={onFocusPane}
-              onSplitPane={onSplitPane}
-              onSplitPaneEmpty={onSplitPaneEmpty}
-              onResizeSplit={onResizeSplit}
-              onReorderTabsInPane={onReorderTabsInPane}
-              activeDragTabId={activeDragTabId}
-              showDropZones={showDropZones}
-              dropPreview={dropPreview}
-              tabDropPreview={tabDropPreview}
-              maximizedPaneId={maximizedPaneId}
-              workspaceHasMultiplePanes={workspaceHasMultiplePanes}
-              onTogglePaneMaximized={onTogglePaneMaximized}
-              focusModeEnabled={focusModeEnabled}
-              onExitFocusMode={onExitFocusMode}
-            />
-          </SplitGroupChild>
-          {index < node.group.children.length - 1 &&
-          !isSplitNodeHiddenForPresentation(child, maximizedPaneId) &&
-          !isSplitNodeHiddenForPresentation(node.group.children[index + 1], maximizedPaneId) ? (
-            <ResizeHandle
-              testID="workspace-split-resize-handle"
-              direction={node.group.direction}
-              groupId={node.group.id}
-              index={index}
-              sizes={groupSizes}
-              containerSize={groupContainerSize}
-              onPreviewResizeSplit={previewResizeSplit}
-              onResizeSplit={onResizeSplit}
-            />
-          ) : null}
-        </Fragment>
-      ))}
-    </div>
+      {node.group.children.map((child, index) => {
+        const hidden = isSplitNodeHiddenForPresentation(child, maximizedPaneId);
+        const previous = index > 0 ? node.group.children[index - 1] : undefined;
+        const showHandle =
+          previous !== undefined &&
+          !hidden &&
+          !isSplitNodeHiddenForPresentation(previous, maximizedPaneId);
+        return (
+          <Fragment key={getNodeKey(child)}>
+            {showHandle ? <ResizableHandle data-testid="workspace-split-resize-handle" /> : null}
+            <ResizablePanel
+              id={getNodeKey(child)}
+              defaultSize={`${(visibleFlex[index] ?? 0) * 100}%`}
+              className="flex min-h-0 min-w-0 flex-col"
+              style={PANEL_CONTENT_STYLE}
+              data-testid={hidden ? "split-group-child-hidden" : "split-group-child"}
+            >
+              <SplitNodeView
+                node={child}
+                workspaceKey={workspaceKey}
+                uiTabs={uiTabs}
+                focusedPaneId={focusedPaneId}
+                normalizedServerId={normalizedServerId}
+                normalizedWorkspaceId={normalizedWorkspaceId}
+                isWorkspaceFocused={isWorkspaceFocused}
+                hoveredCloseTabKey={hoveredCloseTabKey}
+                setHoveredCloseTabKey={setHoveredCloseTabKey}
+                closingTabIds={closingTabIds}
+                onNavigateTab={onNavigateTab}
+                onCloseTab={onCloseTab}
+                onCopyResumeCommand={onCopyResumeCommand}
+                onCopyAgentId={onCopyAgentId}
+                onCopyTerminalId={onCopyTerminalId}
+                onCopyFilePath={onCopyFilePath}
+                onReloadAgent={onReloadAgent}
+                onRenameTab={onRenameTab}
+                onCloseTabsToLeft={onCloseTabsToLeft}
+                onCloseTabsToRight={onCloseTabsToRight}
+                onCloseOtherTabs={onCloseOtherTabs}
+                onCreateNewTab={onCreateNewTab}
+                buildPaneContentModel={buildPaneContentModel}
+                onFocusPane={onFocusPane}
+                onSplitPane={onSplitPane}
+                onSplitPaneEmpty={onSplitPaneEmpty}
+                onResizeSplit={onResizeSplit}
+                onReorderTabsInPane={onReorderTabsInPane}
+                activeDragTabId={activeDragTabId}
+                showDropZones={showDropZones}
+                dropPreview={dropPreview}
+                tabDropPreview={tabDropPreview}
+                maximizedPaneId={maximizedPaneId}
+                workspaceHasMultiplePanes={workspaceHasMultiplePanes}
+                onTogglePaneMaximized={onTogglePaneMaximized}
+                focusModeEnabled={focusModeEnabled}
+                onExitFocusMode={onExitFocusMode}
+              />
+            </ResizablePanel>
+          </Fragment>
+        );
+      })}
+    </ResizablePanelGroup>
   );
 }
 

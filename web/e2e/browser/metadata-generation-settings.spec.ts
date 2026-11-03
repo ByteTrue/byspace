@@ -53,13 +53,17 @@ test("chooses a metadata model and can return to automatic selection", async ({
   });
   await page.getByText("Ten second stream", { exact: true }).click();
 
-  await expect(page.getByRole("button", { name: /Ten second stream/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Select model (Ten second stream)", exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("tab", { name: "Manual", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(page.getByRole("button", { name: /Ten second stream/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Select model (Ten second stream)", exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("metadata-manual-persisted.png"),
     fullPage: true,
@@ -72,7 +76,9 @@ test("chooses a metadata model and can return to automatic selection", async ({
     "aria-selected",
     "true",
   );
-  await expect(page.getByRole("button", { name: /Ten second stream/ })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Select model (Ten second stream)", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("replaces only the first configured metadata model", async ({ page }) => {

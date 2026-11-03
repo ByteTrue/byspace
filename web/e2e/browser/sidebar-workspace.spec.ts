@@ -69,7 +69,7 @@ async function openWorkspaceHoverCard(page: import("@playwright/test").Page, wor
   const row = await waitForSidebarWorkspace(page, workspaceId);
   await row.hover();
 
-  const hoverCard = page.getByRole("menu", { name: "Workspace scripts" });
+  const hoverCard = page.getByTestId("workspace-hover-card");
   await expect(hoverCard).toBeVisible({ timeout: 30_000 });
   return hoverCard;
 }
