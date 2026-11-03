@@ -12,7 +12,7 @@ This is an npm workspace monorepo with a unified Go single binary:
 - `internal/` — The Go daemon, CLI, Wails v3 desktop/Android host (`internal/gui`), self-updater (`internal/selfupdate`), agent providers (`internal/agent`), workspace/git (`internal/workspace`), terminal, tunnel, and embedded web UI (`internal/webui`)
 - `build/` — Native packaging templates (`build/darwin` for `BySpace.app` / `.dmg`, `build/android` for the Wails v3 Android sideload APK)
 - `workers/relay` — The Go relay compiled to WebAssembly and run as a Cloudflare Durable Object with WebSocket hibernation
-- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. `web/src/core` holds the modules ported from the retired Expo app; `web/src/shims` stands in for the React Native and Expo APIs they still call
+- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. `web/src/core` holds the modules ported from the retired Expo app; `web/src/shims` stands in for the React Native and Expo APIs they still call. Code comments that cite `packages/app` mean that Expo app, kept at the `archive/expo-app` tag (`git show archive/expo-app:packages/app/src/...`)
 - `packages/relay` — E2E encryption primitives
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade

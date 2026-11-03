@@ -581,19 +581,21 @@ export function DiffSurface(props: DiffSurfaceProps) {
     (event: React.PointerEvent<HTMLDivElement>) => pointHitAt(event.clientX, event.clientY),
     [pointHitAt],
   );
-  const setSelection = useCallback(
-    (selection: DiffSelection | null) => {
-      selectionRef.current = selection;
-      const currentModel = modelRef.current;
-      setHasSelection(
-        Boolean(
-          selection && currentModel && selectedSourceText(currentModel, selection).length > 0,
-        ),
-      );
-      schedulePaint();
-    },
-    [schedulePaint],
-  );
+  // setSelection keeps one identity: the reset effect below re-runs when it changes, and
+  // schedulePaint changes whenever the fonts finish loading or the viewport resizes. Through
+  // schedulePaint, either cleared a finished selection a moment after the drag.
+  const schedulePaintRef = useRef(schedulePaint);
+  useLayoutEffect(() => {
+    schedulePaintRef.current = schedulePaint;
+  }, [schedulePaint]);
+  const setSelection = useCallback((selection: DiffSelection | null) => {
+    selectionRef.current = selection;
+    const currentModel = modelRef.current;
+    setHasSelection(
+      Boolean(selection && currentModel && selectedSourceText(currentModel, selection).length > 0),
+    );
+    schedulePaintRef.current();
+  }, []);
   useEffect(() => {
     // Never abort a gesture that is still underway.
     //
