@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/workspace-labels/swatch.tsx: a label's colour as a dot and as the swatch row it is picked from; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/workspace-label-swatch.py; edit it directly.
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { useCallback, useMemo, type CSSProperties, type ReactElement } from "react";
 import {
   WORKSPACE_LABEL_COLORS,
@@ -8,7 +9,6 @@ import {
 import { identityForeground } from "@/styles/identity-colors";
 import { i18n } from "@/i18n/i18next";
 import type { Theme } from "@/styles/theme";
-import { cn } from "cn";
 import { useThemeObject } from "~/app/theme-object";
 
 /**
@@ -72,50 +72,39 @@ export function WorkspaceLabelSwatchRow({
   disabled?: boolean;
   testID?: string;
 }): ReactElement {
+  const handleValueChange = useCallback(
+    (next: string) => {
+      // A single toggle group reports "" when the pressed item is pressed again; a colour stays.
+      if (next) onChange(next as WorkspaceLabelColor);
+    },
+    [onChange],
+  );
   return (
-    <div
-      className="flex flex-row flex-wrap items-center gap-3"
-      role="radiogroup"
+    <ToggleGroup
+      type="single"
+      value={value ?? ""}
+      onValueChange={handleValueChange}
+      disabled={disabled}
+      spacing={2}
+      className="flex-wrap"
       data-testid={testID}
     >
       {WORKSPACE_LABEL_COLORS.map((color) => (
-        <WorkspaceLabelSwatch
-          key={color}
-          color={color}
-          selected={color === value}
-          disabled={disabled}
-          onChange={onChange}
-        />
+        <WorkspaceLabelSwatch key={color} color={color} />
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 
-function WorkspaceLabelSwatch({
-  color,
-  selected,
-  disabled,
-  onChange,
-}: {
-  color: WorkspaceLabelColor;
-  selected: boolean;
-  disabled: boolean;
-  onChange: (color: WorkspaceLabelColor) => void;
-}): ReactElement {
-  const select = useCallback(() => onChange(color), [color, onChange]);
-  // 20px, big enough to judge a colour by; selection is a 2px foreground border drawn inside
-  // the box, so picking a colour cannot reflow the row.
+function WorkspaceLabelSwatch({ color }: { color: WorkspaceLabelColor }): ReactElement {
   return (
-    <button
-      type="button"
-      role="radio"
+    <ToggleGroupItem
+      value={color}
+      size="sm"
       aria-label={workspaceLabelColorName(color)}
-      aria-checked={selected}
-      disabled={disabled}
-      onClick={select}
-      className={cn("size-5 shrink-0 rounded-full", selected && "border-2 border-foreground")}
-      style={useFillStyle(color)}
       data-testid={`workspace-label-swatch-${color}`}
-    />
+    >
+      <span className="size-4 rounded-full" style={useFillStyle(color)} />
+    </ToggleGroupItem>
   );
 }

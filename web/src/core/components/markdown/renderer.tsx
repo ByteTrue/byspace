@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/components/markdown/renderer.tsx: markdown outside agent prose
 // (plan cards, review comments, file previews, the changelog). The same HTML-ish pre-pass splits
 // out <details> and inline images; the markdown between them renders through web/src/markdown.
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import {
   useCallback,
   useEffect,
@@ -354,33 +355,26 @@ function MarkdownDetails({
   rendererProps: MarkdownPartRendererProps;
 }) {
   const [open, setOpen] = useState(false);
-  const toggle = useCallback(() => setOpen((current) => !current), []);
   const bodyParts = useMemo<MarkdownDisplayPart[]>(
     () => part.bodyParts ?? [{ kind: "markdown", text: part.body }],
     [part.body, part.bodyParts],
   );
+  const Chevron = open ? ChevronDown : ChevronRight;
   return (
-    <div className="mb-2 overflow-hidden rounded-md border">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        className="flex w-full items-center gap-1 bg-muted p-2 text-left"
-      >
-        {open ? (
-          <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
-        )}
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="mb-2 overflow-hidden rounded-md border"
+    >
+      <CollapsibleTrigger className="flex w-full items-center gap-1 bg-muted p-2 text-left">
+        <Chevron size={14} className="shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 text-sm leading-[18px] text-foreground">
           {part.summary}
         </span>
-      </button>
-      {open ? (
-        <div className="px-2 pt-2">
-          <MarkdownPartList parts={bodyParts} rendererProps={rendererProps} />
-        </div>
-      ) : null}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="px-2 pt-2">
+        <MarkdownPartList parts={bodyParts} rendererProps={rendererProps} />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
+import { Button } from "~/components/ui/button";
 
 export type SidebarCalloutActionVariant = "primary" | "secondary";
 
@@ -62,15 +63,17 @@ export function SidebarCallout({
             <span className="flex-1" />
           )}
           {onDismiss ? (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               type="button"
               onClick={onDismiss}
               aria-label={t("sidebarCallout.dismiss")}
               data-testid={testID ? `${testID}-dismiss` : undefined}
-              className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+              className="shrink-0"
             >
               <X className="size-3.5" />
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -81,23 +84,18 @@ export function SidebarCallout({
       {visibleActions.length > 0 ? (
         <div className="mt-2 flex gap-2" data-testid={testID ? `${testID}-actions` : undefined}>
           {visibleActions.map((action, index) => (
-            // The Expo app's callout buttons: a foreground fill or a bordered outline, no hover
-            // change, dimmed while pressed.
-            <button
+            <Button
               type="button"
               key={action.label}
-              className={cn(
-                "min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs font-medium active:opacity-80 disabled:pointer-events-none disabled:opacity-50",
-                action.variant === "primary"
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-transparent text-foreground",
-              )}
+              variant={action.variant === "primary" ? "default" : "outline"}
+              size="sm"
+              className="min-w-0 flex-1"
               disabled={action.disabled}
               onClick={action.onPress}
               data-testid={action.testID ?? (testID ? `${testID}-action-${index}` : undefined)}
             >
               {action.label}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}

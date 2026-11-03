@@ -20,6 +20,7 @@ import {
 } from "@/subagents/track-presentation";
 import type { ArchiveFinishedStatus } from "@/subagents/use-archive-finished";
 import { cn } from "cn";
+import { Button } from "~/components/ui/button";
 
 export interface SubagentsTrackProps {
   serverId: string;
@@ -287,16 +288,17 @@ function SubagentActionButton({
   return (
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild disabled={!visible}>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           aria-label={accessibilityLabel}
           data-testid={testID}
           onClick={handleClick}
           tabIndex={visible ? 0 : -1}
-          className="flex items-center justify-center p-1 text-muted-foreground hover:text-foreground"
         >
           <Icon size={ROW_ICON_SIZE} />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
         {tooltipLabel}

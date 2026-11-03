@@ -2,6 +2,7 @@
 // grouping and detail levels, nested codemode, subagents, forks, the outline, history paging);
 // the view is DOM and Tailwind. Keep the two in step until the cutover deletes the Expo app.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-stream-view.py; edit it directly.
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Spinner } from "~/components/ui/spinner";
 import React, {
   forwardRef,
@@ -115,6 +116,7 @@ import { cn } from "cn";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useStreamHistoryWindow } from "@/agent-stream/use-stream-history-window";
+import { Button } from "~/components/ui/button";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -216,13 +218,9 @@ function SuggestionChip({
 }) {
   const handlePress = useCallback(() => onSelect?.(prompt), [onSelect, prompt]);
   return (
-    <button
-      type="button"
-      onClick={handlePress}
-      className="rounded-md border px-3 py-2 text-xs text-foreground hover:bg-muted"
-    >
+    <Button variant="outline" size="sm" type="button" onClick={handlePress}>
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -1329,15 +1327,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
               style={scrollToBottomContainerStyle}
             >
-              <button
+              <Button
+                variant="secondary"
+                size="icon-lg"
                 type="button"
                 onClick={handleScrollToBottomPress}
                 aria-label={t("agentStream.scrollToBottom")}
                 data-testid="scroll-to-bottom-button"
-                className="pointer-events-auto flex size-12 animate-in items-center justify-center rounded-full bg-muted text-foreground shadow-sm duration-200 fade-in-0"
+                className="pointer-events-auto rounded-full shadow-sm animate-in fade-in-0 duration-200"
               >
                 <ChevronDown size={24} />
-              </button>
+              </Button>
             </div>,
           )}
         </AssistantSelectionCopySurface>
@@ -1518,39 +1518,35 @@ interface PermissionActionButtonProps {
   action: AgentPermissionAction;
   isRespondingAction: boolean;
   isResponding: boolean;
-  isPrimary: boolean;
   testID: string;
   onPress: (action: AgentPermissionAction) => void;
 }
 
-// Outline buttons (shadcn/ui), 28px on desktop.
 function PermissionActionButton({
   action,
   isRespondingAction,
   isResponding,
-  isPrimary,
   testID,
   onPress,
 }: PermissionActionButtonProps) {
   const handlePress = useCallback(() => onPress(action), [onPress, action]);
   const Icon = action.behavior === "allow" ? Check : X;
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       data-testid={testID}
       onClick={handlePress}
       disabled={isResponding}
-      className="flex min-h-9 items-center justify-center rounded-md border border-input bg-background px-2.5 py-1 hover:bg-muted active:opacity-90 disabled:pointer-events-none md:min-h-7 dark:bg-input/30 dark:hover:bg-input/50"
     >
       {isRespondingAction ? (
-        <Spinner className={isPrimary ? "text-foreground" : "text-muted-foreground"} />
+        <Spinner data-icon="inline-start" />
       ) : (
-        <span className="flex items-center gap-2">
-          <Icon size={14} className={isPrimary ? "text-foreground" : "text-muted-foreground"} />
-          <span className="text-sm font-medium text-foreground">{action.label}</span>
-        </span>
+        <Icon data-icon="inline-start" />
       )}
-    </button>
+      {action.label}
+    </Button>
   );
 }
 
@@ -1707,7 +1703,6 @@ function PermissionRequestCard({
         )}
       >
         {resolvedActions.map((action) => {
-          const isPrimary = action.variant === "primary";
           const isRespondingAction = respondingActionId === action.id;
           let testID: string;
           if (action.behavior === "deny") testID = "permission-request-deny";
@@ -1721,7 +1716,6 @@ function PermissionRequestCard({
               action={action}
               isRespondingAction={isRespondingAction}
               isResponding={isResponding}
-              isPrimary={isPrimary}
               testID={testID}
               onPress={handleActionPress}
             />
@@ -1744,30 +1738,29 @@ function PermissionRequestCard({
     );
   }
 
-  // shadcn/ui card: hairline frame, 14px radius, shadow-xs.
   return (
-    <div className="my-3 flex flex-col gap-2 rounded-xl border bg-card px-3.5 py-3 shadow-xs">
-      <span className="text-sm leading-[22px] font-medium text-foreground">{title}</span>
+    <Card size="sm" className="my-3">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {planMarkdown ? (
+          <PlanCard
+            title={t("agentStream.permission.proposedPlan")}
+            text={planMarkdown}
+            testID="permission-plan-card"
+            disableOuterSpacing
+          />
+        ) : null}
 
-      {description ? (
-        <span className="text-sm leading-5 text-muted-foreground">{description}</span>
-      ) : null}
+        {!isPlanRequest ? (
+          <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
+        ) : null}
 
-      {planMarkdown ? (
-        <PlanCard
-          title={t("agentStream.permission.proposedPlan")}
-          text={planMarkdown}
-          testID="permission-plan-card"
-          disableOuterSpacing
-        />
-      ) : null}
-
-      {!isPlanRequest ? (
-        <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
-      ) : null}
-
-      {footer}
-    </div>
+        {footer}
+      </CardContent>
+    </Card>
   );
 }
 

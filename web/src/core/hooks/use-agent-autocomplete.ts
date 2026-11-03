@@ -69,6 +69,7 @@ interface AgentAutocompleteResult {
   isVisible: boolean;
   options: AutocompleteOption[];
   selectedIndex: number;
+  onHighlight: (index: number) => void;
   isLoading: boolean;
   errorMessage?: string;
   loadingText: string;
@@ -558,7 +559,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     [onSelectOption],
   );
 
-  const { selectedIndex, onKeyPress } = useAutocomplete({
+  const { selectedIndex, highlight, onKeyPress } = useAutocomplete({
     isVisible,
     options,
     query: mode === "command" ? commandFilterQuery : fileFilterQuery,
@@ -600,6 +601,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     loadingText,
     emptyText,
     onSelectOption,
+    onHighlight: highlight,
     onKeyPress,
   };
 }

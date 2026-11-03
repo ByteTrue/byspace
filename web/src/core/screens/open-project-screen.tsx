@@ -1,10 +1,10 @@
 // Port of archive/expo-app:packages/app/src/screens/open-project-screen.tsx: the home screen when no workspace is open; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/open-project-screen.py; edit it directly.
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "~/components/ui/item";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "~/app/navigation";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react";
-import { cn } from "cn";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
@@ -109,7 +109,7 @@ export function OpenProjectScreen() {
 }
 
 interface HomeTileProps {
-  icon: ComponentType<{ size: number; className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   title: string;
   description: string;
   onPress: () => void;
@@ -119,20 +119,16 @@ interface HomeTileProps {
 
 function HomeTile({ icon: Icon, title, description, onPress, testID, accent }: HomeTileProps) {
   return (
-    <button
-      type="button"
-      onClick={onPress}
-      data-testid={testID}
-      className="flex w-full flex-col items-start gap-3 rounded-[14px] border bg-card p-4 text-left hover:border-input hover:bg-muted active:opacity-85 md:min-h-[132px] md:w-[220px]"
-    >
-      <Icon
-        size={20}
-        className={cn("shrink-0", accent ? "text-primary" : "text-muted-foreground")}
-      />
-      <span className="flex flex-col gap-1">
-        <span className="text-sm leading-[normal] text-foreground">{title}</span>
-        <span className="text-sm leading-[18px] text-muted-foreground">{description}</span>
-      </span>
-    </button>
+    <Item asChild variant="outline" className="text-left hover:bg-muted md:w-[220px]">
+      <button type="button" onClick={onPress} data-testid={testID}>
+        <ItemMedia variant="icon" className={accent ? "text-primary" : undefined}>
+          <Icon />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{title}</ItemTitle>
+          <ItemDescription>{description}</ItemDescription>
+        </ItemContent>
+      </button>
+    </Item>
   );
 }

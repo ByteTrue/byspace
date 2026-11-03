@@ -11,7 +11,6 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { useToast } from "@/contexts/toast-context";
 import { InlineReviewAddButton, InlineReviewThread } from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
@@ -840,7 +839,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
       <div
         ref={scrollRef}
         data-testid="git-diff-scroll"
-        data-overlay-scrollbar="true"
         tabIndex={0}
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
@@ -910,7 +908,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
             : null}
         </div>
       </div>
-      <DomOverlayScrollbar scrollContainerRef={scrollRef} onUserScrollUp={noop} />
       {hoveredAffordance?.hit.target && reviewActions ? (
         <InlineReviewAddButton onPress={addHoveredComment} style={affordanceStyle} />
       ) : null}
@@ -1120,11 +1117,10 @@ const SCROLL_STYLE: React.CSSProperties = {
   zIndex: 2,
   overflowY: "auto",
   overflowX: "hidden",
-  scrollbarWidth: "none",
+  scrollbarWidth: "thin",
   cursor: "text",
 };
 
-function noop(): void {}
 const CONTENT_STYLE: React.CSSProperties = {
   position: "relative",
   width: "100%",

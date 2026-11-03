@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/sessions-screen.tsx: the History page; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import {
   useMemo,
   useState,
@@ -51,16 +52,13 @@ function SessionHostErrorsBanner({
 }): ReactElement {
   return (
     <div className="px-3 pt-3 md:px-6">
-      <div
-        className="flex flex-col gap-1 rounded-[10px] border p-3"
-        data-testid="sessions-host-errors"
-      >
+      <Alert variant="destructive" data-testid="sessions-host-errors">
         {errors.map((error) => (
-          <span key={error.serverId} className="text-xs leading-[normal] text-red-300">
+          <AlertDescription key={error.serverId}>
             {t("sessions.hostLoadFailed", { host: error.serverName })}
-          </span>
+          </AlertDescription>
         ))}
-      </div>
+      </Alert>
     </div>
   );
 }

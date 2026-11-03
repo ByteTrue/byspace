@@ -88,3 +88,23 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 - **途中修掉的问题**：手机上从侧栏打开「导入会话」，侧栏 Sheet 关闭时把导入面板一起卸载了（导入面板移到侧栏外渲染）；代码块复制选区时丢了换行（每行带上换行符）。
 - **端到端**：附件、工具调用行、代码块按 shadcn 组件的结构定位；提问卡片的用例改为 Questionnaire 的交互；几条只在 CI 上偶发的用例改得更稳（打开动画结束后再量覆盖关系、手机上关闭嵌套抽屉用 Esc、断线前先等对话加载完、主机名示例改短以适应 shadcn 侧栏宽度）。
 - **本机仍失败、与本次无关**：`agent-timeline-resume` 的「未变化的恢复不动滚动位置」在改造前的提交 `1307ec9d0` 上本机也失败，CI 上通过。
+
+### 批 E：剩下自己画的控件（2026-11-03）
+
+先列出 `web/src` 里所有自己写的 `<button>`、输入框、卡片、分隔线、浮层、滚动条，再逐个换。
+
+- **换成 shadcn**：
+  - 按钮：剩下自己画的按钮都改成 Button，包括权限请求、发送与停止、手机上的标签切换、窗口标题栏的三个按钮、终端按键与粘贴/复制、侧栏提示卡片的操作、工具栏的标签按钮、组合框与下拉选择的触发按钮；「提交」「在编辑器中打开」的拆分按钮用 ButtonGroup；菜单、弹层、提示的触发器一律 `asChild` 包住 Button。整行可点的列表行用 Item（`asChild`），侧栏行里的 PR 用 Badge，终端的修饰键用 Toggle。
+  - 设置侧栏：Sidebar 的 Group/Menu/MenuButton（`collapsible="none"`）。
+  - 斜杠命令与 @ 文件补全：Command（选中项仍由输入框的方向键驱动，鼠标移上去也会选中）。
+  - 滚动：自己画的悬浮滚动条删除，对话、Diff、文件树用浏览器的细滚动条（`scrollbar-thin`）；标签栏两端的渐隐改用 shadcn 的 `scroll-fade-x`。
+  - 诊断详情、错误详情、工作区设置日志、首次连接命令用 CodeBlock；诊断状态用 Card。
+  - 折叠：PR 检查及其分组、提交列表、工作区设置的每条命令、Markdown 折叠块用 Collapsible。
+  - 标签颜色、代理资料的颜色与图标用 ToggleGroup（代理资料外观选择器改为 Popover）；使用 SSL 用 Checkbox；显示密码用 InputGroup 的按钮。
+  - 图片查看器、Mermaid 全屏用全屏 Dialog。
+  - 分隔线用 Separator / CommandSeparator；Markdown 表格用 Table。
+  - 主机加载失败、表单错误、PR 平台未配置、对话同步失败、已归档提示用 Alert（带按钮的放在 AlertAction）；端口、版本、连接方式小标签用 Badge；主机行、评论、排队消息、平台目录、代理资料功能项用 Item；没有可添加的平台用 Empty；扫码不可用说明、权限请求用 Card；手机上的归档确认用 Drawer。
+- **随之变化的行为**：项目设置里的脚本行不能再整行点击进入编辑，编辑在行尾菜单里（shadcn 的 Item 带操作时，行本身不可点）；资源管理器的新建/重命名框、新建标签名、评论框变成 shadcn 输入框的样子；滚动条变成系统细滚动条（macOS 默认本来就是悬浮的）；代理资料外观选择器从组合框变成 Popover。
+- **途中修掉的问题**：代理资料编辑框在上一张关闭动画期间点「新建」会被一起关掉，和定时任务表单是同一个问题，抽成 `web/src/hooks/use-retained-open-props.ts` 两处共用。
+- **保留自己写的**（shadcn 没有、也找不到替代）：对话大纲导轨的刻度；消息和 Markdown 里可点击的图片；Combobox（Command 加 Popover/Drawer 的组装，带分组、页脚、自定义行）与 SelectField；带输入法逻辑的输入框（输入框组件）；右键菜单的行触发器；补全浮层的定位；工具栏按钮（Button 加 Tooltip 的组装）。
+- **端到端**：本机跑会在 gh 登录的账号里真建 GitHub 临时仓库。这次漏下 7 个 `byspacetmp-pr-pane-*`：`gh repo create --push` 推送失败时仓库已建好，夹具直接抛错，没人删。夹具改为失败时删除已建的仓库，`docs/testing.md` 写明本机用 `GH_CONFIG_DIR` 指向空目录跳过这些用例。已漏下的 7 个等用户确认后再删。

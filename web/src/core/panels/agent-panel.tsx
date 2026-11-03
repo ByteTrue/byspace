@@ -2,6 +2,7 @@
 // lookup states, reconnect toast, attention clearing, history sync, archive, tracks, rewind
 // restore); the view is DOM and Tailwind. Keep the two in step until the cutover.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-panel.py; edit it directly.
+import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { Button } from "~/components/ui/button";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -30,7 +31,6 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { Composer } from "@/composer";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import {
-  composerPillClassName,
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
 } from "@/composer/pill-styles";
@@ -89,7 +89,6 @@ import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
 import { useSettings } from "@/hooks/use-settings";
-import { ICON_SIZE } from "@/styles/theme";
 import { Spinner } from "~/components/ui/spinner";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";
@@ -1414,15 +1413,10 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
           {contentContainer}
 
           {showHistorySyncError ? (
-            <div className="flex w-full flex-col items-center px-4 pt-2">
-              <div className="w-full max-w-[820px]">
-                <div
-                  className="flex items-center justify-center gap-3 rounded-2xl border border-status-danger bg-card px-4 py-2"
-                  data-testid="agent-timeline-sync-error"
-                >
-                  <span className="text-sm text-muted-foreground">
-                    {t("agentPanel.states.timelineSyncFailed")}
-                  </span>
+            <div className="mx-auto w-full max-w-[820px] px-4 pt-2">
+              <Alert variant="destructive" data-testid="agent-timeline-sync-error">
+                <AlertDescription>{t("agentPanel.states.timelineSyncFailed")}</AlertDescription>
+                <AlertAction>
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1434,8 +1428,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
                       ? t("agentPanel.states.timelineSyncRetrying")
                       : t("common.actions.retry")}
                   </Button>
-                </div>
-              </div>
+                </AlertAction>
+              </Alert>
             </div>
           ) : null}
 
@@ -1639,29 +1633,20 @@ const AgentStreamControlButton = memo(function AgentStreamControlButton({
   accessibilityLabel: string;
   testID: string;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="outline"
+          size="icon"
           type="button"
           onClick={onPress}
-          onPointerEnter={handlePointerEnter}
-          onPointerLeave={handlePointerLeave}
           aria-label={accessibilityLabel}
           data-testid={testID}
-          className={composerPillClassName(
-            isHovered,
-            "pointer-events-auto shrink-0 active:bg-muted",
-          )}
+          className="pointer-events-auto"
         >
-          <Icon
-            size={ICON_SIZE.sm}
-            className={isHovered ? "text-foreground" : "text-muted-foreground"}
-          />
-        </button>
+          <Icon />
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="center">
         {accessibilityLabel}

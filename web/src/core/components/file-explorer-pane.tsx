@@ -2,6 +2,7 @@
 // file's (listing, expand and restore, sort, hidden files, refresh, create, rename, duplicate,
 // delete, copy path, download, add to chat, drag into the composer); the view is DOM.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/file-explorer.py; edit it directly.
+import { Input } from "~/components/ui/input";
 import {
   Fragment,
   useCallback,
@@ -20,7 +21,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Spinner } from "~/components/ui/spinner";
-import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { focusWithRetries } from "@/utils/web-focus";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import * as Clipboard from "~/lib/clipboard";
@@ -64,6 +64,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { useToast } from "@/contexts/toast-context";
 import { ContextMenu } from "~/components/ui/context-menu";
 import { ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Button } from "~/components/ui/button";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -72,10 +73,7 @@ const SORT_OPTIONS: { value: SortOption }[] = [
 ];
 
 const CENTER_STATE = "flex flex-1 flex-col items-center justify-center gap-2 p-4";
-const ERROR_BUTTON =
-  "rounded-md border px-3 py-1 text-sm font-semibold text-muted-foreground hover:bg-accent";
 // The tree draws its own overlay thumb on desktop, so the native bar is hidden there.
-const HIDE_NATIVE_SCROLLBAR = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 /**
  * A FlatList render callback's argument.
@@ -90,8 +88,6 @@ interface ListRenderItemInfo<T> {
 function preventContextMenu(event: { preventDefault(): void }) {
   event.preventDefault();
 }
-
-function noop() {}
 
 function rowPaddingStyle(depth: number): CSSProperties {
   return { paddingLeft: treeRowPaddingLeft(depth) };
@@ -233,7 +229,7 @@ function EntryNameInputRow({
             <MaterialFileIcon fileName={name || "untitled"} size={WORKSPACE_TREE_ICON_SIZE} />
           )}
         </span>
-        <input
+        <Input
           ref={inputRef}
           value={name}
           onChange={handleChange}
@@ -249,7 +245,7 @@ function EntryNameInputRow({
           autoCorrect="off"
           spellCheck={false}
           data-testid="file-explorer-name-input"
-          className="min-w-0 flex-1 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-6 min-w-0 flex-1 px-1.5"
         />
       </div>
     </div>
@@ -1094,13 +1090,13 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         <span className="text-center text-sm text-destructive">{error}</span>
         <div className="flex items-center gap-2">
           {showBackFromError ? (
-            <button type="button" className={ERROR_BUTTON} onClick={handleBackFromError}>
+            <Button variant="outline" size="sm" type="button" onClick={handleBackFromError}>
               {t("workspace.fileExplorer.actions.back")}
-            </button>
+            </Button>
           ) : null}
-          <button type="button" className={ERROR_BUTTON} onClick={handleRetry}>
+          <Button variant="outline" size="sm" type="button" onClick={handleRetry}>
             {t("workspace.fileExplorer.actions.retry")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -1123,15 +1119,17 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         style={headerStyle}
         testID="files-pane-header"
       >
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           type="button"
           onClick={handleSortCycle}
           data-testid="files-sort-trigger"
-          className="ml-2 flex h-6 items-center justify-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:bg-sidebar-accent"
+          className="ml-2"
         >
           <span data-testid="files-sort-label">{currentSortLabel}</span>
           <ChevronDown size={12} />
-        </button>
+        </Button>
         <ToolbarControls>
           {onNewEntryAtRoot ? (
             <>
@@ -1200,27 +1198,19 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
               <span className="text-center text-sm text-muted-foreground">{emptyLabel}</span>
             </div>
           ) : (
-            <>
-              <div
-                ref={treeListRef}
-                data-testid="file-explorer-tree-scroll"
-                className={cn(
-                  "min-h-0 flex-1 overflow-y-auto",
-                  !isCompact && HIDE_NATIVE_SCROLLBAR,
-                )}
-              >
-                <div className="flex min-h-full flex-col pt-2 pb-4">
-                  {listRows.map((row, index) => (
-                    <Fragment key={listRowKeyExtractor(row)}>
-                      {renderTreeRow({ item: row, index })}
-                    </Fragment>
-                  ))}
-                </div>
+            <div
+              ref={treeListRef}
+              data-testid="file-explorer-tree-scroll"
+              className="min-h-0 flex-1 scrollbar-thin overflow-y-auto"
+            >
+              <div className="flex min-h-full flex-col pt-2 pb-4">
+                {listRows.map((row, index) => (
+                  <Fragment key={listRowKeyExtractor(row)}>
+                    {renderTreeRow({ item: row, index })}
+                  </Fragment>
+                ))}
               </div>
-              {isCompact ? null : (
-                <DomOverlayScrollbar scrollContainerRef={treeListRef} onUserScrollUp={noop} />
-              )}
-            </>
+            </div>
           )}
         </ContextMenuTrigger>
         {onNewEntryAtRoot ? (

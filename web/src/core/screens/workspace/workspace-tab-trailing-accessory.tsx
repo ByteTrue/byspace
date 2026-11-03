@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx: the "..."
 // beside each row of the phone tab switcher, holding that tab's menu.
+import { Button } from "~/components/ui/button";
 import { useMemo, type ReactElement, type SyntheticEvent } from "react";
 import {
   ArrowLeftToLine,
@@ -76,12 +77,15 @@ export function MobileTabTrailingAccessory({
     // the portaled menu (React events bubble through portals), must not also select the row.
     <span className="contents" onClick={stopPropagation} onKeyDown={stopPropagation}>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          data-testid={`${menuTestIDBase}-trigger`}
-          aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground active:bg-muted aria-expanded:bg-muted"
-        >
-          <Ellipsis size={14} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            data-testid={`${menuTestIDBase}-trigger`}
+            aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
+          >
+            <Ellipsis size={14} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"

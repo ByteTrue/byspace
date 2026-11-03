@@ -1,12 +1,10 @@
 // Port of archive/expo-app:packages/app/src/components/schedules/schedule-form-sheet.tsx: the create / edit schedule sheet; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
+import { useRetainedOpenProps } from "~/hooks/use-retained-open-props";
 import equal from "fast-deep-equal";
 import {
   useCallback,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
@@ -181,62 +179,17 @@ function updateSelectionPreferences(input: {
 }
 
 export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement | null {
-  const [renderedProps, setRenderedProps] = useState<ScheduleFormSheetProps | null>(() =>
-    props.visible ? props : null,
-  );
-  const [sheetVisible, setSheetVisible] = useState(props.visible);
-  const livePropsRef = useRef(props);
-  const closeRequestedRef = useRef(false);
-  const closedKeyRef = useRef<string | null>(null);
-  livePropsRef.current = props;
-
-  useEffect(() => {
-    if (props.visible) {
-      if (closeRequestedRef.current) {
-        return;
-      }
-      setRenderedProps(props);
-      setSheetVisible(true);
-      return;
-    }
-    if (renderedProps) {
-      setSheetVisible(false);
-    }
-  }, [props, renderedProps]);
-
-  const requestClose = useCallback(() => {
-    closeRequestedRef.current = true;
-    closedKeyRef.current = openKey(livePropsRef.current);
-    setSheetVisible(false);
-  }, []);
-
-  const handleDismiss = useCallback(() => {
-    const liveProps = livePropsRef.current;
-    closeRequestedRef.current = false;
-    // The parent opened another form while this one was closing: show that one, don't close it.
-    if (liveProps.visible && openKey(liveProps) !== closedKeyRef.current) {
-      setRenderedProps(liveProps);
-      setSheetVisible(true);
-      return;
-    }
-    setRenderedProps(null);
-    setSheetVisible(false);
-    if (liveProps.visible) {
-      liveProps.onClose();
-    }
-  }, []);
-
-  if (!renderedProps) {
+  const { retained, generation, release } = useRetainedOpenProps(props);
+  if (!retained) {
     return null;
   }
-
   return (
     <OpenScheduleFormSheet
-      key={openKey(renderedProps)}
-      {...renderedProps}
-      visible={sheetVisible}
-      onClose={requestClose}
-      onDismiss={handleDismiss}
+      key={`${openKey(retained)}:${generation}`}
+      {...retained}
+      visible={props.visible}
+      onClose={props.onClose}
+      onDismiss={release}
     />
   );
 }
@@ -675,17 +628,11 @@ function ScheduleTargetFields({
   const renderModelTrigger = useCallback(
     ({
       selectedModelLabel,
-      disabled,
-      isOpen,
-      hovered,
-      pressed,
     }: {
       selectedModelLabel: string;
       onPress: () => void;
       disabled: boolean;
       isOpen: boolean;
-      hovered: boolean;
-      pressed: boolean;
     }): ReactNode => {
       const displayLabel = state.selectedModelDisplay?.label ?? selectedModelLabel;
       return (
@@ -694,8 +641,6 @@ function ScheduleTargetFields({
           isPlaceholder={!state.selectedModel}
           placeholder={displayLabel}
           leading={modelTriggerLeading}
-          disabled={disabled}
-          active={hovered || pressed || isOpen}
           testID="schedule-model-trigger"
         />
       );

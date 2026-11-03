@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/projects-screen.tsx: a host's project list in settings; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/projects-screen.py; edit it directly.
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { useCallback, useMemo, type CSSProperties } from "react";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -100,19 +101,16 @@ export default function ProjectsScreen({ serverId }: ProjectsScreenProps) {
 function HostErrorsBanner({ errors }: { errors: ProjectHostError[] }) {
   const { t } = useTranslation();
   return (
-    <div
-      className="mb-3 flex flex-col gap-1 rounded-lg border p-3"
-      data-testid="projects-host-errors"
-    >
+    <Alert variant="destructive" className="mb-3" data-testid="projects-host-errors">
       {errors.map((error) => (
-        <span key={error.serverId} className="text-xs leading-[normal] text-red-300">
+        <AlertDescription key={error.serverId}>
           {t("settings.projectList.hostLoadFailed", {
             hostName: error.serverName,
             message: error.message,
           })}
-        </span>
+        </AlertDescription>
       ))}
-    </div>
+    </Alert>
   );
 }
 

@@ -1,4 +1,6 @@
+import { Separator } from "~/components/ui/separator";
 import * as Clipboard from "~/lib/clipboard";
+import { Button } from "~/components/ui/button";
 import {
   useCallback,
   useMemo,
@@ -84,15 +86,14 @@ function CopyableInfoRow({
     setTimeout(() => setCopied(false), 2000);
   }, [copyValue]);
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       aria-label={copyLabel}
       onClick={copy}
       data-copied={copied || undefined}
-      className={cn(
-        INFO_ROW,
-        "group/copy w-full text-left text-muted-foreground hover:text-foreground data-copied:text-foreground",
-      )}
+      className="group/copy w-full justify-start"
     >
       {copied ? (
         <Check className={INFO_ICON} />
@@ -102,10 +103,10 @@ function CopyableInfoRow({
           <Copy className={cn(INFO_ICON, "hidden group-hover/copy:block")} />
         </>
       )}
-      <span className="min-w-0 flex-1 truncate" data-testid={testId}>
+      <span className="min-w-0 flex-1 truncate text-left" data-testid={testId}>
         {value}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -114,22 +115,21 @@ function PrRow({ hint }: { hint: PrHint }) {
   const { t } = useTranslation();
   const openPullRequest = useCallback(() => void openExternalUrl(hint.url), [hint.url]);
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       onClick={openPullRequest}
       aria-label={t("workspace.git.pr.accessibility.pullRequest", {
         number: hint.number,
         context: getForgePresentation(normalizeForge(hint.forge)).changeRequestContext,
       })}
-      className={cn(
-        INFO_ROW,
-        "group/pr w-full text-left text-muted-foreground hover:text-foreground",
-      )}
+      className="group/pr w-full justify-start"
     >
       <PullRequestStateIcon state={hint.state} className="group-hover/pr:hidden" />
       <ExternalLink className={cn(INFO_ICON, "hidden group-hover/pr:block")} />
       <span className="truncate">{hint.number}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -166,15 +166,17 @@ function ChecksSummary({
     [forge, url],
   );
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       aria-label={formatCheckPresentationCountsLabel(
         counts,
         t("workspace.git.pr.sections.checks"),
         t,
       )}
       onClick={openChecks}
-      className="group/checks flex min-h-7 w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground"
+      className="group/checks w-full justify-start"
     >
       <ForgeIcon iconKind={icon} className="group-hover/checks:hidden" />
       <ExternalLink className={cn(INFO_ICON, "hidden group-hover/checks:block")} />
@@ -184,7 +186,7 @@ function ChecksSummary({
           <ChecksPill key={presentation} count={counts[presentation]} presentation={presentation} />
         ))}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -273,13 +275,13 @@ function HoverCardBody({ workspace }: { workspace: SidebarWorkspaceEntry }) {
       ) : null}
       {prHint?.checks && prHint.checks.length > 0 ? (
         <>
-          <div className="h-px bg-border" />
+          <Separator />
           <ChecksSummary checks={prHint.checks} forge={prHint.forge} url={prHint.url} />
         </>
       ) : null}
       {agents.length > 0 ? (
         <>
-          <div className="h-px bg-border" />
+          <Separator />
           <div className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto px-3 py-2">
             {agents.map((agent) => (
               <AgentRow key={agent.id} agent={agent} />

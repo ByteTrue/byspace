@@ -269,19 +269,18 @@ function WorkspaceLabelManagerRow({
       <span className="min-w-0 flex-1 truncate text-xs leading-[normal] text-foreground">
         {label.name}
       </span>
-      <button
+      <Button
+        variant="ghost"
+        size="icon-xs"
         type="button"
         aria-label={t("workspaceLabels.manage.editLabel", { name: label.name })}
         disabled={disabled}
         onClick={edit}
-        className={cn(
-          "flex items-center justify-center text-muted-foreground outline-none active:opacity-60",
-          !revealed && "pointer-events-none opacity-0",
-        )}
         data-testid={`workspace-label-manager-edit-${label.name}`}
+        className={cn(!revealed && "pointer-events-none opacity-0")}
       >
         <Pencil size={EDIT_ICON_SIZE} />
-      </button>
+      </Button>
     </div>
   );
 }

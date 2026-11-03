@@ -1,6 +1,9 @@
 // Port of archive/expo-app:packages/app/src/panels/setup-panel.tsx: the worktree setup log — one collapsible
 // row per setup command, the running one open, its output below. Same logic; the view is DOM.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/setup-panel.py; edit it directly.
+import { CodeBlock, CodeBlockContent } from "~/components/ui/code-block";
+import { Card } from "~/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -438,40 +441,37 @@ function SetupCommandRow({
   }, [command.index, isAutoExpanded, isExpandable, onToggle]);
 
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <button
-        type="button"
-        onClick={handlePress}
-        aria-expanded={showDetail}
-        className={cn(
-          "flex w-full items-center gap-2 bg-card px-3 py-2 text-left active:opacity-80",
-          showDetail && "border-b",
-          !isExpandable && "cursor-default",
-        )}
-      >
-        <span className="flex size-[18px] shrink-0 items-center justify-center">
-          <CommandStatusIcon status={command.status} />
-        </span>
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{command.command}</span>
-        {command.durationMs != null ? (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {formatDuration(command.durationMs)}
+    <Collapsible open={showDetail} onOpenChange={handlePress} disabled={!isExpandable} asChild>
+      <Card size="sm" className="gap-0 py-0">
+        <CollapsibleTrigger
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-2 text-left",
+            showDetail && "border-b",
+            !isExpandable && "cursor-default",
+          )}
+        >
+          <span className="flex size-[18px] shrink-0 items-center justify-center">
+            <CommandStatusIcon status={command.status} />
           </span>
-        ) : null}
-        <SetupCommandChevron showDetail={showDetail} />
-      </button>
-      {showDetail ? (
-        <div className="bg-background">
+          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{command.command}</span>
+          {command.durationMs != null ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatDuration(command.durationMs)}
+            </span>
+          ) : null}
+          <SetupCommandChevron showDetail={showDetail} />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
           {hasLog ? (
-            <div
-              className="max-h-[400px] overflow-y-auto p-3"
-              data-testid="workspace-setup-log"
-              aria-label={t("workspace.setup.accessibility.log")}
-            >
-              <pre className="font-mono text-[13px] leading-5 whitespace-pre-wrap break-words text-foreground select-text">
+            <CodeBlock className="rounded-none border-0">
+              <CodeBlockContent
+                className="max-h-[400px]"
+                data-testid="workspace-setup-log"
+                aria-label={t("workspace.setup.accessibility.log")}
+              >
                 {processedLog}
-              </pre>
-            </div>
+              </CodeBlockContent>
+            </CodeBlock>
           ) : (
             <div
               className="p-3"
@@ -484,13 +484,13 @@ function SetupCommandRow({
             </div>
           )}
           {hasError && errorMessage ? (
-            <div className="bg-red-100 p-3 text-sm whitespace-pre-wrap text-red-800 select-text dark:bg-red-950 dark:text-red-200">
-              {errorMessage}
-            </div>
+            <Alert variant="destructive" className="rounded-none border-0 whitespace-pre-wrap">
+              <AlertDescription className="select-text">{errorMessage}</AlertDescription>
+            </Alert>
           ) : null}
-        </div>
-      ) : null}
-    </div>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 

@@ -1,3 +1,4 @@
+import { SidebarGroupLabel, SidebarMenuButton } from "~/components/ui/sidebar";
 import { useCallback } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Import, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -21,18 +22,10 @@ export function ShowMoreRow({
   );
   const Icon = expanded ? ChevronUp : ChevronDown;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={label}
-      data-testid={testId}
-      className="flex h-7 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-    >
-      <span className="flex size-4 items-center justify-center">
-        <Icon className="size-3.5" />
-      </span>
-      {label}
-    </button>
+    <SidebarMenuButton size="sm" onClick={onToggle} aria-label={label} data-testid={testId}>
+      <Icon />
+      <span>{label}</span>
+    </SidebarMenuButton>
   );
 }
 
@@ -46,16 +39,18 @@ export function PinnedSectionHeader({
   const { t } = useTranslation();
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid="sidebar-pinned-section-header"
-      className="group/pinned flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-sidebar-foreground"
-    >
-      {t("sidebar.pinned.title")}
-      <Chevron className="size-3 opacity-0 group-hover/pinned:opacity-100" />
-    </button>
+    <SidebarGroupLabel asChild>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        data-testid="sidebar-pinned-section-header"
+        className="group/pinned"
+      >
+        {t("sidebar.pinned.title")}
+        <Chevron className="ml-1 opacity-0 group-hover/pinned:opacity-100" />
+      </button>
+    </SidebarGroupLabel>
   );
 }
 

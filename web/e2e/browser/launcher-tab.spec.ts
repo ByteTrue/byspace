@@ -286,11 +286,11 @@ test.describe("Tab creation", () => {
     const tabRow = page.getByTestId("workspace-tabs-row").filter({ visible: true }).first();
     const scrollArea = tabRow.getByTestId("workspace-tabs-scroll");
     const newTabButtonInScroll = await scrollArea.getByTestId("workspace-new-tab-button").count();
-    const scrollShades = await tabRow
-      .locator('[data-testid^="workspace-tabs-scroll-shade-"]')
-      .count();
+    const scrollFades = await scrollArea.evaluate((element) =>
+      element.classList.contains("scroll-fade-x"),
+    );
 
-    expect(newTabButtonInScroll === 0 || scrollShades === 0).toBe(true);
+    expect(newTabButtonInScroll === 0 || !scrollFades).toBe(true);
     await expect(tabRow.getByTestId("workspace-new-tab-button")).toBeVisible();
   });
 });

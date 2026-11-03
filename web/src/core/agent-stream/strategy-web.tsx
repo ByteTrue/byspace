@@ -11,8 +11,6 @@ import { measureElement as measureVirtualElement, useVirtualizer } from "@tansta
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { Spinner } from "~/components/ui/spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
-import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import {
   estimateStreamItemHeight,
   shouldAdjustScrollForVirtualRowResize,
@@ -168,10 +166,8 @@ function isVerticalScrollbarGutterPress(
   if (scrollContainer.scrollHeight <= scrollContainer.clientHeight) {
     return false;
   }
-  const scrollbarWidth = Math.max(
-    scrollContainer.offsetWidth - scrollContainer.clientWidth,
-    WEB_SCROLLBAR_SIZE_PX,
-  );
+  // An overlay scrollbar (macOS) takes no width; 8px is where its thumb shows.
+  const scrollbarWidth = Math.max(scrollContainer.offsetWidth - scrollContainer.clientWidth, 8);
   const bounds = scrollContainer.getBoundingClientRect();
   return window.getComputedStyle(scrollContainer).direction === "rtl"
     ? event.clientX <= bounds.left + scrollbarWidth
@@ -1145,17 +1141,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint]);
-  const scrollContainerStyle = useMemo((): CSSProperties => {
-    const overlayScrollbarEnabled = scrollEnabled && !isMobileBreakpoint;
-    return {
+  // The browser's own scrollbar, thin (Tailwind's scrollbar-thin), as shadcn's scrolling parts use.
+  const scrollContainerStyle = useMemo(
+    (): CSSProperties => ({
       width: "100%",
       height: "100%",
       overflowX: "hidden",
       overflowY: scrollEnabled ? "auto" : "hidden",
       overscrollBehaviorY: "contain",
-      scrollbarWidth: overlayScrollbarEnabled ? "none" : undefined,
-    };
-  }, [isMobileBreakpoint, scrollEnabled]);
+      scrollbarWidth: "thin",
+    }),
+    [scrollEnabled],
+  );
   const viewportStyle = useMemo(
     (): CSSProperties => ({
       position: "relative",
@@ -1229,7 +1226,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       <div
         ref={handleScrollContainerRef}
         data-testid="agent-chat-scroll"
-        data-overlay-scrollbar={scrollEnabled && !isMobileBreakpoint ? "true" : undefined}
         id={`agent-chat-scroll-${shouldUseVirtualizer ? "web-dom-virtualized" : "web-dom-scroll"}`}
         style={scrollContainerStyle}
       >
@@ -1265,12 +1261,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
           {shouldRenderEmpty ? listEmptyComponent : null}
         </div>
       </div>
-      {scrollEnabled && !isMobileBreakpoint ? (
-        <DomOverlayScrollbar
-          scrollContainerRef={scrollContainerRef}
-          onUserScrollUp={stopFollowingOutputFromUserIntent}
-        />
-      ) : null}
     </div>
   );
 }

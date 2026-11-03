@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { router } from "~/app/navigation";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
+import { Button } from "~/components/ui/button";
 
 interface BackHeaderProps {
   title?: string;
@@ -26,14 +27,15 @@ export function BackHeader({ title, titleAccessory, rightContent, onBack }: Back
     <ScreenHeader
       left={
         <>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             type="button"
             onClick={handleBack}
             aria-label={t("common.actions.back")}
-            className="rounded-lg p-3 text-muted-foreground hover:bg-accent md:p-2"
           >
             <ArrowLeft className="size-5" />
-          </button>
+          </Button>
           {title ? <ScreenTitle>{title}</ScreenTitle> : null}
           {titleAccessory}
         </>

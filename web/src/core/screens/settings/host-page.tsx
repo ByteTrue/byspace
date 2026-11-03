@@ -212,19 +212,15 @@ function HostStatusBadges({ serverId }: { serverId: string }) {
         {statusLabel}
       </Badge>
       {connectionBadge ? (
-        <div className="flex max-w-[200px] flex-row items-center gap-1.5 rounded-sm border bg-muted px-2 py-0.5">
+        <Badge variant="outline" className="max-w-[200px]">
           {connectionBadge.icon}
-          <span className="shrink truncate text-xs leading-[normal] font-normal text-muted-foreground">
-            {connectionBadge.text}
-          </span>
-        </div>
+          <span className="truncate">{connectionBadge.text}</span>
+        </Badge>
       ) : null}
       {versionBadgeText ? (
-        <div className="flex max-w-[200px] flex-row items-center gap-1.5 rounded-sm border bg-muted px-2 py-0.5">
-          <span className="shrink truncate text-xs leading-[normal] font-normal text-muted-foreground">
-            {versionBadgeText}
-          </span>
-        </div>
+        <Badge variant="outline" className="max-w-[200px]">
+          <span className="truncate">{versionBadgeText}</span>
+        </Badge>
       ) : null}
     </div>
   );

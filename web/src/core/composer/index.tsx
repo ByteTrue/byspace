@@ -2,6 +2,7 @@
 // attachments, forge links, slash commands, autocomplete, queue, send/steer/interrupt, keyboard
 // actions); the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/composer.py; edit it directly.
+import { Item, ItemActions, ItemContent, ItemDescription } from "~/components/ui/item";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { Spinner } from "~/components/ui/spinner";
 import type { TFunction } from "i18next";
@@ -147,6 +148,7 @@ import {
   type WorkspaceFileDragPayload,
 } from "@/attachments/workspace-file-drag";
 import { withTheme } from "~/app/theme-object";
+import { Button } from "~/components/ui/button";
 
 const composerImageAttachmentPersister: Pick<
   AttachmentPersister,
@@ -220,13 +222,6 @@ function resolveCheckoutRemoteUrl(
   checkoutStatus: ReturnType<typeof useCheckoutStatusQuery>["status"],
 ): string | null {
   return checkoutStatus?.remoteUrl ?? null;
-}
-
-function buildCancelButtonClassName(isConnected: boolean, isCancellingAgent: boolean): string {
-  return cn(
-    "ml-1 flex size-7 items-center justify-center rounded-md bg-red-600",
-    (!isConnected || isCancellingAgent) && "opacity-50",
-  );
 }
 
 function buildAgentStateSelector(serverId: string, agentId: string) {
@@ -593,27 +588,25 @@ function QueuedMessageRow({
     onSendNow(item.id);
   }, [onSendNow, item.id]);
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/50 px-3 py-2">
-      <span className="line-clamp-2 min-w-0 flex-1 text-sm text-foreground">{item.text}</span>
-      <div className="flex items-center gap-2">
-        <button
+    <Item variant="muted" size="sm">
+      <ItemContent className="min-w-0">
+        <ItemDescription className="line-clamp-2 text-foreground">{item.text}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="secondary"
+          size="icon"
           type="button"
           onClick={handleEdit}
           aria-label={editLabel}
-          className="flex size-8 items-center justify-center rounded-md bg-muted text-foreground hover:bg-accent"
         >
           <Pencil size={ICON_SIZE.sm} />
-        </button>
-        <button
-          type="button"
-          onClick={handleSendNow}
-          aria-label={sendNowLabel}
-          className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
-        >
+        </Button>
+        <Button size="icon" type="button" onClick={handleSendNow} aria-label={sendNowLabel}>
           <ArrowUp size={ICON_SIZE.sm} />
-        </button>
-      </div>
-    </div>
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -906,8 +899,6 @@ function resolveContextWindowValues(
 }
 
 interface ComposerCancelButtonProps {
-  buttonIconSize: number;
-  cancelButtonClassName: string;
   handleCancelAgent: () => void;
   isConnected: boolean;
   isCancellingAgent: boolean;
@@ -916,8 +907,6 @@ interface ComposerCancelButtonProps {
 }
 
 function ComposerCancelButton({
-  buttonIconSize,
-  cancelButtonClassName,
   handleCancelAgent,
   isConnected,
   isCancellingAgent,
@@ -927,21 +916,21 @@ function ComposerCancelButton({
   const accessibilityLabel = isCancellingAgent
     ? t("composer.cancel.cancelingAgent")
     : t("composer.cancel.stopAgent");
-  const icon = isCancellingAgent ? (
-    <Spinner className="text-primary-foreground" />
-  ) : (
-    <Square size={buttonIconSize} color="white" fill="white" />
-  );
+  const icon = isCancellingAgent ? <Spinner /> : <Square fill="currentColor" />;
   const shortcutNode = agentInterruptKeys ? <Shortcut chord={agentInterruptKeys} /> : null;
   return (
     <Tooltip delayDuration={0}>
-      <TooltipTrigger
-        onClick={handleCancelAgent}
-        disabled={!isConnected || isCancellingAgent}
-        aria-label={accessibilityLabel}
-        className={cancelButtonClassName}
-      >
-        {icon}
+      <TooltipTrigger asChild>
+        <Button
+          variant="destructive"
+          size="icon-sm"
+          className="ml-1"
+          onClick={handleCancelAgent}
+          disabled={!isConnected || isCancellingAgent}
+          aria-label={accessibilityLabel}
+        >
+          {icon}
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
         <span className="flex items-center gap-2">
@@ -1659,16 +1648,9 @@ function ComposerContentImpl({
     [],
   );
 
-  const cancelButtonClassName = useMemo(
-    () => buildCancelButtonClassName(isConnected, isCancellingAgent),
-    [isConnected, isCancellingAgent],
-  );
-
   const activeActionContent = useMemo(
     () => (
       <ComposerCancelButton
-        buttonIconSize={buttonIconSize}
-        cancelButtonClassName={cancelButtonClassName}
         handleCancelAgent={handleCancelAgent}
         isConnected={isConnected}
         isCancellingAgent={isCancellingAgent}
@@ -1676,15 +1658,7 @@ function ComposerContentImpl({
         t={t}
       />
     ),
-    [
-      agentInterruptKeys,
-      buttonIconSize,
-      cancelButtonClassName,
-      handleCancelAgent,
-      isCancellingAgent,
-      isConnected,
-      t,
-    ],
+    [agentInterruptKeys, handleCancelAgent, isCancellingAgent, isConnected, t],
   );
 
   const { contextWindowMaxTokens, contextWindowUsedTokens } = resolveContextWindowValues(
@@ -2021,6 +1995,7 @@ function ComposerContentImpl({
                 options={autocomplete.options}
                 selectedIndex={autocomplete.selectedIndex}
                 onSelect={handleAutocompleteSelect}
+                onHighlight={autocomplete.onHighlight}
                 isLoading={autocomplete.isLoading}
                 errorMessage={autocomplete.errorMessage}
                 loadingText={autocomplete.loadingText}

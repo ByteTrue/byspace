@@ -423,7 +423,6 @@ export function SidebarDisplayPreferencesMenu() {
           <SidebarIconButton
             label={t("sidebar.display.trigger")}
             data-testid="sidebar-display-preferences-menu"
-            className="[&_svg]:size-3.5"
           >
             <Settings2 />
           </SidebarIconButton>

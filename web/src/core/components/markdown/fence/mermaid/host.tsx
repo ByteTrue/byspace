@@ -15,6 +15,7 @@ import { useMermaidRenderModel } from "@/components/markdown/fence/mermaid/use-r
 import { ZoomableViewport } from "@/components/zoomable-viewport";
 import { cn } from "cn";
 import { useThemeObject } from "~/app/theme-object";
+import { Button } from "~/components/ui/button";
 
 const MEASURING_SIZE = { width: 240, height: 240 };
 /**
@@ -82,14 +83,16 @@ export function MermaidFenceHost({ code, phase }: { code: string; phase: Markdow
         <div className="relative">
           <HighlightedCodeBlock code={code} language="mermaid" />
           {showSource && canShowDiagram ? (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               type="button"
               aria-label={t("message.diagram.viewDiagram")}
               onClick={showDiagramPress}
-              className="absolute top-5 right-2 rounded-sm p-1 text-muted-foreground hover:text-foreground"
+              className="absolute top-5 right-2"
             >
               <Workflow size={14} />
-            </button>
+            </Button>
           ) : null}
         </div>
       )}

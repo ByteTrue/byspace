@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/startup-splash-screen.tsx: the same splash (logo shimmer
 // while hosts connect, an error page with recovery actions) in shadcn/ui.
+import { CodeBlock, CodeBlockContent } from "~/components/ui/code-block";
 import * as Clipboard from "~/lib/clipboard";
 import { useCallback, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,9 +53,9 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
           <h1 className="text-xl font-semibold">{t("startup.errorTitle")}</h1>
         </div>
         <p className="text-sm text-muted-foreground">{t("startup.errorDescription")}</p>
-        <pre className="rounded-lg border bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap">
-          {splashError}
-        </pre>
+        <CodeBlock>
+          <CodeBlockContent>{splashError}</CodeBlockContent>
+        </CodeBlock>
         <p className="font-mono text-xs text-muted-foreground select-text">
           {t("startup.logs.hint")}
         </p>

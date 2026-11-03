@@ -32,7 +32,6 @@ function SortProjectsButton() {
       label={t("sidebar.sortProjects.label", { defaultValue: "Sort projects" })}
       onClick={sort}
       data-testid="sidebar-sort-projects-button"
-      className="[&_svg]:size-3.5"
     >
       <ArrowDownAZ />
     </SidebarIconButton>
@@ -57,10 +56,8 @@ function HeaderNavButton({
     <SidebarIconButton
       label={entry.label}
       shortcutKeys={entry.shortcutKeys}
-      active={entry.isActive}
       onClick={handleClick}
       data-testid={SIDEBAR_NAV_TEST_IDS[entry.id]}
-      className="[&_svg]:size-3.5"
     >
       <Icon />
     </SidebarIconButton>

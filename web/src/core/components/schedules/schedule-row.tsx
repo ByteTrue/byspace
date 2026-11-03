@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/schedules/schedule-row.tsx: one schedule in the Schedules list; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
+import { Button } from "~/components/ui/button";
 import { MoreVertical, Pause, Pencil, Play, RotateCw, Trash2 } from "lucide-react";
 import {
   useCallback,
@@ -323,12 +324,15 @@ function ScheduleKebabMenu({
   const productNameLower = productName.toLowerCase();
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={`${productName} actions`}
-        data-testid={`schedule-kebab-${schedule.id}`}
-        className="rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-      >
-        <MoreVertical size={MENU_ICON_SIZE} />
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`${productName} actions`}
+          data-testid={`schedule-kebab-${schedule.id}`}
+        >
+          <MoreVertical size={MENU_ICON_SIZE} />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[220px]" onCloseAutoFocus={keepFocusElsewhere}>
         <DropdownMenuItem onSelect={onEdit} data-testid={`schedule-menu-edit-${schedule.id}`}>

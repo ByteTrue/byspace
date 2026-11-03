@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/combined-model-selector.tsx: the model trigger (provider
 // glyph + model label, or a caller-drawn trigger) and the model browser in a combobox.
+import { Button } from "~/components/ui/button";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
@@ -32,8 +33,6 @@ interface CombinedModelSelectorProps {
     onPress: () => void;
     disabled: boolean;
     isOpen: boolean;
-    hovered: boolean;
-    pressed: boolean;
   }) => ReactNode;
   onOpen?: () => void;
   onClose?: () => void;
@@ -79,9 +78,6 @@ export function CombinedModelSelector({
   const modelBrowserScrolling = resolveModelBrowserScrolling({ isCompact });
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const handlePointerEnter = useCallback(() => setHovered(true), []);
-  const handlePointerLeave = useCallback(() => setHovered(false), []);
   const browser = useModelBrowser({
     providers,
     selectedProvider,
@@ -148,30 +144,24 @@ export function CombinedModelSelector({
   return (
     <>
       {renderTrigger ? (
-        <button
+        <Button
           ref={anchorRef}
           type="button"
+          variant="outline"
           disabled={disabled}
           onClick={handleTriggerPress}
-          onPointerEnter={handlePointerEnter}
-          onPointerLeave={handlePointerLeave}
           aria-label={accessibilityLabel}
           aria-expanded={isOpen}
           data-testid="combined-model-selector"
-          className={cn(
-            "flex min-w-0 text-left outline-none disabled:opacity-50",
-            triggerFill ? "w-full flex-col items-stretch self-stretch" : "shrink",
-          )}
+          className={cn("min-w-0 justify-start font-normal", triggerFill ? "w-full" : "shrink")}
         >
           {renderTrigger({
             selectedModelLabel: browser.triggerLabel,
             onPress: handleTriggerPress,
             disabled,
             isOpen,
-            hovered,
-            pressed: isOpen,
           })}
-        </button>
+        </Button>
       ) : (
         <ComboboxTrigger
           ref={anchorRef}
@@ -181,10 +171,7 @@ export function CombinedModelSelector({
           aria-expanded={isOpen}
           testID="combined-model-selector"
           chevron={toolbar?.showCaret === false ? null : undefined}
-          className={cn(
-            "flex h-7 min-w-0 shrink items-center gap-1 rounded-2xl px-2 hover:bg-muted active:bg-background disabled:opacity-50",
-            isOpen && "bg-background",
-          )}
+          className="shrink"
         >
           {selectedProvider.trim().length > 0 ? (
             <span className={cn("flex shrink-0", toolbar?.glyphSize === 20 ? "size-5" : "size-4")}>

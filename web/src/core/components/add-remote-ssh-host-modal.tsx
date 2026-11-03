@@ -1,6 +1,12 @@
 // Port of archive/expo-app:packages/app/src/components/add-remote-ssh-host-modal.tsx: the remote SSH host form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "~/components/ui/input-group";
+import {
   useCallback,
   useMemo,
   useRef,
@@ -178,37 +184,36 @@ export function AddRemoteSshHostModal({
       </Field>
       <Field data-testid="remote-ssh-password">
         <FieldLabel>{t("pairing.remoteSsh.fields.password")}</FieldLabel>
-        <div className="flex flex-row items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <Input
-              data-testid="remote-ssh-password-input"
-              aria-label={t("pairing.remoteSsh.fields.password")}
-              defaultValue=""
-              onChange={handlePasswordInput}
-              placeholder={t("pairing.remoteSsh.fields.passwordOptional")}
-              autoCapitalize="none"
-              autoCorrect="off"
-              type={isPasswordVisible ? "text" : "password"}
-              readOnly={isSaving}
-              enterKeyHint="done"
-              onKeyDown={handleSubmitEnter}
-            />
-          </div>
-          <button
-            type="button"
-            className="flex aspect-square shrink-0 items-center justify-center self-stretch rounded-lg border bg-muted"
-            onClick={handleTogglePasswordVisibility}
-            disabled={isSaving}
-            aria-label={
-              isPasswordVisible
-                ? t("pairing.remoteSsh.passwordVisibility.hide")
-                : t("pairing.remoteSsh.passwordVisibility.show")
-            }
-            data-testid="remote-ssh-password-visibility-toggle"
-          >
-            <PasswordVisibilityIcon />
-          </button>
-        </div>
+        <InputGroup>
+          <InputGroupInput
+            data-testid="remote-ssh-password-input"
+            aria-label={t("pairing.remoteSsh.fields.password")}
+            defaultValue=""
+            onChange={handlePasswordInput}
+            placeholder={t("pairing.remoteSsh.fields.passwordOptional")}
+            autoCapitalize="none"
+            autoCorrect="off"
+            type={isPasswordVisible ? "text" : "password"}
+            readOnly={isSaving}
+            enterKeyHint="done"
+            onKeyDown={handleSubmitEnter}
+          />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              size="icon-xs"
+              onClick={handleTogglePasswordVisibility}
+              disabled={isSaving}
+              aria-label={
+                isPasswordVisible
+                  ? t("pairing.remoteSsh.passwordVisibility.hide")
+                  : t("pairing.remoteSsh.passwordVisibility.show")
+              }
+              data-testid="remote-ssh-password-visibility-toggle"
+            >
+              <PasswordVisibilityIcon />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
       </Field>
       <div className="mt-2 flex flex-row gap-3">
         <Button className="flex-1" variant="secondary" onClick={handleCancel} disabled={isSaving}>

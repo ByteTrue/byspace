@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Button } from "~/components/ui/button";
 
 type RowActionIcon = "copy" | "open" | "restart" | "start" | "stop" | "terminal";
 type ScriptDescriptor = WorkspaceDescriptor["scripts"][number];
@@ -102,16 +103,17 @@ function ScriptRowActionButton({
   return (
     <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           aria-label={accessibilityLabel}
           data-testid={testID}
           disabled={disabled}
           onClick={handleClick}
-          className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           <Icon size={size} fill={icon === "start" ? "transparent" : undefined} />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent data-testid={`${testID}-tooltip`} side="top">
         {tooltipLabel}
@@ -174,17 +176,21 @@ function ServiceRouteSelector({
     <DropdownMenu>
       <Tooltip delayDuration={250}>
         <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            aria-label={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
-            data-testid={`workspace-scripts-route-${scriptName}`}
-            className="group/route flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
-          >
-            <span className="flex size-3.5 items-center justify-center text-muted-foreground group-hover/route:text-foreground">
-              <ChevronDown size={14} />
-            </span>
-            <span className="min-w-0 shrink truncate text-xs leading-[14px] text-muted-foreground group-hover/route:text-foreground">
-              {selectedTarget.label}
-            </span>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-label={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
+              data-testid={`workspace-scripts-route-${scriptName}`}
+              className="min-w-0 flex-1 justify-start"
+            >
+              <span className="flex size-3.5 items-center justify-center text-muted-foreground group-hover/route:text-foreground">
+                <ChevronDown size={14} />
+              </span>
+              <span className="min-w-0 shrink truncate text-xs leading-[14px] text-muted-foreground group-hover/route:text-foreground">
+                {selectedTarget.label}
+              </span>
+            </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent data-testid={`workspace-scripts-route-${scriptName}-tooltip`} side="top">
@@ -541,32 +547,16 @@ export function WorkspaceScriptsButton({
     <div className="flex shrink-0 items-center gap-1">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
+          <Button
+            variant={ghost ? "ghost" : "outline"}
+            size={ghost || hideLabels ? "icon" : "default"}
             data-testid="workspace-scripts-button"
             aria-label={t("workspace.scripts.accessibility.trigger")}
-            className={cn(
-              "flex items-center justify-center",
-              ghost
-                ? "size-8 rounded-lg hover:bg-muted aria-expanded:bg-muted"
-                : "h-8 rounded-md border bg-background px-3 hover:bg-muted aria-expanded:bg-muted md:h-7 md:px-2 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-            )}
           >
-            <span className="flex items-center justify-center gap-1.5 md:gap-1">
-              <Play
-                size={ghost ? 16 : 14}
-                strokeWidth={ghost ? 1.5 : 2}
-                fill="transparent"
-                className={hasAnyRunning ? "text-blue-500" : "text-muted-foreground"}
-              />
-              {hideLabels ? null : (
-                <span className="text-sm font-medium text-foreground">
-                  {t("workspace.scripts.title")}
-                </span>
-              )}
-              {ghost ? null : <ChevronDown size={16} className="text-muted-foreground" />}
-            </span>
-          </button>
+            <Play className={hasAnyRunning ? "text-blue-500" : undefined} />
+            {hideLabels || ghost ? null : t("workspace.scripts.title")}
+            {ghost || hideLabels ? null : <ChevronDown data-icon="inline-end" />}
+          </Button>
         </PopoverTrigger>
         <PopoverContent
           align="end"

@@ -10,7 +10,7 @@ import {
   resolveTerminalProfiles,
 } from "@bytetrue/protocol/terminal-profiles";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
-import { buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import {
@@ -94,12 +94,15 @@ function WorkspaceHeaderWorkspaceActionItems({
 function HeaderMenuTrigger() {
   const { t } = useTranslation();
   return (
-    <DropdownMenuTrigger
-      data-testid="workspace-header-menu-trigger"
-      aria-label={t("workspace.header.actions.workspaceActions")}
-      className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-    >
-      <Ellipsis className="text-muted-foreground" />
+    <DropdownMenuTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        data-testid="workspace-header-menu-trigger"
+        aria-label={t("workspace.header.actions.workspaceActions")}
+      >
+        <Ellipsis className="text-muted-foreground" />
+      </Button>
     </DropdownMenuTrigger>
   );
 }

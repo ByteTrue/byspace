@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/git/commits-section/commits-section.tsx: the collapsible "Commits"
 // strip under the Changes view — the branch's commits ahead of its base, refreshed every 10s while
 // open. The query and timing are the Expo file's; the view is DOM.
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -129,12 +130,13 @@ export function CommitsSection({
       : null;
 
   return (
-    <div className="shrink-0 border-t pb-[env(safe-area-inset-bottom)]">
-      <button
-        type="button"
+    <Collapsible
+      open={!collapsed}
+      onOpenChange={handleToggleSection}
+      className="shrink-0 border-t pb-[env(safe-area-inset-bottom)]"
+    >
+      <CollapsibleTrigger
         data-testid="commits-section-header"
-        aria-expanded={!collapsed}
-        onClick={handleToggleSection}
         className="flex w-full shrink-0 items-center gap-2 py-2 pr-3 pl-2 text-left"
       >
         <span
@@ -156,10 +158,10 @@ export function CommitsSection({
             {commitCount}
           </span>
         )}
-      </button>
-      {collapsed ? null : (
+      </CollapsibleTrigger>
+      <CollapsibleContent>
         <CommitsSectionContent query={query} now={displayNow} onCommitPress={onCommitPress} />
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

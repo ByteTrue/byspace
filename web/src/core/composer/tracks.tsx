@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
 import { Separator } from "~/components/ui/separator";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { StatusRing } from "@/components/status-ring";
-import { composerPillClassName, composerPillLabelClassName } from "@/composer/pill-styles";
+import { Button } from "~/components/ui/button";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { cn } from "cn";
 
@@ -63,7 +63,6 @@ export function ComposerTrackPill({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <ComposerTrackPillTrigger
-        open={open}
         segments={segments}
         testID={testID}
         accessibilityLabel={accessibilityLabel ?? segments.map((segment) => segment.text).join(" ")}
@@ -83,36 +82,37 @@ export function ComposerTrackPill({
 }
 
 function ComposerTrackPillTrigger({
-  open,
   segments,
   testID,
   accessibilityLabel,
 }: {
-  open: boolean;
   segments: readonly ComposerTrackPillSegment[];
   testID: string;
   accessibilityLabel: string;
 }): ReactElement {
   return (
-    <PopoverTrigger
-      data-testid={testID}
-      aria-label={accessibilityLabel}
-      className={composerPillClassName(open, "pointer-events-auto min-w-0 shrink hover:bg-muted")}
-    >
-      {/* Segments sit twice as far apart as a mark from its own text, so a count reads as
+    <PopoverTrigger asChild>
+      <Button
+        variant="outline"
+        data-testid={testID}
+        aria-label={accessibilityLabel}
+        className="pointer-events-auto min-w-0 shrink"
+      >
+        {/* Segments sit twice as far apart as a mark from its own text, so a count reads as
           belonging to the mark on its left. */}
-      <span className="flex min-w-0 shrink items-center gap-4">
-        {segments.map((segment, index) => (
-          <span
-            key={segment.bucket ?? "plain"}
-            className="flex min-w-0 shrink items-center gap-2"
-            data-testid={`${testID}-segment-${index}`}
-          >
-            <ComposerTrackMark bucket={segment.bucket} />
-            <span className={composerPillLabelClassName(open)}>{segment.text}</span>
-          </span>
-        ))}
-      </span>
+        <span className="flex min-w-0 shrink items-center gap-4">
+          {segments.map((segment, index) => (
+            <span
+              key={segment.bucket ?? "plain"}
+              className="flex min-w-0 shrink items-center gap-2"
+              data-testid={`${testID}-segment-${index}`}
+            >
+              <ComposerTrackMark bucket={segment.bucket} />
+              <span className="truncate text-xs">{segment.text}</span>
+            </span>
+          ))}
+        </span>
+      </Button>
     </PopoverTrigger>
   );
 }

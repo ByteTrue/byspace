@@ -1,7 +1,7 @@
-// Port of archive/expo-app:packages/app/src/components/attachment-lightbox.tsx: an image over the whole window
-// on a dark backdrop, zoomable, closed by Escape, the close action or a click outside it.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+// An image over the whole window: a full-screen shadcn Dialog on a dark fill, zoomable, closed by
+// Escape, the close action or a click outside the image.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AttachmentMetadata } from "@/attachments/types";
@@ -29,25 +29,9 @@ export function AttachmentLightbox({
   const url = source?.type === "uri" ? source.uri : attachmentUrl;
   const contentSize = source?.type === "uri" ? source.contentSize : undefined;
   const [errored, setErrored] = useState(false);
-  const layerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     setErrored(false);
   }, [metadata?.id, url]);
-  const open = source !== null;
-  useEffect(() => {
-    if (!open) return;
-    layerRef.current?.focus();
-    function handleKeydown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      // Immediate: the shortcut engine also listens on window, and when it runs after this
-      // listener the lightbox is already gone, so it would read the Escape as "interrupt agent".
-      event.stopImmediatePropagation();
-      onClose();
-    }
-    window.addEventListener("keydown", handleKeydown, true);
-    return () => window.removeEventListener("keydown", handleKeydown, true);
-  }, [onClose, open]);
   const actions = useMemo(
     () => [
       {
@@ -60,27 +44,21 @@ export function AttachmentLightbox({
     [onClose, t],
   );
   const handleImageError = useCallback(() => setErrored(true), []);
-  if (!source) return null;
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) onClose();
+    },
+    [onClose],
+  );
   const hasError = errored || !url;
-  return createPortal(
-    <div
-      ref={layerRef}
-      tabIndex={-1}
-      className="fixed inset-0 z-50 outline-none"
-      role="dialog"
-      aria-modal="true"
-      // Marks it an open layer for the shortcut engine (lib/overlay-root.ts), as a Radix dialog is:
-      // Escape closes the lightbox and does not also interrupt the agent behind it.
-      data-state="open"
-    >
-      <button
-        type="button"
-        data-testid="attachment-lightbox-backdrop"
-        aria-label={t("message.attachments.dismissImage")}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/90"
-      />
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
+  return (
+    <Dialog open={source !== null} onOpenChange={handleOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="fixed inset-0 top-0 left-0 flex h-full w-full max-w-none translate-x-0 translate-y-0 flex-col rounded-none p-0 ring-0 sm:max-w-none items-center justify-center bg-black/90 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+      >
+        <DialogTitle className="sr-only">{t("composer.attachments.openImage")}</DialogTitle>
         {hasError ? (
           <span className="text-sm text-muted-foreground">
             {t("message.attachments.imageLoadFailed")}
@@ -93,13 +71,12 @@ export function AttachmentLightbox({
             fit={LIGHTBOX_FIT}
             onError={handleImageError}
             onPressOutsideContent={onClose}
-            className="pointer-events-auto w-full flex-1 self-center"
+            className="w-full flex-1 self-center"
             testID="attachment-lightbox"
             uri={url}
           />
         )}
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

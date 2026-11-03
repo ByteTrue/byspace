@@ -81,7 +81,6 @@ export function SidebarHelpMenu() {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <SidebarIconButton
-          fill={false}
           label={t("sidebar.help.trigger")}
           tooltipSide="top"
           data-testid="sidebar-help"

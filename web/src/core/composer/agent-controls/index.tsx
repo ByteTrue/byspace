@@ -14,7 +14,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { router } from "~/app/navigation";
-import { cn } from "cn";
 import { useShallow } from "zustand/shallow";
 import { Settings2 } from "lucide-react";
 import { getAgentFeatureIcon, ThinkingIcon } from "@/agent-controls/icons";
@@ -91,6 +90,7 @@ import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { useThemeObject } from "~/app/theme-object";
 import { blurActiveElement } from "~/lib/blur-active-element";
 import { useWindowDimensions } from "~/hooks/use-window-dimensions";
+import { Button } from "~/components/ui/button";
 
 interface AgentControlOption {
   id: string;
@@ -702,12 +702,6 @@ function ControlledAgentControls({
     [onSelectModel, onSelectProviderAndModel, provider],
   );
 
-  const providerPressableClassName = cn(
-    "flex h-7 items-center gap-1 rounded-md px-2 hover:bg-muted",
-    openSelector === "provider" && "bg-background",
-    (disabled || !canSelectProvider) && "opacity-50",
-  );
-
   const handleOpenSheet = useCallback((sheet: Exclude<ActiveSheet, null>) => {
     blurActiveElement();
     setActiveSheet(sheet);
@@ -783,7 +777,6 @@ function ControlledAgentControls({
             displayThinking={displayThinking}
             openSelector={openSelector}
             providerAnchorRef={providerAnchorRef}
-            providerPressableClassName={providerPressableClassName}
             handleProviderPress={handleProviderPress}
             handleProviderSelect={handleProviderSelect}
             handleThinkingSelect={handleThinkingSelect}
@@ -878,7 +871,6 @@ interface DesktopAgentControlsContentProps {
   displayThinking: string;
   openSelector: AgentControlSelector | null;
   providerAnchorRef: RefObject<HTMLButtonElement | null>;
-  providerPressableClassName: string;
   handleProviderPress: () => void;
   handleProviderSelect: (id: string) => void;
   handleThinkingSelect: (id: string) => void;
@@ -952,7 +944,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     displayThinking,
     openSelector,
     providerAnchorRef,
-    providerPressableClassName,
     handleProviderPress,
     handleProviderSelect,
     handleThinkingSelect,
@@ -988,7 +979,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             ref={providerAnchorRef}
             disabled={disabled || !canSelectProvider}
             onPress={handleProviderPress}
-            className={providerPressableClassName}
             accessibilityLabel={t("agentControls.provider.selectWithValue", {
               value: displayProvider,
             })}
@@ -1081,18 +1071,19 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 
       {presentation.aggregateFeatures && features?.length ? (
         <>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             onClick={handleOpenFeatures}
             disabled={disabled}
             aria-label={t("agentControls.features.open")}
             data-testid="agent-controls-features"
-            className="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50"
           >
             <ComposerToolbarGlyph size={glyphSize}>
               <Settings2 size={glyphSize} className="text-muted-foreground" />
             </ComposerToolbarGlyph>
-          </button>
+          </Button>
           <AdaptiveModalSheet
             header={featuresSheetHeader}
             visible={activeSheet === "features"}

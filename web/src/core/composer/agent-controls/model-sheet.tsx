@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/composer/agent-controls/model-sheet.tsx: the narrow composer's one
 // model button ("model · thinking"). It opens a sheet with the model browser over the remaining
 // controls; on a phone the controls are a list and the model row drills into a second sheet.
+import { Separator } from "~/components/ui/separator";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Bot } from "lucide-react";
@@ -229,10 +230,7 @@ export function CompactModelSheet({
         aria-expanded={isOpen}
         testID="combined-model-selector"
         chevron={null}
-        className={cn(
-          "flex h-7 min-w-0 shrink items-center gap-1 rounded-2xl px-2 hover:bg-muted active:bg-background disabled:opacity-50",
-          isOpen && "bg-background",
-        )}
+        className="shrink"
       >
         {ProviderIcon ? (
           <ComposerToolbarGlyph size={glyphSize}>
@@ -283,7 +281,7 @@ export function CompactModelSheet({
         </div>
         {!usesBottomSheet ? (
           <>
-            <div className="h-px shrink-0 bg-border" />
+            <Separator />
             <div
               className="min-h-0 flex-1 overflow-y-auto"
               data-testid="agent-controls-settings-list"

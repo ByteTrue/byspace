@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/appearance/appearance-section.tsx: theme, terminal scheme, detail level, fonts, syntax theme. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/appearance-section.py; edit it directly.
+import { Button } from "~/components/ui/button";
 import {
   Fragment,
   useCallback,
@@ -95,8 +96,6 @@ function sizeDraftToOverride(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
-
 // ---------------------------------------------------------------------------
 // Theme picker
 // ---------------------------------------------------------------------------
@@ -161,15 +160,18 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
         <ItemTitle>{t("settings.appearance.theme.title")}</ItemTitle>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={TRIGGER}
-          aria-label={t("settings.appearance.theme.accessibilityLabel", {
-            value: selectedLabel,
-          })}
-        >
-          <ThemeLeading themeValue={value} />
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("settings.appearance.theme.accessibilityLabel", {
+              value: selectedLabel,
+            })}
+          >
+            <ThemeLeading themeValue={value} />
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"
@@ -259,15 +261,18 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
         <ItemDescription>{t("settings.appearance.terminal.hint")}</ItemDescription>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={TRIGGER}
-          aria-label={t("settings.appearance.terminal.accessibilityLabel", {
-            value: selectedLabel,
-          })}
-        >
-          <TerminalAppearanceLeading value={value} />
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("settings.appearance.terminal.accessibilityLabel", {
+              value: selectedLabel,
+            })}
+          >
+            <TerminalAppearanceLeading value={value} />
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"
@@ -341,14 +346,17 @@ function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
         <ItemDescription>{t("settings.general.timelineDetail.description")}</ItemDescription>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={TRIGGER}
-          aria-label={t("settings.general.timelineDetail.accessibilityLabel", {
-            value: selectedLabel,
-          })}
-        >
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("settings.general.timelineDetail.accessibilityLabel", {
+              value: selectedLabel,
+            })}
+          >
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"
@@ -529,14 +537,17 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
         <ItemDescription>{t("settings.appearance.syntax.highlightThemeHint")}</ItemDescription>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={TRIGGER}
-          aria-label={t("settings.appearance.syntax.highlightThemeAccessibility", {
-            value: selectedLabel,
-          })}
-        >
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("settings.appearance.syntax.highlightThemeAccessibility", {
+              value: selectedLabel,
+            })}
+          >
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"

@@ -1,7 +1,7 @@
-// Port of archive/expo-app:packages/app/src/components/markdown/fence/mermaid/fullscreen-viewer.web.tsx: the
-// diagram over the whole window, Escape or a click outside it closes.
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
+// The diagram over the whole window: a full-screen shadcn Dialog; Escape or a click outside the
+// diagram closes it.
+import { useCallback, useMemo } from "react";
+import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -44,18 +44,6 @@ export function MermaidFullscreenViewer({
     },
     [rendered],
   );
-  useEffect(() => {
-    function handleKeydown(event: KeyboardEvent): void {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
-  }, [onClose]);
-  // Focus stays in this document, not in the diagram iframe, so Escape keeps working.
-  const contentLayerRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    contentLayerRef.current?.focus();
-  }, []);
   const visible = state.visible;
   const contentSize = useMemo(
     () => (visible ? { width: visible.width, height: visible.height } : FALLBACK_SIZE),
@@ -72,20 +60,21 @@ export function MermaidFullscreenViewer({
     ],
     [onClose, t],
   );
-  return createPortal(
-    // data-state marks it an open layer for the shortcut engine (lib/overlay-root.ts), so Escape
-    // closes the viewer and does not also interrupt the agent behind it.
-    <div
-      className="fixed inset-0 z-50 bg-background"
-      role="dialog"
-      aria-modal="true"
-      data-state="open"
-    >
-      <div
-        ref={contentLayerRef}
-        tabIndex={-1}
-        className="flex h-full min-h-0 flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] outline-none"
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) onClose();
+    },
+    [onClose],
+  );
+  return (
+    // Focus stays in the dialog, not in the diagram iframe, so Escape keeps working.
+    <Dialog open onOpenChange={handleOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="fixed inset-0 top-0 left-0 flex h-full w-full max-w-none translate-x-0 translate-y-0 flex-col rounded-none p-0 ring-0 sm:max-w-none pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
       >
+        <DialogTitle className="sr-only">{t("message.diagram.diagram")}</DialogTitle>
         <ZoomableViewport
           accessibilityLabel={t("message.diagram.diagram")}
           actions={actions}
@@ -102,8 +91,7 @@ export function MermaidFullscreenViewer({
             onRenderFailed={renderFailed}
           />
         </ZoomableViewport>
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

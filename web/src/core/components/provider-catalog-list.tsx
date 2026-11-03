@@ -1,5 +1,15 @@
 // Port of archive/expo-app:packages/app/src/components/provider-catalog-list.tsx: the searchable ACP provider catalog; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/provider-catalog-list.py; edit it directly.
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "~/components/ui/item";
+import { Empty, EmptyHeader, EmptyTitle } from "~/components/ui/empty";
 import { useCallback, useMemo, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, PackagePlus, Search } from "lucide-react";
@@ -62,8 +72,8 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
   }, [entry.installLink]);
 
   return (
-    <div className="flex flex-row items-center gap-3 border-b p-3">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+    <Item variant="outline" size="sm">
+      <ItemMedia variant="icon">
         {entry.iconSvg ? (
           <ThemedSvgXml
             xml={entry.iconSvg}
@@ -77,46 +87,46 @@ function CatalogRow({ entry, installing, onInstall }: CatalogRowProps) {
             themeProps={foregroundColorMapping}
           />
         )}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex min-w-0 flex-row items-center gap-2">
-          <span className="shrink truncate text-sm leading-[normal] font-medium text-foreground">
-            {entry.title}
-          </span>
-          <span className="shrink-0 truncate text-xs leading-[normal] text-muted-foreground">
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>
+          <span className="truncate">{entry.title}</span>
+          <span className="truncate text-xs font-normal text-muted-foreground">
             {entry.version}
           </span>
-        </div>
-        <span className="truncate text-xs leading-[normal] text-muted-foreground">
-          {entry.description || entry.id}
-        </span>
-        <button
+        </ItemTitle>
+        <ItemDescription className="truncate">{entry.description || entry.id}</ItemDescription>
+        <Button
+          variant="link"
+          size="xs"
           type="button"
           role="link"
           aria-label={t("providerCatalog.actions.installInstructionsFor", {
             provider: entry.title,
           })}
           onClick={handleOpenInstallLink}
-          className="flex max-w-full flex-row items-center gap-1 self-start text-left"
+          className="max-w-full self-start"
         >
           <span className="truncate text-xs leading-[normal] text-muted-foreground">
             {t("providerCatalog.actions.installInstructions")}
           </span>
           <ThemedExternalLink size={12} themeProps={foregroundMutedColorMapping} />
-        </button>
-      </div>
-      <Button
-        size="sm"
-        variant="default"
-        onClick={handleInstall}
-        className="w-[92px] shrink-0"
-        data-testid={`install-provider-${entry.id}`}
-        disabled={installing}
-      >
-        {installing ? <Spinner data-icon="inline-start" /> : null}
-        {actionLabel}
-      </Button>
-    </div>
+        </Button>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          size="sm"
+          variant="default"
+          onClick={handleInstall}
+          className="w-[92px] shrink-0"
+          data-testid={`install-provider-${entry.id}`}
+          disabled={installing}
+        >
+          {installing ? <Spinner data-icon="inline-start" /> : null}
+          {actionLabel}
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -165,13 +175,13 @@ export function ProviderCatalogList({
       </InputGroup>
 
       {availableEntries.length === 0 ? (
-        <div className="flex min-h-24 flex-col items-center justify-center gap-3 rounded-lg border bg-card p-4">
-          <span className="text-sm leading-[normal] text-muted-foreground">
-            {t("providerCatalog.noProviders")}
-          </span>
-        </div>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>{t("providerCatalog.noProviders")}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="overflow-hidden rounded-lg border">
+        <ItemGroup>
           {availableEntries.map((entry) => (
             <CatalogRow
               key={entry.id}
@@ -180,7 +190,7 @@ export function ProviderCatalogList({
               onInstall={onInstall}
             />
           ))}
-        </div>
+        </ItemGroup>
       )}
     </div>
   );

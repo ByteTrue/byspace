@@ -241,7 +241,7 @@ export async function expectDirectHostFormValues(
 }
 
 export async function expectDirectHostSslEnabled(page: Page): Promise<void> {
-  await expect(page.getByTestId("direct-ssl-toggle-checked")).toBeVisible();
+  await expect(page.getByTestId("direct-ssl-toggle")).toBeChecked();
 }
 
 export async function expectDirectHostUriValue(page: Page, uri: string): Promise<void> {

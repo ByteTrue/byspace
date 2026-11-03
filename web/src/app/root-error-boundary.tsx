@@ -1,3 +1,4 @@
+import { CodeBlock, CodeBlockContent } from "~/components/ui/code-block";
 import { Component, Fragment, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { formatCaughtValue } from "@/components/root-error-details";
@@ -50,12 +51,11 @@ function RootErrorFallback({ error, onRetry }: { error: string; onRetry: () => v
           <span className="text-xs font-medium text-muted-foreground">
             {t("rootError.details")}
           </span>
-          <pre
-            data-testid="root-error-boundary-details"
-            className="max-h-[300px] overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap"
-          >
-            {error}
-          </pre>
+          <CodeBlock>
+            <CodeBlockContent data-testid="root-error-boundary-details" className="max-h-[300px]">
+              {error}
+            </CodeBlockContent>
+          </CodeBlock>
         </div>
         <Button data-testid="root-error-boundary-retry" className="self-start" onClick={onRetry}>
           {t("common.actions.retry")}

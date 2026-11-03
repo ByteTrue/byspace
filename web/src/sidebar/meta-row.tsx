@@ -1,3 +1,4 @@
+import { Badge } from "~/components/ui/badge";
 import { Fragment, useCallback, useMemo, type MouseEvent, type ReactNode } from "react";
 import {
   ExternalLink,
@@ -189,23 +190,22 @@ function PullRequestItem({ hint }: { hint: PrHint }) {
     [hint.url],
   );
   return (
-    <button
-      type="button"
-      aria-label={t("workspace.git.pr.accessibility.pullRequest", {
-        number: hint.number,
-        context: presentation.changeRequestContext,
-      })}
-      className="group/pr flex shrink-0 items-center gap-[3px] hover:text-foreground"
-      onClick={open}
-      onPointerDown={stopRowPress}
-    >
-      <PullRequestStateIcon state={hint.state} className="group-hover/pr:hidden" />
-      <ExternalLink className="hidden size-3 shrink-0 group-hover/pr:block" />
-      <span className="truncate">
+    <Badge asChild variant="outline" className="group/pr shrink-0">
+      <button
+        type="button"
+        aria-label={t("workspace.git.pr.accessibility.pullRequest", {
+          number: hint.number,
+          context: presentation.changeRequestContext,
+        })}
+        onClick={open}
+        onPointerDown={stopRowPress}
+      >
+        <PullRequestStateIcon state={hint.state} className="group-hover/pr:hidden" />
+        <ExternalLink className="hidden group-hover/pr:block" />
         {hint.number}
         {hint.state === "open" ? "" : ` ${t(PR_STATE_LABEL_KEYS[hint.state])}`}
-      </span>
-    </button>
+      </button>
+    </Badge>
   );
 }
 

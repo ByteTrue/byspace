@@ -27,34 +27,17 @@ type AgentControlTriggerProps = Omit<
 /** A 44px row in the phone's controls sheet, or a 28px chip (icon only when there is no room). */
 function triggerClassName({
   isSheet,
-  showToolbarLabel,
-  open,
-  disabled,
   className,
 }: {
   isSheet: boolean;
-  showToolbarLabel: boolean;
-  open: boolean;
-  disabled: boolean;
   className: string | undefined;
 }): string {
-  if (isSheet) {
-    return cn(
-      // The Expo app's sheet row: a surface1 card with a 16px radius, surface2 while hovered,
-      // pressed or open
-      "-mx-1 flex min-h-11 min-w-0 items-center gap-2 rounded-[16px] bg-card px-4 hover:bg-muted active:bg-muted",
-      open && "bg-muted",
-      disabled && "opacity-50",
-      className,
-    );
-  }
-  return cn(
-    "flex h-7 min-w-0 shrink items-center gap-1 rounded-2xl px-2 hover:bg-muted active:bg-background",
-    !showToolbarLabel && "w-7 shrink-0 justify-center px-0",
-    open && "bg-background",
-    disabled && "opacity-50",
-    className,
-  );
+  return cn(isSheet ? "w-full" : "shrink", className);
+}
+
+function triggerSize(isSheet: boolean, showToolbarLabel: boolean): "lg" | "sm" | "icon-sm" {
+  if (isSheet) return "lg";
+  return showToolbarLabel ? "sm" : "icon-sm";
 }
 
 export const AgentControlTrigger = forwardRef<HTMLButtonElement, AgentControlTriggerProps>(
@@ -96,7 +79,10 @@ export const AgentControlTrigger = forwardRef<HTMLButtonElement, AgentControlTri
         aria-expanded={open}
         testID={testID}
         chevron={showCaret ? undefined : null}
-        className={triggerClassName({ isSheet, showToolbarLabel, open, disabled, className })}
+        // On a phone the controls are a sheet's rows; in the composer toolbar, ghost buttons.
+        variant={isSheet ? "secondary" : "ghost"}
+        size={triggerSize(isSheet, showToolbarLabel)}
+        className={triggerClassName({ isSheet, className })}
       >
         {isSheet ? (
           <span className="flex size-5 shrink-0 items-center justify-center">{icon}</span>

@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/archived-agent-callout.tsx: in place of the composer for
 // an archived agent — "This agent is archived" and an Unarchive button.
+import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "~/components/ui/button";
@@ -27,19 +28,19 @@ export function ArchivedAgentCallout({ serverId, agentId }: { serverId: string; 
     <div className="relative flex flex-col pb-[env(safe-area-inset-bottom)]">
       <div className="relative mx-auto flex min-h-[75px] w-full flex-col items-center p-4">
         <div className="flex w-full max-w-[820px] flex-col gap-2">
-          <div className="flex items-center justify-center gap-3 rounded-2xl border border-input bg-card px-4 py-3 md:px-6 md:py-4">
-            <span className="text-sm text-muted-foreground">
-              {t("agentPanel.archived.callout")}
-            </span>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleUnarchive}
-              disabled={!isConnected || isUnarchiving}
-            >
-              {t("agentPanel.archived.unarchive")}
-            </Button>
-          </div>
+          <Alert>
+            <AlertDescription>{t("agentPanel.archived.callout")}</AlertDescription>
+            <AlertAction>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleUnarchive}
+                disabled={!isConnected || isUnarchiving}
+              >
+                {t("agentPanel.archived.unarchive")}
+              </Button>
+            </AlertAction>
+          </Alert>
           {unarchiveError ? (
             <span
               className="text-center text-sm text-status-danger"

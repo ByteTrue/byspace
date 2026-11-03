@@ -12,6 +12,7 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { cn } from "cn";
+import { Item } from "~/components/ui/item";
 
 export interface WorkspaceTabPresentation {
   key: string;
@@ -187,25 +188,26 @@ export function WorkspaceTabOptionRow({
     // The Expo app highlights the row, and the hovered/pressed press area, with surface1 (card):
     // the same white as the sheet in light, a step lighter in dark.
     <div className={cn("mx-1 mb-1 flex min-h-9 items-center gap-2 px-1 py-1", active && "bg-card")}>
-      <button
-        type="button"
-        onClick={onPress}
-        className={cn(
-          "group/option flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left hover:bg-card active:bg-card",
-          active && "bg-card",
-        )}
-      >
-        <span className="flex w-4 items-center justify-center">
-          <WorkspaceTabIcon
-            presentation={presentation}
-            active={selected || active}
-            backdrop="surface0"
-          />
-        </span>
-        <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
-          {presentation.titleState === "loading" ? t("workspace.tabs.loading") : presentation.label}
-        </span>
-      </button>
+      <Item asChild size="xs" className="text-left">
+        <button
+          type="button"
+          onClick={onPress}
+          className={cn("group/option min-w-0 flex-1 hover:bg-muted", active && "bg-muted")}
+        >
+          <span className="flex w-4 items-center justify-center">
+            <WorkspaceTabIcon
+              presentation={presentation}
+              active={selected || active}
+              backdrop="surface0"
+            />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
+            {presentation.titleState === "loading"
+              ? t("workspace.tabs.loading")
+              : presentation.label}
+          </span>
+        </button>
+      </Item>
       {presentation.modified ? (
         <span
           className="size-2 shrink-0 rounded-full bg-muted-foreground"

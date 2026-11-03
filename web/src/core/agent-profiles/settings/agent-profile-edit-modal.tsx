@@ -1,17 +1,10 @@
 // Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-edit-modal.tsx: same form
 // model and open/close lifecycle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profile-edit-modal.py; edit it directly.
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-  type ChangeEvent,
-} from "react";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
+import { useRetainedOpenProps } from "~/hooks/use-retained-open-props";
+import { useCallback, useMemo, type ReactElement, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
 import type { AgentFeature } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -70,54 +63,17 @@ function openKey(props: AgentProfileEditModalProps): string {
  * profile id, so every open constructs a form model seeded from that record.
  */
 export function AgentProfileEditModal(props: AgentProfileEditModalProps): ReactElement | null {
-  const [renderedProps, setRenderedProps] = useState<AgentProfileEditModalProps | null>(() =>
-    props.visible ? props : null,
-  );
-  const [sheetVisible, setSheetVisible] = useState(props.visible);
-  const livePropsRef = useRef(props);
-  const closeRequestedRef = useRef(false);
-  livePropsRef.current = props;
-
-  useEffect(() => {
-    if (props.visible) {
-      if (closeRequestedRef.current) {
-        return;
-      }
-      setRenderedProps(props);
-      setSheetVisible(true);
-      return;
-    }
-    if (renderedProps) {
-      setSheetVisible(false);
-    }
-  }, [props, renderedProps]);
-
-  const requestClose = useCallback(() => {
-    closeRequestedRef.current = true;
-    setSheetVisible(false);
-  }, []);
-
-  const handleDismiss = useCallback(() => {
-    const dismissedProps = livePropsRef.current;
-    closeRequestedRef.current = false;
-    setRenderedProps(null);
-    setSheetVisible(false);
-    if (dismissedProps.visible) {
-      dismissedProps.onClose();
-    }
-  }, []);
-
-  if (!renderedProps) {
+  const { retained, generation, release } = useRetainedOpenProps(props);
+  if (!retained) {
     return null;
   }
-
   return (
     <OpenAgentProfileEditModal
-      key={openKey(renderedProps)}
-      {...renderedProps}
-      visible={sheetVisible}
-      onClose={requestClose}
-      onDismiss={handleDismiss}
+      key={`${openKey(retained)}:${generation}`}
+      {...retained}
+      visible={props.visible}
+      onClose={props.onClose}
+      onDismiss={release}
     />
   );
 }
@@ -340,20 +296,16 @@ function OpenAgentProfileEditModal({
         {state.disclosure.showFeaturesField ? (
           <Field data-testid="agent-profile-features-field">
             <FieldLabel>{t("settings.host.agentProfiles.featuresLabel")}</FieldLabel>
-            <div
-              className="rounded-md border bg-muted px-3"
-              data-testid="agent-profile-features-card"
-            >
-              {state.features.map((feature, index) => (
+            <ItemGroup data-testid="agent-profile-features-card">
+              {state.features.map((feature) => (
                 <AgentProfileFeatureRow
                   key={feature.id}
                   feature={feature}
-                  isFirst={index === 0}
                   disabled={state.isSubmitting}
                   model={model}
                 />
               ))}
-            </div>
+            </ItemGroup>
           </Field>
         ) : null}
 
@@ -408,16 +360,13 @@ function OpenAgentProfileEditModal({
 
 function AgentProfileFeatureRow({
   feature,
-  isFirst,
   disabled,
   model,
 }: {
   feature: AgentFeature;
-  isFirst: boolean;
   disabled: boolean;
   model: AgentProfileFormModel;
 }): ReactElement {
-  const rowClassName = cn("flex items-center justify-between gap-3 py-3", !isFirst && "border-t");
   const handleToggle = useCallback(
     (value: boolean) => model.setFeatureValue(feature.id, value),
     [feature.id, model],
@@ -449,7 +398,7 @@ function AgentProfileFeatureRow({
 
   if (feature.type === "select") {
     return (
-      <div className={rowClassName} data-testid={`agent-profile-feature-row-${feature.id}`}>
+      <Item variant="outline" size="sm" data-testid={`agent-profile-feature-row-${feature.id}`}>
         <SelectField
           label={feature.label}
           value={feature.value}
@@ -464,18 +413,16 @@ function AgentProfileFeatureRow({
           testID={`agent-profile-feature-field-${feature.id}`}
           triggerTestID={`agent-profile-feature-trigger-${feature.id}`}
         />
-      </div>
+      </Item>
     );
   }
 
   return (
-    <div className={rowClassName} data-testid={`agent-profile-feature-row-${feature.id}`}>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-sm text-foreground">{feature.label}</span>
-        {feature.description ? (
-          <span className="line-clamp-2 text-xs text-muted-foreground">{feature.description}</span>
-        ) : null}
-      </div>
+    <Item variant="outline" size="sm" data-testid={`agent-profile-feature-row-${feature.id}`}>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{feature.label}</ItemTitle>
+        {feature.description ? <ItemDescription>{feature.description}</ItemDescription> : null}
+      </ItemContent>
       <Switch
         checked={feature.value === true}
         onCheckedChange={handleToggle}
@@ -483,6 +430,6 @@ function AgentProfileFeatureRow({
         aria-label={feature.label}
         data-testid={`agent-profile-feature-switch-${feature.id}`}
       />
-    </div>
+    </Item>
   );
 }

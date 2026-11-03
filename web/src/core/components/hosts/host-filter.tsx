@@ -9,6 +9,7 @@ import {
   HostPicker,
   HostStatusDotSlot,
 } from "@/components/hosts/host-picker";
+import { Button } from "~/components/ui/button";
 
 export interface HostFilterProps {
   hosts: HostProfile[];
@@ -61,12 +62,14 @@ export function HostFilter({
       hostOptionTestID={hostOptionTestID}
     >
       <div ref={filterAnchorRef} className="flex self-start">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           type="button"
           onClick={handleFilterOpen}
-          className="flex flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 outline-none hover:bg-muted active:bg-accent"
           data-testid={triggerTestID}
           aria-label={`Filter: ${selectedHostLabel}`}
+          className="self-start"
         >
           {selectedHost === ALL_HOSTS_OPTION_ID ? (
             <Server size={14} className="text-muted-foreground" />
@@ -77,7 +80,7 @@ export function HostFilter({
             {selectedHostLabel}
           </span>
           <ChevronDown size={14} className="text-muted-foreground" />
-        </button>
+        </Button>
       </div>
     </HostPicker>
   );

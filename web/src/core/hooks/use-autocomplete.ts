@@ -24,6 +24,8 @@ interface UseAutocompleteInput<
 
 interface UseAutocompleteResult<TKeyPressEvent extends AutocompleteKeyPressEvent> {
   selectedIndex: number;
+  /** Selects a row the pointer moved onto. */
+  highlight: (index: number) => void;
   onKeyPress: (event: TKeyPressEvent) => boolean;
 }
 
@@ -124,6 +126,7 @@ export function useAutocomplete<
 
   return {
     selectedIndex,
+    highlight: setSelectedIndex,
     onKeyPress,
   };
 }

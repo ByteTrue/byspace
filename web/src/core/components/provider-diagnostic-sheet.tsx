@@ -17,7 +17,8 @@ import { cn } from "cn";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
+import { Card, CardContent } from "~/components/ui/card";
+import { CodeBlock, CodeBlockContent } from "~/components/ui/code-block";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -47,8 +48,6 @@ interface ProviderDiagnosticSheetProps {
   serverId: string;
 }
 
-const ICON_BUTTON =
-  "flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-muted active:bg-muted disabled:opacity-50 disabled:hover:bg-transparent";
 const MODEL_ROW = "flex flex-row items-center gap-3 border-t px-4 py-2";
 const MODEL_TITLE = "shrink-0 truncate text-sm leading-[normal] text-foreground";
 const MONO_HINT =
@@ -101,15 +100,16 @@ function CustomModelRow({
         {model.id}
       </span>
       <div className="flex-1" />
-      <button
+      <Button
+        variant="ghost"
+        size="icon-sm"
         type="button"
         onClick={handleDelete}
         disabled={deleting}
-        className={ICON_BUTTON}
         aria-label={t("settings.providers.models.removeModel", { id: model.id })}
       >
         <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -291,20 +291,22 @@ function DiagnosticSubSheet({
       title: t("settings.providers.diagnostic.title"),
       actions: (
         <div className="flex flex-row items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             onClick={handleCopyPress}
             disabled={!diagnostic}
-            className={ICON_BUTTON}
             aria-label={t("settings.providers.diagnostic.copyAccessibility")}
           >
             <Copy size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             onClick={handleRefreshPress}
             disabled={loading}
-            className={ICON_BUTTON}
             aria-label={
               loading
                 ? t("settings.providers.diagnostic.refreshingAccessibility")
@@ -316,7 +318,7 @@ function DiagnosticSubSheet({
             ) : (
               <RotateCw size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
             )}
-          </button>
+          </Button>
         </div>
       ),
     }),
@@ -334,30 +336,26 @@ function DiagnosticSubSheet({
   let body: React.ReactNode;
   if (loading && !diagnostic) {
     body = (
-      <SurfaceCard key={visible ? "visible" : "hidden"}>
-        <div className="flex flex-row items-center gap-2 p-4">
-          <Spinner className="text-muted-foreground" />
-          <span className="text-sm leading-[normal] text-muted-foreground">
-            {t("settings.providers.diagnostic.running")}
-          </span>
-        </div>
-      </SurfaceCard>
+      <Card key={visible ? "visible" : "hidden"} size="sm">
+        <CardContent className="flex flex-row items-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
+          {t("settings.providers.diagnostic.running")}
+        </CardContent>
+      </Card>
     );
   } else if (diagnostic) {
     body = (
-      <ScrollableCodeSurface key={visible ? "visible" : "hidden"} maxHeight={480}>
-        {diagnostic}
-      </ScrollableCodeSurface>
+      <CodeBlock key={visible ? "visible" : "hidden"}>
+        <CodeBlockContent className="max-h-[480px]">{diagnostic}</CodeBlockContent>
+      </CodeBlock>
     );
   } else {
     body = (
-      <SurfaceCard key={visible ? "visible" : "hidden"}>
-        <div className="flex flex-row items-center gap-2 p-4">
-          <span className="text-sm leading-[normal] text-muted-foreground">
-            {t("settings.providers.diagnostic.none")}
-          </span>
-        </div>
-      </SurfaceCard>
+      <Card key={visible ? "visible" : "hidden"} size="sm">
+        <CardContent className="text-sm text-muted-foreground">
+          {t("settings.providers.diagnostic.none")}
+        </CardContent>
+      </Card>
     );
   }
 

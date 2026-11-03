@@ -30,6 +30,8 @@ import {
   Plus,
   FolderGit2,
   ChevronRight,
+  ChevronsUpDown,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Select,
@@ -38,9 +40,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
-import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+} from "~/components/ui/sidebar";
 import { HostPicker as SharedHostPicker } from "@/components/hosts/host-picker";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { ScreenTitle } from "@/components/headers/screen-title";
@@ -119,7 +131,7 @@ function selectOnFocus(event: FocusEvent<HTMLInputElement>): void {
 interface SidebarSectionItem {
   id: SettingsSectionSlug;
   labelKey: string;
-  icon: ComponentType<{ size: number; color: string }>;
+  icon: LucideIcon;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
@@ -132,7 +144,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
 interface HostSectionItem {
   id: HostSectionSlug;
   labelKey: string;
-  icon: ComponentType<{ size: number; color: string }>;
+  icon: LucideIcon;
 }
 
 const HOST_SECTION_ITEMS: HostSectionItem[] = [
@@ -164,11 +176,6 @@ function renderHostSettingsContent(
 // ---------------------------------------------------------------------------
 // Trigger + sidebar style helpers
 // ---------------------------------------------------------------------------
-
-const SIDEBAR_ITEM =
-  "relative flex min-h-[34px] w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent md:min-h-8";
-const SELECTED_INDICATOR =
-  "pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground";
 
 function getSendBehaviorOptions(t: TFunction) {
   return [
@@ -497,7 +504,7 @@ function useSortedHosts(hosts: HostProfile[], localServerId: string | null): Hos
 interface SidebarSectionButtonProps {
   itemId: SettingsSectionSlug;
   label: string;
-  icon: ComponentType<{ size: number; color: string }>;
+  icon: LucideIcon;
   isSelected: boolean;
   onSelect: (section: SettingsSectionSlug) => void;
 }
@@ -509,38 +516,27 @@ function SidebarSectionButton({
   isSelected,
   onSelect,
 }: SidebarSectionButtonProps) {
-  const theme = useThemeObject();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
   return (
-    <button
-      type="button"
-      aria-current={isSelected ? "page" : undefined}
-      onClick={handlePress}
-      className={cn(SIDEBAR_ITEM, isSelected && "bg-sidebar-accent")}
-    >
-      {isSelected ? <span aria-hidden className={SELECTED_INDICATOR} /> : null}
-      <IconComponent
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
-      />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate text-sm text-foreground",
-          isSelected && "font-medium",
-        )}
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isSelected}
+        aria-current={isSelected ? "page" : undefined}
+        onClick={handlePress}
       >
-        {label}
-      </span>
-    </button>
+        <IconComponent />
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
 interface SidebarHostSectionButtonProps {
   itemId: HostSectionSlug;
   label: string;
-  icon: ComponentType<{ size: number; color: string }>;
+  icon: LucideIcon;
   isSelected: boolean;
   onSelect: (section: HostSectionSlug) => void;
 }
@@ -552,32 +548,21 @@ function SidebarHostSectionButton({
   isSelected,
   onSelect,
 }: SidebarHostSectionButtonProps) {
-  const theme = useThemeObject();
   const handlePress = useCallback(() => {
     onSelect(itemId);
   }, [onSelect, itemId]);
   return (
-    <button
-      type="button"
-      aria-current={isSelected ? "page" : undefined}
-      onClick={handlePress}
-      data-testid={`settings-host-section-${itemId}`}
-      className={cn(SIDEBAR_ITEM, isSelected && "bg-sidebar-accent")}
-    >
-      {isSelected ? <span aria-hidden className={SELECTED_INDICATOR} /> : null}
-      <IconComponent
-        size={theme.iconSize.md}
-        color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
-      />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate text-sm text-foreground",
-          isSelected && "font-medium",
-        )}
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isSelected}
+        aria-current={isSelected ? "page" : undefined}
+        onClick={handlePress}
+        data-testid={`settings-host-section-${itemId}`}
       >
-        {label}
-      </span>
-    </button>
+        <IconComponent />
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
@@ -634,23 +619,22 @@ function HostPicker({
       addHostTestID="settings-add-host"
       hostOptionTestID={hostOptionTestID}
     >
-      <ComboboxTrigger
-        ref={triggerRef}
-        block
-        className="flex min-h-[34px] w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-sidebar-accent"
-        onPress={handleOpen}
-        accessibilityLabel={t("settings.hostPicker.switchHost")}
-        testID="settings-host-picker"
-      >
-        {activeHost ? (
-          <div className="flex size-4 items-center justify-center">
-            <HostStatusDot serverId={activeHost.serverId} />
-          </div>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-          {activeHost?.label ?? t("settings.groups.host")}
-        </span>
-      </ComboboxTrigger>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          ref={triggerRef}
+          onClick={handleOpen}
+          aria-label={t("settings.hostPicker.switchHost")}
+          data-testid="settings-host-picker"
+        >
+          {activeHost ? (
+            <span className="flex size-4 items-center justify-center">
+              <HostStatusDot serverId={activeHost.serverId} />
+            </span>
+          ) : null}
+          <span>{activeHost?.label ?? t("settings.groups.host")}</span>
+          <ChevronsUpDown className="ml-auto" />
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     </SharedHostPicker>
   );
 }
@@ -676,7 +660,6 @@ function SettingsSidebar({
   activeHostServerId,
   layout,
 }: SettingsSidebarProps) {
-  const theme = useThemeObject();
   const { t } = useTranslation();
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
@@ -692,106 +675,103 @@ function SettingsSidebar({
 
   const sidebarBody = (
     <>
-      <div className="flex flex-col gap-1 p-2">
-        <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-          {t("settings.groups.app")}
-        </span>
-        {items.map((item) => (
-          <SidebarSectionButton
-            key={item.id}
-            itemId={item.id}
-            label={t(item.labelKey)}
-            icon={item.icon}
-            isSelected={selectedSectionId === item.id}
-            onSelect={onSelectSection}
-          />
-        ))}
-      </div>
+      <SidebarGroup>
+        <SidebarGroupLabel>{t("settings.groups.app")}</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {items.map((item) => (
+              <SidebarSectionButton
+                key={item.id}
+                itemId={item.id}
+                label={t(item.labelKey)}
+                icon={item.icon}
+                isSelected={selectedSectionId === item.id}
+                onSelect={onSelectSection}
+              />
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
       <SidebarSeparator />
-      {hasHosts ? (
-        <div className="flex flex-col gap-1 p-2">
-          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            {t("settings.groups.host")}
-          </span>
-          <HostPicker
-            activeServerId={activeHostServerId}
-            sortedHosts={sortedHosts}
-            onSelectHost={onSelectHost}
-            onAddHost={onAddHost}
-            enableBuiltInDaemonOption={enableBuiltInDaemonOption}
-          />
-          {HOST_SECTION_ITEMS.map((item) => (
-            <SidebarHostSectionButton
-              key={item.id}
-              itemId={item.id}
-              label={t(item.labelKey)}
-              icon={item.icon}
-              isSelected={selectedHostSection === item.id}
-              onSelect={onSelectHostSection}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 p-2">
-          <button
-            type="button"
-            aria-label={t("settings.addHost")}
-            onClick={onAddHost}
-            data-testid="settings-add-host"
-            className={SIDEBAR_ITEM}
-          >
-            <Plus size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-            <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-              {t("settings.addHost")}
-            </span>
-          </button>
-          {enableBuiltInDaemonOption.visible ? (
-            <button
-              type="button"
-              aria-label={t("settings.enableBuiltInDaemon")}
-              onClick={enableBuiltInDaemonOption.onPress}
-              data-testid="settings-enable-built-in-daemon"
-              className={SIDEBAR_ITEM}
-            >
-              <Server size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                {t("settings.enableBuiltInDaemon")}
-              </span>
-            </button>
-          ) : null}
-        </div>
-      )}
+      <SidebarGroup>
+        {hasHosts ? (
+          <>
+            <SidebarGroupLabel>{t("settings.groups.host")}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <HostPicker
+                  activeServerId={activeHostServerId}
+                  sortedHosts={sortedHosts}
+                  onSelectHost={onSelectHost}
+                  onAddHost={onAddHost}
+                  enableBuiltInDaemonOption={enableBuiltInDaemonOption}
+                />
+                {HOST_SECTION_ITEMS.map((item) => (
+                  <SidebarHostSectionButton
+                    key={item.id}
+                    itemId={item.id}
+                    label={t(item.labelKey)}
+                    icon={item.icon}
+                    isSelected={selectedHostSection === item.id}
+                    onSelect={onSelectHostSection}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </>
+        ) : (
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={onAddHost} data-testid="settings-add-host">
+                  <Plus />
+                  <span>{t("settings.addHost")}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {enableBuiltInDaemonOption.visible ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={enableBuiltInDaemonOption.onPress}
+                    data-testid="settings-enable-built-in-daemon"
+                  >
+                    <Server />
+                    <span>{t("settings.enableBuiltInDaemon")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        )}
+      </SidebarGroup>
     </>
   );
 
+  if (!isDesktop) {
+    return (
+      <nav aria-label={t("settings.title")} className="p-2" data-testid="settings-sidebar">
+        {sidebarBody}
+      </nav>
+    );
+  }
   return (
-    <nav
+    <Sidebar
+      collapsible="none"
+      role="navigation"
       aria-label={t("settings.title")}
-      className={cn(isDesktop ? "flex shrink-0 flex-col bg-sidebar" : "p-2")}
-      style={isDesktop ? SIDEBAR_WIDTH_STYLE : undefined}
+      className="h-full shrink-0"
+      style={SIDEBAR_WIDTH_STYLE}
       data-testid="settings-sidebar"
     >
-      {isDesktop ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="relative">
-            <SidebarHeaderRow
-              icon={ArrowLeft}
-              label={t("settings.backToWorkspace")}
-              onPress={onBackToWorkspace}
-              testID="settings-back-to-workspace"
-            />
-          </div>
-          <div
-            className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none]"
-            data-testid="settings-sidebar-scroll-body"
-          >
-            {sidebarBody}
-          </div>
-        </div>
-      ) : (
-        sidebarBody
-      )}
-    </nav>
+      <SidebarHeader>
+        <SidebarHeaderRow
+          icon={ArrowLeft}
+          label={t("settings.backToWorkspace")}
+          onPress={onBackToWorkspace}
+          testID="settings-back-to-workspace"
+        />
+      </SidebarHeader>
+      <SidebarContent data-testid="settings-sidebar-scroll-body">{sidebarBody}</SidebarContent>
+    </Sidebar>
   );
 }
 

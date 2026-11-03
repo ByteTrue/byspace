@@ -10,6 +10,7 @@ import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-rout
 import { router } from "~/app/navigation";
 import { Shortcut } from "~/components/shortcut";
 import { SidebarFooter as SidebarFooterFrame } from "~/components/ui/sidebar";
+import { SidebarMenuButton } from "~/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { SidebarHelpMenu } from "~/sidebar/help-menu";
 import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
@@ -51,7 +52,6 @@ function SidebarHostsButton({
     >
       <SidebarIconButton
         ref={triggerRef}
-        fill={false}
         label={t("sidebar.actions.hosts")}
         tooltipSide="top"
         onClick={handleOpen}
@@ -94,16 +94,15 @@ export function SidebarFooter({
     <SidebarFooterFrame className="flex-row items-center gap-2 px-2 py-3">
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <SidebarMenuButton
             onClick={run(() => openAddProject())}
             aria-label={t("sidebar.actions.addProject")}
             data-testid="sidebar-add-project"
-            className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="min-w-0 flex-1"
           >
-            <FolderPlus className="size-3.5 shrink-0" />
-            <span className="truncate">{t("sidebar.actions.addProject")}</span>
-          </button>
+            <FolderPlus />
+            <span>{t("sidebar.actions.addProject")}</span>
+          </SidebarMenuButton>
         </TooltipTrigger>
         <TooltipContent side="top">
           {t("sidebar.actions.addProject")}
@@ -112,7 +111,6 @@ export function SidebarFooter({
       </Tooltip>
       <SidebarHostsButton onAddHost={addHost} onOpenHostSettings={openHostSettings} />
       <SidebarIconButton
-        fill={false}
         label={t("importSession.title")}
         tooltipSide="top"
         onClick={onImportSession}
@@ -122,7 +120,6 @@ export function SidebarFooter({
       </SidebarIconButton>
       <SidebarHelpMenu />
       <SidebarIconButton
-        fill={false}
         label={t("sidebar.actions.settings")}
         shortcutKeys={settingsKeys}
         tooltipSide="top"

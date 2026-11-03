@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/schedules-screen.tsx: the Schedules page; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import {
   useCallback,
   useEffect,
@@ -371,16 +372,13 @@ function SchedulesEndedEmptyState(): ReactElement {
 function ScheduleHostErrorsBanner({ errors }: { errors: ScheduleHostError[] }): ReactElement {
   return (
     <div className="px-3 md:px-6">
-      <div
-        className="flex flex-col gap-1 rounded-[10px] border p-3"
-        data-testid="schedules-host-errors"
-      >
+      <Alert variant="destructive" data-testid="schedules-host-errors">
         {errors.map((error) => (
-          <span key={error.serverId} className="text-xs leading-[normal] text-red-300">
+          <AlertDescription key={error.serverId}>
             {`${error.serverName}: Could not load schedules`}
-          </span>
+          </AlertDescription>
         ))}
-      </div>
+      </Alert>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 // Port of archive/expo-app:packages/app/src/git/actions-split-button.tsx: the header's git split button
 // (primary action, a caret menu of secondary actions, and a "more" menu), or a single menu
 // trigger when space is short. Same actions and test IDs; shadcn view.
+import { ButtonGroup } from "~/components/ui/button-group";
+import { Button } from "~/components/ui/button";
 import { useCallback, useMemo } from "react";
 import { Check, ChevronDown, GitBranch, MoreVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -95,10 +97,6 @@ function GitActionMenuItem({
   );
 }
 
-// The Expo app's split button parts: 28px at every width (buttonControlHeight.xs below md,
-// HEADER_CONTROL_HEIGHT from md up).
-const CONTROL_HEIGHT = "h-7";
-
 export function GitActionsSplitButton({
   gitActions,
   hideLabels,
@@ -120,16 +118,16 @@ export function GitActionsSplitButton({
     if (menuOnlyActions.length === 0) return null;
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger
-          data-testid="changes-actions-menu-trigger"
-          aria-label={t("workspace.header.actions.workspaceActions")}
-          className={cn(
-            "flex w-12 items-center justify-center gap-1 rounded-md border bg-background text-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-[42px] dark:bg-input/30",
-            CONTROL_HEIGHT,
-          )}
-        >
-          <GitBranch size={16} />
-          <ChevronDown size={12} className="opacity-70" />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="default"
+            data-testid="changes-actions-menu-trigger"
+            aria-label={t("workspace.header.actions.workspaceActions")}
+          >
+            <GitBranch size={16} />
+            <ChevronDown size={12} className="opacity-70" />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
@@ -162,41 +160,29 @@ export function GitActionsSplitButton({
   return (
     <div className="flex shrink-0 items-center gap-1">
       {primary ? (
-        <div
-          className={cn(
-            "flex items-stretch overflow-hidden rounded-md border bg-background dark:border-input dark:bg-input/30",
-            CONTROL_HEIGHT,
-          )}
-        >
-          <button
-            type="button"
+        <ButtonGroup>
+          <Button
+            variant="outline"
+            size={hideLabels ? "icon" : "default"}
             data-testid="changes-primary-cta"
             onClick={handlePrimaryPress}
             disabled={primary.disabled}
             aria-label={primary.label}
-            className="relative flex items-center justify-center px-3 hover:bg-muted disabled:opacity-60 md:px-2 dark:hover:bg-input/50"
           >
-            {primary.status === "pending" ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <span className="flex items-center gap-2 md:gap-1 [&_svg]:size-4">
-                {primary.icon}
-                {hideLabels ? null : (
-                  <span className="text-sm leading-[21px] font-medium text-foreground">
-                    {primaryLabel}
-                  </span>
-                )}
-              </span>
-            )}
-          </button>
+            {primary.status === "pending" ? <Spinner /> : primary.icon}
+            {hideLabels ? null : primaryLabel}
+          </Button>
           {gitActions.secondary.length > 0 ? (
             <DropdownMenu>
-              <DropdownMenuTrigger
-                data-testid="changes-primary-cta-caret"
-                aria-label={t("workspace.git.actions.moreOptions")}
-                className="flex w-8 items-center justify-center border-l text-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
-              >
-                <ChevronDown size={16} className="text-muted-foreground" />
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  data-testid="changes-primary-cta-caret"
+                  aria-label={t("workspace.git.actions.moreOptions")}
+                >
+                  <ChevronDown />
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
@@ -218,19 +204,20 @@ export function GitActionsSplitButton({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-        </div>
+        </ButtonGroup>
       ) : null}
       {gitActions.menu.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            data-testid="changes-overflow-menu"
-            aria-label={t("workspace.git.actions.moreActions")}
-            className={cn(
-              "-mr-2 flex w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7",
-              CONTROL_HEIGHT,
-            )}
-          >
-            <MoreVertical size={16} />
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="changes-overflow-menu"
+              aria-label={t("workspace.git.actions.moreActions")}
+              className="-mr-2"
+            >
+              <MoreVertical size={16} />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"

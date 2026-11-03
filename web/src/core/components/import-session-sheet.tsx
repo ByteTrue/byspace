@@ -56,6 +56,7 @@ import {
 } from "@/components/import-session-sheet-view-model";
 import { Input } from "~/components/ui/input";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
+import { Item, ItemGroup } from "~/components/ui/item";
 
 /** Long enough that a typed word is one request, short enough to feel live. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -248,14 +249,11 @@ function ProviderErrorBanner({
   onRetry: (provider: string) => void;
 }) {
   return (
-    <div
-      className="mb-2 flex flex-col rounded-[10px] border px-3 py-1"
-      data-testid="import-session-provider-errors"
-    >
+    <ItemGroup className="mb-2" data-testid="import-session-provider-errors">
       {rows.map((row) => (
         <ProviderErrorBannerRow key={row.provider} row={row} onRetry={onRetry} />
       ))}
-    </div>
+    </ItemGroup>
   );
 }
 
@@ -288,18 +286,20 @@ function ProviderErrorBannerRow({
 function RefreshAction({ isRefreshing, onPress }: { isRefreshing: boolean; onPress: () => void }) {
   const { t } = useTranslation();
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon-sm"
       type="button"
       onClick={onPress}
       disabled={isRefreshing}
       aria-label={t("importSession.actions.refresh")}
       data-testid="import-session-refresh"
-      className="mr-1 rounded-[10px] p-2 text-muted-foreground active:bg-muted"
+      className="mr-1"
     >
       <span className="flex size-4 items-center justify-center">
         {isRefreshing ? <Spinner /> : <RotateCw size={16} />}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -378,38 +378,40 @@ function ImportSessionSheetRow({
   }, [entry, onImportSession]);
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={handlePress}
-      className="-mx-2 flex flex-row items-start gap-2 rounded-[10px] p-2 text-left enabled:hover:bg-card enabled:active:bg-muted"
-      data-testid={`import-session-session-${entry.providerId}-${entry.providerHandleId}`}
-    >
-      <span className="flex w-4 shrink-0 items-center justify-center pt-0.5 text-muted-foreground">
-        <ProviderIcon size={16} color="currentColor" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex flex-row items-baseline justify-between gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
-            {title}
-          </span>
-          <span className="shrink-0 text-xs leading-[normal] text-muted-foreground">
-            {importing ? t("importSession.row.importing") : lastActivity}
-          </span>
+    <Item asChild size="sm" className="text-left">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handlePress}
+        data-testid={`import-session-session-${entry.providerId}-${entry.providerHandleId}`}
+        className="items-start hover:bg-muted disabled:opacity-50"
+      >
+        <span className="flex w-4 shrink-0 items-center justify-center pt-0.5 text-muted-foreground">
+          <ProviderIcon size={16} color="currentColor" />
         </span>
-        <span className="line-clamp-2 text-sm leading-5 text-muted-foreground">
-          {promptPreview}
-        </span>
-        {folder ? (
-          <span
-            className="truncate text-xs leading-[normal] text-muted-foreground"
-            data-testid={`import-session-row-folder-${entry.providerId}-${entry.providerHandleId}`}
-          >
-            {folder}
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex flex-row items-baseline justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
+              {title}
+            </span>
+            <span className="shrink-0 text-xs leading-[normal] text-muted-foreground">
+              {importing ? t("importSession.row.importing") : lastActivity}
+            </span>
           </span>
-        ) : null}
-      </span>
-    </button>
+          <span className="line-clamp-2 text-sm leading-5 text-muted-foreground">
+            {promptPreview}
+          </span>
+          {folder ? (
+            <span
+              className="truncate text-xs leading-[normal] text-muted-foreground"
+              data-testid={`import-session-row-folder-${entry.providerId}-${entry.providerHandleId}`}
+            >
+              {folder}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    </Item>
   );
 }
 
@@ -999,19 +1001,21 @@ export function ImportSessionSheet({
       />
       {showFilter ? (
         <div ref={filterAnchorRef} className="flex flex-col pb-2">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={handleFilterOpen}
-            className="flex max-w-full flex-row items-center gap-1.5 self-start rounded-md border bg-card px-3 py-1.5 text-muted-foreground hover:bg-muted active:bg-accent"
             data-testid="import-session-filter-trigger"
             aria-label={`Filter: ${selectedProviderLabel}`}
+            className="max-w-full self-start"
           >
             {filterOptionIcons.get(selectedProvider)}
             <span className="min-w-0 shrink truncate text-sm leading-[normal] font-medium text-foreground">
               {selectedProviderLabel}
             </span>
             <ChevronDown size={14} />
-          </button>
+          </Button>
           <Combobox
             options={filterComboboxOptions}
             value={selectedProvider}

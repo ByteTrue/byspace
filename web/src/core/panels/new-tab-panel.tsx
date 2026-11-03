@@ -23,6 +23,8 @@ import {
   useWorkspaceTabLaunchCatalog,
   type WorkspaceTabLaunchItem,
 } from "@/workspace-tabs/launcher";
+import { Button } from "~/components/ui/button";
+import { Item } from "~/components/ui/item";
 
 const LAUNCHER_ICON_SIZE = 16;
 const ROW_SELECTOR = '[data-new-tab-launcher-row="true"]';
@@ -37,27 +39,29 @@ function LauncherRow({ item }: { item: WorkspaceTabLaunchItem }) {
   const handlePress = useCallback(() => item.launch({ kind: "replace", tabId }), [item, tabId]);
   const Icon = item.Icon as ComponentType<PanelIconProps> | undefined;
   return (
-    <button
-      type="button"
-      aria-label={item.label}
-      data-new-tab-launcher-row="true"
-      disabled={item.disabled}
-      onClick={handlePress}
-      tabIndex={-1}
-      data-testid={`workspace-new-tab-${item.id}`}
-      className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-transparent bg-card px-3 text-left outline-none hover:bg-accent focus-visible:border-border focus-visible:bg-accent active:opacity-85 disabled:opacity-50"
-    >
-      {Icon ? (
-        <span className="flex text-muted-foreground">
-          <Icon size={LAUNCHER_ICON_SIZE} color="currentColor" />
-        </span>
-      ) : null}
-      {item.terminalIconKey ? (
-        <TerminalProfileIcon iconKey={item.terminalIconKey} size={LAUNCHER_ICON_SIZE} />
-      ) : null}
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.label}</span>
-      {item.shortcutActionId ? <LauncherShortcut actionId={item.shortcutActionId} /> : null}
-    </button>
+    <Item variant="muted" size="sm" asChild className="text-left">
+      <button
+        type="button"
+        aria-label={item.label}
+        data-new-tab-launcher-row="true"
+        disabled={item.disabled}
+        onClick={handlePress}
+        tabIndex={-1}
+        data-testid={`workspace-new-tab-${item.id}`}
+        className="hover:bg-muted disabled:opacity-50"
+      >
+        {Icon ? (
+          <span className="flex text-muted-foreground">
+            <Icon size={LAUNCHER_ICON_SIZE} color="currentColor" />
+          </span>
+        ) : null}
+        {item.terminalIconKey ? (
+          <TerminalProfileIcon iconKey={item.terminalIconKey} size={LAUNCHER_ICON_SIZE} />
+        ) : null}
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.label}</span>
+        {item.shortcutActionId ? <LauncherShortcut actionId={item.shortcutActionId} /> : null}
+      </button>
+    </Item>
   );
 }
 
@@ -172,15 +176,17 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
                 <div className="mb-1 flex items-center justify-between px-0.5">
                   <span className="text-xs leading-6 text-muted-foreground">{group.label}</span>
                   {group.accessory ? (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       type="button"
                       aria-label={group.accessory.label}
                       onClick={group.accessory.run}
                       data-testid="workspace-new-tab-edit-terminal-profiles"
-                      className="-m-1 flex size-6 items-center justify-center rounded-md outline-none hover:bg-accent"
+                      className="-m-1"
                     >
                       <Pencil className="size-3 text-muted-foreground opacity-50" />
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : null}

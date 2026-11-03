@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/components/model-browser.tsx: the model picker's body — pinned agent
 // profiles, providers to drill into, a provider's models, search across all of them, and the
 // loading, error and no-match states. `useModelBrowser` is the Expo file's state model.
+import { Separator } from "~/components/ui/separator";
 import {
   type KeyboardEvent,
   useCallback,
@@ -49,6 +50,7 @@ import {
 } from "@/components/model-browser-view";
 import { cn } from "cn";
 import { Spinner } from "~/components/ui/spinner";
+import { Item } from "~/components/ui/item";
 
 const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
 const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
@@ -75,16 +77,17 @@ function ProviderSettingsAction({
     useProviderSettingsStore.getState().open({ serverId, provider, overlayParentLayer });
   }, [overlayParentLayer, provider, serverId]);
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon-xs"
       type="button"
       onClick={handlePress}
       disabled={!serverId}
       aria-label={accessibilityLabel}
       data-testid={`selector-header-settings-${provider}`}
-      className={cn(ICON_BUTTON, serverId ? "text-muted-foreground" : "text-border")}
     >
       <Settings size={ICON_SIZE.sm} />
-    </button>
+    </Button>
   );
 }
 
@@ -93,15 +96,16 @@ function AgentProfilesEditAction({ onPress }: { onPress: () => void }) {
   return (
     <Tooltip delayDuration={250}>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           onClick={onPress}
           aria-label={t("modelSelector.editProfilesLabel")}
           data-testid="model-profiles-edit"
-          className={cn(ICON_BUTTON, "text-muted-foreground")}
         >
           <Pencil size={ICON_SIZE.xs} />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
         {t("modelSelector.editProfilesLabel")}
@@ -366,8 +370,6 @@ function stopAnd(onPress: () => void) {
   };
 }
 
-type ModelBrowserRowTone = "default" | "elevated" | "drillDown";
-
 function RowLabel({
   label,
   description,
@@ -403,7 +405,6 @@ function ModelBrowserRow({
   trailingSlot,
   selected = false,
   selectionIndicator = false,
-  tone = "default",
   labelMuted = false,
   onPress,
   testID,
@@ -414,7 +415,6 @@ function ModelBrowserRow({
   trailingSlot?: ReactNode;
   selected?: boolean;
   selectionIndicator?: boolean;
-  tone?: ModelBrowserRowTone;
   /** For rows that offer an action rather than name a thing you can pick. */
   labelMuted?: boolean;
   onPress: () => void;
@@ -422,37 +422,28 @@ function ModelBrowserRow({
 }) {
   const hasTrailing = selected || trailingSlot;
   return (
-    <button
-      type="button"
-      onClick={stopAnd(onPress)}
-      // A profile row is an action, not a selection, so it carries no selection
-      // state at all — only rows that draw the checkmark claim one.
-      aria-selected={selectionIndicator ? selected : undefined}
-      data-testid={testID}
-      className={cn(
-        "flex min-h-9 w-full items-center gap-2 py-2 text-left",
-        ROW_INSET,
-        // The Expo app fills a hovered or pressed row with surface1 (surface2 when elevated):
-        // bg-card in the dark theme. In the light theme surface1 is white, so rows keep the
-        // visible muted fill, as the combobox rows do (step 4 batch 2).
-        tone === "elevated"
-          ? "hover:bg-accent active:bg-accent"
-          : "hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card",
-      )}
-    >
-      <span className="flex w-4 shrink-0 items-center justify-center">{leadingSlot}</span>
-      <RowLabel label={label} description={description} muted={labelMuted} />
-      {hasTrailing ? (
-        <span className="ml-auto flex items-center gap-1">
-          {selectionIndicator ? (
-            <span className="flex w-4 items-center justify-center">
-              {selected ? <Check size={ICON_SIZE.sm} className="text-muted-foreground" /> : null}
-            </span>
-          ) : null}
-          {trailingSlot}
-        </span>
-      ) : null}
-    </button>
+    <Item asChild size="xs" className="text-left">
+      <button
+        type="button"
+        onClick={stopAnd(onPress)}
+        aria-selected={selectionIndicator ? selected : undefined}
+        data-testid={testID}
+        className="hover:bg-muted"
+      >
+        <span className="flex w-4 shrink-0 items-center justify-center">{leadingSlot}</span>
+        <RowLabel label={label} description={description} muted={labelMuted} />
+        {hasTrailing ? (
+          <span className="ml-auto flex items-center gap-1">
+            {selectionIndicator ? (
+              <span className="flex w-4 items-center justify-center">
+                {selected ? <Check size={ICON_SIZE.sm} className="text-muted-foreground" /> : null}
+              </span>
+            ) : null}
+            {trailingSlot}
+          </span>
+        ) : null}
+      </button>
+    </Item>
   );
 }
 
@@ -587,27 +578,26 @@ function ModelRow({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
-      <button
-        type="button"
-        onClick={stopAnd(onPress)}
-        aria-selected={isSelected}
-        data-testid={`model-row-${row.provider}-${row.modelId}`}
-        className={cn(
-          "flex min-h-9 w-full items-center gap-2 py-2 text-left hover:bg-muted active:bg-muted dark:hover:bg-card dark:active:bg-card",
-          ROW_INSET,
-        )}
-      >
-        <span className="flex w-4 shrink-0 items-center justify-center">
-          <ModelProviderGlyph provider={row.provider} serverId={serverId} size={ICON_SIZE.sm} />
-        </span>
-        <RowLabel label={row.modelLabel} description={description} />
-        <span className="ml-auto flex items-center gap-1">
-          <span className="flex w-4 items-center justify-center">
-            {isSelected ? <Check size={ICON_SIZE.sm} className="text-muted-foreground" /> : null}
+      <Item asChild size="xs" className="text-left">
+        <button
+          type="button"
+          onClick={stopAnd(onPress)}
+          aria-selected={isSelected}
+          data-testid={`model-row-${row.provider}-${row.modelId}`}
+          className="hover:bg-muted"
+        >
+          <span className="flex w-4 shrink-0 items-center justify-center">
+            <ModelProviderGlyph provider={row.provider} serverId={serverId} size={ICON_SIZE.sm} />
           </span>
-          {profileAction}
-        </span>
-      </button>
+          <RowLabel label={row.modelLabel} description={description} />
+          <span className="ml-auto flex items-center gap-1">
+            <span className="flex w-4 items-center justify-center">
+              {isSelected ? <Check size={ICON_SIZE.sm} className="text-muted-foreground" /> : null}
+            </span>
+            {profileAction}
+          </span>
+        </button>
+      </Item>
     </div>
   );
 }
@@ -650,7 +640,6 @@ function AgentProfilePickerRowView({
     <ModelBrowserRow
       label={row.name}
       description={row.summary}
-      tone="elevated"
       onPress={handlePress}
       leadingSlot={glyph}
       testID={`model-profile-row-${row.id}`}
@@ -780,7 +769,6 @@ function GroupProviderButton({
       label={provider.label}
       leadingSlot={glyph}
       trailingSlot={state}
-      tone="drillDown"
       onPress={handlePress}
       testID={`model-provider-${provider.id}`}
     />
@@ -800,7 +788,7 @@ function GroupedProviderRows({
     <div>
       {providers.map((provider, index) => (
         <div key={provider.id}>
-          {index > 0 ? <div className="h-px bg-border" /> : null}
+          {index > 0 ? <Separator /> : null}
           <GroupProviderButton provider={provider} serverId={serverId} onDrillDown={onDrillDown} />
         </div>
       ))}

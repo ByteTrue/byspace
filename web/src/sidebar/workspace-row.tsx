@@ -1,3 +1,4 @@
+import { Button } from "~/components/ui/button";
 import { memo, useCallback, useMemo, useState, type ComponentProps, type MouseEvent } from "react";
 import {
   Archive,
@@ -508,16 +509,17 @@ function WorkspaceRowKebab({
   const isCompact = useIsCompactFormFactor();
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger
-        aria-label={t("sidebar.workspace.actions.menu")}
-        data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
-        // The Expo app renders it only while the row is hovered (always on phones), so on desktop
-        // it is not a Tab stop, and out of hover it is hidden rather than transparent.
-        tabIndex={isCompact ? undefined : -1}
-        // The scrim fades the title out under the button instead of cutting it off.
-        className="invisible absolute top-1.5 right-1 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-muted-foreground before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-l before:from-sidebar-accent hover:text-sidebar-foreground group-hover/workspace-row:visible data-[state=open]:visible max-md:visible max-md:bg-transparent max-md:before:hidden"
-      >
-        <EllipsisVertical className="size-3.5" />
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t("sidebar.workspace.actions.menu")}
+          data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
+          tabIndex={isCompact ? undefined : -1}
+          className="invisible absolute top-1 right-1 group-hover/workspace-row:visible data-[state=open]:visible max-md:visible"
+        >
+          <EllipsisVertical className="size-3.5" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[260px]">
         <WorkspaceMenuItems kit={dropdownMenuKit} actions={actions} />

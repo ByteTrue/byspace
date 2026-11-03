@@ -40,6 +40,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { SidebarMenu } from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
+import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ShowMoreRow } from "~/sidebar/list-parts";
 import { ProjectLeadingVisual } from "~/sidebar/status-visuals";
@@ -126,19 +127,20 @@ function NewWorkspaceButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           aria-label={t("sidebar.workspace.actions.createWorkspaceFor", {
             projectName: displayName,
           })}
           data-testid={`sidebar-project-new-worktree-${projectViewKey}`}
-          // Not a Tab stop, as the Expo app's (a Pressable without a role on the web).
+          // Hover-revealed: not a Tab stop (docs/hover.md).
           tabIndex={-1}
           onClick={handleClick}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground"
         >
-          <Plus className="size-3.5" />
-        </button>
+          <Plus />
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
         {t("sidebar.workspace.actions.newWorkspace")}
@@ -249,13 +251,16 @@ function ProjectHeaderRow({
         ) : null}
         {onRemoveProject ? (
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-            <DropdownMenuTrigger
-              aria-label={t("sidebar.project.actions.menu")}
-              data-testid={`sidebar-project-kebab-${project.viewKey}`}
-              onClick={stopRowPress}
-              className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground"
-            >
-              <EllipsisVertical className="size-3.5" />
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t("sidebar.project.actions.menu")}
+                data-testid={`sidebar-project-kebab-${project.viewKey}`}
+                onClick={stopRowPress}
+              >
+                <EllipsisVertical className="size-3.5" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[220px]">
               <ProjectMenuItems

@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/git/pull-request-panel/checks-section.tsx: the PR pane's CI block —
 // the summary line with its ring, then the checks grouped by status. Grouping, identity and the
 // "Add to chat" gate are the Expo file's; the view is DOM.
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import {
   useCallback,
   useMemo,
@@ -82,13 +83,10 @@ export function ChecksSection({
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
-    <div data-testid="pr-pane-checks">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
+    <Collapsible open={open} onOpenChange={onToggle} data-testid="pr-pane-checks">
+      <CollapsibleTrigger
         aria-label={summary.detail ? `${summary.headline}. ${summary.detail}` : summary.headline}
-        className="flex w-full items-center gap-2 p-3 text-left hover:bg-sidebar-accent"
+        className="flex w-full items-center gap-2 p-3 text-left hover:bg-muted"
       >
         <ChecksRing summary={summary} size={ICON_SIZE.lg} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -109,10 +107,10 @@ export function ChecksSection({
           ) : null}
         </span>
         <Chevron size={ICON_SIZE.sm} className="shrink-0 text-muted-foreground" />
-      </button>
+      </CollapsibleTrigger>
 
-      {open && summary.groups.length > 0 ? (
-        <div className="overflow-y-auto pb-2" style={LIST_STYLE}>
+      {summary.groups.length > 0 ? (
+        <CollapsibleContent className="overflow-y-auto pb-2" style={LIST_STYLE}>
           {summary.groups.map((group) => (
             <CheckGroup
               key={group.status}
@@ -124,9 +122,9 @@ export function ChecksSection({
               onAddLogsToChat={onAddLogsToChat}
             />
           ))}
-        </div>
+        </CollapsibleContent>
       ) : null}
-    </div>
+    </Collapsible>
   );
 }
 
@@ -148,31 +146,30 @@ function CheckGroup({
   const handlePress = useCallback(() => onToggle(group.status), [group.status, onToggle]);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <div data-testid={`pr-pane-check-group-${group.status}`}>
-      <button
-        type="button"
-        onClick={handlePress}
-        aria-expanded={!collapsed}
-        className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-left"
-      >
+    <Collapsible
+      open={!collapsed}
+      onOpenChange={handlePress}
+      data-testid={`pr-pane-check-group-${group.status}`}
+    >
+      <CollapsibleTrigger className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-left">
         <span className="text-xs font-medium text-muted-foreground">{group.label}</span>
         <Chevron size={ICON_SIZE.xs} className="shrink-0 text-muted-foreground" />
-      </button>
-      {collapsed
-        ? null
-        : group.checks.map((check) => {
-            const checkKey = getCheckIdentity(check);
-            return (
-              <CheckRow
-                key={checkKey}
-                check={check}
-                attachEnabled={attachEnabled}
-                isAddingLogsToChat={loadingCheckKeys.has(checkKey)}
-                onAddLogsToChat={onAddLogsToChat}
-              />
-            );
-          })}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {group.checks.map((check) => {
+          const checkKey = getCheckIdentity(check);
+          return (
+            <CheckRow
+              key={checkKey}
+              check={check}
+              attachEnabled={attachEnabled}
+              isAddingLogsToChat={loadingCheckKeys.has(checkKey)}
+              onAddLogsToChat={onAddLogsToChat}
+            />
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

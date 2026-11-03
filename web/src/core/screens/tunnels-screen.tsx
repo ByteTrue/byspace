@@ -570,20 +570,11 @@ function TunnelRow({
       <div className={ROW_CONTENT}>
         {isOutbound ? (
           <div className="flex flex-row flex-wrap items-center gap-2">
-            <div className="rounded-[4px] bg-muted px-2 py-0.5">
-              <span
-                data-testid="tunnels-row-local-port"
-                className="block truncate text-xs leading-[normal] text-foreground"
-              >
-                {localEndpoint}
-              </span>
-            </div>
+            <Badge variant="secondary" data-testid="tunnels-row-local-port">
+              {localEndpoint}
+            </Badge>
             <ArrowRight size={13} className="shrink-0 text-muted-foreground" />
-            <div className="rounded-[4px] bg-muted px-2 py-0.5">
-              <span className="block truncate text-xs leading-[normal] text-foreground">
-                {remoteEndpoint}
-              </span>
-            </div>
+            <Badge variant="secondary">{remoteEndpoint}</Badge>
           </div>
         ) : (
           <div className="flex flex-row items-center gap-2">
@@ -755,9 +746,7 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
           allowedPorts.map((port) => (
             <Item variant="outline" key={port}>
               <div className="flex flex-1 flex-row items-center gap-3">
-                <div className="rounded-[4px] bg-muted px-2 py-0.5">
-                  <span className="text-xs leading-[normal] text-foreground">127.0.0.1:{port}</span>
-                </div>
+                <Badge variant="secondary">127.0.0.1:{port}</Badge>
                 <span className="text-xs leading-[normal] text-muted-foreground">
                   {t("tunnels.allowlist.port", { port })}
                 </span>

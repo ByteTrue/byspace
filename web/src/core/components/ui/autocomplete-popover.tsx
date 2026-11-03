@@ -1,6 +1,6 @@
-// Port of archive/expo-app:packages/app/src/components/ui/autocomplete-popover.tsx: the autocomplete list
-// floating above the composer input, as wide as it, never taller than the space above it. Focus
-// stays in the composer, which owns visibility and the keyboard.
+// The autocomplete list floating above the composer input, as wide as it, never taller than the
+// space above it. Not a Radix Popover: focus, Escape and visibility stay with the composer, and a
+// Popover's dismissable layer would take Escape and clicks outside for itself.
 //
 // Placed as the Expo app places it: by its bottom edge, OFFSET above the input, so a list that
 // grows or shrinks as results arrive keeps its bottom where it was; measured before the first paint,
@@ -39,6 +39,7 @@ export function AutocompletePopover({
   options,
   selectedIndex,
   onSelect,
+  onHighlight,
   isLoading,
   errorMessage,
   loadingText,
@@ -49,6 +50,7 @@ export function AutocompletePopover({
   options: readonly AutocompleteOption[];
   selectedIndex: number;
   onSelect: (option: AutocompleteOption) => void;
+  onHighlight?: (index: number) => void;
   isLoading?: boolean;
   errorMessage?: string;
   loadingText?: string;
@@ -112,6 +114,7 @@ export function AutocompletePopover({
         options={options}
         selectedIndex={selectedIndex}
         onSelect={onSelect}
+        onHighlight={onHighlight}
         isLoading={isLoading}
         errorMessage={errorMessage}
         loadingText={loadingText}

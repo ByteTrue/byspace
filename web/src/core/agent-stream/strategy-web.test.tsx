@@ -150,7 +150,7 @@ describe("createWebStreamStrategy", () => {
     expect(rowRenderCount.mock.calls.length).toBeLessThanOrEqual(historyVirtualized.length);
   });
 
-  it("keeps the timeline width stable with an overlay scrollbar", () => {
+  it("scrolls with the browser's thin scrollbar", () => {
     const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -188,8 +188,7 @@ describe("createWebStreamStrategy", () => {
     const scrollContainer = container.querySelector<HTMLElement>(
       '[data-testid="agent-chat-scroll"]',
     );
-    expect(scrollContainer?.style.scrollbarWidth).toBe("none");
-    expect(scrollContainer?.dataset.overlayScrollbar).toBe("true");
+    expect(scrollContainer?.style.scrollbarWidth).toBe("thin");
   });
 
   it("rerenders a stable live-head row when its revision changes", () => {

@@ -37,10 +37,6 @@ import type {
 } from "@/components/draggable-list.types";
 import { SortableInlineList } from "@/components/sortable-inline-list";
 import {
-  HorizontalScrollBoundaryShades,
-  useHorizontalScrollBoundary,
-} from "@/components/ui/horizontal-scroll-boundary";
-import {
   paneContentToolbarTrailingPadding,
   ToolbarButton,
   ToolbarControls,
@@ -88,6 +84,7 @@ import {
 import { ContextMenuTrigger } from "@/components/ui/context-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { WithTooltip } from "~/components/with-tooltip";
+import { Button } from "~/components/ui/button";
 
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 // shadcn's icon-xs button.
@@ -605,7 +602,9 @@ function TabCloseButton({
       )}
       style={CLOSE_SLOT_STYLE}
     >
-      <button
+      <Button
+        variant="ghost"
+        size="icon-xs"
         type="button"
         data-testid={testId}
         disabled={isClosingTab}
@@ -615,14 +614,13 @@ function TabCloseButton({
         onPointerEnter={handleEnter}
         onPointerLeave={handleLeave}
         onClick={handleClick}
-        className="flex size-[18px] items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         {isClosingTab ? (
           <span className="size-3 animate-spin rounded-full border border-current border-t-transparent" />
         ) : (
           <X size={12} />
         )}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1048,7 +1046,6 @@ function ResolvedWorkspaceDesktopTabsRow({
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const [tabsContainerWidth, tabsContainerRef] = useElementWidth();
   const [exitFocusModeWidth, exitFocusModeRef] = useElementWidth();
-  const scrollBoundary = useHorizontalScrollBoundary();
   const [trackSnapshot, setTrackSnapshot] = useState<WorkspaceTabTrackSnapshot | null>(null);
 
   const layoutMetrics = useMemo(
@@ -1273,12 +1270,13 @@ function ResolvedWorkspaceDesktopTabsRow({
         />
         <div className="relative flex min-w-0 flex-1 self-stretch">
           <div
-            ref={scrollBoundary.ref}
-            onScroll={scrollBoundary.onScroll}
             data-testid="workspace-tabs-scroll"
             className={cn(
               "flex min-w-0 flex-1 items-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-              layout.requiresHorizontalScrollFallback ? "overflow-x-auto" : "overflow-x-hidden",
+              // shadcn's scroll-fade: the tabs fade at an edge that has more of them past it.
+              layout.requiresHorizontalScrollFallback
+                ? "scroll-fade-x overflow-x-auto"
+                : "overflow-x-hidden",
             )}
             style={TAB_SCROLL_PADDING_STYLE}
           >
@@ -1302,13 +1300,6 @@ function ResolvedWorkspaceDesktopTabsRow({
               />
             ) : null}
           </div>
-          <HorizontalScrollBoundaryShades
-            visible={layout.requiresHorizontalScrollFallback}
-            backdrop="surface"
-            testIDPrefix="workspace-tabs-scroll-shade"
-            showLeft={scrollBoundary.showLeft}
-            showRight={scrollBoundary.showRight}
-          />
         </div>
         <WorkspacePaneToolbarActions
           showNewTabButton={layout.requiresHorizontalScrollFallback}

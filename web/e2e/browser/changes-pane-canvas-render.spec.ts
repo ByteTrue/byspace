@@ -234,26 +234,17 @@ test("scrolling clears the hovered review affordance", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Add review comment" })).toHaveCount(0);
 });
 
-test("canvas diff uses the overlay scrollbar and its thumb controls vertical scrolling", async ({
-  page,
-}) => {
+test("canvas diff scrolls with the browser's thin scrollbar", async ({ page }) => {
   const lines = Array.from({ length: 240 }, (_, index) => `export const line${index} = ${index};`);
   const workspace = await createWorkspaceWithExactSelectionDiff(lines.join("\n"));
   await openSelectionWorkspaceChanges(page, workspace);
 
-  const root = page.getByTestId("git-diff-canvas-root");
   const scroller = page.getByTestId("git-diff-scroll");
-  const grab = root.getByTestId("workspace-overlay-scrollbar-grab");
-  await expect(grab).toBeVisible();
-  await expect(scroller).toHaveCSS("scrollbar-width", "none");
-
-  const bounds = await grab.boundingBox();
-  if (!bounds) throw new Error("Diff overlay scrollbar thumb has no bounds");
+  await expect(scroller).toHaveCSS("scrollbar-width", "thin");
+  const bounds = await scroller.boundingBox();
+  if (!bounds) throw new Error("Diff scroller has no bounds");
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-  await page.mouse.down();
-  await expect(grab).toHaveCSS("cursor", "grabbing");
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 180);
-  await page.mouse.up();
+  await page.mouse.wheel(0, 400);
 
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });
@@ -302,8 +293,9 @@ test("the whole reviewable row reveals the gutter affordance and uses a text cur
   await expect(affordance).toBeVisible();
   await expect(affordance.locator("svg")).toBeVisible();
   const affordanceBounds = await affordance.boundingBox();
-  expect(affordanceBounds?.width).toBeCloseTo(22, 0);
-  expect(affordanceBounds?.height).toBeCloseTo(22, 0);
+  // shadcn's icon-xs button.
+  expect(affordanceBounds?.width).toBeCloseTo(24, 0);
+  expect(affordanceBounds?.height).toBeCloseTo(24, 0);
   await expect(affordance).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(page.getByTestId("git-diff-scroll")).toHaveCSS("cursor", "text");
 });

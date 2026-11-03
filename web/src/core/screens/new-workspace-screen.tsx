@@ -228,8 +228,7 @@ const metaChevron = <MetaChevron />;
 const PROJECT_PICK_ACTIONS: readonly KeyboardActionId[] = ["workspace.project.pick"];
 // A picker-trigger badge: 28px tall, the same height the compact form's spacer reserves, so
 // toggling Isolation to Local hides the Base row without shifting the form.
-const BADGE =
-  "flex h-7 max-w-60 min-w-0 shrink items-center gap-1 overflow-hidden rounded-2xl px-2 enabled:hover:bg-muted enabled:active:bg-background";
+const BADGE = "max-w-60 shrink overflow-hidden";
 // The badge's own padding is offset so the project icon lands on the title's left edge.
 const CENTERED_CONTENT_STYLE: CSSProperties = { paddingBottom: HEADER_INNER_HEIGHT + 24 };
 const CONTENT_WIDTH_STYLE: CSSProperties = { maxWidth: MAX_CONTENT_WIDTH };
@@ -1497,14 +1496,14 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
       >
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
+            <ComboboxTrigger
               ref={host.anchorRef}
-              aria-label="Host"
-              onClick={host.open}
+              accessibilityLabel="Host"
+              onPress={host.open}
               disabled={isPending}
               className={badgeClassName}
-              data-testid="host-picker-trigger"
+              chevron={metaChevron}
+              testID="host-picker-trigger"
             >
               <span className="flex size-4 shrink-0 items-center justify-center">
                 <HostStatusDot serverId={host.selectedServerId} />
@@ -1512,8 +1511,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
               <span className="min-w-0 shrink truncate text-sm text-muted-foreground">
                 {selectedHostLabel}
               </span>
-              {metaChevron}
-            </button>
+            </ComboboxTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
             {tooltipText}

@@ -79,6 +79,8 @@ import type { AddProjectFlowRequest } from "@/stores/add-project-flow-store";
 import { shortenPath } from "@/utils/shorten-path";
 import { buildNewWorkspaceRoute, buildSettingsAddHostRoute } from "@/utils/host-routes";
 import { Input } from "~/components/ui/input";
+import { Button } from "~/components/ui/button";
+import { Item } from "~/components/ui/item";
 
 interface AddProjectFlowProps {
   request: AddProjectFlowRequest;
@@ -115,15 +117,17 @@ const ESCAPE_HINT_KEYS = ["Esc"];
 
 function FlowBackButton({ onPress }: { onPress: () => void }) {
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon-sm"
       type="button"
       onClick={onPress}
-      className="flex h-5 w-[18px] shrink-0 items-center justify-center text-muted-foreground hover:text-foreground active:text-foreground"
       aria-label="Back"
       data-testid="add-project-flow-back"
+      className="shrink-0"
     >
       <ArrowLeft size={18} />
-    </button>
+    </Button>
   );
 }
 
@@ -252,30 +256,28 @@ function FlowRow({ option, active }: { option: FlowRowOption; active: boolean })
   // The active row is muted, not the Expo app's surface1: in the light theme surface1 is the
   // panel's own white, so neither the keyboard selection nor the hover showed.
   return (
-    <button
-      type="button"
-      disabled={option.disabled}
-      onClick={option.select}
-      className={cn(
-        "flex flex-row items-center gap-3 px-4 py-2 text-left enabled:hover:bg-muted enabled:active:bg-muted",
-        active && "bg-muted",
-        option.disabled && "opacity-50",
-      )}
-      aria-current={active ? "true" : undefined}
-      data-testid={option.testID}
-    >
-      <span className="flex w-[18px] shrink-0 items-center justify-center text-muted-foreground">
-        <FlowIcon icon={option.icon} size={16} />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm leading-[normal] text-foreground">{option.title}</span>
-        {option.subtitle ? (
-          <span className="mt-0.5 truncate text-xs leading-[normal] text-muted-foreground">
-            {option.subtitle}
-          </span>
-        ) : null}
-      </span>
-    </button>
+    <Item asChild size="sm" className="text-left">
+      <button
+        type="button"
+        disabled={option.disabled}
+        onClick={option.select}
+        aria-current={active ? "true" : undefined}
+        data-testid={option.testID}
+        className={cn("hover:bg-muted disabled:opacity-50", active && "bg-muted")}
+      >
+        <span className="flex w-[18px] shrink-0 items-center justify-center text-muted-foreground">
+          <FlowIcon icon={option.icon} size={16} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm leading-[normal] text-foreground">{option.title}</span>
+          {option.subtitle ? (
+            <span className="mt-0.5 truncate text-xs leading-[normal] text-muted-foreground">
+              {option.subtitle}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    </Item>
   );
 }
 

@@ -318,32 +318,6 @@
     flex: 1;
     min-width: 0;
   }
-  .markdown .md-table {
-    margin: 12px 0;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-  }
-  .markdown table {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
-  }
-  .markdown tr {
-    border-bottom: 1px solid var(--border);
-  }
-  .markdown :is(th, td) {
-    padding: 8px;
-    border-right: 1px solid var(--border);
-    color: var(--foreground);
-    text-align: left;
-    vertical-align: top;
-  }
-  .markdown th {
-    border-bottom: 1px solid var(--border);
-    background: var(--muted);
-    font-weight: 500;
-  }
   .markdown .md-image {
     max-width: 100%;
     margin: 8px 0;

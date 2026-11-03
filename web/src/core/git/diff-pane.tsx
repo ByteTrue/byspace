@@ -2,6 +2,7 @@
 // row, diff mode and toolbar, the changed-file tree, the diff document and the commits strip.
 // The logic is the Expo file's; the view is DOM.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/diff-pane.py; edit it directly.
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import {
   Fragment,
   useState,
@@ -77,11 +78,6 @@ import {
   ToolbarButton,
   ToolbarControls,
 } from "@/components/ui/pane-content-toolbar";
-import {
-  ToolbarLabelTriggerIcon,
-  TOOLBAR_LABEL_TRIGGER_CLASS,
-  TOOLBAR_LABEL_TRIGGER_TEXT,
-} from "@/components/ui/toolbar-label-trigger";
 import { FOCUSED_PANE_PLACEMENT, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import type { WorkspaceTabPlacement } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
@@ -259,20 +255,17 @@ export function DiffModeMenu({
   const committedLabel = t("workspace.git.diff.committed");
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        data-testid={`${testIDPrefix}-status-trigger`}
-        className={TOOLBAR_LABEL_TRIGGER_CLASS}
-        aria-label={t("workspace.git.diff.diffMode")}
-      >
-        <ToolbarLabelTriggerIcon>
-          <FileDiff size={13} className="text-muted-foreground" />
-        </ToolbarLabelTriggerIcon>
-        <span className={TOOLBAR_LABEL_TRIGGER_TEXT}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          data-testid={`${testIDPrefix}-status-trigger`}
+          aria-label={t("workspace.git.diff.diffMode")}
+        >
+          <FileDiff data-icon="inline-start" />
           {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
-        </span>
-        <ToolbarLabelTriggerIcon>
-          <ChevronDown size={12} className={EXTRA_MUTED_ICON} />
-        </ToolbarLabelTriggerIcon>
+          <ChevronDown data-icon="inline-end" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
@@ -607,16 +600,17 @@ function ChangesPullRequestLink({ model }: { model: ChangesPullRequestLinkModel 
   const label = `${presentation.numberPrefix}${model.number}`;
   return (
     <Tooltip delayDuration={300}>
-      <TooltipTrigger
-        data-testid="changes-open-pull-request"
-        aria-label={`${t("panels.pullRequest.label")} ${label}`}
-        onClick={model.onOpen}
-        className={TOOLBAR_LABEL_TRIGGER_CLASS}
-      >
-        <ToolbarLabelTriggerIcon>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          data-testid="changes-open-pull-request"
+          aria-label={`${t("panels.pullRequest.label")} ${label}`}
+          onClick={model.onOpen}
+        >
           <PullRequestStateIcon state={model.state} size={14} strokeWidth={1.5} />
-        </ToolbarLabelTriggerIcon>
-        <span className={TOOLBAR_LABEL_TRIGGER_TEXT}>{label}</span>
+          {label}
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{t("panels.pullRequest.label")}</TooltipContent>
     </Tooltip>
@@ -1899,12 +1893,9 @@ export function ChangesSurface({
       ) : null}
 
       {forgeSetupMessage ? (
-        <div
-          className="mx-3 my-2 rounded-md border bg-card px-3 py-2"
-          data-testid="forge-setup-callout"
-        >
-          <span className="text-xs text-muted-foreground">{forgeSetupMessage}</span>
-        </div>
+        <Alert className="mx-3 my-2 w-auto" data-testid="forge-setup-callout">
+          <AlertDescription>{forgeSetupMessage}</AlertDescription>
+        </Alert>
       ) : null}
 
       {prErrorMessage ? (

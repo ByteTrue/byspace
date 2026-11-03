@@ -7,12 +7,11 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 
 import type { Theme } from "@/styles/theme";
 import { withTheme } from "~/app/theme-object";
+import { Item } from "~/components/ui/item";
 
 const ThemedLink2 = withTheme(Link2);
 const ThemedClipboardPaste = withTheme(ClipboardPaste);
 const foregroundIconMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-
-const OPTION = "flex w-full flex-row items-center gap-4 rounded-xl border bg-muted p-4 text-left";
 
 export interface AddHostMethodModalProps {
   visible: boolean;
@@ -46,41 +45,45 @@ export function AddHostMethodModal({
       onClose={onClose}
       testID="add-host-method-modal"
     >
-      <button
-        type="button"
-        className={OPTION}
-        onClick={handleDirect}
-        aria-label={t("pairing.connectionMethods.direct.title")}
-        data-testid="add-host-method-direct"
-      >
-        <ThemedLink2 size={18} themeProps={foregroundIconMapping} />
-        <span className="flex flex-1 flex-col">
-          <span className="text-sm leading-[normal] font-normal text-foreground">
-            {t("pairing.connectionMethods.direct.title")}
+      <Item variant="outline" asChild className="text-left">
+        <button
+          type="button"
+          onClick={handleDirect}
+          aria-label={t("pairing.connectionMethods.direct.title")}
+          data-testid="add-host-method-direct"
+          className="hover:bg-muted"
+        >
+          <ThemedLink2 size={18} themeProps={foregroundIconMapping} />
+          <span className="flex flex-1 flex-col">
+            <span className="text-sm leading-[normal] font-normal text-foreground">
+              {t("pairing.connectionMethods.direct.title")}
+            </span>
+            <span className="mt-1 text-sm leading-[normal] text-muted-foreground">
+              {t("pairing.connectionMethods.direct.description")}
+            </span>
           </span>
-          <span className="mt-1 text-sm leading-[normal] text-muted-foreground">
-            {t("pairing.connectionMethods.direct.description")}
-          </span>
-        </span>
-      </button>
+        </button>
+      </Item>
 
-      <button
-        type="button"
-        className={OPTION}
-        onClick={handlePaste}
-        aria-label={t("pairing.connectionMethods.pasteLink.title")}
-        data-testid="add-host-method-pair-link"
-      >
-        <ThemedClipboardPaste size={18} themeProps={foregroundIconMapping} />
-        <span className="flex flex-1 flex-col">
-          <span className="text-sm leading-[normal] font-normal text-foreground">
-            {t("pairing.connectionMethods.pasteLink.title")}
+      <Item variant="outline" asChild className="text-left">
+        <button
+          type="button"
+          onClick={handlePaste}
+          aria-label={t("pairing.connectionMethods.pasteLink.title")}
+          data-testid="add-host-method-pair-link"
+          className="hover:bg-muted"
+        >
+          <ThemedClipboardPaste size={18} themeProps={foregroundIconMapping} />
+          <span className="flex flex-1 flex-col">
+            <span className="text-sm leading-[normal] font-normal text-foreground">
+              {t("pairing.connectionMethods.pasteLink.title")}
+            </span>
+            <span className="mt-1 text-sm leading-[normal] text-muted-foreground">
+              {t("pairing.connectionMethods.pasteLink.description")}
+            </span>
           </span>
-          <span className="mt-1 text-sm leading-[normal] text-muted-foreground">
-            {t("pairing.connectionMethods.pasteLink.description")}
-          </span>
-        </span>
-      </button>
+        </button>
+      </Item>
     </AdaptiveModalSheet>
   );
 }

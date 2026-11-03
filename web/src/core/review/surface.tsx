@@ -3,6 +3,9 @@
 // saves, Escape cancels). The draft store and the controller are the Expo file's; the view is DOM.
 // InlineReviewGutterCell is not ported: the canvas diff draws its own gutter and uses
 // InlineReviewAddButton.
+import { Item, ItemActions, ItemContent, ItemDescription } from "~/components/ui/item";
+import { Textarea } from "~/components/ui/textarea";
+import { Card } from "~/components/ui/card";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -22,12 +25,8 @@ import {
   type InlineReviewActions,
   type InlineReviewEditorState,
 } from "@/review/geometry";
-import { cn } from "cn";
 
 export const SMALL_ACTION_HIT_SLOP = 8;
-
-const ICON_BUTTON =
-  "flex size-[26px] items-center justify-center rounded-full transition-colors duration-120 hover:bg-accent active:bg-accent";
 
 export function InlineReviewAddButton({
   onPress,
@@ -38,15 +37,16 @@ export function InlineReviewAddButton({
 }) {
   const { t } = useTranslation();
   return (
-    <button
+    <Button
+      size="icon-xs"
       type="button"
       aria-label={t("review.comment.add")}
       onClick={onPress}
       style={style as CSSProperties}
-      className="z-10 flex size-[22px] items-center justify-center rounded-md bg-primary text-primary-foreground"
+      className="z-10"
     >
       <Plus size={16} strokeWidth={2.4} />
-    </button>
+    </Button>
   );
 }
 
@@ -237,31 +237,34 @@ function CommentRow({
   );
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-muted px-3 py-2">
-      <p className="line-clamp-2 min-w-0 flex-1 text-[15px] leading-[1.4] text-foreground">
-        {comment.body}
-      </p>
-      <div className="flex shrink-0 items-center gap-1">
-        <button
+    <Item variant="muted" size="sm">
+      <ItemContent className="min-w-0">
+        <ItemDescription className="line-clamp-2 text-foreground">{comment.body}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           aria-label={t("review.comment.edit")}
           data-testid={`review-comment-edit-${comment.id}`}
           onClick={handleEdit}
-          className={cn(ICON_BUTTON, "text-muted-foreground")}
         >
           <Pencil size={14} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           aria-label={t("review.comment.delete")}
           data-testid={`review-comment-delete-${comment.id}`}
           onClick={handleDelete}
-          className={cn(ICON_BUTTON, "text-destructive")}
+          className="text-destructive"
         >
           <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -330,12 +333,8 @@ export function InlineReviewEditor({
   );
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border bg-muted p-3"
-      style={EDITOR_STYLE}
-      data-testid={testID}
-    >
-      <textarea
+    <Card size="sm" className="gap-3 bg-muted p-3" style={EDITOR_STYLE} data-testid={testID}>
+      <Textarea
         ref={inputRef}
         aria-label={t("review.comment.label")}
         data-testid={testID ? `${testID}-input` : undefined}
@@ -343,7 +342,7 @@ export function InlineReviewEditor({
         value={body}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        className="min-h-0 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-[15px] leading-[1.4] text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+        className="min-h-0 flex-1 resize-none bg-background"
       />
       <div className="flex items-center justify-end gap-2">
         <Button
@@ -366,7 +365,7 @@ export function InlineReviewEditor({
           {t("review.comment.save")}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 

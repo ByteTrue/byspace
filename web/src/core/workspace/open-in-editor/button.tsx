@@ -1,5 +1,7 @@
 // Port of archive/expo-app:packages/app/src/workspace/open-in-editor/button.tsx: the header's "Open" split
 // button (open the workspace or file on its forge), with a menu to pick and remember the target.
+import { ButtonGroup } from "~/components/ui/button-group";
+import { Button } from "~/components/ui/button";
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
@@ -14,7 +16,6 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
-import { cn } from "cn";
 import { ForgeIcon } from "~/components/forge-icon";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -139,9 +140,10 @@ export function WorkspaceOpenInEditorButton({
   if (!canResolveWorkspace || !primaryOption || targets.length === 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-1">
-      <div className="flex h-8 items-stretch overflow-hidden rounded-md border bg-background md:h-7 dark:border-input dark:bg-input/30">
-        <button
-          type="button"
+      <ButtonGroup>
+        <Button
+          variant="outline"
+          size={hideLabels ? "icon" : "default"}
           data-testid="workspace-open-in-editor-primary"
           onClick={handlePrimaryPress}
           disabled={openMutation.isPending}
@@ -153,32 +155,21 @@ export function WorkspaceOpenInEditorButton({
                 })
               : t("workspace.git.openInEditor.openIn", { target: primaryOption.label })
           }
-          className={cn(
-            "relative flex items-center justify-center hover:bg-muted disabled:opacity-60 dark:hover:bg-input/50",
-            hideLabels ? "w-8 md:w-7" : "px-3 md:px-2",
-          )}
         >
-          {openMutation.isPending ? (
-            <Spinner className="size-3.5" />
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              {primaryOption.icon}
-              {hideLabels ? null : (
-                <span className="text-sm font-medium text-foreground">
-                  {t("workspace.git.openInEditor.open")}
-                </span>
-              )}
-            </span>
-          )}
-        </button>
+          {openMutation.isPending ? <Spinner /> : primaryOption.icon}
+          {hideLabels ? null : t("workspace.git.openInEditor.open")}
+        </Button>
         {targets.length > 1 ? (
           <DropdownMenu>
-            <DropdownMenuTrigger
-              data-testid="workspace-open-in-editor-caret"
-              aria-label={t("workspace.git.openInEditor.chooseEditor")}
-              className="flex w-8 items-center justify-center border-l text-muted-foreground hover:bg-muted aria-expanded:bg-muted md:w-7 dark:border-input dark:hover:bg-input/50"
-            >
-              <ChevronDown size={16} />
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                data-testid="workspace-open-in-editor-caret"
+                aria-label={t("workspace.git.openInEditor.chooseEditor")}
+              >
+                <ChevronDown />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
@@ -197,7 +188,7 @@ export function WorkspaceOpenInEditorButton({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-      </div>
+      </ButtonGroup>
     </div>
   );
 }

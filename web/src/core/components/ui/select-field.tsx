@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState, type ReactElement, type ReactNo
 import { ChevronDown } from "lucide-react";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { cn } from "cn";
-import { buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 
@@ -52,29 +52,28 @@ export interface SelectFieldProps<TValue> {
   triggerTestID?: string;
 }
 
+/** The outline Button a SelectFieldTrigger sits in: full width, its content from the start. */
+export const SELECT_FIELD_BUTTON_CLASS = "w-full justify-start font-normal";
+
 export interface SelectFieldTriggerProps {
   display?: SelectFieldDisplay | null;
   label?: string;
   isPlaceholder?: boolean;
   placeholder: string;
-  active?: boolean;
-  disabled?: boolean;
   loading?: boolean;
   leading?: ReactNode;
   testID?: string;
 }
 
 /**
- * The trigger's face, shadcn's outline button: leading slot, value or placeholder, spinner,
- * chevron. It sits inside the button that opens the list (`group/select`), which owns focus.
+ * The trigger's content: leading slot, value or placeholder, spinner, chevron. It goes inside the
+ * outline Button that opens the list (SELECT_FIELD_BUTTON_CLASS).
  */
 export function SelectFieldTrigger({
   display,
   label: explicitLabel,
   isPlaceholder: explicitIsPlaceholder,
   placeholder,
-  active = false,
-  disabled = false,
   loading = false,
   leading,
   testID,
@@ -82,15 +81,7 @@ export function SelectFieldTrigger({
   const label = explicitLabel ?? display?.label ?? placeholder;
   const isPlaceholder = explicitIsPlaceholder ?? display == null;
   return (
-    <span
-      data-testid={testID}
-      className={cn(
-        buttonVariants({ variant: "outline" }),
-        "pointer-events-none w-full justify-start font-normal group-focus-visible/select:border-ring group-focus-visible/select:ring-3 group-focus-visible/select:ring-ring/50",
-        active && "bg-muted",
-        disabled && "opacity-50",
-      )}
-    >
+    <span data-testid={testID} className="flex min-w-0 flex-1 items-center gap-2">
       {leading}
       <span
         className={cn(
@@ -217,27 +208,24 @@ export function SelectField<TValue>({
   const displayLabel = selectedDisplay?.label ?? placeholder;
   const control = (
     <>
-      <button
+      <Button
         ref={anchorRef}
         type="button"
+        variant="outline"
         onClick={handlePress}
         disabled={disabled}
         aria-label={`${label} (${displayLabel})`}
         aria-expanded={open}
         data-testid={triggerTestID}
-        // The global keyboard focus outline on the button and the ring on the field inside, both
-        // as the Expo app's (a Pressable round the field).
-        className="group/select flex w-full"
+        className={SELECT_FIELD_BUTTON_CLASS}
       >
         <SelectFieldTrigger
           display={selectedDisplay}
           placeholder={placeholder}
-          active={open}
-          disabled={disabled}
           loading={loading}
           leading={triggerLeading}
         />
-      </button>
+      </Button>
       <Combobox
         options={comboboxOptions}
         value={selectedOptionId}

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "~/app/navigation";
 import { Link2, ClipboardPaste, Settings, Terminal, type LucideIcon } from "lucide-react";
-import { cn } from "cn";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
 import { isBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
@@ -220,19 +219,15 @@ interface WelcomeActionButtonProps {
 function WelcomeActionButton({ action }: WelcomeActionButtonProps) {
   const Icon = action.icon;
   return (
-    <button
+    <Button
+      variant={action.primary ? "default" : "outline"}
+      size="lg"
       type="button"
       onClick={action.onPress}
       data-testid={action.testID}
-      className={cn(
-        "flex flex-row items-center justify-center gap-3 rounded-[14px] border py-4",
-        action.primary
-          ? "border-primary bg-primary text-primary-foreground"
-          : "bg-muted text-foreground",
-      )}
     >
       <Icon size={18} />
       <span className="text-sm leading-[normal] font-medium">{action.label}</span>
-    </button>
+    </Button>
   );
 }

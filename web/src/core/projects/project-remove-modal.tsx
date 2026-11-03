@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/projects/project-remove-modal.tsx: removing a multi-host project from one host or all, on AdaptiveModalSheet; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/project-remove-modal.py; edit it directly.
+import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "~/components/ui/item";
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -48,24 +49,26 @@ function ProjectRemoveHostRow({
   }, [host, onRemove]);
 
   return (
-    <div className="flex flex-row items-center justify-between gap-2 rounded-md border bg-background px-3 py-2">
-      <div className="flex flex-1 flex-row items-center gap-2">
+    <Item variant="outline" size="sm">
+      <ItemMedia>
         <HostStatusDot serverId={host.serverId} />
-        <span className="shrink truncate text-sm leading-[normal] font-medium text-foreground">
-          {hostName}
-        </span>
-      </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={handlePress}
-        data-testid={`project-remove-host-button-${host.serverId}`}
-        disabled={isRowPending || isPending}
-      >
-        {isRowPending ? <Spinner data-icon="inline-start" /> : null}
-        {t("sidebar.project.confirmations.removeFromHost", { hostName })}
-      </Button>
-    </div>
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="truncate">{hostName}</ItemTitle>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handlePress}
+          data-testid={`project-remove-host-button-${host.serverId}`}
+          disabled={isRowPending || isPending}
+        >
+          {isRowPending ? <Spinner data-icon="inline-start" /> : null}
+          {t("sidebar.project.confirmations.removeFromHost", { hostName })}
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }
 

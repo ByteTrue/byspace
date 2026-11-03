@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
+import { Button } from "~/components/ui/button";
 
 interface SettingsInfoTipProps {
   /** Header the tip belongs to; used for the accessibility label. */
@@ -18,14 +19,16 @@ export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
   return (
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           type="button"
           aria-label={t("settings.groupInfo", { title })}
           data-testid={testID}
-          className="-ml-1 flex rounded-none p-1 text-muted-foreground"
+          className="-ml-1"
         >
           <Info size={ICON_SIZE.sm} />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="start">
         <span className="text-sm leading-[1.4]">{info}</span>

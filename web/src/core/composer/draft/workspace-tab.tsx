@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/composer/draft/workspace-tab.tsx: the new-agent tab. The draft and
 // create-flow logic is the Expo file's; the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/draft-workspace-tab.py; edit it directly.
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CHIEF_ROLE_NAME, isHomeWorkspace } from "@/chief/home-workspace";
@@ -53,6 +54,7 @@ import {
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
 import { useSettings } from "@/hooks/use-settings";
 import { blurActiveElement } from "~/lib/blur-active-element";
+import { Button } from "~/components/ui/button";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
 const DRAFT_CAPABILITIES: AgentCapabilityFlags = {
@@ -328,14 +330,9 @@ function DraftSuggestionChip({
     onSelect(prompt);
   }, [onSelect, prompt]);
   return (
-    <button
-      type="button"
-      onClick={handlePress}
-      aria-label={prompt}
-      className="rounded-md border px-3 py-2 text-xs text-foreground hover:bg-muted"
-    >
+    <Button variant="outline" size="sm" type="button" onClick={handlePress} aria-label={prompt}>
       {prompt}
-    </button>
+    </Button>
   );
 }
 
@@ -700,9 +697,9 @@ export function WorkspaceDraftAgentTab({
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 pb-6">
             <div className="flex flex-col gap-3">
               {formErrorMessage ? (
-                <div className="mt-2 rounded-md border border-destructive bg-muted px-3 py-2">
-                  <span className="text-sm text-destructive">{formErrorMessage}</span>
-                </div>
+                <Alert variant="destructive" className="mt-2">
+                  <AlertDescription>{formErrorMessage}</AlertDescription>
+                </Alert>
               ) : null}
             </div>
             {chiefSuggestions.length > 0 ? (

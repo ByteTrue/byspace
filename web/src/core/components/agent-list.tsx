@@ -1,7 +1,13 @@
 // Port of archive/expo-app:packages/app/src/components/agent-list.tsx: the History list (day sections, search marks, long press to archive); DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/sessions-screen.py; edit it directly.
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "~/components/ui/drawer";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "cn";
 import { useLongPress } from "~/hooks/use-long-press";
 import type { TFunction } from "i18next";
@@ -18,6 +24,8 @@ import { HighlightedText } from "@/components/ui/highlighted-text";
 import { Badge } from "~/components/ui/badge";
 import type { AgentSearchMatch } from "@bytetrue/protocol/messages";
 import type { MatchRange } from "@bytetrue/protocol/search/text-match";
+import { Button } from "~/components/ui/button";
+import { Item } from "~/components/ui/item";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -303,93 +311,95 @@ function SessionRow({
     !isMobile && showAttentionIndicator && Boolean(agent.requiresAttention);
 
   return (
-    <button
-      type="button"
-      className={cn(
-        "relative mb-0.5 flex w-full flex-row items-center overflow-hidden rounded-sm px-3 py-2 text-left select-none [-webkit-touch-callout:none] hover:bg-muted active:bg-muted",
-        isSelected && "bg-muted",
-      )}
-      onClick={handlePress}
-      {...longPress}
-      data-testid={`agent-row-${agent.serverId}-${agent.id}`}
-    >
-      {isSelected ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-foreground"
-        />
-      ) : null}
-      <span className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <span className="flex flex-row flex-nowrap items-center gap-2 overflow-hidden">
-          <WorkspaceTitlePrefix
-            visible={!isMobile && Boolean(workspaceName)}
-            workspaceName={workspaceName}
-            ranges={rangesFor("workspace")}
-            testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
-          />
-          <span className="flex w-4 shrink-0 items-center justify-center text-muted-foreground">
-            <ProviderIcon size={14} color="currentColor" />
-          </span>
-          <HighlightedText
-            text={agent.title || t("agentList.fallbackTitle")}
-            ranges={agent.title ? rangesFor("title") : undefined}
-            className={cn(
-              "min-w-0 shrink text-sm leading-[normal] font-normal text-foreground",
-              isSelected ? "opacity-100" : "opacity-86",
-            )}
-            numberOfLines={1}
-          />
-          <SessionRowBadges
-            agent={agent}
-            archivedIcon={archivedIcon}
-            pendingPermissionCount={pendingPermissionCount}
-            showDesktopAttention={showDesktopAttention}
-          />
-        </span>
-        {isMobile ? (
-          <SessionRowMetaLine
-            agent={agent}
-            projectName={projectName}
-            branch={branch}
-            workspaceName={workspaceName}
-            timeAgo={timeAgo}
-            showHostColumn={showHostColumn}
-            rangesFor={rangesFor}
+    <Item asChild size="sm" className="text-left">
+      <button
+        type="button"
+        onClick={handlePress}
+        {...longPress}
+        data-testid={`agent-row-${agent.serverId}-${agent.id}`}
+        className={cn(
+          "relative mb-0.5 select-none [-webkit-touch-callout:none] hover:bg-muted",
+          isSelected && "bg-muted",
+        )}
+      >
+        {isSelected ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-foreground"
           />
         ) : null}
-      </span>
-      {!isMobile ? (
-        <span className="flex shrink-0 flex-row items-center gap-3">
-          <HighlightedText
-            text={projectName}
-            ranges={rangesFor("project")}
-            className={COLUMN_META}
-            numberOfLines={1}
-            testID={`agent-row-project-${agent.serverId}-${agent.id}`}
-          />
-          {showHostColumn ? (
-            <span className="ml-4 w-[120px] shrink-0 truncate text-right text-sm leading-[normal] text-muted-foreground">
-              {agent.serverLabel}
+        <span className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <span className="flex flex-row flex-nowrap items-center gap-2 overflow-hidden">
+            <WorkspaceTitlePrefix
+              visible={!isMobile && Boolean(workspaceName)}
+              workspaceName={workspaceName}
+              ranges={rangesFor("workspace")}
+              testID={`agent-row-workspace-${agent.serverId}-${agent.id}`}
+            />
+            <span className="flex w-4 shrink-0 items-center justify-center text-muted-foreground">
+              <ProviderIcon size={14} color="currentColor" />
             </span>
-          ) : null}
-          <HighlightedText
-            text={branch}
-            ranges={rangesFor("branch")}
-            className={COLUMN_META}
-            numberOfLines={1}
-            testID={`agent-row-branch-${agent.serverId}-${agent.id}`}
-          />
-          <span className="w-[72px] shrink-0 truncate text-right text-sm leading-[normal] text-muted-foreground">
-            {timeAgo}
+            <HighlightedText
+              text={agent.title || t("agentList.fallbackTitle")}
+              ranges={agent.title ? rangesFor("title") : undefined}
+              className={cn(
+                "min-w-0 shrink text-sm leading-[normal] font-normal text-foreground",
+                isSelected ? "opacity-100" : "opacity-86",
+              )}
+              numberOfLines={1}
+            />
+            <SessionRowBadges
+              agent={agent}
+              archivedIcon={archivedIcon}
+              pendingPermissionCount={pendingPermissionCount}
+              showDesktopAttention={showDesktopAttention}
+            />
           </span>
+          {isMobile ? (
+            <SessionRowMetaLine
+              agent={agent}
+              projectName={projectName}
+              branch={branch}
+              workspaceName={workspaceName}
+              timeAgo={timeAgo}
+              showHostColumn={showHostColumn}
+              rangesFor={rangesFor}
+            />
+          ) : null}
         </span>
-      ) : null}
-      <SessionRowTrailingAttention
-        isMobile={isMobile}
-        showAttentionIndicator={showAttentionIndicator}
-        requiresAttention={agent.requiresAttention}
-      />
-    </button>
+        {!isMobile ? (
+          <span className="flex shrink-0 flex-row items-center gap-3">
+            <HighlightedText
+              text={projectName}
+              ranges={rangesFor("project")}
+              className={COLUMN_META}
+              numberOfLines={1}
+              testID={`agent-row-project-${agent.serverId}-${agent.id}`}
+            />
+            {showHostColumn ? (
+              <span className="ml-4 w-[120px] shrink-0 truncate text-right text-sm leading-[normal] text-muted-foreground">
+                {agent.serverLabel}
+              </span>
+            ) : null}
+            <HighlightedText
+              text={branch}
+              ranges={rangesFor("branch")}
+              className={COLUMN_META}
+              numberOfLines={1}
+              testID={`agent-row-branch-${agent.serverId}-${agent.id}`}
+            />
+            <span className="w-[72px] shrink-0 truncate text-right text-sm leading-[normal] text-muted-foreground">
+              {timeAgo}
+            </span>
+          </span>
+        ) : null}
+        <SessionRowTrailingAttention
+          isMobile={isMobile}
+          showAttentionIndicator={showAttentionIndicator}
+          requiresAttention={agent.requiresAttention}
+        />
+      </button>
+    </Item>
   );
 }
 
@@ -414,41 +424,35 @@ function ArchiveActionSheet({
     [onClose],
   );
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          className="fixed inset-0 z-50 flex flex-col justify-end outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0"
-        >
-          <div className="absolute inset-0 bg-black/35" onClick={onClose} />
-          <div className="relative flex flex-col gap-4 rounded-t-[16px] bg-muted px-6 pt-4 pb-[max(env(safe-area-inset-bottom),24px)]">
-            <div className="h-1 w-10 self-center rounded-full bg-muted-foreground opacity-30" />
-            <DialogPrimitive.Title className="text-center text-sm leading-[normal] font-semibold text-foreground">
-              {title}
-            </DialogPrimitive.Title>
-            <div className="flex flex-row gap-3">
-              <button
-                type="button"
-                className="flex flex-1 items-center justify-center rounded-[10px] bg-card py-4 text-sm leading-[normal] font-semibold text-foreground"
-                onClick={onClose}
-                data-testid="agent-action-cancel"
-              >
-                {t("common.actions.cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={archiveDisabled}
-                className="flex flex-1 items-center justify-center rounded-[10px] bg-primary py-4 text-sm leading-[normal] font-semibold text-primary-foreground disabled:text-primary-foreground/50"
-                onClick={onArchive}
-                data-testid="agent-action-archive"
-              >
-                {t("agentList.archiveSheet.archive")}
-              </button>
-            </div>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    <Drawer open={open} onOpenChange={handleOpenChange}>
+      <DrawerContent aria-describedby={undefined}>
+        <DrawerHeader>
+          <DrawerTitle>{title}</DrawerTitle>
+        </DrawerHeader>
+        <DrawerFooter className="flex-row">
+          <Button
+            variant="secondary"
+            size="lg"
+            type="button"
+            onClick={onClose}
+            data-testid="agent-action-cancel"
+            className="flex-1"
+          >
+            {t("common.actions.cancel")}
+          </Button>
+          <Button
+            size="lg"
+            type="button"
+            disabled={archiveDisabled}
+            onClick={onArchive}
+            data-testid="agent-action-archive"
+            className="flex-1"
+          >
+            {t("agentList.archiveSheet.archive")}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
 

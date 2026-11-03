@@ -172,9 +172,11 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
             </QuestionnaireItem>
           ))}
           <QuestionnaireActions>
+            {/* Dismiss takes the actions row's middle slot, where a Skip button would go. */}
             <Button
               type="button"
               variant="outline"
+              className="col-start-2 row-start-1 justify-self-end"
               onClick={handleDismiss}
               disabled={isResponding}
               data-testid="question-form-dismiss"

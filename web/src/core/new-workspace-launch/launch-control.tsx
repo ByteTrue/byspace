@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/new-workspace-launch/launch-control.tsx: what New workspace submits
 // to — the chat agent or a terminal (blank or a profile). Same props, except the trigger takes the
 // meta row's badge classes instead of a React Native style.
+import { Button } from "~/components/ui/button";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "~/app/navigation";
@@ -132,22 +133,21 @@ export function LaunchControl({
       <Tooltip delayDuration={300} open={tooltipOpen && !open} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <span className="flex min-w-0">
-            <DropdownMenuTrigger
-              data-testid="new-workspace-launch-trigger"
-              disabled={disabled}
-              className={badgeClassName}
-              aria-label={t("newWorkspace.tooltips.launch")}
-            >
-              <span className="flex size-4 shrink-0 items-center justify-center">
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="new-workspace-launch-trigger"
+                disabled={disabled}
+                aria-label={t("newWorkspace.tooltips.launch")}
+                className={badgeClassName}
+              >
                 <TriggerIcon target={target} profile={selectedProfile} />
-              </span>
-              <span className="min-w-0 shrink truncate text-sm text-muted-foreground">
-                {triggerLabel}
-                {selectedProfile ? (
-                  <span className="text-muted-foreground"> {selectedProfile.name}</span>
-                ) : null}
-              </span>
-              <ChevronDown size={ICON_SIZE.sm} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 shrink truncate">
+                  {selectedProfile ? `${triggerLabel} ${selectedProfile.name}` : triggerLabel}
+                </span>
+                <ChevronDown data-icon="inline-end" />
+              </Button>
             </DropdownMenuTrigger>
           </span>
         </TooltipTrigger>

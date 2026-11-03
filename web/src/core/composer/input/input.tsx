@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/composer/input/input.tsx. The input logic is the Expo file's (send,
 // queue, steer, IME, paste, height, keyboard actions); the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/composer-input.py; edit it directly.
+import { Button } from "~/components/ui/button";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   useState,
@@ -232,13 +233,16 @@ function AttachmentDropdown({
     <DropdownMenu>
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            disabled={isButtonDisabled}
-            aria-label={addAttachmentLabel}
-            data-testid="message-input-attach-button"
-            className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            {renderAttachButtonIcon}
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={isButtonDisabled}
+              aria-label={addAttachmentLabel}
+              data-testid="message-input-attach-button"
+            >
+              {renderAttachButtonIcon}
+            </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" align="center">
@@ -529,7 +533,6 @@ function SendButtonTooltip({
   onDefaultSendAction,
   isSendButtonDisabled,
   submitAccessibilityLabel,
-  sendButtonClassName,
   isSubmitLoading,
   submitIcon,
   submitLabel,
@@ -544,7 +547,6 @@ function SendButtonTooltip({
   onDefaultSendAction: () => void;
   isSendButtonDisabled: boolean;
   submitAccessibilityLabel: string;
-  sendButtonClassName: string;
   isSubmitLoading: boolean;
   submitIcon: "arrow" | "return";
   submitLabel: string | undefined;
@@ -557,13 +559,14 @@ function SendButtonTooltip({
   return (
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
-        <button
+        <Button
           type="button"
+          size={submitLabel ? "sm" : "icon-sm"}
           onClick={canPressLoadingButton ? onSubmitLoadingPress : onDefaultSendAction}
           disabled={isSendButtonDisabled}
           aria-label={submitAccessibilityLabel}
           data-testid={submitButtonTestID}
-          className={sendButtonClassName}
+          className={submitLabel ? "ml-1" : "ml-1 rounded-full"}
         >
           <SendButtonContent
             isSubmitLoading={isSubmitLoading}
@@ -571,7 +574,7 @@ function SendButtonTooltip({
             submitLabel={submitLabel}
             buttonIconSize={buttonIconSize}
           />
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
         <SendTooltipBody label={sendTooltipLabel} sendKeys={sendKeys} />
@@ -1179,11 +1182,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       mode.isMonospace && "font-mono",
       isComposerScrollEnabled ? "overflow-y-auto" : "overflow-y-hidden",
     );
-    const sendButtonClassName = cn(
-      "ml-1 flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground",
-      submitLabel && "w-auto min-w-7 rounded-md px-3",
-      isSendButtonDisabled && "opacity-50",
-    );
     const renderAttachButtonIcon = useMemo(
       () => (
         <AttachButtonIcon onAttachButtonRef={onAttachButtonRef} buttonIconSize={buttonIconSize} />
@@ -1249,7 +1247,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
                 onDefaultSendAction={handleDefaultSendAction}
                 isSendButtonDisabled={isSendButtonDisabled}
                 submitAccessibilityLabel={submitAccessibilityLabel}
-                sendButtonClassName={sendButtonClassName}
                 isSubmitLoading={isSubmitLoading}
                 submitIcon={submitIcon}
                 submitLabel={submitLabel}

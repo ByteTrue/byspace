@@ -9,10 +9,6 @@ import type {
   DraggableRenderItemInfo,
 } from "@/components/draggable-list.types";
 import { SortableInlineList } from "@/components/sortable-inline-list";
-import {
-  HorizontalScrollBoundaryShades,
-  useHorizontalScrollBoundary,
-} from "@/components/ui/horizontal-scroll-boundary";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { PanelIconProps } from "@/panels/panel-registry";
 import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
@@ -223,7 +219,6 @@ export function ExplorerSidebarTabRail({
   trailingAccessory,
 }: ExplorerSidebarTabRailProps) {
   const { t } = useTranslation();
-  const scrollBoundary = useHorizontalScrollBoundary();
   const groups = useWorkspaceTabLaunchCatalog({
     serverId: normalizedServerId,
     purpose: "supporting",
@@ -294,11 +289,7 @@ export function ExplorerSidebarTabRail({
         testID="explorer-sidebar-tab-rail"
       >
         <div className="relative flex min-w-0 flex-1 self-stretch">
-          <div
-            ref={scrollBoundary.ref}
-            onScroll={scrollBoundary.onScroll}
-            className="flex min-w-0 flex-1 items-center overflow-x-auto pr-2 pl-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
+          <div className="flex min-w-0 flex-1 scroll-fade-x items-center overflow-x-auto pr-2 pl-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <SortableInlineList
               data={tabs}
               keyExtractor={tabKey}
@@ -310,13 +301,6 @@ export function ExplorerSidebarTabRail({
               getItemData={getTabDragData}
             />
           </div>
-          <HorizontalScrollBoundaryShades
-            visible
-            backdrop="sidebar"
-            testIDPrefix="explorer-sidebar-tabs-scroll-shade"
-            showLeft={scrollBoundary.showLeft}
-            showRight={scrollBoundary.showRight}
-          />
         </div>
         {trailingAccessory ? <div className="mr-3">{trailingAccessory}</div> : null}
       </ContextMenuTrigger>

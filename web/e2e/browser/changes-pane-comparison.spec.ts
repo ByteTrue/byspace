@@ -191,8 +191,8 @@ test("compact Changes keeps its actions compact and menu-only", async ({ page })
   if (!actionsBox || !optionsBox || !glyphBox) {
     throw new Error("Compact Changes toolbar geometry could not be measured");
   }
-  expect(actionsBox.width).toBe(48);
-  expect(actionsBox.height).toBe(28);
+  // shadcn's default outline button.
+  expect(actionsBox.height).toBe(32);
   // shadcn's icon-xs button: a 24px frame around a 12px glyph.
   expect(optionsBox.width).toBe(24);
   expect(optionsBox.height).toBe(24);

@@ -74,7 +74,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "~/components/ui/item";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -588,15 +595,16 @@ function ProjectSettingsBody({
           <span className="shrink truncate text-sm leading-[normal] font-medium text-foreground">
             {selectedHost.projectName}
           </span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             data-testid="project-edit-button"
             aria-label={t("settings.project.edit.title")}
             onClick={openEditSheet}
-            className="p-1 text-muted-foreground"
           >
             <Pencil size={ICON_SIZE} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -971,15 +979,16 @@ function ProjectConfigForm({
 
   const scriptsTrailing = useMemo(
     () => (
-      <button
+      <Button
+        variant="ghost"
+        size="icon-sm"
         type="button"
         onClick={handleAddScript}
-        className="flex flex-row items-center gap-1 text-muted-foreground"
         aria-label={t("settings.project.scripts.actions.add")}
         data-testid="scripts-add-button"
       >
         <Plus size={ICON_SIZE} />
-      </button>
+      </Button>
     ),
     [handleAddScript, t],
   );
@@ -1419,41 +1428,42 @@ function ScriptRow({ script, onEdit, onRemove }: ScriptRowProps) {
   const handleRemove = useCallback(() => onRemove(script), [onRemove, script]);
   return (
     <Item variant="outline" data-testid={`script-row-${script.id}`}>
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-        onClick={handleEdit}
-      >
+      <ItemContent className="min-w-0">
         <ItemTitle className="truncate">
           {script.name || t("settings.project.scripts.untitled")}
         </ItemTitle>
         <ItemDescription className="truncate">{scriptHint(script, t)}</ItemDescription>
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={t("settings.project.scripts.menuAccessibility")}
-          data-testid={`script-row-menu-${script.id}`}
-          className="p-1 text-muted-foreground"
-        >
-          <MoreVertical size={ICON_SIZE} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="w-max min-w-[160px]"
-          onCloseAutoFocus={keepFocusElsewhere}
-        >
-          <DropdownMenuItem data-testid={`script-action-${script.id}-edit`} onSelect={handleEdit}>
-            {t("settings.project.scripts.actions.edit")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            data-testid={`script-action-${script.id}-remove`}
-            variant="destructive"
-            onSelect={handleRemove}
+      </ItemContent>
+      <ItemActions>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("settings.project.scripts.menuAccessibility")}
+              data-testid={`script-row-menu-${script.id}`}
+            >
+              <MoreVertical size={ICON_SIZE} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-max min-w-[160px]"
+            onCloseAutoFocus={keepFocusElsewhere}
           >
-            {t("settings.project.scripts.actions.remove")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <DropdownMenuItem data-testid={`script-action-${script.id}-edit`} onSelect={handleEdit}>
+              {t("settings.project.scripts.actions.edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid={`script-action-${script.id}-remove`}
+              variant="destructive"
+              onSelect={handleRemove}
+            >
+              {t("settings.project.scripts.actions.remove")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ItemActions>
     </Item>
   );
 }

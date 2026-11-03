@@ -1,3 +1,4 @@
+import { Button } from "~/components/ui/button";
 import type { Theme } from "@/styles/theme";
 // Port of archive/expo-app:packages/app/src/screens/settings/providers-section.tsx: the provider list and the add-provider section; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/providers-section.py; edit it directly.
@@ -119,13 +120,16 @@ function ProviderActionsMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        disabled={isRemoving}
-        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground active:bg-accent data-[state=open]:bg-muted data-[state=open]:text-foreground"
-        aria-label={t("settings.providers.actions.menu", { name: providerLabel })}
-        data-testid={`provider-actions-${providerId}`}
-      >
-        <MoreHorizontal size={iconSize} />
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={isRemoving}
+          aria-label={t("settings.providers.actions.menu", { name: providerLabel })}
+          data-testid={`provider-actions-${providerId}`}
+        >
+          <MoreHorizontal size={iconSize} />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[220px]" onCloseAutoFocus={keepFocusElsewhere}>
         <DropdownMenuItem

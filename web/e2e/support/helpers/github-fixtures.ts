@@ -230,6 +230,15 @@ function seedIssue(args: { spec: IssueSpec; basePath: string }): GhIssueFixture 
 // (collides with real repos like `byspace`, `byspace-website`).
 const TEMP_GITHUB_REPO_PREFIX = "byspacetmp-";
 
+function deleteTempGithubRepo(repoName: string): void {
+  try {
+    const owner = gh(["api", "user", "--jq", ".login"]);
+    gh(["repo", "delete", `${owner}/${repoName}`, "--yes"]);
+  } catch {
+    // Never created, or already gone.
+  }
+}
+
 export async function createTempGithubRepo(options: {
   category: string;
   prs?: PrSpec[];
@@ -255,88 +264,95 @@ export async function createTempGithubRepo(options: {
   git(["add", "README.md"], basePath);
   git(["commit", "-m", "Initial commit"], basePath);
 
-  // Create GitHub repo and push initial commit
-  gh(["repo", "create", repoName, "--private", `--source=${basePath}`, "--push"]);
+  // From `repo create` on, a repository may exist in the account: if anything below fails, delete
+  // it, or every failed run leaks one (a failed `--push` still leaves the created repository).
+  try {
+    // Create GitHub repo and push initial commit
+    gh(["repo", "create", repoName, "--private", `--source=${basePath}`, "--push"]);
 
-  const owner = gh(["api", "user", "--jq", ".login"]);
-  const fullName = `${owner}/${repoName}`;
-  const token = gh(["auth", "token"]);
-  const authedUrl = `https://x-access-token:${token}@github.com/${fullName}.git`;
+    const owner = gh(["api", "user", "--jq", ".login"]);
+    const fullName = `${owner}/${repoName}`;
+    const token = gh(["auth", "token"]);
+    const authedUrl = `https://x-access-token:${token}@github.com/${fullName}.git`;
 
-  // Switch remote to authed URL for subsequent pushes
-  git(["remote", "set-url", "origin", authedUrl], basePath);
+    // Switch remote to authed URL for subsequent pushes
+    git(["remote", "set-url", "origin", authedUrl], basePath);
 
-  // Create a branch + commit for each PR spec
-  const branches: string[] = [];
-  for (let i = 0; i < prs.length; i++) {
-    const branch = `pr-branch-${i + 1}`;
-    branches.push(branch);
-    git(["checkout", "-b", branch], basePath);
-    await writeFile(path.join(basePath, `pr-${i + 1}.txt`), `PR ${i + 1}\n`);
-    git(["add", `pr-${i + 1}.txt`], basePath);
-    git(["commit", "-m", `Add PR ${i + 1}`], basePath);
-    git(["checkout", defaultBranch], basePath);
-  }
+    // Create a branch + commit for each PR spec
+    const branches: string[] = [];
+    for (let i = 0; i < prs.length; i++) {
+      const branch = `pr-branch-${i + 1}`;
+      branches.push(branch);
+      git(["checkout", "-b", branch], basePath);
+      await writeFile(path.join(basePath, `pr-${i + 1}.txt`), `PR ${i + 1}\n`);
+      git(["add", `pr-${i + 1}.txt`], basePath);
+      git(["commit", "-m", `Add PR ${i + 1}`], basePath);
+      git(["checkout", defaultBranch], basePath);
+    }
 
-  if (branches.length > 0) {
-    git(["push", "origin", ...branches], basePath);
-  }
+    if (branches.length > 0) {
+      git(["push", "origin", ...branches], basePath);
+    }
 
-  // Create PRs, seed checks/comments, apply state changes, clone workspaces
-  const prFixtures: GhPrFixture[] = [];
-  const localPaths: string[] = [];
+    // Create PRs, seed checks/comments, apply state changes, clone workspaces
+    const prFixtures: GhPrFixture[] = [];
+    const localPaths: string[] = [];
 
-  for (let i = 0; i < prs.length; i++) {
-    const { fixture, localPath } = await seedPr({
-      spec: prs[i],
-      branch: branches[i],
-      index: i,
-      basePath,
-      authedUrl,
-      fullName,
-      repoName,
-      defaultBranch,
-    });
-    localPaths.push(localPath);
-    prFixtures.push(fixture);
-  }
+    for (let i = 0; i < prs.length; i++) {
+      const { fixture, localPath } = await seedPr({
+        spec: prs[i],
+        branch: branches[i],
+        index: i,
+        basePath,
+        authedUrl,
+        fullName,
+        repoName,
+        defaultBranch,
+      });
+      localPaths.push(localPath);
+      prFixtures.push(fixture);
+    }
 
-  // Create issues
-  const issueFixtures: GhIssueFixture[] = [];
-  for (const spec of issues) {
-    issueFixtures.push(seedIssue({ spec, basePath }));
-  }
+    // Create issues
+    const issueFixtures: GhIssueFixture[] = [];
+    for (const spec of issues) {
+      issueFixtures.push(seedIssue({ spec, basePath }));
+    }
 
-  if (waitForSearchIndex) {
-    await Promise.all([
-      ...issueFixtures.map((issue) =>
-        waitForGithubSearchIndex({ cwd: basePath, query: issue.title, kind: "issue" }),
-      ),
-      ...prFixtures.map((pr) =>
-        waitForGithubSearchIndex({ cwd: pr.localPath, query: pr.title, kind: "change_request" }),
-      ),
-    ]);
-  }
-
-  return {
-    owner,
-    name: repoName,
-    fullName,
-    defaultBranch,
-    prs: prFixtures,
-    issues: issueFixtures,
-    cleanup: async () => {
-      try {
-        gh(["repo", "delete", fullName, "--yes"]);
-      } catch {
-        // Best-effort cleanup
-      }
+    if (waitForSearchIndex) {
       await Promise.all([
-        rm(basePath, { recursive: true, force: true, ...RETRY }),
-        ...localPaths.map((p) => rm(p, { recursive: true, force: true, ...RETRY })),
+        ...issueFixtures.map((issue) =>
+          waitForGithubSearchIndex({ cwd: basePath, query: issue.title, kind: "issue" }),
+        ),
+        ...prFixtures.map((pr) =>
+          waitForGithubSearchIndex({ cwd: pr.localPath, query: pr.title, kind: "change_request" }),
+        ),
       ]);
-    },
-  };
+    }
+
+    return {
+      owner,
+      name: repoName,
+      fullName,
+      defaultBranch,
+      prs: prFixtures,
+      issues: issueFixtures,
+      cleanup: async () => {
+        try {
+          gh(["repo", "delete", fullName, "--yes"]);
+        } catch {
+          // Best-effort cleanup
+        }
+        await Promise.all([
+          rm(basePath, { recursive: true, force: true, ...RETRY }),
+          ...localPaths.map((p) => rm(p, { recursive: true, force: true, ...RETRY })),
+        ]);
+      },
+    };
+  } catch (error) {
+    deleteTempGithubRepo(repoName);
+    throw error;
+  }
 }
 
 export async function cloneGithubRepoDefaultBranchOnly(

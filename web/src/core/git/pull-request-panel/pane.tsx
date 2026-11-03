@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/git/pull-request-panel/pane.tsx. The pane's logic is the Expo
 // file's; the view is DOM, and the activity cards are web/src/pull-request/activity-cards.tsx.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/pull-request-pane.py; edit it directly.
+import { Separator } from "~/components/ui/separator";
 import { useCallback, useMemo, useState } from "react";
 import {
   ExternalLink,
@@ -56,6 +57,7 @@ import { buildPrTimeline, type PrThreadEntry } from "@/git/pull-request-panel/ti
 import { Section, SummaryPill, sectionKitClassNames } from "@/git/pull-request-panel/section-kit";
 import { TimelineEntryCard } from "~/pull-request/activity-cards";
 import { cn } from "cn";
+import { Item } from "~/components/ui/item";
 
 const CLIENT_PANE_CONTRIBUTIONS: readonly PaneNativeContribution[] =
   CLIENT_FORGE_VIEW_MODULES.flatMap((module) => module.paneContributions ?? []);
@@ -437,39 +439,41 @@ export function PullRequestPane({
           ) : null}
         </PaneContentToolbar>
 
-        <button
-          type="button"
-          onClick={handleOpenPrUrl}
-          className="group/pr-header flex w-full flex-col gap-2 p-4 text-left"
-        >
-          <span className="text-sm leading-[22px] text-foreground" data-testid="pr-pane-title">
-            {data.title}
-            <span className="text-muted-foreground">
-              {" "}
-              {forgePresentation.numberPrefix}
-              {data.number}
-            </span>
-          </span>
-          <span className="flex min-h-4 w-full items-center gap-1">
-            <StateIcon size={14} className={cn("shrink-0", statePresentation.className)} />
-            <span
-              className={cn("text-xs", statePresentation.className)}
-              data-testid="pr-pane-state"
-            >
-              {getStateLabel(data.state)}
-            </span>
-            {nativeHeaderMeta}
-            {repoIdentity ? (
-              <span className="ml-1 min-w-0 shrink truncate text-xs text-muted-foreground">
-                {repoIdentity}
+        <Item asChild className="text-left">
+          <button
+            type="button"
+            onClick={handleOpenPrUrl}
+            className="group/pr-header flex-col items-start hover:bg-muted"
+          >
+            <span className="text-sm leading-[22px] text-foreground" data-testid="pr-pane-title">
+              {data.title}
+              <span className="text-muted-foreground">
+                {" "}
+                {forgePresentation.numberPrefix}
+                {data.number}
               </span>
-            ) : null}
-            <ExternalLink
-              size={12}
-              className="ml-1 shrink-0 text-muted-foreground opacity-0 group-hover/pr-header:opacity-100"
-            />
-          </span>
-        </button>
+            </span>
+            <span className="flex min-h-4 w-full items-center gap-1">
+              <StateIcon size={14} className={cn("shrink-0", statePresentation.className)} />
+              <span
+                className={cn("text-xs", statePresentation.className)}
+                data-testid="pr-pane-state"
+              >
+                {getStateLabel(data.state)}
+              </span>
+              {nativeHeaderMeta}
+              {repoIdentity ? (
+                <span className="ml-1 min-w-0 shrink truncate text-xs text-muted-foreground">
+                  {repoIdentity}
+                </span>
+              ) : null}
+              <ExternalLink
+                size={12}
+                className="ml-1 shrink-0 text-muted-foreground opacity-0 group-hover/pr-header:opacity-100"
+              />
+            </span>
+          </button>
+        </Item>
 
         {nativeChecksSection ?? (
           <ChecksSection
@@ -482,7 +486,7 @@ export function PullRequestPane({
           />
         )}
 
-        <div className="h-px bg-border" />
+        <Separator />
 
         <Section
           title="Activity"

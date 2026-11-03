@@ -2,6 +2,8 @@
 // (stream attach and replay, size claims, focus, keys and modifiers, paste, copy, local file links,
 // the phone's key rows); the view is DOM and Tailwind.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/terminal-pane.py; edit it directly.
+import { Toggle } from "~/components/ui/toggle";
+import { Button } from "~/components/ui/button";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import * as Clipboard from "~/lib/clipboard";
@@ -125,49 +127,24 @@ function terminalScopeKey(input: { serverId: string; cwd: string }): string {
 }
 
 /** Terminal-scheme colors for the virtual keyboard, resolved by the pane. */
-interface TerminalKeyPalette {
-  border: string;
-  surface: string;
-  surfaceHovered: string;
-  activeBorder: string;
-  text: string;
-  textActive: string;
-}
-
-const KEY_BUTTON_CLASS_NAME =
-  "flex h-[34px] min-w-0 flex-1 items-center justify-center rounded-md border px-1 text-sm font-medium border-(--key-border) bg-(--key-surface) text-(--key-text) hover:bg-(--key-surface-hovered) active:bg-(--key-surface-hovered)";
-
-/** The key's colors as CSS variables, so hover and press can read them. */
-function keyPaletteStyle(palette: TerminalKeyPalette, active: boolean): CSSProperties {
-  return {
-    "--key-border": active ? palette.activeBorder : palette.border,
-    "--key-surface": active ? palette.surfaceHovered : palette.surface,
-    "--key-surface-hovered": palette.surfaceHovered,
-    "--key-text": active ? palette.textActive : palette.text,
-  } as CSSProperties;
-}
-
 interface ModifierButtonProps {
   modifier: keyof ModifierState;
   active: boolean;
-  palette: TerminalKeyPalette;
   onToggle: (modifier: keyof ModifierState) => void;
 }
 
-function ModifierButton({ modifier, active, palette, onToggle }: ModifierButtonProps) {
+function ModifierButton({ modifier, active, onToggle }: ModifierButtonProps) {
   const handlePress = useCallback(() => onToggle(modifier), [onToggle, modifier]);
-  const style = useMemo(() => keyPaletteStyle(palette, active), [active, palette]);
   return (
-    <button
-      type="button"
+    <Toggle
+      variant="outline"
+      className="min-w-0 flex-1"
       data-testid={`terminal-key-${modifier}`}
-      aria-pressed={active}
-      onClick={handlePress}
-      style={style}
-      className={KEY_BUTTON_CLASS_NAME}
+      pressed={active}
+      onPressedChange={handlePress}
     >
       {MODIFIER_LABELS[modifier]}
-    </button>
+    </Toggle>
   );
 }
 
@@ -175,53 +152,43 @@ interface VirtualKeyButtonProps {
   id: string;
   label: string;
   keyValue: string;
-  palette: TerminalKeyPalette;
   onSend: (key: string) => void;
 }
 
-function VirtualKeyButton({ id, label, keyValue, palette, onSend }: VirtualKeyButtonProps) {
+function VirtualKeyButton({ id, label, keyValue, onSend }: VirtualKeyButtonProps) {
   const handlePress = useCallback(() => onSend(keyValue), [onSend, keyValue]);
-  const style = useMemo(() => keyPaletteStyle(palette, false), [palette]);
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      className="min-w-0 flex-1"
       data-testid={`terminal-key-${id}`}
       onClick={handlePress}
-      style={style}
-      className={KEY_BUTTON_CLASS_NAME}
     >
       {label}
-    </button>
+    </Button>
   );
 }
 
 interface KeyboardToggleButtonProps {
   isKeyboardVisible: boolean;
-  iconColor: string;
-  palette: TerminalKeyPalette;
   onToggle: () => void;
 }
 
-function KeyboardToggleButton({
-  isKeyboardVisible,
-  iconColor,
-  palette,
-  onToggle,
-}: KeyboardToggleButtonProps) {
+function KeyboardToggleButton({ isKeyboardVisible, onToggle }: KeyboardToggleButtonProps) {
   const label = isKeyboardVisible ? "Hide keyboard" : "Show keyboard";
   const Icon = isKeyboardVisible ? KeyboardOffIcon : KeyboardIcon;
-  const style = useMemo(() => keyPaletteStyle(palette, false), [palette]);
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      className="min-w-0 flex-1"
       aria-label={label}
       data-testid="terminal-keyboard-toggle"
       onClick={onToggle}
-      style={style}
-      className={KEY_BUTTON_CLASS_NAME}
     >
-      <Icon color={iconColor} size={16} />
-    </button>
+      <Icon />
+    </Button>
   );
 }
 
@@ -1066,17 +1033,6 @@ export function TerminalPane({
     }),
     [terminalTheme],
   );
-  const terminalKeyPalette = useMemo<TerminalKeyPalette>(
-    () => ({
-      border: terminalTheme.colors.border,
-      surface: terminalTheme.colors.surface1,
-      surfaceHovered: terminalTheme.colors.surface2,
-      activeBorder: terminalTheme.colors.primary,
-      text: terminalTheme.colors.foregroundMuted,
-      textActive: terminalTheme.colors.foreground,
-    }),
-    [terminalTheme],
-  );
 
   const handleSwipeRight = useCallback(() => {
     if (!swipeGesturesEnabled) return;
@@ -1093,7 +1049,6 @@ export function TerminalPane({
     hasSelection,
     isCompact: isMobile,
   });
-  const keyboardToggleIconColor = terminalTheme.colors.foregroundMuted;
 
   const renderVirtualKeyboardControl = (control: TerminalVirtualKeyboardControl) => {
     const controlId = getTerminalVirtualKeyboardControlId(control);
@@ -1105,7 +1060,6 @@ export function TerminalPane({
             id={control.button.id}
             label={control.button.label}
             keyValue={control.button.key}
-            palette={terminalKeyPalette}
             onSend={sendVirtualKey}
           />
         );
@@ -1115,7 +1069,6 @@ export function TerminalPane({
             key={controlId}
             modifier={control.modifier}
             active={modifiers[control.modifier]}
-            palette={terminalKeyPalette}
             onToggle={toggleModifier}
           />
         );
@@ -1131,9 +1084,7 @@ export function TerminalPane({
         return (
           <KeyboardToggleButton
             key={controlId}
-            iconColor={keyboardToggleIconColor}
             isKeyboardVisible={isKeyboardToggleVisible}
-            palette={terminalKeyPalette}
             onToggle={handleKeyboardToggle}
           />
         );

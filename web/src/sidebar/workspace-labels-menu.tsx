@@ -1,3 +1,4 @@
+import { Input } from "~/components/ui/input";
 import {
   useCallback,
   useEffect,
@@ -87,9 +88,8 @@ function CreateLabelForm({
 
   return (
     <>
-      {/* The Expo app's MenuTextField: a row-sized box in the row fill, its text on the rows' rail */}
-      <div className="mx-1 flex min-h-7 items-center rounded-md border bg-muted px-2 py-1 focus-within:border-input">
-        <input
+      <div className="px-1">
+        <Input
           autoFocus
           value={name}
           onChange={handleNameChange}
@@ -99,7 +99,7 @@ function CreateLabelForm({
           autoCapitalize="none"
           autoCorrect="off"
           disabled={offline || pending}
-          className="min-w-0 flex-1 bg-transparent p-0 text-xs leading-[18px] text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-7"
           data-testid="workspace-label-picker-create-name"
         />
       </div>

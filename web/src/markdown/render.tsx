@@ -2,6 +2,14 @@
 // Expo renderer put on its views (assistant-selection-copy/markup.ts), so selection copy turns a
 // rendered selection back into markdown the same way. Styles live in index.css under `.markdown`
 // and mirror archive/expo-app:packages/app/src/styles/markdown-styles.ts.
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 import {
   MARKDOWN_COPY_ALIGN_ATTRIBUTE,
@@ -164,49 +172,49 @@ export const DEFAULT_MARKDOWN_RULES: Record<string, MarkdownRule> = {
     );
   },
   table: (node, children) => (
-    <div key={node.key} className="md-table">
-      <table {...copyTag("table")}>{children}</table>
-    </div>
+    <Table key={node.key} className="my-3" {...copyTag("table")}>
+      {children}
+    </Table>
   ),
   thead: (node, children) => (
-    <thead key={node.key} {...copyTag("thead")}>
+    <TableHeader key={node.key} {...copyTag("thead")}>
       {children}
-    </thead>
+    </TableHeader>
   ),
   tbody: (node, children) => (
-    <tbody key={node.key} {...copyTag("tbody")}>
+    <TableBody key={node.key} {...copyTag("tbody")}>
       {children}
-    </tbody>
+    </TableBody>
   ),
   tr: (node, children) => (
-    <tr key={node.key} {...copyTag("tr")}>
+    <TableRow key={node.key} {...copyTag("tr")}>
       {children}
-    </tr>
+    </TableRow>
   ),
   th: (node, children) => {
     const align = cellAlignment(node.attributes.style);
     return (
-      <th
+      <TableHead
         key={node.key}
         style={align ? CELL_ALIGN_STYLES[align] : undefined}
         {...copyTag("th")}
         {...(align ? { [MARKDOWN_COPY_ALIGN_ATTRIBUTE]: align } : {})}
       >
         {children}
-      </th>
+      </TableHead>
     );
   },
   td: (node, children) => {
     const align = cellAlignment(node.attributes.style);
     return (
-      <td
+      <TableCell
         key={node.key}
         style={align ? CELL_ALIGN_STYLES[align] : undefined}
         {...copyTag("td")}
         {...(align ? { [MARKDOWN_COPY_ALIGN_ATTRIBUTE]: align } : {})}
       >
         {children}
-      </td>
+      </TableCell>
     );
   },
   unknown: () => null,

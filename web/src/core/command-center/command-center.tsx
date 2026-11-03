@@ -58,8 +58,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "~/components/ui/command";
 import { Spinner } from "~/components/ui/spinner";
+import { Button } from "~/components/ui/button";
 
 function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
   const leftNeedsInput = (left.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
@@ -510,7 +512,7 @@ const ResultRow = memo(function ResultRow({
 function SectionHeading({ row }: { row: Extract<CommandCenterListRow, { kind: "section" }> }) {
   return (
     <div role="presentation" className="flex flex-col">
-      {row.divider ? <div className="-mx-1 my-1 h-px bg-border" /> : null}
+      {row.divider ? <CommandSeparator /> : null}
       {row.title ? (
         <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">{row.title}</div>
       ) : null}
@@ -567,17 +569,19 @@ export function CommandCenter() {
       >
         <div className="flex items-center gap-1" data-testid="command-center-header">
           {state.scope === "files" ? (
-            <button
+            <Button
+              variant="secondary"
+              size="xs"
               type="button"
               onClick={state.clearScope}
               aria-label={t("shell.commandCenter.files")}
               data-testid="command-center-files-scope"
-              className="mt-1 ml-1 flex h-7 shrink-0 items-center gap-1 rounded-md bg-muted px-2 text-xs font-medium"
+              className="mt-1 ml-1"
             >
               <Folder className="size-3.5 text-muted-foreground" />
               {t("shell.commandCenter.files")}
               <X className="size-3 text-muted-foreground" />
-            </button>
+            </Button>
           ) : null}
           <div className="min-w-0 flex-1">
             <CommandInput

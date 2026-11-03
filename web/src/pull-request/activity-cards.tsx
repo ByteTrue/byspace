@@ -165,11 +165,10 @@ function KebabSlot({
       )}
     >
       <DropdownMenu onOpenChange={onMenuOpenChange}>
-        <DropdownMenuTrigger
-          aria-label={label}
-          className="rounded p-0.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-muted data-[state=open]:text-foreground"
-        >
-          <MoreHorizontal size={14} />
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-xs" aria-label={label}>
+            <MoreHorizontal size={14} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"

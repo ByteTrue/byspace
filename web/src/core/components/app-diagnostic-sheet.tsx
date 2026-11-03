@@ -7,7 +7,8 @@ import { useTranslation } from "react-i18next";
 
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
+import { Card, CardContent } from "~/components/ui/card";
+import { CodeBlock, CodeBlockContent } from "~/components/ui/code-block";
 import { useToast } from "@/contexts/toast-context";
 import {
   formatAppDiagnosticHeader,
@@ -21,6 +22,7 @@ import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runti
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 import { withTheme } from "~/app/theme-object";
+import { Button } from "~/components/ui/button";
 
 interface AppDiagnosticSheetProps {
   visible: boolean;
@@ -154,20 +156,22 @@ export function AppDiagnosticSheet({
       title: t("settings.diagnostics.app.title"),
       actions: (
         <div className="flex flex-row items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             onClick={handleCopyPress}
             disabled={!diagnostic}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50"
             aria-label={t("settings.diagnostics.app.copyAccessibility")}
           >
             <ThemedCopy size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
             onClick={handleRefreshPress}
             disabled={loading}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:bg-muted disabled:pointer-events-none disabled:opacity-50 disabled:opacity-100"
             aria-label={
               loading
                 ? t("settings.diagnostics.app.refreshingAccessibility")
@@ -179,7 +183,7 @@ export function AppDiagnosticSheet({
             ) : (
               <ThemedRotateCw size={ICON_SIZE.sm} themeProps={foregroundMutedColorMapping} />
             )}
-          </button>
+          </Button>
         </div>
       ),
     }),
@@ -195,12 +199,12 @@ export function AppDiagnosticSheet({
       testID="app-diagnostic-sheet"
     >
       {diagnostic ? (
-        <ScrollableCodeSurface key={visible ? "visible" : "hidden"} maxHeight={520}>
-          {diagnostic}
-        </ScrollableCodeSurface>
+        <CodeBlock key={visible ? "visible" : "hidden"}>
+          <CodeBlockContent className="max-h-[520px]">{diagnostic}</CodeBlockContent>
+        </CodeBlock>
       ) : (
-        <SurfaceCard key={visible ? "visible" : "hidden"}>
-          <div className="flex flex-col gap-3 p-4">
+        <Card key={visible ? "visible" : "hidden"} size="sm">
+          <CardContent className="flex flex-col gap-3">
             {progress.length === 0 ? (
               <div className="flex min-h-6 flex-row items-center gap-2">
                 <Spinner className="text-muted-foreground" />
@@ -228,8 +232,8 @@ export function AppDiagnosticSheet({
                 </div>
               ))
             )}
-          </div>
-        </SurfaceCard>
+          </CardContent>
+        </Card>
       )}
     </AdaptiveModalSheet>
   );

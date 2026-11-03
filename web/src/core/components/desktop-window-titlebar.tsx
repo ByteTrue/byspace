@@ -1,6 +1,7 @@
 // Port of archive/expo-app:packages/app/src/components/desktop-window-titlebar.tsx: the framed content card
 // (6px from the window edges, 12px radius, 1px border) and, in the Windows desktop app's frameless
 // window, the 36px title bar above it with minimize, maximize and close.
+import { Button } from "~/components/ui/button";
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
@@ -38,9 +39,6 @@ function sendWindowAction(action: "minimize" | "maximize" | "close") {
   }).catch(() => undefined);
 }
 
-const CONTROL =
-  "flex h-full w-[46px] items-center justify-center text-foreground hover:bg-[rgba(128,128,128,0.22)] active:bg-[rgba(128,128,128,0.34)]";
-
 export function DesktopWindowTitleBar({ showLeadingNav }: { showLeadingNav: boolean }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const handleMinimize = useCallback(() => sendWindowAction("minimize"), []);
@@ -60,34 +58,37 @@ export function DesktopWindowTitleBar({ showLeadingNav }: { showLeadingNav: bool
         {/* The collapsed sidebar's way back; the app menu became the sidebar's nav rows. */}
         {showLeadingNav ? <SidebarMenuToggle host="content" /> : null}
       </div>
-      <div className="flex h-full items-stretch">
-        <button
+      <div className="flex items-center gap-1 pr-1">
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label="Minimize"
           onClick={handleMinimize}
-          className={CONTROL}
           data-testid="window-control-minimize"
         >
-          <Minus size={14} />
-        </button>
-        <button
+          <Minus />
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label={isMaximized ? "Restore" : "Maximize"}
           onClick={handleMaximize}
-          className={CONTROL}
           data-testid="window-control-maximize"
         >
-          {isMaximized ? <Copy size={12} /> : <Square size={12} />}
-        </button>
-        <button
+          {isMaximized ? <Copy /> : <Square />}
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label="Close"
           onClick={handleClose}
-          className="flex h-full w-[46px] items-center justify-center text-foreground hover:bg-[#e81123] hover:text-white active:bg-[#c50e1f] active:text-white"
           data-testid="window-control-close"
         >
-          <X size={15} />
-        </button>
+          <X />
+        </Button>
       </div>
     </div>
   );

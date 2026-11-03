@@ -28,13 +28,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { Item, ItemContent, ItemGroup, ItemTitle } from "~/components/ui/item";
+import { Button } from "~/components/ui/button";
 
 const ThemedChevronDown = withTheme(ChevronDown);
 const ThemedPencil = withTheme(Pencil);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-const TRIGGER = "flex flex-row items-center gap-1 rounded-md border px-2 py-1 active:opacity-85";
 
 function HostRenameButton({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
@@ -55,15 +54,16 @@ function HostRenameButton({ host }: { host: HostProfile }) {
 
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
+        size="icon-sm"
         type="button"
         onClick={openEditor}
-        className="rounded-md p-1"
         aria-label={t("settings.host.daemon.rename.editLabel")}
         data-testid="host-page-label-edit-button"
       >
         <ThemedPencil size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
-      </button>
+      </Button>
 
       <AdaptiveRenameModal
         visible={isEditing}
@@ -124,15 +124,18 @@ function ColorRow({ color, onChange }: { color: HostColor; onChange: (color: Hos
         <ItemTitle>{t("settings.host.appearance.color.label")}</ItemTitle>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={TRIGGER}
-          aria-label={t("settings.host.appearance.color.accessibilityLabel", {
-            value: selectedLabel,
-          })}
-        >
-          <ColorSwatch color={color} />
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("settings.host.appearance.color.accessibilityLabel", {
+              value: selectedLabel,
+            })}
+          >
+            <ColorSwatch color={color} />
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"
@@ -169,15 +172,18 @@ function BadgeDisplayRow({
         <ItemTitle>{t("settings.host.appearance.badge.label")}</ItemTitle>
       </ItemContent>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          data-testid="host-appearance-badge-display"
-          className={TRIGGER}
-          aria-label={t("settings.host.appearance.badge.accessibilityLabel", {
-            value: selectedLabel,
-          })}
-        >
-          <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
-          <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="host-appearance-badge-display"
+            aria-label={t("settings.host.appearance.badge.accessibilityLabel", {
+              value: selectedLabel,
+            })}
+          >
+            <span className="text-sm leading-[normal] text-foreground">{selectedLabel}</span>
+            <ThemedChevronDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="bottom"

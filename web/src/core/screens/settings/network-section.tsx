@@ -322,9 +322,10 @@ function PasswordSheet({
               onKeyDown={handleSaveEnter}
             />
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             type="button"
-            className="p-1"
             onClick={handleToggleVisibility}
             aria-label={t("settings.host.daemon.network.password.toggleVisibility")}
             data-testid="host-page-network-password-visibility"
@@ -334,7 +335,7 @@ function PasswordSheet({
             ) : (
               <ThemedEye size={16} themeProps={mutedColorMapping} />
             )}
-          </button>
+          </Button>
         </div>
         <FieldDescription data-testid="host-page-network-password-hint">
           {t("settings.host.daemon.network.password.fieldHint")}

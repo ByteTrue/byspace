@@ -1,3 +1,4 @@
+import { SidebarGroupLabel } from "~/components/ui/sidebar";
 import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import {
   CircleAlert,
@@ -202,22 +203,24 @@ function StatusGroupHeader({
   const handleClick = useCallback(() => toggle(group.key), [group.key, toggle]);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      aria-label={`${group.label} group`}
-      aria-expanded={!collapsed}
-      data-testid={`sidebar-status-group-${group.key}`}
-      className="group/status-group flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent"
-    >
-      <span className="flex size-4 items-center justify-center">
-        <span className="group-hover/status-group:hidden">
-          {STATUS_GROUP_ICON[group.leading.bucket]}
+    <SidebarGroupLabel asChild>
+      <button
+        type="button"
+        onClick={handleClick}
+        aria-label={`${group.label} group`}
+        aria-expanded={!collapsed}
+        data-testid={`sidebar-status-group-${group.key}`}
+        className="group/status-group"
+      >
+        <span className="mr-2 flex size-4 items-center justify-center">
+          <span className="group-hover/status-group:hidden">
+            {STATUS_GROUP_ICON[group.leading.bucket]}
+          </span>
+          <Chevron className="hidden group-hover/status-group:block" />
         </span>
-        <Chevron className="hidden size-3.5 text-muted-foreground group-hover/status-group:block" />
-      </span>
-      <span className="truncate">{group.label}</span>
-    </button>
+        {group.label}
+      </button>
+    </SidebarGroupLabel>
   );
 }
 

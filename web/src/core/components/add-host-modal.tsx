@@ -1,5 +1,13 @@
 // Port of archive/expo-app:packages/app/src/components/add-host-modal.tsx: the direct connection form; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/add-host-modals.py; edit it directly.
+import { Field, FieldLabel } from "~/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "~/components/ui/input-group";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   useCallback,
   useMemo,
@@ -9,8 +17,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "cn";
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import {
@@ -459,42 +466,27 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
         </div>
       </div>
 
-      <button
-        type="button"
-        role="checkbox"
-        className="flex flex-row items-center gap-3 self-start text-left disabled:opacity-50"
-        onClick={handleToggleUseTls}
-        disabled={isSaving}
-        aria-label={t("pairing.direct.fields.useSsl")}
-        aria-checked={useTls}
-        data-testid="direct-ssl-toggle"
-      >
-        <span
-          className={cn(
-            "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
-            useTls ? "border-primary bg-primary" : "border-input bg-background dark:bg-input/30",
-          )}
-        >
-          {useTls ? (
-            <span className="flex" data-testid="direct-ssl-toggle-checked">
-              <Check size={12} strokeWidth={3} color={theme.colors.accentForeground} />
-            </span>
-          ) : null}
-        </span>
-        <span className={LABEL}>{t("pairing.direct.fields.useSsl")}</span>
-      </button>
+      <Field orientation="horizontal">
+        <Checkbox
+          id="direct-ssl-toggle"
+          checked={useTls}
+          onCheckedChange={handleToggleUseTls}
+          disabled={isSaving}
+          data-testid="direct-ssl-toggle"
+        />
+        <FieldLabel htmlFor="direct-ssl-toggle">{t("pairing.direct.fields.useSsl")}</FieldLabel>
+      </Field>
 
       <div className="flex flex-col gap-2">
         <span className={LABEL}>{t("pairing.direct.fields.password")}</span>
-        <div className="flex flex-row items-center gap-2">
-          <Input
+        <InputGroup>
+          <InputGroupInput
             data-testid="direct-password-input"
             aria-label={t("pairing.direct.fields.password")}
             defaultValue={password}
             key={`direct-password-${inputResetKey}`}
             onChange={handlePasswordInput}
             placeholder={t("pairing.direct.fields.optional")}
-            className="min-w-0 flex-1"
             autoCapitalize="none"
             autoCorrect="off"
             type={isPasswordVisible ? "text" : "password"}
@@ -502,39 +494,41 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
             enterKeyHint="done"
             onKeyDown={handleSubmitEditingEnter}
           />
-          <button
-            type="button"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg border bg-muted"
-            onClick={handleTogglePasswordVisibility}
-            disabled={isSaving}
-            aria-label={
-              isPasswordVisible
-                ? t("pairing.direct.passwordVisibility.hide")
-                : t("pairing.direct.passwordVisibility.show")
-            }
-            data-testid="direct-password-visibility-toggle"
-          >
-            <PasswordIcon size={18} color={theme.colors.foregroundMuted} />
-          </button>
-        </div>
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              size="icon-xs"
+              onClick={handleTogglePasswordVisibility}
+              disabled={isSaving}
+              aria-label={
+                isPasswordVisible
+                  ? t("pairing.direct.passwordVisibility.hide")
+                  : t("pairing.direct.passwordVisibility.show")
+              }
+              data-testid="direct-password-visibility-toggle"
+            >
+              <PasswordIcon />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
       </div>
 
       <div className="flex flex-col gap-2">
-        <button
+        <Button
           type="button"
-          className="flex flex-row items-center gap-2 self-start py-1"
+          variant="ghost"
+          size="sm"
+          className="self-start"
           onClick={handleToggleAdvanced}
           disabled={isSaving}
           aria-label={
             isAdvancedOpen ? t("pairing.direct.advanced.hide") : t("pairing.direct.advanced.show")
           }
+          aria-expanded={isAdvancedOpen}
           data-testid="direct-host-advanced-toggle"
         >
-          <AdvancedIcon size={16} color={theme.colors.foregroundMuted} />
-          <span className="text-sm leading-[normal] font-medium text-foreground">
-            {t("pairing.direct.advanced.label")}
-          </span>
-        </button>
+          <AdvancedIcon data-icon="inline-start" />
+          {t("pairing.direct.advanced.label")}
+        </Button>
         {isAdvancedOpen ? (
           <Input
             data-testid="direct-host-uri-input"

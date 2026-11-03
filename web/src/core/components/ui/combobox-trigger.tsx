@@ -1,5 +1,5 @@
-// Port of archive/expo-app:packages/app/src/components/ui/combobox-trigger.tsx: the button that opens a
-// combobox — content, then a chevron unless `chevron` is null.
+// The button that opens a combobox: shadcn's Button (ghost by default), its content, then a
+// chevron unless `chevron` is null.
 import {
   forwardRef,
   useCallback,
@@ -9,10 +9,13 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown } from "lucide-react";
-import { ICON_SIZE } from "@/styles/theme";
+import { Button } from "~/components/ui/button";
 import { cn } from "cn";
 
-export interface ComboboxTriggerProps extends Omit<ComponentProps<"button">, "ref"> {
+export interface ComboboxTriggerProps extends Omit<
+  ComponentProps<typeof Button>,
+  "ref" | "children"
+> {
   children?: ReactNode;
   chevron?: ReactNode | null;
   /** A full-width row: the label grows and the chevron pins to the trailing edge. */
@@ -33,6 +36,8 @@ export const ComboboxTrigger = forwardRef<HTMLButtonElement, ComboboxTriggerProp
       accessibilityLabel,
       testID,
       className,
+      variant = "ghost",
+      size = "sm",
       ...props
     },
     ref,
@@ -46,27 +51,20 @@ export const ComboboxTrigger = forwardRef<HTMLButtonElement, ComboboxTriggerProp
       [onClick, onPress],
     );
     return (
-      <button
+      <Button
         ref={ref}
         type="button"
+        variant={variant}
+        size={size}
         aria-label={accessibilityLabel}
         data-testid={testID}
-        className={className}
+        className={cn("min-w-0", block && "w-full justify-between", className)}
         {...props}
         onClick={handleClick}
       >
-        <span
-          className={cn("flex max-w-full min-w-0 shrink items-center gap-1", block && "grow gap-2")}
-        >
-          {children}
-          {chevron !== null &&
-            (chevron ?? (
-              <span className="flex shrink-0 translate-y-px text-muted-foreground">
-                <ChevronDown size={ICON_SIZE.sm} />
-              </span>
-            ))}
-        </span>
-      </button>
+        {children}
+        {chevron !== null && (chevron ?? <ChevronDown data-icon="inline-end" />)}
+      </Button>
     );
   },
 );

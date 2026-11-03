@@ -3,8 +3,8 @@
 import { memo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { DiffStat } from "@/components/diff-stat";
-import { composerPillClassName } from "@/composer/pill-styles";
 import { useVisibleWorkspaceDiffStat } from "@/composer/workspace-diff-stat";
+import { Button } from "~/components/ui/button";
 
 export function ComposerDiffStatPill({
   additions,
@@ -17,15 +17,17 @@ export function ComposerDiffStatPill({
 }) {
   const { t } = useTranslation();
   return (
-    <button
+    <Button
+      variant="outline"
+      size="sm"
       type="button"
       data-testid="composer-diff-stat-pill"
       aria-label={t("workspace.git.diff.openChangesTab")}
       onClick={onPress}
-      className={composerPillClassName(false, "pointer-events-auto hover:bg-muted")}
+      className="pointer-events-auto"
     >
       <DiffStat additions={additions} deletions={deletions} />
-    </button>
+    </Button>
   );
 }
 

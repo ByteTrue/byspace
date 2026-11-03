@@ -19,6 +19,8 @@ import { usePanelStore, type ExplorerTab } from "@/stores/panel-store";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { cn } from "cn";
 import { useThemeObject } from "~/app/theme-object";
+import { Button } from "~/components/ui/button";
+import { Toggle } from "~/components/ui/toggle";
 
 interface ExplorerSidebarProps {
   serverId: string;
@@ -116,19 +118,10 @@ function ExplorerTabButton({
 }) {
   const handlePress = useCallback(() => onTabPress(tab), [onTabPress, tab]);
   return (
-    <button
-      type="button"
-      data-testid={testID}
-      aria-pressed={active}
-      onClick={handlePress}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground",
-        active && "bg-sidebar-accent text-foreground",
-      )}
-    >
+    <Toggle size="sm" data-testid={testID} pressed={active} onPressedChange={handlePress}>
       {children}
       {label !== undefined ? <span>{label}</span> : null}
-    </button>
+    </Toggle>
   );
 }
 
@@ -221,15 +214,16 @@ function ExplorerSidebarContent({
             </ExplorerTabButton>
           ) : null}
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           type="button"
           onClick={onClose}
           data-testid="explorer-close"
           aria-label={t("workspace.tabs.explorerSidebar.close")}
-          className="rounded-md p-2 text-muted-foreground hover:text-foreground active:text-foreground"
         >
           <X size={18} />
-        </button>
+        </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col" data-testid="explorer-content-area">
         {mountedTabIds.has("changes") ? (

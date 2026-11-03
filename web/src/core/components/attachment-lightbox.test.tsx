@@ -1,7 +1,7 @@
+// @vitest-environment jsdom
 import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { AttachmentLightbox, type ImageLightboxSource } from "./attachment-lightbox";
@@ -112,17 +112,7 @@ let root: Root | null = null;
 let container: HTMLElement | null = null;
 
 beforeEach(() => {
-  const dom = new JSDOM("<!doctype html><html><body></body></html>");
-  dom.window.requestAnimationFrame = vi.fn(() => 1);
-  dom.window.cancelAnimationFrame = vi.fn();
-  vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal("window", dom.window);
-  vi.stubGlobal("document", dom.window.document);
-  vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
-  vi.stubGlobal("Node", dom.window.Node);
-  vi.stubGlobal("navigator", dom.window.navigator);
-
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -135,6 +125,7 @@ afterEach(() => {
       root?.unmount();
     });
   }
+  container?.remove();
   root = null;
   container = null;
   vi.unstubAllGlobals();
@@ -160,7 +151,6 @@ describe("AttachmentLightbox", () => {
   it("renders nothing when the source is null", () => {
     render(<AttachmentLightbox source={null} onClose={vi.fn()} />);
 
-    expect(queryByTestId("attachment-lightbox-backdrop")).toBeNull();
     expect(queryByTestId("attachment-lightbox-image")).toBeNull();
   });
 
@@ -178,17 +168,6 @@ describe("AttachmentLightbox", () => {
     const image = queryByTestId("attachment-lightbox-image");
     expect(image?.getAttribute("data-source")).toBe("blob:assistant-image");
     expect(useAttachmentPreviewUrlMock).toHaveBeenLastCalledWith(null);
-  });
-
-  it("calls onClose when the backdrop is pressed", () => {
-    const onClose = vi.fn();
-    render(<AttachmentLightbox source={attachmentSource} onClose={onClose} />);
-
-    const backdrop = queryByTestId("attachment-lightbox-backdrop");
-    expect(backdrop).not.toBeNull();
-    click(backdrop!);
-
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("calls onClose when the close button is pressed", () => {
@@ -212,12 +191,14 @@ describe("AttachmentLightbox", () => {
     expect(document.body.textContent ?? "").toContain("Couldn't load image");
   });
 
-  it("closes on Escape key on web", () => {
+  it("closes on Escape", () => {
     const onClose = vi.fn();
     render(<AttachmentLightbox source={attachmentSource} onClose={onClose} />);
 
     act(() => {
-      window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);

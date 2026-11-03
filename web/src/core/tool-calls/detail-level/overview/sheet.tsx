@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Wrench, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
+import { Button } from "~/components/ui/button";
 
 export function OverviewToolCallGroupSheet({
   visible,
@@ -46,15 +47,16 @@ export function OverviewToolCallGroupSheet({
                 {summary}
               </DrawerTitle>
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               type="button"
               onClick={onClose}
               aria-label={t("common.actions.close")}
               data-testid="tool-call-group-sheet-close"
-              className="p-2 text-muted-foreground"
             >
               <X size={20} />
-            </button>
+            </Button>
           </div>
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
             <div className="px-[13px] py-2">{children}</div>

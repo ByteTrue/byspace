@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/components/setup-guide-modal.tsx: the setup guide sheet; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/welcome-screen.py; edit it directly.
+import { CodeBlock, CodeBlockContent, CodeBlockFooter } from "~/components/ui/code-block";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ClipboardPaste, Copy } from "lucide-react";
@@ -36,24 +37,16 @@ function CommandBlock({
       .then(() => toast.copied(copiedLabel))
       .catch(() => toast.error(copyFailedLabel));
   }, [command, copyFailedLabel, copiedLabel, toast]);
-  // size-4 keeps the 16px the Expo app draws; the button would size an unsized icon to its own.
-  const copyIcon = useMemo(() => <Copy size={16} className="size-4 text-muted-foreground" />, []);
   return (
-    <div
-      className="flex flex-col gap-2 rounded-[10px] border bg-muted px-4 py-3"
-      data-testid={testID}
-    >
-      <span
-        data-pmono=""
-        className="font-mono text-sm leading-[normal] break-words whitespace-pre-wrap text-foreground select-text"
-      >
-        {command}
-      </span>
-      <Button variant="ghost" size="sm" onClick={handleCopyPress}>
-        {copyIcon}
-        {copyLabel}
-      </Button>
-    </div>
+    <CodeBlock data-testid={testID}>
+      <CodeBlockContent>{command}</CodeBlockContent>
+      <CodeBlockFooter>
+        <Button variant="ghost" size="sm" onClick={handleCopyPress}>
+          <Copy data-icon="inline-start" />
+          {copyLabel}
+        </Button>
+      </CodeBlockFooter>
+    </CodeBlock>
   );
 }
 

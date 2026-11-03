@@ -2,6 +2,7 @@
 // file's, unchanged; the view is DOM and Tailwind. Keep the two in step until the cutover deletes
 // The Expo app.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/workspace-screen.py; edit it directly.
+import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import { getOpenAgentTabLabel } from "@bytetrue/protocol/agent-labels";
@@ -700,12 +701,13 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   // The phone switcher is the Expo app's Combobox, which is a bottom sheet on compact layouts.
   return (
     <div className="flex items-center border-b bg-background" data-testid="workspace-tabs-row">
-      <button
+      <Button
         ref={anchorRef}
         type="button"
+        variant="ghost"
         data-testid="workspace-tab-switcher-trigger"
         aria-label={t("workspace.tabs.switcher.trigger", { count: tabs.length })}
-        className="flex min-w-0 shrink items-center gap-2 px-5 py-2 active:bg-card"
+        className="m-1 min-w-0 shrink justify-start"
         onClick={handleOpenSwitcher}
       >
         <span className="flex min-w-0 flex-1 items-center gap-1">
@@ -716,8 +718,8 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
             backdrop="surface0"
           />
         </span>
-        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-      </button>
+        <ChevronDown data-icon="inline-end" />
+      </Button>
       <Combobox
         options={tabSwitcherOptions}
         value={activeTabKey}
