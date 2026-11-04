@@ -62,6 +62,8 @@ interface WorkspaceScriptsButtonProps {
   onScriptTerminalStarted?: (terminalId: string) => void;
   onViewTerminal?: (terminalId: string) => void;
   hideLabels?: boolean;
+  /** shadcn's Button size for the trigger; default is the standalone size. */
+  size?: "default" | "sm";
   presentation?: "split" | "ghost";
 }
 
@@ -434,6 +436,11 @@ function ScriptRow({
   );
 }
 
+function computeTriggerSize(size: "default" | "sm", compact: boolean) {
+  if (size === "sm") return compact ? "icon-sm" : "sm";
+  return compact ? "icon" : "default";
+}
+
 export function WorkspaceScriptsButton({
   serverId,
   workspaceId,
@@ -442,6 +449,7 @@ export function WorkspaceScriptsButton({
   onScriptTerminalStarted,
   onViewTerminal,
   hideLabels,
+  size = "default",
   presentation = "split",
 }: WorkspaceScriptsButtonProps): ReactElement | null {
   const { t } = useTranslation();
@@ -542,14 +550,16 @@ export function WorkspaceScriptsButton({
   if (scripts.length === 0) return null;
   const hasAnyRunning = scripts.some((s) => s.lifecycle === "running");
   const ghost = presentation === "ghost";
+  const triggerSize = computeTriggerSize(size, ghost || hideLabels === true);
 
   return (
     <div className="flex shrink-0 items-center gap-1">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
+          {/* `size` shrinks the trigger in the workspace's 36px header. */}
           <Button
             variant={ghost ? "ghost" : "outline"}
-            size={ghost || hideLabels ? "icon" : "default"}
+            size={triggerSize}
             data-testid="workspace-scripts-button"
             aria-label={t("workspace.scripts.accessibility.trigger")}
           >

@@ -32,6 +32,8 @@ interface WorkspaceOpenInEditorButtonProps {
   cwd: string;
   activeFile?: WorkspaceFileLocation | null;
   hideLabels?: boolean;
+  /** shadcn's Button size for the header; default is the standalone size. */
+  size?: "default" | "sm";
 }
 
 interface OpenTarget {
@@ -70,6 +72,7 @@ export function WorkspaceOpenInEditorButton({
   cwd,
   activeFile,
   hideLabels,
+  size = "default",
 }: WorkspaceOpenInEditorButtonProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -137,13 +140,17 @@ export function WorkspaceOpenInEditorButton({
     if (primaryOption) openMutation.mutate(primaryOption);
   }, [openMutation, primaryOption]);
 
+  let openButtonSize: "icon" | "default" | "icon-sm" | "sm" = hideLabels ? "icon" : "default";
+  if (size === "sm") openButtonSize = hideLabels ? "icon-sm" : "sm";
+  const caretSize = size === "sm" ? "icon-sm" : "icon";
+
   if (!canResolveWorkspace || !primaryOption || targets.length === 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-1">
       <ButtonGroup>
         <Button
           variant="outline"
-          size={hideLabels ? "icon" : "default"}
+          size={openButtonSize}
           data-testid="workspace-open-in-editor-primary"
           onClick={handlePrimaryPress}
           disabled={openMutation.isPending}
@@ -164,7 +171,7 @@ export function WorkspaceOpenInEditorButton({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                size="icon"
+                size={caretSize}
                 data-testid="workspace-open-in-editor-caret"
                 aria-label={t("workspace.git.openInEditor.chooseEditor")}
               >

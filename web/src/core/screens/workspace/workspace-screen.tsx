@@ -3633,7 +3633,8 @@ function WorkspaceScreenContent({
 
   const headerRight = useMemo(
     () => (
-      <div className="flex items-center gap-1 md:gap-2">
+      <div className="flex items-center gap-1">
+        {/* Header actions are 28px (shadcn's sm / icon-sm) inside a 36px bar. */}
         <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
         {!isMobile && workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
           <WorkspaceScriptsButton
@@ -3641,6 +3642,7 @@ function WorkspaceScreenContent({
             workspaceId={normalizedWorkspaceId}
             scripts={workspaceDescriptor.scripts}
             liveTerminalIds={liveTerminalIds}
+            size="sm"
             onScriptTerminalStarted={handleScriptTerminalStarted}
             onViewTerminal={handleViewScriptTerminal}
             hideLabels
@@ -3651,12 +3653,12 @@ function WorkspaceScreenContent({
             serverId={normalizedServerId}
             cwd={workspaceDirectory}
             activeFile={activeFileLocation}
-            hideLabels
+            size="sm"
           />
         ) : null}
         {!isMobile && workspaceDirectory ? (
           <>
-            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
+            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} size="sm" />
             <WorkspaceHeaderExplorerToggle
               owner={explorerToggleOwner}
               onPress={handleToggleExplorerSidebar}

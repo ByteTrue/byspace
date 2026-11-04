@@ -97,11 +97,18 @@ function GitActionMenuItem({
   );
 }
 
+function headerButtonSize(size: "default" | "sm", hideLabels: boolean | undefined) {
+  if (size === "sm") return hideLabels ? "icon-sm" : "sm";
+  return hideLabels ? "icon" : "default";
+}
+
 export function GitActionsSplitButton({
   gitActions,
   hideLabels,
   menuOnly = false,
-}: GitActionsSplitButtonProps) {
+  /** shadcn's Button size; "sm" in the workspace's 36px header. */
+  size = "default",
+}: GitActionsSplitButtonProps & { size?: "default" | "sm" }) {
   const { t } = useTranslation();
   const runGitAction = useGitActionRunner();
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
@@ -113,6 +120,8 @@ export function GitActionsSplitButton({
     () => [...(primary ? [primary] : []), ...gitActions.secondary, ...gitActions.menu],
     [gitActions.menu, gitActions.secondary, primary],
   );
+
+  const caretSize = size === "sm" ? "icon-sm" : "icon";
 
   if (menuOnly) {
     if (menuOnlyActions.length === 0) return null;
@@ -163,7 +172,7 @@ export function GitActionsSplitButton({
         <ButtonGroup>
           <Button
             variant="outline"
-            size={hideLabels ? "icon" : "default"}
+            size={headerButtonSize(size, hideLabels)}
             data-testid="changes-primary-cta"
             onClick={handlePrimaryPress}
             disabled={primary.disabled}
@@ -177,7 +186,7 @@ export function GitActionsSplitButton({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  size="icon"
+                  size={caretSize}
                   data-testid="changes-primary-cta-caret"
                   aria-label={t("workspace.git.actions.moreOptions")}
                 >
