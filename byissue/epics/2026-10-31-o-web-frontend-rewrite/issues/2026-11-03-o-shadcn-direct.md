@@ -132,7 +132,9 @@ shadcn 的 Sidebar 本身就有调宽的入口：边缘的 `SidebarRail`，以�
 
 `docs/hover.md` 按 `showOnHover` 改写。端到端里 Playwright 把透明度为 0 的元素算作可见，判断这类按钮是否显示要看透明度（`expectHoverActionHidden` / `expectHoverActionShown`）。
 
-还剩两处 shadcn 有、还没换的，留给用户定：
+还剩两处 shadcn 有、还没换的，问过用户，都选了换（2026-11-04）：
 
-- **组合框**：模型、分支、主机、目录等 13 处 Combobox，以及 17 处可搜索的下拉选择（SelectField，内部也是 Combobox），都是自己用 Command 加 Popover（手机上 Drawer）拼的（`core/components/ui/combobox.tsx`，592 行）。批 E 记成「shadcn 没有」是错的：shadcn 有 Combobox（radix-nova 风格，基于 Base UI，`npx shadcn view combobox`）。换的话要新增 `@base-ui/react` 依赖，手机上从底部抽屉变成弹出层。
-- **命令面板（⌘K）的列表行与弹窗尺寸**：沿用旧版的 36px 行高、悬停底色、只用方向键移动选中项，弹窗 640×560。shadcn 的 Command 原样是鼠标悬停就移动选中项。
+- **命令面板（⌘K）**按 shadcn 的 CommandDialog 原样（`f4d773b87`）：弹窗大小随结果变化，分组用 CommandGroup 带标题，鼠标悬停就移动选中项。旧版的 640×560 固定尺寸、36px 行高、只用方向键选中都去掉；结果列表不再计算行高与偏移（那是旧版虚拟列表用的）。
+- **组合框**换成 shadcn 的 Combobox（`cff8b0900`，新增依赖 `@base-ui/react`）：搜索框在弹出层里；选项仍由 `combobox-options.ts` 过滤排序，Combobox 自带的过滤关掉；手机上从底部抽屉变成横跨屏幕的弹出层。没有搜索的列表留一个看不见的只读输入框接方向键。自带内容的调用方（模型浏览）仍用 Popover/Drawer。途中修掉三处：在 Radix 弹窗里打开时，弹出层要挂进弹窗，否则弹窗的焦点陷阱与禁用指针让它点不动；正在关闭的列表去掉 test id，免得和下一个打开的混淆；手机标签切换器的行改为组合框条目里的普通内容，行尾 ⋯ 菜单改为点击打开（列表会阻止每次按下的默认行为，Radix 的触发器遇到被阻止的按下就不响应）。
+
+另外删掉了已经没有任何地方使用的 AdaptiveTextInput（`8791b464c`）。
