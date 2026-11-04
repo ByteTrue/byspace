@@ -73,10 +73,18 @@ async function closeBottomSheetWithBackdrop(page: Page) {
   await expect(backdrop).not.toBeVisible({ timeout: 1_000 });
 }
 
+// The tab switcher is a Combobox popup, not a drawer: it closes on a press outside it.
 async function openTabSwitcher(page: Page) {
-  const trigger = page.getByRole("button", { name: /Switch tabs/ });
-  await trigger.click();
-  await expectBottomSheetOpen(page);
+  await page.getByRole("button", { name: /Switch tabs/ }).click();
+  await expect(page.getByTestId("combobox-sheet")).toBeVisible({ timeout: 10_000 });
+}
+
+async function closeTabSwitcherOutside(page: Page) {
+  await page.mouse.click(MOBILE_VIEWPORT.width / 2, MOBILE_VIEWPORT.height / 2);
+  await expect(page.getByTestId("combobox-sheet")).toHaveCount(0);
+  // Guard against the regression where the list starts closing, then re-presents.
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId("combobox-sheet")).toHaveCount(0);
 }
 
 async function openModelSelector(page: Page) {
@@ -87,9 +95,9 @@ async function openModelSelector(page: Page) {
 
 async function openAndCloseTabSwitcherTwice(page: Page) {
   await openTabSwitcher(page);
-  await closeBottomSheetWithBackdrop(page);
+  await closeTabSwitcherOutside(page);
   await openTabSwitcher(page);
-  await closeBottomSheetWithBackdrop(page);
+  await closeTabSwitcherOutside(page);
 }
 
 async function openAndCloseModelSelectorTwice(page: Page) {
