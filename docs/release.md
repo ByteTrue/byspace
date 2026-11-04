@@ -26,11 +26,10 @@ GitHub Release assets are the npm tarball and one container descriptor, each wit
 1. Confirm the worktree is clean and on `main`.
 2. Confirm `HEAD` equals `origin/main`.
 3. Confirm CI passed for that exact SHA.
-4. Run:
+4. Run (there is no `build:server` script; the daemon builds through `release:check`):
 
    ```bash
    npm ci
-   npm run build:server
    npm run build:app-deps
    npm run lint
    npm run typecheck
