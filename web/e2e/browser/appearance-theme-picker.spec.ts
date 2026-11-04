@@ -40,8 +40,11 @@ test("keeps the selected workspace visible in Light", async ({ page }, testInfo)
       serverId: getServerId(),
       workspaceId: workspace.workspaceId,
     });
-    // The shadcn sidebar accent (neutral-100) over the neutral-50 sidebar, with the 2px bar.
-    await expect(row).toHaveCSS("background-color", "rgb(245, 245, 245)");
+    // Selection is a 2px leading bar, not a fill (the row still carries hover's tint from the
+    // click). The bar is the ::before of shadcn's SidebarMenuButton.
+    await expect
+      .poll(() => row.evaluate((el) => getComputedStyle(el, "::before").opacity))
+      .toBe("1");
     await page.screenshot({
       path: testInfo.outputPath("light-selected-workspace.png"),
       fullPage: true,
@@ -72,7 +75,9 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
       serverId: getServerId(),
       workspaceId: workspace.workspaceId,
     });
-    await expect(row).toHaveCSS("background-color", "rgb(22, 22, 22)");
+    await expect
+      .poll(() => row.evaluate((el) => getComputedStyle(el, "::before").opacity))
+      .toBe("1");
     await page.screenshot({
       path: testInfo.outputPath("pure-black-selected-workspace.png"),
       fullPage: true,
