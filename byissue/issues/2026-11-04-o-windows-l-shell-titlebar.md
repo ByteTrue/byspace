@@ -32,7 +32,10 @@ created: 2026-11-04
 
 ## 剩余
 
-顶栏条拖窗已定位并修复，但尚未得到用户真机确认；mac 不回归与深色 tint 也未验。这两项过了才能关闭。
+顶栏条拖窗已由用户在 Windows 真机确认（2026-11-05，全宽可拖，按钮与边缘 resize 正常）。还不能关的两项：
+
+- mac 不回归：`screen-header.tsx` 给左右子组加了 `data-wails-drag`，mac 上头部行文字区的拖窗命中范围变大；窗口有框，`wails:drag` 应该无效，但未实测。
+- 深色 tint：新结构下 `titleBarColor` 同步脚本仍否工作未验。
 
 ## 验证
 
@@ -42,6 +45,7 @@ Windows 本机构建桌面端：按钮三态可用、拖拽只在顶部条、卡
 
 - 2026-11-04：titlebar 移植（`web/src/app/desktop-window-titlebar.tsx`）+ `windowAction` 恢复（`internal/gui/app.go`）+ L 型接入（`WindowsShellFrame`/`WindowsShellMain`，app-chrome）。验证：cua 实测最大化/还原/最小化生效；用户手测拖拽范围正常。
 - 2026-11-05：用户反馈两问题——四边不能 resize、顶部 38px 文字选中被拖窗手势吃掉。根因都在旧「假顶栏」时代的补丁：`frameOnlyResizeJS` 把 Wails 页内边缘 resize 整个关了（改为 `inPageResizeJS` 开回 `setResizable(true)`）；`webui.go` 注入的全页顶部 38px mousedown 劫持（preventDefault + 强设 drag）删除，拖窗归顶栏组件所有。
-- 2026-11-05：用户反馈只有头部行可拖、顶栏条不可。中途两次误判都已排除：controlsArea 补 `data-wails-drag` 无效；`ScreenHeader` 左右子组补字面量属性后那一行确实能拖了（证明「只看命中元素」机制是对的），但顶栏条仍不可；再猜「inset 透明 margin 吞事件」加 `relative z-10`，症状不变——已回退。
-- 2026-11-05 真根因：`WAILS_DRAG_DATA_SET = { wailsDrag: "true" }` 在 React DOM 里渲染成属性 `wailsdrag="true"`，而注入 CSS 的选择器是 `[data-wails-drag="true"]`，从不匹配。该常量是 RN `dataSet`（会映射成 `data-*`）的残留，全仓只有顶栏在用；其他可拖区域（`screen-header.tsx`、`sidebar-header-row.tsx`）都写字面量——这就是「头部行能拖、顶栏条永远不能拖」的全部原因。顶栏三处改字面量，删除死常量。待用户手测。
+- 2026-11-05：顶栏条仍不可拖。两次误判先排除：给 `controlsArea` 补 `data-wails-drag` 无效；给 `ScreenHeader` 左右子组补字面量后头部行确实能拖了（证明「只看命中元素」的机制判断是对的），但顶栏条照旧不可拖；再猜「inset 透置 margin 吞事件」加 `relative z-10`，症状不变，已回退。
+- 2026-11-05 真根因：`WAILS_DRAG_DATA_SET = { wailsDrag: "true" }` 在 React DOM 里渲染成属性 `wailsdrag="true"`，而注入 CSS 的选择器是 `[data-wails-drag="true"]`，从不匹配。该常量是 RN `dataSet`（会映射成 `data-*`）的残留，全仓只有顶栏在用；其他可拖区域（`screen-header.tsx`、`sidebar-header-row.tsx`）都写字面量——这就是「头部行能拖、顶栏条永远不能拖」的全部原因。顶栏三处改字面量，删除死常量。
+- 2026-11-05：用户 Windows 真机确认顶栏条全宽可拖，按钮、边缘 resize 均正常。根因定案。
 - 验证备注：cua 的合成拖拽对窗口移动/resize 均不可靠（连已知可用的区域也拖不动；resize 一次偶然生效），壳层拖拽验证以用户手测为准；按钮点击/最小化/最大化用 UIA Invoke 验证有效。
