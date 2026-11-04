@@ -37,3 +37,5 @@ commits: [ad0b1c04d, 493aeaaff, 90dc664ab, 0e1ac92f8, dabfd4373]
 - Windows 桌面窗口的红绿灯不涉及（平台专用）。
 
 同日追加：**工作区顶栏右侧的按钮「又肿又挤」**（`fc9d887dc`）。运行脚本、打开编辑器、git 操作（Push/Pull/Commit）这几组按钮用的是 shadcn 默认尺寸（带文字时 36px 高），顶栏本身只有 36px，旁边其它图标是 28px 的 ghost。给这三组加了尺寸参数，工作区顶栏统一传 shadcn 的 `sm` / `icon-sm`（28px），间距收紧；Changes 面板里只出菜单的形式不变。
+
+同日第三轮（`f8429c9d2`）：顶栏按钮改成 ghost 图标（运行脚本、打开编辑器、git 操作），不再是一排带边框的胶囊挨着一排裸图标；浅色下 `--sidebar-accent` 从 `#f5f5f5` 改 `#e5e5e5`（离页面底色只差 1% 时选中行看不出来）；输入框去掉 shadcn 的 3px 焦点光圈和焦点边框，它本身有边框阴影，叠起来像双重边框。git split button 的两种形态拆成两个函数（之前 lint complexity 超限）。
