@@ -138,3 +138,9 @@ shadcn 的 Sidebar 本身就有调宽的入口：边缘的 `SidebarRail`，以�
 - **组合框**换成 shadcn 的 Combobox（`cff8b0900`，新增依赖 `@base-ui/react`）：搜索框在弹出层里；选项仍由 `combobox-options.ts` 过滤排序，Combobox 自带的过滤关掉；手机上从底部抽屉变成横跨屏幕的弹出层。没有搜索的列表留一个看不见的只读输入框接方向键。自带内容的调用方（模型浏览）仍用 Popover/Drawer。途中修掉三处：在 Radix 弹窗里打开时，弹出层要挂进弹窗，否则弹窗的焦点陷阱与禁用指针让它点不动；正在关闭的列表去掉 test id，免得和下一个打开的混淆；手机标签切换器的行改为组合框条目里的普通内容，行尾 ⋯ 菜单改为点击打开（列表会阻止每次按下的默认行为，Radix 的触发器遇到被阻止的按下就不响应）。
 
 另外删掉了已经没有任何地方使用的 AdaptiveTextInput（`8791b464c`）。
+
+## 收尾（2026-11-04 验收通过）
+
+用户在开发版桌面窗口上逐轮验收，剩下的都是 macOS 桌面窗口上的观感与性能问题，当天按快改修完，记录见 [2026-11-04-x-ff-desktop-polish-and-notifications.md](../../../issues/2026-11-04-x-ff-desktop-polish-and-notifications.md)：顶部一行对齐与红绿灯、侧栏拖动与收起展开的性能、⌘K 面板尺寸、输入框灰色、确认弹窗全部改为应用内、通知改走系统原生通知（另发现 daemon 从未发 agent_attention_required，一并补上）。最后一轮定下**选中态统一为 2px 竖线、悬停只留淡色**（`d6198cc41`），写进 `docs/design.md`。
+
+至此本事项与整个前端重写 Epic 验收通过，关闭。

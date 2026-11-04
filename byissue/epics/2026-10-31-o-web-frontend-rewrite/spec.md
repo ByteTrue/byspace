@@ -20,6 +20,10 @@ created: 2026-10-31
 - **样式：** shadcn/ui nova 风格加 neutral 底色，数值以 `design/component-sheet.html` 和 `docs/design.md` 为准，包括 [UI 美化 Epic](../2026-10-31-o-ui-style-refresh/spec.md) 里记下的三处有意偏离。旧版没给 `lineHeight` 的文字用 `normal`，不写在 Mac 上量到的像素值：Mac 上 Chromium 和 WebKit 把字体的上下高度各自取整（14px 的 Geist 是 18px），Android、Windows、Linux 不取整（18.29px），写死的行在那里每行矮一点、往下累积。
 - **预览和构建：** 开发时 Vite 跑在 8082，连开发版 daemon（6778）。构建产物在 `web/dist`，切换前不进 `internal/webui/dist`。
 
+## 状态：已完成（2026-11-04）
+
+六步全部落地并在 `main`，用户验收通过后关闭。现在只有 `web/` 一个前端，Expo 与 `packages/app` 已删（存档标签 `archive/expo-app`），界面组件用 shadcn 现成的（shadcn 没有的保留自写，清单见 issues/2026-11-03-o-shadcn-direct.md）。选中态、悬停、弹窗、通知的最终规则在 `docs/design.md` 与 `docs/hover.md`。
+
 ## 必须守住
 
 - 协议不动：只换前端，`packages/protocol` 和 `packages/client` 照用。
