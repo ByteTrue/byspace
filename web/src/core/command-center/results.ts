@@ -106,15 +106,17 @@ interface MutableCommandCenterResultSection {
   results: CommandCenterResult[];
 }
 
-export type CommandCenterListRow =
-  | { kind: "section"; key: string; title?: string; divider: boolean; height: number }
-  | { kind: "result"; key: string; result: CommandCenterResult; height: number };
+/** A section as the list shows it: shadcn's CommandGroup, its heading the title. */
+export interface CommandCenterListGroup {
+  key: string;
+  title?: string;
+  results: readonly CommandCenterResult[];
+}
 
 export interface CommandCenterListProjection {
-  rows: readonly CommandCenterListRow[];
+  groups: readonly CommandCenterListGroup[];
+  /** Every result in list order, for the arrow keys. */
   selectableResults: readonly CommandCenterResult[];
-  rowIndexByResultId: ReadonlyMap<string, number>;
-  offsets: readonly number[];
 }
 
 /**
@@ -171,15 +173,6 @@ function contributionSearchFields(
       ? [contribution.presentation.title, contribution.presentation.subtitle ?? ""]
       : [...contribution.presentation.path];
   return { visible, hidden: contribution.keywords };
-}
-
-function resultHeight(result: CommandCenterResult): number {
-  if (result.kind === "workspace" || result.kind === "agent") return 56;
-  if (result.kind === "file") return 36;
-  if (result.contribution.presentation.kind === "action") {
-    return result.contribution.presentation.subtitle ? 56 : 36;
-  }
-  return 36;
 }
 
 /**
@@ -298,43 +291,11 @@ export function buildContributionSections(
 export function projectCommandCenterRows(
   sections: readonly CommandCenterResultSection[],
 ): CommandCenterListProjection {
-  const populated = sections
+  const groups = sections
     .filter((section) => section.results.length > 0)
-    .sort(compareResultSections);
-  const rows: CommandCenterListRow[] = [];
-  const selectableResults: CommandCenterResult[] = [];
-  const rowIndexByResultId = new Map<string, number>();
-  const offsets: number[] = [];
-  let offset = 0;
-
-  for (const [sectionIndex, section] of populated.entries()) {
-    const divider = sectionIndex > 0;
-    let sectionHeight = 0;
-    if (section.title && divider) sectionHeight = 49;
-    if (section.title && !divider) sectionHeight = 32;
-    if (!section.title && divider) sectionHeight = 17;
-    if (sectionHeight > 0) {
-      offsets.push(offset);
-      rows.push({
-        kind: "section",
-        key: `section:${section.id}`,
-        title: section.title,
-        divider,
-        height: sectionHeight,
-      });
-      offset += sectionHeight;
-    }
-    for (const result of section.results) {
-      const height = resultHeight(result);
-      offsets.push(offset);
-      rowIndexByResultId.set(result.id, rows.length);
-      rows.push({ kind: "result", key: result.id, result, height });
-      selectableResults.push(result);
-      offset += height;
-    }
-  }
-
-  return { rows, selectableResults, rowIndexByResultId, offsets };
+    .sort(compareResultSections)
+    .map((section) => ({ key: section.id, title: section.title, results: section.results }));
+  return { groups, selectableResults: groups.flatMap((group) => group.results) };
 }
 
 export function preserveActiveResultId(

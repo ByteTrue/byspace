@@ -32,6 +32,8 @@ const SURFACE_SELECTORS = {
   fileLine: '[data-testid="command-center-file-line"]',
 } as const;
 
+const GROWS_WITH_RESULTS: ReadonlySet<string> = new Set(["panel", "results"]);
+
 function parseSessionMessage(message: WebSocketMessage): Record<string, unknown> | null {
   const raw = typeof message === "string" ? message : message.toString("utf8");
   try {
@@ -169,7 +171,11 @@ export async function expectStableCommandCenterLayout(page: Page): Promise<void>
   for (const surface of Object.keys(SURFACE_SELECTORS)) {
     const samples = observation.samples[surface] ?? [];
     expect(samples.length, `${surface}: ${JSON.stringify(observation)}`).toBeGreaterThan(0);
-    for (const dimension of ["height", "width", "x", "y"] as const) {
+    // shadcn's command dialog grows with its results, downward from a fixed top.
+    const dimensions = GROWS_WITH_RESULTS.has(surface)
+      ? (["width", "x", "y"] as const)
+      : (["height", "width", "x", "y"] as const);
+    for (const dimension of dimensions) {
       const values = samples.map((sample) => sample[dimension]);
       expect(
         Math.max(...values) - Math.min(...values),
@@ -206,7 +212,6 @@ export async function expectOneLineTruncatedFileResult(
   expect(lineBox).not.toBeNull();
   expect(filenameBox).not.toBeNull();
   expect(pathBox).not.toBeNull();
-  expect(rowBox?.height).toBe(36);
   expect(Math.abs((filenameBox?.y ?? 0) - (pathBox?.y ?? 0))).toBeLessThanOrEqual(1);
   expect(overflow.scrollWidth).toBeGreaterThan(overflow.clientWidth);
   expect(overflow.overflow).toBe("hidden");

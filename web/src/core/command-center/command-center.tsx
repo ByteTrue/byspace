@@ -41,7 +41,7 @@ import {
   projectCommandCenterRows,
   type CommandCenterAgentResult,
   type CommandCenterFileResult,
-  type CommandCenterListRow,
+  type CommandCenterListGroup,
   type CommandCenterResult,
   type CommandCenterResultSection,
   type CommandCenterSearchFields,
@@ -55,6 +55,8 @@ import { Shortcut } from "~/components/shortcut";
 import {
   Command,
   CommandDialog,
+  CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
@@ -198,10 +200,10 @@ interface CommandCenterState {
   query: string;
   setQuery(query: string): void;
   activeId: string | null;
-  rows: readonly CommandCenterListRow[];
+  /** The pointer moved onto a row: Command makes it the active one. */
+  setActiveId(id: string): void;
+  groups: readonly CommandCenterListGroup[];
   results: readonly CommandCenterResult[];
-  rowIndexByResultId: ReadonlyMap<string, number>;
-  offsets: readonly number[];
   inputRef: React.RefObject<HTMLInputElement | null>;
   fileSearchLoading: boolean;
   fileSearchError: string | null;
@@ -340,10 +342,9 @@ function useCommandCenterState(): CommandCenterState {
     query,
     setQuery,
     activeId: resolvedActiveId,
-    rows: projection.rows,
+    setActiveId,
+    groups: projection.groups,
     results: projection.selectableResults,
-    rowIndexByResultId: projection.rowIndexByResultId,
-    offsets: projection.offsets,
     inputRef,
     fileSearchLoading,
     fileSearchError,
@@ -499,27 +500,32 @@ const ResultRow = memo(function ResultRow({
       data-testid={
         result.kind === "file" ? `command-center-file-row-${result.filePath}` : choice?.testId
       }
-      // Hover highlights on its own; only the keys move the active row, as in the Expo app.
-      // 36px rows (56 with a subtitle), as the Expo app's command center lays them out.
-      className="min-h-9 hover:bg-accent/60"
     >
       <ResultContent result={result} />
     </CommandItem>
   );
 });
 
-function SectionHeading({ row }: { row: Extract<CommandCenterListRow, { kind: "section" }> }) {
+function ResultGroup({
+  group,
+  divider,
+  onSelect,
+}: {
+  group: CommandCenterListGroup;
+  divider: boolean;
+  onSelect(result: CommandCenterResult): void;
+}) {
   return (
-    <div role="presentation" className="flex flex-col">
-      {row.divider ? <CommandSeparator /> : null}
-      {row.title ? (
-        <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">{row.title}</div>
-      ) : null}
-    </div>
+    <>
+      {divider ? <CommandSeparator /> : null}
+      <CommandGroup heading={group.title}>
+        {group.results.map((result) => (
+          <ResultRow key={result.id} result={result} onSelect={onSelect} />
+        ))}
+      </CommandGroup>
+    </>
   );
 }
-
-const ignoreValueChange = () => {};
 
 export function CommandCenter() {
   const { t } = useTranslation();
@@ -554,15 +560,11 @@ export function CommandCenter() {
       onOpenChange={handleOpenChange}
       title={t("shell.commandCenter.placeholder")}
       description={t("shell.commandCenter.placeholder")}
-      // The Expo app's panel: 640 wide, 560 tall, 48px below the top of the window, a 10px radius.
-      className="top-12 h-[min(560px,calc(100vh-6rem))] rounded-[10px]! sm:max-w-[640px]"
     >
       <Command
-        className="h-full"
         shouldFilter={false}
-        disablePointerSelection
         value={activeId ?? ""}
-        onValueChange={ignoreValueChange}
+        onValueChange={state.setActiveId}
         onKeyDown={handleKeyDown}
         data-testid="command-center-panel"
       >
@@ -620,19 +622,18 @@ export function CommandCenter() {
             {t("common.errors.error")}: {state.fileSearchError}
           </p>
         ) : null}
-        <CommandList className="max-h-none min-h-0 flex-1" data-testid="command-center-results">
-          {state.rows.length === 0 && !state.fileSearchError && !state.fileSearchLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("shell.commandCenter.noMatches")}
-            </p>
+        <CommandList data-testid="command-center-results">
+          {state.groups.length === 0 && !state.fileSearchError && !state.fileSearchLoading ? (
+            <CommandEmpty>{t("shell.commandCenter.noMatches")}</CommandEmpty>
           ) : null}
-          {state.rows.map((row) =>
-            row.kind === "section" ? (
-              <SectionHeading key={row.key} row={row} />
-            ) : (
-              <ResultRow key={row.key} result={row.result} onSelect={state.select} />
-            ),
-          )}
+          {state.groups.map((group, index) => (
+            <ResultGroup
+              key={group.key}
+              group={group}
+              divider={index > 0}
+              onSelect={state.select}
+            />
+          ))}
         </CommandList>
       </Command>
     </CommandDialog>

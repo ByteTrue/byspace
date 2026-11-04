@@ -120,8 +120,10 @@ function sectionResultIds(sections: ReturnType<typeof buildContributionSections>
   return ids;
 }
 
+const resultId = (result: { id: string }) => result.id;
+
 describe("Command Center result projection", () => {
-  it("query-gates model choices and creates one flat row index", () => {
+  it("query-gates model choices and orders the sections into groups", () => {
     const contributions = [
       contribution({ id: "settings", group: "actions", groupRank: 0 }),
       contribution({ id: "opus", group: "models", groupRank: 1, visibility: "query" }),
@@ -140,14 +142,12 @@ describe("Command Center result projection", () => {
         results: [workspace("workspace:1")],
       },
     ]);
-    expect(projection.rows.map((row) => row.key)).toEqual([
-      "section:models",
-      "opus",
-      "section:workspaces",
-      "workspace:1",
+    const groupIds = projection.groups.map((group) => [group.key, group.results.map(resultId)]);
+    expect(groupIds).toEqual([
+      ["models", ["opus"]],
+      ["workspaces", ["workspace:1"]],
     ]);
-    expect(projection.rowIndexByResultId.get("workspace:1")).toBe(3);
-    expect(projection.offsets).toEqual([0, 32, 68, 117]);
+    expect(projection.selectableResults.map(resultId)).toEqual(["opus", "workspace:1"]);
   });
 
   it("shows query-only actions only when their group matches a search", () => {
@@ -175,7 +175,7 @@ describe("Command Center result projection", () => {
     expect(moveActiveResultId(first.id, [first, second], "previous")).toBe(second.id);
   });
 
-  it("keeps keyboard selection aligned with rows beyond the render window", () => {
+  it("moves keyboard selection through a long list", () => {
     const workspaces = Array.from({ length: 200 }, (_, index) => workspace(`workspace:${index}`));
     const projection = projectCommandCenterRows([
       {
@@ -192,10 +192,7 @@ describe("Command Center result projection", () => {
       activeId = moveActiveResultId(activeId, projection.selectableResults, "next");
     }
 
-    const targetId = workspaces[150].id;
-    expect(activeId).toBe(targetId);
-    expect(projection.rowIndexByResultId.get(targetId)).toBe(151);
-    expect(projection.offsets[151]).toBe(32 + 150 * 56);
+    expect(activeId).toBe(workspaces[150].id);
   });
 });
 
