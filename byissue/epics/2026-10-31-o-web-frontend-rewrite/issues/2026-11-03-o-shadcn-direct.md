@@ -132,4 +132,7 @@ shadcn 的 Sidebar 本身就有调宽的入口：边缘的 `SidebarRail`，以�
 
 `docs/hover.md` 按 `showOnHover` 改写。端到端里 Playwright 把透明度为 0 的元素算作可见，判断这类按钮是否显示要看透明度（`expectHoverActionHidden` / `expectHoverActionShown`）。
 
-还剩命令面板（⌘K）的列表行与弹窗尺寸：沿用旧版的 36px 行高、悬停底色、只用方向键移动选中项，弹窗 640×560。换成 shadcn 的 Command 原样，鼠标悬停就会移动选中项；用方向键滚动长列表时，停在列表上的鼠标会把选中项拽走（旧版正是为此关掉了悬停选中）。这一处留给用户定。
+还剩两处 shadcn 有、还没换的，留给用户定：
+
+- **组合框**：模型、分支、主机、目录等 13 处 Combobox，以及 17 处可搜索的下拉选择（SelectField，内部也是 Combobox），都是自己用 Command 加 Popover（手机上 Drawer）拼的（`core/components/ui/combobox.tsx`，592 行）。批 E 记成「shadcn 没有」是错的：shadcn 有 Combobox（radix-nova 风格，基于 Base UI，`npx shadcn view combobox`）。换的话要新增 `@base-ui/react` 依赖，手机上从底部抽屉变成弹出层。
+- **命令面板（⌘K）的列表行与弹窗尺寸**：沿用旧版的 36px 行高、悬停底色、只用方向键移动选中项，弹窗 640×560。shadcn 的 Command 原样是鼠标悬停就移动选中项。
