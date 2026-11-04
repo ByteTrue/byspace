@@ -5,6 +5,44 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.0 - 2026-11-04
+
+### Changed
+
+- Replaced the Expo/React Native frontend with a web one built on React, Tailwind CSS and shadcn/ui for the browser, installed PWA, desktop app and Android app
+- Switched the hand-built controls (switches, tabs, badges, dialogs, menus, comboboxes, the command palette, settings rows, chat messages, tool-call rows, code blocks) to shadcn components
+- Selected rows in the sidebar and settings list now show a 2px leading bar instead of a grey fill, and hover no longer reads as selection
+- The desktop sidebar can be resized by dragging its edge and the width persists; Settings shares the same sidebar as the rest of the app
+- The command palette opens at a readable width with a full-width search field, groups its results with headings and follows the pointer
+- Confirmation dialogs are shown inside the app on every platform instead of native OS dialogs on desktop
+
+### Added
+
+- Native system notifications on desktop (macOS Notification Center, Windows, Linux) when an agent finishes or asks for input, and clicking one opens the agent
+- Scheduled tasks now actually run on time, with the configured provider, model and mode, each run in its own workspace, archived on finish without touching the project's main workspace, and resumed after a restart
+- Inline pull request review threads in the PR panel, including resolved threads and replies, on GitHub, GitLab and Gitea
+- Pull request status badges in the sidebar, including Gitea, Forgejo and Codeberg repositories
+- GitHub Enterprise support for GitHub operations
+- MCP tools for schedules and heartbeats
+- `--output-schema` for `byspace run`, and `--provider`, `--target`, `--run-now` for schedule commands
+
+### Fixed
+
+- Fixed the sidebar not reflecting branch switches or commits made in the terminal for up to five minutes
+- Fixed workspace and branch auto-naming never sending the prompt to the model, which produced generic names like "Untitled coding task"
+- Fixed models being offered for providers that are not installed or disabled
+- Fixed agents marked unread being flagged when no agent was markable
+- Fixed errors from actions such as disabling a provider not appearing anywhere
+- Fixed blurry diff rendering at 125%, 150% and 175% display scaling, the Windows defaults
+- Fixed a text selection in the diff disappearing when fonts finished loading or the window was resized
+- Fixed pasting a pull request link on the new workspace page showing "No matching refs"
+- Fixed Markdown table column alignment
+- Fixed sidebar drag and collapse stuttering
+- Fixed the composer appearing greyed out while empty and a doubled focus border
+- Fixed temporary GitHub repositories created by end-to-end tests being left behind in the user's account
+- Fixed the audit reporting success when Go tests or browser checks failed
+- Fixed GitLab merge requests being shown as closed while open
+
 ## 0.23.6 - 2026-10-30
 
 ### Fixed
