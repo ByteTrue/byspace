@@ -6,6 +6,14 @@ import { createMarkdownParser } from "@/utils/markdown-parser";
 import { cn } from "cn";
 import { parseMarkdownAst } from "~/markdown/ast";
 import { copyTag, MarkdownBody, type MarkdownRules } from "~/markdown/render";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 
 // No typographer (a plan's literal `(c)` stays as typed) and no linkify: bare URLs stay plain text.
 const planMarkdownParser = createMarkdownParser({ linkify: false });
@@ -40,21 +48,15 @@ export function PlanCard({
   const { t } = useTranslation();
   const nodes = useMemo(() => parseMarkdownAst(text, planMarkdownParser), [text]);
   return (
-    <div
-      data-testid={testID}
-      className={cn(
-        "flex flex-col gap-2 rounded-md border bg-card p-3",
-        disableOuterSpacing ? "my-0" : "my-3",
-      )}
-    >
-      <span className="text-sm leading-[22px] text-foreground">
-        {title ?? t("agentStream.permission.plan")}
-      </span>
-      {description ? (
-        <span className="text-sm leading-5 text-muted-foreground">{description}</span>
-      ) : null}
-      <MarkdownBody nodes={nodes} rules={PLAN_RULES} />
-      {footer ? <div className="flex flex-col gap-2">{footer}</div> : null}
-    </div>
+    <Card size="sm" data-testid={testID} className={disableOuterSpacing ? "my-0" : "my-3"}>
+      <CardHeader>
+        <CardTitle>{title ?? t("agentStream.permission.plan")}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent>
+        <MarkdownBody nodes={nodes} rules={PLAN_RULES} />
+      </CardContent>
+      {footer ? <CardFooter className="flex-col items-stretch gap-2">{footer}</CardFooter> : null}
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { PanelLeft } from "lucide-react";
+import { Menu, PanelLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -12,21 +12,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 
 const MAC_TOGGLE_KEYS = ["mod", "B"];
 const OTHER_TOGGLE_KEYS = ["mod", "."];
-
-/**
- * The Expo app's compact menu glyph: two 16px lines and a short 8px one, 1.5px thick, spread over
- * 12px. Boxes rather than an SVG, as the Expo app draws it: the browser snaps a box's edges to device
- * pixels, so the middle line (at 5.25px) stays as sharp as the others instead of blurring.
- */
-function MobileMenuIcon() {
-  return (
-    <span aria-hidden="true" className="flex h-3 w-4 flex-col items-start justify-between">
-      <span className="h-[1.5px] w-4 rounded-full bg-muted-foreground" />
-      <span className="h-[1.5px] w-4 rounded-full bg-muted-foreground" />
-      <span className="h-[1.5px] w-2 rounded-full bg-muted-foreground" />
-    </span>
-  );
-}
 
 /**
  * The sidebar toggle, as in the Expo app's SidebarMenuToggle: exactly one host shows it, the
@@ -50,23 +35,12 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          // The Expo app's large header control: 28px on desktop, 32px on a phone.
           size={isCompact ? "icon" : "icon-sm"}
           data-testid="menu-button"
           aria-label={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
-          aria-expanded={isOpen}
-          // As the Expo app's leadingToggle: pulled 2px left so the glyph sits on the rows' 16px icon rail.
-          // aria-expanded reports the sidebar's state; it must not paint the ghost button's open look.
-          // No keyboard focus outline: the Expo app's header controls set outlineWidth 0.
-          className="rounded-md text-muted-foreground outline-none aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted md:-ml-0.5"
           onClick={toggle}
         >
-          {/* The Expo app's toggle glyph keeps its colour on hover; only the fill changes. */}
-          {isCompact ? (
-            <MobileMenuIcon />
-          ) : (
-            <PanelLeft strokeWidth={1.5} className="text-muted-foreground" />
-          )}
+          {isCompact ? <Menu /> : <PanelLeft />}
         </Button>
       </TooltipTrigger>
       <TooltipContent side={host === "sidebar" ? "bottom" : "right"}>

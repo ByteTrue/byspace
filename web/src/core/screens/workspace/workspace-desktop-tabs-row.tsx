@@ -85,6 +85,7 @@ import { ContextMenuTrigger } from "@/components/ui/context-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { WithTooltip } from "~/components/with-tooltip";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
 // shadcn's icon-xs button.
@@ -615,11 +616,7 @@ function TabCloseButton({
         onPointerLeave={handleLeave}
         onClick={handleClick}
       >
-        {isClosingTab ? (
-          <span className="size-3 animate-spin rounded-full border border-current border-t-transparent" />
-        ) : (
-          <X size={12} />
-        )}
+        {isClosingTab ? <Spinner /> : <X size={12} />}
       </Button>
     </div>
   );

@@ -1,15 +1,7 @@
 // The PR pane's activity timeline: comments, reviews and review threads, each with its kebab menu
 // and "Add to chat". The view half of archive/expo-app:packages/app/src/git/pull-request-panel/pane.tsx (from
 // TimelineEntryCard down); the pane (core/git/pull-request-panel/pane.tsx) renders these. Kebabs show on hover, while their menu is open, and always on a phone.
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
+import { useCallback, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import {
   CircleCheck,
   CircleX,
@@ -43,6 +35,8 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { Card } from "~/components/ui/card";
 
 const ADD_TO_CHAT_MENU_ICON = <MessageSquarePlus size={14} className="text-muted-foreground" />;
 const COPY_MENU_ICON = <Copy size={14} className="text-muted-foreground" />;
@@ -227,22 +221,12 @@ function ActivityKebab({
   );
 }
 
-function ActivityAvatar({ activity, size }: { activity: PrPaneActivity; size: number }) {
-  const frameStyle = useMemo<CSSProperties>(
-    () => ({ width: size, height: size, backgroundColor: activity.avatarColor }),
-    [activity.avatarColor, size],
-  );
+function ActivityAvatar({ activity }: { activity: PrPaneActivity }) {
   return (
-    <span
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full"
-      style={frameStyle}
-    >
-      {activity.avatarUrl ? (
-        <img src={activity.avatarUrl} alt="" width={size} height={size} className="rounded-full" />
-      ) : (
-        <span className="text-[10px] text-white">{activity.author.slice(0, 1).toUpperCase()}</span>
-      )}
-    </span>
+    <Avatar size="sm">
+      {activity.avatarUrl ? <AvatarImage src={activity.avatarUrl} alt="" /> : null}
+      <AvatarFallback>{activity.author.slice(0, 1).toUpperCase()}</AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -269,16 +253,14 @@ function ActivityVerb({ activity }: { activity: PrPaneActivity }) {
 
 function ActivityHeader({
   activity,
-  avatarSize,
   children,
 }: {
   activity: PrPaneActivity;
-  avatarSize: number;
   children?: ReactNode;
 }) {
   return (
     <>
-      <ActivityAvatar activity={activity} size={avatarSize} />
+      <ActivityAvatar activity={activity} />
       <span className="min-w-0 shrink truncate text-sm text-foreground">{activity.author}</span>
       <ActivityVerb activity={activity} />
       <span className="ml-auto flex shrink-0 items-center gap-2">
@@ -334,7 +316,7 @@ function SingleActivityCard({
   }, [activity.url, collapsed, entry.id, hasBody, onToggleCollapsed]);
   const header = (
     <PressableRow onPress={handleHeaderPress} className={ROW_HEADER}>
-      <ActivityHeader activity={activity} avatarSize={20}>
+      <ActivityHeader activity={activity}>
         <ActivityKebab
           activity={activity}
           visible={actionsVisible}
@@ -441,7 +423,7 @@ function ReviewCard({
       data-testid="pr-pane-activity-row"
     >
       <PressableRow onPress={handleHeaderPress} className={ROW_HEADER}>
-        <ActivityHeader activity={review} avatarSize={20}>
+        <ActivityHeader activity={review}>
           {collapsed && canAddToChat ? (
             <Button variant="ghost" size="xs" onClick={handleAddToChat} className="py-0">
               <MessageSquarePlus data-icon="inline-start" />
@@ -470,7 +452,7 @@ function ReviewCard({
           {threads.length > 0 ? (
             <div className="py-1">
               {threads.map((thread) => (
-                <div key={thread.id} className="mx-3 mb-2 overflow-hidden rounded-md border">
+                <Card key={thread.id} size="sm" className="mx-3 mb-2 gap-0 overflow-hidden py-0">
                   <ThreadBlock
                     thread={thread}
                     collapsed={collapsedEntryIds.has(thread.id)}
@@ -480,7 +462,7 @@ function ReviewCard({
                     onAddThreadToChat={onAddThreadToChat}
                     onToggleCollapsed={onToggleCollapsed}
                   />
-                </div>
+                </Card>
               ))}
             </div>
           ) : null}
@@ -558,7 +540,7 @@ function ThreadBlock({
           {replies.length > 0 ? (
             <div className="mx-3 mt-2">
               {replies.map((reply) => (
-                <div key={reply.id} className="mb-2 overflow-hidden rounded-md border bg-card">
+                <Card key={reply.id} size="sm" className="mb-2 gap-0 overflow-hidden py-0">
                   <ThreadComment
                     comment={reply}
                     attachEnabled={attachEnabled}
@@ -566,7 +548,7 @@ function ThreadBlock({
                     onAddToChat={onAddToChat}
                     isReply
                   />
-                </div>
+                </Card>
               ))}
             </div>
           ) : null}
@@ -599,7 +581,7 @@ function ThreadComment({
       onPointerLeave={handlePointerLeave}
     >
       <div className="flex min-h-8 items-center gap-2 px-3 pt-2 pb-1">
-        <ActivityHeader activity={comment} avatarSize={16}>
+        <ActivityHeader activity={comment}>
           <ActivityKebab
             activity={comment}
             visible={actionsVisible}

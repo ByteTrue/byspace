@@ -29,6 +29,7 @@ import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { withTheme } from "~/app/theme-object";
 import { Item, ItemGroup, ItemTitle } from "~/components/ui/item";
+import { ButtonGroup } from "~/components/ui/button-group";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -109,10 +110,10 @@ function SidebarNavRow({
       </div>
       <div className="flex flex-row items-center gap-3">
         {reorderable ? (
-          <div className="flex flex-row items-center overflow-hidden rounded-md border bg-muted">
+          <ButtonGroup>
             <Button
-              variant="ghost"
-              size="xs"
+              variant="outline"
+              size="icon-xs"
               onClick={handleMoveUp}
               aria-label={t("settings.appearance.sidebar.moveUp")}
               data-testid={`sidebar-nav-move-up-${item.key}`}
@@ -121,8 +122,8 @@ function SidebarNavRow({
               {moveUpIcon}
             </Button>
             <Button
-              variant="ghost"
-              size="xs"
+              variant="outline"
+              size="icon-xs"
               onClick={handleMoveDown}
               aria-label={t("settings.appearance.sidebar.moveDown")}
               data-testid={`sidebar-nav-move-down-${item.key}`}
@@ -130,7 +131,7 @@ function SidebarNavRow({
             >
               {moveDownIcon}
             </Button>
-          </div>
+          </ButtonGroup>
         ) : null}
         <Switch
           checked={item.visible}
