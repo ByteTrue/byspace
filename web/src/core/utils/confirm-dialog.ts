@@ -1,6 +1,5 @@
-// Port of archive/expo-app:packages/app/src/utils/confirm-dialog.ts. Same contract and the same native Wails
-// dialog on desktop; in a browser it opens shadcn's AlertDialog (ConfirmDialogHost) instead of
-// window.confirm.
+// Port of archive/expo-app:packages/app/src/utils/confirm-dialog.ts. Same contract; everywhere, the desktop
+// app included, it opens shadcn's AlertDialog (ConfirmDialogHost), never a native dialog.
 export interface ConfirmDialogInput {
   title: string;
   message: string;
@@ -31,44 +30,12 @@ export function getPendingConfirmDialog(): PendingConfirmDialog | null {
   return pending;
 }
 
-function isWailsNativeContainer(): boolean {
-  return (
-    window.location.protocol === "wails:" ||
-    window.location.hostname === "wails.localhost" ||
-    "wails" in window
-  );
-}
-
 function blurActiveElement(): void {
   const active = document.activeElement;
   if (active instanceof HTMLElement) active.blur();
 }
 
-async function showWailsConfirmDialog(input: ConfirmDialogInput): Promise<boolean> {
-  blurActiveElement();
-  const res = await fetch("/_byspace/desktop/confirm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: input.title,
-      message: input.message,
-      confirmLabel: input.confirmLabel ?? "OK",
-      cancelLabel: input.cancelLabel ?? "Cancel",
-    }),
-  });
-  if (!res.ok) return false;
-  const data = (await res.json()) as { confirmed?: boolean };
-  return Boolean(data.confirmed);
-}
-
 export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean> {
-  if (isWailsNativeContainer()) {
-    try {
-      return await showWailsConfirmDialog(input);
-    } catch {
-      // The desktop endpoint is unreachable; fall through to the in-page dialog.
-    }
-  }
   blurActiveElement();
   // A second request while one is open answers the first with "cancel".
   pending?.settle(false);

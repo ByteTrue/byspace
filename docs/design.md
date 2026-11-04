@@ -108,7 +108,7 @@ The desktop card is shadcn's `Dialog` as shipped. Footer actions sit on the righ
 
 Tooltips are shadcn's `Tooltip`, inverted against the surface. Text inside one inherits its colour; `text-foreground` there disappears into the fill.
 
-`confirmDialog` is for destructive yes/no and imperative confirmation. Promise-based: `await confirmDialog({ destructive: true, ... })`. Anything where a wrong click loses work.
+`confirmDialog` is for destructive yes/no and imperative confirmation. Promise-based: `await confirmDialog({ destructive: true, ... })`. Anything where a wrong click loses work. It opens shadcn's `AlertDialog` in the page on every platform, the desktop and Android apps included; do not call a native dialog (`window.confirm`, `window.alert`, a Wails dialog) from the page, since it looks foreign and blocks the window. Errors that interrupt a flow go through `showAlert` (`web/src/lib/alert.ts`), which is a toast.
 
 Three themes is `DropdownMenu`. A row's value from a short list is `Select`. Thirty hosts is `Combobox`. A label and a value is `AdaptiveModalSheet`. "Are you sure?" is `confirmDialog`.
 

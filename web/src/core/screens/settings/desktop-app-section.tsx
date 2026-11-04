@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/desktop-app-section.tsx: the Wails desktop app's General and About rows. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/desktop-app-section.py; edit it directly.
+import { isWailsDesktopContainer } from "@/utils/wails";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
@@ -71,21 +72,6 @@ interface DesktopSettingsResponse {
   configFolderFull?: string;
   cliStatus?: CLIStatus;
   update?: UpdateStatusSnapshot;
-}
-
-function isWailsDesktopContainer(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const isWailsOrigin =
-    window.location?.protocol === "wails:" ||
-    window.location?.hostname === "wails.localhost" ||
-    "wails" in window;
-  if (!isWailsOrigin) {
-    return false;
-  }
-  const ua = window.navigator?.userAgent ?? "";
-  return !/android|iphone|ipad|ipod/i.test(ua);
 }
 
 function isChineseLanguage(lang: string | undefined): boolean {

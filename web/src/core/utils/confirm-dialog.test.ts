@@ -9,26 +9,16 @@ describe("confirmDialog", () => {
     getPendingConfirmDialog()?.settle(false);
   });
 
-  it("uses the native Wails /_byspace/desktop/confirm endpoint inside Wails containers", async () => {
+  it("opens the in-page dialog in the desktop app too, never a native one", async () => {
     (window as { wails?: unknown }).wails = {};
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ confirmed: true }),
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-    const confirmed = await confirmDialog({
-      title: "Uninstall BySpace skills?",
-      message: "Removes all BySpace orchestration skills.",
-      confirmLabel: "Uninstall",
-      destructive: true,
-    });
+    const answer = confirmDialog({ title: "Close terminal?", message: "" });
 
-    expect(confirmed).toBe(true);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/_byspace/desktop/confirm",
-      expect.objectContaining({ method: "POST" }),
-    );
-    expect(getPendingConfirmDialog()).toBeNull();
+    expect(getPendingConfirmDialog()?.input.title).toBe("Close terminal?");
+    getPendingConfirmDialog()?.settle(true);
+    await expect(answer).resolves.toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("blurs the focused element and answers with the in-page dialog's choice", async () => {

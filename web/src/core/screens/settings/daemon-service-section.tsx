@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
+import { isWailsDesktopContainer } from "@/utils/wails";
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -25,21 +26,6 @@ interface ServiceView {
   state: string;
   label: string;
   linger?: boolean;
-}
-
-function isWailsDesktopContainer(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const isWailsOrigin =
-    window.location?.protocol === "wails:" ||
-    window.location?.hostname === "wails.localhost" ||
-    "wails" in window;
-  if (!isWailsOrigin) {
-    return false;
-  }
-  const ua = window.navigator?.userAgent ?? "";
-  return !/android|iphone|ipad|ipod/i.test(ua);
 }
 
 /**

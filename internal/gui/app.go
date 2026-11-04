@@ -76,28 +76,31 @@ func withDesktopSettingsAPI(
 	onDockChanged func(DesktopSettings),
 	onTintTitleBar func([3]uint8, bool),
 	onOpenConfigFolder func(),
-	onWindowAction func(string),
-	onConfirmDialog func(title, message, confirmLabel, cancelLabel string) bool,
+	onNotify func(id, title, body string, data map[string]any) bool,
+	onAuthorizeNotifications func() bool,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/_byspace/desktop/confirm" && r.Method == http.MethodPost {
+		if r.URL.Path == "/_byspace/desktop/notify/authorize" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			_ = json.NewEncoder(w).Encode(map[string]any{"authorized": onAuthorizeNotifications != nil && onAuthorizeNotifications()})
+			return
+		}
+		if r.URL.Path == "/_byspace/desktop/notify" && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			var req struct {
-				Title        string `json:"title"`
-				Message      string `json:"message"`
-				ConfirmLabel string `json:"confirmLabel"`
-				CancelLabel  string `json:"cancelLabel"`
+				ID    string         `json:"id"`
+				Title string         `json:"title"`
+				Body  string         `json:"body"`
+				Data  map[string]any `json:"data"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			confirmed := false
-			if onConfirmDialog != nil {
-				confirmed = onConfirmDialog(req.Title, req.Message, req.ConfirmLabel, req.CancelLabel)
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"confirmed": confirmed})
+			delivered := onNotify != nil && onNotify(req.ID, req.Title, req.Body, req.Data)
+			_ = json.NewEncoder(w).Encode(map[string]any{"delivered": delivered})
 			return
 		}
 		if r.URL.Path == "/_byspace/desktop/settings" {
@@ -129,7 +132,6 @@ func withDesktopSettingsAPI(
 					CreateBackup     bool      `json:"createBackup"`
 					TitleBarColor    *[3]uint8 `json:"titleBarColor"`
 					TitleBarDark     *bool     `json:"titleBarDark"`
-					WindowAction     string    `json:"windowAction"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -187,9 +189,6 @@ func withDesktopSettingsAPI(
 				}
 				if patch.LinkCLI || patch.AddCLIToPath {
 					_, _ = selfupdate.AddCLIToPath()
-				}
-				if patch.WindowAction != "" && onWindowAction != nil {
-					onWindowAction(patch.WindowAction)
 				}
 				if patch.OpenConfigFolder && onOpenConfigFolder != nil {
 					go onOpenConfigFolder()
@@ -280,6 +279,20 @@ func Run(version string, showMain bool, initialLink string) error {
 	// so it never deadlocks with Wails' main-thread tray/window callbacks (mirroring magpie's
 	// lightweight.go invariant: "never hold a lock on the main thread around InvokeSync").
 	var mainWin *application.WebviewWindow
+	var showMainWindow func(targetURL string)
+	// A clicked notification brings the window forward and opens what it is about; a window the
+	// lightweight mode released loads that route directly.
+	notifier := newDesktopNotifier(func(data map[string]any) {
+		route, _ := data["route"].(string)
+		application.InvokeAsync(func() {
+			if mainWin == nil {
+				go showMainWindow(route)
+				return
+			}
+			mainWin.Show().Focus()
+			mainWin.ExecJS(notificationClickScript(data))
+		})
+	})
 	var releasedWin atomic.Pointer[application.WebviewWindow]
 
 	syncDockPolicy := func(s DesktopSettings, front bool) {
@@ -341,70 +354,11 @@ func Run(version string, showMain bool, initialLink string) error {
 			func() {
 				_ = openFolder(app, homeDir)
 			},
-			func(action string) {
-				application.InvokeAsync(func() {
-					w := mainWin
-					if w == nil {
-						return
-					}
-					switch action {
-					case "minimize":
-						w.Minimise()
-					case "maximize":
-						if w.IsMaximised() {
-							w.UnMaximise()
-						} else {
-							w.Maximise()
-						}
-					case "close":
-						if runtime.GOOS == "darwin" && w.IsFullscreen() {
-							w.UnFullscreen()
-						}
-						w.Hide()
-						s := LoadDesktopSettings(homeDir)
-						setDock(ShouldShowInDock(s, false, false), false)
-					}
-				})
+			func(id, title, body string, data map[string]any) bool {
+				return notifier.send(id, title, body, data)
 			},
-			func(title, message, confirmLabel, cancelLabel string) bool {
-				if app == nil {
-					return false
-				}
-				if strings.TrimSpace(confirmLabel) == "" {
-					confirmLabel = "OK"
-				}
-				if strings.TrimSpace(cancelLabel) == "" {
-					cancelLabel = "Cancel"
-				}
-				ch := make(chan bool, 1)
-				application.InvokeAsync(func() {
-					d := app.Dialog.Question().
-						SetTitle(title).
-						SetMessage(message)
-					confirmBtn := d.AddButton(confirmLabel)
-					confirmBtn.OnClick(func() {
-						select {
-						case ch <- true:
-						default:
-						}
-					})
-					cancelBtn := d.AddButton(cancelLabel)
-					cancelBtn.OnClick(func() {
-						select {
-						case ch <- false:
-						default:
-						}
-					})
-					d.SetDefaultButton(confirmBtn)
-					d.SetCancelButton(cancelBtn)
-					d.Show()
-				})
-				select {
-				case res := <-ch:
-					return res
-				case <-time.After(5 * time.Minute):
-					return false
-				}
+			func() bool {
+				return notifier.ready.Load() && notifier.authorized()
 			},
 		)
 
@@ -504,7 +458,7 @@ func Run(version string, showMain bool, initialLink string) error {
 		return w
 	}
 
-	showMainWindow := func(targetURL string) {
+	showMainWindow = func(targetURL string) {
 		s := LoadDesktopSettings(homeDir)
 		setDock(ShouldShowInDock(s, true, false), true)
 		application.InvokeAsync(func() {
@@ -599,6 +553,7 @@ func Run(version string, showMain bool, initialLink string) error {
 
 		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 			appStarted.Store(true)
+			go notifier.start()
 			if mainWin != nil {
 				configureNativeTitlebar(mainWin)
 			}

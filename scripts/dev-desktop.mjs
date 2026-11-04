@@ -2,7 +2,7 @@
 // Runs the Wails v3 desktop client in dev mode against this checkout's .dev/byspace-home
 // on 127.0.0.1:6778 (attaching to an existing dev daemon on 6778 or starting it in-process).
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configureDevBySpaceHome, runDevChild } from "./dev-home.mjs";
@@ -48,13 +48,44 @@ if (!existsSync(binary)) {
   process.exit(1);
 }
 
+// macOS: run the binary from inside an app bundle, as the packaged app does. Notification Center
+// (internal/gui/notify.go) only serves bundled apps; outside one, notifications fall back to the
+// webview's. A dev bundle id keeps the dev app's notification permission apart from BySpace's.
+function devMacBundle() {
+  const bundle = resolve(rootDir, "bin", "BySpace Dev.app");
+  const executable = resolve(bundle, "Contents", "MacOS", "byspace-app");
+  mkdirSync(resolve(bundle, "Contents", "MacOS"), { recursive: true });
+  copyFileSync(binary, executable);
+  const plist = readFileSync(resolve(rootDir, "build", "darwin", "Info.plist"), "utf8")
+    .replaceAll("@VERSION@", "0.0.0-dev")
+    .replace("<string>com.bytetrue.byspace</string>", "<string>com.bytetrue.byspace.dev</string>")
+    .replace(
+      "<key>CFBundleExecutable</key><string>byspace</string>",
+      "<key>CFBundleExecutable</key><string>byspace-app</string>",
+    )
+    .replace(
+      "<key>CFBundleName</key><string>BySpace</string>",
+      "<key>CFBundleName</key><string>BySpace Dev</string>",
+    )
+    .replace(
+      "<key>CFBundleDisplayName</key><string>BySpace</string>",
+      "<key>CFBundleDisplayName</key><string>BySpace Dev</string>",
+    )
+    // The dev app must not claim byspace:// links from the installed one.
+    .replace(/\t<key>CFBundleURLTypes<\/key>[\s\S]*?\n\t<\/array>\n/, "");
+  writeFileSync(resolve(bundle, "Contents", "Info.plist"), plist);
+  execFileSync("codesign", ["--force", "--sign", "-", bundle], { stdio: "inherit" });
+  return executable;
+}
+const launchBinary = process.platform === "darwin" ? devMacBundle() : binary;
+
 console.log("══════════════════════════════════════════════════════");
 console.log("  BySpace Desktop Client Dev (Wails v3)");
 console.log("══════════════════════════════════════════════════════");
 console.log(`  Home:    ${process.env.BYSPACE_HOME}`);
 console.log(`  Daemon:  ${process.env.BYSPACE_LISTEN}`);
-console.log(`  Binary:  ${binary}`);
+console.log(`  Binary:  ${launchBinary}`);
 console.log(`  Web UI:  ${process.env.BYSPACE_WEB_DIR}`);
 console.log("══════════════════════════════════════════════════════");
 
-await runDevChild(binary, ["app"], { cwd: rootDir, env: process.env });
+await runDevChild(launchBinary, ["app"], { cwd: rootDir, env: process.env });

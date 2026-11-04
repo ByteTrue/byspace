@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/hooks/use-image-attachment-picker.ts: the browser's file dialog,
 // images only. No permission prompt exists on the web.
+import { showAlert } from "~/lib/alert";
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -24,9 +25,7 @@ export function useImageAttachmentPicker(): {
       );
     } catch (error) {
       console.error("[ImageAttachmentPicker] Failed to pick image:", error);
-      window.alert(
-        `${t("imageAttachmentPicker.errorTitle")}\n${t("imageAttachmentPicker.failedToSelect")}`,
-      );
+      showAlert(t("imageAttachmentPicker.errorTitle"), t("imageAttachmentPicker.failedToSelect"));
       return null;
     } finally {
       isPickingRef.current = false;

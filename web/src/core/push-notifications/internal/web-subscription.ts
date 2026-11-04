@@ -1,3 +1,5 @@
+import { ensureOsNotificationPermission } from "@/utils/os-notifications";
+import { isWailsContainer } from "@/utils/wails";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { RevokePushNotificationsInput, StartPushNotificationsInput } from "./types";
 
@@ -30,17 +32,6 @@ export type WebPushState =
 
 const NATIVE_NOTIFY_STORAGE_PREFIX = "@byspace:native-notify:";
 
-function isWailsNativeContainer(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return (
-    window.location?.protocol === "wails:" ||
-    window.location?.hostname === "wails.localhost" ||
-    "wails" in window
-  );
-}
-
 function readNativeNotifyEnabled(serverId: string): boolean {
   try {
     return window.localStorage?.getItem(NATIVE_NOTIFY_STORAGE_PREFIX + serverId) === "1";
@@ -62,7 +53,7 @@ function writeNativeNotifyEnabled(serverId: string, enabled: boolean): void {
 }
 
 export function isWebPushSupported(): boolean {
-  if (isWailsNativeContainer()) {
+  if (isWailsContainer()) {
     return true;
   }
   return (
@@ -92,7 +83,7 @@ export async function getWebPushState(
   client: DaemonClient | null,
   serverId: string,
 ): Promise<WebPushState> {
-  if (isWailsNativeContainer()) {
+  if (isWailsContainer()) {
     if (!client) {
       return "unavailable";
     }
@@ -120,11 +111,9 @@ export async function enableWebPush(input: {
   client: DaemonClient;
   serverId: string;
 }): Promise<WebPushState> {
-  if (isWailsNativeContainer()) {
+  if (isWailsContainer()) {
     writeNativeNotifyEnabled(input.serverId, true);
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      void Notification.requestPermission().catch(() => undefined);
-    }
+    void ensureOsNotificationPermission();
     return "enabled";
   }
   if (!isWebPushSupported()) {
@@ -156,7 +145,7 @@ export async function enableWebPush(input: {
  * daemon leases tokens, so re-registering on reconnect is what keeps it alive.
  */
 export function startWebSubscription(input: StartPushNotificationsInput): () => void {
-  if (isWailsNativeContainer()) {
+  if (isWailsContainer()) {
     const prevStatuses = new Map<string, string>();
     const unsubscribe = input.client.on("agent_update", (msg) => {
       if (msg.payload.kind !== "upsert") {
@@ -222,7 +211,7 @@ export function startWebSubscription(input: StartPushNotificationsInput): () => 
 }
 
 export async function revokeWebSubscription(input: RevokePushNotificationsInput): Promise<void> {
-  if (isWailsNativeContainer()) {
+  if (isWailsContainer()) {
     writeNativeNotifyEnabled(input.serverId, false);
     return;
   }
