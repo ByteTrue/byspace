@@ -479,8 +479,6 @@ function MobileWorkspaceTabOption({
   normalizedServerId,
   normalizedWorkspaceId,
   selected,
-  active,
-  onPress,
   onCopyResumeCommand,
   onCopyAgentId,
   onCopyTerminalId,
@@ -498,8 +496,6 @@ function MobileWorkspaceTabOption({
   normalizedServerId: string;
   normalizedWorkspaceId: string;
   selected: boolean;
-  active: boolean;
-  onPress: () => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
@@ -581,12 +577,10 @@ function MobileWorkspaceTabOption({
       <WorkspaceTabOptionRow
         presentation={presentation}
         selected={selected}
-        active={active}
-        onPress={onPress}
         trailingAccessory={trailingAccessory}
       />
     ),
-    [selected, active, onPress, trailingAccessory],
+    [selected, trailingAccessory],
   );
 
   return (
@@ -637,17 +631,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   }, []);
 
   const renderTabOption = useCallback(
-    ({
-      option,
-      selected,
-      active,
-      onPress,
-    }: {
-      option: ComboboxOption;
-      selected: boolean;
-      active: boolean;
-      onPress: () => void;
-    }) => {
+    ({ option, selected }: { option: ComboboxOption; selected: boolean }) => {
       const tab = tabByKey.get(option.id);
       if (!tab) {
         return <div />;
@@ -664,8 +648,6 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           normalizedServerId={normalizedServerId}
           normalizedWorkspaceId={normalizedWorkspaceId}
           selected={selected}
-          active={active}
-          onPress={onPress}
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
           onCopyTerminalId={onCopyTerminalId}

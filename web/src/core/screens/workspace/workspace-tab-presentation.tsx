@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-presentation.tsx: the same
 // presentation resolver; the icon and option row are DOM.
 import { useMemo, type ComponentType, type ReactElement, type ReactNode } from "react";
-import { Check, CircleAlert } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { StatusRing } from "@/components/status-ring";
@@ -12,7 +12,6 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { cn } from "cn";
-import { Item } from "~/components/ui/item";
 
 export interface WorkspaceTabPresentation {
   key: string;
@@ -169,59 +168,33 @@ export function WorkspaceTabIcon({
   );
 }
 
-/** A row in the phone tab switcher. */
+/** A row's content in the phone tab switcher; the combobox item around it owns the press,
+ * the highlight and the check. */
 export function WorkspaceTabOptionRow({
   presentation,
   selected,
-  active,
-  onPress,
   trailingAccessory,
 }: {
   presentation: WorkspaceTabPresentation;
   selected: boolean;
-  active: boolean;
-  onPress: () => void;
   trailingAccessory?: ReactNode;
 }): ReactElement {
   const { t } = useTranslation();
   return (
-    // The Expo app highlights the row, and the hovered/pressed press area, with surface1 (card):
-    // the same white as the sheet in light, a step lighter in dark.
-    <div className={cn("mx-1 mb-1 flex min-h-9 items-center gap-2 px-1 py-1", active && "bg-card")}>
-      <Item asChild size="xs" className="text-left">
-        <button
-          type="button"
-          onClick={onPress}
-          className={cn("group/option min-w-0 flex-1 hover:bg-muted", active && "bg-muted")}
-        >
-          <span className="flex w-4 items-center justify-center">
-            <WorkspaceTabIcon
-              presentation={presentation}
-              active={selected || active}
-              backdrop="surface0"
-            />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm leading-[normal] text-foreground">
-            {presentation.titleState === "loading"
-              ? t("workspace.tabs.loading")
-              : presentation.label}
-          </span>
-        </button>
-      </Item>
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="flex w-4 items-center justify-center">
+        <WorkspaceTabIcon presentation={presentation} active={selected} backdrop="surface0" />
+      </span>
+      <span className="min-w-0 flex-1 truncate">
+        {presentation.titleState === "loading" ? t("workspace.tabs.loading") : presentation.label}
+      </span>
       {presentation.modified ? (
         <span
           className="size-2 shrink-0 rounded-full bg-muted-foreground"
           aria-label={t("workspace.tabs.modified")}
         />
       ) : null}
-      {selected ? (
-        <span className="flex w-4 items-center justify-center text-muted-foreground">
-          <Check size={16} />
-        </span>
-      ) : null}
-      {trailingAccessory ? (
-        <span className="flex items-center justify-center">{trailingAccessory}</span>
-      ) : null}
-    </div>
+      {trailingAccessory}
+    </span>
   );
 }

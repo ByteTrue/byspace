@@ -1,7 +1,14 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-tab-trailing-accessory.tsx: the "..."
 // beside each row of the phone tab switcher, holding that tab's menu.
 import { Button } from "~/components/ui/button";
-import { useMemo, type ReactElement, type SyntheticEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type MouseEvent,
+  type ReactElement,
+  type SyntheticEvent,
+} from "react";
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -72,15 +79,23 @@ export function MobileTabTrailingAccessory({
   menuEntries: WorkspaceTabMenuEntry[];
 }): ReactElement {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  // The row is a shadcn Combobox item, whose list prevents the default of every pointerdown to
+  // keep focus on its input; Radix's trigger skips a prevented pointerdown, so a pointer opens the
+  // menu on click here. Keys still go through the trigger (a key's click has detail 0).
+  const handleTriggerClick = useCallback((event: MouseEvent) => {
+    if (event.detail > 0) setOpen((current) => !current);
+  }, []);
   return (
-    // The accessory sits inside a sessions-list row (a Command item): a press or key here, or in
-    // the portaled menu (React events bubble through portals), must not also select the row.
+    // A press or key here, or in the portaled menu (React events bubble through portals), must not
+    // also select the row.
     <span className="contents" onClick={stopPropagation} onKeyDown={stopPropagation}>
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="icon-sm"
+            onClick={handleTriggerClick}
             data-testid={`${menuTestIDBase}-trigger`}
             aria-label={t("workspace.tabs.menu.openFor", { label: presentationLabel })}
           >

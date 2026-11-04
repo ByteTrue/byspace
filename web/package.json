@@ -19,6 +19,7 @@
     "profile:side-pane": "playwright test --config playwright.profile.config.ts side-pane-performance.spec.ts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@bytetrue/client": "*",
     "@bytetrue/highlight": "*",
     "@bytetrue/protocol": "*",
