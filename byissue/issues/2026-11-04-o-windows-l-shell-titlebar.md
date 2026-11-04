@@ -32,10 +32,7 @@ created: 2026-11-04
 
 ## 剩余
 
-顶栏条拖窗已由用户在 Windows 真机确认（2026-11-05，全宽可拖，按钮与边缘 resize 正常）。还不能关的两项：
-
-- mac 不回归：`screen-header.tsx` 给左右子组加了 `data-wails-drag`，mac 上头部行文字区的拖窗命中范围变大；窗口有框，`wails:drag` 应该无效，但未实测。
-- 深色 tint：新结构下 `titleBarColor` 同步脚本仍否工作未验。
+只剩一项：mac 桌面端不回归。`screen-header.tsx` 给头部行左右子组加了 `data-wails-drag`，mac 上头部行文字区的拖窗命中范围变大；窗口有框，`wails:drag` 应该无效，但需要在 mac 上实测才能关。Windows 侧已全部确认：顶栏条全宽可拖、按钮三态、边缘 resize、深色 tint、IME 候选框跟随光标。
 
 ## 验证
 
@@ -48,4 +45,5 @@ Windows 本机构建桌面端：按钮三态可用、拖拽只在顶部条、卡
 - 2026-11-05：顶栏条仍不可拖。两次误判先排除：给 `controlsArea` 补 `data-wails-drag` 无效；给 `ScreenHeader` 左右子组补字面量后头部行确实能拖了（证明「只看命中元素」的机制判断是对的），但顶栏条照旧不可拖；再猜「inset 透置 margin 吞事件」加 `relative z-10`，症状不变，已回退。
 - 2026-11-05 真根因：`WAILS_DRAG_DATA_SET = { wailsDrag: "true" }` 在 React DOM 里渲染成属性 `wailsdrag="true"`，而注入 CSS 的选择器是 `[data-wails-drag="true"]`，从不匹配。该常量是 RN `dataSet`（会映射成 `data-*`）的残留，全仓只有顶栏在用；其他可拖区域（`screen-header.tsx`、`sidebar-header-row.tsx`）都写字面量——这就是「头部行能拖、顶栏条永远不能拖」的全部原因。顶栏三处改字面量，删除死常量。
 - 2026-11-05：用户 Windows 真机确认顶栏条全宽可拖，按钮、边缘 resize 均正常。根因定案。
+- 2026-11-05：用户确认深色模式 tint 在新结构下正确（顶栏与侧栏同底色、按钮浅色），IME 候选框缩放窗口后跟随光标。
 - 验证备注：cua 的合成拖拽对窗口移动/resize 均不可靠（连已知可用的区域也拖不动；resize 一次偶然生效），壳层拖拽验证以用户手测为准；按钮点击/最小化/最大化用 UIA Invoke 验证有效。
