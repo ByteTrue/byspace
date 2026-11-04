@@ -51,6 +51,7 @@ export const en = {
   shell: {
     menu: {
       toggleSidebar: "Toggle sidebar",
+      resizeSidebar: "Resize sidebar",
       open: "Open menu",
       close: "Close menu",
     },

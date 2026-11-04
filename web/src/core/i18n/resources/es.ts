@@ -53,6 +53,7 @@ export const es: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "Alternar barra lateral",
+      resizeSidebar: "Cambiar tamaño de la barra lateral",
       open: "abrir menú",
       close: "Cerrar menú",
     },

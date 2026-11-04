@@ -54,6 +54,7 @@ export const fr: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "Basculer la barre latérale",
+      resizeSidebar: "Redimensionner la barre latérale",
       open: "Ouvrir le menu",
       close: "Fermer le menu",
     },

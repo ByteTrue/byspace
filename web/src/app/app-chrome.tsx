@@ -1,5 +1,5 @@
 import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
-import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useStoreReady } from "@/app/_layout";
 import { CommandCenter } from "@/command-center/command-center";
@@ -36,6 +36,7 @@ import {
 } from "@/utils/host-routes";
 import { AppSidebar } from "~/app/app-sidebar";
 import { SidebarResizeRail } from "~/app/sidebar-resize-rail";
+import { SidebarSlotProvider } from "~/app/sidebar-slot";
 import { WorkspaceLayer } from "~/app/workspace-layer";
 import { Sidebar, SidebarInset, SidebarProvider, useSidebar } from "~/components/ui/sidebar";
 import { cn } from "cn";
@@ -161,9 +162,17 @@ function AppChromeContent() {
     }),
   });
   const sidebarActive = isCompactLayout ? chromeEnabled : desktopSidebarVisible;
-  // Settings own their split layout and run full-bleed; every other desktop route sits in the
-  // inset card (the frame stays when the sidebar is closed), compact layouts never frame.
-  const framed = !isSettingsRoute;
+  // One desktop sidebar for every route: the workspace list, or the navigation a route renders
+  // into it (Settings, through SidebarSlotPortal). Settings on a phone is its own full page.
+  const [slotElement, setSlotElement] = useState<HTMLDivElement | null>(null);
+  const [slotClaimed, setSlotClaimed] = useState(false);
+  const sidebarSlot = useMemo(
+    () => ({ element: slotElement, setClaimed: setSlotClaimed }),
+    [slotElement],
+  );
+  const routeOwnsSidebar = !chromeEnabled && slotClaimed;
+  const framed = !(isSettingsRoute && isCompactLayout);
+  const sidebarOpen = routeOwnsSidebar ? !isCompactLayout : desktopSidebarVisible;
   // On a phone the explorer is a sheet over the page instead of a docked pane.
   const routed = (
     <WorkspaceLayer>
@@ -180,32 +189,45 @@ function AppChromeContent() {
     <CommandCenterProvider>
       <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
         <SidebarModelProvider active={sidebarActive}>
-          <SidebarProvider
-            open={desktopSidebarVisible}
-            onOpenChange={ignoreOpenChange}
-            style={providerStyle}
-            // No width animation while the rail drags: the sidebar follows the pointer.
-            className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
-          >
-            <MobileSidebarSync />
-            {framed ? (
-              <Sidebar variant="inset" data-testid="left-sidebar">
-                {chromeEnabled ? <AppSidebar onImportSession={openImportSession} /> : null}
-                {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen. */}
-                {chromeEnabled && !isCompactLayout && !isWorkspaceFocusModeEnabled ? (
-                  <SidebarResizeRail width={sidebarWidth} viewportWidth={viewportWidth} />
-                ) : null}
-              </Sidebar>
-            ) : null}
-            {/* One element for both, so a workspace covered by Settings stays mounted (the
-                workspace layer); Settings run full-bleed as a plain block. */}
-            {importSessionSheet}
-            <SidebarInset
-              className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
+          <SidebarSlotProvider value={sidebarSlot}>
+            <SidebarProvider
+              open={sidebarOpen}
+              onOpenChange={ignoreOpenChange}
+              style={providerStyle}
+              // No width animation while the rail drags: the sidebar follows the pointer.
+              className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
             >
-              {content}
-            </SidebarInset>
-          </SidebarProvider>
+              <MobileSidebarSync />
+              {framed ? (
+                <Sidebar variant="inset" data-testid="left-sidebar">
+                  {chromeEnabled ? (
+                    <AppSidebar onImportSession={openImportSession} />
+                  ) : (
+                    <div ref={setSlotElement} className="flex min-h-0 flex-1 flex-col" />
+                  )}
+                  {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen.
+                    A route's own navigation cannot be collapsed: the rail only resizes it. */}
+                  {(chromeEnabled || routeOwnsSidebar) &&
+                  !isCompactLayout &&
+                  !isWorkspaceFocusModeEnabled ? (
+                    <SidebarResizeRail
+                      width={sidebarWidth}
+                      viewportWidth={viewportWidth}
+                      collapsible={!routeOwnsSidebar}
+                    />
+                  ) : null}
+                </Sidebar>
+              ) : null}
+              {/* One element for both, so a workspace covered by Settings stays mounted (the
+                workspace layer); Settings on a phone run full-bleed as a plain block. */}
+              {importSessionSheet}
+              <SidebarInset
+                className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
+              >
+                {content}
+              </SidebarInset>
+            </SidebarProvider>
+          </SidebarSlotProvider>
           <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
         </SidebarModelProvider>
         <WorktreeSetupCalloutSource />

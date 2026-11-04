@@ -24,14 +24,17 @@ interface RailDrag {
 export function SidebarResizeRail({
   width,
   viewportWidth,
+  collapsible = true,
 }: {
   width: number;
   viewportWidth: number;
+  /** False for a route's own navigation (Settings): the rail resizes it, a click does nothing. */
+  collapsible?: boolean;
 }) {
   const { t } = useTranslation();
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
-  const expanded = useSidebar().state === "expanded";
+  const expanded = useSidebar().state === "expanded" || !collapsible;
   const dragRef = useRef<RailDrag | null>(null);
 
   const handlePointerDown = useCallback(
@@ -80,15 +83,16 @@ export function SidebarResizeRail({
   const handleClick = useCallback(() => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (drag?.moved) return;
+    if (drag?.moved || !collapsible) return;
     toggleDesktopAgentList();
-  }, [toggleDesktopAgentList]);
+  }, [collapsible, toggleDesktopAgentList]);
+  const label = collapsible ? t("shell.menu.toggleSidebar") : t("shell.menu.resizeSidebar");
 
   return (
     <SidebarRail
       data-testid="left-sidebar-rail"
-      aria-label={t("shell.menu.toggleSidebar")}
-      title={t("shell.menu.toggleSidebar")}
+      aria-label={label}
+      title={label}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

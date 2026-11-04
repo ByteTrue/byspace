@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings-screen.tsx: the settings sidebar, detail pane, General and About. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-screen.py; edit it directly.
+import { SidebarSlotPortal } from "~/app/sidebar-slot";
 import {
   useCallback,
   useEffect,
@@ -42,7 +43,6 @@ import {
 } from "~/components/ui/select";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import {
-  Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
@@ -73,7 +73,6 @@ import {
   type HostProfile,
 } from "@/types/host-connection";
 import { BackHeader } from "@/components/headers/back-header";
-import { DesktopContentFrame } from "@/components/desktop-window-titlebar";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
@@ -106,7 +105,7 @@ import {
 
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
-import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import {
   buildSettingsHostSectionRoute,
@@ -753,13 +752,11 @@ function SettingsSidebar({
       </nav>
     );
   }
+  // Rendered into the app's desktop sidebar (SidebarSlotPortal), which owns its width and rail.
   return (
-    <Sidebar
-      collapsible="none"
-      role="navigation"
+    <nav
       aria-label={t("settings.title")}
-      className="h-full shrink-0"
-      style={SIDEBAR_WIDTH_STYLE}
+      className="flex min-h-0 flex-1 flex-col"
       data-testid="settings-sidebar"
     >
       <SidebarHeader>
@@ -771,11 +768,9 @@ function SettingsSidebar({
         />
       </SidebarHeader>
       <SidebarContent data-testid="settings-sidebar-scroll-body">{sidebarBody}</SidebarContent>
-    </Sidebar>
+    </nav>
   );
 }
-
-const SIDEBAR_WIDTH_STYLE = { width: SETTINGS_DESKTOP_SIDEBAR_WIDTH };
 
 // ---------------------------------------------------------------------------
 // Main screen
@@ -1132,12 +1127,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     );
   }
 
-  // Desktop split view — mirrors AppContainer: sidebar owns the titlebar drag
-  // region + traffic-light padding; detail pane renders whatever header the
-  // selected section provides.
+  // Desktop: the navigation goes into the app's sidebar and the detail fills the app's inset
+  // card, the same frame every other route has.
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-sidebar">
-      <div className="flex min-h-0 flex-1 flex-row">
+    <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="settings-detail-pane">
+      <SidebarSlotPortal>
         <SettingsSidebar
           view={view}
           onSelectSection={handleSelectSection}
@@ -1148,21 +1142,14 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           activeHostServerId={activeHostServerId}
           layout="desktop"
         />
-        <DesktopContentFrame
-          enabled
-          sidebarCollapsed={false}
-          showCollapsedSidebarNav={false}
-          testID="settings-detail-pane"
-        >
-          <ScreenHeader
-            borderless={!detailHeader}
-            left={desktopDetailHeaderLeft}
-            leftClassName="gap-2"
-          />
-          <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-            <div className="mx-auto flex w-full max-w-[720px] flex-col p-4 pt-6">{content}</div>
-          </div>
-        </DesktopContentFrame>
+      </SidebarSlotPortal>
+      <ScreenHeader
+        borderless={!detailHeader}
+        left={desktopDetailHeaderLeft}
+        leftClassName="gap-2"
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto flex w-full max-w-[720px] flex-col p-4 pt-6">{content}</div>
       </div>
       {addHostModals}
     </div>

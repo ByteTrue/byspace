@@ -53,6 +53,7 @@ export const ru: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "Переключить боковую панель",
+      resizeSidebar: "Изменить размер боковой панели",
       open: "Открыть меню",
       close: "Закрыть меню",
     },

@@ -53,6 +53,7 @@ export const ar: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "تبديل الشريط الجانبي",
+      resizeSidebar: "تغيير حجم الشريط الجانبي",
       open: "فتح القائمة",
       close: "إغلاق القائمة",
     },

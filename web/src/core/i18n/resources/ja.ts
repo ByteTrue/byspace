@@ -53,6 +53,7 @@ export const ja: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "サイドバーを切り替え",
+      resizeSidebar: "サイドバーのサイズを変更",
       open: "メニューを開く",
       close: "メニューを閉じる",
     },

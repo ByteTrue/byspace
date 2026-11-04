@@ -53,6 +53,7 @@ export const zhCN: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "切换侧边栏",
+      resizeSidebar: "调整侧边栏宽度",
       open: "打开菜单",
       close: "关闭菜单",
     },

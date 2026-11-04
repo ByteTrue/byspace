@@ -53,6 +53,7 @@ export const ko: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "사이드바 토글",
+      resizeSidebar: "사이드바 크기 조절",
       open: "메뉴 열기",
       close: "메뉴 닫기",
     },

@@ -53,6 +53,7 @@ export const ptBR: TranslationResources = {
   shell: {
     menu: {
       toggleSidebar: "Alternar barra lateral",
+      resizeSidebar: "Redimensionar barra lateral",
       open: "Abrir menu",
       close: "Fechar menu",
     },
