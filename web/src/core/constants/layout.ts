@@ -1,5 +1,6 @@
 // Port of archive/expo-app:packages/app/src/constants/layout.ts: identical except useIsCompactFormFactor, which
 // reads the compact breakpoint (below Tailwind's `md`, 768px, shadcn's useIsMobile) from matchMedia.
+import { isWailsContainer } from "@/utils/wails";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 export const FOOTER_HEIGHT = 75;
@@ -26,22 +27,11 @@ export const SETTINGS_DESKTOP_SPLIT_MIN_WIDTH =
 // Desktop app constants for macOS traffic light buttons
 // These buttons (close/minimize/maximize) overlay the top-left corner
 export const DESKTOP_TRAFFIC_LIGHT_WIDTH = 72;
-export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 36;
 
 export const WAILS_DRAG_DATA_SET = { wailsDrag: "true" } as const;
 
 function isMacWailsDesktopWindow(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const isWailsOrigin =
-    window.location?.protocol === "wails:" ||
-    window.location?.hostname === "wails.localhost" ||
-    "wails" in window;
-  if (!isWailsOrigin) {
-    return false;
-  }
-  return /Mac/i.test(window.navigator?.platform ?? "");
+  return isWailsContainer() && /Mac/i.test(window.navigator?.platform ?? "");
 }
 
 function isMacWindowFullscreen(): boolean {

@@ -161,7 +161,9 @@ function AppChromeContent() {
       viewportWidth,
     }),
   });
-  const sidebarActive = isCompactLayout ? chromeEnabled : desktopSidebarVisible;
+  // The sidebar stays subscribed while collapsed (it stays mounted, offcanvas): re-subscribing on
+  // every expand refetched every host's directory and re-rendered the list through the animation.
+  const sidebarActive = chromeEnabled;
   // One desktop sidebar for every route: the workspace list, or the navigation a route renders
   // into it (Settings, through SidebarSlotPortal). Settings on a phone is its own full page.
   const [slotElement, setSlotElement] = useState<HTMLDivElement | null>(null);
@@ -174,16 +176,20 @@ function AppChromeContent() {
   const framed = !(isSettingsRoute && isCompactLayout);
   const sidebarOpen = routeOwnsSidebar ? !isCompactLayout : desktopSidebarVisible;
   // On a phone the explorer is a sheet over the page instead of a docked pane.
-  const routed = (
-    <WorkspaceLayer>
-      <Outlet />
-    </WorkspaceLayer>
-  );
-  const content = isCompactLayout ? (
-    <CompactExplorerSidebarHost enabled={chromeEnabled}>{routed}</CompactExplorerSidebarHost>
-  ) : (
-    routed
-  );
+  // Memoized: opening or closing the sidebar re-renders this shell, and must not re-render the page
+  // under it (the toggle's first frame was that render).
+  const content = useMemo(() => {
+    const routed = (
+      <WorkspaceLayer>
+        <Outlet />
+      </WorkspaceLayer>
+    );
+    return isCompactLayout ? (
+      <CompactExplorerSidebarHost enabled={chromeEnabled}>{routed}</CompactExplorerSidebarHost>
+    ) : (
+      routed
+    );
+  }, [chromeEnabled, isCompactLayout]);
 
   return (
     <CommandCenterProvider>

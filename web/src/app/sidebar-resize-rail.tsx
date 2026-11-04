@@ -13,13 +13,23 @@ interface RailDrag {
   width: number;
   moved: boolean;
   wrapper: HTMLElement | null;
+  /** The two elements shadcn sizes with `--sidebar-width`: the gap and the fixed container. */
+  sized: HTMLElement[];
+  frame: number;
+}
+
+// While dragging, the width goes straight on the two sized elements. Setting shadcn's
+// `--sidebar-width` instead restyles every element that inherits it each frame: on the provider
+// that is the whole app, on these two the whole sidebar.
+function applyWidth(drag: RailDrag): void {
+  drag.frame = 0;
+  for (const element of drag.sized) element.style.width = `${drag.width}px`;
 }
 
 /**
  * shadcn's SidebarRail on the desktop sidebar's edge. A click collapses or expands the sidebar, as
- * shipped; a drag on the open sidebar resizes it. The drag writes `--sidebar-width` on the provider
- * (shadcn's width variable) directly, so the app does not re-render per pointer move, and stores
- * the width on release.
+ * shipped; a drag on the open sidebar resizes it. The drag writes shadcn's `--sidebar-width` on the
+ * DOM once per frame, so React does not re-render per pointer move, and stores the width on release.
  */
 export function SidebarResizeRail({
   width,
@@ -47,7 +57,22 @@ export function SidebarResizeRail({
       const wrapper = event.currentTarget.closest<HTMLElement>('[data-slot="sidebar-wrapper"]');
       // Turns off shadcn's width transition while the pointer drives the width (app-chrome).
       wrapper?.setAttribute("data-resizing", "");
-      dragRef.current = { startX: event.clientX, startWidth: width, width, moved: false, wrapper };
+      const sized = wrapper
+        ? [
+            ...wrapper.querySelectorAll<HTMLElement>(
+              '[data-slot="sidebar-gap"], [data-slot="sidebar-container"]',
+            ),
+          ]
+        : [];
+      dragRef.current = {
+        startX: event.clientX,
+        startWidth: width,
+        width,
+        moved: false,
+        wrapper,
+        sized,
+        frame: 0,
+      };
     },
     [expanded, width],
   );
@@ -56,6 +81,9 @@ export function SidebarResizeRail({
     (event: PointerEvent<HTMLButtonElement>) => {
       const drag = dragRef.current;
       if (!drag) return;
+      // react-resizable-panels hit-tests every pointermove on the document unless it was handled,
+      // reading layout each time: the drag's main cost before this.
+      event.preventDefault();
       const delta = event.clientX - drag.startX;
       if (!drag.moved && Math.abs(delta) < DRAG_THRESHOLD_PX) return;
       drag.moved = true;
@@ -63,7 +91,7 @@ export function SidebarResizeRail({
         requestedWidth: drag.startWidth + delta,
         viewportWidth,
       });
-      drag.wrapper?.style.setProperty("--sidebar-width", `${drag.width}px`);
+      if (!drag.frame) drag.frame = requestAnimationFrame(() => applyWidth(drag));
     },
     [viewportWidth],
   );
@@ -71,8 +99,15 @@ export function SidebarResizeRail({
   const handlePointerUp = useCallback(() => {
     const drag = dragRef.current;
     if (!drag) return;
+    if (drag.frame) cancelAnimationFrame(drag.frame);
     drag.wrapper?.removeAttribute("data-resizing");
-    if (drag.moved) setSidebarWidth(drag.width);
+    if (!drag.moved) return;
+    applyWidth(drag);
+    setSidebarWidth(drag.width);
+    // The provider carries the stored width from the render this release flushes; hand back to it.
+    requestAnimationFrame(() => {
+      for (const element of drag.sized) element.style.removeProperty("width");
+    });
   }, [setSidebarWidth]);
 
   const handlePointerCancel = useCallback(() => {

@@ -1,13 +1,13 @@
-import { useCallback, useMemo } from "react";
+import { SidebarTopBar } from "@/components/sidebar/sidebar-header-row";
+import { useCallback } from "react";
 import { GitBranch, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSidebarModel } from "@/components/sidebar/sidebar-model";
-import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
-import { cn } from "cn";
 import { SidebarToggle } from "~/app/sidebar-toggle";
 import { Button } from "~/components/ui/button";
 import { SidebarContent, SidebarHeader } from "~/components/ui/sidebar";
@@ -29,7 +29,6 @@ export function AppSidebar({ onImportSession }: { onImportSession: () => void })
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
   // On a phone the sidebar is a sheet over the page, so it gets out of the way of any navigation.
   const closeOnNavigate = isCompact ? showMobileAgent : undefined;
-  const trafficLightInset = useMacTrafficLightInset();
   const {
     projects,
     hasProjectsBeforeFilter,
@@ -52,25 +51,12 @@ export function AppSidebar({ onImportSession }: { onImportSession: () => void })
     closeOnNavigate?.();
     onImportSession();
   }, [closeOnNavigate, onImportSession]);
-  const headerStyle = useMemo(
-    () => (trafficLightInset > 0 ? { paddingLeft: 12 + trafficLightInset } : undefined),
-    [trafficLightInset],
-  );
 
   return (
     <>
-      <SidebarHeader
-        data-wails-drag="true"
-        // Desktop: the Expo app's 35px corner row (HEADER_INNER_HEIGHT minus the hairline it pairs
-        // with). Compact: its header band, 8px above and below a 32px close button, over a hairline.
-        className={cn(
-          "shrink-0 flex-row items-center gap-1",
-          isCompact ? "border-b border-sidebar-border px-2 py-2" : "h-[35px] px-3 py-0",
-        )}
-        style={headerStyle}
-      >
-        {isCompact ? null : <SidebarToggle host="sidebar" />}
-        {isCompact ? (
+      {isCompact ? (
+        // The phone's header band: 8px above and below a 32px close button, over a hairline.
+        <SidebarHeader className="shrink-0 flex-row items-center gap-1 border-b border-sidebar-border px-2 py-2">
           <Button
             variant="ghost"
             size="icon"
@@ -81,8 +67,12 @@ export function AppSidebar({ onImportSession }: { onImportSession: () => void })
           >
             <X />
           </Button>
-        ) : null}
-      </SidebarHeader>
+        </SidebarHeader>
+      ) : (
+        <SidebarTopBar>
+          <SidebarToggle host="sidebar" />
+        </SidebarTopBar>
+      )}
       {/* Pinned above the list, as the Expo app's header was: a wheel over them scrolls nothing,
           and they stay in reach when the list is scrolled. */}
       <div className="shrink-0 pt-0.5">

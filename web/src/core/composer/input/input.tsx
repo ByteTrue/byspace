@@ -1162,6 +1162,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // shadcn's InputGroup around the composer: the text, attachments and controls stack inside it.
     const inputWrapperClassName = cn(
       "h-auto shrink flex-col items-stretch gap-2 px-3 py-2",
+      // shadcn greys the group when anything inside is disabled; here that is the send button of
+      // an empty message, so the composer looked disabled whenever it was empty.
+      "has-disabled:bg-transparent has-disabled:opacity-100 dark:has-disabled:bg-input/30",
       // Dotted says "this surface is the same box, but there is nothing to type into it"
       // without swapping the border colour, which reads as an error state.
       readOnly && "border-dotted",

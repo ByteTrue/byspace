@@ -1,8 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, type CSSProperties } from "react";
 import { Menu, PanelLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
-import { useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/layout";
 import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
@@ -23,6 +23,16 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
   const desktopSidebarVisible = useDesktopSidebarVisible();
   const isOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact }));
   const toggleAgentListForLayout = usePanelStore((state) => state.toggleAgentListForLayout);
+  // In the content header of a collapsed sidebar the toggle sits where the sidebar's own was,
+  // right of the macOS traffic lights instead of under them.
+  const trafficLightInset = useMacTrafficLightInset();
+  const style = useMemo<CSSProperties | undefined>(
+    () =>
+      host === "content" && !isCompact && trafficLightInset > 0
+        ? { marginLeft: trafficLightInset }
+        : undefined,
+    [host, isCompact, trafficLightInset],
+  );
   const toggle = useCallback(
     () => toggleAgentListForLayout({ isCompact }),
     [isCompact, toggleAgentListForLayout],
@@ -39,6 +49,7 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
           data-testid="menu-button"
           aria-label={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
           onClick={toggle}
+          style={style}
         >
           {isCompact ? <Menu /> : <PanelLeft />}
         </Button>

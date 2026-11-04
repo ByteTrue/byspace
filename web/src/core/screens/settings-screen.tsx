@@ -47,7 +47,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -759,14 +758,12 @@ function SettingsSidebar({
       className="flex min-h-0 flex-1 flex-col"
       data-testid="settings-sidebar"
     >
-      <SidebarHeader>
-        <SidebarHeaderRow
-          icon={ArrowLeft}
-          label={t("settings.backToWorkspace")}
-          onPress={onBackToWorkspace}
-          testID="settings-back-to-workspace"
-        />
-      </SidebarHeader>
+      <SidebarHeaderRow
+        icon={ArrowLeft}
+        label={t("settings.backToWorkspace")}
+        onPress={onBackToWorkspace}
+        testID="settings-back-to-workspace"
+      />
       <SidebarContent data-testid="settings-sidebar-scroll-body">{sidebarBody}</SidebarContent>
     </nav>
   );

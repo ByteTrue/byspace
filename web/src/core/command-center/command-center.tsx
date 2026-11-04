@@ -560,6 +560,8 @@ export function CommandCenter() {
       onOpenChange={handleOpenChange}
       title={t("shell.commandCenter.placeholder")}
       description={t("shell.commandCenter.placeholder")}
+      // shadcn's dialog default (24rem) cuts the placeholder and fits a handful of rows.
+      className="sm:max-w-2xl"
     >
       <Command
         shouldFilter={false}
@@ -568,7 +570,7 @@ export function CommandCenter() {
         onKeyDown={handleKeyDown}
         data-testid="command-center-panel"
       >
-        <div className="flex items-center gap-1" data-testid="command-center-header">
+        <div className="relative flex items-center gap-1" data-testid="command-center-header">
           {state.scope === "files" ? (
             <Button
               variant="secondary"
@@ -599,8 +601,9 @@ export function CommandCenter() {
               data-testid="command-center-input"
             />
           </div>
+          {/* Over the input's end, so the input spans the dialog. */}
           <span
-            className="mr-2 flex size-4 shrink-0 items-center justify-center"
+            className="pointer-events-none absolute top-1/2 right-3 flex size-4 -translate-y-1/2 items-center justify-center"
             data-testid="command-center-file-search-status"
           >
             {state.fileSearchLoading ? (
@@ -622,7 +625,7 @@ export function CommandCenter() {
             {t("common.errors.error")}: {state.fileSearchError}
           </p>
         ) : null}
-        <CommandList data-testid="command-center-results">
+        <CommandList className="max-h-[min(28rem,60vh)]" data-testid="command-center-results">
           {state.groups.length === 0 && !state.fileSearchError && !state.fileSearchLoading ? (
             <CommandEmpty>{t("shell.commandCenter.noMatches")}</CommandEmpty>
           ) : null}
