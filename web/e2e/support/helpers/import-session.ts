@@ -14,7 +14,7 @@ export class ImportSessionFlow {
     await this.page.setViewportSize(viewport);
     await gotoAppShell(this.page);
     await this.page.goto(buildHostWorkspaceRoute(getServerId(), workspaceId));
-    await expect(this.page.getByRole("button", { name: "Workspace actions" })).toBeVisible({
+    await expect(this.page.getByTestId("workspace-header-menu-trigger")).toBeVisible({
       timeout: 30_000,
     });
   }
@@ -32,7 +32,7 @@ export class ImportSessionFlow {
     await this.expectSheetReady();
   }
   async openFromWorkspaceHeader() {
-    await this.page.getByRole("button", { name: "Workspace actions" }).click();
+    await this.page.getByTestId("workspace-header-menu-trigger").click();
     await this.page.getByTestId("workspace-header-import-agent").click();
     await this.expectScope("This workspace");
     await expect(this.page.getByTestId("import-session-show-all")).toBeVisible();

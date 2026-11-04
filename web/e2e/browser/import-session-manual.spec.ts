@@ -44,7 +44,7 @@ async function openWorkspace(page: Page, seed: SeededWorkspace): Promise<void> {
 }
 
 async function openImportSheet(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Workspace actions" }).click();
+  await page.getByTestId("workspace-header-menu-trigger").click();
   await page.getByTestId("workspace-header-import-agent").click();
   await expect(page.getByTestId("import-session-sheet")).toBeVisible({ timeout: 15_000 });
 }
