@@ -1,5 +1,5 @@
 import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useStoreReady } from "@/app/_layout";
 import { CommandCenter } from "@/command-center/command-center";
@@ -11,6 +11,7 @@ import {
   canDesktopAppSidebarShare,
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
+  resolveDesktopSidebarWidth,
 } from "@/components/desktop-sidebar-layout";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
 import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
@@ -34,6 +35,7 @@ import {
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
 import { AppSidebar } from "~/app/app-sidebar";
+import { SidebarResizeRail } from "~/app/sidebar-resize-rail";
 import { WorkspaceLayer } from "~/app/workspace-layer";
 import { Sidebar, SidebarInset, SidebarProvider, useSidebar } from "~/components/ui/sidebar";
 import { cn } from "cn";
@@ -54,9 +56,6 @@ const ignoreOpenChange = () => {};
  * The compact sidebar is shadcn's sheet; its open state mirrors the panel store's mobile panel so
  * shared code that opens or closes "agent-list" drives it, and a dismissed sheet updates the store.
  */
-// shadcn's default sidebar width (SIDEBAR_WIDTH in ui/sidebar), for the narrow-window check.
-const SIDEBAR_WIDTH_PX = 256;
-
 function MobileSidebarSync() {
   const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const target = usePanelStore((state) => state.mobilePanel.target);
@@ -113,6 +112,16 @@ function AppChromeContent() {
   const exitFocusMode = usePanelStore((state) => state.exitFocusMode);
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const isDesktopAgentListOpen = usePanelStore((state) => state.desktop.agentListOpen);
+  const storedSidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  const sidebarWidth = resolveDesktopSidebarWidth({
+    requestedWidth: storedSidebarWidth,
+    viewportWidth,
+  });
+  // shadcn's width variable; while the rail drags, the rail writes it directly (sidebar-resize-rail).
+  const providerStyle = useMemo(
+    () => ({ "--sidebar-width": `${sidebarWidth}px` }) as CSSProperties,
+    [sidebarWidth],
+  );
   const isWorkspaceFocusModeEnabled =
     parseHostWorkspaceRouteFromPathname(pathname) !== null && isFocusModeEnabled;
   const toggleAgentList = isCompactLayout ? toggleMobileAgentList : toggleDesktopAgentList;
@@ -147,7 +156,7 @@ function AppChromeContent() {
     isOpen: isDesktopAgentListOpen,
     canShare: canDesktopAppSidebarShare({
       contentMinimumWidth: resolveDesktopAppContentMinimum({ isSettingsRoute }),
-      sidebarWidth: SIDEBAR_WIDTH_PX,
+      sidebarWidth,
       viewportWidth,
     }),
   });
@@ -174,12 +183,18 @@ function AppChromeContent() {
           <SidebarProvider
             open={desktopSidebarVisible}
             onOpenChange={ignoreOpenChange}
-            className="h-svh"
+            style={providerStyle}
+            // No width animation while the rail drags: the sidebar follows the pointer.
+            className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
           >
             <MobileSidebarSync />
             {framed ? (
               <Sidebar variant="inset" data-testid="left-sidebar">
                 {chromeEnabled ? <AppSidebar onImportSession={openImportSession} /> : null}
+                {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen. */}
+                {chromeEnabled && !isCompactLayout && !isWorkspaceFocusModeEnabled ? (
+                  <SidebarResizeRail width={sidebarWidth} viewportWidth={viewportWidth} />
+                ) : null}
               </Sidebar>
             ) : null}
             {/* One element for both, so a workspace covered by Settings stays mounted (the

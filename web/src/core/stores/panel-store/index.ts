@@ -11,9 +11,13 @@ import { type ExplorerCheckoutContext } from "../explorer-checkout-context";
 import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,
+  clampSidebarWidth,
   clampTreeRailWidth,
+  DEFAULT_SIDEBAR_WIDTH,
   DEFAULT_TREE_RAIL_WIDTH,
+  MAX_SIDEBAR_WIDTH,
   MAX_TREE_RAIL_WIDTH,
+  MIN_SIDEBAR_WIDTH,
   MIN_TREE_RAIL_WIDTH,
   migratePanelState,
   PanelPersistedStateSchema,
@@ -37,8 +41,11 @@ export type {
   SortOption,
 } from "./state";
 export {
+  DEFAULT_SIDEBAR_WIDTH,
   DEFAULT_TREE_RAIL_WIDTH,
+  MAX_SIDEBAR_WIDTH,
   MAX_TREE_RAIL_WIDTH,
+  MIN_SIDEBAR_WIDTH,
   MIN_TREE_RAIL_WIDTH,
   clampTreeRailWidth,
   selectIsAgentListOpen,
@@ -64,6 +71,7 @@ export interface PanelState {
   // folders stay expanded as the diff changes.
   diffCollapsedFoldersByWorkspace: Record<string, string[]>;
   collapsedFilePathsByWorkspace: Record<string, string[]>;
+  sidebarWidth: number;
   explorerSortOption: SortOption;
   explorerShowHiddenFiles: boolean;
   treeRailWidth: number;
@@ -93,6 +101,7 @@ export interface PanelState {
   setDiffCollapsedFoldersForWorkspace: (workspaceKey: string, dirPaths: string[]) => void;
   setCollapsedFilePathsForWorkspace: (workspaceKey: string, paths: string[]) => void;
   activateExplorerTabForCheckout: (checkout: ExplorerCheckoutContext) => void;
+  setSidebarWidth: (width: number) => void;
   setExplorerSortOption: (option: SortOption) => void;
   toggleExplorerShowHiddenFiles: () => void;
   setTreeRailWidth: (width: number) => void;
@@ -127,6 +136,7 @@ export const usePanelStore = create<PanelState>()(
       expandedPathsByWorkspace: {},
       diffCollapsedFoldersByWorkspace: {},
       collapsedFilePathsByWorkspace: {},
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       explorerSortOption: "name",
       explorerShowHiddenFiles: true,
       treeRailWidth: DEFAULT_TREE_RAIL_WIDTH,
@@ -267,6 +277,7 @@ export const usePanelStore = create<PanelState>()(
             explorerTabByCheckout: state.explorerTabByCheckout,
           }),
         })),
+      setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       setExplorerSortOption: (option) => set({ explorerSortOption: option }),
       toggleExplorerShowHiddenFiles: () =>
         set((state) => ({ explorerShowHiddenFiles: !state.explorerShowHiddenFiles })),
@@ -285,6 +296,7 @@ export const usePanelStore = create<PanelState>()(
         expandedPathsByWorkspace: state.expandedPathsByWorkspace,
         diffCollapsedFoldersByWorkspace: state.diffCollapsedFoldersByWorkspace,
         collapsedFilePathsByWorkspace: state.collapsedFilePathsByWorkspace,
+        sidebarWidth: state.sidebarWidth,
         explorerSortOption: state.explorerSortOption,
         explorerShowHiddenFiles: state.explorerShowHiddenFiles,
         treeRailWidth: state.treeRailWidth,

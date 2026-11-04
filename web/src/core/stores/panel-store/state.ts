@@ -21,6 +21,11 @@ export interface DesktopSidebarState {
 
 export type SortOption = "name" | "modified" | "size";
 
+// The desktop sidebar: shadcn's 16rem by default, dragged on its rail between these bounds.
+export const DEFAULT_SIDEBAR_WIDTH = 256;
+export const MIN_SIDEBAR_WIDTH = 200;
+export const MAX_SIDEBAR_WIDTH = 600;
+
 export const DEFAULT_TREE_RAIL_WIDTH = 260;
 export const MIN_TREE_RAIL_WIDTH = 180;
 export const MAX_TREE_RAIL_WIDTH = 600;
@@ -41,6 +46,10 @@ function clampNumber(value: number, min: number, max: number): number {
     return min;
   }
   return Math.max(min, Math.min(max, value));
+}
+
+export function clampSidebarWidth(width: number): number {
+  return clampNumber(width, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
 }
 
 export function clampTreeRailWidth(width: number): number {
@@ -138,7 +147,6 @@ export const PanelPersistedStateSchema = z.strictObject({
   collapsedFilePathsByWorkspace: z.record(z.string(), z.array(z.string())).optional(),
   // Accepted only so migration can discard the former docked explorer sidebar width.
   explorerWidth: z.number().optional(),
-  // Accepted only so migration can discard the former resizable sidebar width.
   sidebarWidth: z.number().optional(),
   explorerSortOption: z.enum(["name", "modified", "size"]).optional(),
   explorerShowHiddenFiles: z.boolean().optional(),
@@ -206,7 +214,9 @@ export function migratePanelState(persistedState: unknown, version: number): Mig
   // workspace tabs. Left behind, `fileExplorerOpen` kept drawing a sidebar that
   // nothing could close.
   delete state.explorerWidth;
-  delete state.sidebarWidth;
+  if (typeof state.sidebarWidth === "number") {
+    state.sidebarWidth = clampSidebarWidth(state.sidebarWidth);
+  }
   if (state.desktop) {
     delete state.desktop.fileExplorerOpen;
   }

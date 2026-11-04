@@ -79,7 +79,7 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
         expect(persisted).not.toBeNull();
         expect(persisted).not.toContain("fileExplorerOpen");
         expect(persisted).not.toContain("explorerWidth");
-        expect(persisted).not.toContain("sidebarWidth");
+        expect(persisted).toContain('"sidebarWidth":340');
         // Everything else the user had must survive the migration.
         expect(persisted).toContain('"explorerSortOption":"name"');
       });

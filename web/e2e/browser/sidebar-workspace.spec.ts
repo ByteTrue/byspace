@@ -327,6 +327,58 @@ test.describe("Mobile sidebar panelState transition", () => {
   });
 });
 
+test.describe("Desktop sidebar width", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("dragging the rail resizes the sidebar, and the width survives a reload", async ({
+    page,
+  }) => {
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+    const sidebarWidth = async () => (await pinnedSidebar(page).boundingBox())?.width ?? 0;
+    const rail = page.getByTestId("left-sidebar-rail");
+    // The sidebar slides in as the app loads; grab the rail once it stops moving.
+    let box = await rail.boundingBox();
+    await expect
+      .poll(
+        async () => {
+          const next = await rail.boundingBox();
+          const settled = next !== null && box !== null && next.x === box.x;
+          box = next;
+          return settled;
+        },
+        { intervals: [100] },
+      )
+      .toBe(true);
+    if (!box) throw new Error("The sidebar rail was not measurable");
+    const before = await sidebarWidth();
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 120, y, { steps: 8 });
+    await page.mouse.up();
+    // A drag resizes; it does not also collapse the sidebar the way a click on the rail does.
+    await expect(pinnedSidebar(page)).toBeVisible();
+    await expect.poll(sidebarWidth).toBeCloseTo(before + 120, 0);
+
+    await page.reload();
+    await expect(pinnedSidebar(page)).toBeVisible();
+    await expect.poll(sidebarWidth).toBeCloseTo(before + 120, 0);
+  });
+
+  test("a click on the rail collapses the sidebar, and a click on the edge strip reopens it", async ({
+    page,
+  }) => {
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+    await page.getByTestId("left-sidebar-rail").click();
+    await expect(pinnedSidebar(page)).toHaveCount(0);
+    await page.getByTestId("left-sidebar-rail").click();
+    await expect(pinnedSidebar(page)).toBeVisible();
+  });
+});
+
 test.describe("Half-screen desktop layout", () => {
   // Above the 768px compact breakpoint, so the sidebar is the pinned desktop one.
   test.use({ viewport: { width: 800, height: 982 } });

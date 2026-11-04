@@ -75,7 +75,7 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 - **A**：开关、分段控件（改为 Tabs）、状态徽标（Badge，状态色用 class）、加载圈（Spinner）、提示框（Alert）、外链、快捷键显示；输入框与表单（Input/Textarea/InputGroup/Field，非受控的地方保持 `defaultValue`）；按钮封装、图标按钮外观、工具栏按钮（Button 的 variant/size）、Tooltip。
 - **B**：弹窗（`AdaptiveModalSheet` 改为桌面 Dialog、手机 Drawer）、确认框、提示消息（Sonner，放在工作区标题栏与标签栏下方）、菜单引擎整套删除（DropdownMenu/ContextMenu，选项行用 CheckboxItem，进行中的菜单项显示 Spinner）、设置里的下拉（Select）、组合框（Popover + Command）、命令面板（CommandDialog）。
 - **C**：设置行与空状态（Item/Empty/Checkbox）、分屏与资源管理器宽度与树栏（Resizable）、折叠区（Collapsible）、用量条（Progress）、骨架行（Skeleton）、快捷键列表（Item）；手机上的侧栏用 shadcn Sidebar 自带的 Sheet，资源管理器用右侧 Sheet。
-- **随之消失的行为**（shadcn 没有，按原则不再自己写）：手机上从屏幕边缘滑动打开侧栏/资源管理器、拖动开合（`docs/mobile-panels.md` 一并删除）；桌面侧栏拖动改宽（固定为 shadcn 默认宽度，旧的宽度设置读取时丢弃）；收起的桌面侧栏按 shadcn 的做法滑出窗口外但仍挂载；菜单只有弹出式，手机上不再变成底部抽屉；分段控件变成 Tabs（高 32px，方向键切换）。
+- **随之消失的行为**（shadcn 没有，按原则不再自己写）：手机上从屏幕边缘滑动打开侧栏/资源管理器、拖动开合（`docs/mobile-panels.md` 一并删除）；桌面侧栏拖动改宽（批 C 改成固定宽度，用户验收时要回来了，见下面「验收后」）；收起的桌面侧栏按 shadcn 的做法滑出窗口外但仍挂载；菜单只有弹出式，手机上不再变成底部抽屉；分段控件变成 Tabs（高 32px，方向键切换）。
 - **途中修掉的问题**：手机会话列表里的会话菜单点一下会同时选中下面那一行（React 事件穿过菜单的 portal 冒泡）；从行内菜单打开的右键菜单在门户里再右键会打开外层区域的菜单；技能弹窗的保存错误被挤成 0 高（滚动区里的子元素被压缩），移到底部按钮旁；新建定时任务在上一张表单关闭动画期间点开会被一起关掉；Diff 选区（见前一批）。
 - **端到端**：按 shadcn 组件的角色改断言（Select 是 combobox/option，选项行 menuitemcheckbox，Command 输入框是 combobox，紧凑布局的菜单仍是菜单），图标按钮按 shadcn `icon-xs`（24px 框、12px 图标）量尺寸，对话框几何在打开动画结束后再量，关闭中的菜单淡出后再点下一个；删掉 3 条只验证旧行为的用例（手机侧栏关闭后保持挂载、侧栏切换按钮固定在左上角、整页底部抽屉）。
 
@@ -111,3 +111,14 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 - **途中另修**：上下文用量圆环的底圈颜色在批 A 改 token 名时被写坏（`var(--surface-3)` 变成了无效的 `varaccent`），空的用量环只剩一个点，改为 `var(--accent)`（`a792ade9f`）。
 - **验证**：类型检查、lint、格式检查通过；`web/` 单元测试全过；本机端到端按改动范围跑了 369 条，失败的只有需要本机没装的 Codex、OpenCode、Claude CLI 的用例（CI 上通过）；开发服务器上首页、对话、设置、主机、Agents、定时任务、隧道、历史、新建工作区在桌面浅色、深色和手机三种下逐页截图看过，无报错。CI `a792ade9f` 全部通过（22 项通过，4 项按路径没有触发）。
 - **未解决**：`sidebar-workspace-mark-unread` 的「普通完成在离开时清除」在 CI 的 `1cdf08474` 上两次都失败，`a792ade9f` 上通过，本机 3 次通过。失败截图里离开后那一行仍是绿点（提醒没清）。原因没查；这一步的逻辑本次没改过，推测是提醒刚到就离开时没清掉，待查。
+
+### 验收后：桌面侧栏恢复可调宽度（2026-11-04）
+
+用户验收这一轮，唯一的问题是左侧栏不能调宽度。批 C 删掉了自己写的拖动条，把侧栏固定在 shadcn 默认的 16rem。
+
+shadcn 的 Sidebar 本身就有调宽的入口：边缘的 `SidebarRail`，以及 `SidebarProvider` 上的 `--sidebar-width` 变量（文档写明用 `style` 设置宽度）。现在的做法：
+
+- **SidebarRail**：在打开的侧栏边缘上按住拖动，就调整宽度；单击和 shadcn 原版一样是收起/展开。侧栏收起时，窗口边缘那条 rail 只能点开侧栏。
+- **宽度**：拖动时直接写 `--sidebar-width`，跟手且不重渲染；松开后存进面板状态，刷新后保留。范围 200–600px，并且至少给右边的内容留 400px（`resolveDesktopSidebarWidth`）。拖动期间关掉 shadcn 侧栏的宽度过渡动画。
+
+`sidebar-resize-rail.tsx` 只是 SidebarRail 加上拖动处理，没有自己画任何东西。

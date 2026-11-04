@@ -4,9 +4,18 @@ import {
   resolveDesktopAppChromeLayout,
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
+  resolveDesktopSidebarWidth,
 } from "@/components/desktop-sidebar-layout";
 
 describe("desktop sidebar layout", () => {
+  it("draws the stored width within its bounds, leaving the content 400px", () => {
+    expect(resolveDesktopSidebarWidth({ requestedWidth: 600, viewportWidth: 1440 })).toBe(600);
+    expect(resolveDesktopSidebarWidth({ requestedWidth: 600, viewportWidth: 800 })).toBe(400);
+    expect(resolveDesktopSidebarWidth({ requestedWidth: 900, viewportWidth: 1440 })).toBe(600);
+    expect(resolveDesktopSidebarWidth({ requestedWidth: 100, viewportWidth: 1440 })).toBe(200);
+    expect(resolveDesktopSidebarWidth({ requestedWidth: 300, viewportWidth: 500 })).toBe(200);
+  });
+
   it("keeps a retained sidebar hidden while app chrome is suppressed", () => {
     expect(
       resolveDesktopSidebarVisibility({
