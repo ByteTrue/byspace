@@ -3696,17 +3696,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			mp.record.UpdatedAt = nowStr
 			recCopy := mp.record
 			s.mu.Unlock()
-			// A finished turn is what the sidebar badge means by "this agent wants you". Only
-			// apply it when the client is not looking at this agent, which the presence policy
-			// decides — marking unconditionally would badge a conversation the user just read.
-			//
-			// Computed after unlocking: attentionIsFocused takes s.mu, and a re-entrant Lock
-			// deadlocks the provider event loop (see notes/013).
-			shouldBadge := !s.attentionIsFocused(mp.record.ID)
+			// A finished turn always flags the agent, as Node's checkAndSetAttention does: the
+			// client clears the flag for the agent it is showing, and the presence policy only
+			// decides who is notified (broadcastAgentAttention). Gating the flag on presence too
+			// left a turn that finished while viewed with nothing to clear on leaving.
 			_ = s.store.UpsertAgent(recCopy)
-			if shouldBadge {
-				s.markAgentAttention(mp.record.ID, AttentionReasonFinished, nowStr)
-			}
+			s.markAgentAttention(mp.record.ID, AttentionReasonFinished, nowStr)
 			// recCopy predates the attention flag, and the snapshot below is the last word the
 			// client hears about this turn: sending the stale copy retracted the badge that
 			// markAgentAttention just published, leaving the row with nothing to clear.

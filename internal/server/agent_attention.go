@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -206,19 +205,6 @@ func (s *Server) firstMarkableAgent(workspaceID string) (store.AgentRecord, bool
 // isDuplicateAttentionTimestamp guards against re-marking on a replayed event.
 func isDuplicateAttentionTimestamp(existing *string, next string) bool {
 	return existing != nil && strings.TrimSpace(*existing) == next
-}
-
-// attentionIsFocused reports whether a present client is currently looking at this agent.
-//
-// Wired to the attention package's presence policy. With no presence information the answer is
-// false, which keeps the badge behaving as it did before presence tracking existed.
-func (s *Server) attentionIsFocused(agentID string) bool {
-	_, states := s.presenceSnapshot()
-	if len(states) == 0 {
-		return false
-	}
-	plan := attention.ComputePlan(states, &attention.FocusTarget{Kind: "agent", ID: agentID}, true, time.Now())
-	return plan.InAppRecipient == -1 && !plan.ShouldPush
 }
 
 // pushTitleFor / pushBodyFor build the notification text.
