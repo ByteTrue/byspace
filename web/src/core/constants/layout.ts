@@ -28,8 +28,6 @@ export const SETTINGS_DESKTOP_SPLIT_MIN_WIDTH =
 // These buttons (close/minimize/maximize) overlay the top-left corner
 export const DESKTOP_TRAFFIC_LIGHT_WIDTH = 72;
 
-export const WAILS_DRAG_DATA_SET = { wailsDrag: "true" } as const;
-
 function isMacWailsDesktopWindow(): boolean {
   return isWailsContainer() && /Mac/i.test(window.navigator?.platform ?? "");
 }

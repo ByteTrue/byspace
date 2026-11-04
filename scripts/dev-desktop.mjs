@@ -14,6 +14,9 @@ const binary = resolve(
   process.platform === "win32" ? "byspace-app.exe" : "byspace-app",
 );
 
+// Node refuses to spawn .cmd/.bat without a shell (EINVAL), so npm needs shell:true on Windows.
+const npmOpts = { cwd: rootDir, stdio: "inherit", shell: process.platform === "win32" };
+
 if (process.env.BYSPACE_SERVICE_DAEMON_PORT && !process.env.BYSPACE_LISTEN) {
   process.env.BYSPACE_LISTEN = `127.0.0.1:${process.env.BYSPACE_SERVICE_DAEMON_PORT}`;
 } else {
@@ -35,10 +38,7 @@ process.env.BYSPACE_WEB_DIR = process.env.BYSPACE_WEB_DIR || resolve(rootDir, "w
 const skipBuild = process.env.BYSPACE_SKIP_DEV_DESKTOP_BUILD === "1";
 if (!skipBuild) {
   if (process.env.BYSPACE_SKIP_DEV_WEB_BUILD !== "1") {
-    execFileSync("npm", ["run", "build", "--workspace=@bytetrue/web"], {
-      cwd: rootDir,
-      stdio: "inherit",
-    });
+    execFileSync("npm", ["run", "build", "--workspace=@bytetrue/web"], npmOpts);
   }
   execFileSync("make", ["build-app"], { cwd: rootDir, stdio: "inherit" });
 }

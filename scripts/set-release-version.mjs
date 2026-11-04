@@ -61,9 +61,11 @@ if (args.print) {
   process.exit(0);
 }
 
+// Node refuses to spawn .cmd/.bat without a shell (EINVAL), so npm needs shell:true on Windows.
 execFileSync("npm", ["version", nextVersion, "--include-workspace-root", "--no-git-tag-version"], {
   cwd: rootDir,
   stdio: "inherit",
+  shell: process.platform === "win32",
 });
 execFileSync("git", ["commit", "-m", `chore(release): cut v${nextVersion}`], {
   cwd: rootDir,

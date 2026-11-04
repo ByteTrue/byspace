@@ -75,6 +75,7 @@ func withDesktopSettingsAPI(
 	updater *ClientUpdater,
 	onDockChanged func(DesktopSettings),
 	onTintTitleBar func([3]uint8, bool),
+	onWindowAction func(string),
 	onOpenConfigFolder func(),
 	onNotify func(id, title, body string, data map[string]any) bool,
 	onAuthorizeNotifications func() bool,
@@ -132,6 +133,7 @@ func withDesktopSettingsAPI(
 					CreateBackup     bool      `json:"createBackup"`
 					TitleBarColor    *[3]uint8 `json:"titleBarColor"`
 					TitleBarDark     *bool     `json:"titleBarDark"`
+					WindowAction     string    `json:"windowAction"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -192,6 +194,9 @@ func withDesktopSettingsAPI(
 				}
 				if patch.OpenConfigFolder && onOpenConfigFolder != nil {
 					go onOpenConfigFolder()
+				}
+				if patch.WindowAction != "" && onWindowAction != nil {
+					onWindowAction(patch.WindowAction)
 				}
 				if patch.TakeOverDaemon && sup != nil {
 					sup.TakeOver()
@@ -351,6 +356,28 @@ func Run(version string, showMain bool, initialLink string) error {
 					}
 				})
 			},
+			func(action string) {
+				application.InvokeAsync(func() {
+					if mainWin == nil {
+						return
+					}
+					switch action {
+					case "minimize":
+						mainWin.Minimise()
+					case "maximize":
+						if mainWin.IsMaximised() {
+							mainWin.UnMaximise()
+						} else {
+							mainWin.Maximise()
+						}
+					case "close":
+						// Same hide-to-tray semantics as the WindowClosing hook.
+						mainWin.Hide()
+						s := LoadDesktopSettings(homeDir)
+						setDock(ShouldShowInDock(s, false, false), false)
+					}
+				})
+			},
 			func() {
 				_ = openFolder(app, homeDir)
 			},
@@ -443,8 +470,8 @@ func Run(version string, showMain bool, initialLink string) error {
 
 			if runtime.GOOS == "windows" {
 				w.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
-					if frameOnlyResizeJS != "" {
-						w.ExecJS(frameOnlyResizeJS)
+					if inPageResizeJS != "" {
+						w.ExecJS(inPageResizeJS)
 					}
 					s := LoadDesktopSettings(homeDir)
 					if s.TitleBarColor != nil {

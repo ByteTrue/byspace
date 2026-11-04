@@ -16,8 +16,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GO_SERVER_DIR = path.join(ROOT, "internal/server");
 const GO_PI_DIR = path.join(ROOT, "internal/agent/pi");
 
@@ -293,8 +294,7 @@ export function runAudit(root = ROOT) {
 }
 
 const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   const report = runAudit();
   if (process.argv.includes("--json")) {

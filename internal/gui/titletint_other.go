@@ -4,7 +4,7 @@ package gui
 
 import "github.com/wailsapp/wails/v3/pkg/application"
 
-const frameOnlyResizeJS = ""
+const inPageResizeJS = ""
 
 func tintWindowsTitleBar(*application.WebviewWindow, [3]uint8, bool) bool {
 	return false

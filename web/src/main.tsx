@@ -2,11 +2,15 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { installCryptoPolyfills } from "@/polyfills/install-crypto-polyfills";
 import { noteHistoryEntry } from "@/navigation/workspace-route-navigation";
+import { installImeAnchorGuard } from "@/utils/ime-anchor";
 import { router } from "~/app/router";
 import { bindRouter } from "~/app/navigation";
 import "./index.css";
 
 installCryptoPolyfills(globalThis.crypto);
+// Windows/WebView2 loses the IME caret anchor after an interactive resize (WebView2Feedback#5675);
+// the guard re-anchors the focused editable and no-ops everywhere else.
+installImeAnchorGuard();
 bindRouter(router);
 // Workspace navigation replaces the host entry and pops what sits above it, so it needs to know
 // which history entries are host-level.

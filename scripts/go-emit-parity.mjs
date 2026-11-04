@@ -35,8 +35,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * 该字段由尚未实现的子系统承载，Go 侧没有语义可填。
@@ -794,8 +795,7 @@ export function goEmitSitesFromText(text) {
 }
 
 const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) {
   const protocolPath = path.join(ROOT, "packages/protocol/src/messages.ts");
   const source = fs.readFileSync(protocolPath, "utf8");
