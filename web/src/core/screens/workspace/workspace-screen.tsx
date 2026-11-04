@@ -3643,6 +3643,7 @@ function WorkspaceScreenContent({
             scripts={workspaceDescriptor.scripts}
             liveTerminalIds={liveTerminalIds}
             size="sm"
+            ghost
             onScriptTerminalStarted={handleScriptTerminalStarted}
             onViewTerminal={handleViewScriptTerminal}
             hideLabels
@@ -3654,11 +3655,17 @@ function WorkspaceScreenContent({
             cwd={workspaceDirectory}
             activeFile={activeFileLocation}
             size="sm"
+            ghost
           />
         ) : null}
         {!isMobile && workspaceDirectory ? (
           <>
-            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} size="sm" />
+            <WorkspaceActions
+              serverId={normalizedServerId}
+              cwd={workspaceDirectory}
+              size="sm"
+              ghost
+            />
             <WorkspaceHeaderExplorerToggle
               owner={explorerToggleOwner}
               onPress={handleToggleExplorerSidebar}

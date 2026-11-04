@@ -7,14 +7,21 @@ interface WorkspaceActionsProps {
   cwd: string;
   /** shadcn's Button size; "sm" in the workspace's 36px header. */
   size?: "default" | "sm";
+  /** Unframed header actions. */
+  ghost?: boolean;
 }
 
-export function WorkspaceActions({ serverId, cwd, size = "default" }: WorkspaceActionsProps) {
+export function WorkspaceActions({
+  serverId,
+  cwd,
+  size = "default",
+  ghost = false,
+}: WorkspaceActionsProps) {
   const { gitActions } = useGitActions({
     serverId,
     cwd,
     icons: GIT_ACTION_ICONS,
   });
 
-  return <GitActionsSplitButton gitActions={gitActions} size={size} />;
+  return <GitActionsSplitButton gitActions={gitActions} size={size} ghost={ghost} />;
 }

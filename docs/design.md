@@ -229,7 +229,9 @@ A row may carry both a chevron and a kebab when both navigation and row-level ac
 
 Switches and segmented controls also sit in the trailing slot. A row that both navigates and toggles is a button row with a `<Switch>` in the trailing slot — the switch calls `event.stopPropagation()` so the row press does not fire (`web/src/core/screens/settings/providers-section.tsx`). Sidebar items that hold a status dot, a count, and a kebab follow the same rule (`web/src/sidebar/workspace-row.tsx`).
 
-A selected list row is shadcn's: `SidebarMenuButton isActive` in the sidebar and the settings list (`web/src/sidebar/workspace-row.tsx`, `web/src/core/screens/settings-screen.tsx`), the `sidebar-accent` fill and a `medium` title, the same fill as hover. Horizontal tabs (workspace tabs, the Explorer rail) have no fill; the active tab carries a 2px `foreground` underline on the bar's bottom edge.
+A selected list row is shadcn's: `SidebarMenuButton isActive` in the sidebar and the settings list (`web/src/sidebar/workspace-row.tsx`, `web/src/core/screens/settings-screen.tsx`), the `sidebar-accent` fill and a `medium` title, the same fill as hover. Light `sidebar-accent` is `#e5e5e5`, not the `#f5f5f5` hover step: one shade off the page is invisible as a selection. Horizontal tabs (workspace tabs, the Explorer rail) have no fill; the active tab carries a 2px `foreground` underline on the bar's bottom edge.
+
+A dense header takes ghost icon buttons (`size="icon-sm"`), not outlined ones. Run scripts, open-in-editor and the git split button on the workspace header all pass `ghost` (`web/src/core/screens/workspace/workspace-screen.tsx`): a bordered pill beside a row of bare icons reads as a different material. The composer (`web/src/core/composer/input/input.tsx`) opts out of shadcn's 3px focus ring, which doubles its own frame; focus stays visible on the controls inside.
 
 ---
 

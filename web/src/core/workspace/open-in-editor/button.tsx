@@ -32,6 +32,8 @@ interface WorkspaceOpenInEditorButtonProps {
   cwd: string;
   activeFile?: WorkspaceFileLocation | null;
   hideLabels?: boolean;
+  /** Icon-only header actions are unframed, like the icons beside them. */
+  ghost?: boolean;
   /** shadcn's Button size for the header; default is the standalone size. */
   size?: "default" | "sm";
 }
@@ -67,12 +69,18 @@ function OpenTargetMenuItem({
   );
 }
 
+function openButtonSize(size: "default" | "sm", hideLabels: boolean | undefined) {
+  if (size === "sm") return hideLabels ? "icon-sm" : "sm";
+  return hideLabels ? "icon" : "default";
+}
+
 export function WorkspaceOpenInEditorButton({
   serverId,
   cwd,
   activeFile,
   hideLabels,
   size = "default",
+  ghost = false,
 }: WorkspaceOpenInEditorButtonProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -140,17 +148,13 @@ export function WorkspaceOpenInEditorButton({
     if (primaryOption) openMutation.mutate(primaryOption);
   }, [openMutation, primaryOption]);
 
-  let openButtonSize: "icon" | "default" | "icon-sm" | "sm" = hideLabels ? "icon" : "default";
-  if (size === "sm") openButtonSize = hideLabels ? "icon-sm" : "sm";
-  const caretSize = size === "sm" ? "icon-sm" : "icon";
-
   if (!canResolveWorkspace || !primaryOption || targets.length === 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-1">
       <ButtonGroup>
         <Button
-          variant="outline"
-          size={openButtonSize}
+          variant={ghost ? "ghost" : "outline"}
+          size={openButtonSize(size, hideLabels)}
           data-testid="workspace-open-in-editor-primary"
           onClick={handlePrimaryPress}
           disabled={openMutation.isPending}
@@ -170,8 +174,8 @@ export function WorkspaceOpenInEditorButton({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
-                size={caretSize}
+                variant={ghost ? "ghost" : "outline"}
+                size={size === "sm" ? "icon-sm" : "icon"}
                 data-testid="workspace-open-in-editor-caret"
                 aria-label={t("workspace.git.openInEditor.chooseEditor")}
               >

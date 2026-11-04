@@ -62,6 +62,8 @@ interface WorkspaceScriptsButtonProps {
   onScriptTerminalStarted?: (terminalId: string) => void;
   onViewTerminal?: (terminalId: string) => void;
   hideLabels?: boolean;
+  /** Icon-only header actions are unframed, like the icons beside them. */
+  ghost?: boolean;
   /** shadcn's Button size for the trigger; default is the standalone size. */
   size?: "default" | "sm";
   presentation?: "split" | "ghost";
@@ -450,6 +452,7 @@ export function WorkspaceScriptsButton({
   onViewTerminal,
   hideLabels,
   size = "default",
+  ghost: ghostProp = false,
   presentation = "split",
 }: WorkspaceScriptsButtonProps): ReactElement | null {
   const { t } = useTranslation();
@@ -549,7 +552,7 @@ export function WorkspaceScriptsButton({
 
   if (scripts.length === 0) return null;
   const hasAnyRunning = scripts.some((s) => s.lifecycle === "running");
-  const ghost = presentation === "ghost";
+  const ghost = presentation === "ghost" || ghostProp;
   const triggerSize = computeTriggerSize(size, ghost || hideLabels === true);
 
   return (

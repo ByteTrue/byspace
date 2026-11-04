@@ -1162,6 +1162,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // shadcn's InputGroup around the composer: the text, attachments and controls stack inside it.
     const inputWrapperClassName = cn(
       "h-auto shrink flex-col items-stretch gap-2 px-3 py-2",
+      // The composer frames itself; a 3px ring around a large input looks like a doubled border.
+      // Focus stays visible on its buttons and inputs.
+      "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-input",
       // shadcn greys the group when anything inside is disabled; here that is the send button of
       // an empty message, so the composer looked disabled whenever it was empty.
       "has-disabled:bg-transparent has-disabled:opacity-100 dark:has-disabled:bg-input/30",
