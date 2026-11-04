@@ -300,15 +300,7 @@ function MetaItem({
 const EMPTY_LABELS: readonly WorkspaceLabelDefinition[] = [];
 
 /** The line under a workspace title: branch, project, host, change request, checks, labels, service. */
-export function WorkspaceMetaRow({
-  currentBranch,
-  projectName,
-  projectNameCue = null,
-  hostBadge,
-  prHint,
-  serviceSummary,
-  labels = EMPTY_LABELS,
-}: {
+interface WorkspaceMetaRowInput {
   currentBranch: string | null;
   projectName: string | null;
   projectNameCue?: string | null;
@@ -316,9 +308,20 @@ export function WorkspaceMetaRow({
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
   labels?: readonly WorkspaceLabelDefinition[];
-}) {
+}
+
+/** What the meta row shows; empty when the display preferences leave nothing to show. */
+export function useWorkspaceMetaRowItems({
+  currentBranch,
+  projectName,
+  projectNameCue = null,
+  hostBadge,
+  prHint,
+  serviceSummary,
+  labels = EMPTY_LABELS,
+}: WorkspaceMetaRowInput) {
   const { rowItems, checksDisplay } = useSidebarMetaPreferences();
-  const items = selectMetaRowItems({
+  return selectMetaRowItems({
     currentBranch,
     projectName,
     projectNameCue,
@@ -329,6 +332,11 @@ export function WorkspaceMetaRow({
     visible: rowItems,
     checksDisplay,
   });
+}
+
+export function WorkspaceMetaRow(props: WorkspaceMetaRowInput) {
+  const items = useWorkspaceMetaRowItems(props);
+  const { hostBadge } = props;
   if (items.length === 0) return null;
   return (
     // The Expo app's meta row: 6px between items and the dots, 3px inside an item.

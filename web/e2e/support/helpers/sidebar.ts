@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { getServerId } from "./server-id";
 import { onceConfirm } from "./confirm-dialog";
 import { pressOutsideMenu } from "./press-outside-menu";
@@ -64,12 +64,24 @@ export async function expectWorkspaceContextMenuOwnsAttention(page: Page): Promi
   await expect(page.getByTestId("workspace-hover-card")).toHaveCount(0);
 }
 
+/**
+ * A row action shown on hover (shadcn's SidebarMenuAction `showOnHover`) hides by opacity, which
+ * Playwright still counts as visible, so these read the opacity.
+ */
+export async function expectHoverActionHidden(action: Locator): Promise<void> {
+  await expect(action).toHaveCSS("opacity", "0");
+}
+
+export async function expectHoverActionShown(action: Locator): Promise<void> {
+  await expect(action).toHaveCSS("opacity", "1");
+}
+
 export async function expectWorkspaceRowHoverCleared(
   page: Page,
   workspaceId: string,
 ): Promise<void> {
   const workspaceKey = `${getServerId()}:${workspaceId}`;
-  await expect(page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`)).toBeHidden();
+  await expectHoverActionHidden(page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`));
   await expect(page.getByTestId("workspace-hover-card")).toHaveCount(0);
 }
 

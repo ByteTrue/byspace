@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type MouseEvent } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { EllipsisVertical, Plus, Settings, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { isHomeProjectViewKey } from "@/chief/home-workspace";
@@ -38,9 +38,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { SidebarMenu } from "~/components/ui/sidebar";
+import {
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
-import { Button } from "~/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { ShowMoreRow } from "~/sidebar/list-parts";
 import { ProjectLeadingVisual } from "~/sidebar/status-visuals";
@@ -57,10 +61,6 @@ export function isWorkspaceSelected(input: {
     input.selection?.serverId === input.serverId &&
     input.selection.workspaceId === input.workspaceId
   );
-}
-
-function stopRowPress(event: MouseEvent) {
-  event.stopPropagation();
 }
 
 function ProjectMenuItems({
@@ -104,43 +104,38 @@ function ProjectMenuItems({
   );
 }
 
-function NewWorkspaceButton({
+function NewWorkspaceAction({
   projectViewKey,
   displayName,
   showShortcutHint,
+  besideKebab,
   onPress,
 }: {
   projectViewKey: string;
   displayName: string;
   showShortcutHint: boolean;
+  besideKebab: boolean;
   onPress: () => void;
 }) {
   const { t } = useTranslation();
   const keys = useShortcutKeys("new-worktree");
-  const handleClick = useCallback(
-    (event: MouseEvent) => {
-      stopRowPress(event);
-      onPress();
-    },
-    [onPress],
-  );
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
+        <SidebarMenuAction
+          showOnHover
           aria-label={t("sidebar.workspace.actions.createWorkspaceFor", {
             projectName: displayName,
           })}
           data-testid={`sidebar-project-new-worktree-${projectViewKey}`}
           // Hover-revealed: not a Tab stop (docs/hover.md).
           tabIndex={-1}
-          onClick={handleClick}
+          // SidebarMenuAction holds one slot at the row's end; a second action sits one slot in.
+          className={besideKebab ? "right-7" : undefined}
+          onClick={onPress}
         >
           <Plus />
-        </Button>
+        </SidebarMenuAction>
       </TooltipTrigger>
       <TooltipContent side="bottom">
         {t("sidebar.workspace.actions.newWorkspace")}
@@ -197,16 +192,15 @@ function ProjectHeaderRow({
     );
   }, [displayName, onWorkspacePress, worktreeTarget]);
 
+  const actionCount = (worktreeTarget ? 1 : 0) + (onRemoveProject ? 1 : 0);
   const row = (
-    <div
+    <SidebarMenuButton
       ref={sortable?.handle.ref}
       {...sortable?.handle.listeners}
-      role="button"
-      tabIndex={0}
       data-testid={`sidebar-project-row-${project.viewKey}`}
-      data-state={menuOpen ? "menu-open" : undefined}
       className={cn(
-        "group/project-row mb-1 flex min-h-9 items-center gap-2 rounded-md px-2 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent md:min-h-8 md:py-1.5",
+        // Room for both actions; shadcn's menu button keeps room for one.
+        actionCount > 1 && "group-has-data-[sidebar=menu-action]/menu-item:pr-14",
         sortable?.isDragging && "bg-sidebar shadow-md",
       )}
     >
@@ -240,45 +234,10 @@ function ProjectHeaderRow({
           </span>
         </TooltipContent>
       </Tooltip>
-      <span className="-mr-1.5 flex shrink-0 items-center gap-0.5 opacity-0 group-hover/project-row:opacity-100 group-focus-within/project-row:opacity-100 group-data-[state=menu-open]/project-row:opacity-100 max-md:opacity-100">
-        {worktreeTarget ? (
-          <NewWorkspaceButton
-            projectViewKey={project.viewKey}
-            displayName={displayName}
-            showShortcutHint={isProjectActive}
-            onPress={beginWorkspaceSetup}
-          />
-        ) : null}
-        {onRemoveProject ? (
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t("sidebar.project.actions.menu")}
-                data-testid={`sidebar-project-kebab-${project.viewKey}`}
-                onClick={stopRowPress}
-              >
-                <EllipsisVertical className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[220px]">
-              <ProjectMenuItems
-                kit={dropdownMenuKit}
-                projectViewKey={project.viewKey}
-                settingsTarget={settingsTarget}
-                onRemoveProject={onRemoveProject}
-                isRemoving={isRemoving}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </span>
-    </div>
+    </SidebarMenuButton>
   );
 
-  if (!onRemoveProject) return row;
-  return (
+  const rowWithContextMenu = onRemoveProject ? (
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent
@@ -294,6 +253,47 @@ function ProjectHeaderRow({
         />
       </ContextMenuContent>
     </ContextMenu>
+  ) : (
+    row
+  );
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        {rowWithContextMenu}
+        {worktreeTarget ? (
+          <NewWorkspaceAction
+            projectViewKey={project.viewKey}
+            displayName={displayName}
+            showShortcutHint={isProjectActive}
+            besideKebab={onRemoveProject !== undefined}
+            onPress={beginWorkspaceSetup}
+          />
+        ) : null}
+        {onRemoveProject ? (
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuAction
+                showOnHover
+                aria-label={t("sidebar.project.actions.menu")}
+                data-testid={`sidebar-project-kebab-${project.viewKey}`}
+              >
+                <EllipsisVertical />
+              </SidebarMenuAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[220px]">
+              <ProjectMenuItems
+                kit={dropdownMenuKit}
+                projectViewKey={project.viewKey}
+                settingsTarget={settingsTarget}
+                onRemoveProject={onRemoveProject}
+                isRemoving={isRemoving}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 

@@ -37,6 +37,15 @@ async function seedMatchingWorkspaces(count: number): Promise<SeededWorkspace[]>
   );
 }
 
+// Runs in the page (locator.evaluate), so it stands alone. A cancelled animation rejects
+// `finished`; that one is over too.
+function waitForDialogAnimations(element: Element): Promise<unknown> {
+  const dialog = element.closest('[role="dialog"]') ?? element;
+  return Promise.all(
+    dialog.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+  );
+}
+
 test.use({
   userAgent:
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/145.0 Safari/537.36",
@@ -101,13 +110,7 @@ test("dropping the files scope leaves the search row the same height", async ({ 
     const panel = page.getByTestId("command-center-panel");
     await expect(panel).toBeVisible({ timeout: 30_000 });
     // The dialog zooms in as it opens; measure once it has.
-    await panel.evaluate((element) =>
-      Promise.all(
-        (element.closest('[role="dialog"]') ?? element)
-          .getAnimations()
-          .map((animation) => animation.finished),
-      ),
-    );
+    await panel.evaluate(waitForDialogAnimations);
     const header = panel.getByTestId("command-center-header");
     const scoped = await header.boundingBox();
 

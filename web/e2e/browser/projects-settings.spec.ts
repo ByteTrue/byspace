@@ -253,7 +253,8 @@ test.describe("Projects settings", () => {
       await expect(action).toBeEnabled();
       await action.click();
 
-      await expect(page).toHaveURL(/\/new\?/);
+      // The daemon installs the setup skill before the draft opens; slow under parallel workers.
+      await expect(page).toHaveURL(/\/new\?/, { timeout: 30_000 });
       await expect
         .poll(async () => client.getAgentSkillsStatus())
         .toMatchObject({

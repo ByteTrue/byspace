@@ -125,4 +125,11 @@ shadcn 的 Sidebar 本身就有调宽的入口：边缘的 `SidebarRail`，以�
 
 同一天按「还有哪些没切到 shadcn」重新清点，又换掉 6 处漏网的（`1733bb501`）：关闭标签时自己画的转圈换成 Spinner；PR 动态的头像换成 Avatar；计划卡片和 PR 评审讨论串换成 Card；外观设置里侧栏项的上移/下移换成 ButtonGroup；Markdown 预览的 front matter 换成 Table；侧栏开关按钮去掉为了贴近旧版加的样式覆盖（包括去掉焦点框的那条），手机上自己画的三道杠换成 lucide 的 Menu。
 
-清点后仍是自己写的，分两类。一类是 shadcn 没有对应组件：终端、编辑器、Diff 画布、Mermaid、文件树（虚拟列表）、工作区标签栏（可拖动、可关闭）、对话大纲导轨、状态圆点、PR 检查与上下文用量的圆环、拖动预览与分屏落点、消息与 Markdown 里可点的图片、二维码框。另一类是 shadcn 有、但换了会改变用户明确要过的效果，等用户定：侧栏的工作区行和项目行（shadcn 是 SidebarMenuButton，会失去选中行左侧的竖条）、输入框外框（shadcn 是 InputGroup，输入时会一直有 3px 焦点光圈）。
+清点后仍是自己写的，分两类。一类是 shadcn 没有对应组件：终端、编辑器、Diff 画布、Mermaid、文件树（虚拟列表）、工作区标签栏（可拖动、可关闭）、对话大纲导轨、状态圆点、PR 检查与上下文用量的圆环、拖动预览与分屏落点、消息与 Markdown 里可点的图片、二维码框。另一类是 shadcn 有、但换了会改变用户明确要过的效果，问过用户，两处都选了换：
+
+- **侧栏的工作区行和项目行**改成 SidebarMenuButton（`isActive`），选中行左侧的竖条没有了，只剩底色和加粗；有第二行（分支、PR 等）的行用 `lg` 尺寸（48px），没有的用默认 32px。行尾的 ⋯ 和 + 改成 SidebarMenuAction 的 `showOnHover`：靠透明度隐藏，行有焦点时也会显示，手机上一直显示。快捷键序号用 SidebarMenuBadge 加 Kbd。命令面板里选中行的竖条原本是照着侧栏加的，一起去掉。
+- **输入框外框**改成 InputGroup，输入框聚焦时有 3px 的焦点光圈。
+
+`docs/hover.md` 按 `showOnHover` 改写。端到端里 Playwright 把透明度为 0 的元素算作可见，判断这类按钮是否显示要看透明度（`expectHoverActionHidden` / `expectHoverActionShown`）。
+
+还剩命令面板（⌘K）的列表行与弹窗尺寸：沿用旧版的 36px 行高、悬停底色、只用方向键移动选中项，弹窗 640×560。换成 shadcn 的 Command 原样，鼠标悬停就会移动选中项；用方向键滚动长列表时，停在列表上的鼠标会把选中项拽走（旧版正是为此关掉了悬停选中）。这一处留给用户定。

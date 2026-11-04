@@ -501,8 +501,7 @@ const ResultRow = memo(function ResultRow({
       }
       // Hover highlights on its own; only the keys move the active row, as in the Expo app.
       // 36px rows (56 with a subtitle), as the Expo app's command center lays them out.
-      // The active row carries the same left bar as the sidebar's selected row.
-      className="relative min-h-9 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-foreground before:opacity-0 hover:bg-accent/60 data-selected:before:opacity-100"
+      className="min-h-9 hover:bg-accent/60"
     >
       <ResultContent result={result} />
     </CommandItem>

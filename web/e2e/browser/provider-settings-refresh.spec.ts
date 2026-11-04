@@ -67,8 +67,10 @@ async function closeSheetByHeaderButton(page: Page, testId: string) {
   if (await close.isVisible().catch(() => false)) {
     await close.click();
   } else {
-    // A phone's drawer has no Close button; Escape closes the top one only. A tap on the overlay
-    // during a nested drawer's slide-in could reach the drawer under it too.
+    // A phone's drawer has no Close button; Escape closes the top one only, once it has slid in.
+    // An Escape during the slide-in reaches the drawer under it too: the new drawer has not yet
+    // registered as the top layer.
+    await sheet.evaluate(waitForAnimations);
     await page.keyboard.press("Escape");
   }
   await expect(sheet).not.toBeVisible({ timeout: 10_000 });
@@ -131,9 +133,19 @@ async function exerciseProviderSettingsStack(page: Page) {
   await expectProviderSettingsVisible(page);
 }
 
+// Both run in the page (locator.evaluate), so each stands alone. A cancelled animation rejects
+// `finished`; that one is over too.
+function waitForAnimations(element: Element): Promise<unknown> {
+  return Promise.all(
+    element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+  );
+}
+
 function waitForDialogAnimations(element: Element): Promise<unknown> {
   const dialog = element.closest('[role="dialog"]') ?? element;
-  return Promise.all(dialog.getAnimations().map((animation) => animation.finished));
+  return Promise.all(
+    dialog.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+  );
 }
 
 test.describe("provider settings overlay stack", () => {

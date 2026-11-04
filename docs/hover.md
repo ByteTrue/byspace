@@ -1,49 +1,53 @@
 # Hover
 
 Read this before writing hover code. Hover-to-reveal is CSS: the row is a Tailwind `group`, and
-what it reveals is a descendant switched by `group-hover`. Copy the workspace row in
+what it reveals is a descendant switched by `group-hover`. In the sidebar, shadcn's
+`SidebarMenuAction showOnHover` does all of it; copy the workspace row in
 `web/src/sidebar/workspace-row.tsx`.
 
 ## The pattern
 
 ```tsx
-<div className="group/workspace-row">
-  {" "}
-  {/* the hover target */}
-  <a className="... hover:bg-sidebar-accent">
-    {" "}
-    {/* the row's own press */}
-    <span className="group-hover/workspace-row:invisible max-md:hidden">{diffStat}</span>
-  </a>
-  <button
-    className="invisible group-hover/workspace-row:visible data-[state=open]:visible max-md:visible"
-    tabIndex={isCompact ? undefined : -1}
-  >
-    {/* kebab */}
-  </button>
-</div>
+<SidebarMenuItem>
+  {/* the hover target: shadcn's group/menu-item */}
+  <SidebarMenuButton asChild isActive={selected}>
+    <a href={route}>…</a>
+  </SidebarMenuButton>
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <SidebarMenuAction showOnHover tabIndex={isCompact ? undefined : -1}>
+        <EllipsisVertical />
+      </SidebarMenuAction>
+    </DropdownMenuTrigger>
+    …
+  </DropdownMenu>
+</SidebarMenuItem>
 ```
 
+`showOnHover` shows the action while the item is hovered or has focus inside it, while its menu is
+open (`aria-expanded`), and always below `md`, where there is no hover. `SidebarMenuButton` keeps
+room for the action at its end, so trailing content (a diff stat) never sits under it.
+
 - **The `group` element holds everything the pointer can move into.** CSS `:hover` stays on an
-  ancestor while the pointer is over any descendant, so buttons nested in the row never take the
-  hover away. A revealed control that sits outside the group loses hover as the pointer crosses
-  to it.
-- **Hide with `invisible`, not by unmounting.** The revealed control and what it replaces share
-  one slot, so nothing reflows under the pointer.
-- **A control whose menu is open stays visible** (`data-[state=open]:visible`). The menu takes the
-  pointer off the row; if the trigger hid with the hover, an open menu would sit under nothing.
-- **Compact layouts have no hover**: `max-md:visible` shows the control on phones, where it is
-  always there.
+  ancestor while the pointer is over any descendant, so an action inside the item never takes the
+  hover away. An action outside the group loses hover as the pointer crosses to it.
+- **Hide by opacity, not by unmounting**, as shadcn does. The revealed control keeps its box, so
+  nothing reflows under the pointer.
+- **A control whose menu is open stays shown.** The menu takes the pointer off the row; if the
+  trigger hid with the hover, an open menu would sit under nothing.
 - **A control that only appears on hover is not a Tab stop on desktop** (`tabIndex={-1}` unless
   compact), so the Tab order does not depend on where the pointer happens to be.
+- **Outside the sidebar**, reveal the same way with `group-hover/<name>:opacity-100` on an
+  `opacity-0` control (`web/src/sidebar/list-parts.tsx`).
+- **In e2e, assert the opacity.** Playwright counts an `opacity: 0` element as visible; use
+  `expectHoverActionHidden` / `expectHoverActionShown` (`web/e2e/support/helpers/sidebar.ts`).
 
 ## Geometry
 
 Hover must not change the hover target's size or position: no hover-only `padding`, `border`,
 `width`, or a sibling that mounts and pushes the target. The pointer ends up outside the moved
 box, the hover drops, the box moves back, and it flickers. Change colour, opacity, or content
-that fits the same fixed box. Give a row that swaps content on hover a `min-h-*` so the swap
-cannot change its height.
+that fits the same fixed box.
 
 ## Hover in JavaScript
 
@@ -63,9 +67,9 @@ after a click does not hold its card open.
 ## Checklist
 
 - [ ] The `group` element contains every element the pointer moves into while using the feature.
-- [ ] Revealed controls use `invisible` / `group-hover:visible`, not conditional rendering.
+- [ ] Revealed controls hide by opacity (`showOnHover` in the sidebar), not by conditional rendering.
 - [ ] Hover changes no size, padding, or border of the hover target.
-- [ ] An open menu keeps its trigger visible.
+- [ ] An open menu keeps its trigger shown.
 - [ ] Compact layouts show the controls without hover.
 - [ ] You hovered the row in the dev server and moved the pointer slowly onto every revealed
       control without losing it.

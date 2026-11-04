@@ -3,6 +3,8 @@ import { test, expect } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import {
   closeMobileAgentSidebar,
+  expectHoverActionHidden,
+  expectHoverActionShown,
   expectMobileAgentSidebarHidden,
   expectMobileAgentSidebarVisible,
   openMobileAgentSidebar,
@@ -300,13 +302,13 @@ test.describe("Workspace menu visibility", () => {
 
         const row = await waitForSidebarWorkspace(page, workspace.workspaceId);
         const kebab = page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`);
-        await expect(kebab).toBeHidden();
+        await expectHoverActionHidden(kebab);
 
         await row.hover();
-        await expect(kebab).toBeVisible({ timeout: 10_000 });
+        await expectHoverActionShown(kebab);
 
         await page.mouse.move(1279, 899);
-        await expect(kebab).toBeHidden();
+        await expectHoverActionHidden(kebab);
       } finally {
         await workspace.cleanup();
       }

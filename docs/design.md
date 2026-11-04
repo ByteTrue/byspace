@@ -229,7 +229,7 @@ A row may carry both a chevron and a kebab when both navigation and row-level ac
 
 Switches and segmented controls also sit in the trailing slot. A row that both navigates and toggles is a button row with a `<Switch>` in the trailing slot — the switch calls `event.stopPropagation()` so the row press does not fire (`web/src/core/screens/settings/providers-section.tsx`). Sidebar items that hold a status dot, a count, and a kebab follow the same rule (`web/src/sidebar/workspace-row.tsx`).
 
-Hover and selection share one fill, `surfaceSidebarSelected` (= `surface2`, shadcn/ui's `sidebar-accent`), in both the settings list+detail and the sidebar list (`web/src/core/screens/settings-screen.tsx`, `web/src/core/components/agent-list.tsx`). The selected row is told apart by a 2px `foreground` bar on its left edge and a `medium` title, not by a darker fill. Horizontal tabs (workspace tabs, the Explorer rail) are the other half of that pair: no fill, and the active tab carries a 2px `foreground` underline on the bar's bottom edge. Vertical lists use the left bar, horizontal tabs use the underline; do not swap them.
+A selected list row is shadcn's: `SidebarMenuButton isActive` in the sidebar and the settings list (`web/src/sidebar/workspace-row.tsx`, `web/src/core/screens/settings-screen.tsx`), the `sidebar-accent` fill and a `medium` title, the same fill as hover. Horizontal tabs (workspace tabs, the Explorer rail) have no fill; the active tab carries a 2px `foreground` underline on the bar's bottom edge.
 
 ---
 

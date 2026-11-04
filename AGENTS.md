@@ -154,10 +154,10 @@ single-panel vs split — and `isDev` from `@/constants/platform` for developmen
 - **NEVER use raw DOM APIs in a module that can be imported outside a browser.** A DOM
   call at module scope breaks non-browser importers (the e2e harness and unit tests import
   `web/src/core` modules in Node).
-- **Hover-to-show UI is CSS.** Reveal kebabs and action buttons with Tailwind `group-hover`, and
-  show them always on compact layouts (`max-md:visible`). Pointer-enter handlers are for code that
-  must know about hover, never the only way to a control. [docs/hover.md](docs/hover.md) owns
-  this pattern.
+- **Hover-to-show UI is CSS.** Reveal kebabs and action buttons with Tailwind `group-hover` (in the
+  sidebar, shadcn's `SidebarMenuAction showOnHover`), and show them always on compact layouts.
+  Pointer-enter handlers are for code that must know about hover, never the only way to a control.
+  [docs/hover.md](docs/hover.md) owns this pattern.
 - **Use breakpoints for layout decisions** (`useIsCompactFormFactor()`), not the user agent.
 
 ## Debugging

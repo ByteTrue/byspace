@@ -1,4 +1,3 @@
-import { Button } from "~/components/ui/button";
 import { memo, useCallback, useMemo, useState, type ComponentProps, type MouseEvent } from "react";
 import {
   Archive,
@@ -52,9 +51,19 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { SidebarMenuItem } from "~/components/ui/sidebar";
+import {
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "~/components/ui/sidebar";
+import { Kbd } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
-import { WorkspaceMetaRow, WorkspaceTrailingContent } from "~/sidebar/meta-row";
+import {
+  useWorkspaceMetaRowItems,
+  WorkspaceMetaRow,
+  WorkspaceTrailingContent,
+} from "~/sidebar/meta-row";
 import { ProjectStatusIndicator, WorkspaceStatusIndicator } from "~/sidebar/status-visuals";
 import { WorkspaceLabelsSubmenu } from "~/sidebar/workspace-labels-menu";
 import { WorkspaceHoverCard } from "~/sidebar/workspace-hover-card";
@@ -397,7 +406,6 @@ function WorkspaceRowText({
   leadingProjectNameCue,
   isCreating,
   showShortcut,
-  hasKebab,
 }: {
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
@@ -405,7 +413,6 @@ function WorkspaceRowText({
   leadingProjectNameCue: string | null;
   isCreating: boolean;
   showShortcut: boolean;
-  hasKebab: boolean;
 }) {
   const { t } = useTranslation();
   const {
@@ -431,19 +438,10 @@ function WorkspaceRowText({
           </span>
         ) : null}
         {hasTrailing && !showShortcut ? (
-          <span
-            className={cn(
-              "shrink-0",
-              // The kebab takes the trailing slot: on hover or with its menu open, and always on a
-              // phone, where the kebab is always shown.
-              hasKebab &&
-                "group-hover/workspace-row:invisible group-data-[state=menu-open]/workspace-row:invisible max-md:hidden",
-            )}
-          >
+          <span className="shrink-0">
             <WorkspaceTrailingContent workspace={workspace} trailing={sidebarWorkspaceTrailing} />
           </span>
         ) : null}
-        {hasKebab ? <span className="w-4 shrink-0 md:hidden" aria-hidden="true" /> : null}
       </span>
       <WorkspaceMetaRow
         currentBranch={workspace.currentBranch}
@@ -510,16 +508,15 @@ function WorkspaceRowKebab({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        <SidebarMenuAction
+          showOnHover
           aria-label={t("sidebar.workspace.actions.menu")}
           data-testid={`sidebar-workspace-kebab-${workspaceKey}`}
+          // Hover-revealed on desktop: not a Tab stop (docs/hover.md).
           tabIndex={isCompact ? undefined : -1}
-          className="invisible absolute top-1 right-1 group-hover/workspace-row:visible data-[state=open]:visible max-md:visible"
         >
-          <EllipsisVertical className="size-3.5" />
-        </Button>
+          <EllipsisVertical />
+        </SidebarMenuAction>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[260px]">
         <WorkspaceMenuItems kit={dropdownMenuKit} actions={actions} />
@@ -537,16 +534,16 @@ type WorkspaceRowLinkProps = ComponentProps<"a"> &
     | "leadingProjectNameCue"
     | "leadingProjectIconDataUri"
     | "selected"
-    | "shortcutNumber"
     | "reserveIdleStatusIndicatorSpace"
     | "isCreating"
     | "onWorkspacePress"
     | "sortable"
-  > & { isArchiving: boolean; showShortcut: boolean; hasKebab: boolean };
+  > & { isArchiving: boolean; showShortcut: boolean };
 
 /**
- * The row itself, a link to the workspace. Radix's hover-card and context-menu triggers merge
- * their props and ref into it, so it spreads the rest onto the anchor.
+ * The row itself, a link to the workspace inside shadcn's SidebarMenuButton. The menu button and
+ * Radix's hover-card and context-menu triggers merge their props and ref into it, so it spreads
+ * the rest onto the anchor.
  */
 function WorkspaceRowLink({
   workspace,
@@ -555,15 +552,14 @@ function WorkspaceRowLink({
   leadingProjectNameCue = null,
   leadingProjectIconDataUri = null,
   selected,
-  shortcutNumber,
   reserveIdleStatusIndicatorSpace = true,
   isCreating = false,
   onWorkspacePress,
   sortable,
   isArchiving,
   showShortcut,
-  hasKebab,
   onClick,
+  className,
   ref,
   ...rest
 }: WorkspaceRowLinkProps) {
@@ -600,17 +596,11 @@ function WorkspaceRowLink({
       aria-label={accessibilityLabel}
       aria-current={selected ? "page" : undefined}
       aria-disabled={isArchiving || undefined}
-      data-active={selected}
       // What the e2e helpers read for selection (the Expo app's row carried aria-selected, which a
       // link does not take; aria-current is the link's).
       data-selected={selected ? "true" : "false"}
       data-testid={`sidebar-workspace-row-${workspace.workspaceKey}`}
-      className={cn(
-        "relative flex min-h-9 w-full min-w-0 items-start gap-2 rounded-md py-2 pr-3 pl-2 text-left text-sm text-sidebar-foreground transition-[background-color] hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium md:min-h-8 md:py-1.5",
-        // BySpace: the selected row carries a 2px bar on its left edge.
-        "before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-foreground before:opacity-0 data-[active=true]:before:opacity-100",
-        isHostDisconnected && "opacity-60",
-      )}
+      className={cn(className, isHostDisconnected && "opacity-60")}
     >
       <WorkspaceRowLeading
         workspace={workspace}
@@ -626,13 +616,7 @@ function WorkspaceRowLink({
         leadingProjectNameCue={leadingProjectNameCue}
         isCreating={isCreating}
         showShortcut={showShortcut}
-        hasKebab={hasKebab}
       />
-      {showShortcut ? (
-        <span className="pointer-events-none absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded-sm bg-sidebar-accent text-xs font-medium text-muted-foreground">
-          {shortcutNumber}
-        </span>
-      ) : null}
     </a>
   );
 }
@@ -656,6 +640,17 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
   });
   const isDragging = sortable?.isDragging === true;
   const anyMenuOpen = menuOpen || contextMenuOpen;
+  // shadcn's two-line menu button is its lg size; a row without a meta line is the default one.
+  const labels = useWorkspaceLabelDefinitions(workspace.serverId, workspace.labels);
+  const metaItems = useWorkspaceMetaRowItems({
+    currentBranch: workspace.currentBranch,
+    projectName: props.leadingProjectName ?? null,
+    projectNameCue: props.leadingProjectNameCue ?? null,
+    hostBadge: props.hostBadge ?? null,
+    prHint: workspace.prHint,
+    serviceSummary: selectWorkspaceServiceSummary(workspace.scripts),
+    labels,
+  });
   const showShortcut = props.showShortcutBadge && props.shortcutNumber !== null;
   // As in the Expo app, only rows that can be archived carry the kebab; the right-click menu is always there.
   const hasKebab = actions.onArchive !== undefined;
@@ -664,28 +659,31 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
     <SidebarMenuItem
       ref={sortable?.nodeRef}
       style={sortable?.style}
-      className={cn("group/workspace-row mb-0.5", isDragging && "rounded-md bg-sidebar shadow-md")}
-      data-state={anyMenuOpen ? "menu-open" : undefined}
+      className={cn(isDragging && "rounded-md bg-sidebar shadow-md")}
     >
       <ContextMenu onOpenChange={setContextMenuOpen}>
         <WorkspaceHoverCard workspace={workspace} disabled={anyMenuOpen || isDragging}>
           <ContextMenuTrigger asChild>
-            <WorkspaceRowLink
-              workspace={workspace}
-              hostBadge={props.hostBadge}
-              leadingProjectName={props.leadingProjectName}
-              leadingProjectNameCue={props.leadingProjectNameCue}
-              leadingProjectIconDataUri={props.leadingProjectIconDataUri}
-              selected={selected}
-              shortcutNumber={props.shortcutNumber}
-              reserveIdleStatusIndicatorSpace={props.reserveIdleStatusIndicatorSpace}
-              isCreating={props.isCreating}
-              onWorkspacePress={props.onWorkspacePress}
-              sortable={sortable}
-              isArchiving={actions.isArchiving}
-              showShortcut={showShortcut}
-              hasKebab={hasKebab}
-            />
+            <SidebarMenuButton
+              asChild
+              isActive={selected}
+              size={metaItems.length > 0 ? "lg" : "default"}
+            >
+              <WorkspaceRowLink
+                workspace={workspace}
+                hostBadge={props.hostBadge}
+                leadingProjectName={props.leadingProjectName}
+                leadingProjectNameCue={props.leadingProjectNameCue}
+                leadingProjectIconDataUri={props.leadingProjectIconDataUri}
+                selected={selected}
+                reserveIdleStatusIndicatorSpace={props.reserveIdleStatusIndicatorSpace}
+                isCreating={props.isCreating}
+                onWorkspacePress={props.onWorkspacePress}
+                sortable={sortable}
+                isArchiving={actions.isArchiving}
+                showShortcut={showShortcut}
+              />
+            </SidebarMenuButton>
           </ContextMenuTrigger>
         </WorkspaceHoverCard>
         <ContextMenuContent
@@ -695,6 +693,11 @@ export const WorkspaceRow = memo(function WorkspaceRow(props: WorkspaceRowProps)
           <WorkspaceMenuItems kit={contextMenuKit} actions={actions} />
         </ContextMenuContent>
       </ContextMenu>
+      {showShortcut ? (
+        <SidebarMenuBadge>
+          <Kbd>{props.shortcutNumber}</Kbd>
+        </SidebarMenuBadge>
+      ) : null}
       {hasKebab && !showShortcut ? (
         <WorkspaceRowKebab
           workspaceKey={workspace.workspaceKey}

@@ -59,6 +59,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { keepFocusElsewhere } from "~/lib/menu-focus";
+import { InputGroup } from "~/components/ui/input-group";
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
 
@@ -500,6 +501,8 @@ function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElemen
       <EditingTextInput
         ref={props.textInputRef}
         data-composer-input=""
+        // shadcn's InputGroup draws its focus border and ring around a focused control.
+        data-slot="input-group-control"
         initialValue={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
@@ -1156,11 +1159,9 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const surfacePresentation = resolveComposerSurfacePresentation(false);
 
-    // shadcn's input group: an input-coloured border and shadow-xs. The composer holds focus
-    // nearly all the time, so focus only firms up the border; a permanent 3px ring is noise.
+    // shadcn's InputGroup around the composer: the text, attachments and controls stack inside it.
     const inputWrapperClassName = cn(
-      "flex shrink flex-col gap-2 rounded-xl border border-input bg-background px-3 py-2 shadow-xs transition-[border-color] duration-150 ease-in-out dark:bg-input/30",
-      isInputFocused && !readOnly && "border-ring",
+      "h-auto shrink flex-col items-stretch gap-2 px-3 py-2",
       // Dotted says "this surface is the same box, but there is nothing to type into it"
       // without swapping the border colour, which reads as an error state.
       readOnly && "border-dotted",
@@ -1196,7 +1197,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           autoFocusKey={autoFocusKey}
           textInputRef={textInputRef}
         />
-        <div className={inputWrapperClassName} style={inputWrapperCombinedStyle}>
+        <InputGroup className={inputWrapperClassName} style={inputWrapperCombinedStyle}>
           {attachmentSlot}
           <RenderProfile id="ComposerTextSurface">
             <ComposerTextSurface
@@ -1257,7 +1258,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               />
             </div>
           </div>
-        </div>
+        </InputGroup>
       </div>
     );
   },
