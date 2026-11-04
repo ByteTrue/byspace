@@ -268,9 +268,10 @@ type Server struct {
 	// relayUseTLS mirrors `serve --relay-use-tls`, which the stored config cannot express for a
 	// flag-only endpoint.
 	relayUseTLS bool
-	// clientPresence is what connected clients report about themselves, used to suppress
-	// notifications for an agent the user is already looking at.
-	clientPresence []attention.ClientPresence
+	// clientPresence is what each connected client last reported in client_heartbeat: whether
+	// the app is visible, what it is focused on, when the user last acted. The attention policy
+	// picks from it the one client that shows an in-app notification, or none and a push.
+	clientPresence map[frameSink]attention.ClientPresence
 	// sinkPermissions holds the granted permissions per connection. A connection absent from
 	// this map acts as the owner, which is how a direct local connection behaves.
 	sinkPermissions map[frameSink][]string
@@ -438,6 +439,7 @@ func New(opts Options) (*Server, error) {
 		clients:               make(map[frameSink]bool),
 		timelineViews:         make(map[frameSink]map[string]bool),
 		selectiveTimeline:     make(map[frameSink]bool),
+		clientPresence:        make(map[frameSink]attention.ClientPresence),
 		directorySyncSinks:    make(map[frameSink]bool),
 		pollStop:              make(chan struct{}),
 		skillsQueue:           newSerialQueue(),
@@ -985,6 +987,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 		delete(s.clients, sink)
 		delete(s.timelineViews, sink)
 		delete(s.selectiveTimeline, sink)
+		delete(s.clientPresence, sink)
 		delete(s.terminalDelivered, sink)
 		s.mu.Unlock()
 		s.notePRStatusClientsChanged()
@@ -1402,9 +1405,15 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// on screen; ignoring the message left a focused terminal flagged forever.
 		var beat struct {
 			AppVisible        bool    `json:"appVisible"`
+			FocusedAgentID    *string `json:"focusedAgentId"`
 			FocusedTerminalID *string `json:"focusedTerminalId"`
+			LastActivityAt    string  `json:"lastActivityAt"`
 		}
-		if err := json.Unmarshal(raw, &beat); err == nil && beat.AppVisible && beat.FocusedTerminalID != nil {
+		if err := json.Unmarshal(raw, &beat); err != nil {
+			return
+		}
+		s.recordClientPresence(sink, beat.AppVisible, beat.FocusedAgentID, beat.FocusedTerminalID, beat.LastActivityAt)
+		if beat.AppVisible && beat.FocusedTerminalID != nil {
 			if id := strings.TrimSpace(*beat.FocusedTerminalID); id != "" {
 				s.clearTerminalAttention(id)
 			}

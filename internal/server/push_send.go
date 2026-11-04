@@ -126,8 +126,6 @@ func (s *Server) notifyAttention(agentID, reason, title, body string) {
 
 // attentionPlan evaluates the presence policy for one agent.
 func (s *Server) attentionPlan(agentID string) attention.Plan {
-	s.mu.Lock()
-	states := s.clientPresence
-	s.mu.Unlock()
+	_, states := s.presenceSnapshot()
 	return attention.ComputePlan(states, &attention.FocusTarget{Kind: "agent", ID: agentID}, true, time.Now())
 }

@@ -54,6 +54,9 @@ func (n *desktopNotifier) start() {
 	}
 	n.ready.Store(true)
 	log.Println("byspace notifications: using the system's notifications")
+	// Ask at launch, when the user is at the app, not when the first agent finishes and they
+	// may be away from it.
+	n.authorized()
 }
 
 // authorized asks once; later calls reuse the answer (the system remembers it anyway).

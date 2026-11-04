@@ -69,9 +69,7 @@ func (s *Server) setAgentAttention(agentID, reason, timestamp string, notify boo
 	_ = s.store.UpsertAgent(rec)
 	s.broadcastAgentUpdate(rec)
 	if notify {
-		// A user who is not looking at the app needs the push; notifyAttention consults the
-		// presence policy so a client that is already showing this agent gets nothing.
-		s.notifyAttention(rec.ID, reason, pushTitleFor(reason), pushBodyFor(rec))
+		s.broadcastAgentAttention(rec, reason, ts)
 	}
 	return true
 }
@@ -215,9 +213,7 @@ func isDuplicateAttentionTimestamp(existing *string, next string) bool {
 // Wired to the attention package's presence policy. With no presence information the answer is
 // false, which keeps the badge behaving as it did before presence tracking existed.
 func (s *Server) attentionIsFocused(agentID string) bool {
-	s.mu.Lock()
-	states := s.clientPresence
-	s.mu.Unlock()
+	_, states := s.presenceSnapshot()
 	if len(states) == 0 {
 		return false
 	}
