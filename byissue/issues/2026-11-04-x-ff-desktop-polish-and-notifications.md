@@ -35,3 +35,5 @@ commits: [ad0b1c04d, 493aeaaff, 90dc664ab, 0e1ac92f8, dabfd4373]
 - macOS 通知的实际横幅、点击通知后的跳转：开发版已请求权限并在系统通知库里注册了 `com.bytetrue.byspace.dev`，端到端已验证 daemon 发出且前端调用通知（/tmp/probe-notify.mjs），但开发版窗口没在前台时锁屏抓不到横幅，需用户自己看一眼。
 - Windows / Linux 的原生通知（Wails 服务本身支持，没跑过）。
 - Windows 桌面窗口的红绿灯不涉及（平台专用）。
+
+同日追加：**工作区顶栏右侧的按钮「又肿又挤」**（`fc9d887dc`）。运行脚本、打开编辑器、git 操作（Push/Pull/Commit）这几组按钮用的是 shadcn 默认尺寸（带文字时 36px 高），顶栏本身只有 36px，旁边其它图标是 28px 的 ghost。给这三组加了尺寸参数，工作区顶栏统一传 shadcn 的 `sm` / `icon-sm`（28px），间距收紧；Changes 面板里只出菜单的形式不变。
