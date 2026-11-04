@@ -365,8 +365,8 @@ try {
   expectContains("Sidebar lists the Chief home workspace", snap, ["BySpace-WorkSpace", "Chief"]);
 
   // Chief 必须排在 byspace 之前（它是 daemon 自持的 home workspace）。项目按钮的名字以图标字母开头，
-  // 有自定义图标的项目没有这个字母。
-  const chiefIdx = snap.indexOf('button "Chief"');
+  // 有自定义图标的项目没有这个字母。工作区行是 shadcn 的 SidebarMenuButton 包的链接。
+  const chiefIdx = snap.search(/(?:button|link) "Chief"/);
   const byspaceIdx = snap.search(/button "(?:\S )?byspace\b/);
   record(
     "Chief is pinned above ordinary projects",
@@ -481,7 +481,16 @@ try {
   const declared = chosenModel?.thinkingOptions?.map((option) => option.id) ?? null;
   const chosenModelId = chosenModel?.id ?? null;
   const entryRole = "(?:button|menuitem|menuitemradio|option)";
-  const knownLabels = ["Off", "Minimal", "Low", "Medium", "High", "Extra high", "Max"];
+  const knownLabels = [
+    "Off",
+    "Minimal",
+    "Low",
+    "Medium",
+    "High",
+    "Extra high",
+    "Max",
+    "Ultra code",
+  ];
   const menuEntries = knownLabels.filter((lvl) => new RegExp(`${entryRole} "${lvl}"`).test(snap));
   // Any level label the menu shows that is not one of the protocol's names — a locally invented
   // word like "XHigh" rendered raw, or the old "Extra high" spelling drifting — is a mismatch
