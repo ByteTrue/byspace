@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.1 - 2026-11-05
+
+### Fixed
+
+- Fixed provider CLIs installed in Homebrew or user-local directories appearing unavailable and failing to launch when the desktop daemon had no shell PATH
+- Restored the Windows frameless desktop shell, including window controls, dragging, resizing and IME candidate positioning
+- Fixed existing local directories rerunning setup commands when opened
+
 ## 0.24.0 - 2026-11-04
 
 ### Changed
