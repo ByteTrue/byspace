@@ -1,6 +1,15 @@
-import { useCallback, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
 import { isWailsDesktopContainer } from "@/utils/wails";
+import { onWindowsWindowMaximizedChange } from "@/utils/desktop-window-events";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 import { cn } from "cn";
 
@@ -13,15 +22,31 @@ export function isWindowsDesktopShell(): boolean {
 }
 
 function sendWindowAction(action: "minimize" | "maximize" | "close") {
-  void fetch("/_byspace/desktop/settings", {
+  void fetch("/_byspace/desktop/window", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ windowAction: action }),
+    body: JSON.stringify({ action }),
   }).catch(() => undefined);
 }
 
 const minimize = () => sendWindowAction("minimize");
 const close = () => sendWindowAction("close");
+const toggleMaximize = () => sendWindowAction("maximize");
+
+function zoomDragSurface(event: MouseEvent<HTMLDivElement>) {
+  if (event.detail > 1 && event.target instanceof Element && event.target.closest("button")) {
+    // The two clicks already performed one native action; don't reverse it a second time.
+    event.preventDefault();
+    return;
+  }
+  if (
+    event.target instanceof Element &&
+    event.target.hasAttribute("data-wails-drag") &&
+    event.target === event.currentTarget
+  ) {
+    toggleMaximize();
+  }
+}
 
 /**
  * The main column for the Windows L-shell: the 36px titlebar strip rides on top of the framed
@@ -115,21 +140,29 @@ export function DesktopWindowTitleBar({
   onToggleSidebar: () => void;
 }) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const lastMaximizeClick = useRef(0);
 
-  const toggleMaximize = useCallback((event: MouseEvent) => {
-    event.preventDefault();
-    setIsMaximized((prev) => !prev);
-    sendWindowAction("maximize");
+  useEffect(() => onWindowsWindowMaximizedChange(setIsMaximized), []);
+
+  const onMaximizeClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    const now = Date.now();
+    if (event.detail > 1 && now - lastMaximizeClick.current < 500) return;
+    lastMaximizeClick.current = now;
+    toggleMaximize();
   }, []);
 
   return (
     <div
       data-wails-drag="true"
       data-testid="desktop-window-titlebar"
-      onDoubleClick={toggleMaximize}
+      onDoubleClick={zoomDragSurface}
       className="flex h-9 min-h-9 shrink-0 items-center justify-between pl-3 select-none"
     >
-      <div data-wails-drag="true" className="flex h-full min-w-0 flex-1 items-center gap-1">
+      <div
+        data-wails-drag="true"
+        onDoubleClick={zoomDragSurface}
+        className="flex h-full min-w-0 flex-1 items-center gap-1"
+      >
         {showLeadingNav ? (
           <button
             type="button"
@@ -145,7 +178,11 @@ export function DesktopWindowTitleBar({
           </button>
         ) : null}
       </div>
-      <div data-wails-drag="true" className="flex h-full items-stretch">
+      <div
+        data-wails-drag="true"
+        onDoubleClick={zoomDragSurface}
+        className="flex h-full items-stretch"
+      >
         <button
           type="button"
           aria-label="Minimize"
@@ -159,7 +196,7 @@ export function DesktopWindowTitleBar({
           type="button"
           aria-label={isMaximized ? "Restore" : "Maximize"}
           data-testid="window-control-maximize"
-          onClick={toggleMaximize}
+          onClick={onMaximizeClick}
           className="flex w-11 items-center justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
         >
           {isMaximized ? <Copy size={12} /> : <Square size={12} />}

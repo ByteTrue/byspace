@@ -92,6 +92,96 @@ describe("installImeAnchorGuard", () => {
     expect(blurSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("does not commit an editor's business blur handler during the re-anchor", () => {
+    const commit = vi.fn();
+    input.addEventListener("blur", commit);
+    dispose = installImeAnchorGuard();
+
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(180);
+
+    expect(commit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(9);
+  });
+
+  it("does not steal focus when the user clicks another editor during the delay", () => {
+    const other = document.createElement("input");
+    document.body.append(other);
+    dispose = installImeAnchorGuard();
+
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(120);
+    other.dispatchEvent(new Event("mousedown", { bubbles: true }));
+    other.focus();
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(other);
+    other.remove();
+  });
+
+  it("cancels an old refocus when another resize begins", () => {
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(120);
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(30);
+    expect(document.activeElement).toBe(document.body);
+    vi.advanceTimersByTime(180);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not steal focus from an iframe", () => {
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(120);
+    frame.focus();
+    vi.advanceTimersByTime(60);
+    expect(document.activeElement).toBe(frame);
+    frame.remove();
+  });
+
+  it("restores React focus state once after the synthetic focus round trip", () => {
+    const focusIn = vi.fn();
+    input.addEventListener("focusin", focusIn);
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(180);
+    expect(focusIn).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not leave the editor blurred when composition starts during the delay", () => {
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(120);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Process", bubbles: true }));
+    input.dispatchEvent(new Event("compositionstart", { bubbles: true }));
+    vi.advanceTimersByTime(60);
+    expect(document.activeElement).toBe(input);
+    input.dispatchEvent(new Event("compositionend", { bubbles: true }));
+  });
+
+  it("restores the caret after a select-on-focus handler runs", () => {
+    input.addEventListener("focusin", () => input.select());
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(180);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(9);
+  });
+
+  it("preserves the direction of a backward selection", () => {
+    input.setSelectionRange(2, 9, "backward");
+    dispose = installImeAnchorGuard();
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(180);
+    expect(input.selectionDirection).toBe("backward");
+  });
+
   it("does nothing when the focused element is not editable", () => {
     const div = document.createElement("div");
     div.tabIndex = -1;

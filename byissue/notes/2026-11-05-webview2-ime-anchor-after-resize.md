@@ -14,6 +14,8 @@
 - Chrome / Edge 打开同一页面不复现，所以别在前端焦点逻辑里找原因。
 - 已验证有效的护栏：窗口尺寸稳定后（防抖 120ms）把当前可编辑元素重锚一次——`blur()` → **等 60ms** → `focus({preventScroll:true})` + 还原选区与滚动。合成中不打断（等 `compositionend` 再补做），只在 Windows + Wails webview 启用。
 - 实测**无效**的做法，别再试：同步 `blur()+focus()`、`setTimeout(0)`、只调 `focus()`、只挪 DOM 选区。所见即所得编辑器（ProseMirror 类）用 `setTimeout(0)` 够用，源码模式（CodeMirror 6）不够，所以统一钉 60ms。
+- 重锚是合成焦点往返，不是用户退出编辑器。普通 `blur()` 会触发文件重命名等 commit-on-blur；恢复焦点也会触发 select-on-focus。必须隔离合成焦点事件、只通知 React 已恢复的焦点，再还原原选区（含反向选区）与滚动。用户点击别处后不能抢回焦点；连续 resize 保留最后一次待恢复状态。合成输入在重锚间隔开始时仍需恢复原编辑器。
+- 2026-11-05 多轮 review 后用 jsdom 覆盖上述 DOM 行为；jsdom 的 `KeyboardEvent` 不会模拟真实按键的默认目标选择和文本插入，不能用它证明键盘输入路径。原生 WebView2 的 IME 候选框位置与真实合成输入仍以 Windows 真机为准。
 - 上游修好后可以整段删除护栏：实现是独立模块，没有散落的兼容分支。
 
 **相关：** `web/src/core/utils/ime-anchor.ts`（实现与注释）、`byissue/issues/2026-11-04-x-win-ime-candidate-top-left.md`（诊断与验证证据）。

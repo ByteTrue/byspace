@@ -16,4 +16,4 @@
 - 层叠不是原因（2026-11-05 误判过一次：以为 `SidebarInset` 的透明 margin 吞掉顶栏右段，加 `relative z-10` 后症状不变，已回退）。真原因是属性名：`{...{wailsDrag:"true"}}` 渲染成 `wailsdrag="true"`，匹配不上 `[data-wails-drag="true"]`。**全仓统一写字面量 `data-wails-drag="true"`**，不要用 RN 时代残留的 `WAILS_DRAG_DATA_SET`（已删）。
 - **验证方法**：cua-driver 的合成拖拽（`drag` + `delivery_mode:"foreground"`）不能用来验窗口移动/resize——连已知可用的区域也拖不动，偶尔一次生效不可复现。窗口按钮的点击可以用 UIA Invoke 验（最小化/最大化/还原都可靠）。壳层拖拽只能真人手测。
 
-**相关：** `byissue/issues/2026-11-04-o-windows-l-shell-titlebar.md`（未结的右段拖不动）、`byissue/issues/2026-10-30-x-ff-agcopilot-framed-card-window-shell.md`（壳层形态的原始拍板）、`byissue/notes/2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（同批 Windows 侧坑）。
+**相关：** `byissue/issues/2026-11-04-x-windows-l-shell-titlebar.md`（壳层恢复与跨平台验证）、`byissue/issues/2026-10-30-x-ff-agcopilot-framed-card-window-shell.md`（壳层形态的原始拍板）、`byissue/notes/2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（同批 Windows 侧坑）。

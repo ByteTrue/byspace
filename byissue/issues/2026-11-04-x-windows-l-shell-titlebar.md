@@ -32,7 +32,13 @@ created: 2026-11-04
 
 ## 剩余
 
-只剩一项：mac 桌面端不回归。`screen-header.tsx` 给头部行左右子组加了 `data-wails-drag`，mac 上头部行文字区的拖窗命中范围变大；窗口有框，`wails:drag` 应该无效，但需要在 mac 上实测才能关。Windows 侧已全部确认：顶栏条全宽可拖、按钮三态、边缘 resize、深色 tint、IME 候选框跟随光标。
+无。2026-11-05 用户已在 macOS 桌面 dev 实测原生红绿灯、布局、拖窗与文字选择无回归。
+
+## 关闭结论
+
+Windows 无边框壳层已恢复 L 型布局、独立标题栏、窗口控制和边缘 resize。窗口控制走独立 `/_byspace/desktop/window` 端点，不依赖设置写盘；最大化图标由原生状态查询与事件同步。多轮 review 的标题栏双击、IME blur 提交与焦点恢复问题已补回归测试。
+
+验证：Windows 真机确认壳层、resize、tint 和 IME；macOS 真机确认无回归；定向前端测试、typecheck/lint/format、Go 测试和字段审计通过。原生 IME 的边界见 `byissue/notes/2026-11-05-webview2-ime-anchor-after-resize.md`，不凭 DOM 单测替代真机验证。
 
 ## 验证
 

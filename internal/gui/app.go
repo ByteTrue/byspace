@@ -75,7 +75,7 @@ func withDesktopSettingsAPI(
 	updater *ClientUpdater,
 	onDockChanged func(DesktopSettings),
 	onTintTitleBar func([3]uint8, bool),
-	onWindowAction func(string),
+	onWindowAction func(string) map[string]any,
 	onOpenConfigFolder func(),
 	onNotify func(id, title, body string, data map[string]any) bool,
 	onAuthorizeNotifications func() bool,
@@ -102,6 +102,25 @@ func withDesktopSettingsAPI(
 			}
 			delivered := onNotify != nil && onNotify(req.ID, req.Title, req.Body, req.Data)
 			_ = json.NewEncoder(w).Encode(map[string]any{"delivered": delivered})
+			return
+		}
+		if r.URL.Path == "/_byspace/desktop/window" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			var req struct {
+				Action string `json:"action"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response := map[string]any{"accepted": true}
+			if onWindowAction != nil {
+				if result := onWindowAction(req.Action); result != nil {
+					response = result
+				}
+			}
+			_ = json.NewEncoder(w).Encode(response)
 			return
 		}
 		if r.URL.Path == "/_byspace/desktop/settings" {
@@ -133,7 +152,6 @@ func withDesktopSettingsAPI(
 					CreateBackup     bool      `json:"createBackup"`
 					TitleBarColor    *[3]uint8 `json:"titleBarColor"`
 					TitleBarDark     *bool     `json:"titleBarDark"`
-					WindowAction     string    `json:"windowAction"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -194,9 +212,6 @@ func withDesktopSettingsAPI(
 				}
 				if patch.OpenConfigFolder && onOpenConfigFolder != nil {
 					go onOpenConfigFolder()
-				}
-				if patch.WindowAction != "" && onWindowAction != nil {
-					onWindowAction(patch.WindowAction)
 				}
 				if patch.TakeOverDaemon && sup != nil {
 					sup.TakeOver()
@@ -356,9 +371,15 @@ func Run(version string, showMain bool, initialLink string) error {
 					}
 				})
 			},
-			func(action string) {
+			func(action string) map[string]any {
+				result := make(chan map[string]any, 1)
 				application.InvokeAsync(func() {
+					defer close(result)
 					if mainWin == nil {
+						return
+					}
+					if action == "query" {
+						result <- map[string]any{"maximized": mainWin.IsMaximised()}
 						return
 					}
 					switch action {
@@ -377,6 +398,10 @@ func Run(version string, showMain bool, initialLink string) error {
 						setDock(ShouldShowInDock(s, false, false), false)
 					}
 				})
+				if action == "query" {
+					return <-result
+				}
+				return nil
 			},
 			func() {
 				_ = openFolder(app, homeDir)
@@ -469,6 +494,12 @@ func Run(version string, showMain bool, initialLink string) error {
 			})
 
 			if runtime.GOOS == "windows" {
+				w.OnWindowEvent(events.Windows.WindowMaximise, func(*application.WindowEvent) {
+					w.EmitEvent("byspace:window-maximized", true)
+				})
+				w.OnWindowEvent(events.Windows.WindowRestore, func(*application.WindowEvent) {
+					w.EmitEvent("byspace:window-maximized", false)
+				})
 				w.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) {
 					if inPageResizeJS != "" {
 						w.ExecJS(inPageResizeJS)
