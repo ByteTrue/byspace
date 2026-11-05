@@ -45,14 +45,75 @@ func Find(ctx context.Context, name string) string {
 	return ""
 }
 
-// Enumerate lists every PATH match for a bare command name, in PATH order, deduplicated.
+// StandardDirs returns the conventional Unix executable locations, after the process PATH.
+// These are lookup candidates, not an instruction to run a login shell.
+func StandardDirs() []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dirs := []string{"/usr/local/bin"}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		dirs = append(dirs, filepath.Join(home, ".local", "bin"))
+	}
+	return append(dirs, "/opt/homebrew/bin")
+}
+
+// AppendStandardDirs adds the same executable locations to a provider subprocess's PATH.
+// A JS CLI's `#!/usr/bin/env node` needs this even after the CLI itself was resolved absolutely.
+// Keep it scoped to provider children rather than changing the daemon's own environment.
+func AppendStandardDirs(env []string) []string {
+	if len(env) == 0 {
+		env = os.Environ()
+	}
+	dirs := StandardDirs()
+	if len(dirs) == 0 {
+		return env
+	}
+	out := append([]string(nil), env...)
+	pathIndex := -1
+	existing := ""
+	for i, entry := range out {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && key == "PATH" {
+			pathIndex = i
+			existing = value
+			break
+		}
+	}
+	seen := make(map[string]bool)
+	for _, dir := range strings.Split(existing, string(os.PathListSeparator)) {
+		seen[dir] = true
+	}
+	for _, dir := range dirs {
+		if !seen[dir] {
+			if existing != "" {
+				existing += string(os.PathListSeparator)
+			}
+			existing += dir
+			seen[dir] = true
+		}
+	}
+	if pathIndex >= 0 {
+		out[pathIndex] = "PATH=" + existing
+	} else {
+		out = append(out, "PATH="+existing)
+	}
+	return out
+}
+
+// Enumerate lists every PATH match for a bare command name, in search order, deduplicated.
+// Desktop apps start with the OS PATH rather than the user's shell PATH. Look in the standard
+// Unix install locations as well, without changing the daemon's environment.
 func Enumerate(name string) []string {
+	dirs := append(strings.Split(os.Getenv("PATH"), string(os.PathListSeparator)), StandardDirs()...)
+	return enumerate(name, dirs)
+}
+
+func enumerate(name string, dirs []string) []string {
 	seen := make(map[string]bool, 4)
 	out := make([]string, 0, 4)
-	pathEnv := os.Getenv("PATH")
-	separator := string(os.PathListSeparator)
 
-	for _, dir := range strings.Split(pathEnv, separator) {
+	for _, dir := range dirs {
 		if dir == "" {
 			continue
 		}

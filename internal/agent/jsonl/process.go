@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/execres"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
@@ -104,6 +105,7 @@ func Start(cfg LaunchConfig) (*Process, error) {
 	} else {
 		cmd.Env = home.ExternalProcessEnv(os.Environ())
 	}
+	cmd.Env = execres.AppendStandardDirs(cmd.Env)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

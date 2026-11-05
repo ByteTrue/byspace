@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/execres"
 )
 
 // fakeServer starts an HTTP server and returns its URL.
@@ -118,7 +120,11 @@ func TestStartBuildsServeCommand(t *testing.T) {
 	if server.URL != "http://127.0.0.1:7102" {
 		t.Fatalf("url = %q", server.URL)
 	}
-	want := []string{"opencode", "--verbose", "serve", "--port", "7102"}
+	executable := "opencode"
+	if resolved := execres.Find(context.Background(), executable); resolved != "" {
+		executable = resolved
+	}
+	want := []string{executable, "--verbose", "serve", "--port", "7102"}
 	if len(gotArgs) != len(want) {
 		t.Fatalf("args = %v", gotArgs)
 	}

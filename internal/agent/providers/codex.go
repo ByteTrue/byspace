@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/execres"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
 	"os"
@@ -79,6 +80,7 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 	} else {
 		cmd.Env = os.Environ()
 	}
+	cmd.Env = execres.AppendStandardDirs(cmd.Env)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
