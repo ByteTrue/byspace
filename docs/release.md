@@ -14,11 +14,10 @@ Both channels deploy the Go Worker in `workers/relay`: stable Web releases to `a
 
 **Deploy App** deploys the Worker with the `CLOUDFLARE_API_TOKEN` secret. That token needs Zone → Workers Routes → Edit, with `byspace.cc.cd` in its zone resources. `wrangler deploy` uploads the Worker and its assets before it publishes the custom-domain routes from `workers/relay/wrangler.jsonc`, so a token scoped to a different zone, or missing the permission, fails the run with `No access to the specified resource` after the new build is already live.
 
-`@bytetrue/byspace` is the only published package. The `@bytetrue/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
+**Releases are not published to npm.** `@bytetrue/byspace` on the registry stopped at 0.21.2; every release since ships through GitHub Releases, the web deploy and Docker only (confirmed with the user on 2026-11-04). `scripts/package-go-release.mjs` still packs a tarball for anyone who wants one by hand; it is not part of a release.
 
-GitHub Release assets are the npm tarball and one container descriptor, each with a `.sha256` sibling:
+GitHub Release assets include one container descriptor with its `.sha256` sibling:
 
-- `BySpace-<version>-npm.tgz`, `BySpace-<version>-npm.tgz.sha256`
 - `BySpace-<version>-container.txt`, `BySpace-<version>-container.txt.sha256`
 
 ## Prepare
@@ -37,7 +36,7 @@ GitHub Release assets are the npm tarball and one container descriptor, each wit
    npm run release:check
    ```
 
-5. Verify the consolidated npm tarball:
+5. Optionally verify the npm tarball (it is not published):
 
    ```bash
    npm run release:publish:dry-run          # stable
@@ -45,7 +44,7 @@ GitHub Release assets are the npm tarball and one container descriptor, each wit
    ```
 
    On Windows, two traps make this fail from Git Bash even though the packaging is fine:
-   - `release:publish:*:dry-run` uses bash command substitution (`$(node -p ...)`), which cmd.exe passes through literally — run the pack step (`npm run release:pack:bytetrue`) locally and let the CI **Publish npm** dry-run (`workflow_dispatch`, `publish=false`) cover the full verify on Linux.
+   - `release:publish:*:dry-run` uses bash command substitution (`$(node -p ...)`), which cmd.exe passes through literally — run the pack step (`npm run release:pack:bytetrue`) on Linux or macOS instead.
    - `release:pack:bytetrue` shells out to `tar`, and Git Bash's GNU tar treats `C:\...` paths as remote hosts. Shadow it with Windows' bsdtar in an isolated dir — prepending System32 itself breaks `bash.exe` resolution:
 
      ```bash
@@ -55,10 +54,7 @@ GitHub Release assets are the npm tarball and one container descriptor, each wit
 
 ## Dry-runs
 
-Before tagging, run these workflows with `workflow_dispatch` on the current `main` SHA. Both build without publishing:
-
-- **Publish npm** with `ref=<full SHA>`, `publish=false`
-- **Docker** with `byspace_version=<version>`
+Before tagging, the Docker workflow can be dry-run with `workflow_dispatch` on the current `main` SHA (`byspace_version=<version>`); it builds without publishing.
 
 `ref` requires the full 40-character SHA — `actions/checkout` fetch mode fails on abbreviated SHAs.
 
@@ -108,7 +104,7 @@ locally rather than pushed ahead of it. Pushing the work first to watch CI is
 fine, but it adds a second full run (about 13 minutes) because the version
 commit lands on top and needs its own.
 
-Tag pushes start three workflows: **Publish npm**, **Deploy App**, and **Docker**.
+Tag pushes start three workflows: **Release Binaries**, **Deploy App**, and **Docker**.
 Stable `vX.Y.Z` tag pushes publish `ghcr.io/bytetrue/byspace:X.Y.Z` and
 `latest`; prerelease `vX.Y.Z-beta.N` tag pushes publish only the exact
 prerelease tag and never move `latest`.
@@ -131,7 +127,7 @@ npm run release:push         # Push the branch, wait for CI, then create and pus
 ```
 
 Publishing is CI-driven. There is no local publish step: the tag push is what makes
-**Publish npm** run.
+**Release Binaries** and **Docker** run.
 
 ## Beta flow
 
@@ -143,7 +139,6 @@ npm run release:promote          # Promote X.Y.Z-beta.N to stable X.Y.Z
 ```
 
 - Beta tags are published GitHub prereleases like `v0.1.41-beta.1`
-- Betas publish `@bytetrue/byspace` with `--tag beta`, so `npm install @bytetrue/byspace@beta` opts in while plain `npm install @bytetrue/byspace` stays on `latest`
 - `release:promote` creates a fresh stable tag like `v0.1.41`; the final release never reuses the beta tag
 - **Each beta carries its own changelog entry.** Promotion collapses every beta entry for the version into one final stable entry. See the Changelog policy section.
 
@@ -211,14 +206,14 @@ later transitions and stops itself when the release is complete.
 
 The **Release Notes Sync** workflow (`.github/workflows/release-notes-sync.yml`) makes
 the Release body match the changelog. It runs on every `v*` tag push, waits for
-**Publish npm** or **Docker** to create the Release, then overwrites the body with the
+**Release Binaries** or **Docker** to create the Release, then overwrites the body with the
 matching `CHANGELOG.md` entry. It does not create the Release itself: the sync script's
 create path marks a Release as a draft, and nothing in this repository publishes drafts.
 
 The workflows that create the Release both pick an initial body, which is why the sync
 step exists — whichever runs first wins:
 
-- **Publish npm** uses `.github/release/<tag>.md` when present, otherwise the placeholder `BySpace <tag>`
+- **Release Binaries** uses `.github/release/<tag>.md` when present, otherwise the placeholder `BySpace <tag>`
 - **Docker** uses `.github/release/<tag>.md` when present, otherwise `--generate-notes` (the PR-title list)
 
 To re-sync a Release whose body drifted, dispatch the workflow with a tag, or run it
@@ -255,7 +250,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 
 - `version:all:*` bumps root + syncs workspace versions and `@bytetrue/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
-- A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
+- A stable run leaves the beta channel's deploy where it is.
 - The public relay and hosted web UI are the same Cloudflare Worker, but the two channels are different deployments: stable is `byspace-relay-go` in `workers/relay`, beta is `byspace-relay-go-beta` in the same directory. Since issue 073 the Deploy App workflow deploys the channel's Worker on every web release — UI and relay go out atomically. For an emergency relay-only fix outside a release, run `npm run deploy:relay-go` (stable) or `npm run deploy:relay-go:beta` (beta) from the repo root. `packages/relay` holds only the E2EE primitives the client imports
 
 ## Changelog format
@@ -402,7 +397,6 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] Release preparation stayed local until the approved release command pushed the complete branch and tag
 - [ ] `release:beta:patch`, `release:beta:minor`, or `release:beta:next` completes successfully
 - [ ] Every GitHub Actions run for the complete release commit and tag is green
-- [ ] npm `@bytetrue/byspace@beta` resolves to the version, and `latest` did not move
 - [ ] The GitHub prerelease has the changelog body and both assets with their `.sha256` siblings
 - [ ] The GitHub prerelease is marked as a prerelease
 - [ ] Docker published the versioned beta image without moving `latest`
@@ -422,7 +416,6 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] Release preparation stayed local until the approved release command pushed the complete branch and tag
 - [ ] `release:patch`, `release:minor`, or `release:promote` completes successfully
 - [ ] Every GitHub Actions run for the complete release commit and tag is green
-- [ ] npm `@bytetrue/byspace@latest` resolves to the version
 - [ ] The GitHub Release is published with the changelog body and both assets with their `.sha256` siblings
 - [ ] Docker published both the versioned and `latest` images
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
