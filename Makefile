@@ -21,6 +21,10 @@ ifeq ($(shell uname -s),Darwin)
   export CGO_LDFLAGS = -mmacosx-version-min=13.0
 endif
 
+ifeq ($(OS),Windows_NT)
+  APP_BINARY := bin/byspace-app.exe
+endif
+
 .PHONY: build build-app app dmg build-android release-cli release-windows release-linux-desktop checksums build-web build-full test vet clean
 
 ## build: 编译无头单二进制（-tags nogui，零 CGO）

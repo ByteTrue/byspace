@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { auditFromSources, parseSchemas } from "./go-emit-parity.mjs";
 
@@ -58,7 +59,7 @@ test("the repository sends no null for optional-not-nullable fields", async () =
   const { execFileSync } = await import("node:child_process");
   const out = execFileSync(process.execPath, ["scripts/go-emit-parity.mjs", "--json"], {
     encoding: "utf8",
-    cwd: new URL("..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
   });
   const report = JSON.parse(out);
   assert.deepEqual(report.nulledOptional, []);

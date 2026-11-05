@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative as relativePath, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 // Documentation links rot silently: deleting a doc, retiring a feature page, or
@@ -15,7 +16,7 @@ import test from "node:test";
 // byissue entries are frozen records of what was true when they were written;
 // rewriting their links would falsify the record.
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const SCANNED = [
   "AGENTS.md",

@@ -21,8 +21,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// fileURLToPath, not URL#pathname: pathname gives "/C:/..." on Windows, which resolves to a
+// nonexistent cwd and makes every step fail with ENOENT in 0.0s.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE = path.join(ROOT, "scripts", "audit-baseline.json");
 const args = new Set(process.argv.slice(2));
 const skipBrowser = args.has("--no-browser");

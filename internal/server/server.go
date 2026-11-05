@@ -2246,14 +2246,13 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		return
 	}
 	s.adoptWorktreePlacement(ctx, &ws)
-	// Same reason as the worktree path: opening a workspace that has never been set up
-	// must run its setup commands, otherwise the first command the user types fails.
-	setupCommands := workspace.ReadSetupCommands(ws.Cwd)
-	setupSkippedReason := any(nil)
-	if len(setupCommands) == 0 {
-		setupSkippedReason = "no setup commands configured"
-	} else {
-		go s.runWorkspaceSetup(ws.WorkspaceID, ws.Cwd, "", setupCommands)
+	// Setup only runs for worktrees BySpace creates (a fresh checkout has no node_modules —
+	// see the worktree create paths). A directory the user points at is already set up, and
+	// re-running `worktree.setup` there would e.g. wipe node_modules; the Setup panel's run
+	// action stays available for a deliberate run.
+	setupSkippedReason := any("no setup commands configured")
+	if len(workspace.ReadSetupCommands(ws.Cwd)) > 0 {
+		setupSkippedReason = "local directory: setup runs only for BySpace-created worktrees"
 	}
 
 	respPayload := map[string]any{

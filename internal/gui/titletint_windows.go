@@ -7,12 +7,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/w32"
 )
 
-// frameOnlyResizeJS disables Wails' in-page edge resize zone on framed Windows windows so the
-// top of the page under the title bar does not turn into a vertical resize handle (ported from
-// magpie's mainwindow.go).
-const frameOnlyResizeJS = `(()=>{const w=window._wails;if(!w||typeof w.setResizable!=="function")return;` +
-	`if(!w.setResizable.frameOnly){const f=w.setResizable;w.setResizable=()=>f(false);w.setResizable.frameOnly=true}` +
-	`w.setResizable(false)})();`
+// inPageResizeJS re-enables Wails' in-page edge resize zone on the frameless Windows window.
+// The L-shell (DesktopWindowTitleBar + framed card) owns the top strip, so the old
+// "frameOnly" suppression that disabled resize entirely is no longer needed — without this
+// call the window's four edges stop being resize handles.
+const inPageResizeJS = `(()=>{const w=window._wails;if(w&&typeof w.setResizable==="function")w.setResizable(true)})();`
 
 // tintWindowsTitleBar paints the Windows native title bar with the page's own background color
 // and flips its caption buttons/text between light and dark so the title bar blends seamlessly

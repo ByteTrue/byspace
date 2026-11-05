@@ -635,13 +635,11 @@ func TestPairingQRHasFinderPatterns(t *testing.T) {
 	}
 }
 
-// TestWorkspaceCreateRunsSetup pins the bootstrap behaviour ported from
-// runAsyncWorktreeBootstrap: a workspace whose byspace.json declares setup commands must run
-// them, and report why when there are none.
-//
-// Without this a freshly created worktree looks ready but has no node_modules, so the first
-// command the user runs fails.
-func TestWorkspaceCreateRunsSetup(t *testing.T) {
+// TestWorkspaceCreateSkipsSetupForDirectories pins the setup boundary: `worktree.setup` runs
+// only for worktrees BySpace creates (the two worktree create paths). A directory the user adds
+// is already set up, so re-running setup there would e.g. wipe node_modules; the response must
+// say why it was skipped, and nothing may run.
+func TestWorkspaceCreateSkipsSetupForDirectories(t *testing.T) {
 	tmp := t.TempDir()
 	fakePi := writeFaithfulFakePi(t)
 	workDir := filepath.Join(tmp, "project")
@@ -686,7 +684,7 @@ func TestWorkspaceCreateRunsSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The response must say setup is running (not "no setup commands configured").
+	// The response must skip with the directory reason.
 	var skipped any
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) {
@@ -710,19 +708,18 @@ func TestWorkspaceCreateRunsSetup(t *testing.T) {
 			break
 		}
 	}
-	if skipped != nil {
-		t.Fatalf("expected setup to start, got setupSkippedReason=%v", skipped)
+	if skipped != "local directory: setup runs only for BySpace-created worktrees" {
+		t.Fatalf("expected setup to be skipped with the directory reason, got setupSkippedReason=%v", skipped)
 	}
 
-	// And it must actually run.
-	runDeadline := time.Now().Add(8 * time.Second)
+	// And nothing may have run.
+	runDeadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(runDeadline) {
 		if _, statErr := os.Stat(marker); statErr == nil {
-			return
+			t.Fatal("setup command ran for a directory workspace")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal("setup command never ran: setup-ran.txt was not created")
 }
 
 // A workspace whose manifest has no setup block must say so instead of silently doing nothing.

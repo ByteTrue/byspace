@@ -34,12 +34,17 @@ export function ScreenHeader({
         )}
       >
         <div
+          data-wails-drag="true"
           className={cn("flex min-w-0 flex-1 items-center gap-2", leftClassName)}
           style={leftStyle}
         >
           {left}
         </div>
-        <div className={cn("flex shrink-0 items-center gap-2", rightClassName)} style={rightStyle}>
+        <div
+          data-wails-drag="true"
+          className={cn("flex shrink-0 items-center gap-2", rightClassName)}
+          style={rightStyle}
+        >
           {right}
         </div>
       </div>
