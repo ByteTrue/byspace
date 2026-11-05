@@ -327,6 +327,17 @@ func IsBinaryAvailable(spec ProviderSpec, piCommandOverride string) bool {
 	return execres.IsCommandAvailable(context.Background(), spec.Binary)
 }
 
+// ResolveProviderCommand gives process launches the same executable as availability checks.
+// An explicit path remains literal; a bare command also searches the standard install locations
+// that a desktop app's OS-provided PATH omits.
+func ResolveProviderCommand(ctx context.Context, command string) string {
+	if resolved := execres.Find(ctx, command); resolved != "" {
+		return resolved
+	}
+	// Preserve the launch error for a missing command instead of turning it into "empty command".
+	return command
+}
+
 // customProviderBinary is the executable a custom provider will actually launch.
 //
 // `command` is where the config says so — it may be an array (`[path, args...]`) or a string — and it is what the test
@@ -565,6 +576,24 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 	var providerArgs []string
 	if len(argv) > 1 {
 		providerArgs = argv[1:]
+	}
+	if cmd != "" {
+		resolveCommand := cmd
+		if spec.Protocol == "opencode-http" && strings.HasSuffix(cmd, " acp") {
+			resolveCommand = strings.TrimSuffix(cmd, " acp")
+		}
+		if !strings.HasPrefix(resolveCommand, "http://") && !strings.HasPrefix(resolveCommand, "https://") {
+			resolved := ResolveProviderCommand(context.Background(), resolveCommand)
+			if resolveCommand != cmd {
+				resolved += " acp"
+			}
+			cmd = resolved
+		}
+	}
+	// Keep the inherited daemon environment intact, but let a resolved JS CLI find its
+	// interpreter through /usr/bin/env as well. Nil means "inherit the daemon environment".
+	if cfg.Env != nil {
+		cfg.Env = execres.AppendStandardDirs(cfg.Env)
 	}
 
 	switch spec.Protocol {

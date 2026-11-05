@@ -102,6 +102,71 @@ func TestEnumerateDeduplicates(t *testing.T) {
 	}
 }
 
+func TestEnumerateSearchesStandardLocationsAfterPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix executable locations")
+	}
+	pathDir := t.TempDir()
+	localDir := t.TempDir()
+	pathCommand := writeScript(t, pathDir, "mycli", "#!/bin/sh\nexit 0\n")
+	localCommand := writeScript(t, localDir, "mycli", "#!/bin/sh\nexit 0\n")
+	got := enumerate("mycli", []string{pathDir, "/opt/homebrew/bin", "/usr/local/bin", localDir})
+	if len(got) < 2 || got[0] != pathCommand || got[len(got)-1] != localCommand {
+		t.Fatalf("search order = %v, want PATH first and user local bin last", got)
+	}
+}
+
+func TestFindUsesUserLocalBinWithoutShellPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses shell scripts")
+	}
+	home := t.TempDir()
+	localBin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(localBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := writeScript(t, localBin, "mycli", "#!/bin/sh\nexit 0\n")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	if got := Find(t.Context(), "mycli"); got != command {
+		t.Fatalf("Find = %q, want %q", got, command)
+	}
+}
+
+func TestFindSkipsBrokenStandardLocationCandidate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses shell scripts")
+	}
+	broken := t.TempDir()
+	localBin := t.TempDir()
+	// Exists but is not executable: the next standard location must still get a chance.
+	if err := os.WriteFile(filepath.Join(broken, "mycli"), []byte("not executable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	command := writeScript(t, localBin, "mycli", "#!/bin/sh\nexit 0\n")
+	if got := Find(t.Context(), "mycli"); got != "" {
+		// Enumerate has already filtered the non-executable file before any probe runs.
+		t.Fatalf("Find unexpectedly resolved a command outside the test PATH: %q", got)
+	}
+	got := enumerate("mycli", []string{broken, localBin})
+	if len(got) != 1 || got[0] != command {
+		t.Fatalf("candidates = %v, want only the usable local install", got)
+	}
+}
+
+func TestFindUsesHomebrewWithoutShellPath(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("requires the macOS Homebrew location")
+	}
+	if _, err := os.Stat("/opt/homebrew/bin/pi"); err != nil {
+		t.Skip("Homebrew Pi is not installed")
+	}
+	t.Setenv("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+	if got := Find(t.Context(), "pi"); got != "/opt/homebrew/bin/pi" {
+		t.Fatalf("Find = %q, want Homebrew Pi", got)
+	}
+}
+
 func TestProbe(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses shell scripts")

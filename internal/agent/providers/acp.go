@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/execres"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
 	"os"
@@ -60,11 +61,17 @@ type ACPSession struct {
 func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*ACPSession, error) {
 	bin := strings.TrimSpace(cmdOverride)
 	args := append([]string(nil), spec.DefaultArgs...)
-	if bin != "" {
-		// When overridden via env or test script, use the override command directly.
-		args = spec.DefaultArgs
-	} else {
+	if bin == "" {
 		bin = spec.Binary
+	}
+	// OpenCode accepts the historical command string `opencode acp`; only its executable
+	// participates in lookup. Other overrides keep their complete argument tail in cfg.
+	if spec.ID == "opencode" && strings.HasSuffix(bin, " acp") {
+		args = []string{"acp"}
+		bin = strings.TrimSuffix(bin, " acp")
+	}
+	if resolved := execres.Find(context.Background(), bin); resolved != "" {
+		bin = resolved
 	}
 
 	cmd := proc.Command(bin, args...)
@@ -76,6 +83,7 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 	} else {
 		cmd.Env = os.Environ()
 	}
+	cmd.Env = execres.AppendStandardDirs(cmd.Env)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

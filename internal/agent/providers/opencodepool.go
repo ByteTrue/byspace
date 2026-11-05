@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/execres"
 )
 
 // OpenCode startup and shutdown budgets, ported from server-manager.ts.
@@ -92,6 +94,9 @@ func NewOpenCodePool(homeDir, command string, args []string) *OpenCodePool {
 	pool.startProcess = defaultStartProcess
 	pool.probe = probeOpenCodeServer
 	pool.startupTimeout = OpenCodeServerStartupTimeout
+	if resolved := execres.Find(context.Background(), pool.command); resolved != "" {
+		pool.command = resolved
+	}
 	return pool
 }
 
@@ -205,6 +210,7 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 	for key, value := range p.env {
 		env = append(env, key+"="+value)
 	}
+	env = execres.AppendStandardDirs(env)
 
 	startCtx, cancel := context.WithTimeout(ctx, p.startupTimeout)
 	defer cancel()
