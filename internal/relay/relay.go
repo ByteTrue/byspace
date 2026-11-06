@@ -20,6 +20,9 @@ type Options struct {
 	WebDir      string
 	WebUI       *webui.Handler
 	UpstreamURL string
+	// ObserveFrame runs before the shared router handles an inbound frame. Tests use it to count
+	// uploads at the relay boundary without replacing the router or any socket behavior.
+	ObserveFrame func(conn Connection)
 }
 
 // Server implements the BySpace Relay HTTP and WebSocket protocol (v1 and v2)
@@ -29,6 +32,7 @@ type Server struct {
 	rooms        map[string]*sessionRoom
 	webUI        *webui.Handler
 	cutoverProxy http.Handler
+	observeFrame func(Connection)
 }
 
 // NewServer creates a new Relay Server instance.
@@ -51,6 +55,7 @@ func NewServer(opts Options) *Server {
 		rooms:        make(map[string]*sessionRoom),
 		webUI:        ui,
 		cutoverProxy: proxy,
+		observeFrame: opts.ObserveFrame,
 	}
 }
 
@@ -124,6 +129,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		msgType, data, err := ws.Read(r.Context())
 		if err != nil {
 			return
+		}
+		if s.observeFrame != nil {
+			s.observeFrame(conn)
 		}
 		router.Message(r.Context(), room, room.frames, peer, conn, fromWebsocketType(msgType), data)
 	}

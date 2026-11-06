@@ -1,6 +1,7 @@
 package e2ee
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,7 +87,8 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 
 	if !raw.IsBinary {
 		// A plaintext frame after the handshake is either a repeated hello (harmless, the peer
-		// retrying) or a protocol error. Never application data: that would be unencrypted.
+		// retrying) or a protocol error. Text ciphertext is base64, not JSON, so it must continue
+		// to the decrypt path rather than being rejected before its encoding is examined.
 		trimmed := strings.TrimSpace(string(raw.Data))
 		if strings.HasPrefix(trimmed, "{") {
 			var probe struct {
@@ -96,19 +98,43 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 				switch probe.Type {
 				case "e2ee_ready", "e2ee_hello":
 					return nil, nil
+				default:
+					return nil, errors.New("received plaintext frame on encrypted channel")
 				}
 			}
 		}
-		return nil, errors.New("received plaintext frame on encrypted channel")
 	}
 
-	// Both sides carry the ciphertext in binary frames, so decryption is the same either way;
-	// `binaryCiphertext` only matters for Send, where the choice is per-session.
-	plaintext, err := Decrypt(s.sharedKey, raw.Data)
+	var ciphertext []byte
+	if s.binaryCiphertext {
+		if raw.IsBinary {
+			ciphertext = raw.Data
+		} else {
+			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
+			if err != nil {
+				return nil, fmt.Errorf("invalid base64 ciphertext: %w", err)
+			}
+			ciphertext = decoded
+		}
+	} else {
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
+		if err != nil {
+			// COMPAT(binaryCiphertext): added in v0.2.3, remove base64-only receive mode after
+			// 2027-01-27. Peers that never negotiated the capability may send raw binary ciphertext.
+			if raw.IsBinary {
+				ciphertext = raw.Data
+			} else {
+				return nil, fmt.Errorf("invalid legacy base64 ciphertext: %w", err)
+			}
+		} else {
+			ciphertext = decoded
+		}
+	}
+	plaintext, err := Decrypt(s.sharedKey, ciphertext)
 	if err != nil {
 		return nil, err
 	}
-	return &Frame{Data: plaintext, IsBinary: s.binaryCiphertext}, nil
+	return &Frame{Data: plaintext, IsBinary: raw.IsBinary}, nil
 }
 
 // Send encrypts and transmits one frame.
@@ -126,8 +152,8 @@ func (s *ClientSession) Send(plain Frame) error {
 	if err != nil {
 		return err
 	}
-	if binaryCiphertext {
+	if binaryCiphertext && plain.IsBinary {
 		return s.transport.SendBinary(sealed)
 	}
-	return s.transport.SendText(string(sealed))
+	return s.transport.SendText(base64.StdEncoding.EncodeToString(sealed))
 }

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // Codex structured outputs need every object closed and fully required; Node normalized the schema
@@ -54,6 +56,7 @@ func TestNormalizeCodexOutputSchema(t *testing.T) {
 func TestCodexPromptCarriesTheOutputSchema(t *testing.T) {
 	reader, writer := io.Pipe()
 	session := &CodexSession{stdin: writer, pending: map[int64]chan map[string]any{}, threadID: "thread-1"}
+	session.frames = sdk.NewStreamFrames(session.flushFramesOnTimer)
 	requests := make(chan map[string]any, 4)
 	go func() {
 		scanner := bufio.NewScanner(reader)

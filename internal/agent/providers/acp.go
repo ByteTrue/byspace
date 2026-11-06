@@ -46,6 +46,9 @@ type ACPSession struct {
 	activeTurnID        string
 	activeTextIdx       int
 	activeThinkIdx      int
+	streamSeq           int
+	frames              *sdk.StreamFrames
+	emitMu              sync.Mutex
 	timeline            []sdk.TimelineEntry
 	toolIndexByID       map[string]int
 	commands            []sdk.SlashCommand
@@ -114,6 +117,7 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 		permissionRPCIDs:   make(map[string]any),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
+	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	go s.readLoop(stdout)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -259,6 +263,7 @@ func (s *ACPSession) readLoop(stdout io.Reader) {
 		}
 	}
 
+	s.flushTailOnExit()
 	s.mu.Lock()
 	s.closed = true
 	s.status = "closed"
@@ -274,6 +279,8 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 	params, _ := msg["params"].(map[string]any)
 	var extraEvents []map[string]any
 
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	// The reverse terminal family. Handled first so the main switch stays about session state.
 	if s.handleACPReverseTerminal(rpcID, method, params) {
 		return
@@ -400,10 +407,11 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 			if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
 				s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "assistant_message",
-					Text: text,
 				})
-			} else {
-				s.timeline[s.activeTextIdx].Item.Text += text
+			}
+			s.timeline[s.activeTextIdx].Item.Text += text
+			if s.frames.AddText(s.activeTextIdx, sdk.TimelineItem{Type: "assistant_message", Text: text}, s.activeTurnID) {
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
 			}
 		}
 
@@ -413,10 +421,11 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 			if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
 				s.activeThinkIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "reasoning",
-					Text: text,
 				})
-			} else {
-				s.timeline[s.activeThinkIdx].Item.Text += text
+			}
+			s.timeline[s.activeThinkIdx].Item.Text += text
+			if s.frames.AddText(s.activeThinkIdx, sdk.TimelineItem{Type: "reasoning", Text: text}, s.activeTurnID) {
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
 			}
 		}
 
@@ -441,6 +450,9 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		if callID != "" {
 			s.toolIndexByID[callID] = idx
 		}
+		if s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, nil) {
+			extraEvents = append(extraEvents, s.flushFramesLocked()...)
+		}
 		extraEvents = append(extraEvents, map[string]any{
 			"type":       "tool_execution_start",
 			"toolCallId": callID,
@@ -457,8 +469,11 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 			normStatus = "running"
 		}
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
+			visible := s.sentItemLocked(idx)
 			s.timeline[idx].Item.Status = normStatus
 			s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail(strings.ToLower(s.timeline[idx].Item.Name), upd["rawInput"], upd["rawOutput"])
+			s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, visible)
+			extraEvents = append(extraEvents, s.flushFramesLocked()...)
 		}
 		extraEvents = append(extraEvents, map[string]any{
 			"type":       "tool_execution_end",
@@ -484,6 +499,10 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		}
 	}
 
+	if updType != "agent_message_chunk" && updType != "agent_thought_chunk" &&
+		updType != "tool_call" && updType != "tool_call_update" {
+		extraEvents = append(s.flushFramesLocked(), extraEvents...)
+	}
 	subs := s.copySubscribersLocked()
 	s.mu.Unlock()
 
@@ -522,9 +541,10 @@ func (s *ACPSession) copySubscribersLocked() []func(map[string]any) {
 func (s *ACPSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.streamSeq++
 	entry := sdk.TimelineEntry{
-		Seq:       len(s.timeline) + 1,
-		SeqEnd:    len(s.timeline) + 1,
+		Seq:       s.streamSeq,
+		SeqEnd:    s.streamSeq,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Item:      sdk.LimitTimelineItemContent(item),
 	}
@@ -533,14 +553,53 @@ func (s *ACPSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry
 }
 
 func (s *ACPSession) appendItemLocked(item sdk.TimelineItem) int {
-	seq := len(s.timeline) + 1
+	return s.appendItemWithSeqLocked(0, item)
+}
+
+func (s *ACPSession) appendItemWithSeqLocked(seq int, item sdk.TimelineItem) int {
 	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       seq,
+		SeqEnd:    seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item:      item,
+		Item:      sdk.LimitTimelineItemContent(item),
 	})
 	return len(s.timeline) - 1
+}
+
+func (s *ACPSession) appendUserMessageLocked(item sdk.TimelineItem) {
+	preEvents := s.flushFramesLocked()
+	s.streamSeq++
+	s.appendItemWithSeqLocked(s.streamSeq, item)
+	subs := s.copySubscribersLocked()
+	seq := s.streamSeq
+	turnID := s.activeTurnID
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range preEvents {
+			fn(event)
+		}
+		fn(map[string]any{
+			"type": "byspace_stream_timeline", "seq": seq,
+			"turnId": turnID, "item": item,
+		})
+	}
+	s.mu.Lock()
+}
+
+func (s *ACPSession) flushTailOnExit() {
+	// Not under emitMu: a subscriber may close the session while EOF is delivered. The process
+	// has already stopped producing events, and the stopped timer cannot add another delivery.
+	s.mu.Lock()
+	events := s.flushFramesLocked()
+	s.frames.Stop()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
 }
 
 func (s *ACPSession) notifyFinishLocked(err error) {
@@ -561,9 +620,7 @@ func (s *ACPSession) Status() string {
 func (s *ACPSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]sdk.TimelineEntry, len(s.timeline))
-	copy(out, s.timeline)
-	return out
+	return sdk.VisibleTimeline(s.timeline, s.frames.Pending())
 }
 
 func (s *ACPSession) SeedTimeline(entries []sdk.TimelineEntry) {
@@ -571,6 +628,11 @@ func (s *ACPSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	defer s.mu.Unlock()
 	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
+	for _, entry := range entries {
+		if entry.SeqEnd > s.streamSeq {
+			s.streamSeq = entry.SeqEnd
+		}
+	}
 }
 
 func (s *ACPSession) SetNextClientMessageID(id string) {
@@ -595,7 +657,7 @@ func (s *ACPSession) Usage(_ context.Context) *sdk.AgentUsage {
 func (s *ACPSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.timeline)
+	return s.streamSeq
 }
 
 func (s *ACPSession) ActiveTurn() (string, string) {
@@ -619,6 +681,8 @@ func (s *ACPSession) LastAssistantText() string {
 }
 
 func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.ImageContent) error {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -628,7 +692,7 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 	// The client's own id comes back on this row so it can reconcile the bubble it rendered
 	// optimistically instead of leaving a duplicate, and can settle the pending submission.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
-	s.appendItemLocked(userMessage(message, clientMsgID))
+	s.appendUserMessageLocked(userMessage(message, clientMsgID))
 	sid := s.sessionID
 	subs := s.copySubscribersLocked()
 	s.mu.Unlock()
@@ -646,25 +710,35 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 			"sessionId": sid,
 			"prompt":    promptBlocks,
 		})
-		s.mu.Lock()
-		hadText := s.activeTextIdx >= 0
-		s.status = "idle"
-		s.activeTurnID = ""
-		s.activeTextIdx = -1
-		s.activeThinkIdx = -1
-		s.notifyFinishLocked(err)
-		endSubs := s.copySubscribersLocked()
-		s.mu.Unlock()
-
-		for _, fn := range endSubs {
-			if hadText {
-				fn(map[string]any{"type": "message_end"})
-			}
-			fn(map[string]any{"type": "agent_end"})
-		}
+		s.finishPrompt(err)
 	}()
 	_ = ctx
 	return nil
+}
+
+func (s *ACPSession) finishPrompt(err error) {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	s.mu.Lock()
+	tail := s.flushFramesLocked()
+	hadText := s.activeTextIdx >= 0
+	s.status = "idle"
+	s.activeTurnID = ""
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.notifyFinishLocked(err)
+	endSubs := s.copySubscribersLocked()
+	s.mu.Unlock()
+
+	for _, fn := range endSubs {
+		for _, event := range tail {
+			fn(event)
+		}
+		if hadText {
+			fn(map[string]any{"type": "message_end"})
+		}
+		fn(map[string]any{"type": "agent_end"})
+	}
 }
 
 func (s *ACPSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
@@ -799,7 +873,76 @@ func (s *ACPSession) OnEvent(fn func(map[string]any)) func() {
 	}
 }
 
+func (s *ACPSession) sentItemLocked(index int) *sdk.TimelineItem {
+	for _, frame := range s.frames.Pending() {
+		if frame.Kind == "tool_call" && frame.Row == index {
+			return frame.Visible
+		}
+	}
+	entry := s.timeline[index]
+	if entry.Seq == 0 {
+		return nil
+	}
+	item := entry.Item
+	return &item
+}
+
+// flushFramesLocked keeps timeline sequence assignment after coalescing, as Pi does.
+func (s *ACPSession) flushFramesLocked() []map[string]any {
+	frames := s.frames.Take()
+	if len(frames) == 0 {
+		return nil
+	}
+	events := make([]map[string]any, 0, len(frames))
+	for _, frame := range frames {
+		if frame.Row < 0 || frame.Row >= len(s.timeline) {
+			continue
+		}
+		s.streamSeq++
+		entry := &s.timeline[frame.Row]
+		if entry.Seq == 0 {
+			entry.Seq = s.streamSeq
+		}
+		entry.SeqEnd = s.streamSeq
+		item := frame.Item
+		if frame.Kind == "tool_call" {
+			item = entry.Item
+		}
+		events = append(events, map[string]any{
+			"type": "byspace_stream_timeline", "seq": s.streamSeq,
+			"turnId": frame.TurnID, "item": item,
+		})
+	}
+	return events
+}
+
+func (s *ACPSession) flushFramesOnTimer() {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	s.mu.Lock()
+	events := s.flushFramesLocked()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
+}
+
 func (s *ACPSession) Close() error {
+	// A subscriber may close the session from any event callback, so Close cannot wait on emitMu.
+	// Serialize the tail flush with delivery instead, then stop the timer and the subprocess.
+	s.mu.Lock()
+	frames := s.flushFramesLocked()
+	s.frames.Stop()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range frames {
+			fn(event)
+		}
+	}
 	_ = s.stdin.Close()
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()

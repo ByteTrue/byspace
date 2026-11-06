@@ -27,9 +27,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/syumai/workers-go"
 	"github.com/syumai/workers-go/cloudflare"
@@ -43,9 +45,11 @@ import (
 // wrangler.jsonc's durable_objects.bindings[].class_name and the
 // -durable-objects flag the build passes to workers-assets-gen.
 const roomClass = "RelayRoom"
+const meterClass = "RelayMeter"
 
 func main() {
 	durableobjects.Register(roomClass, newRoom)
+	durableobjects.Register(meterClass, newMeter)
 	http.HandleFunc("/", handleFetch)
 	workers.Serve(nil)
 }
@@ -81,25 +85,24 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Close whatever this connection supersedes *before* accepting it.
-	// BeforeRegister resolves the old socket through the runtime's tagged
-	// registry, so accepting first would make a connection find and close
-	// itself. The TypeScript worker orders it the same way
-	// (closeExistingServerSockets, then acceptWebSocket).
-	router := relay.Router{}
-	view := &roomView{room: r}
-	router.BeforeRegister(view, conn)
-
-	// Hibernating, not Upgrade: the returned end is registered with
-	// acceptWebSocket so the object can be evicted while the socket idles, and so
-	// every later message arrives as a trigger instead of on a goroutine that
-	// keeps the object (and its billed duration) alive.
 	socket, err := cfws.UpgradeHibernating(w, req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	router := relay.Router{}
+	view := &roomView{room: r}
 
+	// Close whatever this connection supersedes *before* accepting it.
+	// BeforeRegister resolves the old socket through the runtime's tagged
+	// registry, so accepting first would make a connection find and close
+	// itself. The TypeScript worker orders it the same way
+	// (closeExistingServerSockets, then acceptWebSocket).
+	router.BeforeRegister(view, conn)
+
+	// Hibernating, not Upgrade: acceptWebSocket lets the object be evicted while the socket idles,
+	// and every later message arrives as a trigger instead of on a goroutine that keeps the object
+	// (and its billed duration) alive.
 	tags := conn.Tags()
 	if err := r.state.AcceptHibernatingConn(socket, tags...); err != nil {
 		_ = socket.Close(1011, "accept failed")
@@ -137,18 +140,157 @@ func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn,
 		kind = relay.MessageBinary
 	}
 	peer := &wsPeer{conn: socket, connectionID: conn.ConnectionID()}
+	// The cheap local bucket runs first: an abusive socket stops itself instead of blocking a
+	// whole room on the shared meter. Allowed traffic still pays for both meter and room requests.
+	rate, err := r.takeRate(relay.BudgetConnectionKey(conn))
+	if err != nil {
+		peer.Close(relay.StatusTryAgainLater, "relay rate state unavailable")
+		return nil
+	}
+	if !rate.Allow {
+		peer.Close(relay.StatusTryAgainLater, rate.Reason)
+		return nil
+	}
+	decision, err := takeDailyBudget()
+	if err != nil {
+		peer.Close(relay.StatusTryAgainLater, "relay budget unavailable")
+		return nil
+	}
+	if !decision.Allow {
+		peer.Close(relay.StatusTryAgainLater, decision.Reason)
+		return nil
+	}
 	relay.Router{}.Message(context.Background(), &roomView{room: r}, r.frames, peer, conn, kind, data)
 	return nil
 }
 
 // WebSocketClose is the webSocketClose trigger: the departure bookkeeping.
-func (r *room) WebSocketClose(_ context.Context, socket *cfws.HibernatingConn, _ int, _ string, _ bool) error {
+func (r *room) WebSocketClose(_ context.Context, socket *cfws.HibernatingConn, code int, reason string, _ bool) error {
+	// acceptWebSocket delivers a peer's close frame here but does not send our side of the closing
+	// handshake. Echo the code and reason so the peer receives a close event instead of waiting for
+	// its transport timeout. This also completes router-initiated peer closes.
+	_ = socket.Close(code, reason)
 	conn, ok := connectionFromAttachment(socket.JSValue())
 	if !ok {
 		return nil
 	}
-	relay.Router{}.Disconnected(context.Background(), &roomView{room: r}, r.frames, conn)
-	return nil
+	view := &roomView{room: r, closing: socket.JSValue()}
+	relay.Router{}.Disconnected(context.Background(), view, r.frames, conn)
+	_, err := r.releaseRate(relay.BudgetConnectionKey(conn))
+	return err
+}
+
+// takeRate serializes read/modify/write through the room's storage transaction. The token bucket
+// survives eviction; it cannot be an in-memory field on room.
+func (r *room) takeRate(connectionKey string) (relay.RateDecision, error) {
+	var decision relay.RateDecision
+	_, err := r.state.Storage().Transaction(func(tx *durableobjects.DurableObjectTransaction) (js.Value, error) {
+		var state relay.RateState
+		if err := readBudgetJSON(tx, "relay-rate-v1", &state); err != nil {
+			return js.Undefined(), err
+		}
+		decision = state.TakeFrame(time.Now(), connectionKey, relay.DefaultBudgetLimits)
+		return js.Undefined(), writeBudgetJSON(tx, "relay-rate-v1", decision.State)
+	})
+	return decision, err
+}
+
+func (r *room) releaseRate(connectionKey string) (relay.RateState, error) {
+	var state relay.RateState
+	_, err := r.state.Storage().Transaction(func(tx *durableobjects.DurableObjectTransaction) (js.Value, error) {
+		if err := readBudgetJSON(tx, "relay-rate-v1", &state); err != nil {
+			return js.Undefined(), err
+		}
+		state = state.ReleaseConnection(connectionKey)
+		return js.Undefined(), writeBudgetJSON(tx, "relay-rate-v1", state)
+	})
+	return state, err
+}
+
+// meter is the single counter shared by every relay room in this Worker namespace. A request to it
+// costs one DO invocation, so both it and the room trigger are included in MeterCost.
+type meter struct {
+	state *durableobjects.DurableObjectState
+}
+
+func newMeter(state *durableobjects.DurableObjectState, _ js.Value) (durableobjects.Object, error) {
+	return &meter{state: state}, nil
+}
+
+func (m *meter) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	var decision relay.MeterDecision
+	_, err := m.state.Storage().Transaction(func(tx *durableobjects.DurableObjectTransaction) (js.Value, error) {
+		var state relay.MeterState
+		if err := readBudgetJSON(tx, "relay-meter-v1", &state); err != nil {
+			return js.Undefined(), err
+		}
+		decision = state.Take(time.Now(), relay.MeterCost, dailyRequestBudget())
+		return js.Undefined(), writeBudgetJSON(tx, "relay-meter-v1", decision.State)
+	})
+	if err != nil {
+		http.Error(w, "meter unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if !decision.Allow {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}
+	_ = json.NewEncoder(w).Encode(decision)
+}
+
+func takeDailyBudget() (relay.MeterDecision, error) {
+	ns, err := cloudflare.NewDurableObjectNamespace("RELAY_METER")
+	if err != nil {
+		return relay.MeterDecision{}, err
+	}
+	stub, err := ns.Get(ns.IdFromName("global"))
+	if err != nil {
+		return relay.MeterDecision{}, err
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://relay-meter.internal/take", nil)
+	if err != nil {
+		return relay.MeterDecision{}, err
+	}
+	res, err := stub.Fetch(req)
+	if err != nil {
+		return relay.MeterDecision{}, err
+	}
+	defer res.Body.Close()
+	var decision relay.MeterDecision
+	if err := json.NewDecoder(res.Body).Decode(&decision); err != nil {
+		return relay.MeterDecision{}, err
+	}
+	if res.StatusCode != http.StatusOK {
+		decision.Allow = false
+	}
+	return decision, nil
+}
+
+func dailyRequestBudget() int64 {
+	configured, err := strconv.ParseInt(cloudflare.Getenv("RELAY_DAILY_REQUEST_BUDGET"), 10, 64)
+	if err != nil || configured <= 0 {
+		return relay.DefaultBudgetLimits.DailyRequests
+	}
+	return configured
+}
+
+func readBudgetJSON(tx *durableobjects.DurableObjectTransaction, key string, target any) error {
+	raw, err := tx.Get(key, durableobjects.DurableObjectGetOptions{})
+	if err != nil {
+		return err
+	}
+	if raw.Type() != js.TypeString {
+		return nil
+	}
+	return json.Unmarshal([]byte(raw.String()), target)
+}
+
+func writeBudgetJSON(tx *durableobjects.DurableObjectTransaction, key string, value any) error {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return tx.Put(key, js.ValueOf(string(encoded)), durableobjects.DurableObjectPutOptions{})
 }
 
 // WebSocketError is the webSocketError trigger. The runtime reports the
@@ -249,6 +391,17 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	decision, err := takeDailyBudget()
+	if err != nil {
+		http.Error(w, "relay budget unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !decision.Allow {
+		w.Header().Set("Retry-After", "3600")
+		http.Error(w, decision.Reason, http.StatusTooManyRequests)
+		return
+	}
+
 	ns, err := cloudflare.NewDurableObjectNamespace("RELAY")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -285,6 +438,9 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 // first time the object hibernated.
 type roomView struct {
 	room *room
+	// closing is still returned by getWebSockets during its own webSocketClose callback. It must not
+	// count as a surviving replacement connection, or Disconnected skips notifying the counterpart.
+	closing js.Value
 }
 
 func (v *roomView) Peers(tag string) []relay.Peer {
@@ -294,6 +450,9 @@ func (v *roomView) Peers(tag string) []relay.Peer {
 	}
 	peers := make([]relay.Peer, 0, len(sockets))
 	for _, socket := range sockets {
+		if !v.closing.IsUndefined() && !v.closing.IsNull() && socket.Equal(v.closing) {
+			continue
+		}
 		conn, ok := connectionFromAttachment(socket)
 		if !ok {
 			continue

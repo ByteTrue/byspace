@@ -29,12 +29,22 @@
         "name": "RELAY",
         "class_name": "RelayRoom",
       },
+      {
+        "name": "RELAY_METER",
+        "class_name": "RelayMeter",
+      },
     ],
   },
+  // Migrations are append-only against the deployed Worker. Adding RelayMeter to the already
+  // applied v1 tag leaves production without the class and makes the version upload fail with 10061.
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["RelayRoom"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["RelayMeter"],
     },
   ],
   // Serve the web export on the same origin as the relay, exactly like the
@@ -62,12 +72,20 @@
             "name": "RELAY",
             "class_name": "RelayRoom",
           },
+          {
+            "name": "RELAY_METER",
+            "class_name": "RelayMeter",
+          },
         ],
       },
       "migrations": [
         {
           "tag": "v1",
           "new_sqlite_classes": ["RelayRoom"],
+        },
+        {
+          "tag": "v2",
+          "new_sqlite_classes": ["RelayMeter"],
         },
       ],
       "assets": {

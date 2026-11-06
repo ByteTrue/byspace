@@ -151,6 +151,8 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
 		if err != nil {
+			// COMPAT(binaryCiphertext): added in v0.2.3, remove base64-only receive mode after
+			// 2027-01-27. Peers that never negotiated the capability may send raw binary ciphertext.
 			if raw.IsBinary {
 				ciphertext = raw.Data
 				isBinaryPlaintext = true

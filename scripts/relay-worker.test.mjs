@@ -17,11 +17,9 @@ function read(relative) {
   return readFileSync(path.join(workerDir, relative), "utf8");
 }
 
-function goClass() {
+function goClasses() {
   const source = read("main.go");
-  const match = source.match(/roomClass\s*=\s*"([^"]+)"/);
-  assert.ok(match, "main.go should declare roomClass");
-  return match[1];
+  return [...source.matchAll(/(?:roomClass|meterClass)\s*=\s*"([^"]+)"/g)].map((match) => match[1]);
 }
 
 function wranglerClasses() {
@@ -36,30 +34,42 @@ function wranglerClasses() {
   return { bound, migrated };
 }
 
-function buildClass() {
+function buildClasses() {
   const source = read("build.mjs");
-  const match = source.match(/DURABLE_OBJECT_CLASS\s*=\s*"([^"]+)"/);
-  assert.ok(match, "build.mjs should declare DURABLE_OBJECT_CLASS");
-  return match[1];
+  const match = source.match(/DURABLE_OBJECT_CLASSES\s*=\s*\[([^\]]+)\]/);
+  assert.ok(match, "build.mjs should declare DURABLE_OBJECT_CLASSES");
+  return [...match[1].matchAll(/"([^"]+)"/g)].map((inner) => inner[1]);
 }
 
-test("the Durable Object class name agrees across main.go, wrangler.jsonc and build.mjs", () => {
-  const declared = goClass();
+test("the Durable Object class names agree across main.go, wrangler.jsonc and build.mjs", () => {
+  const declared = goClasses();
   const { bound, migrated } = wranglerClasses();
-  assert.ok(bound.length > 0, "wrangler.jsonc should bind a Durable Object");
-  for (const name of bound) {
-    assert.equal(name, declared, "wrangler.jsonc binds a class main.go does not register");
+  assert.deepEqual(declared, ["RelayRoom", "RelayMeter"]);
+  assert.deepEqual(buildClasses(), declared, "build.mjs bakes in different class names");
+  assert.equal(bound.length, declared.length * 2, "both environments bind both classes");
+  assert.deepEqual(
+    migrated,
+    ["RelayRoom", "RelayMeter", "RelayRoom", "RelayMeter"],
+    "each environment introduces RelayRoom in v1, then RelayMeter in v2",
+  );
+  for (const tag of ["v1", "v2"]) {
+    assert.equal(
+      [...read("wrangler.jsonc").matchAll(new RegExp(`"tag"\\s*:\\s*"${tag}"`, "g"))].length,
+      2,
+      `both environments retain migration ${tag}`,
+    );
   }
-  for (const name of migrated) {
-    assert.equal(name, declared, "wrangler.jsonc migrates a class main.go does not register");
+  for (const name of [...bound, ...migrated]) {
+    assert.ok(declared.includes(name), `wrangler.jsonc references unregistered class ${name}`);
   }
-  assert.equal(buildClass(), declared, "build.mjs bakes in a different class name");
 });
 
-test("the Worker entry point declares exactly one Durable Object class", () => {
+test("the Worker entry point registers the room and the shared meter", () => {
   const source = read("main.go");
   const registrations = [...source.matchAll(/durableobjects\.Register\(/g)];
-  assert.equal(registrations.length, 1, "expected a single durableobjects.Register call");
+  assert.equal(registrations.length, 2, "expected a room and a meter registration");
+  assert.match(source, /IdFromName\("global"\)/, "all rooms must use the same meter");
+  assert.match(source, /MeterCost/, "the daily counter must include its own meter requests");
 });
 
 test("the Worker build targets the wasm and the JS shim wrangler.jsonc points at", () => {
@@ -112,13 +122,10 @@ test("every environment binds the Durable Object it registers", () => {
   // then answers 500 on every socket, which is exactly the kind of failure
   // nobody finds until they try the beta build.
   const source = read("wrangler.jsonc");
-  const declared = goClass();
-  const bindings = [...source.matchAll(/"class_name"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(bindings, [declared, declared], "default and beta each need one RELAY binding");
-  const migrations = [...source.matchAll(/"new_sqlite_classes"\s*:\s*\[([^\]]*)\]/g)].flatMap((m) =>
-    [...m[1].matchAll(/"([^"]+)"/g)].map((inner) => inner[1]),
-  );
-  assert.deepEqual(migrations, [declared, declared], "default and beta each need the migration");
+  const declared = goClasses();
+  const bindings = [...source.matchAll(/"name"\s*:\s*"(RELAY(?:_METER)?)"/g)].map((m) => m[1]);
+  assert.deepEqual(bindings, ["RELAY", "RELAY_METER", "RELAY", "RELAY_METER"]);
+  assert.equal(declared.length, 2);
 });
 
 test("the deploy workflow publishes both channels to the Go Worker", () => {

@@ -49,6 +49,12 @@ socket 接收必须是 hibernation：
 - `getWebSockets(tag)` 是唯一可靠的注册表，不要另存一份内存 map。
 - **替换旧连接要在 accept 之前**：`BeforeRegister` 走的就是 tag 注册表，先 accept 会让新 socket
   找到并关掉自己。
+- **`webSocketClose` 不会自动完成关闭握手**：回调里要显式 `socket.close(code, reason)`，回送对方
+  发来的 code/reason。只清理路由状态会让主动关闭的一端等不到 close event，对端的路由关闭也可能
+  表现为异常断开。`web_socket_auto_reply_to_close` 在 compatibility date 2026-04-07 起可自动
+  回送，本项目保留显式处理。
+- **关闭回调要排除当前 socket**：此时 `getWebSockets(tag)` 仍返回它。若把它当作仍在线的替代
+  client，router 会跳过 `disconnected` 通知；按 JS 对象身份排除后再枚举对端。
 
 守卫：`scripts/relay-worker.test.mjs` 里两条断言钉住「必须用 `UpgradeHibernating` + `AcceptHibernatingConn`、
 不得出现 `cfws.Upgrade`、不得有 `go r.serve(`」。改回 `Upgrade` 会红。
@@ -113,6 +119,9 @@ socket 接收必须是 hibernation：
 - **WS 消息不经过 Worker。** `workersInvocationsAdaptive` 那小时只有 ~200 次，而 DO 请求是 33 万——
   拿 Worker 指标判断 relay 是否异常会直接看反。看 `durableObjectsInvocationsAdaptiveGroups`。
 - 额度耗尽时**握手返回 502**（`stub.fetch` 直接抛），`/health` 仍 200。和 duration 耗尽的表现不同。
+- **零 remote client 时不应有业务帧。** daemon 保留 control 与 ping，但只有 remote client 上线才建立对应的 server-data；最后一个 client 离开后该 socket 关闭。真实 relay 入站计数已验证 agent 与 terminal 在零 client 时不再上传，本地继续运行，重连通过 timeline cursor 与 terminal backlog 恢复，不缓存所有离线 delta。control 保活与 tunnel 流量不属于“无 App 页面就停止”的范围；前者保留接入口，后者有自己的 relay client。2026-11-06 本地真实 relay 验证之外，生产
+  `byspace-relay-go_RelayRoom` 在过去 1 小时零业务活动窗口记录为 0 请求、0 WebSocket 消息、
+  0 计费 GB-sec；该窗口没有受控的运行中 agent，不能替代运行负载下的线上前后对照。
 
 实测常数（pi 1.4，一次 200 词回答，8.9 秒）：245 个 `text_delta` + 985 个 `thinking_delta`，
 约 **140 事件/秒**。daemon 若每事件发一帧，单次小回答就是 1,230 次 DO 请求；一个下午的
@@ -122,6 +131,37 @@ tool_call 按 callId 就地覆盖）。
 
 **结论：daemon 侧的帧率是额度约束，不是渲染细节。** 60ms 窗口给出 ≤16.7 帧/秒/agent 的上限；
 免费层 10 万/天约等于 1.16 帧/秒，所以持续流式的重度使用仍会撞顶，付费层才是长期解。
+
+### 2026-11-05：跨 room 的预算与再次复现
+
+只给每个 `RelayRoom` 设每日上限没有用：v1/v2 和不同 `serverId` 会路由到不同 room，
+总量仍能超过账户额度。Worker 现在有一个名为 `global` 的 `RelayMeter`：
+
+- 握手在外层 Worker 进入 room 之前计费；正常消息在 room 中计费。每次检查记 **2 次 DO 请求**：
+  外层/room 触发一次，meter 调用一次。被拒绝的调用也已经计费，不能忽略 meter 自身的成本。
+- 默认每个 Worker namespace 每 UTC 日 80,000 次；`RELAY_DAILY_REQUEST_BUDGET` 可以调整。
+  生产与 beta 是不同 namespace，其他 DO 消费者不在这个计数器内；**这不是账户级硬限额**。
+- 超限握手返回 HTTP 429 + `Retry-After`，在线 socket 返回 1013。每条消息另有持久化 token bucket，
+  防止 hibernation 重置速率。先查单连接速率再调用全局 meter，滥用连接先关闭自己，不拖住整个 room；
+  正常消息仍计 2 次 DO 请求。应用预算无法阻止恶意客户端继续产生已计费的拒绝请求。
+- Pi、Codex、ACP 在 provider 内先合帧再分配 seq；OpenCode 默认 HTTP 路径和 Claude 的消息级更新
+  没有同样的逐 token relay fan-out。
+
+复现不需要 daemon、真实 agent 或生产 hostname：
+
+```sh
+node scripts/relay-worker-local.mjs                 # 正常路由 + 超额握手 429
+node scripts/relay-worker-local.mjs --budget        # 多 serverId 共用同一个 meter
+node scripts/relay-worker-local.mjs --live-budget   # 在线数据消息不转发，并以 1013 关闭
+node scripts/relay-worker-local.mjs --close         # 主动关闭回送与对端 1001/1012 raw frame
+```
+
+脚本每次用新的临时 `--persist-to` 目录启动 localhost workerd，结束后清理；不会复用上次测试的计数器。
+本地验证不替代真实浏览器配对与线上计量验收。
+
+生产已部署 `09f00ec8-1dee-4faf-998d-9d22c6bce217`。新增 DO class 时必须追加 migration：
+`v1` 只声明 `RelayRoom`，`v2` 再声明 `RelayMeter`。把新 class 补进已应用的 `v1` 会让版本上传
+以 10061 失败；本地配置和构建检查都发现不了这个线上状态约束。
 
 ## 一条更普适的教训
 

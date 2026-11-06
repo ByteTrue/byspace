@@ -5,6 +5,21 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.2 - 2026-11-06
+
+### Fixed
+
+- Fixed daemon-to-daemon tunnel connections rejecting encrypted text messages or misclassifying them as binary
+- Fixed relay WebSocket close handshakes and peer departure notifications
+
+### Improved
+
+- Coalesced Codex and ACP streaming updates before assigning timeline sequence numbers
+
+### Added
+
+- Added relay-wide request budgets and per-connection rate limits
+
 ## 0.24.1 - 2026-11-05
 
 ### Fixed

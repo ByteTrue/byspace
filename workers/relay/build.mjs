@@ -17,7 +17,7 @@ const wasmFile = path.join(buildDir, "app.wasm");
 
 // The class name must match roomClass in main.go and the class_name in
 // wrangler.jsonc; workers-assets-gen bakes it into the generated JS.
-const DURABLE_OBJECT_CLASS = "RelayRoom";
+const DURABLE_OBJECT_CLASSES = ["RelayRoom", "RelayMeter"];
 
 function run(command, args, options = {}) {
   execFileSync(command, args, {
@@ -39,7 +39,7 @@ run(
     "run",
     "github.com/syumai/workers-go/cmd/workers-assets-gen",
     "-mode=go",
-    `-durable-objects=${DURABLE_OBJECT_CLASS}`,
+    `-durable-objects=${DURABLE_OBJECT_CLASSES.join(",")}`,
   ],
   {
     cwd: here,
@@ -57,4 +57,6 @@ if (!existsSync(wasmFile)) {
   process.exit(1);
 }
 
-console.log(`build: wrote ${path.relative(root, buildDir)}/ (${DURABLE_OBJECT_CLASS} + app.wasm)`);
+console.log(
+  `build: wrote ${path.relative(root, buildDir)}/ (${DURABLE_OBJECT_CLASSES.join(", ")} + app.wasm)`,
+);

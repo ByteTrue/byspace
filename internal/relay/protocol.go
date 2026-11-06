@@ -71,6 +71,8 @@ const (
 	StatusInternalError StatusCode = 1011
 	// StatusServiceRestart closes a client because its daemon went away.
 	StatusServiceRestart StatusCode = 1012
+	// StatusTryAgainLater asks a client to use its reconnect backoff, not retry in a tight loop.
+	StatusTryAgainLater StatusCode = 1013
 )
 
 // Peer is one connection as the routing code sees it.
