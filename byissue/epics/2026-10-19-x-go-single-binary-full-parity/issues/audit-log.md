@@ -1302,7 +1302,7 @@ Go 的 `sync.Mutex` 不可重入，于是 stdout 读循环**永久死锁**。
 | `github-service.ts`                           | 失败 job 上限 5、日志尾 200 行/16KB、分页上限                | **已补**：`workspace.CheckDetails` 现在真的取 failedJobs（此前恒为 `[]`）并置 `truncated`                                                           |
 | `file-observer/native-recursive.ts`           | `MAX_TRACKED_ENTRIES` 250,000                                | **N/A**：Go 没有原生 watcher / 条目表（1s 轮询，见 `decisions/004`），该上限无对应实体                                                              |
 
-仍未做：PR 状态的后台轮询与推送（需要 workspace payload 里的 `github` 段，属 web 重写期的契约决定），见 `byissue/issues/2026-11-01-o-forge-pr-status-push.md`。
+当时仍未做：PR 状态的后台轮询与推送（需要 workspace payload 里的 `github` 段，属 web 重写期的契约决定），后来已由 `byissue/issues/2026-11-01-x-forge-pr-status-push.md` 补齐并交付关闭。
 
 已判定、不算遗漏（有出处）：`watcher-liveness-canary.ts` 标 **DROPPED**；`git-metadata-event-rules.ts` 标「未接 watcher，1s 轮询替代」。
 

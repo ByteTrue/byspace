@@ -1,8 +1,7 @@
 ---
 kind: issue
 title: "PR 状态的后台轮询与推送（workspace payload 里的 github 段缺失）"
-type: issue
-status: open
+type: feature
 created: 2026-11-01
 ---
 
@@ -51,4 +50,10 @@ Go 侧：
 
 Gitea 的 PR 状态 Go 原来也没有，已在同一快改移植，见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)。GitLab、Gitea、GitHub Enterprise 没有真实账号与主机，未实测。
 
-等用户验收后关闭。
+## 关闭结论（2026-11-06）
+
+交付关闭。目标中的同源 payload、pending/idle/错误退避、repo 去重和失败保留最后成功数据均已实现；真实 GitHub fork PR `cli/cli#14783` 已在开发版验证侧栏徽标、Checks 和 PR 面板。本轮复核通过 `go test ./internal/workspace -count=1`、`go test ./internal/server -run 'Schedule|PRStatus|HeadWatch' -count=1`，并通过完整 Go 审计（Go 测试、入站/出站字段对账和账本检查）。
+
+稳定边界毕业到 Project Spec 的 [Workspace](../spec/workspace.md)「分支与推送状态」；GitHub 配额规则已在 `docs/forge-providers.md`，不重复写一份。GitLab、GitHub Enterprise 的真实外部验收不在本 issue 已覆盖的证据内；Gitea 的真实验收继续由 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md) 跟踪，不把它写成已完成。
+
+关闭前按旧全名检索到 3 处引用，均更新为关闭路径。

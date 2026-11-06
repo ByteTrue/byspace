@@ -227,7 +227,7 @@ created: 2026-11-01
 **发现的 daemon 问题**
 
 - agent id：Go 的格式是 `agt_` 加 16 位十六进制，Node 是 UUID，协议的定时任务 schema 按 GUID 校验运行记录里的 agent id。跑过一次的定时任务，编辑、立即运行、查看的回包都被客户端拒收；目标是 Go 建的 agent 的心跳任务会让整个列表显示「Unable to load schedules」。已修：新建的 agent 用 UUID v4（`internal/server/server.go`），补了测试，`npm run audit` 通过（浏览器那一步用 bsk 驱动你的浏览器，没跑），开发版 daemon 已换新二进制；实测新建的 Mock agent 的 id 是 UUID，旧版新版的历史都能列出、没有校验报错。已有的 `agt_` agent 不变。
-- 定时任务的执行部分没有从 Node 移植：不按时运行（只有「立即运行」会跑）、新 agent 类任务写死用 pi（忽略配置的提供方和模型）、跑完把项目的主工作区归档。单独开了事项 [定时任务执行层移植](../../../issues/2026-11-01-o-schedule-runner-port.md)。测试时旧版点过一次「立即运行」，开发版 zz-diff-repo 的主工作区因此被归档，已经用上面的 Unarchive 恢复。
+- 定时任务的执行部分没有从 Node 移植：不按时运行（只有「立即运行」会跑）、新 agent 类任务写死用 pi（忽略配置的提供方和模型）、跑完把项目的主工作区归档。单独开了事项 [定时任务执行层移植](../../../issues/2026-11-01-x-schedule-runner-port.md)。测试时旧版点过一次「立即运行」，开发版 zz-diff-repo 的主工作区因此被归档，已经用上面的 Unarchive 恢复。
 
 **没验到的**
 

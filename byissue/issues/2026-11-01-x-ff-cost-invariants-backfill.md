@@ -23,7 +23,7 @@ created: 2026-11-01
   - `internal/server/background_fetch.go`（新）— 180s 后台 `git fetch origin --prune`，按仓库去重（worktree 共享 refs）、串行、复用 `workspace.GitNetworkTimeout`。
   - `internal/workspace/forge.go` + `git.go` — `CheckDetails` 的 `failedJobs` 此前恒为 `[]`（等于没有）：现在按 Node 取失败 job（上限 5）、每个取日志尾（200 行 / 16KB）、`truncated` 三处来源（job 页满、失败数超限、日志被截）并补 annotations 的 `per_page=20`；导出 `GitNetworkTimeout` 供后台 fetch 使用。
 - 验证：新增 4 个测试文件 — 背压两条件（含「恰好在阈值」与「无信号」）、metrics 窗口内容与重置、fetch 目标去重与 180s 常量、检查详情 5 条上限与日志尾保留的是「最后 200 行」以及 UTF-8 后缀不劈开字符；`go test ./internal/server ./internal/workspace ./internal/terminal` 全绿；`npm run audit -- --no-browser` 全绿（Go 测试 + 出入站字段 + 台账一致）。
-- byissue：已同步台账「同类缺口」小节（4 条已补、1 条 N/A）；PR 状态轮询转 `2026-11-01-o-forge-pr-status-push.md`。
+- byissue：已同步台账「同类缺口」小节（4 条已补、1 条 N/A）；PR 状态轮询转 `2026-11-01-x-forge-pr-status-push.md`。
 
 顺手发现：`file-observer` 的 250,000 条目上限在 Go 里**没有对应实体**——daemon 走 1s 轮询、没有 watcher 条目表（`decisions/004` 已记录机制差异），所以这条不是遗漏。
 
