@@ -52,6 +52,12 @@ created: 2026-11-04
 ### 2026-11-06 PR #41 CI 回归修复
 
 - CI run `42179891758` 的第 4、11、13 分片失败后，读取日志与 sidebar drag trace，确认项目路径卡在 pointer capture 拖拽期间覆盖 workspace 行；完整应用还复现 Diff 路径卡遮挡相邻文件行，以及手机宽度下用量卡不可见却发起请求。
-- 共享组件现在在鼠标按下和 trigger detach 时关闭卡片，且不取消原控件的 press/drag；compact 不向调用方报告打开。`readOnly` 只读卡及 Radix Popper wrapper 不参与命中测试，卡片文字和链接保留命中能力；workspace 复制按钮等交互卡不使用该选项。
-- `web/src/components/info-hover-card.browser.test.tsx` 加载完整应用 CSS，6 项通过：portal 空隙、wrapper 与相邻行命中、真实 CDP pointer capture drag、press 不取消、trigger 卸载、compact。打开态断言排除 Radix 关闭动画节点。
+- 共享组件现在在鼠标按下和 trigger 真正离开文档时关闭卡片，且不取消原控件的 press/drag；compact 不向调用方报告打开。组合 trigger 在 open 更新时替换 DOM 节点不算卸载。`readOnly` 只读卡及 Radix Popper wrapper 不参与命中测试，明确链接仍可点击；普通路径文本不能为了选择而挡住相邻行。workspace 复制按钮等交互卡不使用该选项。
+- `web/src/components/info-hover-card.browser.test.tsx` 加载完整应用 CSS，7 项通过：portal 空隙、wrapper 与相邻行命中、真实 CDP pointer capture drag、press 不取消、trigger 卸载、真实自定义 ContextMenu trigger 组合、compact。打开态断言排除 Radix 关闭动画节点。
 - `changes-pane-comparison.spec.ts`、`provider-usage-tooltip.spec.ts`、`sidebar-reorder.spec.ts` 共 9 项通过，其中用量卡改为桌面视口并验证关闭后的不可见状态。web 生产构建、全仓 typecheck、lint、format check 通过。
+
+### 2026-11-06 第二轮 CI 证据与修复
+
+- CI run `42187356716` 新增 file-editing 两项、workspace-agent-tab 一项失败；扩大本地范围后稳定复现。真实自定义 `ContextMenuTrigger` 在 open 更新时替换 DOM，旧实现把 ref 暂时为 null 误当卸载；最小真实组合测试先红后绿，完整 file-editing + agent-tab 19 项通过。
+- sidebar drag 的命中日志显示 `elementFromPoint` 命中项目卡文本 `<span>`，workspace pointer down 没有到达 anchor 或 dnd-kit。取消恢复普通文本命中的规则后，完整项目/workspace/pinned 拖拽通过。
+- 新 CI 中 sidebar unread 仅首轮失败、重试通过，未归因为 hover 产品回归；扩大本地范围后该文件全部通过。

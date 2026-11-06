@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cdp, page, userEvent } from "vitest/browser";
 import { InfoHoverCard, InfoHoverCardContent, InfoHoverCardTrigger } from "./info-hover-card";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu } from "./ui/context-menu";
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -197,6 +199,27 @@ describe("InfoHoverCard in the browser", () => {
     expect(card()).not.toBeNull();
     flushSync(() => root.render(null));
     expect(openCard()).toBeNull();
+  });
+
+  it("opens through a composed context-menu trigger", async () => {
+    flushSync(() => {
+      root.render(
+        <ContextMenu>
+          <InfoHoverCard>
+            <InfoHoverCardTrigger>
+              <ContextMenuTrigger>
+                <button type="button" data-testid="trigger">
+                  Workspace tab
+                </button>
+              </ContextMenuTrigger>
+            </InfoHoverCardTrigger>
+            <InfoHoverCardContent side="bottom">Tab information</InfoHoverCardContent>
+          </InfoHoverCard>
+        </ContextMenu>,
+      );
+    });
+    await userEvent.hover(page.getByTestId("trigger"));
+    expect(openCard()).not.toBeNull();
   });
 
   it("keeps hover information out of compact layouts", async () => {

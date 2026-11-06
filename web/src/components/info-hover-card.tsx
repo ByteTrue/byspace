@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type FocusEvent,
@@ -60,12 +62,18 @@ export function InfoHoverCard({
 
 export function InfoHoverCardTrigger({ children }: { children: ReactElement }) {
   const close = useContext(InfoHoverCardCloseContext);
-  const triggerRef = useCallback(
-    (node: HTMLAnchorElement | null) => {
-      if (!node) close();
-    },
-    [close],
-  );
+  const closeRef = useRef(close);
+  useEffect(() => {
+    closeRef.current = close;
+  }, [close]);
+  const previousTrigger = useRef<HTMLAnchorElement | null>(null);
+  const triggerRef = useCallback((node: HTMLAnchorElement | null) => {
+    // Composed menu/drag triggers can replace their DOM node when open changes.
+    if (!node && previousTrigger.current && !previousTrigger.current.isConnected) {
+      closeRef.current();
+    }
+    previousTrigger.current = node;
+  }, []);
   const onPointerDown = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       if (event.pointerType === "mouse") close();
