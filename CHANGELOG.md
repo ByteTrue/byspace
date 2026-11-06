@@ -5,6 +5,17 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.3 - 2026-11-06
+
+### Changed
+
+- Unified informational hover cards for paths, branch and model details, usage, and explanations
+
+### Fixed
+
+- Fixed read-only path cards intercepting sidebar and diff dragging
+- Fixed information cards disappearing unexpectedly on composed file and agent triggers
+
 ## 0.24.2 - 2026-11-06
 
 ### Fixed
