@@ -12,4 +12,4 @@
 - 想要不连真 peer 的隧道：用一个指向 `relay 127.0.0.1:9` 的配对链接（脚本里有现成的写法），隧道会一直是 Disconnected，行、暂停、改端口、删除都能测。
 - 隧道在对端连不上时也监听本地端口、并且能盖住别的程序，这是 daemon 现在的行为；Node 版是不是一样还没有对照。
 
-**相关：** [前端重写 · 其余页面](../epics/2026-10-31-o-web-frontend-rewrite/issues/2026-11-01-o-other-pages.md)
+**相关：** [前端重写 · 其余页面](../epics/2026-10-31-x-web-frontend-rewrite/issues/2026-11-01-x-other-pages.md)

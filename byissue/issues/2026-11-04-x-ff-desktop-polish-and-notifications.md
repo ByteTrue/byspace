@@ -4,7 +4,7 @@ title: 桌面端顶栏、侧栏性能、弹窗与通知
 status: fixed
 created: 2026-11-04
 closed: 2026-11-04
-epic: 2026-10-31-o-web-frontend-rewrite
+epic: 2026-10-31-x-web-frontend-rewrite
 commits: [ad0b1c04d, 493aeaaff, 90dc664ab, 0e1ac92f8, dabfd4373]
 ---
 

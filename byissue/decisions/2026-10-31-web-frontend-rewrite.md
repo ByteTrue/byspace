@@ -9,7 +9,7 @@ superseded-by: ""
 
 前端从 Expo（React Native Web）改成 Vite + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui（Radix）+ React Router，代码放在仓库根的 `web/`，也就是 [decision 004](004-go-single-binary-architecture.md) 定的前端最终位置。Expo 当初是为了和 Electron、原生移动端共用一套代码选的，这两者都已退役；现在三个宿主（Wails 桌面、Wails Android、浏览器）都是标准浏览器内核，React Native 这一层只剩成本。另外 shadcn/ui 是 UI 美化 Epic 定下的组件参照，在 Expo 里只能照着抄数值，换了技术栈才能直接用它的组件。
 
-过渡期不复制逻辑代码：`web/` 用 `@/` 直接引用 `packages/app/src` 里不依赖 React Native 界面的模块；需要换实现的模块放进 `web/src/overrides/` 的同名路径，覆盖原文件。切换时把仍在用的模块搬进 `web/`，删掉 `packages/app`。
+切换已于 2026-11-03 完成：业务逻辑已收进 `web/src`，`packages/app`、Expo 与 React Native 依赖及过渡期覆盖机制均已删除。旧实现只保留在 `archive/expo-app` 存档标签供追溯。
 
 ## 背景
 
