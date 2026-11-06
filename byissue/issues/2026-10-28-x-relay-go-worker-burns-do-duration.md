@@ -201,13 +201,36 @@ Deploy App 仍不能重试：tag 内只有 `v1/RelayRoom`，而生产已应用 `
 一致，bundle 版本为 `0.24.1`，Chromium 加载无 page error。Deploy App 的原始失败记录保留，实际
 生产发布由这次定向补发完成，没有修改 tag 或重复发版。
 
+### 2026-11-06 v0.24.2 生产发布与请求量对照
+
+PR #40 合入后，v0.24.2 从精确版本提交 `c7ba4b057` 正常发布。四个 tag 工作流、Release
+正文、16 个平台资产及 SHA256SUMS、GHCR 双架构和 Web/PWA 构建一致性均通过。本机 Desktop
+正常启动并完成自动更新，托管 daemon 为 0.24.2，生产 relay 为 `422990a0`；没有手动替换
+程序或重启 6777 daemon。
+
+真实 Pi 在最后一个 remote 离开后完成 120 行第二轮回答：本地有 26 次 agent stream，PTY
+连续三次输出，daemon→relay 始终只有 control TCP。remote 重连从 seq 3 的 cursor 补齐
+seq 4–27，无 gap/stale/reset，terminal backlog 也按序恢复。独立 tunnel peer 在生产 E2EE
+上完成文本 hello/RPC 与 binary open/ack；生产端口 allowlist 未开放，因此正向 TCP echo 只在
+真实 in-process 测试中通过，不记为生产 echo 通过。测试资源均已清理。
+
+受控验证后的 Cloudflare 过去 1 小时：RelayRoom 74 请求、65 个可休眠传入 WS 消息、65 个
+传出消息、0.5 GB-sec；0 Worker 异常、0 内部错误、0 CPU/内存超限。再加入 tunnel 传输验证
+后的日窗口：RelayRoom 91 请求 / 0.568 GB-sec，RelayMeter 70 请求 / 0.337 GB-sec，合计
+161 请求 / 0.904 GB-sec。活动仍按消息短促计费，没有恢复旧实现的连接期常驻消耗。
+
+该小时包含两次 remote 上线/离开和恢复流量，不是把全部请求归因于零 remote agent。零 remote
+结论由同一受控窗口的物理连接证据支撑：只有 control、没有 data socket。原始断言保存在
+`/tmp/byspace-relay-production-v0242.json` 和 `/tmp/byspace-production-tunnel-v0242.json`。
+
 ## 部署状态
 
 - `byspace-relay-go-beta`（`app-beta.byspace.cc.cd`）：旧版本
   `9d4ae964-4422-47e3-9ec7-24824960564c`，本次按用户决定未发布 beta
-- `byspace-relay-go`（生产）：**已部署**，版本
-  `9ea1d647-f7a8-48ec-854a-6d26b79ea1e7`，真实 relay 路由、关闭握手、浏览器连接与毫秒级
-  计量已通过；v0.24.1 Pi 真实流式与 timeline 顺序通过，Cloudflare 请求量对照仍未完成
+- `byspace-relay-go`（生产）：**已部署**，版本 `422990a0`。v0.24.2 真实零 remote 运行、
+  timeline/backlog 恢复、tunnel 文本与 binary 传输通过，受控活动窗口的请求量和持续时间已复核；
+  生产 tunnel 正向 TCP echo 未在 allowlist 关闭的条件下执行；隔离 Chromium conformance
+  12/12 通过，详见 `2026-11-06-x-relay-idle-remote-business-frames.md`
 
 ## 沉淀去向
 
@@ -215,6 +238,15 @@ Deploy App 仍不能重试：tag 内只有 `v1/RelayRoom`，而生产已应用 `
   这是长期约束不是性能优化。同时记了「额度耗尽的症状与 relay 故障不同」（`/health` 仍 200）。
 - **`byissue/notes/018-durable-object-billing-and-hibernation.md`**：数字来源、诊断顺序、
   代码该怎么写、以及一条更普适的教训——比对移植实现时除了协议行为，还要问它怎么持有托管环境的资源。
+
+## 关闭结论
+
+用户已授权关闭。hibernation、关闭握手和 meter 部署约束保留在 `byissue/spec/connection.md`
+与 `byissue/notes/018-durable-object-billing-and-hibernation.md`，无新增重复沉淀。v0.24.2
+生产计量、真实 remote 恢复和 12/12 浏览器 conformance 已满足验证承诺。
+
+旧 Windows peer 是用户自己的配置，保留且不在本次清理；生产 tunnel 正向 TCP echo 的验证
+边界与另一 issue 相同，不记为已通过。
 
 ## 遗留
 

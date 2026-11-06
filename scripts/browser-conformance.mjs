@@ -364,14 +364,16 @@ try {
 
   expectContains("Sidebar lists the Chief home workspace", snap, ["BySpace-WorkSpace", "Chief"]);
 
-  // Chief 必须排在 byspace 之前（它是 daemon 自持的 home workspace）。项目按钮的名字以图标字母开头，
-  // 有自定义图标的项目没有这个字母。工作区行是 shadcn 的 SidebarMenuButton 包的链接。
-  const chiefIdx = snap.search(/(?:button|link) "Chief"/);
-  const byspaceIdx = snap.search(/button "(?:\S )?byspace\b/);
+  // Chief 子行位于 Home 项目组标题之后；这里验证两者都属于固定首位的 `home:chief` 组，
+  // 不把组内父子顺序误当成 Chief 没有固定在其他项目之前。
+  const chiefIdx = snap.search(/link "Chief"/);
+  const homeProjectIdx = snap.search(/button "(?:\S )?BySpace-WorkSpace\b/);
+  const homeGroupExists =
+    (await page.locator('[data-testid="sidebar-project-row-home:chief"]').count()) === 1;
   record(
-    "Chief is pinned above ordinary projects",
-    chiefIdx >= 0 && byspaceIdx > chiefIdx,
-    `chief@${chiefIdx} byspace@${byspaceIdx}`,
+    "Chief home project is pinned above ordinary projects",
+    homeGroupExists && homeProjectIdx >= 0 && chiefIdx > homeProjectIdx,
+    `homeProject@${homeProjectIdx} chief@${chiefIdx} homeGroup=${homeGroupExists}`,
   );
 
   // 非 git 的 home workspace 不应显示 diff 计数。

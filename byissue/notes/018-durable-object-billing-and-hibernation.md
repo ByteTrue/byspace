@@ -122,6 +122,11 @@ socket 接收必须是 hibernation：
 - **零 remote client 时不应有业务帧。** daemon 保留 control 与 ping，但只有 remote client 上线才建立对应的 server-data；最后一个 client 离开后该 socket 关闭。真实 relay 入站计数已验证 agent 与 terminal 在零 client 时不再上传，本地继续运行，重连通过 timeline cursor 与 terminal backlog 恢复，不缓存所有离线 delta。control 保活与 tunnel 流量不属于“无 App 页面就停止”的范围；前者保留接入口，后者有自己的 relay client。2026-11-06 本地真实 relay 验证之外，生产
   `byspace-relay-go_RelayRoom` 在过去 1 小时零业务活动窗口记录为 0 请求、0 WebSocket 消息、
   0 计费 GB-sec；该窗口没有受控的运行中 agent，不能替代运行负载下的线上前后对照。
+  v0.24.2 随后完成生产受控验证：零 remote 的 Pi 第二轮有 26 次本地 agent 更新，daemon→relay
+  始终只有 control TCP；重连按 cursor 补齐 seq 4–27，terminal backlog 有序恢复。同一活动小时
+  RelayRoom 为 74 请求 / 0.5 GB-sec，再加入 tunnel 验证后的日窗口为 RelayRoom 91 /
+  0.568、RelayMeter 70 / 0.337 GB-sec。控制台窗口含 remote 上线与恢复流量，不能拿总数反推
+  零 remote 窗口上传了业务帧；是否建立 data socket 要用物理连接或真实 relay 入站计数判断。
 
 实测常数（pi 1.4，一次 200 词回答，8.9 秒）：245 个 `text_delta` + 985 个 `thinking_delta`，
 约 **140 事件/秒**。daemon 若每事件发一帧，单次小回答就是 1,230 次 DO 请求；一个下午的

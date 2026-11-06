@@ -104,10 +104,68 @@ npm run format:check
 零 remote client”专项线上对照，也不验证尚未发布的 E2EE client 修复。没有导出 OAuth token、
 部署新版本或重启 daemon。
 
+### 2026-11-06 v0.24.2 生产发布与受控负载
+
+PR #40 的 23 项 CI 全部通过，经用户批准合入 main。v0.24.2 的精确版本提交
+`c7ba4b057dbd6c91897b88a0fcb648e10226c4cf` 先通过 CI，再发布 tag；Release Binaries、Deploy
+App、Docker 和 Release Notes Sync 全部成功。GitHub Release 的 16 个平台资产通过
+SHA256SUMS，GHCR `0.24.2`/`latest` 的两种 Linux 架构 digest 一致，线上 Web/PWA 资源与
+tag 构建逐字节一致。本机 Desktop 通过正常启动/更新路径升级，托管 daemon 为 0.24.2；没有
+手动替换二进制或重启 6777 daemon。生产 relay 版本为 `422990a0`。
+
+生产受控验证使用真实 Pi、E2EE relay client、PTY 和 TCP 连接观测，不启动第二条
+`server-control` probe。两个测试 workspace/agent/terminal 均已归档或停止，结束时 daemon
+到 relay 恢复为一条 control TCP。
+
+- 最后一个 remote 离开后，真实 Pi 继续第二轮 120 行回答。零 remote 窗口内本地收到 26 次
+  `agent_stream`，agent 最终 idle；本地 PTY 连续收到 one/two/three 三次输出。全程最多一条
+  daemon→relay TCP，即只有 control，没有 data socket 或业务上传。✅
+- 重连 remote 使用离线前的 `endCursor`（epoch 不变、seq 3）请求 after 页面，恰好收到第二轮
+  user/reasoning/assistant 三条，source seq 从 4 连续到 27，最终 cursor 与本地 seq 27 一致；
+  `gap/staleCursor/reset` 均为 false。120 行回答完整，没有重复。✅
+- 重连 terminal 收到一条按序包含 one/two/three 的 backlog 输出。✅
+- 独立 tunnel peer 没有 App 页面或 presence，在生产 relay 上完成 E2EE 握手、文本 hello、
+  文本 `tunnel.list` RPC 和 binary open/ack；旧 binary 密文不再被当成解密后的 binary RPC。✅
+  实际 TCP echo 因生产端口未加入 allowlist 被目标端按预期拒绝，未改生产密码或 tunnel 配置。
+  完整 open + echo 的正向结果仍由上述真实 in-process 测试覆盖，不记为生产 TCP echo 通过。
+- 首次 terminal 采集使用 `live` 恢复且未读到 backlog，不能作为通过证据；随后独立重跑使用
+  `full-snapshot` 取得有序 backlog，并把 local 流事件与 timeline 在归档前保存。没有修改产品
+  代码来迎合采集脚本。
+
+原始证据在 `/tmp/byspace-relay-production-v0242.json` 和
+`/tmp/byspace-production-tunnel-v0242.json`，仅包含测试标识、时序和断言结果，不含配对密钥。
+
+受控验证后通过 Cloudflare 控制台读取生产 `byspace-relay-go_RelayRoom`：过去 1 小时为
+74 请求、65 个可休眠传入 WS 消息、65 个传出消息、0.5 GB-sec；4 个客户端断开状态，
+0 Worker 异常、0 内部错误、0 CPU/内存超限。随后包含 tunnel 传输验证的日窗口为 RelayRoom
+91 请求 / 0.568 GB-sec、RelayMeter 70 请求 / 0.337 GB-sec，合计 161 请求 /
+0.904 GB-sec。这个小时包含两次 remote 连接与恢复，不能把全部消息归到零 remote 窗口；
+物理 socket 证据说明零 remote 窗口没有 data 连接，控制台证明这些活动没有恢复持续时长消耗。
+
+### 2026-11-06 浏览器 conformance
+
+经用户明确允许启动额外实例，在干净 v0.24.2 worktree 使用独立 `.dev/byspace-home` 和
+127.0.0.1:6778 启动开发 daemon，运行无头 Chromium；没有重启或改动 6777 生产 daemon。
+`npm run audit:browser` 最终 **12/12 通过**，包括两条真实 workspace/project 状态转换、
+provider 列表、thinking 档位和无协议 console 错误。额外实例已停止，6778 无监听，
+生产健康检查仍为 0.24.2。日志保存在 `/tmp/byspace-v0242-browser-conformance-final.log`。
+
+首次运行 11/12：Chief 排序断言在临时项目删除后仍寻找不存在的 `byspace` 按钮。按实际
+sidebar 的父子结构核对后，不是 Chief 项目组排序回归；应断言 `home:chief` 项目组及其
+标题/Chief 子行，而不是让 Chief 子行排在同组项目标题之前。只修正
+`scripts/browser-conformance.mjs` 的过期定位后重跑 12/12，没有修改产品代码。该测试脚本
+修正与本轮关闭文档一起提交，未推送。
+
 ## 关闭条件
 
-- 在已有 dev daemon 上运行浏览器 conformance，确认现有页面行为未回归；本轮未运行。
+- 在隔离 dev daemon 上运行浏览器 conformance，确认现有页面行为未回归；最终 12/12 通过。✅
 - 发布当前 daemon 修复后，在受控运行中 agent 与零 remote client 的条件下复核 Cloudflare 请求量。
-  当前只取得零业务活动的 1 小时零请求基线，没有发布当前修复或做受控前后对照，因此保留 issue。
-  连接生命周期边界已回写 `byissue/spec/connection.md`，零客户端请求计量约束已更新到
-  `byissue/notes/018-durable-object-billing-and-hibernation.md`。
+  v0.24.2 已完成发布、生产升级、受控运行负载和浏览器验证；结果见上。✅
+
+## 关闭结论
+
+用户已授权关闭。data socket 生命周期、恢复与 tunnel 边界毕业到 `byissue/spec/connection.md`
+的「Relay 会话生命周期」；计量与已证实的托管平台约束保留在
+`byissue/notes/018-durable-object-billing-and-hibernation.md`，无新增重复沉淀。
+生产 tunnel 正向 TCP echo 因 allowlist 未开放而未执行，正向覆盖保留在真实 in-process
+测试。没有由本 issue 遗留的新行动项。
