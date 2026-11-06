@@ -1,8 +1,7 @@
 ---
 kind: issue
 title: "Gitea 的 PR 状态没有移植：侧栏徽标与 PR 面板对 Gitea 仓库永远显示没有 PR"
-type: issue
-status: open
+type: bug
 created: 2026-11-02
 ---
 
@@ -30,4 +29,6 @@ Node 的实现在 `git show 20721fdcf^:archive/packages/server/src/services/gite
 - 检查：`tea pr N` 拿 head 提交，读这个提交的合并状态（commit statuses）和 Actions 任务（最多 5 页 × 50）。Gitea 给自己的 Actions 作业镜像出来的 status 去掉（否则每个作业算两次），同一 workflow 只留最新一次执行，等待审批的运行标 `action_required`，`warning` 算失败；汇总同时看 status 和 Actions，一个失败的 Actions 运行不会因为合并状态是 success 而显示通过。任何一步失败都保留不带检查的 PR 状态，同 Node。
 - forgeSpecific：`{forge: "gitea", mergeable, hasMerged, ciStatus}`。
 
-验证：Go 测试用假的 `tea` 脚本覆盖开着的 PR、已合并 PR 按 head 提交匹配、镜像 status 去重、workflow 重跑取最新、审批等待、warning。本机没有能登录的 Gitea/Forgejo/Codeberg 账号，没有实测，需要你提供一个仓库才能验。
+验证：Go 测试用假的 `tea` 脚本覆盖开着的 PR、已合并 PR 按 head 提交匹配、镜像 status 去重、workflow 重跑取最新、审批等待、warning。
+
+2026-11-06 复核：`go test ./internal/workspace -count=1` 与完整 Go 审计通过。公开 Codeberg API 能只读返回 `forgejo/forgejo` 的真实 open/fork PR 数据，证明无需账号即可读取公开 PR；但本机没有 `tea`，尝试下载并执行官方 `gitea/tea` v0.16.0 被本机权限策略阻止，因此尚未跑过真实 `tea` → Go 解析 → PR 状态链路，也未验证合并操作。保持 `-o-`，不能将 fake 测试或公开 API 响应当作端到端验收。

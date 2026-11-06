@@ -1,8 +1,7 @@
 ---
 kind: issue
 title: "定时任务的执行层没有移植：不按时运行、新 agent 忽略配置、运行完归档了项目的主工作区"
-type: issue
-status: open
+type: bug
 created: 2026-11-01
 ---
 
@@ -39,4 +38,8 @@ Node 的 `ScheduleService`（`git show 20721fdcf^:archive/packages/server/src/se
 - Go 测试：`internal/schedule`（cron、时钟、Run now、maxRuns、暂停恢复、更新补丁、重启恢复、心跳随 agent 结束、去重）和 `internal/server/schedule_runner_test.go`（用 Mock 提供方真实建 agent：自己的工作区、配置、标签、归档开关、目录消失、提供方失败、心跳）。
 - 开发版实测（Mock 模型）：在 8082 新建「每分钟」任务，02:49、02:50 两次按时触发，各建一个新工作区、agent id 是 UUID、模型和模式是配置的、跑完归档，主工作区没动；Run now 立即跑一次，下次时间不变；暂停后 02:52 没有触发；编辑关掉 archiveOnFinish 后 Run now 的工作区保留；8081 旧版能打开编辑弹窗、显示模型思考模式；删除带确认。开发版原有的「每小时」任务（`Asia/Hong_Kong`）在 11:00 按时触发、跑满五分钟、归档本次工作区。worktree 隔离：新建 BySpace worktree、跑完归档并删掉目录。MCP：`create_heartbeat` 在 02:54 触发，agent 收到「Schedule "hb-verify" fired (id=…, run=…)」；归档 agent 后心跳结束；`create_schedule` 继承调用者的提供方和模型；`run_schedule_once`、`schedule_logs`、`update_schedule`、`delete_schedule` 正常；别的 agent 删不了这个心跳，定时工具碰不到心跳。
 
-等用户验收后关闭。
+## 关闭结论（2026-11-06）
+
+交付关闭。上面 1–5 已逐项实现，开发版真实 Mock 任务验证了按时触发、Run now、local/worktree 隔离、归档开关、主工作区不受影响、暂停恢复和 MCP 心跳。本轮复核通过 `go test ./internal/schedule -count=1`、`go test ./internal/server -run 'Schedule|PRStatus|HeadWatch' -count=1`，并通过完整 Go 审计（Go 测试、入站/出站字段对账和账本检查）。
+
+运行所有权和恢复边界毕业到 Project Spec 的 [Schedules](../spec/schedules.md)，入口加入 spec 地图；实现过程继续留在本 issue，不另写重复文档。关闭前按旧全名检索到 2 处引用，均更新为关闭路径。

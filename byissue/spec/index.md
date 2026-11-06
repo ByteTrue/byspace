@@ -11,6 +11,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 - [Workspace](workspace.md) — 侧栏行内信息、分支与推送状态、hover 状态展示与 Agent 精炼命名。
 - [连接与发布通道](connection.md) — App 与 Relay 地址按通道选择、连接安全边界与配对 hostname，自托管部署的发布形态与限制，以及 daemon 隧道（远端端口转发到本机）。
 - [通知送达](notifications.md) — 各平台怎样收到「agent 需要你」的通知，Web Push 的凭据归属与加密边界，以及 PWA 与局域网直连的互斥。
+- [Schedules](schedules.md) — daemon 定时执行、每次运行的 workspace 所有权、重启恢复和 heartbeat 目标边界。
 
 系统架构、协议、发布和性能的工程约束仍由 `docs/` 中的主题文档负责。Project Spec 记录用户能依赖的当前产品行为；实现过程和验证证据留在已关闭 Issue。
 
@@ -23,6 +24,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 
 ## 边界与考量
 
+- 浏览器、主屏幕 PWA、Wails 桌面与 Wails Android 共用同一套 Web 前端和页面能力；Expo / React Native 已退出，独立原生客户端不再保留。桌面与手机外壳只提供窗口、通知、剪贴板等平台便利，不能成为某项产品能力唯一可用的前提。历史技术取舍见[前端重写决策](../decisions/2026-10-31-web-frontend-rewrite.md)。
 - 同一套 Go 单二进制与内嵌 Web 前端通过编译标签（`-tags nogui` vs Wails v3）延伸出无头 CLI/Daemon/Docker、桌面客户端（macOS / Windows / Linux，单主窗口 + 托盘驻留 + 本机 daemon 主从自愈接管与外部旧进程一键接管，支持开机自启、Agent 运行期间智能防休眠、macOS Dock 显隐控制与 Template 菜单栏图标、轻量模式、空闲自动安装更新以及核心配置自动滚动备份）与 Android 远程客户端（侧载 APK，不在手机本地起 daemon），见 [Decision 005](../decisions/005-wails-v3-unified-desktop-and-android-client.md)、[Epic Wails v3](../epics/2026-10-29-x-wails-v3-desktop-and-android/spec.md) 与 [Epic Magpie Gems](../epics/2026-10-29-x-magpie-gems-absorption/spec.md)。
 - Windows 客户端的输入法候选框依赖前端重锚：WebView2 在用户**拖边框缩放窗口**后丢失 caret 布局，候选框会退回屏幕左上角且不自愈（上游 WebView2Feedback#5675，浏览器里不复现）。缩放稳定后必须重锚当前可编辑元素；上游修复前这条约束常驻。
 - App 与 daemon 可以异步更新，wire protocol 保持双向兼容。

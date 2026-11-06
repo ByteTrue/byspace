@@ -42,6 +42,11 @@ import {
 } from "@/composer/agent-controls/role-control";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import type {
   AgentFeature,
   AgentMode,
@@ -1006,12 +1011,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {canSelectModel ? (
-        <Tooltip
-          delayDuration={0}
-          open={modelHintOpen && !modelPickerOpen}
-          onOpenChange={setModelHintOpen}
-        >
-          <TooltipTrigger asChild>
+        <InfoHoverCard open={modelHintOpen && !modelPickerOpen} onOpenChange={setModelHintOpen}>
+          <InfoHoverCardTrigger>
             <div className="min-w-0 shrink">
               <CombinedModelSelector
                 providers={modelSelectorProviders}
@@ -1035,11 +1036,14 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 toolbar={modelToolbar}
               />
             </div>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center">
-            <span>{t(getAgentControlHintKey("model"))}</span>
-          </TooltipContent>
-        </Tooltip>
+          </InfoHoverCardTrigger>
+          <InfoHoverCardContent side="top">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-muted-foreground">{t(getAgentControlHintKey("model"))}</span>
+              {selectedModelId ? <span className="break-all">{selectedModelId}</span> : null}
+            </div>
+          </InfoHoverCardContent>
+        </InfoHoverCard>
       ) : null}
 
       {thinkingOptions && thinkingOptions.length > 0 ? (
@@ -1330,7 +1334,10 @@ function DesktopFeatureItem({
   const comboboxOptions = useMemo<ComboboxOption[]>(
     () =>
       feature.type === "select"
-        ? feature.options.map((option) => ({ id: option.id, label: option.label }))
+        ? feature.options.map((option) => ({
+            id: option.id,
+            label: option.label,
+          }))
         : [],
     [feature],
   );
@@ -1426,7 +1433,10 @@ function SheetFeatureItem({
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(() => {
     if (feature.type === "select") {
-      return feature.options.map((option) => ({ id: option.id, label: option.label }));
+      return feature.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+      }));
     }
     return [
       { id: "true", label: t("agentControls.features.on") },
@@ -1578,7 +1588,10 @@ export const AgentControls = memo(function AgentControls({
   });
 
   const modelOptions = useMemo<AgentControlOption[]>(() => {
-    return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
+    return (models ?? []).map((model) => ({
+      id: model.id,
+      label: model.label,
+    }));
   }, [models]);
 
   const thinkingOptions = useMemo<AgentControlOption[]>(() => {

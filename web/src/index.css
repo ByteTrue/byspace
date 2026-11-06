@@ -185,6 +185,13 @@
   html {
     @apply font-sans;
   }
+  /* A read-only hover card must not cover a neighboring row during a drag. */
+  [data-radix-popper-content-wrapper]:has(> [data-info-hover-card-read-only]) {
+    pointer-events: none;
+  }
+  [data-info-hover-card-read-only] a {
+    pointer-events: auto;
+  }
   /* BySpace: the app fills the window. */
   html,
   body,

@@ -5,7 +5,11 @@ import type { ReactNode } from "react";
 import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "~/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
 import { formatConnectionStatus } from "@/utils/daemons";
 import { Spinner } from "~/components/ui/spinner";
@@ -237,14 +241,14 @@ function WorkspaceUnreachable({
               })}
         </p>
         {state.lastError ? (
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
+          <InfoHoverCard>
+            <InfoHoverCardTrigger>
               <p className="line-clamp-3 leading-5 text-destructive">{state.lastError}</p>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[420px]">
-              {state.lastError}
-            </TooltipContent>
-          </Tooltip>
+            </InfoHoverCardTrigger>
+            <InfoHoverCardContent side="top" className="w-[420px] max-w-[80vw]">
+              <span className="break-words">{state.lastError}</span>
+            </InfoHoverCardContent>
+          </InfoHoverCard>
         ) : null}
       </TextStack>
       {canRetry ? (

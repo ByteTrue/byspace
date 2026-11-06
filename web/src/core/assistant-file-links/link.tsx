@@ -3,7 +3,11 @@
 // else opens externally. The anchor keeps its href for copy, but navigation is ours.
 import { useCallback, useMemo, type MouseEvent, type ReactNode } from "react";
 import { MARKDOWN_COPY_UNWRAP_ATTRIBUTE } from "@/assistant-selection-copy/markup";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { copyTag } from "~/markdown/render";
 import { useAssistantFileLinkResolverContext } from "@/assistant-file-links/provider";
 import type { AssistantFileLinkSource } from "@/assistant-file-links/resolver";
@@ -53,12 +57,12 @@ export function AssistantMarkdownLink({
   );
   if (!tooltipPath) return anchor;
   return (
-    <Tooltip delayDuration={400}>
-      <TooltipTrigger asChild>{anchor}</TooltipTrigger>
-      <TooltipContent side="top" align="start" className="max-w-[520px]">
-        {tooltipPath}
-      </TooltipContent>
-    </Tooltip>
+    <InfoHoverCard>
+      <InfoHoverCardTrigger>{anchor}</InfoHoverCardTrigger>
+      <InfoHoverCardContent side="top" align="start" className="w-[360px] max-w-[80vw]">
+        <span className="break-all">{tooltipPath}</span>
+      </InfoHoverCardContent>
+    </InfoHoverCard>
   );
 }
 

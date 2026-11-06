@@ -46,6 +46,11 @@ import {
 } from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { ShowMoreRow } from "~/sidebar/list-parts";
 import { ProjectLeadingVisual } from "~/sidebar/status-visuals";
 import { WorkspaceRow } from "~/sidebar/workspace-row";
@@ -210,8 +215,8 @@ function ProjectHeaderRow({
         projectViewKey={project.viewKey}
         isArchiving={isRemoving}
       />
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <InfoHoverCard>
+        <InfoHoverCardTrigger>
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
             <span className="truncate font-medium">{displayName}</span>
             {nameCue ? (
@@ -223,17 +228,18 @@ function ProjectHeaderRow({
               </span>
             ) : null}
           </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start">
+        </InfoHoverCardTrigger>
+        {/* Keep the path hint out of a drag's pointer path through the workspace rows below. */}
+        <InfoHoverCardContent side="bottom" align="start" readOnly>
           <span className="flex flex-col" data-testid={`sidebar-project-path-${project.viewKey}`}>
             {pathLines.map((line) => (
-              <span key={line.serverId} className="line-clamp-2">
+              <span key={line.serverId} className="line-clamp-2 break-all">
                 {line.text}
               </span>
             ))}
           </span>
-        </TooltipContent>
-      </Tooltip>
+        </InfoHoverCardContent>
+      </InfoHoverCard>
     </SidebarMenuButton>
   );
 
@@ -377,14 +383,18 @@ export const ProjectBlock = memo(function ProjectBlock({
     void (async () => {
       const confirmed = await confirmDialog({
         title: t("sidebar.project.confirmations.removeTitle"),
-        message: t("sidebar.project.confirmations.removeMessage", { projectName: displayName }),
+        message: t("sidebar.project.confirmations.removeMessage", {
+          projectName: displayName,
+        }),
         confirmLabel: t("sidebar.project.confirmations.removeConfirm"),
         cancelLabel: t("sidebar.project.confirmations.cancel"),
         destructive: true,
       });
       if (!confirmed) return;
       setIsRemoving(true);
-      const readiness = getCurrentProjectRemoveReadiness({ hosts: project.hosts });
+      const readiness = getCurrentProjectRemoveReadiness({
+        hosts: project.hosts,
+      });
       if (readiness.kind === "needs_host_update") {
         toast.error(t("sidebar.project.toasts.updateHostToRemove"));
         setIsRemoving(false);

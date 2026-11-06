@@ -13,13 +13,15 @@
 - BranchSwitcher 区分 Local、Remote、Both 并用可辨识图标分组；远端名不硬编码为 `origin`。
 - 无 configured upstream 但存在同名同步的 `origin/<branch>` 时显示为已同步，不显示 Push；显式 upstream 优先，configured-gone 显示 unknown。
 - Git/Forge 查询保持 directory-backed `(serverId, cwd)` 语义。
+- 侧栏 PR 徽标和 PR 面板共用 daemon 的同一份当前 PR 状态；有客户端连接时才后台刷新，无客户端时停止。检查运行中缩短刷新间隔，空闲时降频，连续失败指数退避并保留最后一次成功数据；同一 Forge 主机的目标合并查询，不能为每个 workspace 各发一遍 GitHub 请求。
+- 在应用或终端提交、推送、切换分支、创建或合并 PR 后，当前分支和 PR 状态应及时重查，不等下一次慢速轮询。已结束的 PR 只有 head 提交仍对应当前 checkout 时才归到该工作区。
 
 ## Project 行与同名消歧
 
 - 同名 Project 并列时（多台 Host 各添加同名的普通目录，或同名 Git 仓库无 remote），该行在名字下方多一行线索 `Host 名 · 缩短路径`；名字不冲突的行不加任何字。线索按**当前可见列表**判定：过滤到只剩一个同名项时它消失。
 - 线索必须同时给 Host 与路径。只给 Host 分不清同一台机器上的 `~/dev/chat` 与 `~/work/chat`；只给路径分不清两台机器的 `~/chat`——`shortenPath` 会把两者都变成 `~/chat`。跨多台 Host 的项目在行内列出**前两个** Host 名、超出以 `…` 截断（完整清单在悬停提示里），路径取第一个有路径的 Host。
 - 线索在标题**下方第二行**，不与标题同行：标题右侧是 hover 操作区，放那里会在最需要它的时候被挤掉。
-- 悬停 Project 的**名字**显示该项目每个 Host 的完整路径（tooltip）。触发面是名字而不是整行，移向行内 kebab 时不会弹出。
+- 悬停 Project 的**名字**显示该项目每个 Host 的完整路径（信息卡）。触发面是名字而不是整行，移向行内 kebab 时不会弹出。
 - **线索跟着名字走，不跟着位置走。** 非 project 分组模式（status / label）没有项目行，项目名渲染在 workspace 行的元信息行上，线索就挂在那个名字后面（`名字 · 线索`），复用同一份冲突判定。同理，project 模式里被置顶提到项目块之外的行也要带线索——那些行上方没有 header，是线索唯一能出现的地方；留在项目块内的行不重复给，header 就在旁边。
 - 元信息行上的线索随 `project` 这个 display item 一起开关：它是解释名字的，名字关掉之后它没有解释对象。
 

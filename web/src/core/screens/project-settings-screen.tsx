@@ -25,7 +25,11 @@ import type {
 } from "@bytetrue/protocol/messages";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { Button } from "~/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -995,8 +999,8 @@ function ProjectConfigForm({
 
   const setupDocsLink = useMemo(
     () => (
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <InfoHoverCard>
+        <InfoHoverCardTrigger>
           <Button variant="link" size="sm" asChild>
             <a
               href={WORKTREE_DOCS_URL}
@@ -1008,16 +1012,18 @@ function ProjectConfigForm({
               <ArrowUpRight data-icon="inline-end" />
             </a>
           </Button>
-        </TooltipTrigger>
-        <TooltipContent>{t("settings.project.worktree.docsTooltip")}</TooltipContent>
-      </Tooltip>
+        </InfoHoverCardTrigger>
+        <InfoHoverCardContent side="top">
+          {t("settings.project.worktree.docsTooltip")}
+        </InfoHoverCardContent>
+      </InfoHoverCard>
     ),
     [t],
   );
   const teardownDocsLink = useMemo(
     () => (
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <InfoHoverCard>
+        <InfoHoverCardTrigger>
           <Button variant="link" size="sm" asChild>
             <a
               href={WORKTREE_DOCS_URL}
@@ -1029,9 +1035,11 @@ function ProjectConfigForm({
               <ArrowUpRight data-icon="inline-end" />
             </a>
           </Button>
-        </TooltipTrigger>
-        <TooltipContent>{t("settings.project.worktree.docsTooltip")}</TooltipContent>
-      </Tooltip>
+        </InfoHoverCardTrigger>
+        <InfoHoverCardContent side="top">
+          {t("settings.project.worktree.docsTooltip")}
+        </InfoHoverCardContent>
+      </InfoHoverCard>
     ),
     [t],
   );

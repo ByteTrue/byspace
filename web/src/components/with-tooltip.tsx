@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
-/** `children` with a shadcn tooltip when there is something to say, else `children` alone. */
+/** Short control/tab labels only. Information worth a card belongs in `InfoHoverCard`. */
 export function WithTooltip({
   tooltip,
   side = "right",

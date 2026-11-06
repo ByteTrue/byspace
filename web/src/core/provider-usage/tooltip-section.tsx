@@ -1,7 +1,6 @@
 // Port of archive/expo-app:packages/app/src/provider-usage/tooltip-section.tsx: the active agent's provider
 // usage under the context meter's tooltip; nothing when that provider has no usage entry.
 import { ProviderUsageCard } from "@/provider-usage/card";
-import { OnTooltipSurface } from "@/provider-usage/window-bar";
 import { providerUsageCopy } from "@/provider-usage/copy";
 import type { ProviderUsage, ProviderUsageView } from "@/provider-usage/types";
 
@@ -15,7 +14,7 @@ function matchProvider(
 }
 
 // The rule spans the tooltip edge to edge, in the tooltip's own outline colour.
-const DIVIDER = <div className="-mx-3 my-2 h-px bg-background/20" />;
+const DIVIDER = <div className="-mx-2.5 my-2 h-px bg-border" />;
 
 export function ProviderUsageTooltipSection({
   view,
@@ -28,7 +27,7 @@ export function ProviderUsageTooltipSection({
     return (
       <>
         {DIVIDER}
-        <span className="text-xs leading-[16.8px] text-background/65">
+        <span className="text-xs leading-[16.8px] text-muted-foreground">
           {providerUsageCopy.tooltipLoading}
         </span>
       </>
@@ -38,7 +37,7 @@ export function ProviderUsageTooltipSection({
     return (
       <>
         {DIVIDER}
-        <span className="text-xs leading-[16.8px] text-red-300">{view.message}</span>
+        <span className="text-xs leading-[16.8px] text-destructive">{view.message}</span>
       </>
     );
   }
@@ -47,9 +46,7 @@ export function ProviderUsageTooltipSection({
   return (
     <>
       {DIVIDER}
-      <OnTooltipSurface value={true}>
-        <ProviderUsageCard usage={usage} compact />
-      </OnTooltipSurface>
+      <ProviderUsageCard usage={usage} compact />
     </>
   );
 }
