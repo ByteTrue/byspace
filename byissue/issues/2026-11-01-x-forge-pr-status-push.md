@@ -48,12 +48,12 @@ Go 侧：
 
 验证：Go 测试（轮询间隔与退避、批量、额度暂停、fork 改查、检查缓存、释放即停、候选挑选、查找目标、GitLab MR、描述里的 PR 与推送、PR worktree 元数据）。开发版实测：用 cli/cli#14783（fork 的 PR）建 worktree，元数据记下 base `trunk` 和 owner `mrecachinas`，8081、8082 侧栏都出现「14783 · passed」徽标和悬停卡片的 Checks；PR 面板的状态带合并信息；两个前端都没有校验报错。其余测试工作区的 PR 都已合并且分支已经走过了 PR 的 head 提交，按 Node 的规则不再显示。
 
-Gitea 的 PR 状态 Go 原来也没有，已在同一快改移植，见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)。GitLab、Gitea、GitHub Enterprise 没有真实账号与主机，未实测。
+Gitea 的 PR 状态 Go 原来也没有，已在同一快改移植，见 [gitea-pr-status](2026-11-02-x-gitea-pr-status.md)。Gitea 的 PR 状态 Go 原来也没有，已在同一快改移植，见 [gitea-pr-status](2026-11-02-x-gitea-pr-status.md)。GitLab、Gitea、GitHub Enterprise 没有真实账号与主机，未实测；Gitea 的交付范围后来由用户明确收窄为代码与 fake `tea` 测试。
 
 ## 关闭结论（2026-11-06）
 
 交付关闭。目标中的同源 payload、pending/idle/错误退避、repo 去重和失败保留最后成功数据均已实现；真实 GitHub fork PR `cli/cli#14783` 已在开发版验证侧栏徽标、Checks 和 PR 面板。本轮复核通过 `go test ./internal/workspace -count=1`、`go test ./internal/server -run 'Schedule|PRStatus|HeadWatch' -count=1`，并通过完整 Go 审计（Go 测试、入站/出站字段对账和账本检查）。
 
-稳定边界毕业到 Project Spec 的 [Workspace](../spec/workspace.md)「分支与推送状态」；GitHub 配额规则已在 `docs/forge-providers.md`，不重复写一份。GitLab、GitHub Enterprise 的真实外部验收不在本 issue 已覆盖的证据内；Gitea 的真实验收继续由 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md) 跟踪，不把它写成已完成。
+稳定边界毕业到 Project Spec 的 [Workspace](../spec/workspace.md)「分支与推送状态」；GitHub 配额规则已在 `docs/forge-providers.md`，不重复写一份。GitLab、GitHub Enterprise 的真实外部验收不在本 issue 已覆盖的证据内；Gitea 的实现、fake `tea` 测试证据与验收范围记录见 [gitea-pr-status](2026-11-02-x-gitea-pr-status.md)，不含真实登录端到端验收。
 
 关闭前按旧全名检索到 3 处引用，均更新为关闭路径。

@@ -59,10 +59,11 @@ func entryStatus(t *testing.T, entries []map[string]any, id string) string {
 // Only a ready provider carries a catalog, as in Node: an unavailable one (switched off, or its CLI
 // not installed) lists no models or modes, and a custom provider switched off says so.
 func TestUnavailableProvidersCarryNoCatalog(t *testing.T) {
+	// Disable built-ins whose CLIs may be installed on the development machine or in CI.
 	t.Setenv("BYSPACE_NODE_ENV", "development")
-	t.Setenv("CODEX_COMMAND", "")
 	t.Setenv("PATH", t.TempDir())
 	entries := BuildSnapshotEntries(nil, "", map[string]any{
+		"codex":        map[string]any{"enabled": false},
 		MockProviderID: map[string]any{"enabled": false},
 		"diag":         map[string]any{"command": []any{"/nonexistent/provider"}, "enabled": false},
 	})

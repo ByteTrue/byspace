@@ -13,7 +13,7 @@
 - BranchSwitcher 区分 Local、Remote、Both 并用可辨识图标分组；远端名不硬编码为 `origin`。
 - 无 configured upstream 但存在同名同步的 `origin/<branch>` 时显示为已同步，不显示 Push；显式 upstream 优先，configured-gone 显示 unknown。
 - Git/Forge 查询保持 directory-backed `(serverId, cwd)` 语义。
-- 侧栏 PR 徽标和 PR 面板共用 daemon 的同一份当前 PR 状态；有客户端连接时才后台刷新，无客户端时停止。检查运行中缩短刷新间隔，空闲时降频，连续失败指数退避并保留最后一次成功数据；同一 Forge 主机的目标合并查询，不能为每个 workspace 各发一遍 GitHub 请求。
+- 侧栏 PR 徽标和 PR 面板共用 daemon 的同一份当前 PR 状态；Gitea、Forgejo、Codeberg 共用 Gitea CLI 适配层。有客户端连接时才后台刷新，无客户端时停止。检查运行中缩短刷新间隔，空闲时降频，连续失败指数退避并保留最后一次成功数据；同一 Forge 主机的目标合并查询，不能为每个 workspace 各发一遍 GitHub 请求。
 - 在应用或终端提交、推送、切换分支、创建或合并 PR 后，当前分支和 PR 状态应及时重查，不等下一次慢速轮询。已结束的 PR 只有 head 提交仍对应当前 checkout 时才归到该工作区。
 
 ## Project 行与同名消歧

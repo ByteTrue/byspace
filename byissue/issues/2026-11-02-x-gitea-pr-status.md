@@ -31,4 +31,10 @@ Node 的实现在 `git show 20721fdcf^:archive/packages/server/src/services/gite
 
 验证：Go 测试用假的 `tea` 脚本覆盖开着的 PR、已合并 PR 按 head 提交匹配、镜像 status 去重、workflow 重跑取最新、审批等待、warning。
 
-2026-11-06 复核：`go test ./internal/workspace -count=1` 与完整 Go 审计通过。公开 Codeberg API 能只读返回 `forgejo/forgejo` 的真实 open/fork PR 数据，证明无需账号即可读取公开 PR；但本机没有 `tea`，尝试下载并执行官方 `gitea/tea` v0.16.0 被本机权限策略阻止，因此尚未跑过真实 `tea` → Go 解析 → PR 状态链路，也未验证合并操作。保持 `-o-`，不能将 fake 测试或公开 API 响应当作端到端验收。
+2026-11-06 复核：`go test ./internal/workspace -count=1` 与 Go 审计（Go 测试、入站/出站字段对账、账本检查；`--no-browser`）通过。公开 Codeberg API 能只读返回 `forgejo/forgejo` 的真实 open/fork PR 数据，证明无需账号即可读取公开 PR。随后安装 `tea` v0.16.0，确认 `tea pr list` 需要可用 login；OAuth 因本机没有 Codeberg 登录而超时。用户明确本次不做真实登录端到端验收，代码、fake `tea` 测试与 Go 审计即可，因此不再尝试登录，也不声称真实 `tea` → Go 解析 → UI 或合并操作已经验证。
+
+## 关闭结论（2026-11-06）
+
+按用户确认的验收范围交付关闭。目标中的 open/merged PR 查找、fork/head SHA 匹配、Actions 与 commit status 汇总、镜像 status 去重、workflow 重跑、审批等待和 warning 均已实现，并由 fake `tea` Go 测试覆盖；`CurrentPRStatus` 的 `gitea` 分支已供侧栏徽标与 PR 面板共用。验证证据为 `go test ./internal/workspace -count=1`、`go test ./internal/agent/providers -count=1`、`npm run typecheck`、`npm run lint`、`npm run format:check` 与 `npm run audit -- --no-browser` 全部通过。真实登录端到端验收不在本次证据内。
+
+跨 Forge 共用状态与轮询边界已存在于 Project Spec 的 [Workspace](../spec/workspace.md)「分支与推送状态」，本次补充 Gitea/Forgejo/Codeberg 共用 Gitea CLI 适配层。无其他毕业内容或遗留事项。
