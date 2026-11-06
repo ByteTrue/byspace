@@ -19,7 +19,7 @@ Daemon：
 - **`byspace run --output-schema` 被忽略**：照 Node 传给 Codex（规范化后放进 `turn/start`）和 OpenCode（`json_schema` 格式）；其它提供方 Node 也不支持。`internal/agent/providers/output_schema.go`、`codex.go`、`opencode.go`、`internal/server/server.go`。
 - **CLI**：`schedule create` 需要 `--provider`，`heartbeat create` 只能在 agent 里用（同 Node CLI）；`--run-now` 原来发成协议没有的字段、不生效，现在发 `runOnCreate`，不加时与 Node 一样等第一个时段；补上 Node 的 `--target`；被 daemon 拒绝的请求显示原因，原来等到超时。`internal/cli/`。
 - **侧栏 PR 徽标从没出现过**：Go 不发工作区的 `githubRuntime`，也没有 PR 状态的后台轮询。照 Node 补上，同时修了 GitLab MR 的状态（开着的 MR 被当成已关闭）、PR worktree 不写元数据（fork 的 PR 找不回来）。详见 [forge-pr-status-push](2026-11-01-x-forge-pr-status-push.md) 的「实现」一节。
-- **Gitea、Forgejo、Codeberg 的 PR 状态**：Go 没有，侧栏和 PR 面板对这类仓库永远是没有 PR。照 Node 移植（找 PR、提交状态与 Actions 检查），详见 [gitea-pr-status](2026-11-02-o-gitea-pr-status.md)。
+- **Gitea、Forgejo、Codeberg 的 PR 状态**：Go 没有，侧栏和 PR 面板对这类仓库永远是没有 PR。照 Node 移植（找 PR、提交状态与 Actions 检查），详见 [gitea-pr-status](2026-11-02-x-gitea-pr-status.md)。
 - **在终端里切分支、提交，侧栏要等 5 分钟**（分支名、改动统计、PR）：Node 用文件监听当场发现。Go 现在有客户端连着时每 2 秒读一次每个检出的 HEAD 和分支 ref 文件，变了才跑 git。`internal/workspace/head_fingerprint.go`、`internal/server/head_watch.go`。
 
 前端（旧版、新版）：

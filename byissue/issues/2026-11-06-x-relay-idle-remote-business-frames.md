@@ -126,8 +126,10 @@ tag 构建逐字节一致。本机 Desktop 通过正常启动/更新路径升级
 - 重连 terminal 收到一条按序包含 one/two/three 的 backlog 输出。✅
 - 独立 tunnel peer 没有 App 页面或 presence，在生产 relay 上完成 E2EE 握手、文本 hello、
   文本 `tunnel.list` RPC 和 binary open/ack；旧 binary 密文不再被当成解密后的 binary RPC。✅
-  实际 TCP echo 因生产端口未加入 allowlist 被目标端按预期拒绝，未改生产密码或 tunnel 配置。
-  完整 open + echo 的正向结果仍由上述真实 in-process 测试覆盖，不记为生产 TCP echo 通过。
+  初次实际 TCP echo 因生产端口未加入 allowlist 被目标端按预期拒绝，当时未改生产密码或 tunnel 配置。
+  随后在同一真实 relay E2EE 会话中临时启用 tunnel 并追加本机随机 echo 端口，远端配置回读确认后，
+  binary open/ack 与原样 TCP echo 均通过；结束时 `tunnel.enabled` 和原 allowlist 精确恢复，
+  没有启动或重启 6777 daemon。✅
 - 首次 terminal 采集使用 `live` 恢复且未读到 backlog，不能作为通过证据；随后独立重跑使用
   `full-snapshot` 取得有序 backlog，并把 local 流事件与 timeline 在归档前保存。没有修改产品
   代码来迎合采集脚本。
@@ -167,5 +169,4 @@ sidebar 的父子结构核对后，不是 Chief 项目组排序回归；应断�
 用户已授权关闭。data socket 生命周期、恢复与 tunnel 边界毕业到 `byissue/spec/connection.md`
 的「Relay 会话生命周期」；计量与已证实的托管平台约束保留在
 `byissue/notes/018-durable-object-billing-and-hibernation.md`，无新增重复沉淀。
-生产 tunnel 正向 TCP echo 因 allowlist 未开放而未执行，正向覆盖保留在真实 in-process
-测试。没有由本 issue 遗留的新行动项。
+生产 tunnel 正向 TCP echo 已在临时开放并恢复 allowlist 后通过；没有由本 issue 遗留的新行动项。
