@@ -30,7 +30,11 @@ const WS_MODULE = createRequire(import.meta.url).resolve("ws");
 const BASE = (() => {
   const idx = process.argv.indexOf("--base");
   return idx >= 0 ? process.argv[idx + 1] : "http://127.0.0.1:6778";
-})();
+})().replace(/\/$/, "");
+// Vite serves the app on a different port from the daemon; daemon probes always use the daemon origin.
+const DAEMON_BASE =
+  process.env.BYSPACE_CONFORMANCE_DAEMON_BASE ??
+  (new URL(BASE).port === "8082" ? "http://127.0.0.1:6778" : BASE);
 
 const results = [];
 
@@ -72,7 +76,7 @@ const hasButton = async (name) => (await page.getByRole("button", { name }).coun
 function queryProviderSnapshot() {
   const script = `
     const WebSocket = (await import("ws")).default;
-    const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
+    const ws = new WebSocket(${JSON.stringify(DAEMON_BASE.replace(/^http/, "ws") + "/ws")});
     let done = false;
     const finish = (value) => { if (!done) { done = true; console.log(JSON.stringify(value)); process.exit(0); } };
     ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "conf-providers", protocolVersion: 1 })));
@@ -143,7 +147,7 @@ function runWorkspaceStateTransitions() {
 
   const script = `
 const WebSocket = require(${JSON.stringify(WS_MODULE)});
-const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
+const ws = new WebSocket(${JSON.stringify(DAEMON_BASE.replace(/^http/, "ws") + "/ws")});
 const repoPath = ${JSON.stringify(repoPath)};
 const out = { updates: [], archived: null, removed: null };
 const send = (message) => ws.send(JSON.stringify({ type: "session", message }));
@@ -272,7 +276,9 @@ async function dismissOverlays() {
 function openAWorkspaceRoute() {
   const serverId = (() => {
     try {
-      const body = execFileSync("curl", ["-s", "-m", "5", `${BASE}/health`], { encoding: "utf8" });
+      const body = execFileSync("curl", ["-s", "-m", "5", `${DAEMON_BASE}/health`], {
+        encoding: "utf8",
+      });
       return JSON.parse(body)?.serverId ?? null;
     } catch {
       return null;
@@ -286,7 +292,7 @@ function openAWorkspaceRoute() {
     probePath,
     `
 const WebSocket = require(${JSON.stringify(WS_MODULE)});
-const ws = new WebSocket(${JSON.stringify(BASE.replace(/^http/, "ws") + "/ws")});
+const ws = new WebSocket(${JSON.stringify(DAEMON_BASE.replace(/^http/, "ws") + "/ws")});
 const send = (message) => ws.send(JSON.stringify({ type: "session", message }));
 ws.on("open", () => ws.send(JSON.stringify({ type: "hello", clientId: "wks-probe", protocolVersion: 1 })));
 ws.on("message", (raw) => {
@@ -308,7 +314,7 @@ setTimeout(() => { console.log(JSON.stringify({ id: null })); process.exit(0); }
     const line = (run.stdout ?? "").trim().split("\n").findLast(Boolean) ?? "";
     const workspaceId = line ? JSON.parse(line).id : null;
     if (!workspaceId) return null;
-    return `${BASE}/h/${encodeURIComponent(serverId)}/workspace/${encodeURIComponent(workspaceId)}`;
+    return `${DAEMON_BASE}/h/${encodeURIComponent(serverId)}/workspace/${encodeURIComponent(workspaceId)}`;
   } catch {
     return null;
   } finally {
@@ -362,6 +368,9 @@ try {
   // ---------------------------------------------------------------- 侧边栏结构
   let snap = await ensureSidebarVisible();
 
+  if (!snap.includes("BySpace-WorkSpace") || !snap.includes("Chief")) {
+    console.log(`Sidebar startup snapshot:\n${snap}`);
+  }
   expectContains("Sidebar lists the Chief home workspace", snap, ["BySpace-WorkSpace", "Chief"]);
 
   // Chief 子行位于 Home 项目组标题之后；这里验证两者都属于固定首位的 `home:chief` 组，

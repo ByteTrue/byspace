@@ -4,7 +4,11 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatTokenCount } from "@/components/context-window-meter.utils";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { ProviderUsageTooltipSection } from "@/provider-usage/tooltip-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { cn } from "cn";
@@ -139,14 +143,16 @@ export function ContextWindowMeter({
   const formattedSessionCost =
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
   return (
-    <Tooltip open={isTooltipOpen} onOpenChange={handleTooltipOpenChange} delayDuration={0}>
-      <TooltipTrigger asChild>
+    <InfoHoverCard open={isTooltipOpen} onOpenChange={handleTooltipOpenChange}>
+      <InfoHoverCardTrigger>
         <button
           type="button"
           className={containerClass}
           data-testid="context-window-meter"
           role="img"
-          aria-label={t("contextWindow.accessibility", { percentage: roundedPercentage })}
+          aria-label={t("contextWindow.accessibility", {
+            percentage: roundedPercentage,
+          })}
         >
           <svg
             width={svgSize}
@@ -173,27 +179,25 @@ export function ContextWindowMeter({
             <span className="text-sm text-muted-foreground">{`${roundedPercentage}%`}</span>
           ) : null}
         </button>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center">
+      </InfoHoverCardTrigger>
+      <InfoHoverCardContent side="top">
         <div className="flex min-w-[200px] flex-col gap-1.5">
           <span>{t("contextWindow.title")}</span>
-          <span className="leading-[1.4]">
-            {t("contextWindow.used", { percentage: roundedPercentage })}
-          </span>
-          <span className="text-xs leading-[1.4] text-background/65">
+          <span>{t("contextWindow.used", { percentage: roundedPercentage })}</span>
+          <span className="text-xs text-muted-foreground">
             {t("contextWindow.tokens", {
               used: formatTokenCount(usedTokens),
               max: formatTokenCount(maxTokens),
             })}
           </span>
           {formattedSessionCost ? (
-            <span className="text-xs leading-[1.4] text-background/65">
+            <span className="text-xs text-muted-foreground">
               {t("contextWindow.sessionCost", { cost: formattedSessionCost })}
             </span>
           ) : null}
           <ProviderUsageTooltipSection view={providerUsageView} activeProviderId={provider} />
         </div>
-      </TooltipContent>
-    </Tooltip>
+      </InfoHoverCardContent>
+    </InfoHoverCard>
   );
 }

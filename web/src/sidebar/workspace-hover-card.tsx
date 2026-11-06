@@ -1,19 +1,11 @@
 import { Separator } from "~/components/ui/separator";
 import * as Clipboard from "~/lib/clipboard";
 import { Button } from "~/components/ui/button";
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type ComponentType,
-  type FocusEvent,
-  type ReactElement,
-} from "react";
+import { useCallback, useState, type ComponentType, type ReactElement } from "react";
 import { Check, Copy, ExternalLink, FileDiff, Folder, GitBranch, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
 import type { AgentLifecycleStatus } from "@bytetrue/protocol/agent-lifecycle";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   COUNTED_CHECK_PRESENTATIONS,
   countCheckPresentations,
@@ -36,7 +28,11 @@ import {
   getCheckPresentationTone,
 } from "~/components/check-presentation";
 import { ForgeIcon } from "~/components/forge-icon";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { DiffStat, PullRequestStateIcon } from "~/sidebar/meta-row";
 
 // Geometry follows archive/expo-app:packages/app/src/components/workspace-hover-card.tsx: a 260px card, 12px
@@ -293,14 +289,6 @@ function HoverCardBody({ workspace }: { workspace: SidebarWorkspaceEntry }) {
   );
 }
 
-function preventFocusOpen(event: FocusEvent) {
-  event.preventDefault();
-}
-
-/**
- * The Expo app's WorkspaceHoverCard: the workspace's details beside its row on desktop, opening
- * at once and closing after a 100ms grace. Compact layouts have no hover, so no card.
- */
 export function WorkspaceHoverCard({
   workspace,
   disabled = false,
@@ -310,29 +298,17 @@ export function WorkspaceHoverCard({
   disabled?: boolean;
   children: ReactElement;
 }) {
-  const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
-  const [open, setOpen] = useState(false);
-  const handleOpenChange = useCallback((next: boolean) => setOpen(next && !disabled), [disabled]);
-  const isOpen = useMemo(() => open && !disabled, [disabled, open]);
-  if (isCompact) return children;
   return (
-    <HoverCard open={isOpen} onOpenChange={handleOpenChange} openDelay={0} closeDelay={100}>
-      {/* Hover only, as in the Expo app: a row that keeps focus after a click must not hold the card open. */}
-      <HoverCardTrigger asChild onFocus={preventFocusOpen}>
-        {children}
-      </HoverCardTrigger>
-      <HoverCardContent
+    <InfoHoverCard disabled={disabled}>
+      <InfoHoverCardTrigger>{children}</InfoHoverCardTrigger>
+      <InfoHoverCardContent
         side="right"
         align="start"
-        sideOffset={4}
-        collisionPadding={8}
-        className="w-[260px] p-0 pt-2"
-        aria-label={t("workspace.hoverCard.scriptsAccessibility")}
+        className="p-0 pt-2"
         data-testid="workspace-hover-card"
       >
         <HoverCardBody workspace={workspace} />
-      </HoverCardContent>
-    </HoverCard>
+      </InfoHoverCardContent>
+    </InfoHoverCard>
   );
 }

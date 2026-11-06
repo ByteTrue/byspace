@@ -6,7 +6,11 @@ import { Download, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { ToolbarLabelSelectTrigger } from "@/components/ui/toolbar-label-trigger";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher, type BranchSuggestionScope } from "@/hooks/use-branch-switcher";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -121,8 +125,8 @@ export function BranchSwitcher({
 
   return (
     <div ref={anchorRef} className="flex min-w-0 shrink">
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
+      <InfoHoverCard>
+        <InfoHoverCardTrigger>
           <ToolbarLabelSelectTrigger
             testID={testID}
             label={currentBranchName}
@@ -131,9 +135,14 @@ export function BranchSwitcher({
             onPress={handleOpen}
             accessibilityLabel={triggerLabel}
           />
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t("branchSwitcher.triggerTooltip")}</TooltipContent>
-      </Tooltip>
+        </InfoHoverCardTrigger>
+        <InfoHoverCardContent side="bottom">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-muted-foreground">{t("branchSwitcher.triggerTooltip")}</span>
+            <span className="break-all">{currentBranchName}</span>
+          </div>
+        </InfoHoverCardContent>
+      </InfoHoverCard>
       <Combobox
         options={branchOptions}
         value={currentBranchName}

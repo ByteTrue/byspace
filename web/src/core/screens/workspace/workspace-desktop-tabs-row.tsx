@@ -42,7 +42,11 @@ import {
   ToolbarControls,
 } from "@/components/ui/pane-content-toolbar";
 import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -705,8 +709,8 @@ function TabChip({
       onAuxClick={handleAuxClick}
     >
       <ContextMenu key={tab.key}>
-        <Tooltip delayDuration={400}>
-          <TooltipTrigger asChild>
+        <InfoHoverCard>
+          <InfoHoverCardTrigger>
             <ContextMenuTrigger
               {...attributes}
               {...listeners}
@@ -732,11 +736,11 @@ function TabChip({
                 testIdentity={testIdentity}
               />
             </ContextMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent
+          </InfoHoverCardTrigger>
+          <InfoHoverCardContent
             side="bottom"
             data-testid={`workspace-tab-tooltip-${testIdentity}`}
-            className="max-w-[720px]"
+            className="w-max max-w-[720px]"
           >
             {tab.target.kind === "agent" ? (
               <AgentTabTooltipBody
@@ -745,10 +749,10 @@ function TabChip({
                 title={tooltipLabel}
               />
             ) : (
-              tooltipLabel
+              <span className="break-all">{tooltipLabel}</span>
             )}
-          </TooltipContent>
-        </Tooltip>
+          </InfoHoverCardContent>
+        </InfoHoverCard>
         {showCloseButton ? (
           <TabCloseButton
             tabKey={tab.key}

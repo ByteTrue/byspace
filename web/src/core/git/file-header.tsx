@@ -21,7 +21,11 @@ import {
   workspaceTreeRowClassNames,
   WORKSPACE_TREE_ICON_SIZE,
 } from "@/components/tree-primitives";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { useFileHeaderInteraction } from "@/git/file-header-interaction";
 import {
   diffFileChangeKind,
@@ -314,12 +318,12 @@ export const FileHeader = memo(function FileHeader({
       aria-label={accessibilityLabel}
     >
       <ContextMenu>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent side="bottom" align="start" className="max-w-[520px]">
-            {file.path}
-          </TooltipContent>
-        </Tooltip>
+        <InfoHoverCard>
+          <InfoHoverCardTrigger>{trigger}</InfoHoverCardTrigger>
+          <InfoHoverCardContent side="bottom" align="start" className="w-[360px] max-w-[80vw]">
+            <span className="break-all">{file.path}</span>
+          </InfoHoverCardContent>
+        </InfoHoverCard>
         {interactive ? (
           <FileHeaderMenu file={file} testID={testID} {...actions} bodyVisible={bodyVisible} />
         ) : null}

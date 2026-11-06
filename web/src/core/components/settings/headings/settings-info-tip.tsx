@@ -3,7 +3,11 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "~/components/info-hover-card";
 import { ICON_SIZE } from "@/styles/theme";
 import { Button } from "~/components/ui/button";
 
@@ -17,8 +21,8 @@ interface SettingsInfoTipProps {
 export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
   const { t } = useTranslation();
   return (
-    <Tooltip delayDuration={0}>
-      <TooltipTrigger asChild>
+    <InfoHoverCard>
+      <InfoHoverCardTrigger>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -29,10 +33,10 @@ export function SettingsInfoTip({ title, info, testID }: SettingsInfoTipProps) {
         >
           <Info size={ICON_SIZE.sm} />
         </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="start">
-        <span className="text-sm leading-[1.4]">{info}</span>
-      </TooltipContent>
-    </Tooltip>
+      </InfoHoverCardTrigger>
+      <InfoHoverCardContent side="top" align="start">
+        {info}
+      </InfoHoverCardContent>
+    </InfoHoverCard>
   );
 }

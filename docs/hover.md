@@ -58,11 +58,20 @@ reach a control.
 
 ## Floating content
 
-Content that renders in a portal (a hover card, a tooltip) cannot be inside the group. Use Radix:
-`HoverCard` keeps the card open while the pointer is over the trigger or the card, and
-`closeDelay` covers the gap between them. `web/src/sidebar/workspace-hover-card.tsx` is the
-example: no delay to open, 100ms grace to close, and no opening on focus, so a row that keeps focus
-after a click does not hold its card open.
+Use the right surface for the content:
+
+- **Information worth a card** — a full path, branch details, usage, an explanation, or several
+  fields — belongs in `InfoHoverCard`, composed with `InfoHoverCardTrigger` and
+  `InfoHoverCardContent` from `web/src/components/info-hover-card.tsx`.
+- **A short name for a button, control, or tab** stays a normal shadcn `Tooltip`; use
+  `WithTooltip` where that wrapper already fits. Do not turn every tooltip into a card.
+
+Content that renders in a portal cannot be inside the CSS hover group. The shared card is Radix:
+it keeps the card open while the pointer is over the trigger or the card, and `closeDelay` covers
+the gap between them. `web/src/sidebar/workspace-hover-card.tsx` is the rich-content example. The
+shared policy is no delay to open, 100ms grace to close, and no opening on focus, so a row that
+keeps focus after a click does not hold its card open. Compact layouts do not show the card;
+information and actions they need must have a non-hover path.
 
 ## Checklist
 
