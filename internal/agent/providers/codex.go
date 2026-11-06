@@ -53,6 +53,9 @@ type CodexSession struct {
 	nativeTurnID       string
 	activeTextIdx      int
 	activeThinkIdx     int
+	streamSeq          int
+	frames             *sdk.StreamFrames
+	emitMu             sync.Mutex
 	timeline           []sdk.TimelineEntry
 	toolIndexByID      map[string]int
 	pendingPermissions map[string]map[string]any
@@ -110,6 +113,7 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		subagents:          make(map[string]sdk.SubagentDescriptor),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
+	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	go s.readLoop(stdout)
 
 	// Best-effort initialize + thread/start handshake
@@ -242,6 +246,7 @@ func (s *CodexSession) readLoop(stdout io.Reader) {
 		}
 	}
 
+	s.flushTailOnExit()
 	s.mu.Lock()
 	s.closed = true
 	s.status = "closed"
@@ -257,6 +262,8 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 	params, _ := msg["params"].(map[string]any)
 	var extraEvents []map[string]any
 
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
 	switch method {
 	case "turn/started":
@@ -284,10 +291,11 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
 				s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "assistant_message",
-					Text: delta,
 				})
-			} else {
-				s.timeline[s.activeTextIdx].Item.Text += delta
+			}
+			s.timeline[s.activeTextIdx].Item.Text += delta
+			if s.frames.AddText(s.activeTextIdx, sdk.TimelineItem{Type: "assistant_message", Text: delta}, s.activeTurnID) {
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
 			}
 		}
 
@@ -297,10 +305,11 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
 				s.activeThinkIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "reasoning",
-					Text: delta,
 				})
-			} else {
-				s.timeline[s.activeThinkIdx].Item.Text += delta
+			}
+			s.timeline[s.activeThinkIdx].Item.Text += delta
+			if s.frames.AddText(s.activeThinkIdx, sdk.TimelineItem{Type: "reasoning", Text: delta}, s.activeTurnID) {
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
 			}
 		}
 
@@ -320,6 +329,9 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 				})
 				if itemID != "" {
 					s.toolIndexByID[itemID] = idx
+				}
+				if s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, nil) {
+					extraEvents = append(extraEvents, s.flushFramesLocked()...)
 				}
 				extraEvents = append(extraEvents, map[string]any{
 					"type":       "tool_execution_start",
@@ -341,14 +353,20 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 						Type: "assistant_message",
 						Text: txt,
 					})
+					s.frames.AddText(s.activeTextIdx, s.timeline[s.activeTextIdx].Item, s.activeTurnID)
+					extraEvents = append(extraEvents, s.flushFramesLocked()...)
 				}
+				extraEvents = append(extraEvents, s.flushFramesLocked()...)
 				extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
 			case "commandExecution":
 				outStr, _ := item["aggregatedOutput"].(string)
 				cmdStr, _ := item["command"].(string)
 				if idx, ok := s.toolIndexByID[itemID]; ok && idx >= 0 && idx < len(s.timeline) {
+					visible := s.sentItemLocked(idx)
 					s.timeline[idx].Item.Status = "completed"
 					s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, outStr)
+					s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, visible)
+					extraEvents = append(extraEvents, s.flushFramesLocked()...)
 				}
 				extraEvents = append(extraEvents, map[string]any{
 					"type":       "tool_execution_end",
@@ -446,6 +464,11 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		extraEvents = append(extraEvents, map[string]any{"type": "agent_end"})
 	}
 
+	if method != "item/agentMessage/delta" && method != "codex/event/agent_message_delta" &&
+		method != "item/reasoning/summaryTextDelta" && method != "codex/event/reasoning_delta" &&
+		method != "item/started" && method != "item/completed" {
+		extraEvents = append(s.flushFramesLocked(), extraEvents...)
+	}
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)
@@ -467,9 +490,10 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 func (s *CodexSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.streamSeq++
 	entry := sdk.TimelineEntry{
-		Seq:       len(s.timeline) + 1,
-		SeqEnd:    len(s.timeline) + 1,
+		Seq:       s.streamSeq,
+		SeqEnd:    s.streamSeq,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Item:      sdk.LimitTimelineItemContent(item),
 	}
@@ -478,14 +502,56 @@ func (s *CodexSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEnt
 }
 
 func (s *CodexSession) appendItemLocked(item sdk.TimelineItem) int {
-	seq := len(s.timeline) + 1
+	return s.appendItemWithSeqLocked(0, item)
+}
+
+func (s *CodexSession) appendItemWithSeqLocked(seq int, item sdk.TimelineItem) int {
 	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       seq,
+		SeqEnd:    seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item:      item,
+		Item:      sdk.LimitTimelineItemContent(item),
 	})
 	return len(s.timeline) - 1
+}
+
+// appendUserMessageLocked numbers and delivers a user row immediately, ahead of any later
+// assistant frames. Streaming rows use appendItemLocked and receive their seq when flushed.
+func (s *CodexSession) appendUserMessageLocked(item sdk.TimelineItem) {
+	preEvents := s.flushFramesLocked()
+	s.streamSeq++
+	s.appendItemWithSeqLocked(s.streamSeq, item)
+	subs := s.copySubscribersLocked()
+	seq := s.streamSeq
+	turnID := s.activeTurnID
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range preEvents {
+			fn(event)
+		}
+		fn(map[string]any{
+			"type": "byspace_stream_timeline", "seq": seq,
+			"turnId": turnID, "item": item,
+		})
+	}
+	s.mu.Lock()
+}
+
+// flushTailOnExit delivers anything still merging before the process-exit lifecycle event.
+func (s *CodexSession) flushTailOnExit() {
+	// Not under emitMu: a subscriber may close the session while EOF is delivered. The process
+	// has already stopped producing events, and the stopped timer cannot add another delivery.
+	s.mu.Lock()
+	events := s.flushFramesLocked()
+	s.frames.Stop()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
 }
 
 func (s *CodexSession) notifyFinishLocked(err error) {
@@ -506,9 +572,7 @@ func (s *CodexSession) Status() string {
 func (s *CodexSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]sdk.TimelineEntry, len(s.timeline))
-	copy(out, s.timeline)
-	return out
+	return sdk.VisibleTimeline(s.timeline, s.frames.Pending())
 }
 
 func (s *CodexSession) SeedTimeline(entries []sdk.TimelineEntry) {
@@ -516,6 +580,11 @@ func (s *CodexSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	defer s.mu.Unlock()
 	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
+	for _, entry := range entries {
+		if entry.SeqEnd > s.streamSeq {
+			s.streamSeq = entry.SeqEnd
+		}
+	}
 }
 
 func (s *CodexSession) SetNextClientMessageID(id string) {
@@ -562,7 +631,7 @@ func (s *CodexSession) Usage(_ context.Context) *sdk.AgentUsage {
 func (s *CodexSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.timeline)
+	return s.streamSeq
 }
 
 func (s *CodexSession) ActiveTurn() (string, string) {
@@ -586,6 +655,8 @@ func (s *CodexSession) LastAssistantText() string {
 }
 
 func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.ImageContent) error {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -595,7 +666,7 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	// The client's own id comes back on this row so it can reconcile the bubble it rendered
 	// optimistically instead of leaving a duplicate, and can settle the pending submission.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
-	s.appendItemLocked(userMessage(message, clientMsgID))
+	s.appendUserMessageLocked(userMessage(message, clientMsgID))
 	tid := s.threadID
 	outputSchema := s.nextOutputSchema
 	s.nextOutputSchema = nil
@@ -620,6 +691,8 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 // the current one is still going: the user's correction is not applied to the work in progress,
 // and two turns write to the same thread.
 func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
 	running := s.status == "running"
 	threadID := s.threadID
@@ -635,7 +708,7 @@ func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.I
 		return s.Prompt(ctx, message, images)
 	}
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
-	s.appendItemLocked(userMessage(message, clientMsgID))
+	s.appendUserMessageLocked(userMessage(message, clientMsgID))
 	s.mu.Unlock()
 
 	input := []map[string]any{{"type": "text", "text": message}}
@@ -826,7 +899,85 @@ func (s *CodexSession) OnEvent(fn func(map[string]any)) func() {
 	}
 }
 
+func (s *CodexSession) copySubscribersLocked() []func(map[string]any) {
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
+	return subs
+}
+
+func (s *CodexSession) sentItemLocked(index int) *sdk.TimelineItem {
+	for _, frame := range s.frames.Pending() {
+		if frame.Kind == "tool_call" && frame.Row == index {
+			return frame.Visible
+		}
+	}
+	entry := s.timeline[index]
+	if entry.Seq == 0 {
+		return nil
+	}
+	item := entry.Item
+	return &item
+}
+
+// flushFramesLocked takes seqs only as frames go out. Merging after numbering
+// would make clients refetch the timeline for every skipped seq.
+func (s *CodexSession) flushFramesLocked() []map[string]any {
+	frames := s.frames.Take()
+	if len(frames) == 0 {
+		return nil
+	}
+	events := make([]map[string]any, 0, len(frames))
+	for _, frame := range frames {
+		if frame.Row < 0 || frame.Row >= len(s.timeline) {
+			continue
+		}
+		s.streamSeq++
+		entry := &s.timeline[frame.Row]
+		if entry.Seq == 0 {
+			entry.Seq = s.streamSeq
+		}
+		entry.SeqEnd = s.streamSeq
+		item := frame.Item
+		if frame.Kind == "tool_call" {
+			item = entry.Item
+		}
+		events = append(events, map[string]any{
+			"type": "byspace_stream_timeline", "seq": s.streamSeq,
+			"turnId": frame.TurnID, "item": item,
+		})
+	}
+	return events
+}
+
+func (s *CodexSession) flushFramesOnTimer() {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	s.mu.Lock()
+	events := s.flushFramesLocked()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
+}
+
 func (s *CodexSession) Close() error {
+	// A subscriber may close the session from any event callback, so Close cannot wait on emitMu.
+	// Serialize the tail flush with delivery instead, then stop the timer and the subprocess.
+	s.mu.Lock()
+	frames := s.flushFramesLocked()
+	s.frames.Stop()
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range frames {
+			fn(event)
+		}
+	}
 	_ = s.stdin.Close()
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()

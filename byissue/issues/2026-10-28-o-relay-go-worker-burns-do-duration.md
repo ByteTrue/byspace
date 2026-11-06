@@ -120,11 +120,94 @@ worker 的 DO 请求都会抛 `Exceeded allowed duration in Durable Objects free
 额度按日重置。**明天需复验**：真浏览器经 relay 配对、打开 agent 会话、并确认 DO 的
 「持续时间/请求数」保持在毫秒级。
 
+### 2026-11-05 本地 DO 触发器与请求预算验证
+
+当前分支进一步用真正的 localhost `workerd` 和 Durable Objects 验证了控制通知、ping/pong、
+client/server 双向 opaque 数据路由。新增 `RelayMeter` 让不同 serverId 的 room 共享同一 UTC
+请求预算：四个握手计 8 次 billable DO 调用（含 meter 自身），下一次合法握手收到 429；
+在线 client→server 数据消息超额时不转发，发送端以 1013 关闭。复现命令和预算边界见
+`byissue/notes/018-durable-object-billing-and-hibernation.md`。
+
+这补齐了**本地真实 DO 触发器**证据，仍不替代真浏览器配对、agent 会话与线上计量验收；
+本 issue 保持 open。最后复核补了订阅回调重入关闭的 race 回归，并让单连接限流先于全局 meter；
+真实本地 DO 三种场景再次通过。
+
+### 2026-11-05 生产部署、关闭修复与真实浏览器验证
+
+用户授权跳过 beta，直接部署生产。首次部署被 Cloudflare 以 10061 拒绝：不能把 `RelayMeter`
+追加到已经应用的 `v1` migration。保留 `v1: RelayRoom`，追加 `v2: RelayMeter` 后部署成功；
+静态守卫已钉住两个环境的迁移顺序。`app.byspace.cc.cd` 的 `/health` 返回 `{"status":"ok"}`，
+首页新资源已发布，独立随机 serverId 的 `sync`、ping/pong、`connected` 通知和双向 opaque
+数据原样送达。没有启动或重启本机 daemon。
+
+首次生产 smoke 还暴露两个关闭问题：hibernated `webSocketClose` 没有回送关闭帧；关闭回调的
+`getWebSockets` 仍包含当前 socket，使 router 误以为还有替代 client，跳过对端通知。现在显式
+回送 code/reason，并在 disconnect 视图排除当前 socket。`--close` 真实本地 workerd 测试同时
+验证 Node 主动 1000 关闭、raw frame 的 1001/1012 对端通知；正常路由、共享预算和在线预算
+三种场景也全部通过。修复后生产版本为 `9ea1d647-f7a8-48ec-854a-6d26b79ea1e7`，Node 与
+真实 Chromium 的独立 control socket 均收到 1000。
+
+真实 Chromium 以 relay-only host 配置连接现有生产 daemon，看到真实 workspaces，并进入
+Workout 的现有 agent 路由。页面正确显示 daemon 的 `Failed to load agent: exec: "pi": executable
+file not found in $PATH`；这是 v0.24.0 生产 daemon 尚未包含本分支标准 CLI 路径修复，不是 relay
+失败。未发送新 prompt，因此 agent 流式验收仍未完成。
+
+Cloudflare GraphQL `durableObjectsInvocationsAdaptiveGroups` 在 13:00 UTC 记录：生产 room
+176 次成功请求 / 4,451,195 wall time，约 25ms/请求；共享 meter 180 次 / 4,987,309，约
+28ms/请求，保持毫秒级。计量字段是 wallTime，不是早期记录里的 duration；维度字段是
+name/objectId，不是 durableObjectClassName/durableObjectId。正常 WebSocket 关闭仍可能对应
+DO 的 responseStreamDisconnected 终态，不能用该状态否定浏览器已完成的关闭握手。
+
+本 issue 保持 open：还缺新 provider 合帧代码在本机生产 daemon 运行后的真实流式输出与请求量
+对照。
+
+### 2026-11-05 v0.24.1 Claude 生产验证
+
+生产桌面应用及其托管 daemon 已升级到 v0.24.1。通过正常配置 API 临时开启 Claude 后，无需 command
+覆盖即可发现 `~/.local/bin/claude`，provider 为 ready；真实 Chromium 经生产 relay 创建 Haiku 4.5
+会话，完整收到 20 行回答，最终状态 idle。测试 workspace 和 agent 已归档，Claude 开关已恢复关闭。
+
+这轮不能记作增量流式通过：浏览器只采到一个已经包含全文的 assistant DOM 状态。Claude 原生转录也
+只有 thinking 和完整 text 两个 assistant 事件，没有 `stream_event`；v0.24.1 的 Claude provider
+未传 `--include-partial-messages`，只在完整 assistant 消息到达时追加 timeline 文本。这是当前的
+消息级更新行为，不足以判断 relay 丢失了增量帧，也没有验证 Codex/ACP 的未发布合帧代码。
+
+验证脚本在流式样本断言处提前失败，后续 relay socket close/error 断言未执行；测试 agent 又在读取
+timeline 前被归档，daemon 拒绝读取归档 agent 的 timeline，因此没有取得无重复和顺序证据。Cloudflare
+GraphQL 与 token verify 均返回鉴权失效，本轮没有流式前后的 DO 请求量对照。后续验收必须在归档前
+抓取 timeline 和 socket 结果，并先恢复 Cloudflare 鉴权。
+
+后续改用 v0.24.1 已能正常发现的 Pi，在相同生产 relay-only Chromium 链路发送 200 行回答：
+页面采到 18 次单调增长，首个样本 567 字符，最终 1,776 字符，增长窗口 2.154 秒；单条 relay
+socket 收到 99 帧，无 page error、socket error 或完成前关闭，agent 最终 idle。归档前抓取的
+timeline 只有 user/reasoning/assistant 三类行，assistant 文本与浏览器全文一致，没有重复；
+合并行的 source seq 从 1 到 44 连续无缺口。测试 workspace `wks_6844cee0809ac6bb` 和 agent
+`84acb4e9-337f-4fb4-8b59-ec57ab1c0f08` 已归档，截图和原始结果保存在
+`/tmp/byspace-pi-v0241-long-validation.{png,json}`。
+
+这证明生产 daemon、relay、timeline 和浏览器可见增长链路可用，但 v0.24.1 不包含当前分支的
+Codex/ACP 合帧代码；Cloudflare 鉴权失效仍阻止本轮请求量前后对照，本 issue 保持 open。
+
+### 2026-11-06 v0.24.1 发布补发
+
+Release Binaries 的 publish 首次因 GitHub API 500 失败，所有 build 已成功且 19 个资产已补齐；
+只重跑 failed job 后 attempt 3 全部通过。Release 正文与 changelog 一致，全部平台资产通过
+SHA256SUMS，容器描述符也通过独立 `.sha256` 校验，source 为发布提交，digest 与 GHCR
+`0.24.1`/`latest` 的 `44dd3fbb…` 一致。
+
+Deploy App 仍不能重试：tag 内只有 `v1/RelayRoom`，而生产已应用 `v2/RelayMeter`，日志已证实
+10074 migration 错误。保留当前 relay 代码和双 DO bindings，用 release tag 构建 Web/PWA 后补发，
+生产版本为 `398df464-e672-4e06-b637-143b341c518c`；线上 JS/CSS/manifest 与该 tag 的构建逐字节
+一致，bundle 版本为 `0.24.1`，Chromium 加载无 page error。Deploy App 的原始失败记录保留，实际
+生产发布由这次定向补发完成，没有修改 tag 或重复发版。
+
 ## 部署状态
 
-- `byspace-relay-go-beta`（`app-beta.byspace.cc.cd`）：**已部署**，版本
-  `9d4ae964-4422-47e3-9ec7-24824960564c`
-- `byspace-relay-go`（生产）：**未部署**，等 beta 复验通过再推
+- `byspace-relay-go-beta`（`app-beta.byspace.cc.cd`）：旧版本
+  `9d4ae964-4422-47e3-9ec7-24824960564c`，本次按用户决定未发布 beta
+- `byspace-relay-go`（生产）：**已部署**，版本
+  `9ea1d647-f7a8-48ec-854a-6d26b79ea1e7`，真实 relay 路由、关闭握手、浏览器连接与毫秒级
+  计量已通过；v0.24.1 Pi 真实流式与 timeline 顺序通过，Cloudflare 请求量对照仍未完成
 
 ## 沉淀去向
 

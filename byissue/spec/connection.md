@@ -15,6 +15,12 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
 - **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
 
+## Relay 会话生命周期
+
+- daemon 的 `server-control` 连接与 ping 常驻，保留 remote client 的接入口；这不代表业务数据正在上传。每个 remote client 对应独立的 server-data socket，零 remote client 时没有 data socket，最后一个 client 离开后 relay 关闭对应 socket，后续 agent、terminal 与 workspace 业务帧不再进入 relay。
+- 离线期间不缓存并重放所有 delta。remote 重连后从现有快照、agent timeline seq/cursor 与 terminal backlog 恢复；本地和 LAN 客户端不依赖 relay 生命周期。
+- 不按 App 页面 presence 设置全局发送开关。daemon 发起的 tunnel 也是 relay client，没有 App 页面时仍需转发；发送边界是每个 remote client 的 data socket。请求计量约束见 [notes/018](../notes/018-durable-object-billing-and-hibernation.md)。
+
 ## Daemon 隧道（远端端口的本地转发）
 
 - **形态**：本机 daemon（D1）以配对客户端身份经 relay 连远端 daemon（D2，E2EE + bearer 密码双因子），把 D2 白名单端口的 TCP 服务呈现为本机 `127.0.0.1:<动态端口>`；每个本地 TCP 流独立隧道。与 workspace/agent 零耦合，裸 daemon 可用。

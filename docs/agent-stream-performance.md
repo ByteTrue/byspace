@@ -7,7 +7,7 @@ For terminal output, which is a separate pipeline with separate budgets, see [te
 ## The pipeline
 
 ```
-provider deltas (every provider streams incrementally)
+provider deltas
   → AgentStreamCoalescer (daemon, leading + trailing, ≤1 message per 60ms per agent)
   → recordTimeline: one canonical row per flushed item
   → agent_stream ws message
@@ -16,7 +16,7 @@ provider deltas (every provider streams incrementally)
 ```
 
 The Go daemon implements the coalescer as `sdk.StreamFrames` (`internal/agent/sdk/stream_frames.go`),
-used by the pi session, and it is not only a smoothness knob: over the relay every websocket frame
+used by the Pi, Codex, and ACP sessions, and it is not only a smoothness knob: over the relay every websocket frame
 is one billed Durable Object request, and the free plan allows 100,000 per day. Measured on pi 1.4,
 a 200-word answer arrives as ~1,230 deltas (245 text, 985 thinking) at ~140/s, so forwarding each
 delta costs a normal session millions of requests. Node always merged them; the Go port did not,
@@ -29,7 +29,7 @@ first Go port merged in the server, after the session had numbered every delta, 
 frame skipped seqs and every client refetched the timeline once per frame. `TestStreamFramesAreCoalesced`
 checks the frame budget and that the seqs are contiguous.
 
-Every provider delivers incremental text, so there is no provider that needs special handling: Claude via `includePartialMessages`, Codex via `agent_message_delta`, ACP agents via `agent_message_chunk`, Pi and OMP via `text_delta`.
+Pi and OMP emit `text_delta`; Codex emits `agent_message_delta`; ACP agents, including Copilot and OpenCode's stdio fallback, emit `agent_message_chunk`. These sessions share `StreamFrames`. Claude currently emits message-level timeline updates, and OpenCode's default HTTP path posts a prompt and stores the final response, so neither has this per-token fan-out. A pending streamed row takes its seq when its frame is broadcast, not when it is appended; EOF, turn completion, and prompt insertion flush the preceding tail before later lifecycle events.
 
 ## Why the reveal is paced
 
