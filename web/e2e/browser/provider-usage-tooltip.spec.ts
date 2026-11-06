@@ -3,10 +3,10 @@ import { expectComposerVisible } from "../support/helpers/composer";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 import { installProviderUsageFixture } from "../support/helpers/provider-usage";
 
-const MOBILE_VIEWPORT = { width: 390, height: 844 };
+const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 
 async function openMockAgent(page: Page) {
-  await page.setViewportSize(MOBILE_VIEWPORT);
+  await page.setViewportSize(DESKTOP_VIEWPORT);
   const session = await seedMockAgentWorkspace({
     repoPrefix: "provider-usage-tooltip-",
     title: "Provider usage tooltip e2e",
@@ -18,8 +18,8 @@ async function openMockAgent(page: Page) {
   return session;
 }
 
-test.describe("provider usage tooltip", () => {
-  test("fetches usage when the context tooltip opens and renders the active provider", async ({
+test.describe("provider usage information card", () => {
+  test("fetches usage when the context card opens and renders the active provider", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -63,7 +63,7 @@ test.describe("provider usage tooltip", () => {
     }
   });
 
-  test("refreshes usage again each time the tooltip is shown", async ({ page }) => {
+  test("refreshes usage again each time the card is shown", async ({ page }) => {
     test.setTimeout(180_000);
     const usageFixture = await installProviderUsageFixture(page, [
       {
@@ -100,7 +100,7 @@ test.describe("provider usage tooltip", () => {
       await expect(page.getByText("41%")).toBeVisible({ timeout: 10_000 });
 
       await page.mouse.move(0, 0);
-      await expect(page.getByText("Mock provider", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Mock provider", { exact: true })).not.toBeVisible();
 
       await meter.hover();
       await usageFixture.waitForRequestCount(2);

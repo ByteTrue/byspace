@@ -229,7 +229,8 @@ function ProjectHeaderRow({
             ) : null}
           </span>
         </InfoHoverCardTrigger>
-        <InfoHoverCardContent side="bottom" align="start">
+        {/* Keep the path hint out of a drag's pointer path through the workspace rows below. */}
+        <InfoHoverCardContent side="bottom" align="start" readOnly>
           <span className="flex flex-col" data-testid={`sidebar-project-path-${project.viewKey}`}>
             {pathLines.map((line) => (
               <span key={line.serverId} className="line-clamp-2 break-all">

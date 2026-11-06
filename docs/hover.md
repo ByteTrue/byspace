@@ -70,8 +70,13 @@ Content that renders in a portal cannot be inside the CSS hover group. The share
 it keeps the card open while the pointer is over the trigger or the card, and `closeDelay` covers
 the gap between them. `web/src/sidebar/workspace-hover-card.tsx` is the rich-content example. The
 shared policy is no delay to open, 100ms grace to close, and no opening on focus, so a row that
-keeps focus after a click does not hold its card open. Compact layouts do not show the card;
-information and actions they need must have a non-hover path.
+keeps focus after a click does not hold its card open. A mouse press closes the card before a drag
+can capture the pointer; unmounting its trigger also closes it, because a removed trigger cannot
+report the pointer leaving. Set `readOnly` on a read-only card that can cover another row: it
+disables hit testing on both the card and Radix's portal wrapper. Keep cards with copy buttons or
+other controls interactive. Compact layouts
+do not show the card or notify the caller that it opened; information and actions they need must
+have a non-hover path.
 
 ## Checklist
 

@@ -48,3 +48,10 @@ created: 2026-11-04
 - `npm run audit:browser -- --base http://127.0.0.1:8082`：12/12。`npm run audit -- --no-browser`：Go 测试、入站/出站字段对账、账本检查全部通过。typecheck、lint、format 通过。
 - 关闭结论：共享组件、内容选择规则和可达的完整应用场景均已验收，可以交付关闭。长期规则毕业到本 Epic spec 与 `docs/hover.md`；未覆盖的外部数据场景不另造验收结论。
 - 引用修复：旧全名检索 0 处，路径改名不影响其他文档。
+
+### 2026-11-06 PR #41 CI 回归修复
+
+- CI run `42179891758` 的第 4、11、13 分片失败后，读取日志与 sidebar drag trace，确认项目路径卡在 pointer capture 拖拽期间覆盖 workspace 行；完整应用还复现 Diff 路径卡遮挡相邻文件行，以及手机宽度下用量卡不可见却发起请求。
+- 共享组件现在在鼠标按下和 trigger detach 时关闭卡片，且不取消原控件的 press/drag；compact 不向调用方报告打开。`readOnly` 只读卡及 Radix Popper wrapper 不参与命中测试，卡片文字和链接保留命中能力；workspace 复制按钮等交互卡不使用该选项。
+- `web/src/components/info-hover-card.browser.test.tsx` 加载完整应用 CSS，6 项通过：portal 空隙、wrapper 与相邻行命中、真实 CDP pointer capture drag、press 不取消、trigger 卸载、compact。打开态断言排除 Radix 关闭动画节点。
+- `changes-pane-comparison.spec.ts`、`provider-usage-tooltip.spec.ts`、`sidebar-reorder.spec.ts` 共 9 项通过，其中用量卡改为桌面视口并验证关闭后的不可见状态。web 生产构建、全仓 typecheck、lint、format check 通过。

@@ -320,7 +320,13 @@ export const FileHeader = memo(function FileHeader({
       <ContextMenu>
         <InfoHoverCard>
           <InfoHoverCardTrigger>{trigger}</InfoHoverCardTrigger>
-          <InfoHoverCardContent side="bottom" align="start" className="w-[360px] max-w-[80vw]">
+          <InfoHoverCardContent
+            side="bottom"
+            align="start"
+            readOnly
+            className="w-[360px] max-w-[80vw]"
+          >
+            {/* A read-only path hint must never cover a neighboring file row. */}
             <span className="break-all">{file.path}</span>
           </InfoHoverCardContent>
         </InfoHoverCard>

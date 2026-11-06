@@ -185,6 +185,13 @@
   html {
     @apply font-sans;
   }
+  /* Read-only hover cards pass through their backdrop without disabling text selection. */
+  [data-radix-popper-content-wrapper]:has(> [data-info-hover-card-read-only]) {
+    pointer-events: none;
+  }
+  [data-info-hover-card-read-only] :is(span, p, a) {
+    pointer-events: auto;
+  }
   /* BySpace: the app fills the window. */
   html,
   body,
