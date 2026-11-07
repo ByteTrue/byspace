@@ -258,6 +258,28 @@ func (d *DaemonSupervisor) TakeOver() DaemonHostStatus {
 	return d.Status()
 }
 
+// daemonCloseDeadline bounds the in-process daemon shutdown. Both callers run on paths that must
+// not stall: OnShutdown runs on the main UI thread, and the relaunch path exits the process right
+// after. A daemon that has not closed by then is abandoned; the OS reclaims the listener.
+const daemonCloseDeadline = 800 * time.Millisecond
+
+// closeDaemonBounded shuts sup down on a helper goroutine so a stalled WebSocket or agent teardown
+// never blocks the caller.
+func closeDaemonBounded(sup *DaemonSupervisor, deadline time.Duration) {
+	if sup == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = sup.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(deadline):
+	}
+}
+
 // BusyState reports whether the in-process daemon currently has any running agent turn or
 // pending permission request, and the last timestamp at which it was observed busy.
 func (d *DaemonSupervisor) BusyState() (busy bool, lastBusy time.Time) {

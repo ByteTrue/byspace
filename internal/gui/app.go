@@ -345,9 +345,6 @@ func Run(version string, showMain bool, initialLink string) error {
 			HomeDir: homeDir,
 			Version: version,
 		}
-		if err := sup.Start(); err != nil {
-			log.Printf("byspace gui: daemon supervisor warning: %v", err)
-		}
 		localToken := server.EnsureCLICredential(homeDir)
 		localHostname, _ := os.Hostname()
 		var uiHandler http.Handler = http.NotFoundHandler()
@@ -579,25 +576,23 @@ func Run(version string, showMain bool, initialLink string) error {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
-			// Close the in-process daemon with a bounded deadline so an open WebView2 socket on
-			// Windows never blocks shutdown indefinitely.
-			if sup != nil {
-				done := make(chan struct{})
-				go func() {
-					_ = sup.Close()
-					close(done)
-				}()
-				select {
-				case <-done:
-				case <-time.After(800 * time.Millisecond):
-				}
-			}
+			closeDaemonBounded(sup, daemonCloseDeadline)
 			updater.InstallStaged()
 		},
 		ErrorHandler: func(err error) {
 			log.Println("byspace gui:", err)
 		},
 	})
+
+	// The daemon starts only now, after application.New has settled single-instance handoff. When a
+	// second instance finds the lock held it hands over and calls os.Exit inside New, so a daemon
+	// bound before that would have taken over port and PID lock on its way out and left the machine
+	// with no daemon at all.
+	if sup != nil {
+		if err := sup.Start(); err != nil {
+			log.Printf("byspace gui: daemon supervisor warning: %v", err)
+		}
+	}
 
 	if !checkWebView2Runtime(app) {
 		return nil
@@ -658,25 +653,13 @@ func Run(version string, showMain bool, initialLink string) error {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
-			// Guarantee the old process exits promptly on Windows even if WebView2's window loop
-			// stalls during teardown, so the newly spawned process waiting in AwaitPredecessor
-			// takes over immediately without leaving a frozen window.
-			go func() {
-				if sup != nil {
-					_ = sup.Close()
-				}
-				os.Exit(0)
-			}()
-			application.InvokeAsync(func() {
-				if mainWin != nil {
-					releasedWin.Store(mainWin)
-					mainWin.Close()
-				}
-				app.Quit()
-			})
-			time.AfterFunc(1200*time.Millisecond, func() {
-				os.Exit(0)
-			})
+			closeDaemonBounded(sup, daemonCloseDeadline)
+			// Exit directly instead of tearing down through app.Quit. Wails closes a Windows window
+			// with a synchronous SendMessage(WM_CLOSE) whose handler hands the real close to the
+			// windowEvents goroutine, which then waits back on the main thread; the main thread wedged
+			// in user32 also stalls ExitProcess. A wedged old process keeps holding the single-instance
+			// mutex the relaunched process needs, so the update leaves a frozen window and no app.
+			os.Exit(0)
 		}
 
 		restartItem := menu.Add("Restart to update").SetHidden(true)

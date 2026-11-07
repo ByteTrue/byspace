@@ -35,7 +35,8 @@ type ClientUpdater struct {
 	IsIdle        func() bool
 	AutoRelaunch  func()
 
-	mu         sync.Mutex
+	mu         sync.Mutex // guards the fields below; never held across the binary swap
+	installMu  sync.Mutex // guards the staged->installed rename
 	state      string
 	lastCheck  time.Time
 	downloaded int64
@@ -319,29 +320,55 @@ func (u *ClientUpdater) AutoTick() {
 }
 
 // InstallStaged swaps a previously staged update into place without relaunching (called on shutdown).
+//
+// The rename runs under installMu, not mu: on Windows it retries with sleeps for up to 30s while
+// antivirus holds the running image, and mu is taken by Status on every desktop-settings read and
+// by Stop on the shutdown path. Holding mu across the swap turns that wait into a frozen client.
 func (u *ClientUpdater) InstallStaged() bool {
 	u.mu.Lock()
-	defer u.mu.Unlock()
-	if u.exe != "" && selfupdate.Replaced(u.exe, u.self) {
-		u.staged = ""
+	exe, bundle, staged, self := u.exe, u.bundle, u.staged, u.self
+	u.mu.Unlock()
+
+	if exe != "" && selfupdate.Replaced(exe, self) {
+		u.markInstalled(false)
 		return true
 	}
-	if u.staged == "" {
+	if staged == "" || (exe == "" && bundle == "") {
 		return false
 	}
+
+	u.installMu.Lock()
+	defer u.installMu.Unlock()
+
+	// A concurrent caller may have finished the swap while this one queued on installMu.
+	if selfupdate.Replaced(exe, self) {
+		u.markInstalled(false)
+		return true
+	}
+
 	var err error
-	if u.bundle != "" {
-		err = selfupdate.InstallApp(u.staged, u.bundle)
-	} else if u.exe != "" {
-		err = selfupdate.InstallBinary(u.staged, u.exe)
+	if bundle != "" {
+		err = selfupdate.InstallApp(staged, bundle)
+	} else {
+		err = selfupdate.InstallBinary(staged, exe)
 	}
 	if err != nil {
 		log.Printf("byspace update install failed: %v", err)
 		return false
 	}
-	u.staged = ""
-	u.state = ""
+	u.markInstalled(true)
 	return true
+}
+
+// markInstalled forgets the staged file. clearState also drops the reported update state, which
+// only makes sense once the running binary is the new one.
+func (u *ClientUpdater) markInstalled(clearState bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.staged = ""
+	if clearState {
+		u.state = ""
+	}
 }
 
 // InstallAndRelaunch swaps the staged update in and spawns the new version before the caller quits.
