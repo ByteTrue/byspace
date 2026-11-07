@@ -229,7 +229,13 @@ async function waitForServer(port: number, child: ChildProcess): Promise<void> {
   );
 }
 
-const RESTART_DAEMON_BINARY = path.resolve(import.meta.dirname, "../../../bin/byspace");
+// `make build` suffixes the headless binary on Windows: Node cannot spawn an extension-less PE
+// file, CreateProcess just appends `.exe` and reports ENOENT.
+const RESTART_DAEMON_BINARY = path.resolve(
+  import.meta.dirname,
+  "../../../bin",
+  process.platform === "win32" ? "byspace.exe" : "byspace",
+);
 
 function resolveRestartDaemonBinary(): string {
   if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;

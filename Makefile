@@ -22,6 +22,10 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 ifeq ($(OS),Windows_NT)
+  # Node's spawn goes through CreateProcess, which appends .exe to an extension-less name instead
+  # of running the file as-is, so a headless binary without the suffix cannot be launched by
+  # `npm run dev:daemon`, `npm run cli`, or the e2e restart spec.
+  BINARY := bin/byspace.exe
   APP_BINARY := bin/byspace-app.exe
 endif
 
