@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -586,8 +588,8 @@ func TestRelayTerminalStopsAfterLastClientWithoutStoppingLocal(t *testing.T) {
 	reconnected.close(t, ctx)
 }
 
-func TestRelayTunnelForwardsWithoutAnAppSession(t *testing.T) {
-	port, stop := startEchoPort(t)
+func TestRelayTunnelForwardsConcurrentStreams(t *testing.T) {
+	port, stop := startSSEPort(t)
 	defer stop()
 	srv, _, relayURL, ctx, cancel := startObservedDaemon(t, Options{})
 	defer cancel()
@@ -602,45 +604,97 @@ func TestRelayTunnelForwardsWithoutAnAppSession(t *testing.T) {
 
 	peer := newRelayTestClient(t, ctx, relayURL, srv, "tunnel-peer")
 	peer.hello(t, ctx, "daemon-tunnel-peer")
-	open, err := tunnel.EncodeFrame(tunnel.OpcodeOpen, "stream-1", tunnel.EncodeOpenPayload(port))
-	if err != nil {
-		t.Fatal(err)
+	for index := 0; index < 6; index++ {
+		streamID := fmt.Sprintf("stream-%d", index)
+		open, err := tunnel.EncodeFrame(tunnel.OpcodeOpen, streamID, tunnel.EncodeOpenPayload(port))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := peer.send(ctx, open, true); err != nil {
+			t.Fatal(err)
+		}
+		upstream, err := tunnel.EncodeFrame(tunnel.OpcodeDataUpstream, streamID, []byte(streamID+"\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := peer.send(ctx, upstream, true); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := peer.send(ctx, open, true); err != nil {
-		t.Fatal(err)
-	}
-	nextTunnelFrame := func() tunnel.Frame {
-		t.Helper()
-		for {
-			select {
-			case <-ctx.Done():
-				t.Fatalf("waiting for tunnel response: %v", ctx.Err())
-			case <-peer.done:
-				t.Fatalf("tunnel peer closed: %v", peer.err)
-			case frame := <-peer.frames:
-				if frame.IsBinary {
-					if decoded, ok := tunnel.DecodeFrame(frame.Data); ok {
-						return decoded
-					}
+
+	responses := make(map[string]string)
+	closed := make(map[string]bool)
+	for len(closed) < 6 {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("only %d streams completed: %v", len(closed), ctx.Err())
+		case <-peer.done:
+			t.Fatalf("tunnel peer closed: %v", peer.err)
+		case frame := <-peer.frames:
+			if !frame.IsBinary {
+				continue
+			}
+			decoded, ok := tunnel.DecodeFrame(frame.Data)
+			if !ok {
+				continue
+			}
+			switch decoded.Opcode {
+			case tunnel.OpcodeOpenAck:
+				allowed, reason, valid := tunnel.DecodeOpenAck(decoded.Payload)
+				if !valid || !allowed {
+					t.Fatalf("tunnel open failed: %s", reason)
 				}
+			case tunnel.OpcodeDataDownstream:
+				responses[decoded.TunnelID] += string(decoded.Payload)
+			case tunnel.OpcodeClose:
+				if !strings.HasSuffix(responses[decoded.TunnelID], "data: [DONE]\n\n") {
+					t.Fatalf("%s closed before its complete response", decoded.TunnelID)
+				}
+				closed[decoded.TunnelID] = true
 			}
 		}
 	}
-	ack := nextTunnelFrame()
-	allowed, reason, ok := tunnel.DecodeOpenAck(ack.Payload)
-	if ack.Opcode != tunnel.OpcodeOpenAck || !ok || !allowed {
-		t.Fatalf("tunnel open failed: frame=%+v reason=%q", ack, reason)
+	for index := 0; index < 6; index++ {
+		streamID := fmt.Sprintf("stream-%d", index)
+		var expected strings.Builder
+		for chunk := 0; chunk < 250; chunk++ {
+			fmt.Fprintf(&expected, "data: {\"stream\":%q,\"chunk\":%d}\n\n", streamID, chunk)
+		}
+		expected.WriteString("data: [DONE]\n\n")
+		if responses[streamID] != expected.String() {
+			t.Fatalf("%s response is truncated or mixed with another stream", streamID)
+		}
 	}
-	upstream, err := tunnel.EncodeFrame(tunnel.OpcodeDataUpstream, "stream-1", []byte("through-relay"))
+	peer.close(t, ctx)
+}
+
+func startSSEPort(t *testing.T) (int, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := peer.send(ctx, upstream, true); err != nil {
-		t.Fatal(err)
-	}
-	downstream := nextTunnelFrame()
-	if downstream.Opcode != tunnel.OpcodeDataDownstream || string(downstream.Payload) != "through-relay" {
-		t.Fatalf("unexpected tunnel downstream frame: %+v", downstream)
-	}
-	peer.close(t, ctx)
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				streamID, err := bufio.NewReader(conn).ReadString('\n')
+				if err != nil {
+					return
+				}
+				streamID = strings.TrimSpace(streamID)
+				for chunk := 0; chunk < 250; chunk++ {
+					if _, err := fmt.Fprintf(conn, "data: {\"stream\":%q,\"chunk\":%d}\n\n", streamID, chunk); err != nil {
+						return
+					}
+				}
+				_, _ = fmt.Fprint(conn, "data: [DONE]\n\n")
+			}()
+		}
+	}()
+	return listener.Addr().(*net.TCPAddr).Port, func() { _ = listener.Close() }
 }

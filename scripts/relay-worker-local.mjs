@@ -11,9 +11,10 @@ import { fileURLToPath } from "node:url";
 // contacts a deployed hostname, or opens a real agent/session.
 const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), "..");
 let mode = process.argv.includes("--live-budget") ? "live" : "default";
-const DAILY_BUDGETS = { default: 12, live: 4, budget: 8, close: 12 };
+const DAILY_BUDGETS = { default: 12, live: 4, budget: 8, close: 12, concurrent: 1_000_000 };
 if (process.argv.includes("--budget")) mode = "budget";
 if (process.argv.includes("--close")) mode = "close";
+if (process.argv.includes("--concurrent")) mode = "concurrent";
 const DAILY_BUDGET = DAILY_BUDGETS[mode];
 const port = await freePort();
 const stateDirectory = mkdtempSync(`${tmpdir()}/byspace-relay-local-`);
@@ -28,6 +29,7 @@ const wrangler = spawn(
     `--persist-to=${stateDirectory}`,
     "--ip=127.0.0.1",
     `--port=${port}`,
+    "--log-level=log",
     "--config=workers/relay/wrangler.jsonc",
     `--var=RELAY_DAILY_REQUEST_BUDGET:${DAILY_BUDGET}`,
   ],
@@ -50,6 +52,7 @@ try {
   if (mode === "budget") await testSharedBudget();
   else if (mode === "live") await testLiveBudget();
   else if (mode === "close") await testClose();
+  else if (mode === "concurrent") await testConcurrentStreams();
   else await testRouting();
 } catch (error) {
   console.error(workerLog.slice(-8000));
@@ -85,6 +88,17 @@ async function waitForWorker() {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`local Worker did not become ready\n${workerLog}`);
+}
+
+async function workerWarnings() {
+  // Local workerd exposes DO console logs through its observability API rather than Wrangler's stdout.
+  const response = await fetch(`${origin}/cdn-cgi/local/explorer/api/local/observability/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql: "SELECT message FROM logs" }),
+  });
+  assert.equal(response.status, 200);
+  return response.text();
 }
 
 function connect(serverId, role, connectionId) {
@@ -131,34 +145,6 @@ function connect(serverId, role, connectionId) {
   return { socket, opened, next, closed };
 }
 
-async function rawUpgrade(serverId) {
-  // Node's fetch owns forbidden Upgrade headers, so this is a raw HTTP request.
-  // A WebSocket client reports an HTTP rejection only as the generic code 1006.
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(port, "127.0.0.1");
-    let response = "";
-    const timeout = setTimeout(() => {
-      socket.destroy();
-      reject(new Error("raw upgrade timed out"));
-    }, 10_000);
-    socket.on("connect", () =>
-      socket.end(
-        `GET /ws?serverId=${serverId}&role=server&v=2 HTTP/1.1\r\n` +
-          `Host: 127.0.0.1:${port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n` +
-          `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`,
-      ),
-    );
-    socket.on("data", (data) => {
-      response += data;
-    });
-    socket.on("end", () => {
-      clearTimeout(timeout);
-      resolve(response);
-    });
-    socket.on("error", reject);
-  });
-}
-
 async function testRouting() {
   const control = connect("local-routing-proof", "server");
   await control.opened;
@@ -180,32 +166,24 @@ async function testRouting() {
   daemon.socket.send(opaque);
   assert.equal(await client.next(), opaque);
 
-  // Three handshakes and three forwarded messages fill twelve billable invocations.
+  // Crossing the observation threshold leaves both new handshakes and established traffic intact.
   const other = connect("another-room", "server");
-  await assert.rejects(other.opened);
-  const rejection = await rawUpgrade("another-room-raw");
-  assert.match(rejection, /^HTTP\/1\.1 429 /);
-  assert.match(rejection, /retry-after: 3600/i);
-  console.log("PASS routing, namespace-wide daily budget, and HTTP 429 handshake rejection");
+  await other.opened;
+  assert.equal(JSON.parse(await other.next()).type, "sync");
+  console.log("PASS routing and handshake availability after the observation threshold");
   for (const peer of [client, daemon, control]) peer.socket.close();
 }
 
 async function testSharedBudget() {
-  // Different server ids use different room objects, but one meter: four handshakes spend 8.
-  for (let index = 0; index < DAILY_BUDGET / 2; index++) {
+  // Different rooms share one observation counter, without disconnecting clients at the threshold.
+  for (let index = 0; index < DAILY_BUDGET / 2 + 1; index++) {
     const peer = connect(`local-shared-room-${index}`, "server");
     await peer.opened;
+    assert.equal(JSON.parse(await peer.next()).type, "sync");
     peer.socket.close();
   }
-  const rejected = connect("local-shared-room-overflow", "server");
-  await assert.rejects(rejected.opened);
-  const rejection = await rawUpgrade("local-shared-room-raw-overflow");
-  assert.match(rejection, /^HTTP\/1\.1 429 /);
-  assert.match(rejection, /relay daily request budget exhausted/);
-  assert.match(rejection, /retry-after: 3600/i);
-  console.log(
-    `PASS ${DAILY_BUDGET / 2 + 1} rooms share one ${DAILY_BUDGET}-request budget; excess handshake returns 429`,
-  );
+  assert.match(await workerWarnings(), /relay daily request observation threshold exceeded/);
+  console.log("PASS rooms share one observation counter without refusing excess handshakes");
 }
 
 async function closeResult(peer) {
@@ -322,22 +300,43 @@ async function rawSocket(serverId, role, connectionId) {
   };
 }
 
-// Two handshakes + one rejected message is six billable invocations against a four-request budget.
+async function testConcurrentStreams() {
+  const streams = Array.from({ length: 6 }, (_, index) => ({
+    id: `stream-${index}`,
+    client: connect("local-concurrent-streams", "client", `stream-${index}`),
+    daemon: connect("local-concurrent-streams", "server", `stream-${index}`),
+  }));
+  await Promise.all(streams.flatMap(({ client, daemon }) => [client.opened, daemon.opened]));
+  const expected =
+    Array.from({ length: 250 }, (_, index) => `data: ${index}\n\n`).join("") + "data: [DONE]\n\n";
+
+  await Promise.all(
+    streams.map(async ({ client, daemon }) => {
+      const received = (async () => {
+        let body = "";
+        while (!body.endsWith("data: [DONE]\n\n")) body += await client.next();
+        return body;
+      })();
+      for (const chunk of expected.match(/data: .*\n\n/g)) daemon.socket.send(chunk);
+      assert.equal(await received, expected, "each response must arrive intact and unmixed");
+    }),
+  );
+  console.log("PASS six concurrent opaque streaming responses arrive intact and unmixed");
+  for (const { client, daemon } of streams) {
+    client.socket.close();
+    daemon.socket.close();
+  }
+}
+
+// Crossing the daily observation threshold must not cut a live response.
 async function testLiveBudget() {
   const daemon = connect("local-live-budget", "server", "local-one");
   await daemon.opened;
   const client = connect("local-live-budget", "client", "local-one");
   await client.opened;
-  client.socket.send("must-not-route");
-  const close = await Promise.race([
-    client.closed,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("live budget close timed out")), 10_000),
-    ),
-  ]);
-  assert.equal(close.code, 1013);
-  assert.match(close.reason, /daily request budget exhausted/);
-  await assert.rejects(daemon.next(), /relay message timed out/);
-  console.log("PASS over-budget live message is not forwarded and closes its socket with 1013");
+  client.socket.send("must-still-route");
+  assert.equal(await daemon.next(), "must-still-route");
+  assert.match(await workerWarnings(), /relay daily request observation threshold exceeded/);
+  console.log("PASS live message forwarding continues after the observation threshold");
   daemon.socket.close();
 }

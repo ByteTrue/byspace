@@ -1,8 +1,11 @@
 package tunnel
 
 import (
+	"fmt"
 	"io"
 	"net"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -149,6 +152,53 @@ func TestPeerReplacementTearsDownStreams(t *testing.T) {
 	buf := make([]byte, 1)
 	if _, readErr := conn.Read(buf); readErr == nil {
 		t.Fatal("the old stream should have been closed")
+	}
+}
+
+func TestStreamCloseLogIdentifiesFramesAndReason(t *testing.T) {
+	var logs strings.Builder
+	closed := make(chan struct{})
+	var closeOnce sync.Once
+	m := NewManager("peer-log", "", func(format string, args ...any) {
+		fmt.Fprintf(&logs, format+"\n", args...)
+		if strings.Contains(format, "closed: up=") {
+			closeOnce.Do(func() { close(closed) })
+		}
+	})
+	defer func() { _ = m.Close() }()
+	_, err := m.AddForward(3002, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, far := Pipe(16)
+	stop := make(chan struct{})
+	defer close(stop)
+	echoPeer(far, stop)
+	m.SetPeer(peer)
+	localPort, _ := m.LocalPort(3002)
+	conn, err := net.Dial("tcp", "127.0.0.1:"+itoa(localPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, 4)
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := io.ReadFull(conn, response); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream close was not logged")
+	}
+	if !strings.Contains(logs.String(), "tunnel peer-log stream t1 closed: up=1 down=1 reason=upstream finished") {
+		t.Fatalf("missing stream lifecycle log: %q", logs.String())
 	}
 }
 

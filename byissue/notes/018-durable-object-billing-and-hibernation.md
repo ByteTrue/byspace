@@ -140,29 +140,33 @@ tool_call 按 callId 就地覆盖）。
 ### 2026-11-05：跨 room 的预算与再次复现
 
 只给每个 `RelayRoom` 设每日上限没有用：v1/v2 和不同 `serverId` 会路由到不同 room，
-总量仍能超过账户额度。Worker 现在有一个名为 `global` 的 `RelayMeter`：
+总量仍能超过账户额度。Worker 有一个名为 `global` 的 `RelayMeter`：
 
 - 握手在外层 Worker 进入 room 之前计费；正常消息在 room 中计费。每次检查记 **2 次 DO 请求**：
-  外层/room 触发一次，meter 调用一次。被拒绝的调用也已经计费，不能忽略 meter 自身的成本。
-- 默认每个 Worker namespace 每 UTC 日 80,000 次；`RELAY_DAILY_REQUEST_BUDGET` 可以调整。
+  外层/room 触发一次，meter 调用一次。计量调用自身也计费。
+- 默认每个 Worker namespace 每 UTC 日 80,000 次；`RELAY_DAILY_REQUEST_BUDGET` 调整**告警阈值**。
   生产与 beta 是不同 namespace，其他 DO 消费者不在这个计数器内；**这不是账户级硬限额**。
-- 超限握手返回 HTTP 429 + `Retry-After`，在线 socket 返回 1013。每条消息另有持久化 token bucket，
-  防止 hibernation 重置速率。先查单连接速率再调用全局 meter，滥用连接先关闭自己，不拖住整个 room；
-  正常消息仍计 2 次 DO 请求。应用预算无法阻止恶意客户端继续产生已计费的拒绝请求。
+- **2026-11-07 起只计量与告警，不拒绝流量。** 40 FPS / 120 burst 的持久化 token bucket 曾把
+  6 路正常 Tunnel 流截断，日预算超限也曾以 1013 关闭在线 socket。两者均已移除；超阈值或 meter
+  不可用只发 Worker warning，握手和在线消息继续。不能改回静态 FPS 限制：Tunnel 的合法并发没有
+  可假定的固定上限，而 relay 断开会破坏 in-flight 响应。成本控制依靠 hibernation、daemon 合帧和
+  无 remote client 时关闭 data socket，不依靠截断业务。
 - Pi、Codex、ACP 在 provider 内先合帧再分配 seq；OpenCode 默认 HTTP 路径和 Claude 的消息级更新
   没有同样的逐 token relay fan-out。
 
 复现不需要 daemon、真实 agent 或生产 hostname：
 
 ```sh
-node scripts/relay-worker-local.mjs                 # 正常路由 + 超额握手 429
-node scripts/relay-worker-local.mjs --budget        # 多 serverId 共用同一个 meter
-node scripts/relay-worker-local.mjs --live-budget   # 在线数据消息不转发，并以 1013 关闭
+node scripts/relay-worker-local.mjs                 # 正常路由 + 超阈值握手仍可用
+node scripts/relay-worker-local.mjs --budget        # 多 serverId 共用 meter，超阈值只告警
+node scripts/relay-worker-local.mjs --live-budget   # 超阈值在线消息仍转发
+node scripts/relay-worker-local.mjs --concurrent    # 6 路并发流完整且不互相混入
 node scripts/relay-worker-local.mjs --close         # 主动关闭回送与对端 1001/1012 raw frame
 ```
 
 脚本每次用新的临时 `--persist-to` 目录启动 localhost workerd，结束后清理；不会复用上次测试的计数器。
-本地验证不替代真实浏览器配对与线上计量验收。
+DO 的 `console.warn` 通过本地 workerd observability API 读取，不在 Wrangler stdout；Go 日志参数只传
+字符串和数值，直接传 struct 会在 `syscall/js.ValueOf` panic。本地验证不替代真实浏览器配对与线上计量验收。
 
 生产已部署 `09f00ec8-1dee-4faf-998d-9d22c6bce217`。新增 DO class 时必须追加 migration：
 `v1` 只声明 `RelayRoom`，`v2` 再声明 `RelayMeter`。把新 class 补进已应用的 `v1` 会让版本上传

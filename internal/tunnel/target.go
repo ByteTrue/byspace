@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strconv"
 	"sync"
@@ -38,8 +39,11 @@ type Target struct {
 
 // targetStream is one forwarded connection on the target side.
 type targetStream struct {
-	id   string
-	conn net.Conn
+	id          string
+	conn        net.Conn
+	framesUp    atomic.Uint64
+	framesDown  atomic.Uint64
+	closeReason atomic.Value // string
 }
 
 // OpenResult reports the outcome of an open request.
@@ -107,6 +111,7 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 	// stream is unreachable either way.
 	if existing, ok := t.streams[id]; ok {
 		_ = existing.conn.Close()
+		slog.Info("tunnel target stream replaced", "streamId", existing.id, "framesUp", existing.framesUp.Load(), "framesDown", existing.framesDown.Load())
 	}
 	t.streams[id] = stream
 	t.mu.Unlock()
@@ -172,10 +177,13 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	// This side previously listened for Downstream, the direction it sends — so each end ignored
 	// exactly what the other one produced and no byte ever crossed.
 	case OpcodeDataUpstream:
+		stream.framesUp.Add(1)
 		if _, err := stream.conn.Write(frame.Payload); err != nil {
+			stream.closeReason.Store("upstream write failed: " + err.Error())
 			t.closeStream(stream)
 		}
 	case OpcodeClose:
+		stream.closeReason.Store("peer closed")
 		t.closeStream(stream)
 	}
 }
@@ -187,12 +195,14 @@ func (t *Target) pumpDownstream(stream *targetStream, send func(Frame) error) {
 		n, err := stream.conn.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
+			stream.framesDown.Add(1)
 			if sendErr := send(Frame{
 				// Downstream: bytes read from the dialled service travelling back to the initiator.
 				Opcode:   OpcodeDataDownstream,
 				TunnelID: stream.id,
 				Payload:  chunk,
 			}); sendErr != nil {
+				stream.closeReason.Store("downstream send failed: " + sendErr.Error())
 				t.closeStream(stream)
 				return
 			}
@@ -202,6 +212,7 @@ func (t *Target) pumpDownstream(stream *targetStream, send func(Frame) error) {
 			if errors.Is(err, io.EOF) {
 				_ = send(Frame{Opcode: OpcodeClose, TunnelID: stream.id})
 			}
+			stream.closeReason.Store(err.Error())
 			t.closeStream(stream)
 			return
 		}
@@ -218,6 +229,8 @@ func (t *Target) closeStream(stream *targetStream) {
 	delete(t.streams, stream.id)
 	t.mu.Unlock()
 	_ = stream.conn.Close()
+	reason, _ := stream.closeReason.Load().(string)
+	slog.Info("tunnel target stream closed", "streamId", stream.id, "framesUp", stream.framesUp.Load(), "framesDown", stream.framesDown.Load(), "reason", reason)
 }
 
 // Close tears down every forwarded connection.
@@ -231,6 +244,7 @@ func (t *Target) Close() {
 	t.streams = make(map[string]*targetStream)
 	t.mu.Unlock()
 	for _, s := range streams {
+		s.closeReason.Store("target closed")
 		_ = s.conn.Close()
 	}
 }

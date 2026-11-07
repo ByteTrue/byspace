@@ -25,6 +25,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -140,25 +141,12 @@ func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn,
 		kind = relay.MessageBinary
 	}
 	peer := &wsPeer{conn: socket, connectionID: conn.ConnectionID()}
-	// The cheap local bucket runs first: an abusive socket stops itself instead of blocking a
-	// whole room on the shared meter. Allowed traffic still pays for both meter and room requests.
-	rate, err := r.takeRate(relay.BudgetConnectionKey(conn))
-	if err != nil {
-		peer.Close(relay.StatusTryAgainLater, "relay rate state unavailable")
-		return nil
-	}
-	if !rate.Allow {
-		peer.Close(relay.StatusTryAgainLater, rate.Reason)
-		return nil
-	}
+	// Metering never gates forwarding: closing a valid socket cuts in-flight streams in half.
 	decision, err := takeDailyBudget()
 	if err != nil {
-		peer.Close(relay.StatusTryAgainLater, "relay budget unavailable")
-		return nil
-	}
-	if !decision.Allow {
-		peer.Close(relay.StatusTryAgainLater, decision.Reason)
-		return nil
+		js.Global().Get("console").Call("warn", "relay meter unavailable; forwarding without a count: "+err.Error())
+	} else if decision.Reason != "" {
+		js.Global().Get("console").Call("warn", decision.Reason, decision.State.Requests)
 	}
 	relay.Router{}.Message(context.Background(), &roomView{room: r}, r.frames, peer, conn, kind, data)
 	return nil
@@ -176,35 +164,7 @@ func (r *room) WebSocketClose(_ context.Context, socket *cfws.HibernatingConn, c
 	}
 	view := &roomView{room: r, closing: socket.JSValue()}
 	relay.Router{}.Disconnected(context.Background(), view, r.frames, conn)
-	_, err := r.releaseRate(relay.BudgetConnectionKey(conn))
-	return err
-}
-
-// takeRate serializes read/modify/write through the room's storage transaction. The token bucket
-// survives eviction; it cannot be an in-memory field on room.
-func (r *room) takeRate(connectionKey string) (relay.RateDecision, error) {
-	var decision relay.RateDecision
-	_, err := r.state.Storage().Transaction(func(tx *durableobjects.DurableObjectTransaction) (js.Value, error) {
-		var state relay.RateState
-		if err := readBudgetJSON(tx, "relay-rate-v1", &state); err != nil {
-			return js.Undefined(), err
-		}
-		decision = state.TakeFrame(time.Now(), connectionKey, relay.DefaultBudgetLimits)
-		return js.Undefined(), writeBudgetJSON(tx, "relay-rate-v1", decision.State)
-	})
-	return decision, err
-}
-
-func (r *room) releaseRate(connectionKey string) (relay.RateState, error) {
-	var state relay.RateState
-	_, err := r.state.Storage().Transaction(func(tx *durableobjects.DurableObjectTransaction) (js.Value, error) {
-		if err := readBudgetJSON(tx, "relay-rate-v1", &state); err != nil {
-			return js.Undefined(), err
-		}
-		state = state.ReleaseConnection(connectionKey)
-		return js.Undefined(), writeBudgetJSON(tx, "relay-rate-v1", state)
-	})
-	return state, err
+	return nil
 }
 
 // meter is the single counter shared by every relay room in this Worker namespace. A request to it
@@ -232,9 +192,6 @@ func (m *meter) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if !decision.Allow {
-		w.WriteHeader(http.StatusTooManyRequests)
-	}
 	_ = json.NewEncoder(w).Encode(decision)
 }
 
@@ -261,7 +218,7 @@ func takeDailyBudget() (relay.MeterDecision, error) {
 		return relay.MeterDecision{}, err
 	}
 	if res.StatusCode != http.StatusOK {
-		decision.Allow = false
+		return relay.MeterDecision{}, fmt.Errorf("meter returned HTTP %d", res.StatusCode)
 	}
 	return decision, nil
 }
@@ -393,13 +350,9 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 
 	decision, err := takeDailyBudget()
 	if err != nil {
-		http.Error(w, "relay budget unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	if !decision.Allow {
-		w.Header().Set("Retry-After", "3600")
-		http.Error(w, decision.Reason, http.StatusTooManyRequests)
-		return
+		js.Global().Get("console").Call("warn", "relay meter unavailable; accepting an uncounted handshake: "+err.Error())
+	} else if decision.Reason != "" {
+		js.Global().Get("console").Call("warn", decision.Reason, decision.State.Requests)
 	}
 
 	ns, err := cloudflare.NewDurableObjectNamespace("RELAY")

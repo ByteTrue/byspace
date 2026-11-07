@@ -36,6 +36,8 @@ type stream struct {
 	// upstreamDone records that the local side finished sending, so the read pump should not
 	// treat the resulting EOF as a failure.
 	upstreamDone atomic.Bool
+	framesUp     atomic.Uint64
+	framesDown   atomic.Uint64
 	// opened receives the target's answer to the open request. Buffered so the reader never blocks
 	// on a stream nobody is waiting for any more.
 	opened chan openResult
@@ -353,6 +355,7 @@ func (m *Manager) pumpLocalToPeer(peer PeerConn, f *forward, s *stream) {
 		n, err := s.conn.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
+			s.framesUp.Add(1)
 			if sendErr := peer.Send(Frame{
 				Opcode:   OpcodeDataUpstream,
 				TunnelID: s.id,
@@ -418,6 +421,7 @@ func (m *Manager) handleFrame(frame Frame) {
 		}
 		target.settleOpen(openResult{allowed: allowed, reason: reason})
 	case OpcodeDataDownstream:
+		target.framesDown.Add(1)
 		if _, err := target.conn.Write(frame.Payload); err != nil {
 			m.dropStream(owner, target, err.Error())
 		}
@@ -439,7 +443,14 @@ func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 	m.mu.Unlock()
 
 	_ = s.conn.Close()
-	if reason != "" && !s.upstreamDone.Load() {
+	if reason == "" {
+		reason = "peer closed"
+		if s.upstreamDone.Load() {
+			reason = "upstream finished"
+		}
+	}
+	m.logf("tunnel %s stream %s closed: up=%d down=%d reason=%s", m.peerID, s.id, s.framesUp.Load(), s.framesDown.Load(), reason)
+	if reason != "peer closed" && reason != "upstream finished" && !s.upstreamDone.Load() {
 		m.setError(f, reason)
 	}
 }
