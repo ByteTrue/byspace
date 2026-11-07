@@ -113,7 +113,7 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 ## Critical rules
 
 - **NEVER restart the BySpace daemon on port 6777 without permission** — it manages running agents. If you're an agent, restarting it can kill your own process.
-- **Never start a BySpace daemon to reproduce or isolate something.** `byspace daemon start --home <tmp> --port <n>` is not isolated — it ends up binding 6777 and crash-loops the real supervisor. Use the in-process harness in [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) or a Vitest run.
+- **Never start a BySpace daemon to reproduce or isolate something.** `byspace daemon start --home <tmp> --port <n>` is not isolated — it ends up binding 6777 and crash-loops the real supervisor. Use the in-process harness in [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) or a Vitest run. This is not a ban on running a real daemon: `npm run dev:daemon` binds `127.0.0.1:6778` against `.dev/byspace-home`, so it is isolated by construction, and it is the way to get end-to-end proof of daemon or provider behavior (`npm run cli -- run/logs/ls` drives it).
 - **Execute large multi-package removal/refactor batches in the main session, not a subagent.** Hand this kind of batch to a child session and it drifts; follow the batch step by step, verifying incrementally. Spawn subagents only when asked.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
