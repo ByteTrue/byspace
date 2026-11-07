@@ -25,6 +25,8 @@ type: ff
 
 无影响。
 
+提交停在本地 `main`（`2f928e5f3`），未 push；生产桌面 App 不因此改动。
+
 ## 顺手发现
 
 `bin/byspace-app`（无扩展名）是 `df5d3a3d1 fix(windows): …` 给 `APP_BINARY` 补后缀之前的产物，已删。`make clean` 不加两个旧名字：Windows 上没有任何 target 再写它们，`/bin/` 本身也在 `.gitignore` 里，只是每台 Windows 机器一次性残留。

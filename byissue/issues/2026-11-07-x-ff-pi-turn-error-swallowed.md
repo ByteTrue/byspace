@@ -21,6 +21,7 @@ type: ff
 - 单测用的是本机真实会话里的原文：`~/.pi/agent/sessions/--C--Users-byte-.byspace-chief--/2026-11-07T11-08-05-511Z_*.jsonl` 两条 `stopReason: "error"` 消息。
 - daemon 侧 `turn_failed` → `[System Error]` 行与状态转换由既有 `internal/server/stream_conformance_test.go`、`turn_failed_notice_test.go` 覆盖，本次未改。
 - 未重启生产 daemon；界面生效需要重新构建并发布桌面 App。
+- 提交停在本地 `main`（`4677af4e1`），未 push；按用户决定等下次发布一起走。
 
 ## 对 byissue/ 的影响
 
