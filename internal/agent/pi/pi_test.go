@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 func TestBuildLaunchArgs(t *testing.T) {
@@ -284,6 +286,116 @@ done
 	}
 	if !strings.Contains(text, `"type":"image"`) || !strings.Contains(text, b64) || !strings.Contains(text, `"mimeType":"image/png"`) {
 		t.Fatalf("image block was not forwarded to pi prompt: %s", text)
+	}
+}
+
+// newEventSession is a Session with no child process, for tests that feed pi's runtime events
+// straight into handleRawEvent.
+func newEventSession(t *testing.T) (*Session, *[]map[string]any) {
+	t.Helper()
+	s := &Session{
+		status:             "idle",
+		activeTextIdx:      -1,
+		activeThinkIdx:     -1,
+		toolIndexByID:      map[string]int{},
+		toolArgsByID:       map[string]any{},
+		pendingPermissions: map[string]map[string]any{},
+		subagents:          map[string]SubagentDescriptor{},
+		commandWaiters:     map[string]chan commandResult{},
+		eventSubscribers:   map[int]func(map[string]any){},
+	}
+	s.frames = sdk.NewStreamFrames(func() {})
+	var got []map[string]any
+	s.OnEvent(func(ev map[string]any) { got = append(got, ev) })
+	return s, &got
+}
+
+func eventTypes(got []map[string]any) []string {
+	out := make([]string, 0, len(got))
+	for _, ev := range got {
+		if typ, _ := ev["type"].(string); strings.HasPrefix(typ, "byspace_turn") {
+			out = append(out, typ)
+		}
+	}
+	return out
+}
+
+// A failed model call is not an error pi reports: it ends the turn with an empty assistant message
+// carrying stopReason "error" and the provider's text in errorMessage. A host that only reads
+// content calls that a completed turn, and the client is left with a user message and nothing else.
+func TestModelFailureEndsTurnAsFailed(t *testing.T) {
+	s, got := newEventSession(t)
+	for _, ev := range []map[string]any{
+		{"type": "agent_start"},
+		{"type": "turn_start"},
+		{"type": "message_end", "message": map[string]any{
+			"role":         "assistant",
+			"content":      []any{},
+			"stopReason":   "error",
+			"errorMessage": "OpenCode Zen Free: Free usage limit reached (429: you can retry your request)",
+		}},
+		{"type": "agent_end", "willRetry": false},
+	} {
+		s.handleRawEvent(ev)
+	}
+
+	if want := []string{"byspace_turn_failed"}; !slices.Equal(eventTypes(*got), want) {
+		t.Fatalf("turn events = %v, want %v", eventTypes(*got), want)
+	}
+	for _, ev := range *got {
+		if ev["type"] == "byspace_turn_failed" && ev["error"] != "OpenCode Zen Free: Free usage limit reached (429: you can retry your request)" {
+			t.Fatalf("failed turn carries no provider message: %+v", ev)
+		}
+	}
+	if s.Status() != "idle" {
+		t.Fatalf("session must settle idle, got %s", s.Status())
+	}
+	if s.LastError() == "" {
+		t.Fatal("the failure must stay readable after the turn")
+	}
+}
+
+// A retried call that finally answers is a completed turn: the last assistant message decides, and
+// an earlier attempt's errorMessage must not leak into the outcome.
+func TestRetryThatSettlesCompletesTurn(t *testing.T) {
+	s, got := newEventSession(t)
+	for _, ev := range []map[string]any{
+		{"type": "agent_start"},
+		{"type": "message_end", "message": map[string]any{
+			"role": "assistant", "content": []any{}, "stopReason": "error", "errorMessage": "429",
+		}},
+		{"type": "agent_end", "willRetry": true},
+		{"type": "message_end", "message": map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "text", "text": "here you go"}},
+		}},
+		{"type": "agent_end", "willRetry": false},
+	} {
+		s.handleRawEvent(ev)
+	}
+
+	if want := []string{"byspace_turn_completed"}; !slices.Equal(eventTypes(*got), want) {
+		t.Fatalf("turn events = %v, want %v", eventTypes(*got), want)
+	}
+}
+
+// A turn the user stopped also arrives as an assistant message with errorMessage — "Operation
+// aborted". That is a cancellation, and reporting it as a failure would put a system-error row in
+// every transcript where somebody pressed stop.
+func TestAbortedTurnStillCompletes(t *testing.T) {
+	s, got := newEventSession(t)
+	for _, ev := range []map[string]any{
+		{"type": "agent_start"},
+		{"type": "message_end", "message": map[string]any{
+			"role": "assistant", "content": []any{}, "stopReason": "aborted", "errorMessage": "Operation aborted",
+		}},
+		{"type": "agent_end", "willRetry": false},
+	} {
+		s.handleRawEvent(ev)
+	}
+
+	if want := []string{"byspace_turn_completed"}; !slices.Equal(eventTypes(*got), want) {
+		t.Fatalf("turn events = %v, want %v", eventTypes(*got), want)
 	}
 }
 

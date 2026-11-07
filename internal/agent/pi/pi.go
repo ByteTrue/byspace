@@ -174,12 +174,14 @@ type Session struct {
 	activeMessageID     string
 	nextClientMessageID string
 	streamedInTurn      bool
-	timeline            []TimelineEntry
-	activeTextIdx       int
-	activeThinkIdx      int
-	toolIndexByID       map[string]int
-	toolArgsByID        map[string]any
-	pendingPermissions  map[string]map[string]any
+	// turnError is the failure carried by the last assistant message of the running turn, if any.
+	turnError          string
+	timeline           []TimelineEntry
+	activeTextIdx      int
+	activeThinkIdx     int
+	toolIndexByID      map[string]int
+	toolArgsByID       map[string]any
+	pendingPermissions map[string]map[string]any
 	// toolDetailBuilder is the provider's card builder; nil means the shared one.
 	toolDetailBuilder func(toolName string, args any, result any) map[string]any
 	subagents         map[string]SubagentDescriptor
@@ -247,6 +249,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 	switch evType {
 	case "agent_start", "turn_start":
 		s.status = "running"
+		s.turnError = ""
 		if s.activeTurnID == "" {
 			s.turnCounter++
 			s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -329,6 +332,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if msg, ok := ev["message"].(map[string]any); ok {
 			role, _ := msg["role"].(string)
 			if role == "assistant" {
+				s.turnError = assistantErrorMessage(msg)
 				if !s.streamedInTurn {
 					rawText := extractAssistantText(msg)
 					cleaned, _ := stripLeadingSectionTag(rawText)
@@ -493,6 +497,8 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		willRetry, _ := ev["willRetry"].(bool)
 		if !willRetry && s.status == "running" {
 			finishedTurnID := s.activeTurnID
+			failure := s.turnError
+			s.turnError = ""
 			s.status = "idle"
 			s.activeTurnID = ""
 			s.turnStartedAt = ""
@@ -500,6 +506,20 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.activeThinkIdx = -1
 			s.activeMessageID = ""
 			s.streamedInTurn = false
+			if failure != "" {
+				// A model call that failed is a turn that failed, not one that completed: the
+				// daemon turns this into `turn_failed`, a `[System Error]` row, and an "error" agent
+				// status. Reporting it as completed leaves the transcript with a user message and
+				// nothing else.
+				s.lastError = failure
+				s.notifyFinishLocked(errors.New(failure))
+				extraEvents = append(extraEvents, map[string]any{
+					"type":   "byspace_turn_failed",
+					"turnId": finishedTurnID,
+					"error":  failure,
+				})
+				break
+			}
 			s.notifyFinishLocked(nil)
 			extraEvents = append(extraEvents, map[string]any{
 				"type":   "byspace_turn_completed",
@@ -618,6 +638,21 @@ func extractAssistantText(msg map[string]any) string {
 		}
 	}
 	return strings.Join(parts, "")
+}
+
+// assistantErrorMessage reads the failure a model call left in its assistant message.
+//
+// pi does not report a failed model call as an error: it ends the turn with an empty assistant
+// message carrying stopReason "error" and the provider's text in errorMessage, so a host that only
+// reads content sees a turn that said nothing and succeeded. "aborted" is excluded — pi puts
+// "Operation aborted" in errorMessage too, and a stop the user pressed is a cancellation, not a
+// failure the transcript should show as one.
+func assistantErrorMessage(msg map[string]any) string {
+	if reason, _ := msg["stopReason"].(string); reason != "error" {
+		return ""
+	}
+	text, _ := msg["errorMessage"].(string)
+	return strings.TrimSpace(text)
 }
 
 func (s *Session) appendItemLocked(item TimelineItem) int {
