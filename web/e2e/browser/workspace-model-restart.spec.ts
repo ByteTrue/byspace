@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
@@ -9,6 +9,7 @@ import { buildHostWorkspaceRoute, decodeWorkspaceIdFromPathSegment } from "@/uti
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { metroTest as test } from "../support/fixtures";
 import { buildSeededHost } from "../support/helpers/daemon-registry";
+import { goDaemonBinary } from "../support/helpers/daemon-binary";
 import { loadDaemonClientConstructor } from "../support/helpers/daemon-client-loader";
 import {
   createNodeWebSocketFactory,
@@ -229,25 +230,6 @@ async function waitForServer(port: number, child: ChildProcess): Promise<void> {
   );
 }
 
-// `make build` suffixes the headless binary on Windows: Node cannot spawn an extension-less PE
-// file, CreateProcess just appends `.exe` and reports ENOENT.
-const RESTART_DAEMON_BINARY = path.resolve(
-  import.meta.dirname,
-  "../../../bin",
-  process.platform === "win32" ? "byspace.exe" : "byspace",
-);
-
-function resolveRestartDaemonBinary(): string {
-  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
-  if (!existsSync(RESTART_DAEMON_BINARY)) {
-    throw new Error(
-      `Go daemon binary not found at ${RESTART_DAEMON_BINARY}. Run \`make build\` first ` +
-        "(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).",
-    );
-  }
-  return RESTART_DAEMON_BINARY;
-}
-
 async function startRestartDaemon(input: {
   byspaceHome: string;
   origin: string;
@@ -260,7 +242,7 @@ async function startRestartDaemon(input: {
   // The daemon under test is the Go binary, like every other e2e fixture: the Node supervisor this
   // used to spawn lives in `archive/`, so the process could not start at all — and the failure looked
   // like a missing node binary rather than a retired fixture.
-  const child = spawn(resolveRestartDaemonBinary(), ["serve"], {
+  const child = spawn(goDaemonBinary(), ["serve"], {
     env: withDisabledE2ESpeechEnv({
       ...process.env,
       BYSPACE_HOME: input.byspaceHome,
