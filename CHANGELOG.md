@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.5 - 2026-11-08
+
+### Fixed
+
+- Fixed tunnel reconnects stalling while waiting for replay acknowledgement
+- Fixed replayed frames being duplicated or delivered out of order after relay socket loss
+- Fixed target stream locking that could interrupt concurrent tunnel responses
+
 ## 0.24.4 - 2026-11-08
 
 ### Fixed
