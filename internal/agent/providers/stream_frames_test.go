@@ -10,6 +10,26 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
+// frozenFrameClock stops the coalescing window from ever elapsing. Both coalescing tests below
+// assert what happens *before* the window ends, and the real clock made that racy: on a slow runner
+// the 600 deltas take longer than the 60ms window, the trailing timer fires, and "nothing flushed
+// yet" fails. This is what the frames' clock seam exists for.
+type frozenFrameClock struct{ now time.Time }
+
+func (c frozenFrameClock) Now() time.Time { return c.now }
+
+func (frozenFrameClock) AfterFunc(time.Duration, func()) sdk.StreamFrameTimer { return frozenTimer{} }
+
+type frozenTimer struct{}
+
+func (frozenTimer) Stop() bool { return false }
+
+// frozenFrames keeps the leading edge (the first delta still goes out at once, as in production)
+// and holds everything after it until an explicit flush.
+func frozenFrames(onTimer func()) *sdk.StreamFrames {
+	return sdk.NewStreamFramesWithClock(time.Hour, frozenFrameClock{now: time.Unix(0, 0)}, onTimer)
+}
+
 func timelineEvents(events []map[string]any) []map[string]any {
 	var out []map[string]any
 	for _, event := range events {
@@ -49,7 +69,7 @@ func assertStreamedText(t *testing.T, events []map[string]any, want string) {
 
 func TestCodexCoalescesDeltasBeforeNumbering(t *testing.T) {
 	s := &CodexSession{activeTextIdx: -1, activeThinkIdx: -1, eventSubscribers: map[int]func(map[string]any){}}
-	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
+	s.frames = frozenFrames(s.flushFramesOnTimer)
 	var events []map[string]any
 	s.OnEvent(func(event map[string]any) { events = append(events, event) })
 	// The server normally creates the user's row before the provider starts. The
@@ -74,7 +94,7 @@ func TestCodexCoalescesDeltasBeforeNumbering(t *testing.T) {
 
 func TestACPCoalescesDeltasBeforeNumbering(t *testing.T) {
 	s := &ACPSession{activeTextIdx: -1, activeThinkIdx: -1, eventSubscribers: map[int]func(map[string]any){}, stdin: nopWriteCloser{}}
-	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
+	s.frames = frozenFrames(s.flushFramesOnTimer)
 	var events []map[string]any
 	s.OnEvent(func(event map[string]any) { events = append(events, event) })
 	// The server normally creates the user's row before the provider starts. The
