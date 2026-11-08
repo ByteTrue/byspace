@@ -121,3 +121,6 @@ connected
 - 2026-11-08：协议修复提交 `89bda1f` 的完整 CI（含 Linux/Windows Go、Playwright）通过，v0.24.4 tag 已推送。Release Binaries、Deploy App、Docker、Release Notes Sync 全部成功，Release 资产与 `SHA256SUMS` 已核对。
 - Mac 通过官方 v0.24.4 arm64 DMG 安装并重启，健康检查为 `0.24.4`，serverId 保持 `srv_FiqtREcxE_Q3`。Windows 需升级同一版本后才能使用双端恢复协议。
 - 真实本地 DeepSeek（`deepseek/deepseek-flash`）流式请求返回 200、`finish_reason: stop` 和 `[DONE]`。这不是 Tunnel 验收；仍需 Windows 经 `localhost:34125` 做 6 路并发与 Pi 工具循环。
+- 2026-11-08 Windows 复测 v0.24.4：6 路 0/6 完整，顺序大流也 IncompleteRead；Pi 工具循环有成功路径，说明恢复有效但物理连接/协议仍不稳定。Mac daemon 实测 0.24.4，不能将问题归因于未升级。
+- 进一步定位到恢复协议自身缺陷：普通 ACK 与恢复 ACK 混用导致重放/暂停竞态，Target 锁顺序导致并发 map 访问冲突。恢复 OpenAck、游标、唤醒和未确认重放形成闭环后，30 轮真实双 daemon relay + E2EE 断连/并发 race 通过；Go 审计与完整 CI 通过。
+- v0.24.5 已发布，修复 `0821a15`，版本提交 `f370cb38b`；Release Binaries、Deploy App、Docker、Release Notes Sync 全部成功。Mac 已升级 0.24.5，健康正常。Windows 原拓扑验收仍待该版本，#43 保持 `-o-`。
