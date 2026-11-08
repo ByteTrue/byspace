@@ -141,6 +141,7 @@ func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn,
 		kind = relay.MessageBinary
 	}
 	peer := &wsPeer{conn: socket, connectionID: conn.ConnectionID()}
+	js.Global().Get("console").Call("debug", "relay message", conn.ServerID(), conn.Role(), conn.ConnectionID(), kind, len(data))
 	// Metering never gates forwarding: closing a valid socket cuts in-flight streams in half.
 	decision, err := takeDailyBudget()
 	if err != nil {
@@ -162,7 +163,7 @@ func (r *room) WebSocketClose(_ context.Context, socket *cfws.HibernatingConn, c
 	if !ok {
 		return nil
 	}
-	js.Global().Get("console").Call("log", "relay socket close", conn.ServerID(), conn.Role(), conn.ConnectionID(), code, reason)
+	js.Global().Get("console").Call("warn", "relay socket close", conn.ServerID(), conn.Role(), conn.ConnectionID(), code, reason)
 	view := &roomView{room: r, closing: socket.JSValue()}
 	relay.Router{}.Disconnected(context.Background(), view, r.frames, conn)
 	return nil
