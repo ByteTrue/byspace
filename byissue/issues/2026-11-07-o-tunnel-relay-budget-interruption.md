@@ -139,4 +139,6 @@ connected
   - 重放帧由读循环发送，新数据由 `pumpDownstream` 并发发送，而 `resume` 通道在重放**之前**就被 close，新帧可以抢在重放帧前上线，被对端游标当作空洞丢弃；另外发送失败重试会把已带序号后缀的 payload 再编码一次并取下一个序号。现在重放期间保持暂停，唤醒放在重放完成之后；payload 只编码一次，重放覆盖的帧不再重发。
   - `Manager` 的流 id 从 `t1` 重新开始，而 `Target` 在断连后保留流 30 秒，`Open` 会复用同 id 的旧 TCP 连接——调用方把上一条响应的半截当自己的状态行（`BadStatusLine` 的来源之一）。id 现在带每个 manager 实例的随机前缀。
 - `internal/tunnel` 的 `-race -count=5` 通过，新增第二个重连周期的重放测试（修复前会在第二次 resume 上挂住）；`internal/server` 相关测试通过；`npm run typecheck`、`npm run lint`、`npm run format:check` 通过。
-- 仍未做：stable 部署与 stable 上的 Windows 原拓扑复测；Windows 桌面模式与 Mac tray 模式的 `slog` / `os.Stderr` 不落 `daemon.log`（本轮用 `serve` + 重定向绕开），这是下轮排查要先补的观测缺口。
+- stable 已部署修复（版本 `80bfa41c`），同一探针 300 帧两次均 `out_of_place=0`；随后两端回到 stable 做最终验收：`/v1/models` 经隧道 26105 字节、MD5 与直连一致，真实 DeepSeek 流式 6 路并发全 200、全 `[DONE]`、零坏 JSON；Windows 端 20 次小请求全成功，日志无 `sequence rejected`。Mac 恢复为桌面 tray 形态后复测依旧一致。
+- 回归守卫进了发布链：`deploy-app.yml` 在 `wrangler deploy` 之后对该渠道域名跑 `go run ./workers/relay/probe -n 300`（失败重试 3 次覆盖自定义域传播），失败即红、提示回滚；`docs/release.md` 的 Notes 写明手工 `deploy:relay-go*` 也要自己跑这一条。临时为测试加的 Mac `allowedPorts` 3426 与 Windows forward 3426→34126 已撤除，两机配置回到原状。
+- 仍未做：Windows 桌面模式与 Mac tray 模式的 `slog` / `os.Stderr` 不落 `daemon.log`（本轮用 `serve` + 重定向绕开）；Windows daemon 的进程名是 `byspace-windows-amd64` 不是 `byspace`，按进程名找状态会漏。这两条是下轮排查要先补的观测缺口。
