@@ -630,6 +630,7 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 	case OpcodeDataDownstreamSeq:
 		sequence, payload, ok := decodeSequencedPayload(frame.Payload)
 		if !ok {
+			m.logf("tunnel %s stream %s malformed sequence frame", m.peerID, target.id)
 			return
 		}
 		accepted, ok := target.downstream.accept(sequencedFrame{Sequence: sequence, Payload: payload})
@@ -638,6 +639,7 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 			return
 		}
 		target.framesDown.Add(1)
+		m.logf("tunnel %s stream %s data received: sequence=%d", m.peerID, target.id, sequence)
 		if _, err := target.conn.Write(accepted); err != nil {
 			m.dropStream(owner, target, err.Error())
 			return

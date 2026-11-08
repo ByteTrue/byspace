@@ -391,6 +391,7 @@ func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
 		if err == nil {
 			if frame.Opcode == OpcodeDataDownstream || frame.Opcode == OpcodeDataDownstreamSeq {
 				stream.framesDown.Add(1)
+				slog.Debug("tunnel target data sent", "streamId", stream.id, "sequence", sequence)
 			}
 			return true
 		}
