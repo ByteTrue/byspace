@@ -197,8 +197,10 @@ func TestStreamCloseLogIdentifiesFramesAndReason(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("stream close was not logged")
 	}
-	if !strings.Contains(logs.String(), "tunnel peer-log stream t1 closed: up=1 down=1 reason=upstream finished") {
-		t.Fatalf("missing stream lifecycle log: %q", logs.String())
+	// Stream ids carry a per-manager prefix, so the assertion pins the shape rather than the number.
+	logged := logs.String()
+	if !strings.Contains(logged, "stream t") || !strings.Contains(logged, "closed: up=1 down=1 reason=upstream finished") {
+		t.Fatalf("missing stream lifecycle log: %q", logged)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -216,46 +217,107 @@ func TestTargetReconnectResumesPendingResponse(t *testing.T) {
 	}
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
-	startResponse := make(chan struct{})
+	write := make(chan string, 4)
 	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
 			return
 		}
 		defer conn.Close()
-		<-startResponse
-		_, _ = conn.Write([]byte("first"))
-		_, _ = conn.Write([]byte("second"))
+		for chunk := range write {
+			_, _ = conn.Write([]byte(chunk))
+		}
 	}()
 
 	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
 	defer target.Close()
-	if _, err := target.Open("resume", port, func(Frame) error {
-		return errors.New("old socket closed")
-	}); err != nil {
-		t.Fatal(err)
-	}
-	close(startResponse)
-	target.Detach(func(Frame) error { return errors.New("old socket closed") })
-	newFrames := make(chan Frame, 8)
-	newSend := func(frame Frame) error {
-		newFrames <- frame
+
+	// One send callback for the whole test: only the socket behind it changes, which is exactly
+	// what a reconnect is.
+	var mu sync.Mutex
+	failing := true
+	sent := make(chan Frame, 32)
+	send := func(frame Frame) error {
+		mu.Lock()
+		fail := failing
+		mu.Unlock()
+		if fail {
+			return errors.New("socket closed")
+		}
+		sent <- frame
 		return nil
 	}
-	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, newSend)
-	target.HandleFrame(Frame{Opcode: OpcodeResumeAck, TunnelID: "resume", Payload: encodeSequence(0)}, newSend)
-	var response []byte
-	deadline := time.After(3 * time.Second)
-	for string(response) != "firstsecond" {
-		select {
-		case frame := <-newFrames:
-			if payload, ok := downstreamPayload(frame); ok {
-				response = append(response, payload...)
+
+	target.HandleFrame(Frame{
+		Opcode:   OpcodeOpen,
+		TunnelID: "resume",
+		Payload:  append(EncodeOpenPayload(port), OpenResumeRequested),
+	}, send)
+
+	resume := func(fail bool, cursor uint64) {
+		t.Helper()
+		mu.Lock()
+		failing = fail
+		mu.Unlock()
+		target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, send)
+		target.HandleFrame(Frame{Opcode: OpcodeResumeAck, TunnelID: "resume", Payload: encodeSequence(cursor)}, send)
+	}
+
+	// Two disconnect cycles. The second one is what a resume counter that only ever rose used to
+	// break: the stream kept waiting for a replay that had already been skipped.
+	for cycle, chunk := range []string{"first", "second"} {
+		mu.Lock()
+		failing = true
+		mu.Unlock()
+		write <- chunk
+		waitForStream(t, target, "resume", func(stream *targetStream) bool {
+			return stream.disconnected && stream.downstream.next == uint64(cycle+1)
+		})
+		resume(false, uint64(cycle))
+
+		var payload []byte
+		deadline := time.After(3 * time.Second)
+		for string(payload) != chunk {
+			select {
+			case frame := <-sent:
+				if frame.Opcode != OpcodeDataDownstreamSeq {
+					continue
+				}
+				sequence, body, ok := decodeSequencedPayload(frame.Payload)
+				if !ok {
+					t.Fatalf("cycle %d: malformed sequenced frame", cycle)
+				}
+				if sequence != uint64(cycle) {
+					t.Fatalf("cycle %d: replayed sequence %d, want %d", cycle, sequence, cycle)
+				}
+				payload = body
+			case <-deadline:
+				t.Fatalf("cycle %d: resumed response = %q, want %q", cycle, payload, chunk)
 			}
-		case <-deadline:
-			t.Fatalf("resumed response = %q", response)
 		}
 	}
+}
+
+// waitForStream polls a stream until the condition holds; the pumps are goroutines, so the test
+// has to observe a state rather than receive a signal from inside them.
+func waitForStream(t *testing.T, target *Target, tunnelID string, done func(*targetStream) bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		target.mu.Lock()
+		stream := target.streams[tunnelID]
+		target.mu.Unlock()
+		if stream != nil {
+			stream.writeMu.Lock()
+			ok := done(stream)
+			stream.writeMu.Unlock()
+			if ok {
+				return
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("stream %s never reached the expected state", tunnelID)
 }
 
 // sendDownstream is HandleFrame with the send callback the target's pumps use.

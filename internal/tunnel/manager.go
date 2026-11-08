@@ -114,6 +114,11 @@ type Manager struct {
 	forwards   map[int]*forward
 	peer       PeerConn
 	nextStream atomic.Uint64
+	// idPrefix keeps stream ids unique per manager instance. The target keeps a stream for up to
+	// 30 seconds after its peer goes away, so a rebuilt manager that numbered from t1 again handed
+	// a new local connection the previous incarnation's dialled socket — the caller then read a
+	// half-finished response as its own.
+	idPrefix string
 
 	mu      sync.Mutex
 	closed  bool
@@ -136,6 +141,7 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 		logf:     logf,
 		grace:    30 * time.Second,
 		streams:  make(map[*stream]struct{}),
+		idPrefix: strconv.FormatInt(time.Now().UnixNano()%0xffffffff, 36),
 	}
 }
 
@@ -361,7 +367,7 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 		return
 	}
 
-	id := "t" + strconv.FormatUint(m.nextStream.Add(1), 10)
+	id := "t" + m.idPrefix + "." + strconv.FormatUint(m.nextStream.Add(1), 10)
 	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{})}
 
 	m.mu.Lock()

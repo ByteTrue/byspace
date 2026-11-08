@@ -55,7 +55,6 @@ type targetStream struct {
 	downstream   replayBuffer
 	resuming     bool
 	resumable    bool
-	resumeAcked  bool
 }
 
 // OpenResult reports the outcome of an open request.
@@ -219,33 +218,43 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 		}
 		next := binary.BigEndian.Uint64(frame.Payload)
 		stream.writeMu.Lock()
-		resuming := stream.resuming
-		if !resuming {
+		if !stream.resuming {
 			stream.downstream.acknowledge(next)
 			stream.writeMu.Unlock()
 			return
 		}
 		frames := stream.downstream.replayFrom(next)
 		send := stream.send
+		stream.writeMu.Unlock()
+
+		// Replay while the stream is still marked resuming, so live frames stay parked and cannot
+		// overtake the sequence numbers they depend on. Releasing the waiter first put them on the
+		// wire ahead of the replay, and the peer's cursor drops every frame it cannot place.
+		failed := false
+		for _, replay := range frames {
+			if err := send(Frame{Opcode: OpcodeDataDownstreamSeq, TunnelID: stream.id, Payload: encodeSequencedPayload(replay)}); err != nil {
+				failed = true
+				break
+			}
+		}
+
+		stream.writeMu.Lock()
+		if failed {
+			stream.disconnected = true
+			if stream.resume == nil {
+				stream.resume = make(chan struct{})
+			}
+			stream.writeMu.Unlock()
+			return
+		}
+		// Cleared here rather than in resumeStream: a stream can be resumed more than once, and a
+		// flag that only ever rose made every resume after the first skip its replay.
+		stream.resuming = false
 		if stream.resume != nil {
 			close(stream.resume)
 			stream.resume = nil
 		}
-		if stream.resumeAcked {
-			stream.writeMu.Unlock()
-			return
-		}
-		stream.resuming = false
-		stream.resumeAcked = resuming
 		stream.writeMu.Unlock()
-		if !resuming {
-			return
-		}
-		for _, replay := range frames {
-			if err := send(Frame{Opcode: OpcodeDataDownstreamSeq, TunnelID: stream.id, Payload: encodeSequencedPayload(replay)}); err != nil {
-				return
-			}
-		}
 		return
 	case OpcodeResume:
 		t.resumeStream(stream, send)
@@ -322,22 +331,8 @@ func (t *Target) pumpDownstream(stream *targetStream) {
 
 // sendOrPause holds a failed frame and stops further TCP reads until a replacement transport
 // arrives. This is the backpressure boundary: a lost socket must not become lost response bytes.
-// Detach pauses streams owned by a departing transport. A replacement callback owns its streams,
-// so the old socket's teardown cannot pause or remove them.
-func (t *Target) Detach(send func(Frame) error) {
-	t.mu.Lock()
-	streams := make([]*targetStream, 0, len(t.streams))
-	for _, stream := range t.streams {
-		streams = append(streams, stream)
-	}
-	t.mu.Unlock()
-	for _, stream := range streams {
-		stream.writeMu.Lock()
-		stream.disconnected = true
-		stream.writeMu.Unlock()
-	}
-}
-
+// Ownership is the failing send itself — the socket that owns a stream is the one whose writes
+// fail — so a departing transport never touches another one's streams.
 func (t *Target) resumeStream(stream *targetStream, send func(Frame) error) {
 	stream.writeMu.Lock()
 	if stream.closed {
@@ -357,62 +352,83 @@ func (t *Target) resumeStream(stream *targetStream, send func(Frame) error) {
 }
 
 func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
+	// Appended and encoded once here. The retry after a pause used to re-enter this block with the
+	// payload already carrying its sequence suffix and take the next counter value, so a retried
+	// frame was misnumbered and eight bytes longer than the one it claimed to be.
+	stream.writeMu.Lock()
+	sequenced := frame.Opcode == OpcodeDataDownstream && stream.resumable
+	if sequenced {
+		if !stream.downstream.append(frame.Payload) {
+			stream.closeReason.Store("unacknowledged downstream buffer exceeded 16 MiB")
+			t.closeStream(stream)
+			stream.writeMu.Unlock()
+			return false
+		}
+		frame = Frame{
+			Opcode:   OpcodeDataDownstreamSeq,
+			TunnelID: frame.TunnelID,
+			Payload:  encodeSequencedPayload(sequencedFrame{Sequence: stream.downstream.next - 1, Payload: frame.Payload}),
+		}
+	}
+	stream.writeMu.Unlock()
+
+	paused := false
 	for {
 		stream.writeMu.Lock()
-		if stream.resuming {
-			resume := stream.resume
-			stream.writeMu.Unlock()
-			select {
-			case <-resume:
-			case <-time.After(30 * time.Second):
+		resuming := stream.resuming
+		send := stream.send
+		stream.writeMu.Unlock()
+		if resuming {
+			if !t.parkStream(stream) {
 				return false
 			}
+			paused = true
 			continue
 		}
-		if frame.Opcode == OpcodeDataDownstream && stream.resumable {
-			if !stream.downstream.append(frame.Payload) {
-				stream.closeReason.Store("unacknowledged downstream buffer exceeded 16 MiB")
-				t.closeStream(stream)
-				stream.writeMu.Unlock()
-				return false
-			}
-			frame = Frame{Opcode: OpcodeDataDownstreamSeq, TunnelID: frame.TunnelID, Payload: frame.Payload}
+		if paused && sequenced {
+			// The replay that ended the pause re-sent this frame from the buffer. Sending it again
+			// would duplicate the bytes under a new sequence number.
+			return true
 		}
-		send := stream.send
-		sequence := stream.downstream.next - 1
-		stream.writeMu.Unlock()
-		var err error
-		if frame.Opcode == OpcodeDataDownstreamSeq {
-			frame.Payload = encodeSequencedPayload(sequencedFrame{Sequence: sequence, Payload: frame.Payload})
-			err = send(frame)
-		} else {
-			err = send(frame)
-		}
-		if err == nil {
+		if err := send(frame); err == nil {
 			if frame.Opcode == OpcodeDataDownstream || frame.Opcode == OpcodeDataDownstreamSeq {
 				stream.framesDown.Add(1)
-				slog.Debug("tunnel target data sent", "streamId", stream.id, "sequence", sequence)
 			}
 			return true
 		}
 		stream.writeMu.Lock()
-		if stream.closed {
-			stream.writeMu.Unlock()
-			return false
-		}
+		closed := stream.closed
 		stream.disconnected = true
-		if stream.resume == nil {
-			stream.resume = make(chan struct{})
-		}
-		resume := stream.resume
 		stream.writeMu.Unlock()
-		select {
-		case <-resume:
-		case <-time.After(30 * time.Second):
-			stream.closeReason.Store("peer reconnect grace expired")
-			t.closeStream(stream)
+		if closed {
 			return false
 		}
+		if !t.parkStream(stream) {
+			return false
+		}
+		paused = true
+	}
+}
+
+// parkStream waits for a replacement transport to take over the stream.
+//
+// This is the backpressure boundary: a lost socket must not become lost response bytes. A stream
+// whose own sends fail is the only one that pauses — a socket closing somewhere else in the daemon
+// never touches a live tunnel.
+func (t *Target) parkStream(stream *targetStream) bool {
+	stream.writeMu.Lock()
+	if stream.resume == nil {
+		stream.resume = make(chan struct{})
+	}
+	resume := stream.resume
+	stream.writeMu.Unlock()
+	select {
+	case <-resume:
+		return true
+	case <-time.After(30 * time.Second):
+		stream.closeReason.Store("peer reconnect grace expired")
+		t.closeStream(stream)
+		return false
 	}
 }
 

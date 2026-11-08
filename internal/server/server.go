@@ -994,15 +994,6 @@ func (s *Server) serveSessionOnSinkGreeted(
 		s.notePRStatusClientsChanged()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
-		if s.tunnelTargetServer != nil {
-			s.tunnelTargetServer.Detach(func(outgoing tunnel.Frame) error {
-				encoded, encodeErr := tunnel.EncodeFrame(outgoing.Opcode, outgoing.TunnelID, outgoing.Payload)
-				if encodeErr != nil {
-					return encodeErr
-				}
-				return sink.SendBinary(ctx, encoded)
-			})
-		}
 	}()
 
 	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
