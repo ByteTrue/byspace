@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.7 - 2026-11-08
+
+### Fixed
+
+- Fixed a failed model call reporting as a completed turn, which left the transcript with a prompt and no explanation
+- Fixed stopping during a retry backoff being reported as the previous attempt's model failure
+- Fixed a prompt the runtime refuses leaving the agent running with no error row
+- Fixed "Restart to update" freezing the window and leaving no app running on Windows
+- Fixed a second launch handing over to an instance that was exiting and taking the daemon down with it
+
 ## 0.24.6 - 2026-11-08
 
 ### Fixed
