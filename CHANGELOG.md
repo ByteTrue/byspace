@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.6 - 2026-11-08
+
+### Fixed
+
+- Fixed the relay forwarding messages out of order, which corrupted concurrent streamed responses and tool arguments
+- Fixed a second tunnel reconnect skipping the replay of pending data
+- Fixed an unrelated connection closing and stalling active tunnel streams
+
 ## 0.24.5 - 2026-11-08
 
 ### Fixed
