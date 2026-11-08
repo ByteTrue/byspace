@@ -398,6 +398,69 @@ func TestAbortedTurnStillCompletes(t *testing.T) {
 
 // omp shares pi's JSONL RPC transport but not its flags: it has no --extension and no --approve,
 // and rejects unknown flags outright, so reusing pi's argument list made it exit immediately.
+// A prompt the runtime refuses never reaches a model message, so no other path can report it: the
+// turn has to fail here, or the record stays running and the transcript gets no row explaining why.
+func TestRefusedPromptFailsTurn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
+	tmp := t.TempDir()
+	fakePi := filepath.Join(tmp, "fake-pi-refuse.sh")
+	script := `#!/bin/sh
+read line
+echo '{"type":"response","id":"req_1","command":"get_state","success":true,"data":{"sessionId":"pi_refuse","thinkingLevel":"medium","isStreaming":false,"isCompacting":false,"messageCount":0,"pendingMessageCount":0}}'
+read line
+echo '{"type":"response","id":"req_2","command":"prompt","success":false,"error":"model router refused the prompt"}'
+sleep 1
+`
+	if err := os.WriteFile(fakePi, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sess, err := StartSession(LaunchOptions{Command: fakePi, Cwd: tmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+
+	failures := make(chan map[string]any, 4)
+	sess.OnEvent(func(ev map[string]any) {
+		if ev["type"] == "byspace_turn_failed" {
+			failures <- ev
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := sess.GetState(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Prompt(ctx, "hello", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.WaitForFinish(ctx); err == nil || !strings.Contains(err.Error(), "model router refused the prompt") {
+		t.Fatalf("WaitForFinish = %v, want the refusal", err)
+	}
+	if sess.Status() != "idle" {
+		t.Fatalf("refused prompt must settle idle, got %s", sess.Status())
+	}
+
+	select {
+	case failure := <-failures:
+		if failure["error"] != "model router refused the prompt" {
+			t.Fatalf("failed turn carries no runtime message: %+v", failure)
+		}
+		if id, _ := failure["turnId"].(string); id == "" {
+			t.Fatalf("failed turn carries no turnId: %+v", failure)
+		}
+		if token, _ := failure["turnToken"].(string); token == "" {
+			t.Fatalf("failed turn carries no turnToken: %+v", failure)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a refused prompt emitted no failed-turn event")
+	}
+}
+
 // A stop during the retry backoff is a cancellation too, and it reaches the provider with no new
 // assistant message: only agent_settled{aborted:true}, while the previous attempt's error is still
 // the last one it saw. Reading that error as the turn's outcome would blame the model for a stop.

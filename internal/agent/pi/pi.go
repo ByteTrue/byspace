@@ -505,12 +505,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			failure := s.turnError
 			s.turnError = ""
 			s.status = "idle"
-			s.activeTurnID = ""
-			s.turnStartedAt = ""
-			s.activeTextIdx = -1
-			s.activeThinkIdx = -1
-			s.activeMessageID = ""
-			s.streamedInTurn = false
+			s.resetTurnLocked()
 			if failure != "" && !aborted {
 				// A failed model call is a failed turn, not one that said nothing: the daemon turns it
 				// into `turn_failed`, a `[System Error]` row, and an "error" agent status.
@@ -675,6 +670,17 @@ func (s *Session) appendItemWithSeqLocked(seq int, item TimelineItem) int {
 	}
 	s.timeline = append(s.timeline, entry)
 	return len(s.timeline) - 1
+}
+
+// resetTurnLocked clears the per-turn state once a turn settles, so the next prompt starts clean.
+// Caller holds s.mu.
+func (s *Session) resetTurnLocked() {
+	s.activeTurnID = ""
+	s.turnStartedAt = ""
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.activeMessageID = ""
+	s.streamedInTurn = false
 }
 
 func (s *Session) notifyFinishLocked(err error) {
@@ -895,12 +901,29 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		defer cancel()
 		if _, err := s.proc.Request(rctx, cmd); err != nil {
 			s.mu.Lock()
-			if s.status == "running" {
-				s.status = "idle"
-				s.activeTurnID = ""
-				s.notifyFinishLocked(err)
+			if s.status != "running" {
+				s.mu.Unlock()
+				return
 			}
+			// A prompt the runtime refuses is a failed turn with no model message behind it.
+			// Settling only the waiters left the daemon's record running and wrote no row.
+			finishedTurnID := s.activeTurnID
+			errorText := err.Error()
+			turnToken := s.turnToken
+			s.status = "idle"
+			s.turnError = ""
+			s.resetTurnLocked()
+			s.notifyFinishLocked(err)
+			subs := s.subscribersLocked()
 			s.mu.Unlock()
+			for _, fn := range subs {
+				fn(map[string]any{
+					"type":      "byspace_turn_failed",
+					"turnId":    finishedTurnID,
+					"error":     errorText,
+					"turnToken": turnToken,
+				})
+			}
 		}
 	}()
 	_ = ctx
