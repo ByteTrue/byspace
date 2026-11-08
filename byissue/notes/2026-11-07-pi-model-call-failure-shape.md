@@ -12,6 +12,8 @@
 
 **退避中按停是第三种形状：** `agent_end` 带 `willRetry`，`agent_settled` 不带它、只带 `aborted`。pi 的重试等待是可中断的（`_prepareRetry` 的 `sleep` 抛 abort → `_finishCancelledRetry`），所以「429 → 退避中按停」不产生新的 assistant 消息，只发 `agent_settled{aborted:true}`，而上一条 assistant 消息仍是那次 429。判定必须是 `failure != "" && !aborted`，否则用户主动取消的一轮会被写成 `[System Error] 429`。两个 `agent_end`/`agent_settled` 分支都要落回 idle：`aborted` 只影响「算不算失败」，不影响「回合结束」。
 
+**第四种形状是 RPC 层失败：** `prompt` 命令本身被拒绝（路由拒绝、5 分钟超时、运行时拒收消息）时不产生任何 assistant 消息，上面两条判定都看不到它——只有 `Prompt` 自己的 `Request` 错误。这种回合必须由 `Prompt` 结算并发 `byspace_turn_failed`，否则 daemon 的记录永久停在 running，而界面上一行解释都没有。
+
 同一形状还有一处没接：`internal/agent/pi/history.go` 从会话文件重建时间线时不看这两个字段，所以失败行在 daemon 内存里、刷新后消失。
 
 **相关：** `internal/agent/pi/pi.go`（`assistantErrorMessage`、`turnError`）、`internal/server/turn_failed_notice.go`（daemon 侧唯一的 `[System Error]` 行落点）、`byissue/issues/2026-11-07-o-provider-turn-failure-silent.md`、`byissue/issues/2026-11-07-x-ff-pi-turn-error-swallowed.md`。
