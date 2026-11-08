@@ -283,6 +283,7 @@ func (p *relayPeer) readLoop() {
 	for {
 		msgType, data, err := p.transport.ws.Read(p.transport.ctx)
 		if err != nil {
+			p.logf("tunnel relay socket read ended: %v", err)
 			p.finish(err)
 			return
 		}

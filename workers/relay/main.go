@@ -162,6 +162,7 @@ func (r *room) WebSocketClose(_ context.Context, socket *cfws.HibernatingConn, c
 	if !ok {
 		return nil
 	}
+	js.Global().Get("console").Call("log", "relay socket close", conn.ServerID(), conn.Role(), conn.ConnectionID(), code, reason)
 	view := &roomView{room: r, closing: socket.JSValue()}
 	relay.Router{}.Disconnected(context.Background(), view, r.frames, conn)
 	return nil

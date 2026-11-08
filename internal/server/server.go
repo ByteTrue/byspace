@@ -937,6 +937,7 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 		for {
 			msgType, data, err := ws.Read(rctx)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "relay data socket %s read ended: %v\n", cid, err)
 				return e2ee.Frame{}, err
 			}
 			plain, err := e2eeSess.Receive(e2ee.Frame{
