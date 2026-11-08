@@ -3635,6 +3635,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			s.broadcastAgentUpdate(recCanceledCopy)
 
 		case "byspace_turn_failed":
+			// Same stale-event rule as a completion: a failure that arrives after the next turn has
+			// started must not paint that turn red or inject a `[System Error]` row into it.
+			if token, _ := ev["turnToken"].(string); token != "" && token != sess.TurnToken() {
+				break
+			}
 			// A provider-reported failure ends the turn the same way a completion does, minus the success:
 			// the client needs the status to leave running or the row spins forever. But it leaves running
 			// into "error", not "idle" — a failed turn is not a finished one, and the sidebar, the hover

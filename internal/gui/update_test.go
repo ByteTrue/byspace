@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func write(t *testing.T, path, content string) os.FileInfo {
+func writeFile(t *testing.T, path, content string) os.FileInfo {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatal(err)
@@ -22,9 +22,9 @@ func write(t *testing.T, path, content string) os.FileInfo {
 func TestInstallStagedSwapsBinaryOnce(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "byspace.exe")
-	self := write(t, exe, "old")
+	self := writeFile(t, exe, "old")
 	staged := exe + ".new"
-	write(t, staged, "the-new-binary")
+	writeFile(t, staged, "the-new-binary")
 
 	u := &ClientUpdater{Version: "0.1.0", exe: exe, self: self, staged: staged, state: "ready"}
 
@@ -48,8 +48,8 @@ func TestInstallStagedSwapsBinaryOnce(t *testing.T) {
 }
 
 // The staged->installed rename can retry with sleeps for up to 30s on Windows while antivirus
-// holds the download open. It must not block the state lock: OnShutdown takes it, and OnShutdown
-// runs on the main UI thread.
+// holds the download open. The readers below are the ones OnShutdown and the settings page call on
+// the main UI thread, so none of them may queue behind that rename.
 func TestUpdateStateReadableWhileInstallRuns(t *testing.T) {
 	u := &ClientUpdater{Version: "0.1.0", exe: filepath.Join(t.TempDir(), "byspace.exe"), state: "ready"}
 	u.staged = u.exe + ".new"
@@ -61,6 +61,7 @@ func TestUpdateStateReadableWhileInstallRuns(t *testing.T) {
 	go func() {
 		_ = u.Status()
 		_, _ = u.State()
+		u.Stop()
 		close(done)
 	}()
 
@@ -68,5 +69,14 @@ func TestUpdateStateReadableWhileInstallRuns(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("update state reads blocked behind the binary swap")
+	}
+}
+
+// Nothing staged means nothing to install. Reporting success would tell OnShutdown it swapped a
+// binary it never touched.
+func TestInstallStagedWithoutAStagedBinary(t *testing.T) {
+	u := &ClientUpdater{Version: "0.1.0", exe: filepath.Join(t.TempDir(), "byspace.exe")}
+	if u.InstallStaged() {
+		t.Fatal("InstallStaged reported an install with nothing staged")
 	}
 }

@@ -320,9 +320,8 @@ func eventTypes(got []map[string]any) []string {
 	return out
 }
 
-// A failed model call is not an error pi reports: it ends the turn with an empty assistant message
-// carrying stopReason "error" and the provider's text in errorMessage. A host that only reads
-// content calls that a completed turn, and the client is left with a user message and nothing else.
+// A failed model call arrives as stopReason "error" plus errorMessage, never as an error of its
+// own; the turn must not read as completed.
 func TestModelFailureEndsTurnAsFailed(t *testing.T) {
 	s, got := newEventSession(t)
 	for _, ev := range []map[string]any{
@@ -350,13 +349,12 @@ func TestModelFailureEndsTurnAsFailed(t *testing.T) {
 	if s.Status() != "idle" {
 		t.Fatalf("session must settle idle, got %s", s.Status())
 	}
-	if s.LastError() == "" {
-		t.Fatal("the failure must stay readable after the turn")
+	if token, _ := (*got)[0]["turnToken"].(string); token != s.TurnToken() {
+		t.Fatalf("failed turn carries turnToken %q, want %q", token, s.TurnToken())
 	}
 }
 
-// A retried call that finally answers is a completed turn: the last assistant message decides, and
-// an earlier attempt's errorMessage must not leak into the outcome.
+// A retried call that finally answers is a completed turn: the last assistant message decides.
 func TestRetryThatSettlesCompletesTurn(t *testing.T) {
 	s, got := newEventSession(t)
 	for _, ev := range []map[string]any{
@@ -379,9 +377,8 @@ func TestRetryThatSettlesCompletesTurn(t *testing.T) {
 	}
 }
 
-// A turn the user stopped also arrives as an assistant message with errorMessage — "Operation
-// aborted". That is a cancellation, and reporting it as a failure would put a system-error row in
-// every transcript where somebody pressed stop.
+// A stop mid-request arrives as stopReason "aborted" with errorMessage "Operation aborted"; it is
+// a cancellation, not a failure, so no system-error row.
 func TestAbortedTurnStillCompletes(t *testing.T) {
 	s, got := newEventSession(t)
 	for _, ev := range []map[string]any{
@@ -401,6 +398,30 @@ func TestAbortedTurnStillCompletes(t *testing.T) {
 
 // omp shares pi's JSONL RPC transport but not its flags: it has no --extension and no --approve,
 // and rejects unknown flags outright, so reusing pi's argument list made it exit immediately.
+// A stop during the retry backoff is a cancellation too, and it reaches the provider with no new
+// assistant message: only agent_settled{aborted:true}, while the previous attempt's error is still
+// the last one it saw. Reading that error as the turn's outcome would blame the model for a stop.
+func TestAbortDuringRetryBackoffCompletes(t *testing.T) {
+	s, got := newEventSession(t)
+	for _, ev := range []map[string]any{
+		{"type": "agent_start"},
+		{"type": "message_end", "message": map[string]any{
+			"role": "assistant", "content": []any{}, "stopReason": "error", "errorMessage": "429",
+		}},
+		{"type": "agent_end", "willRetry": true},
+		{"type": "agent_settled", "aborted": true},
+	} {
+		s.handleRawEvent(ev)
+	}
+
+	if want := []string{"byspace_turn_completed"}; !slices.Equal(eventTypes(*got), want) {
+		t.Fatalf("turn events = %v, want %v", eventTypes(*got), want)
+	}
+	if s.Status() != "idle" {
+		t.Fatalf("aborted turn must settle idle, got %s", s.Status())
+	}
+}
+
 func TestBuildLaunchArgsSuppressesPiOnlyFlags(t *testing.T) {
 	_, argv := BuildLaunchArgs(LaunchOptions{
 		Command:            "omp",

@@ -495,6 +495,11 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 
 	case "agent_end", "agent_settled":
 		willRetry, _ := ev["willRetry"].(bool)
+		// A settle interrupted by the user carries `aborted` and no new assistant message, and only
+		// `agent_end` carries `willRetry`. Stopping during a retry backoff therefore reaches this
+		// branch with the previous attempt's error still in turnError, and reporting that as a
+		// failed turn would blame the model for a cancellation.
+		aborted, _ := ev["aborted"].(bool)
 		if !willRetry && s.status == "running" {
 			finishedTurnID := s.activeTurnID
 			failure := s.turnError
@@ -506,17 +511,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.activeThinkIdx = -1
 			s.activeMessageID = ""
 			s.streamedInTurn = false
-			if failure != "" {
-				// A model call that failed is a turn that failed, not one that completed: the
-				// daemon turns this into `turn_failed`, a `[System Error]` row, and an "error" agent
-				// status. Reporting it as completed leaves the transcript with a user message and
-				// nothing else.
-				s.lastError = failure
+			if failure != "" && !aborted {
+				// A failed model call is a failed turn, not one that said nothing: the daemon turns it
+				// into `turn_failed`, a `[System Error]` row, and an "error" agent status.
 				s.notifyFinishLocked(errors.New(failure))
 				extraEvents = append(extraEvents, map[string]any{
-					"type":   "byspace_turn_failed",
-					"turnId": finishedTurnID,
-					"error":  failure,
+					"type":      "byspace_turn_failed",
+					"turnId":    finishedTurnID,
+					"error":     failure,
+					"turnToken": s.turnToken,
 				})
 				break
 			}

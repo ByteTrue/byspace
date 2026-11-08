@@ -265,7 +265,7 @@ const daemonCloseDeadline = 800 * time.Millisecond
 
 // closeDaemonBounded shuts sup down on a helper goroutine so a stalled WebSocket or agent teardown
 // never blocks the caller.
-func closeDaemonBounded(sup *DaemonSupervisor, deadline time.Duration) {
+func closeDaemonBounded(sup *DaemonSupervisor) {
 	if sup == nil {
 		return
 	}
@@ -276,7 +276,7 @@ func closeDaemonBounded(sup *DaemonSupervisor, deadline time.Duration) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(deadline):
+	case <-time.After(daemonCloseDeadline):
 	}
 }
 

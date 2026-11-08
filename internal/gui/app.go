@@ -576,7 +576,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
-			closeDaemonBounded(sup, daemonCloseDeadline)
+			closeDaemonBounded(sup)
 			updater.InstallStaged()
 		},
 		ErrorHandler: func(err error) {
@@ -653,7 +653,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
-			closeDaemonBounded(sup, daemonCloseDeadline)
+			closeDaemonBounded(sup)
 			// Exit directly instead of tearing down through app.Quit. Wails closes a Windows window
 			// with a synchronous SendMessage(WM_CLOSE) whose handler hands the real close to the
 			// windowEvents goroutine, which then waits back on the main thread; the main thread wedged

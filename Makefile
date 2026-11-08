@@ -119,6 +119,6 @@ vet:
 
 ## clean: 清掉构建产物
 clean:
-	rm -rf $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk BySpace.app rsrc_windows_*.syso dist
+	rm -rf bin/byspace $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk BySpace.app rsrc_windows_*.syso dist
 	rm -rf internal/webui/dist/*
 	touch internal/webui/dist/.keep

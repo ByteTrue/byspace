@@ -10,6 +10,8 @@
 
 **细节：** 2026-11-07 生产 daemon（Windows）上 chief agent 用免费额度耗尽的路由模型发消息，界面上只有用户气泡、agent 停在 idle，报错只在终端里看得见。根因是 `internal/agent/pi/pi.go` 的 `agent_end` 无条件发 `byspace_turn_completed`。归档的 Node provider 一直读这条消息（`latestPiErrorMessage` / `formatPiErrorMessage`，还会把 `stopReason`、`model`、`responseModel`、`responseId` 拼进文本），Go 移植时整段丢了——`packages/server/dist/server/server/agent/providers/pi/agent.js` 可查。移植后的形态是：`message_end` 记下错误，`agent_end` 有错就发 `byspace_turn_failed`。重试场景要求「最后一条 assistant 消息说了算」：记录用赋值而非累积，否则第一次尝试的 429 会污染最终成功的那一轮。
 
+**退避中按停是第三种形状：** `agent_end` 带 `willRetry`，`agent_settled` 不带它、只带 `aborted`。pi 的重试等待是可中断的（`_prepareRetry` 的 `sleep` 抛 abort → `_finishCancelledRetry`），所以「429 → 退避中按停」不产生新的 assistant 消息，只发 `agent_settled{aborted:true}`，而上一条 assistant 消息仍是那次 429。判定必须是 `failure != "" && !aborted`，否则用户主动取消的一轮会被写成 `[System Error] 429`。两个 `agent_end`/`agent_settled` 分支都要落回 idle：`aborted` 只影响「算不算失败」，不影响「回合结束」。
+
 同一形状还有一处没接：`internal/agent/pi/history.go` 从会话文件重建时间线时不看这两个字段，所以失败行在 daemon 内存里、刷新后消失。
 
 **相关：** `internal/agent/pi/pi.go`（`assistantErrorMessage`、`turnError`）、`internal/server/turn_failed_notice.go`（daemon 侧唯一的 `[System Error]` 行落点）、`byissue/issues/2026-11-07-o-provider-turn-failure-silent.md`、`byissue/issues/2026-11-07-x-ff-pi-turn-error-swallowed.md`。
