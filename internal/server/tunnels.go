@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"log/slog"
 	"strconv"
 
 	"github.com/ByteTrue/byspace/internal/tunnel"
@@ -30,7 +30,10 @@ func (s *Server) tunnelRegistry() *tunnel.Registry {
 		return registry
 	}
 	registry := tunnel.NewRegistry(s.homeDir, func(format string, args ...any) {
-		fmt.Fprintf(os.Stderr, "tunnel: "+format+"\n", args...)
+		// slog rather than os.Stderr: the desktop hosts redirect the log package to daemon.log, but a
+		// direct write to stderr lands nowhere in Windows GUI mode — and these lines are the only
+		// trace of stream ids, sequence rejections and close reasons.
+		slog.Info("tunnel " + fmt.Sprintf(format, args...))
 	})
 	registry.SetEnabled(s.tunnelsEnabled)
 	s.tunnels = registry

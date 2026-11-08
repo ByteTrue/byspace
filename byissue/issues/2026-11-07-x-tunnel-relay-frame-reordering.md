@@ -1,11 +1,11 @@
 ---
 kind: issue
-title: "Tunnel 并发流被 relay 预算关闭"
+title: "Tunnel 并发流被 relay 乱序转发撕碎"
 type: bug
 created: 2026-11-07
 ---
 
-# Tunnel 并发流被 relay 预算关闭
+# Tunnel 并发流被 relay 乱序转发撕碎
 
 > 来源：[GitHub #43](https://github.com/ByteTrue/byspace/issues/43)。独立 Issue，不属于现有 Epic。
 
