@@ -52,6 +52,8 @@ const (
 	OpcodeResume byte = 0x25
 	// OpcodeResumeAck acknowledges a resume and reports the next acceptable sequence.
 	OpcodeResumeAck byte = 0x26
+	// OpcodeDataAck acknowledges contiguous receipt without initiating a replay.
+	OpcodeDataAck byte = 0x27
 )
 
 // Open acknowledgement status bytes.
@@ -105,7 +107,7 @@ func DecodeFrame(data []byte) (Frame, bool) {
 	}
 	opcode := data[0]
 	switch opcode {
-	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck:
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck, OpcodeDataAck:
 	default:
 		return Frame{}, false
 	}
@@ -131,7 +133,7 @@ func DecodeFrame(data []byte) (Frame, bool) {
 // as a bad slot and the bytes are dropped without a trace.
 func IsTunnelOpcode(opcode byte) bool {
 	switch opcode {
-	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck:
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck, OpcodeDataAck:
 		return true
 	default:
 		return false

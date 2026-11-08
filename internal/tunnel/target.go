@@ -113,10 +113,10 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 		return OpenResult{Allowed: false, Reason: "Host is shutting down."}, nil
 	}
 	if existing, ok := t.streams[id]; ok {
+		t.mu.Unlock()
 		existing.writeMu.Lock()
 		if !existing.disconnected {
 			existing.writeMu.Unlock()
-			t.mu.Unlock()
 			return OpenResult{TunnelID: id, Allowed: false, Reason: "stream ID is already active"}, nil
 		}
 		existing.send = send
@@ -128,7 +128,6 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 			existing.resume = nil
 		}
 		existing.writeMu.Unlock()
-		t.mu.Unlock()
 		return OpenResult{TunnelID: id, Allowed: true}, nil
 	}
 	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)))
@@ -206,23 +205,33 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	}
 
 	switch frame.Opcode {
+	case OpcodeDataAck:
+		if len(frame.Payload) != 8 {
+			return
+		}
+		stream.writeMu.Lock()
+		stream.downstream.acknowledge(binary.BigEndian.Uint64(frame.Payload))
+		stream.writeMu.Unlock()
+		return
 	case OpcodeResumeAck:
 		if len(frame.Payload) != 8 {
 			return
 		}
 		next := binary.BigEndian.Uint64(frame.Payload)
 		stream.writeMu.Lock()
-		stream.downstream.acknowledge(next)
-		stream.disconnected = false
+		resuming := stream.resuming
+		if !resuming {
+			stream.downstream.acknowledge(next)
+			stream.writeMu.Unlock()
+			return
+		}
+		frames := stream.downstream.replayFrom(next)
+		send := stream.send
 		if stream.resume != nil {
 			close(stream.resume)
 			stream.resume = nil
 		}
-		frames := stream.downstream.replayFrom(next)
-		send := stream.send
-		resuming := stream.resuming
-		if resuming && stream.resumeAcked {
-			stream.disconnected = false
+		if stream.resumeAcked {
 			stream.writeMu.Unlock()
 			return
 		}
@@ -317,12 +326,16 @@ func (t *Target) pumpDownstream(stream *targetStream) {
 // so the old socket's teardown cannot pause or remove them.
 func (t *Target) Detach(send func(Frame) error) {
 	t.mu.Lock()
+	streams := make([]*targetStream, 0, len(t.streams))
 	for _, stream := range t.streams {
+		streams = append(streams, stream)
+	}
+	t.mu.Unlock()
+	for _, stream := range streams {
 		stream.writeMu.Lock()
 		stream.disconnected = true
 		stream.writeMu.Unlock()
 	}
-	t.mu.Unlock()
 }
 
 func (t *Target) resumeStream(stream *targetStream, send func(Frame) error) {
@@ -376,7 +389,7 @@ func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
 			err = send(frame)
 		}
 		if err == nil {
-			if frame.Opcode == OpcodeDataDownstream {
+			if frame.Opcode == OpcodeDataDownstream || frame.Opcode == OpcodeDataDownstreamSeq {
 				stream.framesDown.Add(1)
 			}
 			return true

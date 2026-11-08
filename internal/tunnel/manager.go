@@ -560,6 +560,7 @@ func (m *Manager) pumpPeer(peer PeerConn) {
 		case frame, ok := <-peer.Frames():
 			if !ok {
 				m.SetPeerState(StateDisconnected)
+				m.logf("tunnel %s peer closed: %v", m.peerID, peer.Err())
 				go m.expireDisconnected(peer)
 				return
 			}
@@ -613,8 +614,7 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 			allowed, reason = false, "malformed open acknowledgement"
 		}
 		target.settleOpen(openResult{allowed: allowed, reason: reason})
-		if allowed && (target.resumable || (len(frame.Payload) > 0 && frame.Payload[0]&OpenResumeCapable != 0)) {
-			target.resumable = true
+		if allowed {
 			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 		}
 	case OpcodeDataDownstream:
@@ -624,7 +624,9 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 		target.framesDown.Add(1)
 		if _, err := target.conn.Write(frame.Payload); err != nil {
 			m.dropStream(owner, target, err.Error())
+			return
 		}
+		_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 	case OpcodeDataDownstreamSeq:
 		sequence, payload, ok := decodeSequencedPayload(frame.Payload)
 		if !ok {
@@ -632,6 +634,7 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 		}
 		accepted, ok := target.downstream.accept(sequencedFrame{Sequence: sequence, Payload: payload})
 		if !ok {
+			m.logf("tunnel %s stream %s sequence rejected: got=%d want=%d", m.peerID, target.id, sequence, target.downstream.next)
 			return
 		}
 		target.framesDown.Add(1)
@@ -640,7 +643,7 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 			return
 		}
 		if target.resumable {
-			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+			_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 		}
 	case OpcodeResume:
 		_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
