@@ -141,4 +141,7 @@ connected
 - `internal/tunnel` 的 `-race -count=5` 通过，新增第二个重连周期的重放测试（修复前会在第二次 resume 上挂住）；`internal/server` 相关测试通过；`npm run typecheck`、`npm run lint`、`npm run format:check` 通过。
 - stable 已部署修复（版本 `80bfa41c`），同一探针 300 帧两次均 `out_of_place=0`；随后两端回到 stable 做最终验收：`/v1/models` 经隧道 26105 字节、MD5 与直连一致，真实 DeepSeek 流式 6 路并发全 200、全 `[DONE]`、零坏 JSON；Windows 端 20 次小请求全成功，日志无 `sequence rejected`。Mac 恢复为桌面 tray 形态后复测依旧一致。
 - 回归守卫进了发布链：`deploy-app.yml` 在 `wrangler deploy` 之后对该渠道域名跑 `go run ./workers/relay/probe -n 300`（失败重试 3 次覆盖自定义域传播），失败即红、提示回滚；`docs/release.md` 的 Notes 写明手工 `deploy:relay-go*` 也要自己跑这一条。临时为测试加的 Mac `allowedPorts` 3426 与 Windows forward 3426→34126 已撤除，两机配置回到原状。
-- 仍未做：`tunnel` 的 `logf` 是 `fmt.Fprintf(os.Stderr, ...)`（全部 `tunnel:` 行），桌面模式落不进 `daemon.log`——`log.SetOutput` 管得到 `log` 与 `slog`（已验证），但管不到直接写 `os.Stderr` 的语句；Windows GUI 只把 `log` 包重定向到文件，macOS tray 是 stderr + 文件。而时序诊断缺的正是这一路，下轮先把它改成 `slog`。另：Windows daemon 的进程名是 `byspace-windows-amd64`，按 `byspace` 找进程会漏。
+- 仍未做：无。下面两条已在 0.24.6 收尾。
+- 0.24.6 把观测缺口一起补了：`tunnelRegistry` 的 `logf` 改成 `slog`，桌面模式（Windows GUI / Mac tray）的 `tunnel:` 行现在进 `daemon.log`——在 Windows app 进程自己写的 `INFO tunnel ...` 行上确认过。同版本带上四个隧道修复，GUI 形态（session 1，app 0.24.6）复测：`/v1/models` 26105 字节 MD5 与直连一致，6 路真实流式 6/6 全 `[DONE]`、零坏 JSON。
+- 发布链的探针首次随 v0.24.6 实跑：`sent=300 received=300 out_of_place=0`。同一次发布里 Docker 首次挂在「Attach immutable container digest」（exit 255，无任何输出），重跑即过——是 runner / GHCR 的瞬时故障，不是构建问题。
+- 残留事实：Windows daemon 的进程名是 `byspace-windows-amd64`（不是 `byspace`），按进程名找状态会漏。
