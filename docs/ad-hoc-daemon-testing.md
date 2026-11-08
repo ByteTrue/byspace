@@ -4,6 +4,8 @@ Spin up an isolated in-process daemon test harness without touching the main dae
 
 **Do not spawn a real daemon to reproduce something.** `byspace daemon start --home <tmp> --port <n>` is not actually isolated: it ends up binding the default listen address, so the developer's supervisor on 6777 crash-loops on `EADDRINUSE`, the temporary daemon takes over the port, the app shows empty data under a new server id, and the two `byspace.pid` files describe each other. Recovering means killing the interloper first so the real supervisor can reclaim the port; nothing is deleted, but it looks like data loss. Use this in-process harness, or a Vitest run, instead.
 
+The ban is on that ad-hoc spawn, not on running a daemon. When the thing under test only exists in a real daemon — a provider binary answering, a model call failing, the browser conformance audit — run the dev daemon: `npm run dev:daemon` binds `127.0.0.1:6778` with `BYSPACE_HOME` at `.dev/byspace-home`, so it cannot collide with 6777. Drive it with `npm run cli -- run/logs/ls/inspect` and stop it when done. See [docs/development.md](development.md#running-the-dev-server).
+
 This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
 do not use `createBySpaceDaemon` as a product launch path.

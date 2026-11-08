@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { goDaemonBinary } from "./daemon-binary";
 import { killProcessTree } from "./spawn-node";
 
 export interface LocalGoRelay {
@@ -15,18 +15,6 @@ export interface LocalGoRelay {
 // internal/relay and now ships inside the Go binary (`byspace relay`), so this starts that
 // instead. Mirrors local-wrangler-relay, which runs the Cloudflare worker variant.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
-const GO_DAEMON_BINARY = path.join(REPO_ROOT, "bin", "byspace");
-
-function resolveGoDaemonBinary(): string {
-  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
-  if (!existsSync(GO_DAEMON_BINARY)) {
-    throw new Error(
-      `Go daemon binary not found at ${GO_DAEMON_BINARY}. Run \`make build\` first ` +
-        `(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).`,
-    );
-  }
-  return GO_DAEMON_BINARY;
-}
 
 async function getAvailablePort(): Promise<number> {
   const server = net.createServer();
@@ -65,7 +53,7 @@ async function probeHealth(port: number): Promise<boolean> {
 export async function startLocalGoRelay(): Promise<LocalGoRelay> {
   const port = await getAvailablePort();
   const logs: string[] = [];
-  const child = spawn(resolveGoDaemonBinary(), ["relay", "--addr", `127.0.0.1:${port}`], {
+  const child = spawn(goDaemonBinary(), ["relay", "--addr", `127.0.0.1:${port}`], {
     cwd: REPO_ROOT,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],

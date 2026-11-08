@@ -66,7 +66,7 @@ async function startFailingReleaseHost(): Promise<{ server: Server; url: string 
 // a stubbed response: the daemon really fetches, really gets a 500, and reports it.
 export async function startOutdatedDaemon(): Promise<OutdatedDaemon> {
   const binaryDir = await mkdtemp(path.join(tmpdir(), "byspace-e2e-outdated-"));
-  const binary = path.join(binaryDir, "byspace");
+  const binary = path.join(binaryDir, process.platform === "win32" ? "byspace.exe" : "byspace");
   buildOutdatedDaemon(binary);
   const releaseHost = await startFailingReleaseHost();
 

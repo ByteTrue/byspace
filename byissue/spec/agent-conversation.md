@@ -40,6 +40,7 @@ Home workspace 的 cwd 是 `$BYSPACE_HOME/chief`，不是 `$BYSPACE_HOME` 本身
 
 - 会话 turn 运行/思考指示器（`SyncedLoader`）承载关键的运行时存活反馈，不因操作系统的 `prefers-reduced-motion` 策略而冻结在初始静止帧，确保用户能明确感知 Agent 处于活跃执行状态而非崩溃死锁。
 - Pi Provider 的 Turn 边界结算按**发起方**区分。客户端发起的 turn 在 `agent_end` 即时触发 `turn_completed` 并转入 `idle`，不等扩展层异步后处理（Watchdog、LSP、自动压缩）延迟发射的 `agent_settled`，保证模型输出完毕瞬间输入框与操作按钮即刻解锁；随后到来的 `agent_settled` 幂等忽略。
+- 回合失败只有一条通道：provider 在回合结束时发 `byspace_turn_failed`，daemon 负责把 agent 状态转成 `error`、广播 `turn_failed`、并追加 `[System Error]` 时间线行（`internal/server/turn_failed_notice.go`）。Provider 不自己写错误行，也不把失败报成 completed。Pi 的模型调用失败在事件流里没有独立信号——它是一条 `stopReason: "error"`、`errorMessage` 带供应商原文的空 assistant 消息（见 `byissue/notes/2026-11-07-pi-model-call-failure-shape.md`）；不读它，界面就只剩用户气泡。`stopReason: "aborted"` 也带 `errorMessage`（"Operation aborted"），那是取消，不写错误行。
 - 三种情况仍等待 `agent_settled`，因为它们的后续工作属于同一个 turn：Pi 标记将要重试或本次运行正在从重试中恢复；有 stop 在途，由取消决定结果；运行是自主的、没有客户端发起的 turn，扩展可能继续它。自主轮次是上游 v0.8.0 引入的能力。
 - Pi 工具通过 `ctx.executeTool()` 跑出的嵌套调用（codemode 脚本里的 `tools.bash(...)` 等）作为独立时间线行流出，行上带 `metadata.parentToolCallId`——pi 在事件上给的是**直接调用者**，逐层套娃时它不是顶层行，由 App 沿父链走到流里留存的那个祖先。App 呈现层把它们摘出、按父行分桶，渲染为父行 + 缩进竖轨下的子行，默认可见。整屏 codemode 与看不出包含关系都不接受：061 的纯 daemon 过滤和 062 初版的折叠徽标都因此被推翻。父行徽标带着子调用摘要作副标签（首字母小写），摘要的归类只有一处实现：`packages/protocol/src/tool-call-category.ts` 的 `categorizeToolCall`，直播行与回放徽标都走它，否则同一段脚本两处口径会漂。BySpace 的 durable timeline 自己会记下这些嵌套行，应用/守护进程重启后照常按父行归档。**重新加载会话**（`refresh_agent_request`）会清空 durable timeline 并从 pi transcript 重放：重放时从 tool result 顶层的 `nestedCalls` 快照重建子行（含直接调用者归属与状态映射），渲染与 live 一致。`metadata.nestedSummary` 是**没有子行可归**（pi 还没上报嵌套调用的旧 transcript、provider hydration/导入、或子行重建被跳过）时的兜底徽标。
 - Pi 的 `@bytetrue/pi-subagent` 子代理走与 Claude 相同的 subagents track + 只读 tab（`agent.provider_subagents.*` 通道），descriptor 来自三个源：launch 工具结果（立即建行）、运行中 HTTP 快照、转录内 `subagent-exit` 消息（负责回放）。**从 codemode 脚本里启动的子代理在转录里没有 launch 记录**（pi 只把嵌套调用记成父结果的参数快照），回放因此还需要用 record 自身的 `agent`/`description` 补名——每个 id 只补一次，且不覆盖已经报了名字的 launch（旧参数形态那种只带 id、不带任务的 launch 不拦着 record 补名）。状态枚举不扩：`pending` 显示为 running；`paused` 显示为 canceled——pi-subagent 暂停即杀进程，exit 消息就是该任务最后一条更新，恢复走新任务 id 产生新行，旧行读作 running 会永远卡住「N working」徽标。只读 tab 的内容是 daemon 对子会话 jsonl 的增量 tail；旧版 pi-subagent 不上报时退化为黑盒工具行，不算坏。
@@ -50,6 +51,7 @@ Home workspace 的 cwd 是 `$BYSPACE_HOME/chief`，不是 `$BYSPACE_HOME` 本身
 - 每个 Agent 的时间线只有一个请求 owner；恢复或切回 workspace 时从持久化 cursor 逐页补齐到当前，不做尾部截断回退。
 - 断线重连、rewind 与多页缺口由 authoritative 路径处理；authoritative 页不当作 live delta 追加。
 - 远程恢复保留旧 timeline 内容并展示同步状态，不以空列表覆盖。
+- daemon 追加的 `[System Error]` 行只存在于内存 timeline：重新加载从 provider transcript 重放时不重建它（Pi 侧 `internal/agent/pi/history.go` 不看 `stopReason`/`errorMessage`），刷新后消失。归档的 Node daemon 同样如此，是已知缺口，不是回归。
 
 ## 会话导入与项目准备
 

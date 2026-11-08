@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { goDaemonBinary } from "./daemon-binary";
 import { withDisabledE2ESpeechEnv } from "./speech-env";
 import { killProcessTree } from "./spawn-node";
 
@@ -11,18 +11,6 @@ import { killProcessTree } from "./spawn-node";
 // lived in packages/server and is archived; specs, routes and the wire protocol are
 // unchanged, so this file is the only place that needed to know which language hosts it.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
-const GO_DAEMON_BINARY = path.join(REPO_ROOT, "bin", "byspace");
-
-function resolveGoDaemonBinary(): string {
-  if (process.env.BYSPACE_E2E_DAEMON_BINARY) return process.env.BYSPACE_E2E_DAEMON_BINARY;
-  if (!existsSync(GO_DAEMON_BINARY)) {
-    throw new Error(
-      `Go daemon binary not found at ${GO_DAEMON_BINARY}. Run \`make build-full\` first ` +
-        `(or point BYSPACE_E2E_DAEMON_BINARY at a built binary).`,
-    );
-  }
-  return GO_DAEMON_BINARY;
-}
 
 export interface IsolatedHostDaemon {
   serverId: string;
@@ -178,7 +166,7 @@ export async function startIsolatedHostDaemon(
     };
     // `byspace serve` reads BYSPACE_HOME / BYSPACE_LISTEN / BYSPACE_SERVER_ID from the
     // environment, matching how the Node supervisor was configured.
-    const child = spawn(options.daemonBinary ?? resolveGoDaemonBinary(), ["serve"], spawnOptions);
+    const child = spawn(options.daemonBinary ?? goDaemonBinary(), ["serve"], spawnOptions);
 
     let stderr = "";
     child.stderr?.on("data", (chunk: Buffer) => {

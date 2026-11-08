@@ -174,12 +174,14 @@ type Session struct {
 	activeMessageID     string
 	nextClientMessageID string
 	streamedInTurn      bool
-	timeline            []TimelineEntry
-	activeTextIdx       int
-	activeThinkIdx      int
-	toolIndexByID       map[string]int
-	toolArgsByID        map[string]any
-	pendingPermissions  map[string]map[string]any
+	// turnError is the failure carried by the last assistant message of the running turn, if any.
+	turnError          string
+	timeline           []TimelineEntry
+	activeTextIdx      int
+	activeThinkIdx     int
+	toolIndexByID      map[string]int
+	toolArgsByID       map[string]any
+	pendingPermissions map[string]map[string]any
 	// toolDetailBuilder is the provider's card builder; nil means the shared one.
 	toolDetailBuilder func(toolName string, args any, result any) map[string]any
 	subagents         map[string]SubagentDescriptor
@@ -247,6 +249,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 	switch evType {
 	case "agent_start", "turn_start":
 		s.status = "running"
+		s.turnError = ""
 		if s.activeTurnID == "" {
 			s.turnCounter++
 			s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -329,6 +332,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if msg, ok := ev["message"].(map[string]any); ok {
 			role, _ := msg["role"].(string)
 			if role == "assistant" {
+				s.turnError = assistantErrorMessage(msg)
 				if !s.streamedInTurn {
 					rawText := extractAssistantText(msg)
 					cleaned, _ := stripLeadingSectionTag(rawText)
@@ -491,15 +495,29 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 
 	case "agent_end", "agent_settled":
 		willRetry, _ := ev["willRetry"].(bool)
+		// A settle interrupted by the user carries `aborted` and no new assistant message, and only
+		// `agent_end` carries `willRetry`. Stopping during a retry backoff therefore reaches this
+		// branch with the previous attempt's error still in turnError, and reporting that as a
+		// failed turn would blame the model for a cancellation.
+		aborted, _ := ev["aborted"].(bool)
 		if !willRetry && s.status == "running" {
 			finishedTurnID := s.activeTurnID
+			failure := s.turnError
+			s.turnError = ""
 			s.status = "idle"
-			s.activeTurnID = ""
-			s.turnStartedAt = ""
-			s.activeTextIdx = -1
-			s.activeThinkIdx = -1
-			s.activeMessageID = ""
-			s.streamedInTurn = false
+			s.resetTurnLocked()
+			if failure != "" && !aborted {
+				// A failed model call is a failed turn, not one that said nothing: the daemon turns it
+				// into `turn_failed`, a `[System Error]` row, and an "error" agent status.
+				s.notifyFinishLocked(errors.New(failure))
+				extraEvents = append(extraEvents, map[string]any{
+					"type":      "byspace_turn_failed",
+					"turnId":    finishedTurnID,
+					"error":     failure,
+					"turnToken": s.turnToken,
+				})
+				break
+			}
 			s.notifyFinishLocked(nil)
 			extraEvents = append(extraEvents, map[string]any{
 				"type":   "byspace_turn_completed",
@@ -620,6 +638,21 @@ func extractAssistantText(msg map[string]any) string {
 	return strings.Join(parts, "")
 }
 
+// assistantErrorMessage reads the failure a model call left in its assistant message.
+//
+// pi does not report a failed model call as an error: it ends the turn with an empty assistant
+// message carrying stopReason "error" and the provider's text in errorMessage, so a host that only
+// reads content sees a turn that said nothing and succeeded. "aborted" is excluded — pi puts
+// "Operation aborted" in errorMessage too, and a stop the user pressed is a cancellation, not a
+// failure the transcript should show as one.
+func assistantErrorMessage(msg map[string]any) string {
+	if reason, _ := msg["stopReason"].(string); reason != "error" {
+		return ""
+	}
+	text, _ := msg["errorMessage"].(string)
+	return strings.TrimSpace(text)
+}
+
 func (s *Session) appendItemLocked(item TimelineItem) int {
 	s.streamSeq++
 	return s.appendItemWithSeqLocked(s.streamSeq, item)
@@ -637,6 +670,17 @@ func (s *Session) appendItemWithSeqLocked(seq int, item TimelineItem) int {
 	}
 	s.timeline = append(s.timeline, entry)
 	return len(s.timeline) - 1
+}
+
+// resetTurnLocked clears the per-turn state once a turn settles, so the next prompt starts clean.
+// Caller holds s.mu.
+func (s *Session) resetTurnLocked() {
+	s.activeTurnID = ""
+	s.turnStartedAt = ""
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.activeMessageID = ""
+	s.streamedInTurn = false
 }
 
 func (s *Session) notifyFinishLocked(err error) {
@@ -857,12 +901,29 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		defer cancel()
 		if _, err := s.proc.Request(rctx, cmd); err != nil {
 			s.mu.Lock()
-			if s.status == "running" {
-				s.status = "idle"
-				s.activeTurnID = ""
-				s.notifyFinishLocked(err)
+			if s.status != "running" {
+				s.mu.Unlock()
+				return
 			}
+			// A prompt the runtime refuses is a failed turn with no model message behind it.
+			// Settling only the waiters left the daemon's record running and wrote no row.
+			finishedTurnID := s.activeTurnID
+			errorText := err.Error()
+			turnToken := s.turnToken
+			s.status = "idle"
+			s.turnError = ""
+			s.resetTurnLocked()
+			s.notifyFinishLocked(err)
+			subs := s.subscribersLocked()
 			s.mu.Unlock()
+			for _, fn := range subs {
+				fn(map[string]any{
+					"type":      "byspace_turn_failed",
+					"turnId":    finishedTurnID,
+					"error":     errorText,
+					"turnToken": turnToken,
+				})
+			}
 		}
 	}()
 	_ = ctx
