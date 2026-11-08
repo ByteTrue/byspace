@@ -118,3 +118,6 @@ connected
 - `internal/e2ee` 两端发送锁覆盖加密与写出，防止后调用越过先调用；E2EE 与 Tunnel race 测试通过。
 - `npm run typecheck`、`lint`、`format:check`、`git diff --check` 通过。`env -u GOROOT npm run audit -- --no-browser` 全部通过：完整 Go 测试、入站/出站字段缺口为零、重审账本一致。浏览器验证按参数跳过。
 - 生产 relay 仍只有限流移除，daemon 恢复协议尚未发布；Windows 原拓扑与真实 DeepSeek 验收待新版部署后执行。
+- 2026-11-08：协议修复提交 `89bda1f` 的完整 CI（含 Linux/Windows Go、Playwright）通过，v0.24.4 tag 已推送。Release Binaries、Deploy App、Docker、Release Notes Sync 全部成功，Release 资产与 `SHA256SUMS` 已核对。
+- Mac 通过官方 v0.24.4 arm64 DMG 安装并重启，健康检查为 `0.24.4`，serverId 保持 `srv_FiqtREcxE_Q3`。Windows 需升级同一版本后才能使用双端恢复协议。
+- 真实本地 DeepSeek（`deepseek/deepseek-flash`）流式请求返回 200、`finish_reason: stop` 和 `[DONE]`。这不是 Tunnel 验收；仍需 Windows 经 `localhost:34125` 做 6 路并发与 Pi 工具循环。
