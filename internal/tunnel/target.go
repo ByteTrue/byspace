@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Target serves a peer's open requests: it dials the requested loopback port and pumps bytes
@@ -39,11 +40,17 @@ type Target struct {
 
 // targetStream is one forwarded connection on the target side.
 type targetStream struct {
-	id          string
-	conn        net.Conn
-	framesUp    atomic.Uint64
-	framesDown  atomic.Uint64
-	closeReason atomic.Value // string
+	id           string
+	conn         net.Conn
+	framesUp     atomic.Uint64
+	framesDown   atomic.Uint64
+	closeReason  atomic.Value // string
+	upstreamDone atomic.Bool
+	writeMu      sync.Mutex
+	send         func(Frame) error
+	resume       chan struct{}
+	closed       bool
+	disconnected bool
 }
 
 // OpenResult reports the outcome of an open request.
@@ -90,33 +97,45 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)))
-	if err != nil {
-		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s:%d: %v", host, remotePort, err)}, nil
-	}
 
 	id := tunnelID
 	if id == "" {
 		id = "s" + strconv.FormatUint(t.nextID.Add(1), 10)
 	}
-	stream := &targetStream{id: id, conn: conn}
-
 	t.mu.Lock()
 	if t.closed {
 		t.mu.Unlock()
-		_ = conn.Close()
 		return OpenResult{Allowed: false, Reason: "Host is shutting down."}, nil
 	}
-	// An id collision means two initiators picked the same name. Replace rather than leak: the old
-	// stream is unreachable either way.
 	if existing, ok := t.streams[id]; ok {
-		_ = existing.conn.Close()
-		slog.Info("tunnel target stream replaced", "streamId", existing.id, "framesUp", existing.framesUp.Load(), "framesDown", existing.framesDown.Load())
+		existing.writeMu.Lock()
+		if !existing.disconnected {
+			existing.writeMu.Unlock()
+			t.mu.Unlock()
+			return OpenResult{TunnelID: id, Allowed: false, Reason: "stream ID is already active"}, nil
+		}
+		existing.send = send
+		existing.disconnected = false
+		existing.closed = false
+		existing.closeReason.Store("")
+		if existing.resume != nil {
+			close(existing.resume)
+			existing.resume = nil
+		}
+		existing.writeMu.Unlock()
+		t.mu.Unlock()
+		return OpenResult{TunnelID: id, Allowed: true}, nil
 	}
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)))
+	if err != nil {
+		t.mu.Unlock()
+		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s:%d: %v", host, remotePort, err)}, nil
+	}
+	stream := &targetStream{id: id, conn: conn, send: send}
 	t.streams[id] = stream
 	t.mu.Unlock()
 
-	go t.pumpDownstream(stream, send)
+	go t.pumpDownstream(stream)
 	return OpenResult{TunnelID: id, Allowed: true}, nil
 }
 
@@ -183,38 +202,116 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 			t.closeStream(stream)
 		}
 	case OpcodeClose:
+		if len(frame.Payload) > 0 && frame.Payload[0] == CloseWrite {
+			stream.upstreamDone.Store(true)
+			if tcp, ok := stream.conn.(*net.TCPConn); ok {
+				_ = tcp.CloseWrite()
+			}
+			return
+		}
 		stream.closeReason.Store("peer closed")
 		t.closeStream(stream)
 	}
 }
 
 // pumpDownstream moves bytes from the dialled port back to the peer.
-func (t *Target) pumpDownstream(stream *targetStream, send func(Frame) error) {
+func (t *Target) pumpDownstream(stream *targetStream) {
 	buf := make([]byte, 32*1024)
 	for {
-		n, err := stream.conn.Read(buf)
-		if n > 0 {
-			chunk := append([]byte(nil), buf[:n]...)
-			stream.framesDown.Add(1)
-			if sendErr := send(Frame{
-				// Downstream: bytes read from the dialled service travelling back to the initiator.
-				Opcode:   OpcodeDataDownstream,
-				TunnelID: stream.id,
-				Payload:  chunk,
-			}); sendErr != nil {
-				stream.closeReason.Store("downstream send failed: " + sendErr.Error())
+		_ = stream.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+		stream.writeMu.Lock()
+		disconnected := stream.disconnected
+		stream.writeMu.Unlock()
+		if disconnected {
+			stream.writeMu.Lock()
+			if stream.resume == nil {
+				stream.resume = make(chan struct{})
+			}
+			resume := stream.resume
+			stream.writeMu.Unlock()
+			select {
+			case <-resume:
+				continue
+			case <-time.After(30 * time.Second):
+				stream.closeReason.Store("peer reconnect grace expired")
 				t.closeStream(stream)
 				return
 			}
 		}
+		n, err := stream.conn.Read(buf)
+		if n > 0 {
+			chunk := append([]byte(nil), buf[:n]...)
+			frame := Frame{Opcode: OpcodeDataDownstream, TunnelID: stream.id, Payload: chunk}
+			if !t.sendOrPause(stream, frame) {
+				return
+			}
+		}
 		if err != nil {
-			// EOF means the dialled service closed its side; tell the peer and stop reading.
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
 			if errors.Is(err, io.EOF) {
-				_ = send(Frame{Opcode: OpcodeClose, TunnelID: stream.id})
+				if !t.sendOrPause(stream, Frame{Opcode: OpcodeClose, TunnelID: stream.id}) {
+					return
+				}
 			}
 			stream.closeReason.Store(err.Error())
 			t.closeStream(stream)
 			return
+		}
+	}
+}
+
+// sendOrPause holds a failed frame and stops further TCP reads until a replacement transport
+// arrives. This is the backpressure boundary: a lost socket must not become lost response bytes.
+// Detach pauses streams owned by a departing transport. A replacement callback owns its streams,
+// so the old socket's teardown cannot pause or remove them.
+func (t *Target) Detach(send func(Frame) error) {
+	t.mu.Lock()
+	for _, stream := range t.streams {
+		stream.writeMu.Lock()
+		stream.disconnected = true
+		stream.writeMu.Unlock()
+	}
+	t.mu.Unlock()
+}
+
+func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
+	for {
+		stream.writeMu.Lock()
+		send := stream.send
+		stream.writeMu.Unlock()
+		err := send(frame)
+		if err == nil {
+			if frame.Opcode == OpcodeDataDownstream {
+				stream.framesDown.Add(1)
+			}
+			return true
+		}
+		stream.writeMu.Lock()
+		if stream.closed {
+			stream.writeMu.Unlock()
+			return false
+		}
+		stream.disconnected = true
+		if stream.resume == nil {
+			stream.resume = make(chan struct{})
+		}
+		resume := stream.resume
+		stream.writeMu.Unlock()
+		t.Detach(send)
+		stream.writeMu.Lock()
+		if stream.closed {
+			stream.writeMu.Unlock()
+			return false
+		}
+		stream.writeMu.Unlock()
+		select {
+		case <-resume:
+		case <-time.After(30 * time.Second):
+			stream.closeReason.Store("peer reconnect grace expired")
+			t.closeStream(stream)
+			return false
 		}
 	}
 }
@@ -228,6 +325,12 @@ func (t *Target) closeStream(stream *targetStream) {
 	}
 	delete(t.streams, stream.id)
 	t.mu.Unlock()
+	stream.writeMu.Lock()
+	stream.closed = true
+	if stream.resume != nil {
+		close(stream.resume)
+	}
+	stream.writeMu.Unlock()
 	_ = stream.conn.Close()
 	reason, _ := stream.closeReason.Load().(string)
 	slog.Info("tunnel target stream closed", "streamId", stream.id, "framesUp", stream.framesUp.Load(), "framesDown", stream.framesDown.Load(), "reason", reason)
@@ -245,6 +348,12 @@ func (t *Target) Close() {
 	t.mu.Unlock()
 	for _, s := range streams {
 		s.closeReason.Store("target closed")
+		s.writeMu.Lock()
+		s.closed = true
+		if s.resume != nil {
+			close(s.resume)
+		}
+		s.writeMu.Unlock()
 		_ = s.conn.Close()
 	}
 }

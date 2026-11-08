@@ -31,6 +31,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（从已配对 Host 里选对端 + 密码 + 端口，未配对时可粘 pairing offer）、outbound/inbound 列表、白名单 GUI。入口是侧栏 BySpace 菜单里的 Tunnels 行（内置导航项，可在 Appearance 里排序/隐藏），命令中心保留同名动作。
 - **流式原样透传与闪断无损续传**：已连接状态下两端都是 `socket.on("data") → 帧` 与 `socket.write(payload)` 直通，不聚合、不缓冲，也没有额外的等待窗口——SSE / chunked 这类逐块响应在客户端按产生节奏到达（`tunnel-streaming.e2e.test.ts` 用到达时间跨度钉住）。当底层 WebSocket 发生短时闪断时，依托服务端 Session 重连宽限期，两端暂停 TCP 读取（施加背压）并有界缓存途中帧，重连恢复时按序续传并对账存活流；重连窗口内新到达的本地连接挂起等待重连而非立即拒绝，超出宽限期则主动销毁本地流避免死挂。
 - **托管 relay 的计量不能切断 Tunnel。** 请求计数与日阈值只产生告警，不拒绝握手、不关闭在线 socket，也不设帧率上限。合法并发没有可假定的静态 FPS 上限，硬关会把完整响应截成半截；成本护栏是 hibernation、agent 合帧和零 remote client 时关闭 data socket。
+- **半关闭与恢复需要双端新版。** `CloseWrite` 只结束请求方向，不能销毁尚未完成的响应；重连在原 stream ID 上恢复，保留有界途中帧并施加背压，不另起目标 TCP。旧 Target 不支持恢复，混合版本必须显式失败，不能承诺无损。
 - **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道；不尝试 NAT 打洞，流量一律经 relay（owner 网络环境下打洞从未成功，架构取向是稳定优先于延迟；自托管 relay 就近部署是延迟正解，实测见 [notes/008](../notes/008-tunnel-performance-and-relay-vs-p2p.md)）。
 
 ## 托管部署

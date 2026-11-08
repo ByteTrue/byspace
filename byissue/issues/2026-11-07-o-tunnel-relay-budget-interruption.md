@@ -29,7 +29,7 @@ created: 2026-11-07
 - **可靠性 / 可用性与容错性**：正常并发和超过日告警阈值后，已建立及新建业务连接仍完整转发；以真实 workerd 并发与超阈值测试证明。
 - **性能效率 / 资源利用**：保留 hibernation 和全局请求计数，不为业务转发增加逐帧持久化 token bucket 或缓冲；生产发布后的请求量与单位成本需另行复核。
 - **可维护性 / 可分析性**：一次 Tunnel 异常能从 daemon.log 的 streamId、帧数和原因定位；以日志捕获测试证明。
-- **兼容性 / 互操作性**：relay v1/v2 帧格式与路由不变，E2EE 与 Tunnel 协议不变。
+- **兼容性 / 互操作性**：relay v1/v2 帧格式与路由不变，E2EE 与 Tunnel 帧布局不变；Close 的可选单字节 `CloseWrite` 保留旧 peer 的整流关闭语义，恢复能力需要双端新版 daemon。
 
 ## 影响面
 
@@ -47,7 +47,15 @@ created: 2026-11-07
 - `npm run typecheck`、`npm run lint`、`npm run format:check`、`git diff --check` 均通过。
 - 首次 workerd 启动继承失效 `GOROOT`，去掉环境变量后进入真实测试；首次告警把 Go struct 直接传给 JS 导致 `syscall/js.ValueOf` panic，改为字符串与数值后通过。本地 DO 日志从 workerd observability API 读取，不从 Wrangler stdout 判断。
 - 2026-11-08：修复提交为 `93f9b4038`（`fix(relay): preserve tunnel streams beyond usage thresholds`）。经用户明确授权，stable `byspace-relay-go` 已部署到 `app.byspace.cc.cd`，Cloudflare Version ID `70798e43-104f-4345-b053-d3f4b59d5385`；线上 `/health` 返回 `{"status":"ok"}`。commit 尚未 push。
-- 尚未在 Windows 原拓扑复测，也未读取修复后的生产 Cloudflare 计量。没有重启 daemon 或启动浏览器测试实例。
+- 2026-11-08 Windows 复测：relay 100 帧突发不再触发 1013，握手也不返回 429，证明生产限流已移除；但 6 路仅 2 路完整，其余仍为 `IncompleteRead`、无 `[DONE]`、`BadStatusLine`，顺序大请求和小请求也失败。不能把该版本记为生产验收通过。
+- 用户明确授权后，通过 macOS 正常退出并重新打开桌面应用重启 Mac 6777 daemon；健康检查正常，仍为 0.24.3。CLI `daemon restart` 对桌面托管进程显示 `already running`，没有完成重启，不能拿它当重启证据。用户转述 Windows agent 的后续结果尚未提供，不能把这次重启记为问题消失。
+- 代码对照发现 Go 版没有完整实现 spec 中的闪断续传：D1 `SetPeer` 会 teardown 全部流；D2 data socket 替换后旧 sink 不再持有后续帧。Go relay 在 server-data 消失时还以 1012 关 client。此前 6 路测试只覆盖稳定 socket，不能覆盖生产连接替换。
+- 目标端收到 Close 后立即 `conn.Close()` 会截断半关闭后的响应。`TestTargetUpstreamHalfCloseKeepsResponse` 在修复前收到 0 字节，修复后完整收到响应；Close 的可选 `CloseWrite` 只关闭写方向，省略 payload 时保留旧整流关闭行为。
+- 双端 in-process daemon、随机 loopback 端口、真实 relay 与 E2EE 的 6 路 SSE 测试已通过，含客户端写半关闭。该测试不启动或占用 6777/6778。
+- 新增 server-data 观测接缝并注入真实 socket 丢失：收到首段后关闭 socket，目标 TCP 继续发送，原 stream 在新 socket 上重新 Open；250 个 chunk 和 `[DONE]` 完整有序，不重复拨号、不重复起读泵。D1 以实际字节计数的有界队列保留上行，D2 失败帧保留并暂停 TCP 读取，两端 30 秒超时显式失败。
+- 旧 transport 的迟到帧、恢复 Open、断开清理均有代际/实例守卫，不能删除或暂停新 transport 的流。稳定并发、真实断连恢复、Target 半关闭与恢复均通过 race。
+- 恢复需要双端新版 daemon；旧 Target 不认识恢复语义，不能只更新一端就宣称跨版本无损恢复。该兼容边界已回写 `byissue/spec/connection.md`。
+- v0.24.4 changelog 经用户确认：半关闭截断、relay 重连丢流、usage threshold 切断合法流量三项。用户授权提交、push 并发布 stable v0.24.4；发布验收完成前本 Issue 保持 `-o-`。
 
 ## 当前结论与关闭条件
 

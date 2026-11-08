@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"errors"
 	"io"
 	"net"
 	"strings"
@@ -128,6 +129,102 @@ func TestTargetForwardsBytes(t *testing.T) {
 	}
 	if string(echoed) != "ping" {
 		t.Fatalf("echoed %q", echoed)
+	}
+}
+
+func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.ReadAll(conn)
+		_, _ = conn.Write([]byte("data: complete\n\ndata: [DONE]\n\n"))
+	}()
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
+	defer target.Close()
+	frames := make(chan Frame, 16)
+	send := func(frame Frame) error { frames <- frame; return nil }
+	if _, err := target.Open("half-close", port, send); err != nil {
+		t.Fatal(err)
+	}
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "half-close", Payload: []byte("request")}, send)
+	target.HandleFrame(Frame{Opcode: OpcodeClose, TunnelID: "half-close", Payload: []byte{CloseWrite}}, send)
+
+	var response []byte
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case frame := <-frames:
+			if frame.Opcode == OpcodeDataDownstream {
+				response = append(response, frame.Payload...)
+			}
+			if frame.Opcode == OpcodeClose {
+				if string(response) != "data: complete\n\ndata: [DONE]\n\n" {
+					t.Fatalf("upstream half-close truncated the response: %q", response)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatalf("response did not finish after upstream half-close: %q", response)
+		}
+	}
+}
+
+func TestTargetReconnectResumesPendingResponse(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+	startResponse := make(chan struct{})
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		<-startResponse
+		_, _ = conn.Write([]byte("first"))
+		_, _ = conn.Write([]byte("second"))
+	}()
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
+	defer target.Close()
+	if _, err := target.Open("resume", port, func(Frame) error {
+		return errors.New("old socket closed")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	close(startResponse)
+	target.Detach(func(Frame) error { return errors.New("old socket closed") })
+	newFrames := make(chan Frame, 8)
+	if _, err := target.Open("resume", port, func(frame Frame) error {
+		newFrames <- frame
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var response []byte
+	deadline := time.After(3 * time.Second)
+	for string(response) != "firstsecond" {
+		select {
+		case frame := <-newFrames:
+			if frame.Opcode == OpcodeDataDownstream {
+				response = append(response, frame.Payload...)
+			}
+		case <-deadline:
+			t.Fatalf("resumed response = %q", response)
+		}
 	}
 }
 

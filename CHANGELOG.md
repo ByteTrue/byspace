@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.4 - 2026-11-08
+
+### Fixed
+
+- Fixed tunnel responses being truncated when clients finish sending before the response completes
+- Fixed in-flight tunnel streams being dropped when relay sockets reconnect
+- Prevented relay usage thresholds from disconnecting valid streaming traffic
+
 ## 0.24.3 - 2026-11-06
 
 ### Changed

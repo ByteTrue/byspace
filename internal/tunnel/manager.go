@@ -43,7 +43,35 @@ type stream struct {
 	opened chan openResult
 	// openOnce guards the single delivery into opened: the answer arrives once, but a disconnect
 	// can also fail every waiting stream.
-	openOnce sync.Once
+	openOnce     sync.Once
+	remotePort   int
+	pendingUp    [][]byte
+	pendingBytes int
+	pendingCap   int
+	writeDone    chan struct{}
+	writeMu      sync.Mutex
+	connected    bool
+	closed       bool
+	halfClosed   bool
+	generation   uint64
+}
+
+func (s *stream) enqueue(frame Frame) bool {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.closed {
+		return false
+	}
+	if s.connected {
+		return true
+	}
+	if s.pendingBytes+len(frame.Payload) > s.pendingCap {
+		s.closed = true
+		return false
+	}
+	s.pendingUp = append(s.pendingUp, frame.Payload)
+	s.pendingBytes += len(frame.Payload)
+	return true
 }
 
 // openResult is the target's answer to an open request.
@@ -89,6 +117,8 @@ type Manager struct {
 	closed  bool
 	closeCh chan struct{}
 	logf    func(format string, args ...any)
+	grace   time.Duration
+	streams map[*stream]struct{}
 }
 
 // NewManager builds a manager for one peer.
@@ -102,6 +132,8 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 		forwards: make(map[int]*forward),
 		closeCh:  make(chan struct{}),
 		logf:     logf,
+		grace:    30 * time.Second,
+		streams:  make(map[*stream]struct{}),
 	}
 }
 
@@ -155,8 +187,8 @@ func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, la
 
 // SetPeer attaches the peer connection and starts pumping inbound frames.
 //
-// Replacing the peer is how reconnection works: the registry builds a new connection and hands it
-// over, and every live stream is torn down because its ids belong to the old connection.
+// SetPeer swaps the transport without discarding the local TCP streams. The peer channel closes
+// before a replacement is attached; that pause is what applies backpressure and queues writes.
 func (m *Manager) SetPeer(peer PeerConn) {
 	m.mu.Lock()
 	previous := m.peer
@@ -164,15 +196,62 @@ func (m *Manager) SetPeer(peer PeerConn) {
 	m.mu.Unlock()
 
 	if previous != nil {
-		// Close before tearing down: the old connection's frames must not race with the new
-		// connection's ids, and the stream teardown has to happen for the ids that belonged to it.
 		_ = previous.Close()
-		m.teardownStreams("peer reconnected")
 	}
 	if peer == nil {
 		return
 	}
+	m.mu.Lock()
+	streams := make([]*stream, 0, 16)
+	for _, f := range m.forwards {
+		for _, s := range f.streams {
+			s.writeMu.Lock()
+			if s.generation > 0 {
+				s.opened = make(chan openResult, 1)
+				s.openOnce = sync.Once{}
+			}
+			s.writeMu.Unlock()
+			streams = append(streams, s)
+		}
+	}
+	m.mu.Unlock()
 	go m.pumpPeer(peer)
+	for _, s := range streams {
+		go m.resumeStream(peer, s)
+	}
+}
+
+func (m *Manager) resumeStream(peer PeerConn, s *stream) {
+	s.writeMu.Lock()
+	s.connected = false
+	s.writeMu.Unlock()
+	if err := peer.Send(Frame{Opcode: OpcodeOpen, TunnelID: s.id, Payload: EncodeOpenPayload(s.remotePort)}); err != nil {
+		return
+	}
+	result, ok := m.awaitOpen(s)
+	m.mu.Lock()
+	current := m.peer == peer
+	m.mu.Unlock()
+	if !current {
+		return
+	}
+	if !ok || !result.allowed {
+		m.dropStream(nil, s, "target refused to resume: "+result.reason)
+		return
+	}
+	s.writeMu.Lock()
+	if s.closed {
+		s.writeMu.Unlock()
+		return
+	}
+	if s.writeDone != nil {
+		s.writeMu.Unlock()
+		return
+	}
+	s.writeDone = make(chan struct{})
+	s.generation++
+	s.writeMu.Unlock()
+	go m.pumpLocalToPeer(peer, s)
 }
 
 // SetPeerState updates every port's state after a connection event.
@@ -280,10 +359,11 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	}
 
 	id := "t" + strconv.FormatUint(m.nextStream.Add(1), 10)
-	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1)}
+	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{})}
 
 	m.mu.Lock()
 	f.streams[id] = s
+	m.streams[s] = struct{}{}
 	m.mu.Unlock()
 
 	// Ask the target for the stream before moving any bytes.
@@ -325,7 +405,7 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	}
 	m.mu.Unlock()
 
-	go m.pumpLocalToPeer(peer, f, s)
+	go m.pumpLocalToPeer(peer, s)
 }
 
 // awaitOpen waits for the target's answer, the manager closing, or the socket dying.
@@ -348,31 +428,114 @@ func (m *Manager) awaitOpen(s *stream) (openResult, bool) {
 // openTimeout bounds how long a stream waits for its answer.
 const openTimeout = 15 * time.Second
 
-// pumpLocalToPeer moves bytes from the accepted socket into the tunnel.
-func (m *Manager) pumpLocalToPeer(peer PeerConn, f *forward, s *stream) {
-	buf := make([]byte, 32*1024)
+// pumpLocalToPeer moves bytes from the accepted socket into the tunnel. resumeStream has already
+// reopened the stream on a replacement peer and switched the target's send callback.
+func (m *Manager) pumpLocalToPeer(peer PeerConn, s *stream) {
+	s.writeMu.Lock()
+	generation := s.generation
+	s.writeMu.Unlock()
+	defer close(s.writeDone)
 	for {
-		n, err := s.conn.Read(buf)
-		if n > 0 {
-			chunk := append([]byte(nil), buf[:n]...)
-			s.framesUp.Add(1)
-			if sendErr := peer.Send(Frame{
-				Opcode:   OpcodeDataUpstream,
-				TunnelID: s.id,
-				Payload:  chunk,
-			}); sendErr != nil {
-				m.dropStream(f, s, "peer send failed: "+sendErr.Error())
+		s.writeMu.Lock()
+		if s.generation != generation {
+			s.writeMu.Unlock()
+			return
+		}
+		s.writeMu.Unlock()
+		for {
+			s.writeMu.Lock()
+			if len(s.pendingUp) == 0 {
+				s.connected = true
+				s.writeMu.Unlock()
+				break
+			}
+			payload := s.pendingUp[0]
+			s.pendingUp = s.pendingUp[1:]
+			s.pendingBytes -= len(payload)
+			s.writeMu.Unlock()
+			if err := peer.Send(Frame{Opcode: OpcodeDataUpstream, TunnelID: s.id, Payload: payload}); err != nil {
+				s.writeMu.Lock()
+				if s.generation != generation {
+					s.writeMu.Unlock()
+					return
+				}
+				s.pendingUp = append([][]byte{payload}, s.pendingUp...)
+				s.pendingBytes += len(payload)
+				s.connected = false
+				s.writeMu.Unlock()
 				return
 			}
+			s.framesUp.Add(1)
+		}
+		s.writeMu.Lock()
+		halfClosed := s.halfClosed
+		s.halfClosed = false
+		s.writeMu.Unlock()
+		if halfClosed {
+			if err := peer.Send(Frame{Opcode: OpcodeClose, TunnelID: s.id, Payload: []byte{CloseWrite}}); err != nil {
+				s.writeMu.Lock()
+				s.halfClosed = true
+				s.connected = false
+				s.writeMu.Unlock()
+				return
+			}
+		}
+		s.writeMu.Lock()
+		disconnected := !s.connected
+		s.writeMu.Unlock()
+		if disconnected {
+			return
+		}
+
+		buf := make([]byte, 32*1024)
+		_ = s.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+		n, err := s.conn.Read(buf)
+		if n > 0 {
+			frame := Frame{Opcode: OpcodeDataUpstream, TunnelID: s.id, Payload: append([]byte(nil), buf[:n]...)}
+			if !s.enqueue(frame) {
+				m.dropStream(nil, s, "disconnected buffer exceeded 16 MiB")
+				return
+			}
+			s.writeMu.Lock()
+			connected := s.connected
+			s.writeMu.Unlock()
+			if !connected {
+				continue
+			}
+			if err := peer.Send(frame); err != nil {
+				s.writeMu.Lock()
+				if s.generation != generation {
+					s.writeMu.Unlock()
+					return
+				}
+				s.connected = false
+				s.pendingUp = append([][]byte{frame.Payload}, s.pendingUp...)
+				s.pendingBytes += len(frame.Payload)
+				s.writeMu.Unlock()
+				return
+			}
+			s.framesUp.Add(1)
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				s.upstreamDone.Store(true)
-				// Half-close: tell the peer this direction is done, keep reading the other way.
-				_ = peer.Send(Frame{Opcode: OpcodeClose, TunnelID: s.id})
+				s.writeMu.Lock()
+				s.halfClosed = true
+				connected := s.connected
+				s.writeMu.Unlock()
+				if connected {
+					if err := peer.Send(Frame{Opcode: OpcodeClose, TunnelID: s.id, Payload: []byte{CloseWrite}}); err != nil {
+						s.writeMu.Lock()
+						s.connected = false
+						s.writeMu.Unlock()
+					}
+				}
 				return
 			}
-			m.dropStream(f, s, err.Error())
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			m.dropStream(nil, s, err.Error())
 			return
 		}
 	}
@@ -380,6 +543,13 @@ func (m *Manager) pumpLocalToPeer(peer PeerConn, f *forward, s *stream) {
 
 // pumpPeer reads inbound frames and routes them to their streams.
 func (m *Manager) pumpPeer(peer PeerConn) {
+	defer func() {
+		m.mu.Lock()
+		if m.peer == peer {
+			m.peer = nil
+		}
+		m.mu.Unlock()
+	}()
 	for {
 		select {
 		case <-m.closeCh:
@@ -387,16 +557,36 @@ func (m *Manager) pumpPeer(peer PeerConn) {
 		case frame, ok := <-peer.Frames():
 			if !ok {
 				m.SetPeerState(StateDisconnected)
+				go m.expireDisconnected(peer)
 				return
 			}
-			m.handleFrame(frame)
+			m.handleFrame(peer, frame)
 		}
 	}
 }
 
-// handleFrame dispatches one inbound frame.
-func (m *Manager) handleFrame(frame Frame) {
+func (m *Manager) expireDisconnected(peer PeerConn) {
+	timer := time.NewTimer(m.grace)
+	defer timer.Stop()
+	select {
+	case <-m.closeCh:
+	case <-timer.C:
+	}
 	m.mu.Lock()
+	unchanged := m.peer == peer
+	m.mu.Unlock()
+	if unchanged {
+		m.teardownStreams("peer reconnect grace expired")
+	}
+}
+
+// handleFrame dispatches one inbound frame.
+func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
+	m.mu.Lock()
+	if m.peer != peer {
+		m.mu.Unlock()
+		return
+	}
 	var target *stream
 	var owner *forward
 	for _, f := range m.forwards {
@@ -433,16 +623,20 @@ func (m *Manager) handleFrame(frame Frame) {
 // dropStream closes one stream's socket and forgets it.
 func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 	m.mu.Lock()
+	if _, ok := m.streams[s]; !ok {
+		m.mu.Unlock()
+		return
+	}
+	delete(m.streams, s)
 	if f != nil {
-		if _, ok := f.streams[s.id]; !ok {
-			m.mu.Unlock()
-			return
-		}
 		delete(f.streams, s.id)
 	}
 	m.mu.Unlock()
 
 	_ = s.conn.Close()
+	s.writeMu.Lock()
+	s.closed = true
+	s.writeMu.Unlock()
 	if reason == "" {
 		reason = "peer closed"
 		if s.upstreamDone.Load() {
@@ -456,27 +650,20 @@ func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 }
 
 // teardownStreams closes every live stream, keeping the listeners.
-//
-// Called when the peer connection is replaced: the stream ids belonged to the old connection, so
-// the peer can no longer answer for them.
 func (m *Manager) teardownStreams(reason string) {
 	m.mu.Lock()
-	type pair struct {
-		f *forward
-		s *stream
-	}
-	pairs := make([]pair, 0, 8)
+	streams := make([]*stream, 0, len(m.streams))
 	for _, f := range m.forwards {
-		for _, s := range f.streams {
-			pairs = append(pairs, pair{f, s})
-		}
+		f.streams = make(map[string]*stream)
 	}
+	for s := range m.streams {
+		streams = append(streams, s)
+	}
+	m.streams = make(map[*stream]struct{})
 	m.mu.Unlock()
-
-	for _, p := range pairs {
-		m.dropStream(p.f, p.s, "")
+	for _, s := range streams {
+		m.dropStream(nil, s, reason)
 	}
-	_ = reason
 }
 
 // setError records a per-port error.

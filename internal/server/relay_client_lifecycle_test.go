@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -30,27 +31,39 @@ import (
 type observedRelay struct {
 	*relay.Server
 
-	mu         sync.Mutex
-	frames     map[string]int
-	active     map[string]int
-	changed    chan struct{}
-	control    chan struct{}
-	controlErr error
-	once       sync.Once
+	mu              sync.Mutex
+	frames          map[string]int
+	active          map[string]int
+	changed         chan struct{}
+	control         chan struct{}
+	controlErr      error
+	once            sync.Once
+	serverSockets   map[string]*websocket.Conn
+	dataConnections map[string]string
 }
 
 func newObservedRelay(t *testing.T) (*observedRelay, string) {
 	t.Helper()
 	observed := &observedRelay{
-		frames:  make(map[string]int),
-		active:  make(map[string]int),
-		changed: make(chan struct{}, 1),
-		control: make(chan struct{}),
+		frames:          make(map[string]int),
+		active:          make(map[string]int),
+		changed:         make(chan struct{}, 1),
+		control:         make(chan struct{}),
+		serverSockets:   make(map[string]*websocket.Conn),
+		dataConnections: make(map[string]string),
 	}
 	observed.Server = relay.NewServer(relay.Options{ObserveFrame: func(conn relay.Connection) {
 		if conn.Role() == "server" && conn.ConnectionID() != "" {
 			observed.countFrame(conn.ConnectionID())
 		}
+	}, ObserveSocket: func(conn relay.Connection, ws *websocket.Conn) {
+		if conn.Role() != "server" || conn.ConnectionID() == "" {
+			return
+		}
+		observed.mu.Lock()
+		observed.serverSockets[conn.ConnectionID()] = ws
+		observed.dataConnections[conn.ServerID()] = conn.ConnectionID()
+		observed.mu.Unlock()
 	}})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
@@ -668,7 +681,184 @@ func TestRelayTunnelForwardsConcurrentStreams(t *testing.T) {
 	peer.close(t, ctx)
 }
 
+func TestTwoDaemonsResumeStreamAfterRelaySocketLoss(t *testing.T) {
+	continueResponse := make(chan struct{})
+	port, stop := startPausableSSEPort(t, continueResponse)
+	defer stop()
+	target := newTunnelTestServer(t, map[string]any{"enabled": true, "allowedPorts": []any{port}})
+	if err := target.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+		t.Fatal(err)
+	}
+	target.ApplyTunnelConfig()
+	observed, relayURL := newObservedRelay(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	go func() { _ = target.ConnectRelay(ctx, relayURL) }()
+
+	initiator := newTunnelTestServer(t, map[string]any{"enabled": true})
+	if err := initiator.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+		t.Fatal(err)
+	}
+	initiator.ApplyTunnelConfig()
+	registry := initiator.tunnelRegistry()
+	if err := registry.Add(tunnel.PeerConfig{
+		PeerID: target.ServerID(), URL: relayURL, DaemonPublicKey: target.PublicKeyB64(),
+		Forwards: []tunnel.ForwardConfig{{RemotePort: port}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	forward := waitForConnectedForward(t, registry, target.ServerID(), port)
+	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", forward.LocalPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(25 * time.Second))
+	if _, err := fmt.Fprintln(conn, "stream-interrupted"); err != nil {
+		t.Fatal(err)
+	}
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.CloseWrite()
+	}
+	reader := bufio.NewReader(conn)
+	first, err := reader.ReadString('\n')
+	if err != nil || first == "" {
+		t.Fatalf("did not receive initial response: %q %v", first, err)
+	}
+	observed.mu.Lock()
+	ws := observed.serverSockets[observed.dataConnections[target.ServerID()]]
+	observed.mu.Unlock()
+	if ws == nil {
+		t.Fatal("no server-data socket to interrupt")
+	}
+	_ = ws.CloseNow()
+	close(continueResponse)
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("response ended at socket loss: %v", err)
+	}
+	response := first + string(body)
+	var expected strings.Builder
+	for chunk := 0; chunk < 250; chunk++ {
+		fmt.Fprintf(&expected, "data: {\"stream\":%q,\"chunk\":%d}\n\n", "stream-interrupted", chunk)
+	}
+	expected.WriteString("data: [DONE]\n\n")
+	if response != expected.String() {
+		t.Fatalf("resumed response is incomplete or reordered: %d bytes, done=%v", len(response), strings.HasSuffix(response, "data: [DONE]\n\n"))
+	}
+}
+
+func TestTwoDaemonsForwardConcurrentStreamsOverRelay(t *testing.T) {
+	testTwoDaemonsForwardConcurrentStreamsOverRelay(t, false)
+}
+
+func TestTwoDaemonsResumeStreamsAfterRelaySocketLoss(t *testing.T) {
+	testTwoDaemonsForwardConcurrentStreamsOverRelay(t, true)
+}
+
+func testTwoDaemonsForwardConcurrentStreamsOverRelay(t *testing.T, interrupt bool) {
+	port, stop := startSSEPort(t)
+	defer stop()
+	target := newTunnelTestServer(t, map[string]any{"enabled": true, "allowedPorts": []any{port}})
+	if err := target.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+		t.Fatal(err)
+	}
+	target.ApplyTunnelConfig()
+	_, relayURL := newObservedRelay(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	go func() { _ = target.ConnectRelay(ctx, relayURL) }()
+
+	initiator := newTunnelTestServer(t, map[string]any{"enabled": true})
+	if err := initiator.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+		t.Fatal(err)
+	}
+	initiator.ApplyTunnelConfig()
+	registry := initiator.tunnelRegistry()
+	if err := registry.Add(tunnel.PeerConfig{
+		PeerID: target.ServerID(), URL: relayURL, DaemonPublicKey: target.PublicKeyB64(),
+		Forwards: []tunnel.ForwardConfig{{RemotePort: port}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		peers := registry.List()
+		if len(peers) == 1 && len(peers[0].Forwards) == 1 && peers[0].Forwards[0].State == tunnel.StateConnected {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("two-daemon tunnel did not connect: %+v", peers)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	forward := registry.List()[0].Forwards[0]
+
+	responses := make([]string, 6)
+	var wg sync.WaitGroup
+	for index := range responses {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", forward.LocalPort))
+			if err != nil {
+				t.Errorf("dial local forward: %v", err)
+				return
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
+			streamID := fmt.Sprintf("stream-%d", index)
+			if _, err := fmt.Fprintln(conn, streamID); err != nil {
+				t.Errorf("write request: %v", err)
+				return
+			}
+			if tcp, ok := conn.(*net.TCPConn); ok {
+				if err := tcp.CloseWrite(); err != nil {
+					t.Errorf("half-close request: %v", err)
+					return
+				}
+			}
+			body, err := io.ReadAll(conn)
+			if err != nil {
+				t.Errorf("read response: %v", err)
+			}
+			responses[index] = string(body)
+		}()
+	}
+	wg.Wait()
+	for index, response := range responses {
+		streamID := fmt.Sprintf("stream-%d", index)
+		var expected strings.Builder
+		for chunk := 0; chunk < 250; chunk++ {
+			fmt.Fprintf(&expected, "data: {\"stream\":%q,\"chunk\":%d}\n\n", streamID, chunk)
+		}
+		expected.WriteString("data: [DONE]\n\n")
+		if response != expected.String() {
+			t.Fatalf("%s is incomplete or mixed: %d bytes, done=%v", streamID, len(response), strings.HasSuffix(response, "data: [DONE]\n\n"))
+		}
+	}
+}
+
+func waitForConnectedForward(t *testing.T, registry *tunnel.Registry, peerID string, port int) tunnel.ForwardState {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		peers := registry.List()
+		if len(peers) == 1 && len(peers[0].Forwards) == 1 && peers[0].Forwards[0].State == tunnel.StateConnected {
+			return peers[0].Forwards[0]
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("two-daemon tunnel did not connect: %+v", peers)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func startSSEPort(t *testing.T) (int, func()) {
+	return startPausableSSEPort(t, nil)
+}
+
+func startPausableSSEPort(t *testing.T, resume <-chan struct{}) (int, func()) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -688,6 +878,9 @@ func startSSEPort(t *testing.T) (int, func()) {
 				}
 				streamID = strings.TrimSpace(streamID)
 				for chunk := 0; chunk < 250; chunk++ {
+					if chunk == 1 && resume != nil {
+						<-resume
+					}
 					if _, err := fmt.Fprintf(conn, "data: {\"stream\":%q,\"chunk\":%d}\n\n", streamID, chunk); err != nil {
 						return
 					}

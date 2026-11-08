@@ -993,6 +993,15 @@ func (s *Server) serveSessionOnSinkGreeted(
 		s.notePRStatusClientsChanged()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
+		if s.tunnelTargetServer != nil {
+			s.tunnelTargetServer.Detach(func(outgoing tunnel.Frame) error {
+				encoded, encodeErr := tunnel.EncodeFrame(outgoing.Opcode, outgoing.TunnelID, outgoing.Payload)
+				if encodeErr != nil {
+					return encodeErr
+				}
+				return sink.SendBinary(ctx, encoded)
+			})
+		}
 	}()
 
 	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
@@ -1043,13 +1052,14 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 		// there, so every acknowledgement — including the answer to the open itself — was looked up,
 		// missed, and dropped without a trace: the target dialled the port and then nobody heard
 		// from it again.
-		s.tunnelTarget().HandleFrame(frame, func(outgoing tunnel.Frame) error {
+		send := func(outgoing tunnel.Frame) error {
 			encoded, encodeErr := tunnel.EncodeFrame(outgoing.Opcode, outgoing.TunnelID, outgoing.Payload)
 			if encodeErr != nil {
 				return encodeErr
 			}
 			return sink.SendBinary(ctx, encoded)
-		})
+		}
+		s.tunnelTarget().HandleFrame(frame, send)
 		return
 	}
 

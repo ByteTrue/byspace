@@ -29,8 +29,13 @@ const (
 	OpcodeDataUpstream byte = 0x20
 	// OpcodeDataDownstream carries stream bytes from the target host back to the initiator.
 	OpcodeDataDownstream byte = 0x21
-	// OpcodeClose tears one tunnel stream down.
+	// OpcodeClose tears one tunnel stream down. A one-byte payload of CloseWrite means only
+	// that direction is finished; the other direction may still have a response in flight.
 	OpcodeClose byte = 0x22
+
+	// CloseWrite is the optional OpcodeClose payload for TCP half-close. Older peers omit it and
+	// retain the original whole-stream close behavior.
+	CloseWrite byte = 1
 )
 
 // Open acknowledgement status bytes.

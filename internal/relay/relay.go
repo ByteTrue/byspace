@@ -23,16 +23,19 @@ type Options struct {
 	// ObserveFrame runs before the shared router handles an inbound frame. Tests use it to count
 	// uploads at the relay boundary without replacing the router or any socket behavior.
 	ObserveFrame func(conn Connection)
+	// ObserveSocket exposes accepted data sockets to lifecycle tests. Production leaves it nil.
+	ObserveSocket func(conn Connection, ws *websocket.Conn)
 }
 
 // Server implements the BySpace Relay HTTP and WebSocket protocol (v1 and v2)
 // on top of a plain Go HTTP server.
 type Server struct {
-	mu           sync.Mutex
-	rooms        map[string]*sessionRoom
-	webUI        *webui.Handler
-	cutoverProxy http.Handler
-	observeFrame func(Connection)
+	mu            sync.Mutex
+	rooms         map[string]*sessionRoom
+	webUI         *webui.Handler
+	cutoverProxy  http.Handler
+	observeFrame  func(Connection)
+	observeSocket func(Connection, *websocket.Conn)
 }
 
 // NewServer creates a new Relay Server instance.
@@ -52,10 +55,11 @@ func NewServer(opts Options) *Server {
 		}
 	}
 	return &Server{
-		rooms:        make(map[string]*sessionRoom),
-		webUI:        ui,
-		cutoverProxy: proxy,
-		observeFrame: opts.ObserveFrame,
+		rooms:         make(map[string]*sessionRoom),
+		webUI:         ui,
+		cutoverProxy:  proxy,
+		observeFrame:  opts.ObserveFrame,
+		observeSocket: opts.ObserveSocket,
 	}
 }
 
@@ -111,6 +115,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ws.SetReadLimit(64 * 1024 * 1024)
+	if s.observeSocket != nil {
+		s.observeSocket(conn, ws)
+	}
 
 	room := s.acquireRoom(conn.RoomKey())
 	peer := &peerConn{ws: ws, conn: conn}
