@@ -13,13 +13,17 @@ created: 2026-11-07
 
 - **预期**：Tunnel 中并发的 SSE / chunked 响应按原样完整转发；计量可以发现成本风险，但不能截断合法业务。
 - **实际**：Windows 0.24.3 经生产 relay 连 Mac Magpie，单路请求成功，6 路流式请求出现 `IncompleteRead`、无 `finish_reason`、JSON / tool arguments 损坏；Pi 工具循环因此失败。另一个 `503 masking` 是 Magpie 并发问题，不在本 Issue 修复。
-- **根因**：`workers/relay/main.go` 对每条在线业务消息执行 40 FPS / 120 burst 的持久化 token bucket，并以 1013 关闭超限 socket；日请求预算超限或计量不可用也关闭在线 socket。Tunnel 按项目规格逐帧透传，合法并发没有可安全假定的静态 FPS 上限。
-- **证据边界**：硬断流路径由代码直接证实，用户提供了原坏法的并发复现。JSON 损坏的中间形成链路尚不逐字节确定，不把 relay 直接篡改或交换 payload 当作已证实事实。
+- **根因（2026-11-08 定案）**：托管 relay 的 Durable Object **并发派发** `webSocketMessage` 事件，而 `workers/relay/main.go` 的 handler 在转发前 `await` 一次计量子请求（`RelayMeter`）。于是同一条 socket 上的多条消息各自挂起、按子请求返回顺序继续，帧的上线顺序被打乱。隧道两端按到达顺序把 payload 写进本地 TCP，乱序就等于字节错位：`BadStatusLine`（chunk 头冒充状态行）、`IncompleteRead`、无 `[DONE]` 的截断、JSON / tool 参数损坏都是这一个成因的不同表现。它同样作用于 terminal 输出与文件传输帧，不止隧道。
+- **对原记录的修正**：40 FPS / 120 burst 的持久化 token bucket 与日预算硬关是**另一个真存在的缺陷**（已移除），但它只解释 socket 被 1013 关闭，不解释截断与串字节。此前把它当唯一根因，所以「不再被关」之后症状照旧。
+- **为什么前两轮定位不到**：本地 Go relay 每个 socket 一条读循环，天然有序；本地 workerd 串行派发 DO 事件。两者的「30 轮 race 全绿」都无法证伪这条约束，只有对**已部署**的构建发突发帧才看得见（`go run ./workers/relay/probe`）。
+- **证据边界**：乱序由生产 A/B 实验直接证实（下方执行记录）。此前关于「Target 锁 / 恢复协议造成截断」的判断不再成立：恢复协议里确有缺陷（见下），但它不是 #43 的成因。
 
 ## 范围与方案
 
 - 删除在线业务消息的帧率封禁，不保留另一套静态阈值或 Tunnel 合帧。
 - 托管 relay 保留全局 UTC 日请求计量；超阈值和计量失败记录告警，但不拒绝握手、不关闭在线业务连接。`RELAY_DAILY_REQUEST_BUDGET` 变为告警阈值。请求成本继续由 hibernation、daemon agent 合帧、无 remote client 时关闭 data socket 控制。
+- **转发路径上不允许 await**：计量只留在 `/ws` 握手（`handleFetch`），`WebSocketMessage` 从解密身份到写出全部同步完成。计数粒度从「每帧」变成「每次握手」，也去掉了每帧一次 DO 子请求的开销。
+- 恢复协议自身的缺陷照此修掉（重放与在途数据严格有序、流暂停只由自己的发送失败触发、同 id 不复用旧连接）；它们不是 #43 的成因，但会在任何真实重连上丢数据。
 - 在 Tunnel 发起端与目标端补充有界诊断：streamId、双向帧数、关闭原因；不逐帧记录正常数据，不记录 payload 或凭据。
 - 用真实本地 workerd 验证 6 路并发流式消息在旧限流与旧日预算下会失败、修复后完整；用真实 daemon / E2EE / TCP 服务验证 6 路 SSE 完整性及流间隔离。
 - 不部署生产 relay、不重启 daemon、不修改 Magpie，不在本 Issue 增加自托管配置开关。
@@ -124,3 +128,15 @@ connected
 - 2026-11-08 Windows 复测 v0.24.4：6 路 0/6 完整，顺序大流也 IncompleteRead；Pi 工具循环有成功路径，说明恢复有效但物理连接/协议仍不稳定。Mac daemon 实测 0.24.4，不能将问题归因于未升级。
 - 进一步定位到恢复协议自身缺陷：普通 ACK 与恢复 ACK 混用导致重放/暂停竞态，Target 锁顺序导致并发 map 访问冲突。恢复 OpenAck、游标、唤醒和未确认重放形成闭环后，30 轮真实双 daemon relay + E2EE 断连/并发 race 通过；Go 审计与完整 CI 通过。
 - v0.24.5 已发布，修复 `0821a15`，版本提交 `f370cb38b`；Release Binaries、Deploy App、Docker、Release Notes Sync 全部成功。Mac 已升级 0.24.5，健康正常。Windows 原拓扑验收仍待该版本，#43 保持 `-o-`。
+- 2026-11-08 定案：用一条不经过隧道、也不经过 E2EE 的裸中继探针（v1 client + server，连发 300 个带序号文本帧）量生产 relay 的到达顺序。stable：`sent=300 received=300 out_of_place=291`，首帧是 12。对本地 workerd 跑同一探针：`out_of_place=0`；给本地 meter 人为加 40ms 延迟仍然 0——本地串行派发事件，所以本地怎么测都不会暴露。
+- 同时从 `wrangler tail` 取得机制证据：10 个 `webSocketMessage` 事件在同一毫秒被派发，10 个 `relay-meter.internal/take` 子请求在**全部消息事件之后**才陆续返回（19/49/17/24/29/30/32/36/42ms），即每条 handler 都挂起在计量上，返回顺序决定转发顺序。
+- 修复：`WebSocketMessage` 只做转发，计量留在 `/ws` 握手。部署 beta（`byspace-relay-go-beta`，版本 `3eb8d57e`）后同一探针 300 帧 `out_of_place=0`，重跑三次稳定；同时刻对 stable 复测仍为 `out_of_place=291`。
+- beta 上的真实拓扑复现与验收（Windows `10.1.115.59` → `app-beta` relay → Mac 3425 Magpie）：6 路并发各 250 个 chunk 连续 4 轮全为 `6/6`（16004 字节 / 顺序正确 / 有 `END`）；顺序单路 1000 chunk 完整；20 次小请求全成功；`/v1/models` 经隧道 26105 字节，MD5 与直连一致。修复前同一拓扑为 `0/6`，每路 0 字节收完却超时。
+- 真实 DeepSeek 流式补全 6 路并发（`deepseek/deepseek-flash`，每路 103–187 个 SSE 事件）：全部 200、全部 `[DONE]`、零坏 JSON、文本长度一致（275 字符）。
+- 排查中在恢复协议里找到并修掉四个独立缺陷；它们的表现都是「重连后丢数据」，但不是 #43 的成因：
+  - `Target` 的 `resumeAcked` 只升不降，同一条流的**第二次**重连命中跳过分支：不重放，且把 `resuming` 留在 true，之后每帧都要等一次不会发生的唤醒（30s 超时）。
+  - `Target.Detach` 忽略传入的 transport，暂停**所有**流：daemon 里任何一条无关 socket 关闭都会搞死正在恢复的隧道流。已删除，暂停只由该流自己的发送失败触发。
+  - 重放帧由读循环发送，新数据由 `pumpDownstream` 并发发送，而 `resume` 通道在重放**之前**就被 close，新帧可以抢在重放帧前上线，被对端游标当作空洞丢弃；另外发送失败重试会把已带序号后缀的 payload 再编码一次并取下一个序号。现在重放期间保持暂停，唤醒放在重放完成之后；payload 只编码一次，重放覆盖的帧不再重发。
+  - `Manager` 的流 id 从 `t1` 重新开始，而 `Target` 在断连后保留流 30 秒，`Open` 会复用同 id 的旧 TCP 连接——调用方把上一条响应的半截当自己的状态行（`BadStatusLine` 的来源之一）。id 现在带每个 manager 实例的随机前缀。
+- `internal/tunnel` 的 `-race -count=5` 通过，新增第二个重连周期的重放测试（修复前会在第二次 resume 上挂住）；`internal/server` 相关测试通过；`npm run typecheck`、`npm run lint`、`npm run format:check` 通过。
+- 仍未做：stable 部署与 stable 上的 Windows 原拓扑复测；Windows 桌面模式与 Mac tray 模式的 `slog` / `os.Stderr` 不落 `daemon.log`（本轮用 `serve` + 重定向绕开），这是下轮排查要先补的观测缺口。

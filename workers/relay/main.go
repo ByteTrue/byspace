@@ -141,14 +141,12 @@ func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn,
 		kind = relay.MessageBinary
 	}
 	peer := &wsPeer{conn: socket, connectionID: conn.ConnectionID()}
-	js.Global().Get("console").Call("debug", "relay message", conn.ServerID(), conn.Role(), conn.ConnectionID(), kind, len(data))
-	// Metering never gates forwarding: closing a valid socket cuts in-flight streams in half.
-	decision, err := takeDailyBudget()
-	if err != nil {
-		js.Global().Get("console").Call("warn", "relay meter unavailable; forwarding without a count: "+err.Error())
-	} else if decision.Reason != "" {
-		js.Global().Get("console").Call("warn", decision.Reason, decision.State.Requests)
-	}
+	// Nothing in this handler may await before the frame is forwarded. The runtime dispatches
+	// message events concurrently, so one suspension is enough for a later frame to overtake an
+	// earlier one: measured on the hosted build, 30 back-to-back frames arrived in a different
+	// order than they were sent, which scrambles every byte stream (terminal output, file
+	// transfer chunks, tunnel data) that crosses the relay. Counting lives on the handshake in
+	// handleFetch, where a suspension cannot reorder anything.
 	relay.Router{}.Message(context.Background(), &roomView{room: r}, r.frames, peer, conn, kind, data)
 	return nil
 }
