@@ -8,9 +8,16 @@
 package tunnel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 )
+
+func encodeSequence(sequence uint64) []byte {
+	payload := make([]byte, 8)
+	binary.BigEndian.PutUint64(payload, sequence)
+	return payload
+}
 
 // Frame opcodes, allocated after the file-transfer block in protocol/src/binary-frames/tunnel.ts.
 const (
@@ -36,6 +43,15 @@ const (
 	// CloseWrite is the optional OpcodeClose payload for TCP half-close. Older peers omit it and
 	// retain the original whole-stream close behavior.
 	CloseWrite byte = 1
+
+	// OpcodeDataDownstreamSeq carries an eight-byte big-endian sequence after the TCP payload.
+	// It is only sent after both daemons negotiate resumable streams; sequence bytes never
+	// reach the local TCP connection or an older peer.
+	OpcodeDataDownstreamSeq byte = 0x24
+	// OpcodeResume asks the target to resume an existing logical stream.
+	OpcodeResume byte = 0x25
+	// OpcodeResumeAck acknowledges a resume and reports the next acceptable sequence.
+	OpcodeResumeAck byte = 0x26
 )
 
 // Open acknowledgement status bytes.
@@ -44,6 +60,10 @@ const (
 	OpenAllowed byte = 0
 	// OpenDenied means the target refused, for the reason carried after the byte.
 	OpenDenied byte = 1
+	// OpenResumeCapable is advertised by targets that preserve unacknowledged frames.
+	OpenResumeCapable byte = 2
+	// OpenResumeRequested follows the two-byte port in Open when the initiator supports replay.
+	OpenResumeRequested byte = 1
 )
 
 // MaxTunnelIDLength bounds the stream id. The wire format stores its length in one byte.
@@ -85,7 +105,7 @@ func DecodeFrame(data []byte) (Frame, bool) {
 	}
 	opcode := data[0]
 	switch opcode {
-	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose:
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck:
 	default:
 		return Frame{}, false
 	}
@@ -111,7 +131,7 @@ func DecodeFrame(data []byte) (Frame, bool) {
 // as a bad slot and the bytes are dropped without a trace.
 func IsTunnelOpcode(opcode byte) bool {
 	switch opcode {
-	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose:
+	case OpcodeOpen, OpcodeOpenAck, OpcodeDataUpstream, OpcodeDataDownstream, OpcodeClose, OpcodeDataDownstreamSeq, OpcodeResume, OpcodeResumeAck:
 		return true
 	default:
 		return false
@@ -152,7 +172,7 @@ func DecodeOpenAck(payload []byte) (allowed bool, reason string, ok bool) {
 		return false, "", false
 	}
 	switch payload[0] {
-	case OpenAllowed:
+	case OpenAllowed, OpenAllowed | OpenResumeCapable:
 		return true, "", true
 	case OpenDenied:
 		return false, string(payload[1:]), true

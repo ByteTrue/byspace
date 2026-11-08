@@ -178,13 +178,12 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 // Send encrypts and transmits an application frame over the transport.
 func (s *DaemonSession) Send(plain Frame) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.handshaked {
-		s.mu.Unlock()
 		return errors.New("encrypted channel not open")
 	}
 	shared := s.sharedKey
 	binaryCap := s.binaryCiphertext
-	s.mu.Unlock()
 
 	ciphertext, err := Encrypt(shared, plain.Data)
 	if err != nil {

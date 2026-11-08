@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -51,6 +52,10 @@ type targetStream struct {
 	resume       chan struct{}
 	closed       bool
 	disconnected bool
+	downstream   replayBuffer
+	resuming     bool
+	resumable    bool
+	resumeAcked  bool
 }
 
 // OpenResult reports the outcome of an open request.
@@ -167,6 +172,11 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 			return
 		}
 		result, err := t.Open(frame.TunnelID, port, send)
+		if len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
+			if stream := t.streams[frame.TunnelID]; stream != nil {
+				stream.resumable = true
+			}
+		}
 		if err != nil {
 			_ = send(Frame{
 				Opcode:   OpcodeOpenAck,
@@ -175,10 +185,14 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 			})
 			return
 		}
+		ack := EncodeOpenAck(result.Allowed, result.Reason)
+		if result.Allowed && len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
+			ack[0] |= OpenResumeCapable
+		}
 		_ = send(Frame{
 			Opcode:   OpcodeOpenAck,
 			TunnelID: frame.TunnelID,
-			Payload:  EncodeOpenAck(result.Allowed, result.Reason),
+			Payload:  ack,
 		})
 		return
 	}
@@ -192,6 +206,41 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	}
 
 	switch frame.Opcode {
+	case OpcodeResumeAck:
+		if len(frame.Payload) != 8 {
+			return
+		}
+		next := binary.BigEndian.Uint64(frame.Payload)
+		stream.writeMu.Lock()
+		stream.downstream.acknowledge(next)
+		stream.disconnected = false
+		if stream.resume != nil {
+			close(stream.resume)
+			stream.resume = nil
+		}
+		frames := stream.downstream.replayFrom(next)
+		send := stream.send
+		resuming := stream.resuming
+		if resuming && stream.resumeAcked {
+			stream.disconnected = false
+			stream.writeMu.Unlock()
+			return
+		}
+		stream.resuming = false
+		stream.resumeAcked = resuming
+		stream.writeMu.Unlock()
+		if !resuming {
+			return
+		}
+		for _, replay := range frames {
+			if err := send(Frame{Opcode: OpcodeDataDownstreamSeq, TunnelID: stream.id, Payload: encodeSequencedPayload(replay)}); err != nil {
+				return
+			}
+		}
+		return
+	case OpcodeResume:
+		t.resumeStream(stream, send)
+		return
 	// Upstream: the initiator's local client sent bytes, so they go into the dialled socket.
 	// This side previously listened for Downstream, the direction it sends — so each end ignored
 	// exactly what the other one produced and no byte ever crossed.
@@ -276,12 +325,56 @@ func (t *Target) Detach(send func(Frame) error) {
 	t.mu.Unlock()
 }
 
+func (t *Target) resumeStream(stream *targetStream, send func(Frame) error) {
+	stream.writeMu.Lock()
+	if stream.closed {
+		stream.writeMu.Unlock()
+		_ = send(Frame{Opcode: OpcodeOpenAck, TunnelID: stream.id, Payload: EncodeOpenAck(false, "stream is closed")})
+		return
+	}
+	stream.send = send
+	stream.resuming = true
+	stream.disconnected = false
+	if stream.resume != nil {
+		close(stream.resume)
+	}
+	stream.resume = make(chan struct{})
+	stream.writeMu.Unlock()
+	_ = send(Frame{Opcode: OpcodeOpenAck, TunnelID: stream.id, Payload: EncodeOpenAck(true, "")})
+}
+
 func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
 	for {
 		stream.writeMu.Lock()
+		if stream.resuming {
+			resume := stream.resume
+			stream.writeMu.Unlock()
+			select {
+			case <-resume:
+			case <-time.After(30 * time.Second):
+				return false
+			}
+			continue
+		}
+		if frame.Opcode == OpcodeDataDownstream && stream.resumable {
+			if !stream.downstream.append(frame.Payload) {
+				stream.closeReason.Store("unacknowledged downstream buffer exceeded 16 MiB")
+				t.closeStream(stream)
+				stream.writeMu.Unlock()
+				return false
+			}
+			frame = Frame{Opcode: OpcodeDataDownstreamSeq, TunnelID: frame.TunnelID, Payload: frame.Payload}
+		}
 		send := stream.send
+		sequence := stream.downstream.next - 1
 		stream.writeMu.Unlock()
-		err := send(frame)
+		var err error
+		if frame.Opcode == OpcodeDataDownstreamSeq {
+			frame.Payload = encodeSequencedPayload(sequencedFrame{Sequence: sequence, Payload: frame.Payload})
+			err = send(frame)
+		} else {
+			err = send(frame)
+		}
 		if err == nil {
 			if frame.Opcode == OpcodeDataDownstream {
 				stream.framesDown.Add(1)
@@ -298,13 +391,6 @@ func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
 			stream.resume = make(chan struct{})
 		}
 		resume := stream.resume
-		stream.writeMu.Unlock()
-		t.Detach(send)
-		stream.writeMu.Lock()
-		if stream.closed {
-			stream.writeMu.Unlock()
-			return false
-		}
 		stream.writeMu.Unlock()
 		select {
 		case <-resume:

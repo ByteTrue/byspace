@@ -88,6 +88,17 @@ func TestTargetGatesAreReadPerRequest(t *testing.T) {
 
 // The full round trip: the target dials the service, and bytes sent as downstream frames come
 // back as upstream frames.
+func downstreamPayload(frame Frame) ([]byte, bool) {
+	if frame.Opcode == OpcodeDataDownstream {
+		return frame.Payload, true
+	}
+	if frame.Opcode != OpcodeDataDownstreamSeq {
+		return nil, false
+	}
+	_, payload, ok := decodeSequencedPayload(frame.Payload)
+	return payload, ok
+}
+
 func TestTargetForwardsBytes(t *testing.T) {
 	port, stop := startEchoService(t)
 	defer stop()
@@ -120,8 +131,8 @@ func TestTargetForwardsBytes(t *testing.T) {
 		select {
 		case frame := <-upstream:
 			// The echo comes back as downstream, from the dialled socket to the initiator.
-			if frame.Opcode == OpcodeDataDownstream {
-				echoed = append(echoed, frame.Payload...)
+			if payload, ok := downstreamPayload(frame); ok {
+				echoed = append(echoed, payload...)
 			}
 		case <-deadline:
 			t.Fatalf("timed out with %q", echoed)
@@ -164,8 +175,8 @@ func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
 	for {
 		select {
 		case frame := <-frames:
-			if frame.Opcode == OpcodeDataDownstream {
-				response = append(response, frame.Payload...)
+			if payload, ok := downstreamPayload(frame); ok {
+				response = append(response, payload...)
 			}
 			if frame.Opcode == OpcodeClose {
 				if string(response) != "data: complete\n\ndata: [DONE]\n\n" {
@@ -176,6 +187,25 @@ func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("response did not finish after upstream half-close: %q", response)
 		}
+	}
+}
+
+func TestTargetResumeAcknowledgesExistingStream(t *testing.T) {
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{1} })
+	stream := &targetStream{id: "resume", send: func(Frame) error { return nil }, resumable: true}
+	target.streams["resume"] = stream
+	frames := make(chan Frame, 1)
+	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, func(frame Frame) error {
+		frames <- frame
+		return nil
+	})
+	select {
+	case frame := <-frames:
+		if frame.Opcode != OpcodeOpenAck {
+			t.Fatalf("resume acknowledgement = %+v", frame)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("resume did not acknowledge")
 	}
 }
 
@@ -208,19 +238,19 @@ func TestTargetReconnectResumesPendingResponse(t *testing.T) {
 	close(startResponse)
 	target.Detach(func(Frame) error { return errors.New("old socket closed") })
 	newFrames := make(chan Frame, 8)
-	if _, err := target.Open("resume", port, func(frame Frame) error {
+	newSend := func(frame Frame) error {
 		newFrames <- frame
 		return nil
-	}); err != nil {
-		t.Fatal(err)
 	}
+	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, newSend)
+	target.HandleFrame(Frame{Opcode: OpcodeResumeAck, TunnelID: "resume", Payload: encodeSequence(0)}, newSend)
 	var response []byte
 	deadline := time.After(3 * time.Second)
 	for string(response) != "firstsecond" {
 		select {
 		case frame := <-newFrames:
-			if frame.Opcode == OpcodeDataDownstream {
-				response = append(response, frame.Payload...)
+			if payload, ok := downstreamPayload(frame); ok {
+				response = append(response, payload...)
 			}
 		case <-deadline:
 			t.Fatalf("resumed response = %q", response)

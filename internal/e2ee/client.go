@@ -140,13 +140,12 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 // Send encrypts and transmits one frame.
 func (s *ClientSession) Send(plain Frame) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.handshaked {
-		s.mu.Unlock()
 		return errors.New("e2ee session not ready")
 	}
 	key := s.sharedKey
 	binaryCiphertext := s.binaryCiphertext
-	s.mu.Unlock()
 
 	sealed, err := Encrypt(key, plain.Data)
 	if err != nil {

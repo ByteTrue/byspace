@@ -54,6 +54,8 @@ type stream struct {
 	closed       bool
 	halfClosed   bool
 	generation   uint64
+	downstream   receiveCursor
+	resumable    bool
 }
 
 func (s *stream) enqueue(frame Frame) bool {
@@ -206,10 +208,8 @@ func (m *Manager) SetPeer(peer PeerConn) {
 	for _, f := range m.forwards {
 		for _, s := range f.streams {
 			s.writeMu.Lock()
-			if s.generation > 0 {
-				s.opened = make(chan openResult, 1)
-				s.openOnce = sync.Once{}
-			}
+			s.opened = make(chan openResult, 1)
+			s.openOnce = sync.Once{}
 			s.writeMu.Unlock()
 			streams = append(streams, s)
 		}
@@ -224,10 +224,13 @@ func (m *Manager) SetPeer(peer PeerConn) {
 func (m *Manager) resumeStream(peer PeerConn, s *stream) {
 	s.writeMu.Lock()
 	s.connected = false
+	s.resumable = true
 	s.writeMu.Unlock()
-	if err := peer.Send(Frame{Opcode: OpcodeOpen, TunnelID: s.id, Payload: EncodeOpenPayload(s.remotePort)}); err != nil {
+	if err := peer.Send(Frame{Opcode: OpcodeResume, TunnelID: s.id, Payload: encodeSequence(s.downstream.next)}); err != nil {
+		m.logf("tunnel %s stream %s resume send failed: %v", m.peerID, s.id, err)
 		return
 	}
+	m.logf("tunnel %s stream %s resume requested: next=%d", m.peerID, s.id, s.downstream.next)
 	result, ok := m.awaitOpen(s)
 	m.mu.Lock()
 	current := m.peer == peer
@@ -375,7 +378,7 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	if err := peer.Send(Frame{
 		Opcode:   OpcodeOpen,
 		TunnelID: id,
-		Payload:  EncodeOpenPayload(f.remotePort),
+		Payload:  append(EncodeOpenPayload(f.remotePort), OpenResumeRequested),
 	}); err != nil {
 		m.dropStream(f, s, "peer send failed: "+err.Error())
 		return
@@ -610,11 +613,37 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 			allowed, reason = false, "malformed open acknowledgement"
 		}
 		target.settleOpen(openResult{allowed: allowed, reason: reason})
+		if allowed && (target.resumable || (len(frame.Payload) > 0 && frame.Payload[0]&OpenResumeCapable != 0)) {
+			target.resumable = true
+			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+		}
 	case OpcodeDataDownstream:
+		if target.resumable {
+			return
+		}
 		target.framesDown.Add(1)
 		if _, err := target.conn.Write(frame.Payload); err != nil {
 			m.dropStream(owner, target, err.Error())
 		}
+	case OpcodeDataDownstreamSeq:
+		sequence, payload, ok := decodeSequencedPayload(frame.Payload)
+		if !ok {
+			return
+		}
+		accepted, ok := target.downstream.accept(sequencedFrame{Sequence: sequence, Payload: payload})
+		if !ok {
+			return
+		}
+		target.framesDown.Add(1)
+		if _, err := target.conn.Write(accepted); err != nil {
+			m.dropStream(owner, target, err.Error())
+			return
+		}
+		if target.resumable {
+			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+		}
+	case OpcodeResume:
+		_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 	case OpcodeClose:
 		m.dropStream(owner, target, "")
 	}
