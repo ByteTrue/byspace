@@ -116,6 +116,10 @@ socket 接收必须是 hibernation：
 2026-11-01 打穿的是**请求数**额度（免费层 10 万/天，00:00 UTC 重置），和 GB-s 是两个独立的上限。
 
 - **每条 WebSocket 消息 = 1 次 DO request。** 字节数不影响计数，所以拆帧越细越贵。
+- **入站 WebSocket 消息按 20:1 折算成计费请求**（[定价文档](https://developers.cloudflare.com/durable-objects/platform/pricing/) 脚注 2）：
+  20 条消息算 1 个计费请求。analytics 和面板上的「请求」都是**原始值，不折算**，只有配额计数和账单用
+  折算值。免费层 10 万/天因此是 **200 万帧/天 ≈ 23 帧/秒**，不是 1.16 帧/秒。2026-11-01 那次是
+  原始 226 万 ≈ 计费 11.3 万，刚好越过 10 万。
 - **WS 消息不经过 Worker。** `workersInvocationsAdaptive` 那小时只有 ~200 次，而 DO 请求是 33 万——
   拿 Worker 指标判断 relay 是否异常会直接看反。看 `durableObjectsInvocationsAdaptiveGroups`。
 - 额度耗尽时**握手返回 502**（`stub.fetch` 直接抛），`/health` 仍 200。和 duration 耗尽的表现不同。
@@ -135,7 +139,16 @@ Node 的 `AGENT_STREAM_COALESCE_DEFAULT_WINDOW_MS = 60`（按 agent、text/reaso
 tool_call 按 callId 就地覆盖）。
 
 **结论：daemon 侧的帧率是额度约束，不是渲染细节。** 60ms 窗口给出 ≤16.7 帧/秒/agent 的上限；
-免费层 10 万/天约等于 1.16 帧/秒，所以持续流式的重度使用仍会撞顶，付费层才是长期解。
+免费层 10 万计费请求/天 ≈ 23 帧/秒，单 agent 满帧吃掉一半，多 agent 并发加隧道才会撞顶。
+
+2026-11-09 实测（HKT 00:00 起一整天隧道 + 流式，面板 Metrics 的「过去 24 小时」）：原始请求 164k
+→ 计费 ≈8.2k（**8.2%**），计费持续时间 RelayRoom 108 + RelayMeter 1.09 = **109 GB-s（0.84%）**。
+108 GB-s ÷ 0.128 GB = 843 秒，也就是 16.4 万次调用里对象真正醒着只有 14 分钟。这个用量下两个额度
+差一个数量级，**风险排序是请求数在前、duration 在后**。
+
+别拿 analytics 的 `wallTime` 推 duration：它按每次调用各自累加，并发重叠时重复计，同一天算出来是
+214,200 秒（约 92 小时），而面板的去重值是 108 GB-s。要看 GB-s 只能看 Durable Objects → Metrics 的
+「计费持续时间」。
 
 ### 2026-11-05：跨 room 的预算与再次复现
 
