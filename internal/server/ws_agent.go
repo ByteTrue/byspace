@@ -254,9 +254,10 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 		RequestID string `json:"requestId"`
 		AgentID   string `json:"agentId"`
 		Config    struct {
-			ModelID          *string `json:"modelId"`
-			ModeID           *string `json:"modeId"`
-			ThinkingOptionID *string `json:"thinkingOptionId"`
+			ModelID          *string        `json:"modelId"`
+			ModeID           *string        `json:"modeId"`
+			ThinkingOptionID *string        `json:"thinkingOptionId"`
+			FeatureValues    map[string]any `json:"featureValues"`
 		} `json:"config"`
 	}
 	_ = json.Unmarshal(raw, &req)
@@ -287,6 +288,20 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 			applyErr = err
 		}
 	}
+	if req.Config.ModeID != nil && strings.TrimSpace(*req.Config.ModeID) != "" {
+		if setter, ok := mp.session.(providers.ModeSetter); ok {
+			_ = setter.SetMode(ctx, *req.Config.ModeID)
+		} else if applyErr == nil {
+			applyErr = fmt.Errorf("%s reads its mode at launch; restart the agent to change it", mp.record.Provider)
+		}
+	}
+	if len(req.Config.FeatureValues) > 0 {
+		if setter, ok := mp.session.(providers.FeatureValueSetter); ok {
+			setter.SetFeatureValues(req.Config.FeatureValues)
+		} else if applyErr == nil {
+			applyErr = fmt.Errorf("%s reads its feature toggles at launch; restart the agent to apply", mp.record.Provider)
+		}
+	}
 
 	s.mu.Lock()
 	if mp.record.Config == nil {
@@ -301,6 +316,14 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 	}
 	if req.Config.ThinkingOptionID != nil {
 		mp.record.Config.ThinkingOptionID = req.Config.ThinkingOptionID
+	}
+	if len(req.Config.FeatureValues) > 0 {
+		if mp.record.Config.FeatureValues == nil {
+			mp.record.Config.FeatureValues = map[string]any{}
+		}
+		for key, value := range req.Config.FeatureValues {
+			mp.record.Config.FeatureValues[key] = value
+		}
 	}
 	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	recCopy := mp.record

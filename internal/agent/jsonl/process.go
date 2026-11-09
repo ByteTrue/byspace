@@ -100,10 +100,13 @@ func Start(cfg LaunchConfig) (*Process, error) {
 	// Every child gets the stripped environment, whether the caller supplied one or not: an
 	// agent that inherits the supervisor's markers changes behaviour (the Pi activity extension
 	// registers no handlers when it sees a foreign owner pid).
+	// Only a provider launch carries a per-agent environment; the helper Pi processes (title,
+	// commit message, catalog) pass none and must stay ordinary children, or a daemon that was
+	// itself started from an agent hands its parent's identity down.
 	if len(cfg.Env) > 0 {
 		cmd.Env = home.ProviderProcessEnv(cfg.Env)
 	} else {
-		cmd.Env = home.ProviderProcessEnv(os.Environ())
+		cmd.Env = home.ExternalProcessEnv(os.Environ())
 	}
 	cmd.Env = execres.AppendStandardDirs(cmd.Env)
 

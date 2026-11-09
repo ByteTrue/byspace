@@ -1177,6 +1177,14 @@ func (s *Store) loadDaemonConfigRaw() map[string]any {
 			tun["allowedPorts"] = []int{}
 		}
 	}
+	// COMPAT(daemonMcp): the wire still requires this object, so a hand-edited `mcp: null` or an
+	// object missing injectIntoAgents must not reach the client — it rejects the whole config
+	// frame and the Settings page never resolves. Nothing reads the values.
+	if mcp, ok := cfg["mcp"].(map[string]any); !ok {
+		cfg["mcp"] = daemonConfigDefaults()["mcp"]
+	} else if _, hasInject := mcp["injectIntoAgents"].(bool); !hasInject {
+		mcp["injectIntoAgents"] = true
+	}
 	liftAgentSettings(cfg, disk["agents"])
 	if daemon, ok := disk["daemon"].(map[string]any); ok {
 		liftAgentSettings(cfg, daemon["agents"])

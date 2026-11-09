@@ -127,13 +127,9 @@ func codexTurnParams(st codexTurnState) map[string]any {
 	if fast, ok := st.FeatureValues["fast_mode"].(bool); ok && fast && CodexModelSupportsFastMode(st.Model) {
 		params["serviceTier"] = "fast"
 	}
-	// The system prompt also has a top-level channel, independent of any collaboration mode: this is
-	// what makes it arrive even when the mode list was never fetched.
-	if prompt := strings.TrimSpace(st.SystemPrompt); prompt != "" {
-		params["developerInstructions"] = prompt
-	}
 	planMode, _ := st.FeatureValues["plan_mode"].(bool)
-	if mode, ok := pickCodexCollaborationMode(st.CollaborationModes, planMode); ok {
+	mode, hasMode := pickCodexCollaborationMode(st.CollaborationModes, planMode)
+	if hasMode {
 		modeID := mode.Mode
 		if modeID == "" {
 			modeID = "code"
@@ -141,6 +137,14 @@ func codexTurnParams(st codexTurnState) map[string]any {
 		params["collaborationMode"] = map[string]any{
 			"mode":     modeID,
 			"settings": codexCollaborationSettings(mode, st),
+		}
+	}
+	// The system prompt has two possible carriers. Inside a collaboration mode it rides the mode's
+	// settings; without one there is no carrier at all, so it rides the top-level field node also
+	// sent. Sending both would deliver it twice.
+	if !hasMode {
+		if prompt := strings.TrimSpace(st.SystemPrompt); prompt != "" {
+			params["developerInstructions"] = prompt
 		}
 	}
 	if st.OutputSchema != nil {

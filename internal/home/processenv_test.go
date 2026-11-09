@@ -105,13 +105,10 @@ func TestProviderProcessEnvKeepsTheAgentIdentity(t *testing.T) {
 	}
 }
 
-// The identity is copied from the base environment only, so a caller cannot hand a provider an id
-// the daemon did not set for that agent.
-func TestProviderProcessEnvKeepsOnlyTheBaseIdentity(t *testing.T) {
+// ProviderProcessEnv takes no overlays, so the identity can only come from the base environment:
+// exactly one copy, the one the daemon set for this agent.
+func TestProviderProcessEnvKeepsExactlyOneIdentity(t *testing.T) {
 	env := ProviderProcessEnv([]string{"PATH=/bin", "BYSPACE_AGENT_ID=agt_1"})
-	if slices.Contains(env, "BYSPACE_AGENT_ID=agt_other") {
-		t.Fatalf("a forged identity leaked: %v", env)
-	}
 	found := 0
 	for _, entry := range env {
 		if entry == "BYSPACE_AGENT_ID=agt_1" {

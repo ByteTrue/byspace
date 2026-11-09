@@ -2704,6 +2704,9 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	if err := s.store.UpsertAgent(mp.record); err != nil {
+		// The provider process is already running; a create that cannot be recorded has to take it
+		// back, or nothing will ever close it.
+		s.discardCreatedAgent(mp, rec.ID)
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 			"status":    "agent_create_failed",
 			"requestId": req.RequestID,
