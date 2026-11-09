@@ -323,3 +323,47 @@ func TestACPUsageFromPromptResult(t *testing.T) {
 		t.Fatal("a result without usage must yield nil")
 	}
 }
+
+// The CLI announces its commands on the init message; a hardcoded list hid the user's skills.
+func TestClaudeCommandsFromInit(t *testing.T) {
+	commands := claudeCommandsFromInit(map[string]any{
+		"subtype":        "init",
+		"slash_commands": []any{"/compact", "my-skill", ""},
+	})
+	if len(commands) != 2 || commands[0].Name != "compact" || commands[1].Name != "my-skill" {
+		t.Fatalf("commands = %+v", commands)
+	}
+	if claudeCommandsFromInit(map[string]any{"subtype": "other"}) != nil {
+		t.Fatal("only the init message announces commands")
+	}
+}
+
+// OpenCode keeps its command list server-side; a hardcoded answer hid project commands.
+func TestOpenCodeCommandsFromServer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/command" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("directory"); got != "/repo" {
+			t.Errorf("directory = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"name":"review","description":"Review the diff","hints":["<path>"]},
+			{"name":"my-skill","source":"skill"}
+		]`))
+	}))
+	defer server.Close()
+
+	session := &OpenCodeSession{baseURL: server.URL, cwd: "/repo", httpClient: server.Client()}
+	commands, err := session.GetCommands(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commands) != 2 {
+		t.Fatalf("commands = %+v", commands)
+	}
+	if commands[0].Name != "review" || commands[0].ArgumentHint != "<path>" || commands[1].Source != "skill" {
+		t.Fatalf("commands = %+v", commands)
+	}
+}

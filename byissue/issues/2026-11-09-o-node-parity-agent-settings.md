@@ -48,4 +48,6 @@ MCP 退役时的审计发现 App 上有一部分 provider 设置只有记录、�
 
 **验证**：`codexturn` 测试覆盖 collaboration 选择、settings 合成、无列表时不发；`claudeLaunchArgs` 覆盖 fast settings 与 effort；Claude 的拒绝路径有测试。`internal/{server,cli,agent/providers}` 全绿。
 
+**slash commands**：Claude 从 init 消息的 `slash_commands` 取（此前写死两个，用户装的 skill 看不见）；OpenCode 从 `GET /command?directory=` 取（此前写死，项目命令看不见）。ACP 早已从 `available_commands_update` 缓存。
+
 **仍未做**：OpenCode 的 per-agent env 与身份（共享 `opencode serve`，要 per-env 池）；Claude 中途换模型的真正实现（现为明确拒绝，应改成带 `--resume` 重启 session）；Claude 的 `--json-schema`（Node 也没有，属于新功能）；ACP 客户端的 BySpace 能力（范围外）。

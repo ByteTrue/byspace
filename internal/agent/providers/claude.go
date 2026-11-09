@@ -55,6 +55,8 @@ type ClaudeSession struct {
 	// homeDir is where materialised provider images land. Empty disables image output.
 	homeDir   string
 	nextSubID int
+	// commands are the slash commands the CLI announced on its init message.
+	commands []sdk.SlashCommand
 }
 
 // StartClaudeSession launches a Claude Code stream-json subprocess.
@@ -157,6 +159,12 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 	case "system":
 		if sid, ok := ev["session_id"].(string); ok && sid != "" {
 			s.sessionID = sid
+		}
+		// The init message is where the CLI announces the commands and skills it has loaded. The
+		// node daemon read them from the SDK; without this the "/" menu offered two commands that
+		// happen to be hardcoded here.
+		if commands := claudeCommandsFromInit(ev); len(commands) > 0 {
+			s.commands = commands
 		}
 
 	case "assistant":
@@ -621,7 +629,18 @@ func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error 
 	return errors.New("claude reads --effort at launch; restart the agent to change the thinking level")
 }
 
+// GetCommands returns the commands the CLI announced at startup.
+//
+// The two entry answer is what a session shows before its init message arrives; the init message
+// carries the provider's own list, including the user's skills.
 func (s *ClaudeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.commands) > 0 {
+		out := make([]sdk.SlashCommand, len(s.commands))
+		copy(out, s.commands)
+		return out, nil
+	}
 	return []sdk.SlashCommand{
 		{Name: "compact", Description: "Compact conversation history", Source: "builtin"},
 		{Name: "clear", Description: "Clear conversation context", Source: "builtin"},
@@ -1304,4 +1323,24 @@ func intField(m map[string]any, key string) int {
 		return value
 	}
 	return 0
+}
+
+// claudeCommandsFromInit reads the slash commands the CLI announced on its init message.
+func claudeCommandsFromInit(ev map[string]any) []sdk.SlashCommand {
+	if subtype, _ := ev["subtype"].(string); subtype != "init" {
+		return nil
+	}
+	names, _ := ev["slash_commands"].([]any)
+	commands := make([]sdk.SlashCommand, 0, len(names))
+	for _, raw := range names {
+		name, ok := raw.(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			continue
+		}
+		commands = append(commands, sdk.SlashCommand{
+			Name:   strings.TrimPrefix(strings.TrimSpace(name), "/"),
+			Source: "command",
+		})
+	}
+	return commands
 }

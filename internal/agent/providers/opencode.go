@@ -396,7 +396,15 @@ func (s *OpenCodeSession) SetThinkingLevel(_ context.Context, level string) erro
 	return nil
 }
 
-func (s *OpenCodeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+// GetCommands asks the server for the commands it knows.
+//
+// OpenCode keeps the list server-side (built-ins, project commands and skills), so a hardcoded
+// answer hid every project command. The static list below is only the fallback when the server
+// cannot answer.
+func (s *OpenCodeSession) GetCommands(ctx context.Context) ([]sdk.SlashCommand, error) {
+	if commands := s.listCommandsFromServer(ctx); len(commands) > 0 {
+		return commands, nil
+	}
 	return []sdk.SlashCommand{
 		{Name: "compact", Description: "Compact session", Source: "builtin"},
 	}, nil
@@ -536,4 +544,58 @@ func openCodeUsageFromParts(parts []any) *sdk.AgentUsage {
 		return nil
 	}
 	return usage
+}
+
+// listCommandsFromServer reads GET /command, which returns the commands for one directory.
+func (s *OpenCodeSession) listCommandsFromServer(ctx context.Context) []sdk.SlashCommand {
+	s.mu.Lock()
+	baseURL := s.baseURL
+	cwd := s.cwd
+	s.mu.Unlock()
+	if baseURL == "" {
+		return nil
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/command", nil)
+	if err != nil {
+		return nil
+	}
+	if cwd != "" {
+		query := request.URL.Query()
+		query.Set("directory", cwd)
+		request.URL.RawQuery = query.Encode()
+	}
+	resp, err := s.httpClient.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var entries []struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Hints       []string `json:"hints"`
+		Source      string   `json:"source"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil
+	}
+	out := make([]sdk.SlashCommand, 0, len(entries))
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Name) == "" {
+			continue
+		}
+		kind := "command"
+		if entry.Source == "skill" {
+			kind = "skill"
+		}
+		out = append(out, sdk.SlashCommand{
+			Name:         entry.Name,
+			Description:  entry.Description,
+			ArgumentHint: strings.Join(entry.Hints, " "),
+			Source:       kind,
+		})
+	}
+	return out
 }
