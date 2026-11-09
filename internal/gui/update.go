@@ -371,25 +371,31 @@ func (u *ClientUpdater) markInstalled(clearState bool) {
 	}
 }
 
-// InstallAndRelaunch swaps the staged update in and spawns the new version before the caller quits.
-func (u *ClientUpdater) InstallAndRelaunch(showWindow bool) bool {
-	u.mu.Lock()
-	bundle := u.bundle
-	exe := u.exe
-	u.mu.Unlock()
-
-	if !u.InstallStaged() {
-		return false
-	}
+// relaunchApp starts a replacement of this app process and reports whether one was spawned.
+//
+// Both the update flow and a client-requested daemon restart use it: the daemon runs inside this
+// process, so its restart is a handoff. The successor waits for this pid (BYSPACE_REPLACES) before
+// taking the single-instance lock and the daemon port.
+func relaunchApp(showMain bool) bool {
 	var err error
-	if bundle != "" {
-		err = selfupdate.RelaunchApp(bundle, showWindow)
-	} else if exe != "" {
-		err = selfupdate.RelaunchBinary(exe, showWindow)
+	if bundle := selfupdate.Bundle(); bundle != "" {
+		err = selfupdate.RelaunchApp(bundle, showMain)
+	} else if exe, exeErr := selfupdate.Executable(); exeErr != nil {
+		err = exeErr
+	} else {
+		err = selfupdate.RelaunchBinary(exe, showMain)
 	}
 	if err != nil {
-		log.Printf("byspace update relaunch failed: %v", err)
+		log.Printf("byspace relaunch failed: %v", err)
 		return false
 	}
 	return true
+}
+
+// InstallAndRelaunch swaps the staged update in and spawns the new version before the caller quits.
+func (u *ClientUpdater) InstallAndRelaunch(showWindow bool) bool {
+	if !u.InstallStaged() {
+		return false
+	}
+	return relaunchApp(showWindow)
 }

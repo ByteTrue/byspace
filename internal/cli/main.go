@@ -133,7 +133,9 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "serve":
 		if err := runServe(version, rest, stdout); err != nil {
-			fmt.Fprintln(stderr, "byspace serve:", err)
+			if !errors.Is(err, errRestartUnderSupervisor) {
+				fmt.Fprintln(stderr, "byspace serve:", err)
+			}
 			return 1
 		}
 		return 0
@@ -402,7 +404,15 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer srv.Close()
+	// Closed explicitly before a restart spawns its replacement, so the successor reads settled
+	// agent and terminal state instead of racing this process's teardown. The deferred call covers
+	// every other exit.
+	srvClosed := false
+	defer func() {
+		if !srvClosed {
+			_ = srv.Close()
+		}
+	}()
 
 	// BYSPACE_LISTEN accepts tcp, unix socket and windows named pipe forms; see
 	// daemon.ParseListenTarget for why sockets matter in restricted environments.
@@ -460,20 +470,53 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	}
 
 	httpSrv := &http.Server{Handler: srv}
-	go func() {
-		<-ctx.Done()
+	shutdownHTTP := func() {
 		sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(sctx)
-	}()
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpSrv.Serve(ln) }()
 
 	fmt.Fprintf(stdout, "● byspace daemon (%s) listening on %s [serverId=%s]\n", version, listenTarget.Address(), srv.ServerID())
-	err = httpSrv.Serve(ln)
-	if errors.Is(err, http.ErrServerClosed) {
+
+	// A client's restart/stop ask lands here: the server cannot restart itself, this process owns
+	// it. Both asks end the process, and this select has to hold the main goroutine — closing the
+	// listener returns Serve immediately, so a restart handled in a goroutine loses that race and
+	// the process exits without a replacement.
+	control := server.ControlRequest{}
+	select {
+	case err := <-serveErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	case control = <-srv.ControlRequests():
+	}
+	shutdownHTTP()
+	if !control.Restart {
 		return nil
 	}
-	return err
+	// The pid lock has to go before the replacement starts, or it fails the pre-bind check and
+	// exits into an empty port.
+	daemon.RemovePID(srv.HomeDir(), myPID)
+	srvClosed = true
+	_ = srv.Close()
+	if daemon.Supervised() {
+		return errRestartUnderSupervisor
+	}
+	if _, spawnErr := daemon.StartBackgroundArgs("", srv.HomeDir(), args); spawnErr != nil {
+		fmt.Fprintf(os.Stderr, "daemon restart: %v\n", spawnErr)
+	}
+	return nil
 }
+
+// errRestartUnderSupervisor ends a supervised `serve` so the service manager starts the replacement.
+//
+// Not a failure: both systemd's Restart=on-failure and launchd's KeepAlive/ SuccessfulExit=false
+// restart on a non-zero exit and leave a clean exit alone, which is what makes `daemon stop` stick.
+var errRestartUnderSupervisor = errors.New("restarting under the service manager")
 
 func runWeb(version string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("web", flag.ContinueOnError)
@@ -1401,6 +1444,14 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if grace <= 0 {
 			grace = 3 * time.Second
 		}
+		// The owner decides how the daemon stops; for the desktop app that is the app, not a `serve`
+		// this CLI could signal.
+		if controlAddr, pid := runningDaemonAddr("", resolvedHome); controlAddr != "" &&
+			daemonControl(controlAddr, "requested by byspace daemon stop", false) &&
+			awaitDaemonStop(controlAddr, 20*time.Second) {
+			fmt.Fprintf(stdout, "stopped  pid=%d  home=%s\n", pid, resolvedHome)
+			return nil
+		}
 		pid, stopped, err := daemon.StopRunningWithTimeout(resolvedHome, grace)
 		if err != nil {
 			return err
@@ -1424,13 +1475,47 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if _, _, err := daemon.StopRunning(resolvedHome); err != nil {
+		// Ask the running daemon to restart itself before touching the process: only its owner can
+		// bring it back on the same port, and the owner is not always a `serve` process.
+		//
+		// An unset --addr has to stay unset here, or the address the lock recorded is never probed
+		// and a daemon on a non-default port looks absent.
+		explicitAddr := ""
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "addr" {
+				explicitAddr = *addr
+			}
+		})
+		controlAddr, pidBefore := runningDaemonAddr(explicitAddr, resolvedHome)
+		if controlAddr != "" && daemonControl(controlAddr, "requested by byspace daemon restart", true) {
+			pid, restarted := awaitDaemonRestart(controlAddr, resolvedHome, pidBefore, 60*time.Second)
+			if !restarted {
+				return fmt.Errorf("the daemon accepted the restart but did not come back on %s; %s",
+					controlAddr, daemonLogTail(resolvedHome, 0))
+			}
+			fmt.Fprintf(stdout, "restarted  pid=%d  addr=%s\n", pid, controlAddr)
+			return nil
+		}
+		pid, stopped, err := daemon.StopRunning(resolvedHome)
+		if err != nil {
 			return err
 		}
 		// Wait for the port to be released before starting. Without this the new process can
 		// lose the bind race against the one that is still shutting down, and `restart` reports
 		// success while nothing is listening.
 		daemon.WaitForShutdown(resolvedHome, *addr, 5*time.Second)
+		// A daemon this CLI cannot signal is not a daemon it can restart: report that instead of
+		// starting a second process that loses the bind race and reporting "already running".
+		if !stopped {
+			probeAddr := controlAddr
+			if probeAddr == "" {
+				probeAddr = *addr
+			}
+			if _, probeErr := probeHealth(probeAddr); probeErr == nil {
+				return fmt.Errorf("the daemon on %s did not stop (pid %d); restart it from the app that hosts it",
+					probeAddr, pid)
+			}
+		}
 		return runDaemonCmd(cliVersion, []string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
 
 	case "install-service":

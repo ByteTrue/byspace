@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -119,6 +120,9 @@ type DaemonSupervisor struct {
 	Version       string
 	WatchInterval time.Duration
 
+	// onControlRequest handles a client's restart/stop ask; the app supplies it (see SetControlHandler).
+	onControlRequest func(server.ControlRequest)
+
 	mu        sync.Mutex
 	srv       *server.Server
 	httpSrv   *http.Server
@@ -156,6 +160,14 @@ func (d *DaemonSupervisor) Start() error {
 
 	go d.watchLoop()
 	return nil
+}
+
+// SetControlHandler installs the app's handler for a client's restart/stop ask. Called after Start,
+// which is when the app has the window and updater the restart needs.
+func (d *DaemonSupervisor) SetControlHandler(handler func(server.ControlRequest)) {
+	d.mu.Lock()
+	d.onControlRequest = handler
+	d.mu.Unlock()
 }
 
 // OwnsInProcessDaemon reports whether this desktop process is currently serving the daemon in-process.
@@ -405,6 +417,26 @@ func (d *DaemonSupervisor) startInProcess() error {
 
 	go func() {
 		_ = httpSrv.Serve(ln)
+	}()
+
+	// The way out for a client's restart/stop ask. Without this reader the ask lands in a channel
+	// nobody drains and the app's restart button does nothing.
+	go func() {
+		for {
+			select {
+			case <-stopWatch:
+				return
+			case req := <-srv.ControlRequests():
+				d.mu.Lock()
+				handler := d.onControlRequest
+				d.mu.Unlock()
+				if handler == nil {
+					log.Printf("byspace gui: daemon control requested with no handler: %s", req.Reason)
+					continue
+				}
+				handler(req)
+			}
+		}
 	}()
 	return nil
 }

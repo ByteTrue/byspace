@@ -288,6 +288,10 @@ func TestServerOverRelayE2EEHandshake(t *testing.T) {
 }
 
 func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
+	// The skills section below saves a selection, which installs into the agent homes under the
+	// user's home. Without this redirect the test writes BySpace skills into the developer's real
+	// ~/.agents/skills: running the suite is not supposed to change the machine.
+	sandboxUserHome(t)
 	tmp := t.TempDir()
 	fakePi := writeFakePiScript(t, tmp)
 	workDir := filepath.Join(tmp, "repo")

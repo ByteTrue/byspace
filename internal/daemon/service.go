@@ -17,6 +17,26 @@ import (
 // plist/unit file is only half of it — the platform has to be told to load it, and "installed"
 // with an unloaded unit looks identical to "installed and working" until the next login.
 
+// ServiceManagedEnv marks a `serve` process started by the generated unit/plist.
+//
+// The daemon reacts differently to a client's restart when a service manager owns it: it exits and
+// lets the manager start the replacement, instead of spawning one (see Supervised).
+const ServiceManagedEnv = "BYSPACE_SERVICE_MANAGED"
+
+// Supervised reports whether a service manager owns this process and will restart it.
+//
+// A restart from inside a supervised daemon has to be an exit, not a spawn: systemd kills the rest
+// of the unit's cgroup when the main process exits, so a replacement spawned here dies with it, and
+// launchd keeps that child running while the unit itself reports not running. Both managers restart
+// on a non-zero exit, which is why the restart path returns an error. INVOCATION_ID covers units
+// installed before the marker variable existed.
+func Supervised() bool {
+	if os.Getenv(ServiceManagedEnv) != "" {
+		return true
+	}
+	return os.Getenv("INVOCATION_ID") != ""
+}
+
 // ServiceInstallResult reports what was registered.
 type ServiceInstallResult struct {
 	// DefinitionPath is the plist or unit file written.

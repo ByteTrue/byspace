@@ -5,7 +5,6 @@ import {
   cancelSkillSelection,
   chooseAllSkills,
   chooseCustomSkills,
-  clickInstall,
   expectInstalledIn,
   expectInstalledSkills,
   expectSavedSelection,
@@ -40,9 +39,9 @@ test.describe("Host agent skills", () => {
     const chosen = skills.available.slice(0, 1);
     await openAgentSkillsSettings(page, skills);
 
-    // Nothing is installed yet, so Install is the first point the user can say
-    // what they want. It asks instead of writing the whole bundle.
-    await clickInstall(page);
+    // Nothing is installed yet and nothing is selected, so the only entry point
+    // is the picker: the host never installs the bundle on its own.
+    await openSkillSelection(page);
 
     await chooseCustomSkills(page, chosen);
     await saveSkillSelection(page);
@@ -201,7 +200,8 @@ test.describe("Host agent skills", () => {
     ).toBeVisible();
     await expect(page.getByRole("switch", { name: "All skills", exact: true })).toBeVisible();
     await skills.unblockAgentsDirectory();
-    await expectSavedSelection(skills, { mode: "all" });
+    // The failed save changed nothing, and this host never chose a selection.
+    await expectSavedSelection(skills, { mode: "custom", skills: [] });
   });
 
   test("serializes concurrent saves through the daemon command surface", async ({ skills }) => {

@@ -643,13 +643,7 @@ func Run(version string, showMain bool, initialLink string) error {
 			menu.Update()
 			updater.DownloadFound()
 		})
-		triggerRelaunch := func() {
-			shown := application.InvokeSyncWithResult(func() bool {
-				return mainWin != nil && mainWin.IsVisible()
-			})
-			if !updater.InstallAndRelaunch(shown) {
-				return
-			}
+		exitForRelaunch := func() {
 			quitting.Store(true)
 			cancelBg()
 			updater.Stop()
@@ -660,6 +654,43 @@ func Run(version string, showMain bool, initialLink string) error {
 			// in user32 also stalls ExitProcess. A wedged old process keeps holding the single-instance
 			// mutex the relaunched process needs, so the update leaves a frozen window and no app.
 			os.Exit(0)
+		}
+		triggerRelaunch := func() {
+			shown := application.InvokeSyncWithResult(func() bool {
+				return mainWin != nil && mainWin.IsVisible()
+			})
+			if !updater.InstallAndRelaunch(shown) {
+				return
+			}
+			exitForRelaunch()
+		}
+
+		// A client's restart/stop ask lands here: the daemon runs inside this process, and only the
+		// process owner can restart it. A restart hands off to a replacement process (the same
+		// handoff the update path uses), so the new daemon starts from scratch instead of the old
+		// one continuing to serve.
+		if sup != nil {
+			sup.SetControlHandler(func(req server.ControlRequest) {
+				action := "stop"
+				if req.Restart {
+					action = "restart"
+				}
+				log.Printf("byspace gui: daemon %s requested by a client: %s", action, req.Reason)
+				if !req.Restart {
+					quitting.Store(true)
+					application.InvokeAsync(func() { app.Quit() })
+					return
+				}
+				// Same window decision as the update path: relaunching in the startup mode would
+				// hide a window the user is looking at, since autostart and the tray launch hidden.
+				shown := application.InvokeSyncWithResult(func() bool {
+					return mainWin != nil && mainWin.IsVisible()
+				})
+				if !relaunchApp(shown) {
+					return
+				}
+				exitForRelaunch()
+			})
 		}
 
 		restartItem := menu.Add("Restart to update").SetHidden(true)

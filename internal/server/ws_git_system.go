@@ -1299,7 +1299,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		cfg := s.store.LoadDaemonConfig()
 		sel, ok := cfg["skillsSelection"].(map[string]any)
 		if !ok || sel == nil {
-			sel = map[string]any{"mode": "all"}
+			sel = defaultSkillSelection()
 		}
 		targets := []string{"agents", "claude"}
 		if rawT, hasT := cfg["skillTargets"].([]any); hasT && len(rawT) > 0 {
@@ -1323,6 +1323,14 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			status, err = uninstallSkills(sourceDir, userHome, sel, targets)
 			if err != nil {
 				applyErr = err.Error()
+			} else {
+				// Uninstall is the user saying "not on this host". Recording it is what makes that stick:
+				// a stored selection that still says "all" gets the bundle repaired back on the next
+				// startup where anything drifts, so the skills reappear after the user removed them.
+				sel = defaultSkillSelection()
+				_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
+				ok = true
+				status = getSkillsStatus(sourceDir, userHome, sel, targets)
 			}
 		case "agent.skills.reconcile.request":
 			status = getSkillsStatus(sourceDir, userHome, sel, targets)
@@ -1359,7 +1367,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		_ = json.Unmarshal(raw, &req)
 		sel := req.Selection
 		if sel == nil {
-			sel = map[string]any{"mode": "all"}
+			sel = defaultSkillSelection()
 		}
 		targets := req.Targets
 		if len(targets) == 0 {
@@ -1432,7 +1440,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		_ = json.Unmarshal(raw, &req)
 		sel := req.Selection
 		if sel == nil {
-			sel = map[string]any{"mode": "all"}
+			sel = defaultSkillSelection()
 		}
 		_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
 		_ = sendSessionMsg(ctx, sink, "agent.skills.import_legacy_selection.response", map[string]any{
@@ -1582,8 +1590,22 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if reason == "" {
 			reason = "requested by a client"
 		}
+		restart := msgType == "restart_server_request"
+		status := "shutdown_requested"
+		if restart {
+			status = "restart_requested"
+		}
+		// Acknowledge before the owner takes the socket down: the client's restart flow waits for
+		// this status. `clientId` is required by the schema and empty because the frame is for this
+		// connection; the request used to sit in a channel nobody read, so the button did nothing.
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    status,
+			"clientId":  "",
+			"requestId": controlReq.RequestID,
+			"reason":    reason,
+		})
 		fmt.Fprintf(os.Stderr, "daemon control: %s\n", reason)
-		s.requestShutdown(reason)
+		s.requestControl(ControlRequest{Restart: restart, Reason: reason})
 		return
 
 	case "tunnel.list.request":

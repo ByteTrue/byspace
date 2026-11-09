@@ -145,21 +145,21 @@ export async function openSkillSelection(page: Page): Promise<void> {
   await expectSkillSelectionOpen(page);
 }
 
-export async function clickInstall(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Install", exact: true }).click();
-}
-
 export async function expectSkillSelectionOpen(page: Page): Promise<void> {
   await expect(page.getByRole("switch", { name: "All skills", exact: true })).toBeVisible();
 }
 
 export async function chooseCustomSkills(page: Page, selected: string[]): Promise<void> {
+  // The sheet opens from three states: "All skills" (an existing all-selection),
+  // a partial custom one, or nothing at all (a host that never chose — the
+  // daemon no longer defaults to installing the bundle). Set every row to the
+  // wanted state instead of assuming a starting point.
   const all = page.getByRole("switch", { name: "All skills", exact: true });
-  await expect(all).toBeChecked();
-  await all.click();
+  if (await all.isChecked()) await all.click();
   const keep = new Set(selected);
   for (const name of await listSkillChoices(page)) {
-    if (!keep.has(name)) await page.getByRole("checkbox", { name, exact: true }).click();
+    const checkbox = page.getByRole("checkbox", { name, exact: true });
+    if ((await checkbox.isChecked()) !== keep.has(name)) await checkbox.click();
   }
   await expectSkillChoices(page, selected);
 }

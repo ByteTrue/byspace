@@ -58,6 +58,15 @@ The heart of BySpace. A Go process (`byspace serve`) that:
 
 Layout: `internal/server/` owns the WebSocket API and session loop, `internal/agent/` the provider drivers, `internal/workspace/` git and files, `internal/terminal/`, `internal/schedule/`, `internal/relay/`, `internal/webui/` (embedded client assets).
 
+**Restart and stop belong to the process owner.** `restart_server_request` and
+`shutdown_server_request` are acknowledged with a status frame, then handed out of the server: a
+server cannot restart itself. `byspace serve` respawns itself with the flags it was given, or exits
+for the service manager to restart when `daemon install-service` owns it; the desktop app relaunches
+the app. `byspace daemon restart` and `daemon stop` ask over this RPC first and fall back to
+signalling the pid only when nothing acks, because the process holding the daemon port is often
+`byspace tray`, which no `serve` process identity matches. A stop for a desktop-hosted daemon quits
+the app: nothing else can keep its supervisor from starting the daemon again.
+
 The Node daemon this replaced is kept read-only under `archive/packages/server/`. When a ported behaviour looks wrong, read the archived source at the same call site — it answers "did the port break this, or was it always like this?" faster than any other evidence. [docs/archive-parity.md](archive-parity.md) describes how to use it.
 
 Project identity is daemon-global rather than session-owned. After registry bootstrap, the daemon's
