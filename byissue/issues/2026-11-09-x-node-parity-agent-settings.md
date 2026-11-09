@@ -51,3 +51,15 @@ MCP 退役时的审计发现 App 上有一部分 provider 设置只有记录、�
 **slash commands**：Claude 从 init 消息的 `slash_commands` 取（此前写死两个，用户装的 skill 看不见）；OpenCode 从 `GET /command?directory=` 取（此前写死，项目命令看不见）。ACP 早已从 `available_commands_update` 缓存。
 
 **仍未做**：OpenCode 的 per-agent env 与身份（共享 `opencode serve`，要 per-env 池）；Claude 中途换模型的真正实现（现为明确拒绝，应改成带 `--resume` 重启 session）；Claude 的 `--json-schema`（Node 也没有，属于新功能）；ACP 客户端的 BySpace 能力（范围外）。
+
+## 关闭结论
+
+**可关**：本事项的判据是「Node 版做到、Go 版没做」的设置通道，这批全部到位——Codex 的 mode/thinking/fast/system prompt/plan_mode、Claude 的 system prompt/thinking/fast、OpenCode 的 model/mode/thinking、ACP 的 model/mode/thinking、每 agent 的 `env`、四家的 token usage、Claude 与 OpenCode 的 slash command 列表。通道清单与判据落在 `docs/providers.md` 的表里。
+
+**验证**：`go build`/`go vet` 干净；`internal/{server,cli,agent/…,workspace,schedule,store}` 全绿；`npm run audit:go-parity` 入站/出站缺口 0（`env` 从「解析未使用」变成真实使用）；`oxlint` 0/0、`oxfmt` 通过、typecheck 0 error、`docs-links` 通过。新增测试覆盖每家参数的构造/解析，以及 Claude 拒绝运行时换模型的路径。
+
+**遗留**（另开 `2026-11-09-o-claude-restart-and-opencode-env.md`）：Claude 换模型的真正实现要重启会话；OpenCode 的 per-agent env/身份要按环境分桶池子。
+
+**已知上限**（不再追）：ACP 客户端读不到 bundled skill，因此没有 BySpace 能力；Claude 的 `--json-schema` 不是 Node 已有功能，属于新特性。
+
+**沉淀**：通用的「参数存了不传」判据写进 `byissue/notes/2026-11-09-settings-stored-but-not-transmitted.md`；稳定结论并入 `byissue/spec/agent-tools.md` 的长期约束。
