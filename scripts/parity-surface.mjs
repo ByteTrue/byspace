@@ -140,14 +140,77 @@ export function envVarGaps(root) {
     .sort();
 }
 
+// Surfaces this repo deliberately retired, with the decision that retired them.
+//
+// The guard's job is to catch names lost by accident during the port; a deliberate removal has to
+// say so here instead of quietly editing the snapshot. Each entry is one name a client could type,
+// so the list doubles as the record of what an older client will find missing.
+const RETIRED_MCP_TOOLS_DECISION =
+  "byissue/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (BySpace tools moved to the bundled skill + CLI)";
+const RETIRED_HTTP_ROUTES_DECISION =
+  "byissue/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (the pi subagent report endpoint was a stub)";
+
+const RETIRED_MCP_TOOLS = new Set([
+  "archive_agent",
+  "archive_workspace",
+  "cancel_agent",
+  "capture_terminal",
+  "create_agent",
+  "create_heartbeat",
+  "create_schedule",
+  "create_terminal",
+  "create_workspace",
+  "delete_heartbeat",
+  "delete_schedule",
+  "get_agent_activity",
+  "get_agent_status",
+  "inspect_provider",
+  "inspect_schedule",
+  "kill_agent",
+  "kill_terminal",
+  "list_agents",
+  "list_models",
+  "list_pending_permissions",
+  "list_profiles",
+  "list_providers",
+  "list_schedules",
+  "list_terminals",
+  "list_workspace_scripts",
+  "list_workspaces",
+  "pause_schedule",
+  "rename_branch",
+  "rename_workspace",
+  "respond_to_permission",
+  "resume_schedule",
+  "run_schedule_once",
+  "schedule_logs",
+  "send_agent_prompt",
+  "send_terminal_keys",
+  "set_agent_mode",
+  "start_workspace_script",
+  "stop_workspace_script",
+  "update_agent",
+  "update_schedule",
+]);
+
+const RETIRED_HTTP_ROUTES = new Set(["/api/subagent-report"]);
+
+export function retiredSurfaces() {
+  return { mcpTools: RETIRED_MCP_TOOLS_DECISION, httpRoutes: RETIRED_HTTP_ROUTES_DECISION };
+}
+
 export function mcpToolGaps(root) {
   const go = goMcpTools(root);
-  return [...nodeMcpTools(root)].filter((name) => !go.has(name)).sort();
+  return [...nodeMcpTools(root)]
+    .filter((name) => !go.has(name) && !RETIRED_MCP_TOOLS.has(name))
+    .sort();
 }
 
 export function httpRouteGaps(root) {
   // The root route is the web UI's fallback page, not a daemon API; Go serves the bundle under the
   // same catch-all, so comparing it literally would report a gap that is not one.
   const go = goHttpRoutes(root);
-  return [...nodeHttpRoutes(root)].filter((route) => route !== "/" && !go.has(route)).sort();
+  return [...nodeHttpRoutes(root)]
+    .filter((route) => route !== "/" && !go.has(route) && !RETIRED_HTTP_ROUTES.has(route))
+    .sort();
 }

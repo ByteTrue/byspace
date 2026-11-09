@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -59,17 +60,27 @@ done
 	}
 
 	homeDir := filepath.Join(tmp, "home")
+	// The listener comes first: the daemon tells its agents which address to call
+	// (BYSPACE_HOST), and that is the address it actually bound.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindAddr := listener.Addr().String()
 	srv, err := server.New(server.Options{
-		HomeDir:   homeDir,
-		Version:   "0.20.2-go",
-		PiCommand: fakePi,
+		HomeDir:    homeDir,
+		Version:    "0.20.2-go",
+		PiCommand:  fakePi,
+		ListenAddr: bindAddr,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer srv.Close()
 
-	ts := httptest.NewServer(srv)
+	ts := httptest.NewUnstartedServer(srv)
+	ts.Listener = listener
+	ts.Start()
 	defer ts.Close()
 	addr := strings.TrimPrefix(ts.URL, "http://")
 

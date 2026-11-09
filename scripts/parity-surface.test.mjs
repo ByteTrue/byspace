@@ -35,11 +35,13 @@ test("reads every environment variable the node daemon read", () => {
 // The extractors themselves need guarding: a regex that quietly matches nothing makes every test
 // above pass on an empty surface, which is exactly how the first CLI audit reported "all clear".
 test("the extractors actually find a surface", () => {
+  // The Go daemon no longer serves MCP at all (every tool is in RETIRED_MCP_TOOLS), so only the
+  // node extractor has a surface left to prove itself against.
   assert.ok(
     nodeMcpTools(root).size >= 30,
     `node MCP surface looks empty: ${nodeMcpTools(root).size}`,
   );
-  assert.ok(goMcpTools(root).size >= 30, `go MCP surface looks empty: ${goMcpTools(root).size}`);
+  assert.equal(goMcpTools(root).size, 0, "Go grew an MCP surface; the retirement needs revisiting");
   assert.ok(
     nodeHttpRoutes(root).size >= 3,
     `node route surface looks empty: ${nodeHttpRoutes(root).size}`,
