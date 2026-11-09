@@ -12,11 +12,11 @@ Transfer the current task — context, decisions, failed attempts, constraints �
 
 ## Prerequisites
 
-Read the **byspace** skill. Call `list_profiles` before choosing the receiving agent. Do not create it until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. The host's agent profiles and their notes live in `$BYSPACE_HOME/config.json` under `agentProfiles`; read them before choosing the receiving agent. Do not launch anything until you have read them.
 
 ## Parsing arguments
 
-1. **Agent profile** — explicit profile name first; otherwise choose the profile whose `notes` best match the work. Materialize it into `create_agent` as described by the **byspace** skill. If no profile fits, use BySpace's provider discovery fallback.
+1. **Agent profile** — explicit profile name first; otherwise choose the profile whose `notes` best match the work. Materialize it into `byspace run` (`--provider`, `--mode`, `--thinking`, `--features`). If no profile fits, pick from `byspace provider models` and say that you fell back.
 2. **Isolation** — "in a worktree" / "worktree" → create a workspace with `isolation: "worktree"`, using a short branch name derived from the task.
 3. **Task description** — anything else the user said.
 
@@ -57,7 +57,7 @@ The receiving agent has zero context. Include:
 Prepare the handoff in a dedicated workspace:
 
 1. Select the current workspace or call `create_workspace` with the requested isolation.
-2. Call `create_agent` with a `[Handoff] <task>` title, the briefing as initial prompt, and the selected `workspaceId` when explicit placement is needed.
+2. Run `byspace run --title "[Handoff] <task>"` with the briefing as the prompt, adding `--workspace <id>` when explicit placement is needed.
 3. Return the agent and workspace to the user, explaining that it remains in your subagent track until they detach it manually.
 
 Do not encode independence as a create mode and do not invoke CLI or wire-level detach operations. Detach is a user gesture in the subagents track.

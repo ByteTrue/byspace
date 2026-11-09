@@ -141,7 +141,7 @@ Or persist it in `config.json`:
 }
 ```
 
-When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/mcp/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
+When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
 
 The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6777/` directly usually skips the Add Host step.
 
@@ -214,9 +214,9 @@ BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \
 
 Setting only `BYSPACE_HOME` is not enough — `BYSPACE_LISTEN` still pulls the connection back to 6778.
 
-Canonical automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/update/delete`, and the full `byspace schedule` group. MCP heartbeat automation is intentionally smaller: create and delete only. Detach remains an explicit user lifecycle action rather than an agent tool. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
+Automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/delete`, and the full `byspace schedule` group. Heartbeats stay deliberately smaller than schedules: create and delete only. Detach remains an explicit user lifecycle action rather than an agent command. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
 
-An agent cannot reach its own automation through MCP. The `/mcp/agents` catalog is scoped to the caller, and a currently-running agent has no policy entry, so the tool list comes back empty — only a stopped agent lists tools. Use the CLI to create a heartbeat for a live session, resolving the agent id by matching `runtimeInfo.sessionId` in `$BYSPACE_HOME/agents/*/*.json` against the session you are in.
+An agent runs automation through the CLI like any other caller. `byspace heartbeat` and `byspace run` default their target to `BYSPACE_AGENT_ID`, which the daemon sets in the agent's own process environment, so a live session can schedule itself without looking its id up in `$BYSPACE_HOME/agents/*/*.json`.
 
 ```bash
 npm run cli -- ls -a -g              # List all agents globally

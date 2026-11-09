@@ -114,15 +114,8 @@ func runOnboard(args []string, stdout io.Writer) error {
 	noRelay := fs.Bool("no-relay", false, "disable the relay")
 	relayEndpointFlag := fs.String("relay-endpoint", "", "self-hosted relay (host[:port] or ws(s)://host[:port])")
 	webOrigin := fs.String("web-origin", "", "allowed CORS origin for a separately hosted web UI")
-	injectMCP := fs.Bool("mcp", true, "inject the built-in MCP server into agents")
-	// A separate variable: registering two flags on one *bool makes the second registration
-	// overwrite the first's default, which silently turned injection off.
-	noMCP := fs.Bool("no-mcp", false, "do not inject the built-in MCP server")
 	if err := fs.Parse(args); err != nil {
 		return err
-	}
-	if *noMCP {
-		*injectMCP = false
 	}
 
 	// Contradictory combinations are rejected rather than resolved by precedence: silently
@@ -184,19 +177,6 @@ func runOnboard(args []string, stdout io.Writer) error {
 		patch["cors"] = map[string]any{"allowedOrigins": merged}
 	}
 
-	mcpSection := daemonConfigSection(st, "mcp")
-	enabled, _ := mcpSection["enabled"].(bool)
-	inject, _ := mcpSection["injectIntoAgents"].(bool)
-	if !*injectMCP {
-		enabled = false
-		inject = false
-	} else if _, wasSet := mcpSection["enabled"]; !wasSet {
-		// Default on: the orchestration tools are the reason to run BySpace at all.
-		enabled = true
-		inject = true
-	}
-	patch["mcp"] = map[string]any{"enabled": enabled, "injectIntoAgents": inject}
-
 	st.SaveDaemonConfig(patch)
 
 	fmt.Fprintf(stdout, "bySpace home: %s\n", resolvedHome)
@@ -212,7 +192,6 @@ func runOnboard(args []string, stdout io.Writer) error {
 			fmt.Fprintln(stdout, "relay:        disabled")
 		}
 	}
-	fmt.Fprintf(stdout, "mcp:          enabled=%v injectIntoAgents=%v\n", enabled, inject)
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "Next: byspace daemon start, then open the web UI.")
 	return nil

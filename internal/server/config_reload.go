@@ -21,8 +21,6 @@ var reloadablePaths = []string{
 	"daemon.relay.useTls",
 	"daemon.tunnel.enabled",
 	"daemon.tunnel.allowedPorts",
-	"daemon.mcp.enabled",
-	"daemon.mcp.injectIntoAgents",
 	"daemon.hostnames",
 	"daemon.cors.allowedOrigins",
 	"daemon.trustedProxies",

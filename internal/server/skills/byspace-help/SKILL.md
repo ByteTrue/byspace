@@ -1,6 +1,6 @@
 ---
 name: byspace-help
-description: Answer questions about the BySpace product and app, including setup, configuration, connectivity, providers, workspaces, updates, logs, and troubleshooting. Use when a user inside BySpace asks how BySpace works, how to configure it, or why something is broken; use the byspace skill instead to operate agents and workspaces through MCP or the CLI.
+description: Answer questions about the BySpace product and app, including setup, configuration, connectivity, providers, workspaces, updates, logs, and troubleshooting. Use when a user inside BySpace asks how BySpace works, how to configure it, or why something is broken; use the byspace skill instead to operate agents and workspaces through the `byspace` CLI.
 ---
 
 # BySpace Help

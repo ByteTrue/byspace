@@ -90,13 +90,8 @@ type AgentConfig struct {
 	ThinkingOptionID *string        `json:"thinkingOptionId,omitempty"`
 	FeatureValues    map[string]any `json:"featureValues,omitempty"`
 	ProviderOptions  map[string]any `json:"providerOptions,omitempty"`
-	// PreapprovedTools is the BySpace MCP tools the user allowed without a prompt. Stored with the
-	// agent because a resumed session must keep the same grants: re-prompting for a tool the user
-	// already allowed is how a delegated agent stalls.
-	PreapprovedTools []PreapprovedTool `json:"preapprovedTools,omitempty"`
-	SystemPrompt     *string           `json:"systemPrompt,omitempty"`
-	Role             *string           `json:"role,omitempty"`
-	McpServers       map[string]any    `json:"mcpServers,omitempty"`
+	SystemPrompt     *string        `json:"systemPrompt,omitempty"`
+	Role             *string        `json:"role,omitempty"`
 }
 
 // AgentRecord mirrors StoredAgentRecord in packages/server/src/server/agent/agent-storage.ts.
@@ -1256,10 +1251,6 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 
 func daemonConfigDefaults() map[string]any {
 	return map[string]any{
-		"mcp": map[string]any{
-			"enabled":          true,
-			"injectIntoAgents": true,
-		},
 		"providers":                map[string]any{},
 		"metadataGeneration":       map[string]any{"providers": []any{}},
 		"autoArchiveAfterMerge":    false,

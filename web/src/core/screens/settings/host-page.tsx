@@ -267,7 +267,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       <ProvidersSection serverId={serverId} />
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
-          <InjectBySpaceToolsCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
@@ -913,41 +912,6 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
           </Alert>
         </div>
       ) : null}
-    </ItemGroup>
-  );
-}
-
-function InjectBySpaceToolsCard({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  const { config, patchConfig } = useDaemonConfig(serverId);
-
-  const handleValueChange = useCallback(
-    (next: boolean) => {
-      void patchConfig({
-        mcp: {
-          injectIntoAgents: next,
-        },
-      });
-    },
-    [patchConfig],
-  );
-
-  if (!isConnected) return null;
-
-  return (
-    <ItemGroup data-testid="host-page-inject-mcp-card">
-      <Item variant="outline">
-        <ItemContent>
-          <ItemTitle>{t("settings.host.orchestration.enableTools.title")}</ItemTitle>
-          <ItemDescription>{t("settings.host.orchestration.enableTools.hint")}</ItemDescription>
-        </ItemContent>
-        <Switch
-          checked={config?.mcp.injectIntoAgents !== false}
-          onCheckedChange={handleValueChange}
-          aria-label={t("settings.host.orchestration.enableTools.accessibilityLabel")}
-        />
-      </Item>
     </ItemGroup>
   );
 }

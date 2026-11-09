@@ -96,4 +96,4 @@ Open the **Subagents track** near the composer to inspect delegated work.
 
 A BySpace subagent in another workspace still belongs to its parent's track. It also opens as a tab in its own workspace. To make it a top-level agent, detach it in the app or with [`byspace agent detach`](/docs/cli#agent-modes).
 
-See the [MCP reference](/docs/mcp#mental-model) for workspace and parentage rules.
+See [Agent tools](/docs/agent-tools#mental-model) for workspace and parentage rules.

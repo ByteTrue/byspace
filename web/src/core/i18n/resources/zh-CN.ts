@@ -2225,11 +2225,6 @@ export const zhCN: TranslationResources = {
       orchestration: {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",
-        enableTools: {
-          title: "启用 BySpace tools",
-          hint: "Agent 将能够管理 worktree、Agent 和计划",
-          accessibilityLabel: "注入 BySpace tools",
-        },
         systemPrompt: {
           title: "System prompt",
           hint: "为所有 Agent 添加 system prompt",

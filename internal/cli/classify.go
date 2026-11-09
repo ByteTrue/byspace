@@ -116,7 +116,7 @@ var knownCommandNames = map[string]bool{
 	"daemon": true, "agent": true, "project": true, "workspace": true, "terminal": true,
 	"script": true, "schedule": true, "heartbeat": true, "permit": true, "provider": true,
 	"worktree": true, "clone": true, "open": true, "pair": true, "onboard": true,
-	"hooks": true, "mcp-bridge": true, "print-plist": true, "print-unit": true,
+	"hooks": true, "print-plist": true, "print-unit": true,
 	"version": true, "help": true,
 }
 

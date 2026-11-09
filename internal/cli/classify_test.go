@@ -66,7 +66,7 @@ func TestKnownCommandCoversDispatcher(t *testing.T) {
 		"serve", "web", "relay", "ls", "run", "logs", "attach", "wait",
 		"daemon", "agent", "project", "workspace", "terminal", "script",
 		"schedule", "heartbeat", "permit", "provider", "worktree",
-		"clone", "open", "pair", "onboard", "hooks", "mcp-bridge",
+		"clone", "open", "pair", "onboard", "hooks",
 	} {
 		if !knownCommand(name) {
 			t.Fatalf("%q is a command but not in knownCommandNames", name)

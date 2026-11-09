@@ -2257,11 +2257,6 @@ export const ko: TranslationResources = {
       orchestration: {
         title: "오케스트레이션",
         unavailable: "오케스트레이션을 관리하려면 이 호스트에 연결하세요",
-        enableTools: {
-          title: "BySpace 도구 활성화",
-          hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
-          accessibilityLabel: "BySpace 도구 주입",
-        },
         systemPrompt: {
           title: "시스템 프롬프트",
           hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",

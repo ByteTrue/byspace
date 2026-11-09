@@ -314,8 +314,6 @@ type StartOptions struct {
 	RelayURL string
 	// RelayUseTLS switches pairing offers to wss://.
 	RelayUseTLS bool
-	// InjectMCP controls whether created agents get the BySpace MCP injected.
-	InjectMCP bool
 	// WebUI controls the bundled web UI. Tri-state: nil means "leave to the daemon's config".
 	WebUI *bool
 }
@@ -328,9 +326,6 @@ func StartBackgroundWithOptions(options StartOptions) (int, error) {
 	}
 	if options.RelayUseTLS {
 		args = append(args, "--relay-use-tls")
-	}
-	if !options.InjectMCP {
-		args = append(args, "--no-inject-mcp")
 	}
 	if options.WebUI != nil {
 		if *options.WebUI {
@@ -353,11 +348,10 @@ func StartBackgroundArgs(exePath, homeDir string, serveArgs []string) (int, erro
 
 func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
 	return StartBackgroundWithOptions(StartOptions{
-		ExePath:   exePath,
-		HomeDir:   homeDir,
-		Addr:      addr,
-		RelayURL:  relayURL,
-		InjectMCP: true,
+		ExePath:  exePath,
+		HomeDir:  homeDir,
+		Addr:     addr,
+		RelayURL: relayURL,
 	})
 }
 

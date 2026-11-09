@@ -12,9 +12,9 @@ Two agents from contrasting profiles, fresh context, planning a solution in para
 
 ## Prerequisites
 
-Read the **byspace** skill. Call `list_profiles` before choosing committee members. Do not create committee agents until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. The host's agent profiles and their notes live in `$BYSPACE_HOME/config.json` under `agentProfiles`; read them before choosing committee members. Do not launch anything until you have read them.
 
-Contrast is the point of a committee, so pick profiles from different provider families when possible. Materialize each profile into `create_agent`.
+Contrast is the point of a committee, so pick profiles from different provider families when possible. Materialize each profile into its own `byspace run` call (`--provider`, `--mode`, `--thinking`, `--features`).
 
 ## Composition
 
@@ -23,7 +23,7 @@ Two members with different reasoning styles, selected from configured Agent prof
 - one whose notes fit planning, research, or root-cause analysis
 - one contrasting high-reasoning profile from another provider family
 
-If the user names profiles, use those. If fewer than two suitable profiles are configured, use BySpace's provider discovery fallback for the missing member and tell the user. Override the selection only when the user explicitly asks for different members.
+If the user names profiles, use those. If fewer than two suitable profiles are configured, pick the missing member from `byspace provider models` and tell the user. Override the selection only when the user explicitly asks for different members.
 
 ## Hard rules
 

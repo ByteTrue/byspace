@@ -2,7 +2,7 @@
 kind: decision
 title: "Pi 的 MCP 注入只做工具注入，不设 exposure；旧版 adapter 路径删除"
 created: 2026-10-05
-superseded-by: ""
+superseded-by: "../decisions/2026-11-09-retire-mcp-tool-delivery.md"
 ---
 
 # Pi 的 MCP 注入只做工具注入，不设 exposure；旧版 adapter 路径删除
@@ -11,4 +11,4 @@ BySpace 往 Pi agent 注入 MCP server 时只传连接信息（`{ command, args?
 
 ## 背景
 
-读 `packages/server/src/server/agent/providers/pi/agent.ts` 时容易问「为什么不像 OMP 那样设成 `direct`」。答案在上面：这是选择不覆盖用户的宿主配置，不是漏了。判断「现在还算不算数」看 `docs/providers.md` 的 Pi MCP 段落是否仍写「BySpace sets no `exposure` or `toolExposure`」。讨论与穿刺见 `../issues/067-x-pi-builtin-mcp.md`。
+读 `packages/server/src/server/agent/providers/pi/agent.ts` 时容易问「为什么不像 OMP 那样设成 `direct`」。答案在上面：这是选择不覆盖用户的宿主配置，不是漏了。**已被 [2026-11-09 的决策](2026-11-09-retire-mcp-tool-delivery.md) 取代**：BySpace 不再注入自己的 MCP server。留下的只是用户自己的 server，仍按本文的规则注册、不设 exposure。讨论与穿刺见 `../issues/067-x-pi-builtin-mcp.md`。

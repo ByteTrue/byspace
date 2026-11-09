@@ -24,12 +24,11 @@ import (
 const passwordBcryptCost = 12
 
 // bearerFreeRoutes never require a password: health is what a client probes before it has one,
-// and the two self-authenticating routes carry their own tokens.
+// and the file download route carries its own token.
 var bearerFreeRoutes = map[string]bool{
 	"/health":             true,
 	"/api/health":         true,
 	"/api/files/download": true,
-	"/mcp/agents":         true,
 }
 
 // ShouldBypassBearerAuth reports whether a request skips password auth.
@@ -91,25 +90,6 @@ func ConstantTimeEqual(a, b string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}
-
-// IsAgentMCPRequestAuthorized authorizes the /mcp/agents endpoint.
-//
-// It is exempt from the global middleware because an agent's own MCP client cannot know the
-// user's password; it presents the per-run capability token instead. A password bearer is also
-// accepted so existing callers keep working.
-func IsAgentMCPRequestAuthorized(passwordHash, capabilityToken, authorizationHeader string) bool {
-	if passwordHash == "" {
-		return true
-	}
-	token, hasToken := ExtractHTTPBearerToken(authorizationHeader)
-	if capabilityToken != "" && hasToken && ConstantTimeEqual(token, capabilityToken) {
-		return true
-	}
-	if !hasToken {
-		return false
-	}
-	return VerifyDaemonPassword(passwordHash, token)
 }
 
 // CLICredentialFile holds the token this host's own CLI presents.

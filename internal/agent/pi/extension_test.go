@@ -59,55 +59,6 @@ func TestWriteIntegrationExtensionHonoursOverride(t *testing.T) {
 	}
 }
 
-// pi has no launch flag for MCP: servers arrive through this extension's registerMcpServer
-// calls. Without the injection the agent never saw the daemon's orchestration tools.
-func TestExtensionRegistersMCPServers(t *testing.T) {
-	path, cleanup, err := WriteIntegrationExtension(ExtensionOptions{
-		MCPServers: []MCPConfig{
-			{Name: "byspace", Command: "/usr/local/bin/byspace", Args: []string{"mcp-bridge"}},
-			{Name: "remote", URL: "https://mcp.example/mcp", Headers: map[string]string{"X-Key": "v"}},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-
-	body, _ := os.ReadFile(path)
-	source := string(body)
-	for _, want := range []string{
-		`"byspace"`,
-		`"mcp-bridge"`,
-		`"https://mcp.example/mcp"`,
-		`"X-Key"`,
-		"registerMcpServer",
-	} {
-		if !strings.Contains(source, want) {
-			t.Fatalf("extension is missing %q", want)
-		}
-	}
-	// The placeholder must be substituted, or the extension throws at load time.
-	if strings.Contains(source, "__BYSPACE_MCP_SERVERS__") {
-		t.Fatal("the MCP placeholder was not replaced")
-	}
-}
-
-// A stdio server needs a command; a remote one needs a URL. An entry missing both is dropped
-// rather than emitted as an invalid config that would make registration throw.
-func TestExtensionSkipsIncompleteMCPEntries(t *testing.T) {
-	path, cleanup, err := WriteIntegrationExtension(ExtensionOptions{
-		MCPServers: []MCPConfig{{Name: "empty"}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	body, _ := os.ReadFile(path)
-	if strings.Contains(string(body), `"empty"`) {
-		t.Fatal("an entry with neither command nor url must be dropped")
-	}
-}
-
 // The daemon-side prompt is appended to the provider's own, never replacing it.
 func TestExtensionAppendsSystemPrompt(t *testing.T) {
 	path, cleanup, err := WriteIntegrationExtension(ExtensionOptions{SystemPrompt: "永远使用中文回复"})

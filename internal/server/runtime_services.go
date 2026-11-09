@@ -108,31 +108,6 @@ func (s *Server) handleHTTPTerminalActivity(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleHTTPSubagentReport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !isLoopbackAddr(r.RemoteAddr) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"error":"Forbidden"}`))
-		return
-	}
-
-	var body struct {
-		Token        string           `json:"token"`
-		Observations []map[string]any `json:"observations"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Token) == "" || len(body.Observations) == 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"Invalid subagent report"}`))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 	nowMs := time.Now().UnixMilli()
 	s.mu.Lock()

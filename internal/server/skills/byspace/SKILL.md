@@ -1,131 +1,139 @@
 ---
 name: byspace
-description: BySpace reference for managing projects, workspaces, workspace scripts, agents, schedules, and heartbeats.
+description: BySpace reference for managing projects, workspaces, workspace scripts, agents, terminals, schedules and heartbeats from inside a BySpace agent. Use when the user asks to start, delegate to, wait on, or organize other agents; to create or clean up workspaces and worktrees; to run a project's dev server; or to schedule recurring work.
 ---
 
-BySpace is a remote daemon that manages coding agents and terminals. Control it through MCP tools or the CLI.
+# BySpace
 
-## Projects
+BySpace is the daemon that launched you. You drive it with the `byspace` CLI, already on your
+`PATH` and already pointing at the right host (`BYSPACE_HOME`, `BYSPACE_HOST`). The commands you
+run are attributed to you through `BYSPACE_AGENT_ID`, so an agent you start knows who asked.
 
-Manage the daemon's project registry through the CLI:
+`byspace --help` and `byspace <command> --help` are the contract for flags and output. Read them
+before a command you have not used; this file covers what help cannot: who owns what, which shape
+of work to pick, and what not to do.
+
+## Delegating
 
 ```bash
-byspace project create [path]
-byspace project ls
-byspace project rename <project-id> <name>
-byspace project rename <project-id> --reset
-byspace project delete <project-id>
+byspace run --provider codex/gpt-5.4 --mode full-access "<prompt>"   # blocks until the turn ends
+byspace run -d --provider claude/opus "<prompt>"                    # returns its agent id at once
+byspace send <agent-id> "<follow-up>"
+byspace wait <agent-id>
+byspace logs <agent-id>
 ```
 
-For a local daemon, `project create` defaults to the current directory and resolves relative paths on the CLI machine. With `--host` or `BYSPACE_HOST`, always provide a path; the target daemon interprets it on its own machine. Deleting a project archives its active workspaces and removes the project from BySpace without deleting the project directory.
+`--provider` is `provider` or `provider/model`. Pick a model the provider actually lists
+(`byspace provider ls`, `byspace provider models <provider>`); a made-up id fails at launch.
+
+- Placement and parentage are separate. `--workspace <id>` puts the child in that workspace; it
+  stays your subagent either way. Only the user detaches, in the app.
+- Leave `-d` off when you need the answer in this turn, and the same for `byspace send --wait`.
+  With `-d`, the daemon prompts you when the child finishes, errors, or needs permission — do not
+  poll `byspace ls` to check on it. Agents take 10–30 minutes routinely; go do other work.
+- `--output-schema` (JSON Schema object, or `@file`) makes the child answer with an object
+  instead of prose.
 
 ## Workspaces
 
-**`create_workspace`** — create a workspace independently of any agent. Required: `isolation` (`local` or `worktree`). Worktree isolation supports `mode: "branch-off" | "checkout-branch" | "checkout-pr"`: use `branchName`/`baseBranch` for a new branch, `branch` for an existing branch, or `prNumber` plus optional `forge`/`projectPath` for a change request. `worktreeSlug` controls the managed path. Returns the workspace descriptor centered on `workspaceId`.
-
-**`list_workspaces`** — list active workspaces.
-
-**`archive_workspace`** — `{ workspaceId }`. Archives the workspace, its agents, and its terminals. Local directories remain; BySpace removes an owned worktree only after its final active workspace reference is archived.
-
-**`rename_workspace`** — `{ title, workspaceId? }`. Sets the user-visible title. Omit `workspaceId` to rename your current workspace.
-
-**`rename_branch`** — `{ branchName }`. Renames the current Git branch only when it is still the unpublished BySpace-generated worktree branch, including its one-time initial auto-name. It rejects default, published, upstream-tracking, PR/MR, manually renamed, non-BySpace, and conflicting branches. This is intentionally independent from `rename_workspace`: keep a successful title rename even when branch rename is ineligible, and report why the branch was skipped.
-
-## Workspace scripts
-
-Configured `byspace.json` scripts use the same supervised lifecycle from tools and the CLI.
-
-**`list_workspace_scripts`** — `{ workspaceId }`. Lists configured scripts with lifecycle, service port, proxy URLs, health, exit code, and terminal ID.
-
-**`start_workspace_script`** — `{ workspaceId, scriptName }`. Starts one configured script through BySpace's managed workspace-script launcher and returns its status metadata.
-
-**`stop_workspace_script`** — `{ workspaceId, scriptName }`. Stops a running script through its supervised terminal and returns the stopped status metadata.
-
-The matching CLI surface accepts either an explicit workspace ID or resolves the current directory:
+A workspace is where work happens: a local directory or a BySpace-owned worktree.
 
 ```bash
-byspace script ls [--cwd <path> | --workspace <workspace-id>]
-byspace script start <name> [--cwd <path> | --workspace <workspace-id>]
-byspace script stop <name> [--cwd <path> | --workspace <workspace-id>]
-```
-
-## Agents
-
-**`create_agent`** — required: `title`, `provider` (`claude/opus`, `codex/gpt-5.4`, …), `initialPrompt`. Optional: `workspaceId`, `notifyOnFinish`, `settings`, `labels`. Returns `{ agentId, workspaceId, … }`.
-
-Initial runtime settings live under `settings`: `modeId`, `thinkingOptionId`, and provider-specific `features`. Agent profiles are the preferred source for these values. For Codex fast mode, pass `settings: { features: { "fast_mode": true } }` when creating the agent.
-
-Agent-scoped creation always creates your subagent. Omit `workspaceId` to use your current workspace; pass a workspace returned by `create_workspace` for isolated delegation. Placement never changes parentage.
-
-Detach is an explicit user action in the subagents track, not an agent tool. A cross-workspace child remains your subagent even though it also appears as a normal tab in its workspace.
-
-Agent-scoped `create_agent` defaults `notifyOnFinish` to true. Set it to `false` only for truly fire-and-forget agents.
-
-**`send_agent_prompt`** — `{ agentId, prompt }`. Use for follow-ups to an existing agent. Agent-scoped prompt calls default to `background: true` and `notifyOnFinish: true`; top-level calls default to blocking with no callback. For a synchronous follow-up, pass `background: false` and use the returned result.
-
-**`update_agent`** — `{ agentId, name?, labels?, settings? }`. Use `settings` for runtime changes on an existing agent: `modeId`, `model`, `thinkingOptionId`, and provider-specific `features`. For Codex fast mode, pass `settings: { features: { "fast_mode": true } }`.
-
-**`list_agents`** — filter by `cwd`, `statuses`, `sinceHours`, `includeArchived`.
-
-**`archive_agent`** — `{ agentId }`. Interrupts if running, removes from active list.
-
-## Agent profiles and provider discovery
-
-**`list_profiles`** — named launch bundles configured by the human. Before choosing how to launch a delegated agent, call this tool and read every profile's `notes`. Pick a named profile the user requested, or the profile whose notes best match the work.
-
-There is no `profile` parameter on `create_agent`. Materialize the selected profile into the call:
-
-- combine `provider` and `model` as the `provider/model` value for `create_agent.provider`
-- copy `modeId` to `settings.modeId`
-- copy `thinkingOptionId` to `settings.thinkingOptionId`
-- copy `featureValues` to `settings.features`
-
-Omit absent values. Do not remember a selected profile or infer drift later; a profile is only launch configuration.
-
-If no profile fits, or no profiles are configured, use the provider discovery tools below rather than guessing. Tell the user when you fall back because no configured profile fits.
-
-**`list_providers`** — compact provider availability and modes.
-
-**`list_models`** — full model list for one provider. Use only when you need model IDs or thinking options; the list can be large.
-
-**`inspect_provider`** — compact provider capability and feature inspection. Required: `provider`; pass `cwd` when you are not in an agent-scoped session. Optional: `settings` with draft `model`, `modeId`, `thinkingOptionId`, and `features`.
-
-Only set feature IDs returned by `inspect_provider`. For Codex fast mode, look for `fast_mode` and pass `settings: { features: { "fast_mode": true } }` to `create_agent` or `update_agent`.
-
-## Schedules and heartbeats
-
-**`create_schedule`** — starts a new agent on a cron cadence. Required: `prompt`, `cron`, `provider`. Optional: `timezone`, `name`, `cwd`, `maxRuns`, `expiresIn`. Use when the recurring work should live in fresh agents.
-
-**`create_heartbeat`** — sends you a prompt on a cron cadence. Required: `prompt`, `cron`. Optional: `timezone`, `name`, `maxRuns`, `expiresIn`. Use for reminders, PR/build babysitting, and status checks that should return to this conversation.
-
-**`delete_heartbeat`** stops it. MCP intentionally exposes no heartbeat update tool; delete and recreate when its task or cadence changes.
-
-Schedules have the full list/inspect/update/pause/resume/run-once/log/delete surface. Heartbeats deliberately do not.
-
-## Waiting
-
-Agents take time — 10–30+ minutes is routine. Favor asynchronous workflows.
-
-For agent-scoped `create_agent` and background `send_agent_prompt`, leave `notifyOnFinish` omitted or set it to `true` unless the work is truly fire-and-forget. You will get notified when the target agent finishes, errors, or needs permission. Move on to other work. The notification arrives on its own.
-
-Don't poll `list_agents` or `get_agent_status` to "check on" a running agent. The notification will tell you.
-
-## CLI semantics
-
-The CLI and tools use the same ownership semantics even where their syntax differs:
-
-```bash
+byspace workspace ls
 byspace workspace create --isolation worktree --mode branch-off --new-branch fix-x --base main
 byspace workspace create --isolation worktree --mode checkout-branch --branch existing-work
 byspace workspace create --isolation worktree --mode checkout-pr --pr-number 42
-byspace run --provider codex/gpt-5.4 --mode full-access --workspace <workspace-id> "<prompt>"
-byspace run --provider codex/gpt-5.4 --mode full-access --new-workspace worktree --worktree-mode branch-off --new-branch fix-x --base main "<prompt>"
-byspace send <agent-id> "<follow-up>"
-byspace ls
-byspace schedule create --provider codex/gpt-5.4 --cron "*/15 * * * *" "ping main build"
-byspace heartbeat create --cron "*/15 * * * *" "check the build"
+byspace workspace rename <workspace-id> "title"
+byspace workspace archive <workspace-id>
 ```
 
-Discover with `byspace --help` and `byspace <cmd> --help`.
+`byspace run --new-workspace worktree --worktree-mode branch-off --new-branch fix-x …` does create
+and launch in one step. Two agents on two branches in one checkout fight over the working tree;
+that is the reason worktrees exist.
 
-For product questions, setup, logs, version problems, or troubleshooting, use the **byspace-help** skill.
+Archiving a workspace archives the agents and terminals it owns. The local directory stays; a
+BySpace worktree is removed once its last active workspace reference is gone.
+
+## Workspace scripts
+
+Scripts are the `byspace.json` entries the project configures; BySpace runs them in a supervised
+terminal, so a dev server survives and its port and health are reported.
+
+```bash
+byspace script ls [--cwd <path> | --workspace <id>]
+byspace script start <name> [--cwd <path> | --workspace <id>]
+byspace script stop <name> [--cwd <path> | --workspace <id>]
+```
+
+Prefer a configured script over starting the same server by hand: the user then sees it, and it
+stops with the workspace.
+
+## Terminals
+
+```bash
+byspace terminal ls [--cwd <path>]
+byspace terminal create [--cwd <path>] [--workspace <id>] [--name <label>]
+byspace terminal capture <terminal-id> [-S]
+byspace terminal send <terminal-id> "text" [-l]
+byspace terminal kill <terminal-id>
+```
+
+Use a terminal for something long-running the user should be able to watch, not for one-shot
+commands you can run directly. `capture` reads the screen; `-S` adds scrollback.
+
+## Schedules and heartbeats
+
+Same cron engine, deliberately different shapes.
+
+```bash
+byspace schedule create --provider pi --cron "*/15 * * * *" "check the build"
+byspace schedule ls | inspect <id> | logs <id> | pause <id> | resume <id> | run-once <id>
+byspace schedule update <id> --cron "0 * * * *"
+byspace schedule delete <id>
+
+byspace heartbeat create --cron "*/15 * * * *" "check the build"
+byspace heartbeat ls
+byspace heartbeat delete <id>
+```
+
+A schedule starts a **new agent** on each run — use it when the recurring work should not carry
+this conversation. A heartbeat prompts **you** — use it for reminders, babysitting a PR, or a
+status check that should come back here. A heartbeat belongs to the agent that created it (the command defaults
+to you); you cannot read or delete another agent's. Pause, resume, update, inspect, logs and run-once apply to
+schedules only; to change a heartbeat, delete it and create a new one.
+
+Recurring work that the user will want to see start from a clean context belongs in a schedule.
+
+## Permissions
+
+Agents stop and ask their user for approval on sensitive actions. `byspace permit ls` shows the
+pending requests and `byspace permit allow|deny <agent-id> <request-id>` answers one.
+
+Never answer a permission request for yourself or for an agent acting on your behalf. That
+decision is the user's; an agent that approves its own prompts has removed the control the user
+configured.
+
+## Projects
+
+```bash
+byspace project ls
+byspace project create [path]
+byspace project rename <project-id> "<name>"
+byspace project delete <project-id>
+```
+
+Deleting a project archives its workspaces and removes it from BySpace; it does not delete the
+directory. For a local daemon `project create` defaults to the current directory; with a remote
+host, always pass the path.
+
+## Rules
+
+- Never stop, restart, or reconfigure the daemon you are running inside: `byspace daemon stop`,
+  `byspace restart`, and `byspace update` will kill every agent here, including you. Ask the user.
+- Archive before delete. Archiving is reversible in the record; deleting an agent or workspace
+  from the active list is not.
+- Say the id. Every command that mutates something takes an id from a listing command; do not
+  guess one.
+
+For questions about BySpace itself — setup, configuration, connectivity, updates, logs — use the
+**byspace-help** skill.

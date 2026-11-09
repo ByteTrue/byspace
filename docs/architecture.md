@@ -52,7 +52,7 @@ The heart of BySpace. A Go process (`byspace serve`) that:
 - Listens for WebSocket connections from clients
 - Manages agent lifecycle (create, run, stop, resume, archive)
 - Streams agent output in real time via a timeline model
-- Provides agent-to-agent tools through a transport-neutral tool catalog, with MCP as one adapter
+- Provides agent-to-agent tools through the bundled `byspace` skill and CLI
 - Optionally connects outbound to a relay for remote access
 - Optionally serves the browser web client from the same HTTP server (self-hosting guide: [public-docs/web-ui.md](../public-docs/web-ui.md))
 
@@ -88,8 +88,8 @@ not retain non-Git directories.
 | `server/workspace-labels/`      | Host-local label catalog, assignment mutations, and explicit subscriptions     |
 | `server/agent/agent-manager.ts` | Agent lifecycle state machine, timeline tracking, subscriber management        |
 | `server/agent/agent-storage.ts` | File-backed JSON persistence at `$BYSPACE_HOME/agents/`                        |
-| `server/agent/tools/`           | Transport-neutral catalog for workspaces, agents, permissions, and automation  |
-| `server/agent/mcp-server.ts`    | Thin MCP adapter that registers the BySpace tool catalog with the MCP SDK      |
+| `server/skills/byspace/`        | The reference skill that teaches an agent the `byspace` CLI                    |
+| `server/agentenv.go`            | The environment that gives an agent its CLI identity                           |
 | `server/agent/providers/`       | Provider adapters (see "Agent providers" below)                                |
 | `server/orchestration-skills/`  | Bundled catalog, host selection, convergence, and skill-directory transactions |
 | `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                  |
@@ -212,7 +212,7 @@ All clients speak the same WebSocket protocol over a single connection that mixe
 Client → Server:  WSHelloMessage {
                     type: "hello",
                     clientId,
-                    clientType: "mobile" | "browser" | "cli" | "mcp",
+                    clientType: "mobile" | "browser" | "cli",
                     protocolVersion,
                     appVersion?,
                     capabilities?: { pushNotifications?, browser_host?, ... },
@@ -376,9 +376,9 @@ All providers:
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
 
-Providers that can accept native tool definitions should set `supportsNativeBySpaceTools` and read `launchContext.byspaceTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal MCP adapter from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
+Agents reach the daemon's own capabilities with the `byspace` CLI, not with provider-delivered tool definitions. `internal/server/agentenv.go` puts the binary on the agent's `PATH` and names the daemon and the agent, so the same CLI works for every provider and there is no per-provider tool adapter to keep in sync.
 
-Tool scope is the calling agent's, not the daemon's. `list_agents` defaults to the caller's `cwd` and matches that directory and its descendants, so it answers "what else is running here", not "what exists on this host". An orchestrator that needs to see another project must pass an explicit `cwd`; treat the tool as workspace-scoped discovery, never as a global agent registry.
+Tool scope is the calling agent's, not the daemon's. `byspace ls` defaults to the caller's `cwd` and matches that directory and its descendants, so it answers "what else is running here", not "what exists on this host". An orchestrator that needs to see another project must pass an explicit `cwd`; treat the listing as workspace-scoped discovery, never as a global agent registry.
 
 ## Data flow: running an agent
 

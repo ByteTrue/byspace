@@ -51,4 +51,4 @@ The orchestrator reads the profiles, selects settings for each task, and launche
 
 The bundled [BySpace skill](/docs/skills#byspace-byspace-reference) instructs agents to check profiles and read their notes before delegating. If none fit, it directs the agent to discover configured providers and models and tell you about the fallback.
 
-See [Common workflows](/docs/orchestration-workflows) for delegation examples or the [MCP reference](/docs/mcp#agent-profiles) for the tool interface.
+See [Common workflows](/docs/orchestration-workflows) for delegation examples or [Agent tools](/docs/agent-tools) for what an agent can run.

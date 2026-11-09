@@ -137,10 +137,10 @@ func hasFile(fsys fs.FS, name string) bool {
 
 func isExcludedPath(reqPath string) bool {
 	switch reqPath {
-	case "/api", "/mcp", "/public", "/ws", "/health":
+	case "/api", "/public", "/ws", "/health":
 		return true
 	}
-	for _, prefix := range []string{"/api/", "/mcp/", "/public/"} {
+	for _, prefix := range []string{"/api/", "/public/"} {
 		if strings.HasPrefix(reqPath, prefix) {
 			return true
 		}

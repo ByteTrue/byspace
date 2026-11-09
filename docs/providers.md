@@ -57,9 +57,34 @@ The dev-only `mock` provider (`internal/agent/providers/mock_provider.go`) is al
 
 Claude first-party model metadata lives in `packages/server/src/server/agent/providers/claude/model-manifest.ts`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
 
-BySpace tools are not implemented as MCP tools internally. They live in a shared tool catalog under `packages/server/src/server/agent/tools/`; MCP is only the fallback adapter. The daemon resolves `agents.providers.<provider>.byspaceTools` by the exact provider ID. The catalog policy belongs to the caller: it filters the tools exposed to the current agent. When that agent calls `create_agent`, the child receives the policy for the child provider ID; the caller's policy is not inherited.
+BySpace delivers its own tools through the bundled `byspace` skill and the CLI, not through a per-provider tool catalog. A provider needs exactly one thing to participate: an agent process whose shell can run `byspace`. The daemon supplies that in the launch environment (`internal/server/agentenv.go`): `BYSPACE_HOME`, `BYSPACE_HOST`, `BYSPACE_AGENT_ID`, and the daemon's own directory prepended to `PATH`. `BYSPACE_AGENT_ID` is what makes a created agent a subagent of its caller; the CLI sends it as `callerAgentId`.
 
-A provider that can register runtime tools directly should set `supportsNativeBySpaceTools: true` and consume the already-filtered `launchContext.byspaceTools` in `createSession`/`resumeSession`. When native tools are present, `AgentManager` strips the internal BySpace MCP server from the provider launch config so the provider does not receive the same tools twice. Providers that only know MCP should keep `supportsMcpServers: true` and let the daemon inject `/mcp/agents`; the MCP server builds the same policy-filtered catalog for that caller. Filtering is enforced at catalog registration in both paths.
+A provider whose process environment is not per-agent (a shared server, for example) still gets the CLI, but the agent id is whatever the shared process carries — it cannot name its caller. That is a placement limitation, not a security one: the CLI's authority is the host's own `cli-credential`, the same principal the user's shell uses.
+
+The skill comes from `internal/server/skills/byspace/SKILL.md` and installs into `~/.agents/skills` and `~/.claude/skills`. A client that reads neither has no BySpace tools.
+
+### What the daemon can actually send each provider
+
+Each provider has its own channel for the settings the app exposes, and a channel that does not
+exist fails silently: the record changes, the UI shows the new value, and the provider keeps its
+default. This table is the inventory. When adding a provider, fill a row; when adding a setting,
+fill a column.
+
+|          | Model                             | Mode                                          | Thinking                   | System prompt            | Output schema               | Fast                       |
+| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | ------------------------ | --------------------------- | -------------------------- |
+| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt` | refused                     | not transmitted            |
+| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | not sent                 | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
+| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension      | refused                     | —                          |
+| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt` | refused                     | —                          |
+| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                 | message `format`            | —                          |
+| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                 | refused                     | —                          |
+
+"refused" means the daemon fails the request instead of running the turn without it: a caller that
+asked for a JSON object and got prose would parse garbage.
+
+A mode is a launch flag on the Claude CLI, so Claude cannot change mode mid-session; Codex,
+OpenCode and ACP apply it on the next turn. Claude and Pi cannot change model or thinking
+mid-session either — the CLI reads them once at launch.
 
 Pi is a process-backed provider. BySpace requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
 
@@ -69,7 +94,7 @@ Pi model records expose input capabilities through `model.input`. Only send raw 
 
 Pi thinking options come from each RPC model's `thinkingLevelMap`, not from a provider-wide list. Match Pi's capability rules: `off` through `high` are available unless mapped to `null`, while `xhigh` and `max` are opt-in and appear only when explicitly mapped.
 
-Pi's MCP support is built in, so BySpace registers injected servers from its generated integration extension with `pi.registerMcpServer(name, config)` instead of writing an MCP file or passing `--mcp-config`. Each registration gets its own `try`/`catch`: Pi throws on server names it does not allow, on names another extension already owns, and on two names that collide in the same tool namespace (`a-b` and `a_b`), and a rejected server must not take down the extension's entry-capture and tree bridges. Rejected registrations are reported as warning notifications on the agent, and so is a session where nothing connected the registered servers.
+Pi's MCP support is built in, so BySpace registers the user's own servers from its generated integration extension with `pi.registerMcpServer(name, config)` instead of writing an MCP file or passing `--mcp-config`. BySpace no longer registers a server of its own. Each registration gets its own `try`/`catch`: Pi throws on server names it does not allow, on names another extension already owns, and on two names that collide in the same tool namespace (`a-b` and `a_b`), and a rejected server must not take down the extension's entry-capture and tree bridges. Rejected registrations are reported as warning notifications on the agent, and so is a session where nothing connected the registered servers.
 
 Nothing forces Pi to connect them: an extension that claims the `mcp` command replaces the built-in MCP support, and the built-in extension can be disabled in `pi config`. In either case `registerMcpServer` still succeeds and Pi reports the registration as an extension error, so the BySpace extension also checks `getCommands()` for a command whose `sourceInfo.path` is `builtin:mcp` on `session_start` and warns when it is absent.
 
@@ -79,17 +104,15 @@ Pi control-plane RPCs wait 60 seconds by default. Override `params.rpcTimeoutMs`
 
 Pi import discovery reads Pi's persisted JSONL session files because Pi RPC does not expose a recent-session listing command. Resume and full history hydration still go through `pi --mode rpc` using the session file as `nativeHandle`.
 
-Pi subagents surface through the shared provider-subagents channel (`agent.provider_subagents.*`), fed from three sources: the launch tool result, the `subagent-exit` custom message (both already in the transcript, so replay needs no report), and a loopback snapshot POST from the pi-subagent extension while tasks run. When launching a structured Pi session the daemon injects `BYSPACE_SUBAGENT_REPORT_URL` and `BYSPACE_SUBAGENT_REPORT_TOKEN` into `launchContext.env`; the extension POSTs `{ token, observations }` to `/api/subagent-report` and the token alone identifies the agent. Without those env vars the extension never sends anything. The read-only subagent tab timeline is a tail of the child session JSONL, located by `sessionFile`/`sessionId` from the report (see `providers/pi/subagent-session-tailer.ts`).
+Pi subagents surface through the shared provider-subagents channel (`agent.provider_subagents.*`). The session collects them from its own event stream: a finished tool call whose name starts with `subagent` carries the descriptor (`ParseSubagentDetails`, `internal/agent/pi/pi.go`), and the child's read-only timeline is a tail of the session JSONL it names. There is no side channel: nothing POSTs snapshots to the daemon, so a subagent whose events never reached the stream is simply absent until replay rebuilds it from the transcript.
 
 OMP is a first-class built-in provider, disabled by default. Its launch contract, typed runtime, agent/session behavior, history, permissions, imports, and test fake live under `providers/omp/`; only the provider-neutral JSONL child-process transport is shared with Pi. It launches `omp --mode rpc-ui`, uses OMP's `get_available_commands` RPC for slash-command discovery, bridges OMP `rpc-ui` approval dialogs into BySpace permissions, and imports terminal-started sessions from `~/.omp/agent/sessions` when enabled.
 
-OMP supports native BySpace host tools. The adapter registers the full caller-scoped BySpace tool catalog directly with OMP, matching providers such as Claude that expose the full catalog through MCP. Serialize every OMP host definition with `loadMode: "essential"` so `create_agent`, `send_agent_prompt`, `wait_for_agent`, and related tools remain direct calls; omitting the field makes OMP mount non-built-in names under `xd://` instead. OMP's provider-managed task subagents are surfaced as BySpace subagents through `child_session` imports; the parent keeps the subagents track while the child runtime stays owned by OMP. Custom OMP profiles should extend `omp`; other Pi-compatible forks can still extend `pi`, override `command`, and set `params.sessionDir` to their JSONL session directory.
+OMP's provider-managed task subagents are surfaced as BySpace subagents through `child_session` imports; the parent keeps the subagents track while the child runtime stays owned by OMP. Custom OMP profiles should extend `omp`; other Pi-compatible forks can still extend `pi`, override `command`, and set `params.sessionDir` to their JSONL session directory.
 
 Pi RPC extension UI dialog requests (`select`, `input`, `editor`, `confirm`) are bridged into BySpace question permissions and answered with `extension_ui_response`. Pi extensions such as `ask_user` may chain dialogs: for example, a `select` can be followed by an optional-comment `input`. When an `ask_user` tool call declares `allowComment: true`, BySpace presents the selection and optional comment as one question permission, answers Pi's initial `select` immediately, then auto-answers the follow-up optional `input` with the comment the user already supplied (or an empty string). Preserve placeholders and optional/skip semantics for standalone optional inputs so the app can still distinguish "skip this optional input" from "cancel the whole dialog." Fire-and-forget extension UI requests such as notifications become timeline notifications; the extension's `notifyType` maps to the timeline level and an unknown value falls back to `info`.
 
-OpenCode 1 keeps MCP and process environment outside the session boundary. BySpace shares one OpenCode server for ordinary agents and installs a daemon-owned plugin through `OPENCODE_CONFIG_CONTENT`. The plugin reads the exact agent environment and caller-scoped BySpace tool catalog from the daemon's private loopback bridge for each OpenCode session. Bridge context lives only in daemon memory and is removed when the BySpace session closes. The content-addressed plugin artifact contains no session data or secrets.
-
-An agent with custom environment variables or user-configured MCP servers gets a dedicated OpenCode server. Keep that isolation until OpenCode exposes those values as session-owned configuration. Configure custom MCP with `mcp.add`; do not follow it with `mcp.connect`, which only toggles config-backed servers.
+OpenCode keeps the process environment outside the session boundary. The Go daemon starts or reuses one `opencode serve` and drives it over HTTP (`internal/agent/providers/opencodepool.go`); session configuration, including `mcpServers`, arrives per session, but the environment does not. An OpenCode agent therefore inherits the daemon's environment: `byspace` works only if the daemon's own `PATH` and `BYSPACE_HOME` reach it, and `BYSPACE_AGENT_ID` names no agent. Configure custom MCP with `mcp.add`; do not follow it with `mcp.connect`, which only toggles config-backed servers.
 
 OpenCode owns user message IDs. Do not pass BySpace-generated IDs to OpenCode prompt APIs; let OpenCode create `msg*` IDs and record the user timeline item from the `message.updated` event.
 

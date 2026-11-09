@@ -155,6 +155,25 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 		s.sessionID = "acp_sess_1"
 	}
 
+	// Model, mode and thinking are per-session config options in ACP, not fields of session/new.
+	// Sending them only from the runtime setters meant a freshly created agent ignored the pickers
+	// until the user touched them again.
+	for _, option := range []struct{ id, value string }{
+		{"model", cfg.Model},
+		{"mode", cfg.ModeID},
+		{"thought_level", cfg.ThinkingOptionID},
+	} {
+		value := strings.TrimSpace(option.value)
+		if value == "" || value == "default" {
+			continue
+		}
+		_, _ = s.rpcCall(ctx, "session/set_config_option", map[string]any{
+			"sessionId": s.sessionID,
+			"configId":  option.id,
+			"value":     value,
+		})
+	}
+
 	return s, nil
 }
 

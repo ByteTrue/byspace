@@ -189,7 +189,7 @@ report the release as shipped.
 Pattern:
 
 ```jsonc
-// mcp__byspace__create_heartbeat arguments
+// byspace heartbeat create arguments
 {
   "name": "vX.Y.Z release babysit heartbeat",
   "cron": "*/10 * * * *",

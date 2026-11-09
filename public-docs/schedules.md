@@ -15,7 +15,7 @@ BySpace also has **heartbeats**. A heartbeat sends a recurring prompt back into 
 Both concepts use the same cron engine, but their product surfaces stay separate:
 
 - **Schedules** create a new agent each run. You can inspect, pause, resume, run once, update, or delete them.
-- **Heartbeats** target one existing agent. They are intentionally lightweight: create or delete them over MCP; from the CLI you can also update only their cron period.
+- **Heartbeats** target one existing agent. They are intentionally lightweight: create or delete them from the CLI; changing one means deleting it and creating a replacement.
 
 Cron is the canonical cadence. The CLI accepts simple presets such as `5m` or `1h`, but compiles them to cron rather than storing a separate interval type.
 
@@ -32,4 +32,4 @@ Cron is the canonical cadence. The CLI accepts simple presets such as `5m` or `1
 - **In the app** — open the Schedules view and create one with agent settings, a cron cadence, a repo, and a prompt. This is the main way to create and manage schedules.
 - **[From chat](/docs/schedules-chat)** — ask the agent in a chat and it sets the schedule up for you.
 - **[From the CLI](/docs/schedules-cli)** — `byspace schedule create`, for headless boxes and scripts.
-- **[Over MCP](/docs/mcp)** — agents create and manage schedules programmatically.
+- **[From an agent](/docs/agent-tools)** — agents create and manage schedules with `byspace schedule`.

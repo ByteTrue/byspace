@@ -56,7 +56,7 @@ If your daemon serves nothing at `/`, update it; the bundled web UI is on by def
 
 The page is served from the same origin as the daemon's API and WebSocket. When you open it, the app automatically connects back to that same origin, so you usually skip the "Add Host" step entirely: open `http://localhost:6777/` and you're looking at your agents.
 
-The same HTTP server keeps serving the API (`/api/*`), MCP (`/mcp/*`), service-proxy routes, and the WebSocket upgrade. Only the static files are new. To point the served UI at a _different_ daemon, add that daemon as a host from the UI as usual.
+The same HTTP server keeps serving the API (`/api/*`), service-proxy routes, and the WebSocket upgrade. Only the static files are new. To point the served UI at a _different_ daemon, add that daemon as a host from the UI as usual.
 
 ## Topologies
 

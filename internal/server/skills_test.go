@@ -68,32 +68,13 @@ func TestSkillsInstallAndUninstallRemovesAllManagedSkillDirs(t *testing.T) {
 	}
 }
 
-// A home that never chose a selection must not get the bundle installed at startup.
+// A home that never chose a selection gets the reference skill, and nothing else.
 //
-// The default used to be every bundled skill, so the first boot of a host nobody had configured
-// installed all of them, and a host whose user had removed them got the bundle repaired back on
-// the first boot where a single copy was missing.
-func TestBootRepairInstallsNothingWithoutAStoredSelection(t *testing.T) {
-	sourceDir := resolveSkillsSourceDir()
-	if sourceDir == "" {
-		t.Fatal("expected non-empty bundled skills sourceDir")
-	}
-	// New reads this to find the agent homes the repair writes to.
+// The reference skill is where an agent learns that `byspace` exists; without it a fresh host has
+// no orchestration surface at all. The workflow skills stay opt-in, so a first boot must not drag
+// the whole bundle in.
+func TestBootRepairInstallsOnlyTheReferenceSkillWithoutAStoredSelection(t *testing.T) {
 	userHome := sandboxUserHome(t)
-
-	// A copy left behind by an earlier selection, with one skill missing: drift, which is what the
-	// repair treats as "rebuild the bundle".
-	status := getSkillsStatus(sourceDir, userHome, map[string]any{"mode": "all"}, SkillTargetIDs)
-	if err := applySkillsStatus(sourceDir, userHome, status); err != nil {
-		t.Fatalf("install: %v", err)
-	}
-	if len(status.Available) == 0 {
-		t.Fatal("expected the bundle to ship at least one skill")
-	}
-	missing := filepath.Join(userHome, ".agents", "skills", status.Available[0])
-	if err := os.RemoveAll(missing); err != nil {
-		t.Fatal(err)
-	}
 
 	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "0.0.0-test"})
 	if err != nil {
@@ -101,7 +82,14 @@ func TestBootRepairInstallsNothingWithoutAStoredSelection(t *testing.T) {
 	}
 	defer srv.Close()
 
-	if _, err := os.Stat(missing); !os.IsNotExist(err) {
-		t.Fatalf("startup installed %s for a home with no stored selection", missing)
+	for _, home := range []string{".agents", ".claude"} {
+		installed := filepath.Join(userHome, home, "skills", "byspace", "SKILL.md")
+		if _, err := os.Stat(installed); err != nil {
+			t.Fatalf("startup did not install the reference skill at %s: %v", installed, err)
+		}
+		optional := filepath.Join(userHome, home, "skills", "byspace-advisor")
+		if _, err := os.Stat(optional); !os.IsNotExist(err) {
+			t.Fatalf("startup installed the optional skill %s without a selection", optional)
+		}
 	}
 }

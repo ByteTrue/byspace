@@ -2264,11 +2264,6 @@ export const en = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
-        enableTools: {
-          title: "Enable BySpace tools",
-          hint: "Agents will be able to manage worktrees, agents and schedules",
-          accessibilityLabel: "Inject BySpace tools",
-        },
         systemPrompt: {
           title: "System prompt",
           hint: "Adds a system prompt to all agents",

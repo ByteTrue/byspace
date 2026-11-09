@@ -200,6 +200,12 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 		return
 	}
 
+	// Tell the provider when it can take a mode mid-session. Recording it and telling the user
+	// "applies next turn" was true for none of the providers: nothing ever read the new value.
+	if setter, ok := mp.session.(providers.ModeSetter); ok {
+		_ = setter.SetMode(ctx, req.ModeID)
+	}
+
 	s.mu.Lock()
 	if mp.record.Config == nil {
 		mp.record.Config = &store.AgentConfig{}

@@ -2282,11 +2282,6 @@ export const ptBR: TranslationResources = {
       orchestration: {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",
-        enableTools: {
-          title: "Ativar ferramentas do BySpace",
-          hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
-          accessibilityLabel: "Injetar ferramentas do BySpace",
-        },
         systemPrompt: {
           title: "Prompt do sistema",
           hint: "Adiciona um prompt do sistema a todos os agentes",

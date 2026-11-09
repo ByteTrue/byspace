@@ -10,4 +10,4 @@
 
 ## Heartbeat
 
-Heartbeat 把提示词送回目标 agent。目标 agent 被归档或不存在时，heartbeat 结束，不能继续向一个不可达目标发送。Agent 通过 MCP 管理自己的 heartbeat 和 schedule，不能操作其他 agent 的 heartbeat。
+Heartbeat 把提示词送回目标 agent。目标 agent 被归档或不存在时，heartbeat 结束，不能继续向一个不可达目标发送。Agent 用 `byspace schedule` / `byspace heartbeat` 管理自己的 heartbeat 和 schedule，不能操作其他 agent 的 heartbeat。

@@ -117,7 +117,6 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `featureValues`    | `Record<string, unknown>?` | Feature preference overrides |
 | `extra`            | `Record<string, any>?`     | Provider-specific config     |
 | `systemPrompt`     | `string?`                  | Custom system prompt         |
-| `mcpServers`       | `Record<string, any>?`     | MCP server configurations    |
 
 ### Nested: RuntimeInfo
 
@@ -207,7 +206,7 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
     listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
-    mcp: { enabled: boolean, injectIntoAgents: boolean },
+    mcp: { enabled: boolean, injectIntoAgents: boolean }, // retired, still parsed
     git: { maxProcessesPerSecond: number, maxProcessConcurrency: number },
     appendSystemPrompt: string,    // appended to supported provider system/developer prompts
     terminalProfiles: TerminalProfile[],  // named shell commands; omitted means DEFAULT_TERMINAL_PROFILES
@@ -276,41 +275,12 @@ rather than storing something it cannot describe. That is why the client gates t
 UI on `server_info.features.agentProfiles` instead of letting a save appear to succeed against an
 older daemon.
 
-### Agent provider BySpace tools
+### Agent provider BySpace tools (retired)
 
-`agents.providers` is keyed by the exact provider ID used to launch the agent. The built-in IDs are
-`claude`, `codex`, `copilot`, `opencode`, `pi`, and `omp`. Custom provider IDs are their literal
-configuration keys, such as `my-claude` or `zai`, not the provider named by `extends`.
-
-Each entry may include a BySpace-tool policy:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "my-claude": {
-        "extends": "claude",
-        "label": "My Claude",
-        "byspaceTools": {
-          "enabled": true,
-          "disabledTools": ["browser_evaluate"]
-        }
-      }
-    }
-  }
-}
-```
-
-Absent `byspaceTools`, or absent fields within it, means BySpace tools are enabled and all tools are
-allowed. `enabled: false` disables the provider's BySpace catalog; `disabledTools` lists exact tool
-IDs to omit. The policy covers the core catalog.
-This policy controls the catalog presented to an agent. It is not an authorization boundary for
-agents that can access the host through a shell.
-
-`daemon.mcp.injectIntoAgents` is the global override. When it is `false`, no provider receives
-BySpace tools; otherwise the provider policy applies. Provider and global policy are resolved when a
-session is created, resumed, imported, or reloaded, so configuration changes affect the next
-session rather than an already-running one.
+`byspaceTools` on a provider entry and `daemon.mcp.*` in the daemon config are retired. BySpace
+reaches agents through the bundled `byspace` skill and CLI, so there is no per-provider tool
+catalog to filter and no server to inject. Both keys are still parsed so an older client can write
+a config the daemon accepts; nothing reads them.
 
 `agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 
@@ -389,7 +359,7 @@ The `--every` flag is sugar over five-field cron, so it cannot express anything 
 ### Nested: ScheduleTarget (discriminated union on `type`)
 
 - `{ type: "agent", agentId: string }` — send to existing agent
-- `{ type: "new-agent", config: { provider, cwd, modeId?, model?, thinkingOptionId?, title?, providerOptions?, featureValues?, systemPrompt?, mcpServers? } }` — create a new agent
+- `{ type: "new-agent", config: { provider, cwd, modeId?, model?, thinkingOptionId?, title?, providerOptions?, featureValues?, systemPrompt? } }` — create a new agent
 
 ### Nested: ScheduleRun
 

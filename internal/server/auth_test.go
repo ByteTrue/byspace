@@ -42,8 +42,8 @@ func TestExtractWSBearerToken(t *testing.T) {
 	}
 }
 
-// Health and the two self-authenticating routes must stay reachable before a client has a
-// password, or the app could never discover the daemon it needs to authenticate against.
+// Health and the file download route must stay reachable before a client has a password, or the
+// app could never discover the daemon it needs to authenticate against.
 //
 // /health belongs here next to /api/health for the same reason: `byspace daemon start` and the
 // container health check probe it before they have a token. Leaving it out made a daemon with a
@@ -54,7 +54,6 @@ func TestShouldBypassBearerAuth(t *testing.T) {
 		{"GET", "/health"},
 		{"GET", "/api/health"},
 		{"GET", "/api/files/download"},
-		{"POST", "/mcp/agents"},
 	}
 	for _, c := range bypass {
 		if !ShouldBypassBearerAuth(c.method, c.path) {
@@ -116,29 +115,5 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 	// An empty hash means auth is off; Verify must say "no", never "yes".
 	if VerifyDaemonPassword("", "") {
 		t.Fatal("empty hash must not verify")
-	}
-}
-
-// The MCP endpoint is exempt from the global middleware, so it authorizes itself: a per-run
-// capability token, or a valid password bearer.
-func TestIsAgentMCPRequestAuthorized(t *testing.T) {
-	hash, err := HashDaemonPassword("pw")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !IsAgentMCPRequestAuthorized("", "", "") {
-		t.Fatal("no password configured means open")
-	}
-	if !IsAgentMCPRequestAuthorized(hash, "cap-token", "Bearer cap-token") {
-		t.Fatal("the capability token should authorize")
-	}
-	if !IsAgentMCPRequestAuthorized(hash, "cap-token", "Bearer pw") {
-		t.Fatal("the password should also authorize")
-	}
-	if IsAgentMCPRequestAuthorized(hash, "cap-token", "Bearer nope") {
-		t.Fatal("a wrong token must not authorize")
-	}
-	if IsAgentMCPRequestAuthorized(hash, "cap-token", "") {
-		t.Fatal("a missing header must not authorize")
 	}
 }

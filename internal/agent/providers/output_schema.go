@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -117,4 +118,13 @@ func isObjectSchemaNode(node map[string]any) bool {
 	}
 	_, hasProperties := node["properties"].(map[string]any)
 	return hasProperties
+}
+
+// ModeSetter is a session that can change mode without being relaunched.
+//
+// A mode is a launch flag on the Claude CLI, so Claude cannot implement this; Codex, OpenCode and
+// ACP apply it on the next turn. The daemon asks instead of assuming, because writing the record
+// and telling the user "applies next turn" was true for none of them.
+type ModeSetter interface {
+	SetMode(ctx context.Context, modeID string) error
 }

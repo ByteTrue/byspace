@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -95,24 +94,4 @@ type discardWriter struct{ written []byte }
 func (w *discardWriter) Write(p []byte) (int, error) {
 	w.written = append(w.written, p...)
 	return len(p), nil
-}
-
-// Registering two flags on one *bool makes the second registration overwrite the first's
-// default, which silently turned MCP injection off.
-func TestOnboardMCPDefaultsOn(t *testing.T) {
-	dir := t.TempDir()
-	w := &discardWriter{}
-	if err := runOnboard([]string{"--home", dir}, w); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(w.written), "enabled=true injectIntoAgents=true") {
-		t.Fatalf("MCP injection should default on:\n%s", w.written)
-	}
-
-	if err := runOnboard([]string{"--home", dir, "--no-mcp"}, w); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(w.written), "enabled=false") {
-		t.Fatalf("--no-mcp should disable it:\n%s", w.written)
-	}
 }

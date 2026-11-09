@@ -32,12 +32,11 @@ func TestConfigReloadReportBuckets(t *testing.T) {
 }
 
 // A nested setting counts as reloadable when its parent prefix is reloadable: the client only
-// sends leaf paths, and `daemon.relay.endpoint` arrives as exactly that, but
-// `daemon.mcp.injectIntoAgents` must also match `daemon.mcp`.
+// sends leaf paths, so a nested key has to match the section it belongs to.
 func TestConfigReloadReportMatchesPrefixes(t *testing.T) {
-	report := configReloadReport(nil, nil, []string{"daemon.mcp.injectIntoAgents"})
+	report := configReloadReport(nil, nil, []string{"daemon.relay.endpoint"})
 	if applied := report["appliedPaths"].([]string); len(applied) != 1 {
-		t.Fatalf("expected daemon.mcp.injectIntoAgents to be reloadable, got %v", applied)
+		t.Fatalf("expected daemon.relay.endpoint to be reloadable, got %v", applied)
 	}
 }
 

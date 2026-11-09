@@ -10,7 +10,7 @@ category: Orchestration
 
 The BySpace CLI lets you manage agents from your terminal. It's the same interface exposed by the daemon's API, so anything you can do in the app you can do from the command line.
 
-> **Agent orchestration:** You can tell coding agents to use the BySpace CLI to spawn and manage other agents. BySpace recognizes the calling agent, so CLI-created workers get the same workspace and parent defaults as MCP-created workers.
+> **Agent orchestration:** You can tell coding agents to use the BySpace CLI to spawn and manage other agents. BySpace recognizes the calling agent (`BYSPACE_AGENT_ID`), so a worker started by an agent becomes its subagent, in its workspace unless you name another.
 
 ## Quick reference
 

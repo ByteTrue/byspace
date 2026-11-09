@@ -544,11 +544,6 @@ type LaunchConfig struct {
 	// FeatureValues are the provider's own feature toggles, set by the client at create time. They
 	// are a separate protocol field from ProviderOptions, not a key inside it.
 	FeatureValues map[string]any
-	// PreapprovedTools are the BySpace MCP tools the user allowed without a prompt. Codex needs them
-	// written into its own server config; a provider that inherits our allow-list ignores this.
-	PreapprovedTools []McpToolRef
-	// MCPServers are injected through the generated extension; pi has no launch flag for them.
-	MCPServers []pi.MCPConfig
 	// SystemPrompt is the daemon-side prompt appended to the provider's own.
 	SystemPrompt string
 	// HomeDir is where materialised provider images land. Empty disables image output rather
@@ -644,7 +639,6 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		// tree navigation only through extensions, so without it `agent.rewind` has no way to
 		// reach the provider.
 		extPath, extCleanup, extErr := pi.WriteIntegrationExtension(pi.ExtensionOptions{
-			MCPServers:   cfg.MCPServers,
 			SystemPrompt: cfg.SystemPrompt,
 		})
 		if extErr != nil {

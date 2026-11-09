@@ -2299,11 +2299,6 @@ export const fr: TranslationResources = {
       orchestration: {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
-        enableTools: {
-          title: "Activer les outils BySpace",
-          hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
-          accessibilityLabel: "Injecter les outilsBySpace",
-        },
         systemPrompt: {
           title: "Invite système",
           hint: "Ajoute une invite système à tous les agents",

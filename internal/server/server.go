@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -74,13 +73,8 @@ type Options struct {
 	WebUI        *webui.Handler
 	PiCommand    string
 	PiSessionDir string
-	// ListenAddr is the address the daemon bound to; the MCP bridge it injects into agents
-	// must call the same one.
+	// ListenAddr is the address the daemon bound to; agents learn it as BYSPACE_HOST.
 	ListenAddr string
-	// DisableMCPInjection stops the daemon from adding its own MCP server to created agents.
-	// Set from `serve --no-inject-mcp`: a user who configures their agent's MCP servers by hand
-	// does not want one appearing behind their back.
-	DisableMCPInjection bool
 	// DisableWebUI turns off the bundled web UI. Set from `serve --no-web-ui`, which matters when
 	// the daemon is one half of a split deployment and the UI is served elsewhere.
 	DisableWebUI bool
@@ -195,9 +189,6 @@ type Server struct {
 	webUI        *webui.Handler
 	piCommand    string
 	piSessionDir string
-	// disableMCPInjection comes from --no-inject-mcp; read where the MCP server is attached to a
-	// new agent.
-	disableMCPInjection bool
 
 	mu                sync.Mutex
 	agents            map[string]*managedPi
@@ -257,9 +248,6 @@ type Server struct {
 	// resetting a grid the client still holds.
 	terminalDelivered map[frameSink]map[string]int64
 	listenAddr        string
-	// capabilityToken authorizes an agent's own MCP bridge to /mcp/agents without the user's
-	// password, which the agent does not have.
-	capabilityToken string
 	// relay owns the relay connection's lifecycle so settings changes take effect without a
 	// restart.
 	relay *relayRuntime
@@ -383,19 +371,6 @@ func New(opts Options) (*Server, error) {
 	if strings.TrimSpace(os.Getenv("BYSPACE_DISABLE_HOME_WORKSPACE")) != "1" {
 		_ = st.EnsureHomeWorkspace(serverID)
 	}
-	capabilityToken := ""
-	if raw, err := os.ReadFile(filepath.Join(homeDir, "mcp-capability-token")); err == nil {
-		capabilityToken = strings.TrimSpace(string(raw))
-	} else {
-		// Per-daemon-run token: an agent's MCP bridge presents it instead of the user's
-		// password, and it stops working when the daemon restarts.
-		buf := make([]byte, 24)
-		if _, randErr := rand.Read(buf); randErr == nil {
-			capabilityToken = base64.RawURLEncoding.EncodeToString(buf)
-			_ = home.WriteAtomic(filepath.Join(homeDir, "mcp-capability-token"), []byte(capabilityToken+"\n"), 0o600)
-		}
-	}
-
 	// The CLI's own credential, created here so the first command on a protected home finds it.
 	// Written on every start rather than only when a password exists: setting one later must not
 	// leave the CLI locked out until the daemon restarts.
@@ -406,7 +381,6 @@ func New(opts Options) (*Server, error) {
 		controlRequests:       make(chan ControlRequest, 1),
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,
-		capabilityToken:       capabilityToken,
 		relay:                 newRelayRuntime(RelayConfig{}),
 		relayUseTLS:           opts.RelayUseTLS,
 		serverID:              serverID,
@@ -422,7 +396,6 @@ func New(opts Options) (*Server, error) {
 		webUI:                 ui,
 		piCommand:             opts.PiCommand,
 		piSessionDir:          opts.PiSessionDir,
-		disableMCPInjection:   opts.DisableMCPInjection,
 		agents:                make(map[string]*managedPi),
 		terminals:             make(map[uint8]*terminal.Session),
 		terminalSlotsByID:     make(map[string]uint8),
@@ -609,9 +582,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Password auth. The daemon is reachable from anything that can open a loopback
 	// connection, and a relay/tunnel extends that; an operator who sets a password expects it
-	// to be enforced. /mcp/agents authenticates itself inside the handler with its capability
-	// token, so it is exempt here.
-	if path := r.URL.Path; path != "/mcp/agents" && !ShouldBypassBearerAuth(r.Method, path) {
+	// to be enforced.
+	if path := r.URL.Path; !ShouldBypassBearerAuth(r.Method, path) {
 		// Enforcement is triggered by a password alone. The CLI credential is an alternative way to
 		// present that authority, not a second reason to demand one: treating its mere presence as
 		// "auth is on" would 401 the browser app on every password-less home, because only the
@@ -678,18 +650,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/api/subagent-report" {
-		s.handleHTTPSubagentReport(w, r)
-		return
-	}
-
 	if r.URL.Path == "/ws" {
 		s.handleDirectWS(w, r)
-		return
-	}
-
-	if r.URL.Path == "/mcp/agents" || strings.HasPrefix(r.URL.Path, "/mcp/") {
-		s.handleMCPHTTP(w, r)
 		return
 	}
 
@@ -2511,11 +2473,16 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			Branch    string `json:"branch"`
 			PrNumber  int    `json:"prNumber"`
 		} `json:"worktree"`
-		OutputSchema any               `json:"outputSchema"`
-		AutoArchive  any               `json:"autoArchive"`
-		Git          any               `json:"git"`
-		Env          map[string]string `json:"env"`
-		Images       []struct {
+		OutputSchema any `json:"outputSchema"`
+		AutoArchive  any `json:"autoArchive"`
+		// Git and Env are retired wire fields kept so an older client's create request still parses.
+		// Git was replaced by the structured `worktree` intent; Env never reached a process in this
+		// daemon (the CLI wrote config.env, which nothing read) and BySpace no longer sets per-agent
+		// environment. COMPAT(createEnvGit): keep parsing until the supported client floor predates
+		// the fields (they shipped before v0.24); then delete.
+		Git    any               `json:"git"`
+		Env    map[string]string `json:"env"`
+		Images []struct {
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
@@ -2542,16 +2509,6 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			// it, and were absent here: every featureValues the specs set at create time was dropped, so
 			// mockPromptRejections, mockSteerAmbiguousFailures and the rest silently did nothing.
 			FeatureValues map[string]any `json:"featureValues"`
-			// ToolPolicy carries the BySpace tools the user pre-approved. Codex does not inherit an
-			// allow-list from us — each MCP server declares its own — so without this a pre-approved
-			// tool still prompts, and a sub-agent with nobody watching hangs on that prompt.
-			ToolPolicy *struct {
-				Preapproved []struct {
-					Kind   string `json:"kind"`
-					Server string `json:"server"`
-					Tool   string `json:"tool"`
-				} `json:"preapproved"`
-			} `json:"toolPolicy"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -2726,7 +2683,6 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			SystemPrompt:     req.Config.SystemPrompt,
 			ProviderOptions:  req.Config.ProviderOptions,
 			FeatureValues:    req.Config.FeatureValues,
-			PreapprovedTools: storePreapprovedTools(req.Config.ToolPolicy),
 		},
 	}
 
@@ -2756,18 +2712,26 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	}
 
 	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
-		// `byspace run --output-schema` constrains the reply. Codex and OpenCode honour it; a schema
-		// they cannot use fails the request instead of being dropped (Node threw from the run).
+		// `byspace run --output-schema` constrains the reply. Codex and OpenCode honour it; a provider
+		// that cannot fails the request instead of running the turn and printing prose as if the
+		// schema had been applied — the caller asked for a JSON object and would parse the answer.
 		if req.OutputSchema != nil {
-			if setter, ok := mp.session.(providers.OutputSchemaSetter); ok {
-				if err := setter.SetNextOutputSchema(req.OutputSchema); err != nil {
-					_ = sendSessionMsg(ctx, sink, "status", map[string]any{
-						"status":    "agent_create_failed",
-						"requestId": req.RequestID,
-						"error":     err.Error(),
-					})
-					return
-				}
+			setter, ok := mp.session.(providers.OutputSchemaSetter)
+			if !ok {
+				_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+					"status":    "agent_create_failed",
+					"requestId": req.RequestID,
+					"error":     fmt.Sprintf("provider %q cannot honour an output schema", rec.Provider),
+				})
+				return
+			}
+			if err := setter.SetNextOutputSchema(req.OutputSchema); err != nil {
+				_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+					"status":    "agent_create_failed",
+					"requestId": req.RequestID,
+					"error":     err.Error(),
+				})
+				return
 			}
 		}
 		initialClientMessageID := normalizeClientMessageID(req.ClientMessageID)
@@ -3372,8 +3336,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	// providerOptions is structured provider configuration (codex's sandbox_mode, approval_policy,
 	// sandbox_workspace_write), passed through to the adapter — not environment variables. Turning
 	// each string value into `key=value` in the child environment gave the provider nothing it
-	// understood and polluted every process it started.
-	var providerEnv []string
+	// understood and polluted every process it started. What does belong in the environment is how
+	// the agent finds this daemon; see agentEnv.
+	providerEnv := s.agentEnv(rec)
 	sess, err := providers.StartProviderSession(providers.LaunchConfig{
 		Provider:         rec.Provider,
 		ProviderConfig:   s.providerConfigFor(rec.Provider),
@@ -3386,12 +3351,8 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		Env:              providerEnv,
 		ProviderOptions:  providerOptionsOf(rec),
 		FeatureValues:    featureValuesOf(rec),
-		PreapprovedTools: mcpToolRefs(preapprovedToolsOf(rec)),
-		// Injected through the extension: pi has no launch flag for MCP, and without this the
-		// agent never sees the daemon's orchestration tools.
-		MCPServers:   s.piMCPServersFor(rec),
-		SystemPrompt: s.systemPromptFor(rec),
-		HomeDir:      s.homeDir,
+		SystemPrompt:     s.systemPromptFor(rec),
+		HomeDir:          s.homeDir,
 	})
 	if err != nil {
 		return nil, err
@@ -3427,28 +3388,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		}()
 	}
 
-	// omp has no MCP client in the modes BySpace uses: the orchestration tools reach it through its RPC
-	// host-tool channel. Declaring them is what makes an omp agent able to create agents, list
-	// workspaces or schedule anything at all.
-	var hostToolSink hostToolSession
-	if typed, ok := sess.(hostToolSession); ok {
-		hostToolSink = typed
-	}
-	if rec.Provider == "omp" && hostToolSink != nil {
-		go s.declareOmpHostTools(hostToolSink)
-	}
-
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 
 		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
-
-		// A host tool call is the provider asking the daemon to run one of its own tools. Answered
-		// asynchronously so the event loop is not blocked for the length of the tool.
-		if call, ok := providers.ParseOmpHostToolCall(ev); ok && hostToolSink != nil {
-			go s.answerOmpHostToolCall(hostToolSink, call, rec.ID)
-		}
 
 		switch evType {
 		case "byspace_turn_started":
@@ -5270,103 +5214,6 @@ func draftModelFromConfig(draft map[string]any) string {
 		return strings.TrimSpace(model)
 	}
 	return ""
-}
-
-// preapprovedToolRefs reads the pre-approved MCP tool list from a create request.
-//
-// Only `kind: "mcp"` entries are kept: the schema admits other kinds, and a grant for something that is
-// not an MCP tool cannot be expressed in the provider's server config.
-func storePreapprovedTools(policy *struct {
-	Preapproved []struct {
-		Kind   string `json:"kind"`
-		Server string `json:"server"`
-		Tool   string `json:"tool"`
-	} `json:"preapproved"`
-}) []store.PreapprovedTool {
-	if policy == nil {
-		return nil
-	}
-	out := make([]store.PreapprovedTool, 0, len(policy.Preapproved))
-	for _, grant := range policy.Preapproved {
-		if grant.Kind != "" && grant.Kind != "mcp" {
-			continue
-		}
-		out = append(out, store.PreapprovedTool{Server: grant.Server, Tool: grant.Tool})
-	}
-	return out
-}
-
-// preapprovedToolsOf reads an agent's stored grants.
-func preapprovedToolsOf(rec store.AgentRecord) []store.PreapprovedTool {
-	if rec.Config == nil {
-		return nil
-	}
-	return rec.Config.PreapprovedTools
-}
-
-// mcpToolRefs converts stored grants into the provider-facing shape.
-func mcpToolRefs(tools []store.PreapprovedTool) []providers.McpToolRef {
-	if len(tools) == 0 {
-		return nil
-	}
-	out := make([]providers.McpToolRef, 0, len(tools))
-	for _, tool := range tools {
-		out = append(out, providers.McpToolRef{Server: tool.Server, Tool: tool.Tool})
-	}
-	return out
-}
-
-// hostToolSession is a provider session that can host the daemon's own tools.
-//
-// omp implements it; the other providers take their tools through MCP or an extension instead.
-type hostToolSession interface {
-	SetHostTools(ctx context.Context, tools []map[string]any) ([]string, error)
-	SendHostToolResult(callID, output string, failed bool) error
-}
-
-// declareOmpHostTools sends the BySpace tool catalog to an omp session.
-//
-// Waits for the session to be ready first: omp does not answer RPC before its runtime is listening, and a
-// request sent too early sits in the queue and blocks the prompt behind it.
-func (s *Server) declareOmpHostTools(sess hostToolSession) {
-	for i := 0; i < 100; i++ {
-		if ready, ok := sess.(interface{ Ready() bool }); !ok || ready.Ready() {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// The provider's answer is authoritative: it may refuse a tool whose schema it cannot parse, and
-	// assuming all of them are live means the model calls a tool that does not exist.
-	_, _ = sess.SetHostTools(ctx, mcpToolDefinitions())
-}
-
-// answerOmpHostToolCall runs one host tool call and returns its result.
-func (s *Server) answerOmpHostToolCall(sess hostToolSession, call providers.OmpHostToolCall, agentID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-	ctx = withMCPCaller(ctx, agentID)
-
-	result, isError := s.callMCPTool(ctx, call.Name, call.Arguments)
-	output := ""
-	switch typed := result.(type) {
-	case string:
-		output = typed
-	case nil:
-		output = ""
-	default:
-		encoded, err := json.Marshal(typed)
-		if err != nil {
-			output = fmt.Sprint(typed)
-		} else {
-			output = string(encoded)
-		}
-	}
-	if output == "" && isError {
-		output = "the tool returned no output"
-	}
-	_ = sess.SendHostToolResult(call.CallID, output, isError)
 }
 
 // firstNonEmptyTrimmed returns the first value with content.

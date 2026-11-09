@@ -2282,11 +2282,6 @@ export const ru: TranslationResources = {
       orchestration: {
         title: "Оркестрация",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
-        enableTools: {
-          title: "Включить инструменты BySpace",
-          hint: "Агенты смогут управлять worktree, агентами и расписаниями.",
-          accessibilityLabel: "Добавить инструменты BySpace",
-        },
         systemPrompt: {
           title: "Системный промпт",
           hint: "Добавляет системный промпт всем агентам",

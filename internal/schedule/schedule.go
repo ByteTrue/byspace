@@ -47,7 +47,6 @@ type TargetConfig struct {
 	ProviderOptions map[string]any `json:"providerOptions,omitempty"`
 	FeatureValues   map[string]any `json:"featureValues,omitempty"`
 	SystemPrompt    *string        `json:"systemPrompt,omitempty"`
-	MCPServers      map[string]any `json:"mcpServers,omitempty"`
 }
 
 type Target struct {

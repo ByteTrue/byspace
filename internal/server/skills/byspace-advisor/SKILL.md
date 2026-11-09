@@ -13,7 +13,7 @@ Single agent. Reads the situation you're in. Gives a judgment. You decide what t
 
 ## Prerequisites
 
-Read the **byspace** skill. Call `list_profiles` before choosing the advisor. Do not create the advisor until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. The host's agent profiles and their notes live in `$BYSPACE_HOME/config.json` under `agentProfiles`; read them before choosing the advisor. Do not launch anything until you have read them.
 
 ## Picking the advisor
 
@@ -21,7 +21,7 @@ Read the **byspace** skill. Call `list_profiles` before choosing the advisor. Do
 2. **Otherwise** choose the profile whose `notes` best fit the question. Match the actual work: design and approach, audit and review, or research and root-cause analysis.
 3. **Contrast helps.** When several profiles fit, prefer a different provider family from your own so the second opinion is genuinely fresh.
 
-Materialize the selected profile into `create_agent` as described by the **byspace** skill. If no profile fits, use BySpace's provider discovery fallback.
+Materialize the selected profile into a `byspace run` call: `--provider <provider>/<model>`, `--mode`, `--thinking`, and `--features` for its feature values. If no profile fits, pick a provider and model from `byspace provider ls` and `byspace provider models <provider>`, and say that you fell back.
 
 ## The briefing
 

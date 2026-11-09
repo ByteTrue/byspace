@@ -11,7 +11,6 @@ import {
   clickEditHostLabel,
   expectHostLabelEditMode,
   expectHostConnectionsCard,
-  expectHostInjectMcpCard,
   expectHostActionCards,
   expectHostProvidersCard,
   expectHostNoDaemonLifecycleRow,
@@ -40,7 +39,7 @@ test.describe("Settings host page", () => {
     await expectHostConnectionsCard(page, port);
   });
 
-  test("agents section shows the inject MCP toggle", async ({ page }) => {
+  test("agents section shows the system prompt card", async ({ page }) => {
     const serverId = getServerId();
 
     await gotoAppShell(page);
@@ -49,7 +48,7 @@ test.describe("Settings host page", () => {
 
     await openHostSection(page, serverId, "agents");
     await expectSettingsHeader(page, "Agents");
-    await expectHostInjectMcpCard(page);
+    await expect(page.getByTestId("host-page-append-system-prompt-edit")).toBeVisible();
   });
 
   test("a provider's Terminal tab exposes its agent hook switch", async ({ page }) => {

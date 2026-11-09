@@ -23,25 +23,27 @@ BySpace lets your coding agents coordinate other agents, split work across provi
 
 ## Get started
 
-Use built-in BySpace tools or the CLI. Both let an agent launch and coordinate workers.
+Every agent BySpace launches knows how to drive its host: BySpace installs the bundled **byspace**
+skill where the agent reads its skills, and puts its own `byspace` binary on the agent's `PATH`.
+There is nothing to turn on.
 
-### Built-in BySpace tools (MCP)
+Ask the agent for the outcome:
 
-Enable BySpace tools so agents running inside BySpace can manage agents and workspaces on their host directly.
+> Use BySpace to launch a second agent to review this branch. Have it report potential bugs without changing files, then summarize its findings.
 
-1. Open **Settings → your host → Agents**.
-2. Turn on **Enable BySpace tools**. Tool injection is off by default.
-3. Start a new agent, or reload an existing agent so it receives the tools.
-4. Ask:
-   > Use BySpace to launch a second agent to review this branch. Have it report potential bugs without changing files, then summarize its findings.
+The worker appears in the **Subagents track** near the composer. Open it to follow the conversation.
+Your main agent is notified when the worker finishes, errors, or needs permission, and you can keep
+talking while it works.
 
-The worker appears in the **Subagents track** near the composer. Open it to follow the conversation. Your main agent receives a notification when the worker finishes, and you can keep talking while it works.
+An agent that does not read `~/.agents/skills` (most ACP clients) gets no BySpace tools. Copy the
+skill into that client's own skill directory if you want it there.
 
-See the [MCP reference](/docs/mcp) for tool configuration and the full catalog. [Orchestration skills](/docs/skills) are optional reusable workflows.
+See [Agent tools](/docs/agent-tools) for what the agent can do. [Orchestration skills](/docs/skills)
+are optional reusable workflows built on top of it.
 
-### CLI
+### From your own terminal
 
-Agents with shell access can also use the BySpace CLI. This route does not require enabling tool injection. With BySpace installed, a running host, and Codex configured:
+The same CLI works from your shell, which is handy for starting work without opening a chat:
 
 ```bash
 byspace run --provider codex --background \
@@ -49,7 +51,9 @@ byspace run --provider codex --background \
 byspace ls -a
 ```
 
-The first command starts a worker and returns immediately; the second lists agents from active workspaces, including archived agents. When a BySpace agent runs the command, the worker becomes its subagent in the same workspace. From your own terminal, it starts in a new local workspace.
+The first command starts an agent and returns immediately; the second lists agents from active
+workspaces, including archived ones. Started from your shell, the agent gets a new local workspace;
+started by an agent, it becomes that agent's subagent.
 
 See the [CLI reference](/docs/cli) for follow-ups, output, worktrees, and remote hosts.
 

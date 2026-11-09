@@ -55,11 +55,12 @@ type ClaudeSession struct {
 }
 
 // StartClaudeSession launches a Claude Code stream-json subprocess.
-func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, error) {
-	bin := strings.TrimSpace(cmdOverride)
-	if bin == "" {
-		bin = "claude"
-	}
+// claudeLaunchArgs builds the flags a Claude CLI session starts with.
+//
+// Split out so the mapping is testable without spawning a process: every one of these flags is the
+// only way the daemon's settings reach Claude, and a dropped flag is invisible at runtime — the
+// agent simply runs with Claude's defaults.
+func claudeLaunchArgs(cfg LaunchConfig) []string {
 	args := []string{
 		"-p",
 		"--output-format", "stream-json",
@@ -75,6 +76,24 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 	if cfg.SessionHandle != "" && !strings.HasSuffix(cfg.SessionHandle, ".jsonl") {
 		args = append(args, "--resume", cfg.SessionHandle)
 	}
+	// The daemon's system prompt and the agent's thinking level only exist as launch flags on the
+	// CLI. Without them the host-wide prompt and the thinking picker did nothing for Claude while
+	// the UI showed both as applied.
+	if prompt := strings.TrimSpace(cfg.SystemPrompt); prompt != "" {
+		args = append(args, "--append-system-prompt", prompt)
+	}
+	if effort := claudeEffortArg(cfg.ThinkingOptionID); effort != "" {
+		args = append(args, "--effort", effort)
+	}
+	return args
+}
+
+func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, error) {
+	bin := strings.TrimSpace(cmdOverride)
+	if bin == "" {
+		bin = "claude"
+	}
+	args := claudeLaunchArgs(cfg)
 
 	proc, err := jsonl.Start(jsonl.LaunchConfig{
 		Command: bin,
@@ -1164,4 +1183,16 @@ func (s *ClaudeSession) RewindConversation(ctx context.Context, messageID string
 func (s *ClaudeSession) TreeEntryForMessage(messageID string) (string, bool) {
 	trimmed := strings.TrimSpace(messageID)
 	return trimmed, trimmed != ""
+}
+
+// claudeEffortArg maps a thinking option onto Claude's --effort values.
+//
+// Claude's own scale is low..max. "off", "default" and "ultracode" are BySpace option ids, not
+// effort levels: passing them as --effort makes the CLI reject the launch.
+func claudeEffortArg(thinking string) string {
+	switch strings.TrimSpace(thinking) {
+	case "low", "medium", "high", "xhigh", "max":
+		return strings.TrimSpace(thinking)
+	}
+	return ""
 }

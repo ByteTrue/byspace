@@ -31,7 +31,9 @@ func TestCLIVersionHelpLsRunAndLogs(t *testing.T) {
 	// 2. Spin up in-memory test daemon with a fake Pi binary
 	tmp := t.TempDir()
 	fakePi := filepath.Join(tmp, "fake-pi.sh")
+	envProbe := filepath.Join(tmp, "pi-env.txt")
 	script := `#!/bin/sh
+	printf '%s|%s|%s\n' "$BYSPACE_AGENT_ID" "$BYSPACE_HOST" "$PATH" > "` + envProbe + `"
 while read line; do
   req_id=$(echo "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
   [ -z "$req_id" ] && req_id="req_1"
@@ -81,6 +83,23 @@ done
 		t.Fatalf("unexpected run output: %q", out.String())
 	}
 
+	// 3b. The agent's own environment is how it reaches the daemon: without these variables a
+	// shell inside the agent cannot find the right daemon or name itself as a caller.
+	probe, readErr := os.ReadFile(envProbe)
+	if readErr != nil {
+		t.Fatalf("the agent never saw its environment: %v", readErr)
+	}
+	fields := strings.Split(strings.TrimSpace(string(probe)), "|")
+	if len(fields) != 3 {
+		t.Fatalf("unexpected env probe %q", probe)
+	}
+	if fields[0] == "" {
+		t.Fatalf("the agent process has no BYSPACE_AGENT_ID (probe %q)", probe)
+	}
+	if fields[1] != addr {
+		t.Fatalf("BYSPACE_HOST = %q, want the daemon address %q", fields[1], addr)
+	}
+
 	// 4. byspace ls --home ...
 	out.Reset()
 	errOut.Reset()
@@ -101,20 +120,7 @@ done
 		t.Fatalf("unexpected daemon status output: %q", out.String())
 	}
 
-	// 6. byspace mcp-bridge --addr ... (tools/list + tools/call list_agents)
-	mcpIn := strings.NewReader(
-		`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n" +
-			`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_agents","arguments":{}}}` + "\n",
-	)
-	out.Reset()
-	if err := runMCPBridge([]string{"--addr", addr}, mcpIn, &out); err != nil {
-		t.Fatalf("mcp-bridge failed: %v", err)
-	}
-	if !strings.Contains(out.String(), `"name":"list_agents"`) || !strings.Contains(out.String(), `say hi`) {
-		t.Fatalf("unexpected mcp-bridge output: %s", out.String())
-	}
-
-	// 7. byspace heartbeat create / list / delete
+	// 6. byspace heartbeat create / list / delete
 	out.Reset()
 	errOut.Reset()
 	if code := Main("0.20.2-go", []string{"schedule", "create", "--addr", addr, "--cron", "*/10 * * * *", "--name", "Check CI", "--provider", "pi", "check status"}, &out, &errOut); code != 0 {

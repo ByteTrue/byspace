@@ -12,6 +12,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 - [连接与发布通道](connection.md) — App 与 Relay 地址按通道选择、连接安全边界与配对 hostname，自托管部署的发布形态与限制，以及 daemon 隧道（远端端口转发到本机）。
 - [通知送达](notifications.md) — 各平台怎样收到「agent 需要你」的通知，Web Push 的凭据归属与加密边界，以及 PWA 与局域网直连的互斥。
 - [Schedules](schedules.md) — daemon 定时执行、每次运行的 workspace 所有权、重启恢复和 heartbeat 目标边界。
+- [Agent tools](agent-tools.md) — agent 用什么操作 daemon（bundled skill + CLI）、不携带谁的 MCP 配置，以及「设置必须有传输通道」这条长期约束。
 
 系统架构、协议、发布和性能的工程约束仍由 `docs/` 中的主题文档负责。Project Spec 记录用户能依赖的当前产品行为；实现过程和验证证据留在已关闭 Issue。
 

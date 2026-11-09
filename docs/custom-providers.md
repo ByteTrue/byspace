@@ -484,24 +484,10 @@ Required fields for ACP providers:
 - `label`
 - `command` — the command to spawn the agent process (must support ACP over stdio)
 
-BySpace tools such as subagent creation come from the shared internal tool catalog. ACP providers receive those tools through the MCP fallback by default because ACP exposes `mcpServers`, not BySpace's native tool catalog. Some ACP adapters cannot create sessions when `mcpServers` is non-empty. Disable injected MCP for those providers with `params.supportsMcpServers: false`:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "my-agent": {
-        "extends": "acp",
-        "label": "My Agent",
-        "command": ["my-agent", "acp"],
-        "params": {
-          "supportsMcpServers": false
-        }
-      }
-    }
-  }
-}
-```
+BySpace tools do not reach an ACP agent. The daemon gives ACP sessions an empty `mcpServers`
+array, and the bundled skill is only readable if the client reads `~/.agents/skills` or
+`~/.claude/skills`. Copy the skill into that client's own skill directory to give it the CLI, and
+accept that a client started this way has no `BYSPACE_AGENT_ID` of its own.
 
 ACP agents execute filesystem operations in their own environment by default,
 while terminal operations run through BySpace on the host. To customize which

@@ -116,7 +116,7 @@ Commands run with the worktree as `cwd`. Use `$BYSPACE_SOURCE_CHECKOUT_PATH` to 
 
 `scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and BySpace supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
 
-Run them from the app, or manage them from automation with [`byspace script`](/docs/cli#workspace-scripts) and the [workspace-script MCP tools](/docs/mcp#workspace-scripts).
+Run them from the app, or manage them from automation with [`byspace script`](/docs/cli#workspace-scripts) and the [agent-facing CLI](/docs/agent-tools#reference).
 
 ### Plain scripts
 

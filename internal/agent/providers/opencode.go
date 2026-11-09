@@ -222,6 +222,9 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		Item:      userMessage(message, clientMsgID),
 	})
 	sid := s.sessionID
+	// Read the turn's model/mode/thinking under the same lock as the rest of the turn state: the
+	// runtime setters write them, and reading them inside the goroutine would race.
+	model, modeID, variant := s.model, s.modeID, s.thinking
 	outputSchema := s.nextOutputSchema
 	s.nextOutputSchema = nil
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
@@ -239,6 +242,20 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		parts = append(parts, imageBlocksForOpenCode(images)...)
 		body := map[string]any{
 			"parts": parts,
+		}
+		// OpenCode takes the model, the agent (mode) and the thinking variant per message. They were
+		// stored on the session and never sent, so the pickers changed the record while every turn
+		// ran with whatever the server defaulted to.
+		if trimmed := strings.TrimSpace(model); trimmed != "" {
+			if provider, modelID, ok := strings.Cut(trimmed, "/"); ok {
+				body["model"] = map[string]any{"providerID": provider, "modelID": modelID}
+			}
+		}
+		if trimmed := strings.TrimSpace(modeID); trimmed != "" {
+			body["agent"] = trimmed
+		}
+		if trimmed := strings.TrimSpace(variant); trimmed != "" && trimmed != "default" {
+			body["variant"] = trimmed
 		}
 		if outputSchema != nil {
 			body["format"] = map[string]any{"type": "json_schema", "schema": outputSchema}
@@ -346,6 +363,13 @@ func (s *OpenCodeSession) SetModel(_ context.Context, provider, modelID string) 
 	s.model = modelID
 	s.mu.Unlock()
 	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+}
+
+func (s *OpenCodeSession) SetMode(_ context.Context, modeID string) error {
+	s.mu.Lock()
+	s.modeID = modeID
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *OpenCodeSession) SetThinkingLevel(_ context.Context, level string) error {

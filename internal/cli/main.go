@@ -3,7 +3,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -70,7 +69,6 @@ const usageText = `byspace — single-binary AI coding agent host, desktop & mob
                                   manage daemon lifecycle, config reload and service definitions
   byspace update [check] [--proxy <url>] [--mirror <prefix>]
                                   check for or install the newest BySpace release
-  byspace mcp-bridge              run the self-hosted stdio MCP bridge for child agents
   byspace version                 print version
 `
 
@@ -361,12 +359,6 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
-	case "mcp-bridge":
-		if err := runMCPBridge(rest, os.Stdin, stdout); err != nil {
-			fmt.Fprintln(stderr, "byspace mcp-bridge:", err)
-			return 1
-		}
-		return 0
 	default:
 		fmt.Fprintf(stderr, "byspace: unknown command %q\n\n%s", cmd, usageText)
 		return 1
@@ -383,7 +375,6 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	// ignoring it would be worse than rejecting it, because the user believes it worked.
 	noWebUI := fs.Bool("no-web-ui", false, "do not serve the bundled web UI")
 	webUI := fs.Bool("web-ui", false, "serve the bundled web UI (the default)")
-	noInjectMCP := fs.Bool("no-inject-mcp", false, "do not inject the BySpace MCP server into created agents")
 	relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -393,13 +384,11 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		HomeDir: *homeDir,
 		Version: version,
 		WebDir:  *webDir,
-		// The MCP bridge injected into agents must call back to this daemon's address, and so must a
-		// terminal's activity hook; both need the address the daemon actually binds, which for a
-		// unix socket or a wildcard bind is not what was passed on the command line.
-		ListenAddr:          *addr,
-		DisableWebUI:        *noWebUI && !*webUI,
-		DisableMCPInjection: *noInjectMCP,
-		RelayUseTLS:         *relayUseTLS,
+		// Agents learn the address the daemon actually binds as BYSPACE_HOST, which for a unix
+		// socket or a wildcard bind is not what was passed on the command line.
+		ListenAddr:   *addr,
+		DisableWebUI: *noWebUI && !*webUI,
+		RelayUseTLS:  *relayUseTLS,
 	})
 	if err != nil {
 		return err
@@ -683,6 +672,7 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	// run prints: the model's reply is the object, not prose, and printing prose (or the agent id)
 	// makes the flag useless to a script.
 	outputSchema := fs.String("output-schema", "", "JSON Schema the reply must satisfy (object or @file)")
+	features := fs.String("features", "", "provider feature values as a JSON object, e.g. '{\"fast_mode\":true}'")
 	// Worktree group. The three modes are what `create_agent_request.worktree` accepts; exposing
 	// them here is what lets a CLI user get the same isolation the app's "new worktree" button
 	// gives, instead of every agent sharing the main checkout.
@@ -701,8 +691,6 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	fs.Var(&imagePaths, "image", "image file to attach to the first message (repeatable)")
 	var labels multiFlag
 	fs.Var(&labels, "label", "key=value label (repeatable)")
-	var envVars multiFlag
-	fs.Var(&envVars, "env", "NAME=value for the agent process (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -746,10 +734,12 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if *mode != "" {
 		cfg["modeId"] = *mode
 	}
-	if env, envErr := parseKeyValueFlags(envVars, "env"); envErr != nil {
-		return envErr
-	} else if len(env) > 0 {
-		cfg["env"] = env
+	if text := strings.TrimSpace(*features); text != "" {
+		parsed := map[string]any{}
+		if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+			return fmt.Errorf("--features is not a JSON object: %w", err)
+		}
+		cfg["featureValues"] = parsed
 	}
 
 	request := map[string]any{
@@ -757,6 +747,12 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 		"requestId":     "cli_create",
 		"initialPrompt": prompt,
 		"config":        cfg,
+	}
+	// An agent running this command names itself as the caller, so the agent it starts is recorded
+	// as its subagent. The daemon has no other way to know who asked: the CLI is one process
+	// talking to one socket on behalf of whoever spawned it.
+	if caller := strings.TrimSpace(os.Getenv("BYSPACE_AGENT_ID")); caller != "" {
+		request["callerAgentId"] = caller
 	}
 	if workspace := strings.TrimSpace(*workspaceID); workspace != "" {
 		request["workspaceId"] = workspace
@@ -1323,7 +1319,6 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		homeDir := fs.String("home", "", "byspace home directory")
 		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
 		relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
-		noInjectMCP := fs.Bool("no-inject-mcp", false, "do not inject the BySpace MCP server into created agents")
 		noWebUI := fs.Bool("no-web-ui", false, "do not serve the bundled web UI")
 		foreground := fs.Bool("foreground", false, "run in the foreground instead of daemonizing")
 		webUI := fs.Bool("web-ui", false, "serve the bundled web UI (the default)")
@@ -1379,9 +1374,6 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			if *relayUseTLS {
 				serveArgs = append(serveArgs, "--relay-use-tls")
 			}
-			if *noInjectMCP {
-				serveArgs = append(serveArgs, "--no-inject-mcp")
-			}
 			if webUISetting != nil && !*webUISetting {
 				serveArgs = append(serveArgs, "--no-web-ui")
 			}
@@ -1396,7 +1388,6 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			Addr:        *addr,
 			RelayURL:    *relayURL,
 			RelayUseTLS: *relayUseTLS,
-			InjectMCP:   !*noInjectMCP,
 			WebUI:       webUISetting,
 		})
 		if err != nil {
@@ -1622,107 +1613,6 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 
 	default:
 		return fmt.Errorf("unsupported daemon subcommand %q", sub)
-	}
-}
-
-func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
-	fs := flag.NewFlagSet("mcp-bridge", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon HTTP address")
-	// The capability token authorizes this bridge to /mcp/agents without the user's password,
-	// which an agent process does not have.
-	token := fs.String("token", "", "daemon capability token")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	endpoint := *addr
-	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-		endpoint = "http://" + endpoint
-	}
-	endpoint = strings.TrimRight(endpoint, "/") + "/mcp/agents"
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	authHeader := ""
-	if strings.TrimSpace(*token) != "" {
-		authHeader = "Bearer " + strings.TrimSpace(*token)
-	}
-
-	dec := json.NewDecoder(stdin)
-	enc := json.NewEncoder(stdout)
-	for {
-		var req map[string]any
-		if err := dec.Decode(&req); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return err
-		}
-
-		bodyBytes, err := json.Marshal(req)
-		if err != nil {
-			continue
-		}
-		httpReq, reqErr := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
-		if reqErr != nil {
-			continue
-		}
-		httpReq.Header.Set("Content-Type", "application/json")
-		if authHeader != "" {
-			httpReq.Header.Set("Authorization", authHeader)
-		}
-		// The daemon needs to know which agent is asking so it can apply that provider's
-		// tool policy; the bridge is the only one that knows.
-		if agentID := strings.TrimSpace(os.Getenv("BYSPACE_MCP_AGENT_ID")); agentID != "" {
-			httpReq.Header.Set("X-BySpace-Agent-Id", agentID)
-		}
-		// No proxy: the bridge always talks to its own daemon over loopback.
-		httpClient.Transport = &http.Transport{Proxy: nil}
-		resp, err := httpClient.Do(httpReq)
-		if err == nil {
-			var out map[string]any
-			if json.NewDecoder(resp.Body).Decode(&out) == nil {
-				_ = resp.Body.Close()
-				_ = enc.Encode(out)
-				continue
-			}
-			_ = resp.Body.Close()
-		}
-
-		// Offline fallback if daemon is unreachable
-		method, _ := req["method"].(string)
-		id := req["id"]
-		switch method {
-		case "initialize":
-			_ = enc.Encode(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result": map[string]any{
-					"protocolVersion": "2024-11-05",
-					"serverInfo": map[string]any{
-						"name":    "byspace-go-mcp",
-						"version": "2.0.0",
-					},
-					"capabilities": map[string]any{
-						"tools": map[string]any{},
-					},
-				},
-			})
-		case "tools/list":
-			_ = enc.Encode(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result": map[string]any{
-					"tools": []any{},
-				},
-			})
-		default:
-			if id != nil {
-				_ = enc.Encode(map[string]any{
-					"jsonrpc": "2.0",
-					"id":      id,
-					"result":  map[string]any{},
-				})
-			}
-		}
 	}
 }
 

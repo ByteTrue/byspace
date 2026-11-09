@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/execres"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"io"
@@ -40,6 +39,9 @@ type CodexSession struct {
 	cwd                 string
 	model               string
 	thinking            string
+	modeID              string
+	featureValues       map[string]any
+	providerOptions     map[string]any
 	turnCounter         int
 	nextClientMessageID string
 	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
@@ -105,6 +107,9 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		cwd:                cfg.Cwd,
 		model:              cfg.Model,
 		thinking:           cfg.ThinkingOptionID,
+		modeID:             cfg.ModeID,
+		featureValues:      cfg.FeatureValues,
+		providerOptions:    cfg.ProviderOptions,
 		activeTextIdx:      -1,
 		activeThinkIdx:     -1,
 		toolIndexByID:      make(map[string]int),
@@ -674,14 +679,20 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 
 	input := []map[string]any{{"type": "text", "text": message}}
 	input = append(input, imageBlocksForCodex(images)...)
-	params := map[string]any{
-		"threadId": tid,
-		"input":    input,
+	s.mu.Lock()
+	state := codexTurnState{
+		ThreadID:        tid,
+		Cwd:             s.cwd,
+		Model:           s.model,
+		ModeID:          s.modeID,
+		Thinking:        s.thinking,
+		FeatureValues:   s.featureValues,
+		ProviderOptions: s.providerOptions,
+		OutputSchema:    outputSchema,
+		Input:           input,
 	}
-	if outputSchema != nil {
-		params["outputSchema"] = outputSchema
-	}
-	_, err := s.rpcCall(ctx, "turn/start", params)
+	s.mu.Unlock()
+	_, err := s.rpcCall(ctx, "turn/start", codexTurnParams(state))
 	return err
 }
 
@@ -762,6 +773,13 @@ func (s *CodexSession) SetModel(_ context.Context, provider, modelID string) (*s
 	s.model = modelID
 	s.mu.Unlock()
 	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+}
+
+func (s *CodexSession) SetMode(_ context.Context, modeID string) error {
+	s.mu.Lock()
+	s.modeID = modeID
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *CodexSession) SetThinkingLevel(_ context.Context, level string) error {
@@ -1052,50 +1070,15 @@ func codexAgentUsage(params map[string]any) *sdk.AgentUsage {
 	return usage
 }
 
-// codexInnerConfig assembles the `config` object Codex's thread/start and thread/resume accept.
-//
-// Ported from buildCodexInnerConfig: the user's provider options, then the MCP servers, then the
-// pre-approved tool grants. Order matters — ApplyCodexToolPolicy reads the servers it must annotate, so
-// it has to run after they are in place.
+// codexInnerConfig assembles the `config` object Codex's thread/start and thread/resume accept:
+// the user's provider options.
 func codexInnerConfig(cfg LaunchConfig) map[string]any {
-	inner := make(map[string]any, len(cfg.ProviderOptions)+2)
+	inner := make(map[string]any, len(cfg.ProviderOptions))
 	for key, value := range cfg.ProviderOptions {
 		inner[key] = value
 	}
 
-	if len(cfg.MCPServers) > 0 {
-		servers := make(map[string]any, len(cfg.MCPServers))
-		for _, server := range cfg.MCPServers {
-			servers[server.Name] = codexMCPServerConfig(server)
-		}
-		inner["mcp_servers"] = servers
-	}
-
-	return ApplyCodexToolPolicy(inner, cfg.PreapprovedTools)
-}
-
-// codexMCPServerConfig renders one MCP server the way Codex expects it.
-//
-// Codex distinguishes a stdio server (a command) from a remote one (a url); sending both keys makes it
-// pick the command and ignore the url, so the shape is decided here rather than by whichever field the
-// provider happened to set.
-func codexMCPServerConfig(server pi.MCPConfig) map[string]any {
-	config := map[string]any{}
-	if command := strings.TrimSpace(server.Command); command != "" {
-		config["command"] = command
-		if len(server.Args) > 0 {
-			args := make([]any, 0, len(server.Args))
-			for _, arg := range server.Args {
-				args = append(args, arg)
-			}
-			config["args"] = args
-		}
-		return config
-	}
-	if url := strings.TrimSpace(server.URL); url != "" {
-		config["url"] = url
-	}
-	return config
+	return inner
 }
 
 // recordTurnIDLocked appends a turn id once.

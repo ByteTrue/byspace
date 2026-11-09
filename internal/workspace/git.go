@@ -135,6 +135,30 @@ var gitNetworkCommands = map[string]bool{
 	"ls-remote": true,
 }
 
+// gitEnv is the environment every git child gets.
+//
+// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would otherwise sit
+// waiting for a prompt nobody can answer until the timeout fires.
+//
+// GIT_EDITOR / GIT_SEQUENCE_EDITOR / GIT_MERGE_AUTOEDIT: a merge, pull, rebase or commit that wants
+// a message runs `core.editor` — on a developer's machine an interactive GUI such as
+// `code --wait` — so the git call blocks while a window appears on their screen and the operation
+// looks hung. The daemon and its terminals have nobody to type into that editor. Git also skips the
+// editor when stdin is not a TTY, which is why this only bites in a pty (an agent's terminal); set
+// it here so no call site has to know that.
+func gitEnv(base []string) []string {
+	return append(base,
+		"GIT_OPTIONAL_LOCKS=0",
+		"LC_ALL=C",
+		"GIT_TERMINAL_PROMPT=0",
+		// Never let git fall back to an interactive pager in a daemon context.
+		"GIT_PAGER=cat",
+		"GIT_EDITOR=true",
+		"GIT_SEQUENCE_EDITOR=true",
+		"GIT_MERGE_AUTOEDIT=no",
+	)
+}
+
 func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 	timeout := gitLocalTimeout
 	if len(args) > 0 && gitNetworkCommands[args[0]] {
@@ -154,13 +178,7 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 	cmd.Dir = cwd
 	// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would
 	// otherwise sit waiting for a prompt nobody can answer, until the timeout fires.
-	cmd.Env = append(cmd.Environ(),
-		"GIT_OPTIONAL_LOCKS=0",
-		"LC_ALL=C",
-		"GIT_TERMINAL_PROMPT=0",
-		// Never let git fall back to an interactive pager in a daemon context.
-		"GIT_PAGER=cat",
-	)
+	cmd.Env = gitEnv(cmd.Environ())
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	startedAt := time.Now()
@@ -1213,7 +1231,7 @@ func Push(ctx context.Context, cwd string) error {
 
 // Pull runs `git pull`.
 func Pull(ctx context.Context, cwd string) error {
-	_, err := runGit(ctx, cwd, "pull")
+	_, err := runGit(ctx, cwd, "pull", "--no-edit")
 	return err
 }
 
@@ -1225,7 +1243,7 @@ func Merge(ctx context.Context, cwd, ref string) error {
 	if strings.TrimSpace(ref) == "" {
 		ref = "main"
 	}
-	_, err := runGit(ctx, cwd, "merge", ref)
+	_, err := runGit(ctx, cwd, "merge", "--no-edit", ref)
 	return err
 }
 
@@ -1390,7 +1408,7 @@ func MergeStrategy(ctx context.Context, cwd, ref, strategy string) error {
 		_, err := runGit(ctx, cwd, "rebase", ref)
 		return err
 	default:
-		_, err := runGit(ctx, cwd, "merge", ref)
+		_, err := runGit(ctx, cwd, "merge", "--no-edit", ref)
 		return err
 	}
 }
