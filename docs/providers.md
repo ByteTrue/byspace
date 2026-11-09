@@ -79,6 +79,8 @@ fill a column.
 | OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                     | message `format`            | —                          |
 | ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                     | refused                     | —                          |
 
+A per-agent `env` is handed to the provider process (Claude, Codex, ACP). OpenCode cannot take one: it drives a shared `opencode serve`, so the environment is the daemon's own. The BySpace identity variables are applied last, so an agent cannot rename itself through `env`.
+
 "refused" means the daemon fails the request instead of running the turn without it: a caller that
 asked for a JSON object and got prose would parse garbage.
 

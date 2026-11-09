@@ -44,9 +44,9 @@ type TargetConfig struct {
 	Title           *string `json:"title,omitempty"`
 	// The rest of a new agent's config. A schedule created from an agent carries them over so each
 	// run starts the agent the way the caller runs; dropping them on save loses them for every run.
-	ProviderOptions map[string]any `json:"providerOptions,omitempty"`
-	FeatureValues   map[string]any `json:"featureValues,omitempty"`
-	SystemPrompt    *string        `json:"systemPrompt,omitempty"`
+	ProviderOptions map[string]any    `json:"providerOptions,omitempty"`
+	FeatureValues   map[string]any    `json:"featureValues,omitempty"`
+	SystemPrompt    *string           `json:"systemPrompt,omitempty"`
 }
 
 type Target struct {

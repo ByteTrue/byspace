@@ -82,3 +82,22 @@ func TestPrependPathDirLeavesAnExistingEntryAlone(t *testing.T) {
 		t.Errorf("prependPathDir = %q", got)
 	}
 }
+
+// A per-agent environment reaches the provider process, and it cannot rewrite the identity BySpace
+// puts there: an agent that could change BYSPACE_AGENT_ID could act as another agent.
+func TestAgentEnvAppliesUserVariablesWithoutLosingIdentity(t *testing.T) {
+	s := &Server{homeDir: "/tmp/home", listenAddr: "127.0.0.1:6778"}
+	rec := store.AgentRecord{ID: "agt_1"}
+	rec.Config = &store.AgentConfig{Env: map[string]string{
+		"ANTHROPIC_BASE_URL": "https://proxy.example",
+		"BYSPACE_AGENT_ID":   "agt_someone_else",
+	}}
+	env := s.agentEnv(rec)
+
+	if got := envValue(env, "ANTHROPIC_BASE_URL"); got != "https://proxy.example" {
+		t.Errorf("ANTHROPIC_BASE_URL = %q, want the per-agent value", got)
+	}
+	if got := envValue(env, "BYSPACE_AGENT_ID"); got != "agt_1" {
+		t.Errorf("BYSPACE_AGENT_ID = %q, want the real id to win", got)
+	}
+}

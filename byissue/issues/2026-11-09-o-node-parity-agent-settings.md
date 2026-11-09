@@ -42,6 +42,8 @@ MCP 退役时的审计发现 App 上有一部分 provider 设置只有记录、�
 
 **Mode 变更的响应**：provider 没有 `ModeSetter` 时（Claude），`set_agent_mode` 现在回 `accepted:false` 并说明原因，不再回「applies next turn」——那句对谁都曾经不成立。
 
+**per-agent `env`**：Node 的四家适配器都把 `config.env` 交给 provider 进程；Go 从来没接（`create_agent_request.env` 解析了没人读，CLI `--env` 写进了 `config.env` 而 daemon 不解析）。现在按 wire 的顶层 `env` 解析、存进 `AgentConfig.Env`，`agentEnv()` 在 daemon 环境之上叠加，BySpace 身份变量最后写入（agent 不能借 `env` 改自己的 `BYSPACE_AGENT_ID`）；CLI `--env` 重新可用。OpenCode 仍拿不到：共享 `opencode serve` 的环境不是 per-session。
+
 **验证**：`codexturn` 测试覆盖 collaboration 选择、settings 合成、无列表时不发；`claudeLaunchArgs` 覆盖 fast settings 与 effort；Claude 的拒绝路径有测试。`internal/{server,cli,agent/providers}` 全绿。
 
 **仍未做**：Claude 的 `--json-schema`（需要把 schema 从 per-turn 提到 `LaunchConfig`）；OpenCode 的 per-agent 身份；ACP 的 BySpace 能力。前两条是已知上限，第三条是范围外。

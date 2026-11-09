@@ -108,15 +108,16 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 
 ### Nested: SerializableConfig
 
-| Field              | Type                       | Description                  |
-| ------------------ | -------------------------- | ---------------------------- |
-| `title`            | `string?`                  | Configured title             |
-| `modeId`           | `string?`                  | Configured mode              |
-| `model`            | `string?`                  | Configured model             |
-| `thinkingOptionId` | `string?`                  | Thinking/reasoning level     |
-| `featureValues`    | `Record<string, unknown>?` | Feature preference overrides |
-| `extra`            | `Record<string, any>?`     | Provider-specific config     |
-| `systemPrompt`     | `string?`                  | Custom system prompt         |
+| Field              | Type                       | Description                                                    |
+| ------------------ | -------------------------- | -------------------------------------------------------------- |
+| `title`            | `string?`                  | Configured title                                               |
+| `modeId`           | `string?`                  | Configured mode                                                |
+| `model`            | `string?`                  | Configured model                                               |
+| `thinkingOptionId` | `string?`                  | Thinking/reasoning level                                       |
+| `featureValues`    | `Record<string, unknown>?` | Feature preference overrides                                   |
+| `extra`            | `Record<string, any>?`     | Provider-specific config                                       |
+| `systemPrompt`     | `string?`                  | Custom system prompt                                           |
+| `env`              | `Record<string, string>?`  | Extra environment for the agent process; BySpace identity wins |
 
 ### Nested: RuntimeInfo
 

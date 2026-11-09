@@ -16,11 +16,22 @@ import (
 // 6778. The id is how the CLI records the caller, so an agent that delegates lands under the
 // agent that started it instead of at the top of the tree.
 //
+// The user's per-agent environment goes on top of the daemon's, and the BySpace identity below is
+// applied last: an agent that could rewrite BYSPACE_AGENT_ID could act as another agent.
+//
 // No credential is passed here. The CLI reads the home's own `cli-credential` file, the same
 // principal the user's shell uses; an agent needs no second auth scheme for this.
 func (s *Server) agentEnv(rec store.AgentRecord) []string {
 	env := os.Environ()
 	set := func(key, value string) { env = setEnv(env, key, value) }
+
+	if rec.Config != nil {
+		for key, value := range rec.Config.Env {
+			if strings.TrimSpace(key) != "" {
+				set(key, value)
+			}
+		}
+	}
 
 	if s.homeDir != "" {
 		set("BYSPACE_HOME", s.homeDir)

@@ -47,3 +47,30 @@ func TestCreateAgentLabelsTheParent(t *testing.T) {
 		t.Fatalf("parent field = %v", child.ParentAgentID)
 	}
 }
+
+// The per-agent environment is a top-level field of create_agent_request. Reading it from inside
+// `config` (where the CLI used to write it) silently dropped it, and the provider never saw the
+// variables.
+func TestCreateAgentStoresPerAgentEnv(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	dir := t.TempDir()
+
+	raw := []byte(`{
+		"requestId": "r1",
+		"initialPrompt": "work",
+		"env": {"ANTHROPIC_BASE_URL": "https://proxy.example"},
+		"config": {"provider": "pi", "cwd": "` + strings.ReplaceAll(dir, `\`, `\`) + `"}
+	}`)
+	srv.handleCreateAgent(t.Context(), &recordingSink{}, raw)
+
+	agents, err := srv.store.ListAgents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("agents = %d, want 1", len(agents))
+	}
+	if agents[0].Config == nil || agents[0].Config.Env["ANTHROPIC_BASE_URL"] != "https://proxy.example" {
+		t.Fatalf("env not stored: %+v", agents[0].Config)
+	}
+}

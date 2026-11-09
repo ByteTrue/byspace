@@ -2475,12 +2475,12 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		} `json:"worktree"`
 		OutputSchema any `json:"outputSchema"`
 		AutoArchive  any `json:"autoArchive"`
-		// Git and Env are retired wire fields kept so an older client's create request still parses.
-		// Git was replaced by the structured `worktree` intent; Env never reached a process in this
-		// daemon (the CLI wrote config.env, which nothing read) and BySpace no longer sets per-agent
-		// environment. COMPAT(createEnvGit): keep parsing until the supported client floor predates
-		// the fields (they shipped before v0.24); then delete.
-		Git    any               `json:"git"`
+		// Git is retained so an older client's create request still parses; the structured `worktree`
+		// intent replaced it and nothing reads this copy. COMPAT(createGit): keep parsing until the
+		// supported client floor predates the field (it shipped before v0.24); then delete.
+		Git any `json:"git"`
+		// Env is the per-agent environment. It rides on top of the daemon's own, with the BySpace
+		// identity variables applied last so an agent cannot rename itself.
 		Env    map[string]string `json:"env"`
 		Images []struct {
 			Data     string `json:"data"`
@@ -2683,6 +2683,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			SystemPrompt:     req.Config.SystemPrompt,
 			ProviderOptions:  req.Config.ProviderOptions,
 			FeatureValues:    req.Config.FeatureValues,
+			Env:              req.Env,
 		},
 	}
 

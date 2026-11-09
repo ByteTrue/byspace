@@ -92,6 +92,9 @@ type AgentConfig struct {
 	ProviderOptions  map[string]any `json:"providerOptions,omitempty"`
 	SystemPrompt     *string        `json:"systemPrompt,omitempty"`
 	Role             *string        `json:"role,omitempty"`
+	// Env is the per-agent environment the wire has always carried. It rides on top of the daemon's
+	// own, with the BySpace identity variables applied last so an agent cannot rename itself.
+	Env map[string]string `json:"env,omitempty"`
 }
 
 // AgentRecord mirrors StoredAgentRecord in packages/server/src/server/agent/agent-storage.ts.

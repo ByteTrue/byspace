@@ -691,6 +691,8 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	fs.Var(&imagePaths, "image", "image file to attach to the first message (repeatable)")
 	var labels multiFlag
 	fs.Var(&labels, "label", "key=value label (repeatable)")
+	var envVars multiFlag
+	fs.Var(&envVars, "env", "NAME=value for the agent process (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -734,6 +736,10 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if *mode != "" {
 		cfg["modeId"] = *mode
 	}
+	env, envErr := parseKeyValueFlags(envVars, "env")
+	if envErr != nil {
+		return envErr
+	}
 	if text := strings.TrimSpace(*features); text != "" {
 		parsed := map[string]any{}
 		if err := json.Unmarshal([]byte(text), &parsed); err != nil {
@@ -753,6 +759,11 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	// talking to one socket on behalf of whoever spawned it.
 	if caller := strings.TrimSpace(os.Getenv("BYSPACE_AGENT_ID")); caller != "" {
 		request["callerAgentId"] = caller
+	}
+	// env is a top-level field of create_agent_request, not part of config. The daemon stores it
+	// with the agent and hands it to the provider process on every launch.
+	if len(env) > 0 {
+		request["env"] = env
 	}
 	if workspace := strings.TrimSpace(*workspaceID); workspace != "" {
 		request["workspaceId"] = workspace
