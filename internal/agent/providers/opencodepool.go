@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -344,33 +345,63 @@ func freePort() (int, error) {
 	return address.Port, nil
 }
 
-// sharedOpenCodePool returns the process-wide pool, creating it on first use.
+// one pool per (home, command, args, environment).
 //
-// One pool per daemon: every agent shares the one server, and shutting it down with the daemon is what
-// stops it. A per-agent pool would spawn a server per agent and leak all but the last.
+// A server's environment is fixed when the process starts, so two agents whose per-agent env
+// differs cannot share one; before this every agent silently got the daemon's environment whatever
+// the user configured. Agents with the same environment still share a single server, which is the
+// case that matters: most agents set nothing.
 var (
-	sharedPoolMu sync.Mutex
-	sharedPool   *OpenCodePool
+	sharedPoolsMu sync.Mutex
+	sharedPools   = map[string]*OpenCodePool{}
 )
 
-// sharedOpenCodePool returns the daemon's pool, building it for the given home and command.
-func sharedOpenCodePool(homeDir, command string, args []string) *OpenCodePool {
-	sharedPoolMu.Lock()
-	defer sharedPoolMu.Unlock()
-	if sharedPool != nil {
-		return sharedPool
+// sharedOpenCodePool returns the pool for one environment.
+func sharedOpenCodePool(homeDir, command string, args []string, env map[string]string) *OpenCodePool {
+	key := openCodePoolKey(homeDir, command, args, env)
+	sharedPoolsMu.Lock()
+	defer sharedPoolsMu.Unlock()
+	if pool, ok := sharedPools[key]; ok {
+		return pool
 	}
-	sharedPool = NewOpenCodePool(homeDir, command, args)
-	return sharedPool
+	pool := NewOpenCodePool(homeDir, command, args)
+	pool.SetEnv(env)
+	sharedPools[key] = pool
+	return pool
 }
 
-// ShutdownOpenCodePool stops the shared server, if one was started.
+// openCodePoolKey identifies a pool by everything that changes the server process.
+func openCodePoolKey(homeDir, command string, args []string, env map[string]string) string {
+	var builder strings.Builder
+	builder.WriteString(homeDir)
+	builder.WriteString("\x00")
+	builder.WriteString(command)
+	builder.WriteString("\x00")
+	builder.WriteString(strings.Join(args, "\x00"))
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		builder.WriteString("\x00")
+		builder.WriteString(key)
+		builder.WriteString("=")
+		builder.WriteString(env[key])
+	}
+	return builder.String()
+}
+
+// ShutdownOpenCodePool stops every pooled server.
 func ShutdownOpenCodePool() {
-	sharedPoolMu.Lock()
-	pool := sharedPool
-	sharedPool = nil
-	sharedPoolMu.Unlock()
-	if pool != nil {
+	sharedPoolsMu.Lock()
+	pools := make([]*OpenCodePool, 0, len(sharedPools))
+	for _, pool := range sharedPools {
+		pools = append(pools, pool)
+	}
+	sharedPools = map[string]*OpenCodePool{}
+	sharedPoolsMu.Unlock()
+	for _, pool := range pools {
 		pool.Shutdown()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -3765,11 +3766,18 @@ func (s *Server) syncPiPersistence(mp *managedPi) {
 	if sid == "" && st.SessionFile != "" {
 		sid = st.SessionFile
 	}
+	// NativeHandle is what a relaunch hands back to the provider. Pi resumes by session file; a
+	// CLI whose only handle is a session id (Claude's --resume) keeps the id, or a restart would
+	// start a fresh conversation instead of continuing this one.
+	handle := any(st.SessionFile)
+	if st.SessionFile == "" && st.SessionID != "" {
+		handle = st.SessionID
+	}
 	s.mu.Lock()
 	mp.record.Persistence = &store.AgentPersistenceHandle{
 		Provider:     "pi",
 		SessionID:    sid,
-		NativeHandle: st.SessionFile,
+		NativeHandle: handle,
 	}
 	recCopy := mp.record
 	s.mu.Unlock()
@@ -5271,6 +5279,44 @@ func requestCwd(raw json.RawMessage) string {
 	}
 	_ = json.Unmarshal(raw, &req)
 	return req.Cwd
+}
+
+// restartAgentSession relaunches an agent's provider process with the settings now in its record.
+//
+// Some providers read model, mode, thinking level or feature toggles once, when the process starts.
+// Recording the change and telling the user to restart was a two-step procedure they could not
+// perform from the app; this does the restart instead, resuming the provider's own session and
+// seeding the daemon-side timeline so the conversation survives. A running turn is refused: the
+// user has to stop it first, because the relaunch kills it.
+func (s *Server) restartAgentSession(ctx context.Context, mp *managedPi) (*managedPi, error) {
+	if mp == nil || mp.session == nil {
+		return nil, errors.New("no session to restart")
+	}
+	state, err := mp.session.GetState(ctx)
+	if err == nil && state != nil && state.IsStreaming {
+		return nil, errors.New("stop the running turn before changing this setting")
+	}
+	previous := mp.session.Timeline()
+	rec := mp.record
+	s.mu.Lock()
+	delete(s.agents, rec.ID)
+	s.mu.Unlock()
+	_ = mp.session.Close()
+
+	restarted, err := s.startOrGetPiAgent(rec)
+	if err != nil {
+		return nil, err
+	}
+	// Seed after start: the new session owns the timeline from here on, and the rows the user
+	// already sees must survive the relaunch.
+	restarted.session.SeedTimeline(previous)
+	s.mu.Lock()
+	restarted.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	recCopy := restarted.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
+	s.broadcastAgentUpdate(recCopy)
+	return restarted, nil
 }
 
 // discardCreatedAgent undoes an agent that was created and then refused.

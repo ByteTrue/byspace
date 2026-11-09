@@ -35,3 +35,20 @@ daemon 侧只有一条通道：provider 发 `byspace_turn_failed` → `internal/
 ## 范围
 
 不包含：把 `[System Error]` 行做进 transcript 重建（重载后消失是已知缺口，pi 与 Node 同形，另议）；不改客户端渲染；不引入 provider 侧的错误文案格式约定——原文透传即可。
+
+## 执行记录
+
+四个入口都改成「provider 自己报的失败 = 失败的回合」，事件形状取自各自的协议而不是猜的：
+
+| provider | 失败信号                                                                                            | 落点                  |
+| -------- | --------------------------------------------------------------------------------------------------- | --------------------- |
+| Claude   | `result` 事件的 `is_error: true` 或 `subtype` 以 `error` 开头；`result` 里的原文进 `[System Error]` | `claudeResultFailure` |
+| Codex    | `turn/completed` 的 `turn.status: "failed"` + `turn.error.message`（旧版本把 message 放顶层）       | `codexTurnFailure`    |
+| ACP      | `session/prompt` 的 JSON-RPC 错误                                                                   | `finishPrompt(err)`   |
+| OpenCode | 消息接口的非 2xx（状态 + 响应体前 4KB）                                                             | `Prompt`              |
+
+每家都设 `lastError`/`LastError()`（侧边栏和 hover card 读它），发 `byspace_turn_failed`（带 `turnId`），并且**不再**发 `agent_end` —— 一个失败回合不能同时报完成。`WaitForFinish` 的等待者本来就拿到 error。
+
+**验证**：`turnfail_test.go` 覆盖四家的检测与事件（真事件形状、httptest 429、`finishPrompt`），`go test ./internal/{server,cli,agent/...}` 589 通过；`npm run audit` 的字段对账不受影响。
+
+**还没做**：真实 provider 的失败复现（免费额度/无效 key）。四家的失败**形状**有 Node 源码与 CLI 文档作证，但「真实 429 时这一行出现在对话里」需要一次真调用；这条留在 `-o-`，是本事项唯一未完成的验收项。

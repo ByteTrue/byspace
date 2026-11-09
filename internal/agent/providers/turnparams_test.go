@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -230,11 +231,19 @@ func TestClaudeLaunchArgsCarryFastMode(t *testing.T) {
 // A model change that the CLI cannot apply must fail instead of silently changing the record.
 func TestClaudeRefusesLiveModelChange(t *testing.T) {
 	session := &ClaudeSession{}
-	if _, err := session.SetModel(context.Background(), "anthropic", "opus"); err == nil {
+	_, modelErr := session.SetModel(context.Background(), "anthropic", "opus")
+	if modelErr == nil {
 		t.Fatal("SetModel must refuse: the CLI reads --model at launch")
 	}
-	if err := session.SetThinkingLevel(context.Background(), "high"); err == nil {
+	if !errors.Is(modelErr, ErrSettingNeedsRestart) {
+		t.Fatalf("error %v must tell the daemon a relaunch applies it", modelErr)
+	}
+	thinkingErr := session.SetThinkingLevel(context.Background(), "high")
+	if thinkingErr == nil {
 		t.Fatal("SetThinkingLevel must refuse: the CLI reads --effort at launch")
+	}
+	if !errors.Is(thinkingErr, ErrSettingNeedsRestart) {
+		t.Fatalf("error %v must tell the daemon a relaunch applies it", thinkingErr)
 	}
 }
 

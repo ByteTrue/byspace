@@ -1256,7 +1256,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		}
 		_ = json.Unmarshal(raw, &featReq)
 		accepted := false
-		var featureErr any
+		var featureErr error
 		if rec, _ := s.store.GetAgent(featReq.AgentID); rec != nil && featReq.FeatureID != "" {
 			if rec.Config == nil {
 				rec.Config = &store.AgentConfig{}
@@ -1269,9 +1269,8 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			_ = s.store.UpsertAgent(*rec)
 			s.broadcastAgentUpdate(*rec)
 			accepted = true
-			// A provider that reads toggles per turn takes the change now. One that reads them at
-			// launch (Claude's Fast) keeps the record and says so: reporting success for a value the
-			// running process never received is how these switches became decorative.
+			// A provider that reads toggles per turn takes the change now; one that reads them at
+			// launch gets a relaunch, which is what the picker was asking for anyway.
 			s.mu.Lock()
 			mp := s.agents[featReq.AgentID]
 			s.mu.Unlock()
@@ -1279,16 +1278,21 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 				if setter, ok := mp.session.(providers.FeatureValueSetter); ok {
 					setter.SetFeatureValues(rec.Config.FeatureValues)
 				} else {
-					accepted = false
-					featureErr = rec.Provider + " reads its feature toggles at launch; restart the agent to apply"
+					featureErr = fmt.Errorf("%w: %s reads its feature toggles at launch", providers.ErrSettingNeedsRestart, rec.Provider)
+					featureErr = s.applyOrRestart(ctx, mp, featureErr)
+					accepted = featureErr == nil
 				}
 			}
+		}
+		var featureErrValue any
+		if featureErr != nil {
+			featureErrValue = featureErr.Error()
 		}
 		_ = sendSessionMsg(ctx, sink, "set_agent_feature_response", map[string]any{
 			"requestId": featReq.RequestID,
 			"agentId":   featReq.AgentID,
 			"accepted":  accepted,
-			"error":     featureErr,
+			"error":     featureErrValue,
 		})
 
 	case "abort_request":

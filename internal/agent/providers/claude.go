@@ -27,13 +27,16 @@ import (
 type ClaudeSession struct {
 	proc *jsonl.Process
 
-	mu                  sync.Mutex
-	status              string
-	sessionID           string
-	sessionFile         string
-	model               string
-	modeID              string
-	thinking            string
+	mu          sync.Mutex
+	status      string
+	sessionID   string
+	sessionFile string
+	model       string
+	modeID      string
+	thinking    string
+	// lastError is the provider's own text for the most recent failure, for the sidebar and the
+	// [System Error] row.
+	lastError           string
 	turnCounter         int
 	nextClientMessageID string
 	activeTurnID        string
@@ -406,6 +409,22 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			s.sessionID = sid
 		}
 		s.captureClaudeResultLocked(ev)
+		// A failed model call arrives as a result flagged is_error (or an error subtype) with no
+		// assistant text. Settling it as a completed turn left the conversation looking finished
+		// while the provider's own terminal held the only copy of the error.
+		if failure, failed := claudeResultFailure(ev); failed {
+			finishedTurnID := s.activeTurnID
+			s.lastError = failure
+			s.status = "idle"
+			s.activeTurnID = ""
+			s.notifyFinishLocked(errors.New(failure))
+			extraEvents = append(extraEvents, map[string]any{
+				"type":   "byspace_turn_failed",
+				"turnId": finishedTurnID,
+				"error":  failure,
+			})
+			break
+		}
 		if resTxt, ok := ev["result"].(string); ok && resTxt != "" && s.lastAssistantTextLocked() == "" {
 			s.appendItemLocked(sdk.TimelineItem{
 				Type: "assistant_message",
@@ -518,7 +537,9 @@ func (s *ClaudeSession) SetNextClientMessageID(id string) {
 }
 
 func (s *ClaudeSession) LastError() string {
-	return ""
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
 }
 
 // TurnToken returns "" for providers without an explicit turn token; the daemon then relies
@@ -623,12 +644,12 @@ func (s *ClaudeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 // model on the session would only change the record and the UI. The caller is told to restart; the
 // daemon has already written the new model, so the restart picks it up.
 func (s *ClaudeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
-	return nil, errors.New("claude reads --model at launch; restart the agent to switch models")
+	return nil, fmt.Errorf("%w: claude reads --model at launch; restart the agent to switch models", ErrSettingNeedsRestart)
 }
 
 // SetThinkingLevel refuses for the same reason: --effort is a launch flag.
 func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error {
-	return errors.New("claude reads --effort at launch; restart the agent to change the thinking level")
+	return fmt.Errorf("%w: claude reads --effort at launch; restart the agent to change the thinking level", ErrSettingNeedsRestart)
 }
 
 // GetCommands returns the commands the CLI announced at startup.
@@ -1345,4 +1366,25 @@ func claudeCommandsFromInit(ev map[string]any) []sdk.SlashCommand {
 		})
 	}
 	return commands
+}
+
+// claudeResultFailure reports whether a `result` event describes a failed turn.
+//
+// The CLI flags one with `is_error: true` and an error subtype (`error_during_execution`,
+// `error_max_turns`); `result` then holds the provider's own message, which is what the user
+// should see rather than a generic sentence.
+func claudeResultFailure(ev map[string]any) (string, bool) {
+	isError, _ := ev["is_error"].(bool)
+	subtype, _ := ev["subtype"].(string)
+	failed := isError || strings.HasPrefix(strings.ToLower(strings.TrimSpace(subtype)), "error")
+	if !failed {
+		return "", false
+	}
+	if text, _ := ev["result"].(string); strings.TrimSpace(text) != "" {
+		return strings.TrimSpace(text), true
+	}
+	if subtype != "" {
+		return subtype, true
+	}
+	return "the model call failed", true
 }

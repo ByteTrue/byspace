@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -110,6 +111,8 @@ func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw js
 	// composer renders from.
 	s.broadcastAgentUpdate(recCopy)
 
+	applyErr = s.applyOrRestart(ctx, mp, applyErr)
+
 	_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
@@ -165,6 +168,8 @@ func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw
 
 	s.broadcastAgentUpdate(recCopy)
 
+	applyErr = s.applyOrRestart(ctx, mp, applyErr)
+
 	var notice *agentnotices.Notice
 	if midTurn && applyErr == nil {
 		notice = &agentnotices.ThinkingAppliesNextTurn
@@ -205,6 +210,9 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	var applyErr error
 	if canSetMode {
 		applyErr = setter.SetMode(ctx, req.ModeID)
+	} else {
+		// A launch-only mode is applied by relaunching the provider, which the daemon does below.
+		applyErr = fmt.Errorf("%w: %s reads its mode at launch", providers.ErrSettingNeedsRestart, mp.record.Provider)
 	}
 
 	s.mu.Lock()
@@ -224,18 +232,7 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 
 	s.broadcastAgentUpdate(recCopy)
 
-	// A provider that only reads its mode at launch gets the record (so a restart applies it) but
-	// must not report success for the running session.
-	if !canSetMode {
-		_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
-			"requestId": req.RequestID,
-			"agentId":   req.AgentID,
-			"accepted":  false,
-			"error":     recCopy.Provider + " reads its mode at launch; restart the agent to change it",
-			"notice":    nil,
-		})
-		return
-	}
+	applyErr = s.applyOrRestart(ctx, mp, applyErr)
 
 	var notice *agentnotices.Notice
 	if midTurn && applyErr == nil {
@@ -248,6 +245,18 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 		"error":     errorText(applyErr),
 		"notice":    agentnotices.ToPayload(notice),
 	})
+}
+
+// applyOrRestart turns a launch-only refusal into a relaunch, and reports nil when the setting is
+// live in the new process.
+func (s *Server) applyOrRestart(ctx context.Context, mp *managedPi, applyErr error) error {
+	if applyErr == nil || !errors.Is(applyErr, providers.ErrSettingNeedsRestart) {
+		return applyErr
+	}
+	if _, err := s.restartAgentSession(ctx, mp); err != nil {
+		return fmt.Errorf("%w; restart failed: %v", applyErr, err)
+	}
+	return nil
 }
 
 func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -333,6 +342,8 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 	// A bundle changes several fields at once; the composer and the picker both read them from the
 	// agent snapshot, so the update has to be pushed rather than left to the response.
 	s.broadcastAgentUpdate(recCopy)
+
+	applyErr = s.applyOrRestart(ctx, mp, applyErr)
 
 	_ = sendSessionMsg(ctx, sink, "agent.config.apply.response", map[string]any{
 		"requestId": req.RequestID,

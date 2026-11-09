@@ -38,7 +38,9 @@ type ACPSession struct {
 	status    string
 	sessionID string
 	// lastUsage is the token accounting from the most recent prompt, for the context ring.
-	lastUsage           *sdk.AgentUsage
+	lastUsage *sdk.AgentUsage
+	// lastError is the provider's own text for the most recent failure.
+	lastError           string
 	cwd                 string
 	model               string
 	modeID              string
@@ -663,7 +665,9 @@ func (s *ACPSession) SetNextClientMessageID(id string) {
 }
 
 func (s *ACPSession) LastError() string {
-	return ""
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
 }
 
 // TurnToken returns "" for providers without an explicit turn token; the daemon then relies
@@ -757,6 +761,10 @@ func (s *ACPSession) finishPrompt(err error) {
 	s.mu.Lock()
 	tail := s.flushFramesLocked()
 	hadText := s.activeTextIdx >= 0
+	finishedTurnID := s.activeTurnID
+	if err != nil {
+		s.lastError = err.Error()
+	}
 	s.status = "idle"
 	s.activeTurnID = ""
 	s.activeTextIdx = -1
@@ -771,6 +779,16 @@ func (s *ACPSession) finishPrompt(err error) {
 		}
 		if hadText {
 			fn(map[string]any{"type": "message_end"})
+		}
+		if err != nil {
+			// A prompt the agent refused (auth, quota, a rejected request) is a failed turn. Reporting
+			// agent_end made the daemon call it completed and write no [System Error] row.
+			fn(map[string]any{
+				"type":   "byspace_turn_failed",
+				"turnId": finishedTurnID,
+				"error":  err.Error(),
+			})
+			continue
 		}
 		fn(map[string]any{"type": "agent_end"})
 	}

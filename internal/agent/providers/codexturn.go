@@ -260,3 +260,27 @@ func codexCollaborationSettings(mode codexCollaborationMode, st codexTurnState) 
 	}
 	return settings
 }
+
+// codexTurnFailure reads the failure out of a `turn/completed` notification.
+//
+// App-server reports a failed turn as `turn.status: "failed"` with `turn.error.message`; older
+// builds put the message at the top level. Either way the text is the provider's own and is what
+// the timeline's [System Error] row should carry.
+func codexTurnFailure(params map[string]any) string {
+	turn, _ := params["turn"].(map[string]any)
+	status, _ := turn["status"].(string)
+	if errorObject, ok := turn["error"].(map[string]any); ok {
+		if message, _ := errorObject["message"].(string); strings.TrimSpace(message) != "" {
+			return strings.TrimSpace(message)
+		}
+	}
+	if errorObject, ok := params["error"].(map[string]any); ok {
+		if message, _ := errorObject["message"].(string); strings.TrimSpace(message) != "" {
+			return strings.TrimSpace(message)
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(status), "failed") {
+		return "the turn failed"
+	}
+	return ""
+}

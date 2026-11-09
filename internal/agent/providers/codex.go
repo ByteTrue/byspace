@@ -31,6 +31,8 @@ type CodexSession struct {
 
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
+	// lastError is the provider's own text for the most recent failure.
+	lastError string
 
 	mu              sync.Mutex
 	pending         map[int64]chan map[string]any
@@ -475,6 +477,24 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		if s.activeTextIdx >= 0 {
 			extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
 		}
+		// A turn that failed is not one that finished: settling it as completed left the record idle
+		// and the transcript silent while app-server held the only copy of the error.
+		if failure := codexTurnFailure(params); failure != "" {
+			finishedTurnID := s.activeTurnID
+			s.lastError = failure
+			s.status = "idle"
+			s.activeTurnID = ""
+			s.nativeTurnID = ""
+			s.activeTextIdx = -1
+			s.activeThinkIdx = -1
+			s.notifyFinishLocked(errors.New(failure))
+			extraEvents = append(extraEvents, map[string]any{
+				"type":   "byspace_turn_failed",
+				"turnId": finishedTurnID,
+				"error":  failure,
+			})
+			break
+		}
 		s.status = "idle"
 		s.activeTurnID = ""
 		s.nativeTurnID = ""
@@ -627,7 +647,9 @@ func (s *CodexSession) SetNextOutputSchema(schema any) error {
 }
 
 func (s *CodexSession) LastError() string {
-	return ""
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
 }
 
 // TurnToken returns "" for providers without an explicit turn token; the daemon then relies

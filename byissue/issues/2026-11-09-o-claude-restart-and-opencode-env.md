@@ -26,3 +26,15 @@ created: 2026-11-09
 ## 执行记录
 
 （实现阶段追加）
+
+## 执行记录
+
+**Claude 换模型/thinking（以及任何 launch-only 设置）**：新增 `providers.ErrSettingNeedsRestart` 作为「这个设置要重启才生效」的哨兵。Claude 的 `SetModel`/`SetThinkingLevel` 用它包装错误；daemon 侧 `applyOrRestart` 看到哨兵就**自己重启**：`restartAgentSession` 关掉进程、按记录重新启动、`SeedTimeline` 把已有时间线搬进新会话。运行中的回合会被拒绝（先停再改），因为重启会杀掉它。model、thinking、mode、feature、profile（`agent.config.apply`）五条入口统一走这一条路径。
+
+重启要能续上会话，所以 `syncPiPersistence` 现在：有 session 文件就用文件（pi），否则用 session id（Claude 的 `--resume`）。此前 Claude 的句柄是空的，重启会开一段新对话。
+
+**OpenCode 的 per-agent env**：池子改为按（home、命令、参数、环境）分桶。同一环境的 agent 仍共用一个 `opencode serve`（常见情况），环境不同的各自一个。**身份变量被排除在桶和投递之外**：一个共享 server 无法按 session 变身份，把它算进去等于每个 agent 一个 server；`BYSPACE_HOME`/`BYSPACE_HOST` 保留，所以在 OpenCode 里 `byspace` 能用，但以宿主 CLI 的身份行事——这是 `spec/agent-tools.md` 已记录的边界。
+
+**验证**：`opencodepool_env_test.go` 覆盖分桶与身份剥离；`turnparams_test.go` 断言两个 setter 都带哨兵；`go test ./internal/{server,cli,agent/...}` 589 通过。
+
+**还没做**：真机验证（用 Claude 换一次模型看它是否续上时间线、用 OpenCode 配一个 `env` 看变量是否到达 server）。这台机器上 Claude 有二进制但没有做真调用，OpenCode 有二进制但没有模型凭据。

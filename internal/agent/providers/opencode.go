@@ -41,7 +41,9 @@ type OpenCodeSession struct {
 	timeline         []sdk.TimelineEntry
 	finishWaiters    []chan error
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
-	lastUsage        *sdk.AgentUsage
+	lastUsage *sdk.AgentUsage
+	// lastError is the provider's own text for the most recent failure.
+	lastError        string
 	eventSubscribers map[int]func(map[string]any)
 	nextSubID        int
 }
@@ -63,7 +65,7 @@ func StartOpenCodeSession(cfg LaunchConfig, cmdOverride string) (ManagedSession,
 	if !strings.HasSuffix(cmdOverride, "acp") {
 		// Pass nil args so the pool runs `opencode serve --port <p>` rather than prepending
 		// spec.DefaultArgs ("acp"), which ran `opencode acp serve` and hung 30s until timeout.
-		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, nil)
+		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, nil, openCodePoolEnv(cfg.Env))
 		server, err := pool.Acquire(context.Background())
 		if err == nil && server != nil {
 			return newHTTPOpenCodeSession(cfg, server.URL)
@@ -153,7 +155,9 @@ func (s *OpenCodeSession) SetNextOutputSchema(schema any) error {
 }
 
 func (s *OpenCodeSession) LastError() string {
-	return ""
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
 }
 
 // TurnToken returns "" for providers without an explicit turn token; the daemon then relies
@@ -281,27 +285,39 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		var replyText string
 		var turnUsage *sdk.AgentUsage
 		if err == nil {
-			var res map[string]any
-			if json.NewDecoder(resp.Body).Decode(&res) == nil {
-				if t, ok := res["text"].(string); ok {
-					replyText = t
-				} else if parts, ok := res["parts"].([]any); ok {
-					turnUsage = openCodeUsageFromParts(parts)
-					for _, p := range parts {
-						if pm, ok := p.(map[string]any); ok {
-							if t, ok := pm["text"].(string); ok {
-								replyText += t
+			// A non-2xx answer is the provider's error (quota, auth, a rejected request), and it used to
+			// be decoded as an empty reply: the turn then settled as completed with no row.
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				err = fmt.Errorf("opencode %s: %s", resp.Status, strings.TrimSpace(string(body)))
+				_ = resp.Body.Close()
+			} else {
+				var res map[string]any
+				if json.NewDecoder(resp.Body).Decode(&res) == nil {
+					if t, ok := res["text"].(string); ok {
+						replyText = t
+					} else if parts, ok := res["parts"].([]any); ok {
+						turnUsage = openCodeUsageFromParts(parts)
+						for _, p := range parts {
+							if pm, ok := p.(map[string]any); ok {
+								if t, ok := pm["text"].(string); ok {
+									replyText += t
+								}
 							}
 						}
 					}
 				}
+				_ = resp.Body.Close()
 			}
-			_ = resp.Body.Close()
 		}
 
 		s.mu.Lock()
 		if turnUsage != nil {
 			s.lastUsage = turnUsage
+		}
+		finishedTurnID := s.activeTurnID
+		if err != nil {
+			s.lastError = err.Error()
 		}
 		if replyText != "" {
 			s.timeline = append(s.timeline, sdk.TimelineEntry{
@@ -331,6 +347,16 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		for _, fn := range endSubs {
 			if replyText != "" {
 				fn(map[string]any{"type": "message_end"})
+			}
+			if err != nil {
+				// The provider answered with an error. Settling the turn as completed left the record idle
+				// and wrote no [System Error] row.
+				fn(map[string]any{
+					"type":   "byspace_turn_failed",
+					"turnId": finishedTurnID,
+					"error":  err.Error(),
+				})
+				continue
 			}
 			fn(map[string]any{"type": "agent_end"})
 		}
@@ -600,6 +626,27 @@ func (s *OpenCodeSession) listCommandsFromServer(ctx context.Context) []sdk.Slas
 			ArgumentHint: strings.Join(entry.Hints, " "),
 			Source:       kind,
 		})
+	}
+	return out
+}
+
+// openCodePoolEnv extracts the environment a pooled server can carry.
+//
+// The BySpace identity is dropped: one server hosts many sessions and cannot vary it per session, so
+// including it would give every agent its own server. The host variables stay, so `byspace` inside
+// OpenCode reaches the daemon — as the host's own CLI principal, which is the documented limit.
+func openCodePoolEnv(env []string) map[string]string {
+	out := make(map[string]string, len(env))
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			continue
+		}
+		switch key {
+		case "BYSPACE_AGENT_ID", "BYSPACE_AGENT_CWD", "BYSPACE_SUBAGENT_REPORT_TOKEN", "BYSPACE_SUBAGENT_REPORT_URL":
+			continue
+		}
+		out[key] = value
 	}
 	return out
 }
