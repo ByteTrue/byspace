@@ -85,6 +85,11 @@ func claudeLaunchArgs(cfg LaunchConfig) []string {
 	if effort := claudeEffortArg(cfg.ThinkingOptionID); effort != "" {
 		args = append(args, "--effort", effort)
 	}
+	// Fast mode is a settings flag, not a launch flag: the CLI merges --settings into its settings
+	// file. Codex has a per-turn serviceTier; Claude reads this once per process.
+	if fast, _ := cfg.FeatureValues["fast_mode"].(bool); fast && ClaudeModelSupportsFastMode(cfg.Model) {
+		args = append(args, "--settings", `{"fastMode":true}`)
+	}
 	return args
 }
 
@@ -602,18 +607,18 @@ func (s *ClaudeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	}, nil
 }
 
+// SetModel refuses rather than pretending.
+//
+// The Claude CLI reads --model once at launch and has no in-process switch, so recording a new
+// model on the session would only change the record and the UI. The caller is told to restart; the
+// daemon has already written the new model, so the restart picks it up.
 func (s *ClaudeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
-	s.mu.Lock()
-	s.model = modelID
-	s.mu.Unlock()
-	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+	return nil, errors.New("claude reads --model at launch; restart the agent to switch models")
 }
 
+// SetThinkingLevel refuses for the same reason: --effort is a launch flag.
 func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error {
-	s.mu.Lock()
-	s.thinking = level
-	s.mu.Unlock()
-	return nil
+	return errors.New("claude reads --effort at launch; restart the agent to change the thinking level")
 }
 
 func (s *ClaudeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {

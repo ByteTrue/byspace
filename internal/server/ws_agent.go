@@ -202,7 +202,8 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 
 	// Tell the provider when it can take a mode mid-session. Recording it and telling the user
 	// "applies next turn" was true for none of the providers: nothing ever read the new value.
-	if setter, ok := mp.session.(providers.ModeSetter); ok {
+	setter, canSetMode := mp.session.(providers.ModeSetter)
+	if canSetMode {
 		_ = setter.SetMode(ctx, req.ModeID)
 	}
 
@@ -222,6 +223,19 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	_ = s.store.UpsertAgent(recCopy)
 
 	s.broadcastAgentUpdate(recCopy)
+
+	// A provider that only reads its mode at launch gets the record (so a restart applies it) but
+	// must not report success for the running session.
+	if !canSetMode {
+		_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     recCopy.Provider + " reads its mode at launch; restart the agent to change it",
+			"notice":    nil,
+		})
+		return
+	}
 
 	var notice *agentnotices.Notice
 	if midTurn {

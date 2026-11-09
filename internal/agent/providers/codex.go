@@ -42,6 +42,11 @@ type CodexSession struct {
 	modeID              string
 	featureValues       map[string]any
 	providerOptions     map[string]any
+	systemPrompt        string
+	// collaborationModes are Codex's answer to collaborationMode/list. Plan mode and the daemon's
+	// system prompt both travel inside a collaboration mode's settings, so without this list there
+	// is no way to send either.
+	collaborationModes []codexCollaborationMode
 	turnCounter         int
 	nextClientMessageID string
 	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
@@ -110,6 +115,7 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		modeID:             cfg.ModeID,
 		featureValues:      cfg.FeatureValues,
 		providerOptions:    cfg.ProviderOptions,
+		systemPrompt:       cfg.SystemPrompt,
 		activeTextIdx:      -1,
 		activeThinkIdx:     -1,
 		toolIndexByID:      make(map[string]int),
@@ -157,6 +163,13 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 	}
 	if s.threadID == "" {
 		s.threadID = "th_codex_1"
+	}
+	// Best effort: a Codex build without collaboration modes still answers turns, it just cannot
+	// carry plan mode or the daemon's system prompt.
+	if res, err := s.rpcCall(ctx, "collaborationMode/list", map[string]any{}); err == nil {
+		s.mu.Lock()
+		s.collaborationModes = parseCodexCollaborationModes(res)
+		s.mu.Unlock()
 	}
 
 	return s, nil
@@ -681,15 +694,17 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	input = append(input, imageBlocksForCodex(images)...)
 	s.mu.Lock()
 	state := codexTurnState{
-		ThreadID:        tid,
-		Cwd:             s.cwd,
-		Model:           s.model,
-		ModeID:          s.modeID,
-		Thinking:        s.thinking,
-		FeatureValues:   s.featureValues,
-		ProviderOptions: s.providerOptions,
-		OutputSchema:    outputSchema,
-		Input:           input,
+		ThreadID:           tid,
+		Cwd:                s.cwd,
+		Model:              s.model,
+		ModeID:             s.modeID,
+		Thinking:           s.thinking,
+		FeatureValues:      s.featureValues,
+		ProviderOptions:    s.providerOptions,
+		SystemPrompt:       s.systemPrompt,
+		CollaborationModes: s.collaborationModes,
+		OutputSchema:       outputSchema,
+		Input:              input,
 	}
 	s.mu.Unlock()
 	_, err := s.rpcCall(ctx, "turn/start", codexTurnParams(state))
@@ -780,6 +795,14 @@ func (s *CodexSession) SetMode(_ context.Context, modeID string) error {
 	s.modeID = modeID
 	s.mu.Unlock()
 	return nil
+}
+
+// SetFeatureValues lets the app switch Fast or Plan on a running agent. Codex reads both per turn,
+// so the change lands on the next one.
+func (s *CodexSession) SetFeatureValues(values map[string]any) {
+	s.mu.Lock()
+	s.featureValues = values
+	s.mu.Unlock()
 }
 
 func (s *CodexSession) SetThinkingLevel(_ context.Context, level string) error {

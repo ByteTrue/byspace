@@ -128,3 +128,11 @@ func isObjectSchemaNode(node map[string]any) bool {
 type ModeSetter interface {
 	SetMode(ctx context.Context, modeID string) error
 }
+
+// FeatureValueSetter is a session whose provider reads feature toggles per turn.
+//
+// Codex does (Fast is a turn parameter); providers that only read them at launch do not implement
+// this, and the daemon keeps the record without pretending the running session changed.
+type FeatureValueSetter interface {
+	SetFeatureValues(values map[string]any)
+}

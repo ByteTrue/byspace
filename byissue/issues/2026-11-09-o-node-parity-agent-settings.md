@@ -34,4 +34,14 @@ MCP 退役时的审计发现 App 上有一部分 provider 设置只有记录、�
 
 ## 执行记录
 
-（实现阶段追加）
+**Codex system prompt + `plan_mode`**：会话握手后调一次 `collaborationMode/list` 并缓存；`turn/start` 增加 `collaborationMode: {mode, settings}`。`settings.developer_instructions` 由该 mode 的默认指令 + `LaunchConfig.SystemPrompt`（已含 role、agent、host-wide append）合成，`settings.model` / `settings.reasoning_effort` 按当前选择覆盖——这正是 Node 的 `resolveCollaborationMode`。选 plan 还是普通工作模式按名字匹配（`plan`/`read` vs `auto`/`code`），与 Node 一致；Codex 答不出列表时这一项就不发，回合照常。Fast 与 Plan 的运行时切换经新增的可选接口 `FeatureValueSetter` 下一轮生效。
+
+**Claude `fast_mode`**：`claude --settings '{"fastMode":true}'`（该 flag 读的就是设置文件里的同一字段），只在模型支持时发；不支持就不发。
+
+**Claude 换模型/thinking**：CLI 只在启动读 `--model`/`--effort`，所以 `SetModel`/`SetThinkingLevel` 改为**明确报错**（"restart the agent to switch models"）。记录已经写入，重启即生效。Pi 有 `set_model`/`set_thinking_level` RPC，本来就生效。
+
+**Mode 变更的响应**：provider 没有 `ModeSetter` 时（Claude），`set_agent_mode` 现在回 `accepted:false` 并说明原因，不再回「applies next turn」——那句对谁都曾经不成立。
+
+**验证**：`codexturn` 测试覆盖 collaboration 选择、settings 合成、无列表时不发；`claudeLaunchArgs` 覆盖 fast settings 与 effort；Claude 的拒绝路径有测试。`internal/{server,cli,agent/providers}` 全绿。
+
+**仍未做**：Claude 的 `--json-schema`（需要把 schema 从 per-turn 提到 `LaunchConfig`）；OpenCode 的 per-agent 身份；ACP 的 BySpace 能力。前两条是已知上限，第三条是范围外。

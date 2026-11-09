@@ -160,3 +160,79 @@ func TestOpenCodePromptCarriesModelModeAndVariant(t *testing.T) {
 		t.Fatal("no message was sent")
 	}
 }
+
+// Codex carries plan mode and the daemon's system prompt inside a collaboration mode. The list is
+// Codex's own, so both the choice and the settings have to come from what it answered.
+func TestCodexTurnParamsCarryCollaborationMode(t *testing.T) {
+	modes := parseCodexCollaborationModes(map[string]any{"data": []any{
+		map[string]any{"name": "Default", "mode": "code", "model": "gpt-5.4", "reasoning_effort": "medium"},
+		map[string]any{"name": "Plan", "mode": "plan", "developer_instructions": "read only"},
+	}})
+	if len(modes) != 2 {
+		t.Fatalf("modes = %+v", modes)
+	}
+
+	params := codexTurnParams(codexTurnState{
+		Model:              "gpt-5.4",
+		Thinking:           "high",
+		SystemPrompt:       "Always answer in Chinese.",
+		FeatureValues:      map[string]any{"plan_mode": true},
+		CollaborationModes: modes,
+	})
+	collab, _ := params["collaborationMode"].(map[string]any)
+	if collab["mode"] != "plan" {
+		t.Fatalf("collaborationMode = %v, want the plan entry", collab)
+	}
+	settings, _ := collab["settings"].(map[string]any)
+	instructions, _ := settings["developer_instructions"].(string)
+	if !strings.Contains(instructions, "read only") || !strings.Contains(instructions, "Always answer in Chinese.") {
+		t.Fatalf("developer_instructions = %q", instructions)
+	}
+	if settings["model"] != "gpt-5.4" || settings["reasoning_effort"] != "high" {
+		t.Fatalf("settings = %v", settings)
+	}
+
+	// Without the toggle the ordinary working mode is chosen.
+	plain := codexTurnParams(codexTurnState{Model: "gpt-5.4", CollaborationModes: modes})
+	plainCollab, _ := plain["collaborationMode"].(map[string]any)
+	if plainCollab["mode"] != "code" {
+		t.Fatalf("collaborationMode = %v, want the working entry", plainCollab)
+	}
+}
+
+// A Codex build that answers no collaboration modes must still get a usable turn.
+func TestCodexTurnParamsWithoutCollaborationModes(t *testing.T) {
+	params := codexTurnParams(codexTurnState{Model: "gpt-5.4"})
+	if _, has := params["collaborationMode"]; has {
+		t.Fatalf("collaborationMode sent without a list: %v", params)
+	}
+}
+
+// Claude's Fast toggle is a settings flag, and only for models that accept it.
+func TestClaudeLaunchArgsCarryFastMode(t *testing.T) {
+	args := claudeLaunchArgs(LaunchConfig{
+		Model:         "claude-opus-5",
+		FeatureValues: map[string]any{"fast_mode": true},
+	})
+	if !strings.Contains(strings.Join(args, "\x00"), "--settings\x00{\"fastMode\":true}") {
+		t.Fatalf("args %v missing fast mode settings", args)
+	}
+	unsupported := claudeLaunchArgs(LaunchConfig{
+		Model:         "some-other-model",
+		FeatureValues: map[string]any{"fast_mode": true},
+	})
+	if strings.Contains(strings.Join(unsupported, " "), "fastMode") {
+		t.Fatalf("fast mode sent for a model that does not support it: %v", unsupported)
+	}
+}
+
+// A model change that the CLI cannot apply must fail instead of silently changing the record.
+func TestClaudeRefusesLiveModelChange(t *testing.T) {
+	session := &ClaudeSession{}
+	if _, err := session.SetModel(context.Background(), "anthropic", "opus"); err == nil {
+		t.Fatal("SetModel must refuse: the CLI reads --model at launch")
+	}
+	if err := session.SetThinkingLevel(context.Background(), "high"); err == nil {
+		t.Fatal("SetThinkingLevel must refuse: the CLI reads --effort at launch")
+	}
+}

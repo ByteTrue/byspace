@@ -1268,6 +1268,16 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			_ = s.store.UpsertAgent(*rec)
 			s.broadcastAgentUpdate(*rec)
 			accepted = true
+			// Tell the provider when it reads toggles per turn. Writing only the record is what made
+			// the Fast and Plan switches decorative.
+			s.mu.Lock()
+			mp := s.agents[featReq.AgentID]
+			s.mu.Unlock()
+			if mp != nil && mp.session != nil {
+				if setter, ok := mp.session.(providers.FeatureValueSetter); ok {
+					setter.SetFeatureValues(rec.Config.FeatureValues)
+				}
+			}
 		}
 		_ = sendSessionMsg(ctx, sink, "set_agent_feature_response", map[string]any{
 			"requestId": featReq.RequestID,

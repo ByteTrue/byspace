@@ -72,8 +72,11 @@ type codexTurnState struct {
 	// ProviderOptions may pin approval_policy or sandbox_mode; an explicit user setting outranks
 	// the mode preset, the same way the provider sheet does in the app.
 	ProviderOptions map[string]any
-	OutputSchema    map[string]any
-	Input           []map[string]any
+	// SystemPrompt rides in the collaboration mode's settings; Codex has no top-level parameter.
+	SystemPrompt       string
+	CollaborationModes []codexCollaborationMode
+	OutputSchema       map[string]any
+	Input              []map[string]any
 }
 
 // codexTurnParams builds the `turn/start` parameters.
@@ -124,8 +127,125 @@ func codexTurnParams(st codexTurnState) map[string]any {
 	if fast, ok := st.FeatureValues["fast_mode"].(bool); ok && fast && CodexModelSupportsFastMode(st.Model) {
 		params["serviceTier"] = "fast"
 	}
+	planMode, _ := st.FeatureValues["plan_mode"].(bool)
+	if mode, ok := pickCodexCollaborationMode(st.CollaborationModes, planMode); ok {
+		modeID := mode.Mode
+		if modeID == "" {
+			modeID = "code"
+		}
+		params["collaborationMode"] = map[string]any{
+			"mode":     modeID,
+			"settings": codexCollaborationSettings(mode, st),
+		}
+	}
 	if st.OutputSchema != nil {
 		params["outputSchema"] = st.OutputSchema
 	}
 	return params
+}
+
+// codexCollaborationMode is one entry of Codex's collaborationMode/list.
+//
+// `mode` is the value turn/start expects; `name` is only for choosing among entries. The settings
+// carry per-mode defaults that Codex otherwise applies on its own.
+type codexCollaborationMode struct {
+	Name                  string
+	Mode                  string
+	Model                 string
+	ReasoningEffort       string
+	DeveloperInstructions string
+}
+
+// parseCodexCollaborationModes reads the `collaborationMode/list` response.
+func parseCodexCollaborationModes(res map[string]any) []codexCollaborationMode {
+	raw, _ := res["data"].([]any)
+	out := make([]codexCollaborationMode, 0, len(raw))
+	for _, item := range raw {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		out = append(out, codexCollaborationMode{
+			Name:                  stringField(entry, "name"),
+			Mode:                  stringField(entry, "mode"),
+			Model:                 stringField(entry, "model"),
+			ReasoningEffort:       stringField(entry, "reasoning_effort"),
+			DeveloperInstructions: stringField(entry, "developer_instructions"),
+		})
+	}
+	return out
+}
+
+func stringField(m map[string]any, key string) string {
+	value, _ := m[key].(string)
+	return value
+}
+
+// pickCodexCollaborationMode chooses between the plan and the ordinary working mode.
+//
+// Codex names these itself and does not promise a fixed set, so the choice is by name, the same way
+// the node daemon made it: "plan"/"read" for planning, "auto"/"code" for ordinary work, and the
+// first entry that is neither as a fallback.
+func pickCodexCollaborationMode(modes []codexCollaborationMode, plan bool) (codexCollaborationMode, bool) {
+	if len(modes) == 0 {
+		return codexCollaborationMode{}, false
+	}
+	contains := func(name string, parts ...string) bool {
+		name = strings.ToLower(name)
+		for _, part := range parts {
+			if strings.Contains(name, part) {
+				return true
+			}
+		}
+		return false
+	}
+	if plan {
+		for _, mode := range modes {
+			if contains(mode.Name, "plan", "read") {
+				return mode, true
+			}
+		}
+		return codexCollaborationMode{}, false
+	}
+	for _, mode := range modes {
+		if contains(mode.Name, "auto", "code") {
+			return mode, true
+		}
+	}
+	for _, mode := range modes {
+		if !contains(mode.Name, "plan", "read") {
+			return mode, true
+		}
+	}
+	return modes[0], true
+}
+
+// codexCollaborationSettings builds the settings that ride with a collaboration mode.
+//
+// The system prompt has no top-level parameter on turn/start: it is the mode's
+// developer_instructions. That is why a Codex agent ignored the host-wide append prompt entirely.
+func codexCollaborationSettings(mode codexCollaborationMode, st codexTurnState) map[string]any {
+	settings := map[string]any{}
+	if mode.Model != "" {
+		settings["model"] = mode.Model
+	}
+	if mode.ReasoningEffort != "" {
+		settings["reasoning_effort"] = mode.ReasoningEffort
+	}
+	parts := make([]string, 0, 3)
+	for _, part := range []string{mode.DeveloperInstructions, st.SystemPrompt} {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	if len(parts) > 0 {
+		settings["developer_instructions"] = strings.Join(parts, "\n\n")
+	}
+	if st.Model != "" {
+		settings["model"] = st.Model
+	}
+	if thinking := strings.TrimSpace(st.Thinking); thinking != "" && thinking != "default" {
+		settings["reasoning_effort"] = thinking
+	}
+	return settings
 }

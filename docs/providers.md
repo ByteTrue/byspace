@@ -70,21 +70,23 @@ exist fails silently: the record changes, the UI shows the new value, and the pr
 default. This table is the inventory. When adding a provider, fill a row; when adding a setting,
 fill a column.
 
-|          | Model                             | Mode                                          | Thinking                   | System prompt            | Output schema               | Fast                       |
-| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | ------------------------ | --------------------------- | -------------------------- |
-| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt` | refused                     | not transmitted            |
-| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | not sent                 | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
-| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension      | refused                     | —                          |
-| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt` | refused                     | —                          |
-| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                 | message `format`            | —                          |
-| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                 | refused                     | —                          |
+|          | Model                             | Mode                                          | Thinking                   | System prompt                | Output schema               | Fast                       |
+| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | ---------------------------- | --------------------------- | -------------------------- |
+| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt`     | refused                     | `--settings` fastMode      |
+| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | `collaborationMode` settings | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
+| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension          | refused                     | —                          |
+| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt`     | refused                     | —                          |
+| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                     | message `format`            | —                          |
+| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                     | refused                     | —                          |
 
 "refused" means the daemon fails the request instead of running the turn without it: a caller that
 asked for a JSON object and got prose would parse garbage.
 
 A mode is a launch flag on the Claude CLI, so Claude cannot change mode mid-session; Codex,
-OpenCode and ACP apply it on the next turn. Claude and Pi cannot change model or thinking
-mid-session either — the CLI reads them once at launch.
+OpenCode and ACP apply it on the next turn. Claude and Pi read model and thinking once at launch:
+Pi has RPC setters and applies them, Claude refuses the change and says to restart the agent rather
+than recording a value the process does not use. Codex carries `plan_mode` and the system prompt
+the same way, in `collaborationMode.settings.developer_instructions`.
 
 Pi is a process-backed provider. BySpace requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
 
