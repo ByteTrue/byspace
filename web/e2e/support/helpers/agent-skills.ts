@@ -76,6 +76,9 @@ export async function startAgentSkillsSandbox(): Promise<AgentSkillsSandbox> {
     home,
     targets,
     blockAgentsDirectory: async () => {
+      // The daemon installs the reference skill at startup, so `.agents/skills` is a real
+      // directory by the time a spec runs; replacing it with a file has to remove it first.
+      await rm(targets.agents, { recursive: true, force: true });
       await mkdir(path.dirname(targets.agents), { recursive: true });
       await writeFile(targets.agents, "not a directory", "utf8");
     },

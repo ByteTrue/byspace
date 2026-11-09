@@ -440,6 +440,24 @@ func (s *MockSession) SetModel(ctx context.Context, provider, modelID string) (*
 	return &sdk.Model{Provider: MockProviderID, ID: resolved.ID, Name: resolved.Label}, nil
 }
 
+// SetFeatureValues stores a runtime toggle change. The scripted provider reads its knobs from this
+// map, so the value the app just wrote has to land here too.
+func (s *MockSession) SetFeatureValues(values map[string]any) {
+	s.mu.Lock()
+	s.featureValues = values
+	s.mu.Unlock()
+}
+
+// SetMode takes a mode change like the real providers do. The scripted provider backs the e2e
+// specs, and a mode picker that reports "restart the agent" for it would test the refusal path
+// instead of the picker.
+func (s *MockSession) SetMode(_ context.Context, modeID string) error {
+	s.mu.Lock()
+	s.modeID = modeID
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *MockSession) SetThinkingLevel(ctx context.Context, level string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
