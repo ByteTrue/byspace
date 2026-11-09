@@ -33,10 +33,12 @@ type ACPSession struct {
 	acpTerminals   map[string]*acpTerminal
 	acpTerminalsMu sync.Mutex
 
-	mu                  sync.Mutex
-	pending             map[int64]chan map[string]any
-	status              string
-	sessionID           string
+	mu        sync.Mutex
+	pending   map[int64]chan map[string]any
+	status    string
+	sessionID string
+	// lastUsage is the token accounting from the most recent prompt, for the context ring.
+	lastUsage           *sdk.AgentUsage
 	cwd                 string
 	model               string
 	modeID              string
@@ -669,8 +671,17 @@ func (s *ACPSession) LastError() string {
 func (s *ACPSession) TurnToken() string { return "" }
 
 // Usage reports token/cost accounting when the provider exposes it.
+// Usage reports the token accounting the last prompt announced.
+//
+// ACP returns it on the session/prompt result, so it lands once per turn rather than streaming.
 func (s *ACPSession) Usage(_ context.Context) *sdk.AgentUsage {
-	return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastUsage == nil {
+		return nil
+	}
+	usage := *s.lastUsage
+	return &usage
 }
 
 func (s *ACPSession) StreamSeq() int {
@@ -725,10 +736,15 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 		defer cancel()
 		promptBlocks := []map[string]any{{"type": "text", "text": message}}
 		promptBlocks = append(promptBlocks, imageBlocksForACP(images)...)
-		_, err := s.rpcCall(pctx, "session/prompt", map[string]any{
+		res, err := s.rpcCall(pctx, "session/prompt", map[string]any{
 			"sessionId": sid,
 			"prompt":    promptBlocks,
 		})
+		if usage := acpUsageFromResult(res); usage != nil {
+			s.mu.Lock()
+			s.lastUsage = usage
+			s.mu.Unlock()
+		}
 		s.finishPrompt(err)
 	}()
 	_ = ctx
@@ -1006,4 +1022,24 @@ func numericParam(params map[string]any, key string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// acpUsageFromResult reads the usage a session/prompt result carries.
+//
+// ACP spells the cache bucket `cachedReadTokens`; everything else lines up with the daemon's
+// AgentUsage. A provider that reports nothing yields nil, and the agent shows no usage.
+func acpUsageFromResult(res map[string]any) *sdk.AgentUsage {
+	usage, _ := res["usage"].(map[string]any)
+	if usage == nil {
+		return nil
+	}
+	entry := &sdk.AgentUsage{
+		InputTokens:       intField(usage, "inputTokens"),
+		OutputTokens:      intField(usage, "outputTokens"),
+		CachedInputTokens: intField(usage, "cachedReadTokens"),
+	}
+	if entry.InputTokens == 0 && entry.OutputTokens == 0 && entry.CachedInputTokens == 0 {
+		return nil
+	}
+	return entry
 }

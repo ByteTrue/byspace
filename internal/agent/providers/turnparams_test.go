@@ -308,3 +308,18 @@ func TestOpenCodeUsageFromStepFinishParts(t *testing.T) {
 		t.Fatalf("cost = %v, want both steps", usage.TotalCostUSD)
 	}
 }
+
+// ACP returns usage on the prompt result, and spells the cache bucket differently.
+func TestACPUsageFromPromptResult(t *testing.T) {
+	usage := acpUsageFromResult(map[string]any{"usage": map[string]any{
+		"inputTokens":      float64(120),
+		"outputTokens":     float64(30),
+		"cachedReadTokens": float64(400),
+	}})
+	if usage == nil || usage.InputTokens != 120 || usage.OutputTokens != 30 || usage.CachedInputTokens != 400 {
+		t.Fatalf("usage = %+v", usage)
+	}
+	if acpUsageFromResult(map[string]any{}) != nil {
+		t.Fatal("a result without usage must yield nil")
+	}
+}

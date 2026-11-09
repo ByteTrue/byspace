@@ -79,7 +79,7 @@ fill a column.
 | OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                     | message `format`            | —                          |
 | ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                     | refused                     | —                          |
 
-Usage: Claude, Codex, Pi and OpenCode report token accounting, which feeds the composer's context ring. Claude's "used" is the whole prompt (fresh input plus both cache buckets), OpenCode's is the sum of every bucket in the step, and Codex reports the last request directly. ACP has no standard usage field, so an ACP agent shows none.
+Usage: every provider reports token accounting, which feeds the composer's context ring. Claude's "used" is the whole prompt (fresh input plus both cache buckets), OpenCode's is the sum of every bucket in the step, Codex reports the last request directly, and ACP returns it once per turn on the prompt result.
 
 A per-agent `env` is handed to the provider process (Claude, Codex, ACP). OpenCode cannot take one: it drives a shared `opencode serve`, so the environment is the daemon's own. The BySpace identity variables are applied last, so an agent cannot rename itself through `env`.
 

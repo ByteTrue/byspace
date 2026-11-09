@@ -44,8 +44,8 @@ MCP 退役时的审计发现 App 上有一部分 provider 设置只有记录、�
 
 **per-agent `env`**：Node 的四家适配器都把 `config.env` 交给 provider 进程；Go 从来没接（`create_agent_request.env` 解析了没人读，CLI `--env` 写进了 `config.env` 而 daemon 不解析）。现在按 wire 的顶层 `env` 解析、存进 `AgentConfig.Env`，`agentEnv()` 在 daemon 环境之上叠加，BySpace 身份变量最后写入（agent 不能借 `env` 改自己的 `BYSPACE_AGENT_ID`）；CLI `--env` 重新可用。OpenCode 仍拿不到：共享 `opencode serve` 的环境不是 per-session。
 
-**usage（context ring）**：Claude 与 OpenCode 在 Node 版把 token 记账交给上下文环，Go 版两家都返回 nil。现在 Claude 从每条 assistant 消息的 `message.usage` 取（used = 输入 + cache creation + cache read，`--model` 的窗口来自 manifest），`result` 事件补 cost；OpenCode 从响应里 `step-finish` parts 的 `tokens`/`cost` 取，cost 跨 step 累加。ACP 无标准 usage 字段，继续显示无。
+**usage（context ring）**：Claude 与 OpenCode 在 Node 版把 token 记账交给上下文环，Go 版两家都返回 nil。现在 Claude 从每条 assistant 消息的 `message.usage` 取（used = 输入 + cache creation + cache read，`--model` 的窗口来自 manifest），`result` 事件补 cost；OpenCode 从响应里 `step-finish` parts 的 `tokens`/`cost` 取，cost 跨 step 累加。ACP 的 usage 在 `session/prompt` 结果里（`cachedReadTokens` 对应缓存的读桶），每回合一次。
 
 **验证**：`codexturn` 测试覆盖 collaboration 选择、settings 合成、无列表时不发；`claudeLaunchArgs` 覆盖 fast settings 与 effort；Claude 的拒绝路径有测试。`internal/{server,cli,agent/providers}` 全绿。
 
-**仍未做**：Claude 的 `--json-schema`（需要把 schema 从 per-turn 提到 `LaunchConfig`）；OpenCode 的 per-agent 身份；ACP 的 BySpace 能力。前两条是已知上限，第三条是范围外。
+**仍未做**：OpenCode 的 per-agent env 与身份（共享 `opencode serve`，要 per-env 池）；Claude 中途换模型的真正实现（现为明确拒绝，应改成带 `--resume` 重启 session）；Claude 的 `--json-schema`（Node 也没有，属于新功能）；ACP 客户端的 BySpace 能力（范围外）。
