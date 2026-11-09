@@ -259,9 +259,13 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		// stored on the session and never sent, so the pickers changed the record while every turn
 		// ran with whatever the server defaulted to.
 		if trimmed := strings.TrimSpace(model); trimmed != "" {
-			if provider, modelID, ok := strings.Cut(trimmed, "/"); ok {
-				body["model"] = map[string]any{"providerID": provider, "modelID": modelID}
+			// A bare model id names no provider; OpenCode's own provider is the one that can resolve
+			// it, which is what the node daemon fell back to as well.
+			provider, modelID, ok := strings.Cut(trimmed, "/")
+			if !ok {
+				provider, modelID = "opencode", trimmed
 			}
+			body["model"] = map[string]any{"providerID": provider, "modelID": modelID}
 		}
 		if trimmed := strings.TrimSpace(modeID); trimmed != "" {
 			body["agent"] = trimmed

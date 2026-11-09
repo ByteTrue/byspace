@@ -32,21 +32,21 @@ type CodexSession struct {
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
 
-	mu                  sync.Mutex
-	pending             map[int64]chan map[string]any
-	status              string
-	threadID            string
-	cwd                 string
-	model               string
-	thinking            string
-	modeID              string
-	featureValues       map[string]any
-	providerOptions     map[string]any
-	systemPrompt        string
+	mu              sync.Mutex
+	pending         map[int64]chan map[string]any
+	status          string
+	threadID        string
+	cwd             string
+	model           string
+	thinking        string
+	modeID          string
+	featureValues   map[string]any
+	providerOptions map[string]any
+	systemPrompt    string
 	// collaborationModes are Codex's answer to collaborationMode/list. Plan mode and the daemon's
 	// system prompt both travel inside a collaboration mode's settings, so without this list there
 	// is no way to send either.
-	collaborationModes []codexCollaborationMode
+	collaborationModes  []codexCollaborationMode
 	turnCounter         int
 	nextClientMessageID string
 	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
@@ -164,13 +164,12 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 	if s.threadID == "" {
 		s.threadID = "th_codex_1"
 	}
-	// Best effort: a Codex build without collaboration modes still answers turns, it just cannot
-	// carry plan mode or the daemon's system prompt.
-	if res, err := s.rpcCall(ctx, "collaborationMode/list", map[string]any{}); err == nil {
-		s.mu.Lock()
-		s.collaborationModes = parseCodexCollaborationModes(res)
-		s.mu.Unlock()
-	}
+	// Best effort, on its own budget: a slow `thread/start` (Codex starts its own MCP servers
+	// first) must not eat the time this call needs, or the session runs without plan mode and
+	// without the daemon's system prompt. `ensureCollaborationModes` retries it on a later turn.
+	listCtx, listCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	s.loadCollaborationModes(listCtx)
+	listCancel()
 
 	return s, nil
 }
@@ -692,6 +691,8 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 
 	input := []map[string]any{{"type": "text", "text": message}}
 	input = append(input, imageBlocksForCodex(images)...)
+	s.ensureCollaborationModes(ctx)
+
 	s.mu.Lock()
 	state := codexTurnState{
 		ThreadID:           tid,
@@ -795,6 +796,36 @@ func (s *CodexSession) SetMode(_ context.Context, modeID string) error {
 	s.modeID = modeID
 	s.mu.Unlock()
 	return nil
+}
+
+// loadCollaborationModes asks Codex which collaboration modes it offers.
+//
+// Plan mode and the daemon's system prompt travel inside one of them, so an empty list means
+// neither is deliverable. Failure is not fatal: turns still run, Codex just keeps its own posture.
+func (s *CodexSession) loadCollaborationModes(ctx context.Context) {
+	res, err := s.rpcCall(ctx, "collaborationMode/list", map[string]any{})
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.collaborationModes = parseCodexCollaborationModes(res)
+	s.mu.Unlock()
+}
+
+// ensureCollaborationModes retries the list once per turn while it is still empty.
+//
+// The handshake fetch can lose to a slow Codex startup, and a session that never retried sent
+// every turn without the system prompt.
+func (s *CodexSession) ensureCollaborationModes(ctx context.Context) {
+	s.mu.Lock()
+	loaded := len(s.collaborationModes) > 0
+	s.mu.Unlock()
+	if loaded {
+		return
+	}
+	listCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	s.loadCollaborationModes(listCtx)
 }
 
 // SetFeatureValues lets the app switch Fast or Plan on a running agent. Codex reads both per turn,

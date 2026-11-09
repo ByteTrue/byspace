@@ -85,7 +85,13 @@ func TestCodexPromptCarriesTheOutputSchema(t *testing.T) {
 		if err := session.Prompt(ctx, "hello", nil); err != nil {
 			t.Fatal(err)
 		}
-		request := <-requests
+		var request map[string]any
+		for {
+			request = <-requests
+			if request["method"] == "turn/start" {
+				break
+			}
+		}
 		params := request["params"].(map[string]any)
 		schema, has := params["outputSchema"].(map[string]any)
 		if turn == 0 && (!has || schema["additionalProperties"] != false) {

@@ -101,9 +101,9 @@ func Start(cfg LaunchConfig) (*Process, error) {
 	// agent that inherits the supervisor's markers changes behaviour (the Pi activity extension
 	// registers no handlers when it sees a foreign owner pid).
 	if len(cfg.Env) > 0 {
-		cmd.Env = home.ExternalProcessEnv(cfg.Env)
+		cmd.Env = home.ProviderProcessEnv(cfg.Env)
 	} else {
-		cmd.Env = home.ExternalProcessEnv(os.Environ())
+		cmd.Env = home.ProviderProcessEnv(os.Environ())
 	}
 	cmd.Env = execres.AppendStandardDirs(cmd.Env)
 

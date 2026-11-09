@@ -70,18 +70,18 @@ exist fails silently: the record changes, the UI shows the new value, and the pr
 default. This table is the inventory. When adding a provider, fill a row; when adding a setting,
 fill a column.
 
-|          | Model                             | Mode                                          | Thinking                   | System prompt                | Output schema               | Fast                       |
-| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | ---------------------------- | --------------------------- | -------------------------- |
-| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt`     | refused                     | `--settings` fastMode      |
-| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | `collaborationMode` settings | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
-| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension          | refused                     | —                          |
-| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt`     | refused                     | —                          |
-| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                     | message `format`            | —                          |
-| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                     | refused                     | —                          |
+|          | Model                             | Mode                                          | Thinking                   | System prompt                                                       | Output schema               | Fast                       |
+| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | ------------------------------------------------------------------- | --------------------------- | -------------------------- |
+| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt`                                            | refused                     | `--settings` fastMode      |
+| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | `turn/start` `developerInstructions` + `collaborationMode` settings | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
+| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension                                                 | refused                     | —                          |
+| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt`                                            | refused                     | —                          |
+| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                                                            | message `format`            | —                          |
+| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                                                            | refused                     | —                          |
 
 Usage: every provider reports token accounting, which feeds the composer's context ring. Claude's "used" is the whole prompt (fresh input plus both cache buckets), OpenCode's is the sum of every bucket in the step, Codex reports the last request directly, and ACP returns it once per turn on the prompt result.
 
-A per-agent `env` is handed to the provider process (Claude, Codex, ACP). OpenCode cannot take one: it drives a shared `opencode serve`, so the environment is the daemon's own. The BySpace identity variables are applied last, so an agent cannot rename itself through `env`.
+A per-agent `env` is handed to the provider process (Claude, Pi, OMP, Codex, ACP). OpenCode cannot take one: it drives a shared `opencode serve`, so the environment is the daemon's own — and that is also the one provider where `BYSPACE_AGENT_ID` is missing. The BySpace identity variables are applied last, so an agent cannot rename itself through `env`.
 
 "refused" means the daemon fails the request instead of running the turn without it: a caller that
 asked for a JSON object and got prose would parse garbage.

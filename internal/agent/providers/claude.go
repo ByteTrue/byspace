@@ -168,7 +168,6 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		}
 
 	case "assistant":
-		s.captureClaudeUsageLocked(ev)
 		if parent := parentToolUseID(ev); parent != "" {
 			// A message from inside a subagent. Its tool calls belong to that subagent's
 			// timeline, not to the conversation the user is reading — mixing them made a
@@ -186,6 +185,9 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			}
 			break
 		}
+		// Only the main conversation feeds the context ring: a subagent reports its own usage, and
+		// letting it through replaced the parent's numbers with a fraction of them.
+		s.captureClaudeUsageLocked(ev)
 		if s.status != "running" {
 			s.status = "running"
 		}

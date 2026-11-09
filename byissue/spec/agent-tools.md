@@ -6,7 +6,7 @@ BySpace 启动的 agent 通过 bundled skill + `byspace` CLI 操作 daemon。没
 
 - BySpace 不替 agent 携带 MCP 配置。各家 CLI 读自己的配置文件，BySpace 只是启动同一个二进制。此前 `mcpServers` 透传已删除。
 - 技能装在 `~/.agents/skills` 与 `~/.claude/skills`。不读这两个目录的客户端（多数 ACP 客户端）拿不到 BySpace 能力，这是已知上限，不是缺陷；要给它就在那个客户端自己的技能目录里放一份，但那个进程没有 `BYSPACE_AGENT_ID`，归属会退化成宿主 CLI。
-- agent 身份由 daemon 写进进程环境（`BYSPACE_HOME`、`BYSPACE_HOST`、`BYSPACE_AGENT_ID`），凭证沿用宿主自己的 `cli-credential`。信任模型是「环境里自报的 id」，与退役前 MCP 桥一致。
+- agent 身份由 daemon 写进进程环境（`BYSPACE_HOME`、`BYSPACE_HOST`、`BYSPACE_AGENT_ID`），凭证沿用宿主自己的 `cli-credential`。信任模型是「环境里自报的 id」，与退役前 MCP 桥一致。OpenCode 是例外：它跑在一个共享的 `opencode serve` 里，进程环境不属于任何单个 agent，所以那里没有 id，也没有 per-agent 的 `env`。
 - 用户自己的 git 编辑器不属于 daemon：任何 daemon 侧的 git 调用都不得打开它（`GIT_EDITOR=true` 等）。有 TTY 的调用点（agent 终端）才会命中，所以只在真实终端里复现。
 
 ## 被排除的方案

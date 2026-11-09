@@ -1,6 +1,7 @@
 package home
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -84,5 +85,40 @@ func TestExternalProcessEnvStripsPiSessionIdentity(t *testing.T) {
 	}
 	if !strings.Contains(joined, "PATH=/usr/bin") {
 		t.Fatal("ordinary variables must survive")
+	}
+}
+
+// A provider process is the agent itself, not a child of it: it must know which agent it runs for,
+// or `byspace` inside it cannot name the caller and every delegated agent looks top-level.
+func TestProviderProcessEnvKeepsTheAgentIdentity(t *testing.T) {
+	env := ProviderProcessEnv([]string{
+		"PATH=/bin",
+		"BYSPACE_AGENT_ID=agt_1",
+		"BYSPACE_NODE_ENV=development",
+	})
+	if !slices.Contains(env, "BYSPACE_AGENT_ID=agt_1") {
+		t.Fatalf("identity missing: %v", env)
+	}
+	// Everything else is still a child's environment.
+	if slices.Contains(env, "BYSPACE_NODE_ENV=development") {
+		t.Fatalf("runtime control leaked: %v", env)
+	}
+}
+
+// The identity is copied from the base environment only, so a caller cannot hand a provider an id
+// the daemon did not set for that agent.
+func TestProviderProcessEnvKeepsOnlyTheBaseIdentity(t *testing.T) {
+	env := ProviderProcessEnv([]string{"PATH=/bin", "BYSPACE_AGENT_ID=agt_1"})
+	if slices.Contains(env, "BYSPACE_AGENT_ID=agt_other") {
+		t.Fatalf("a forged identity leaked: %v", env)
+	}
+	found := 0
+	for _, entry := range env {
+		if entry == "BYSPACE_AGENT_ID=agt_1" {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("identity entries = %d in %v", found, env)
 	}
 }

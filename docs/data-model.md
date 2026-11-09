@@ -207,7 +207,7 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
     listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
-    mcp: { enabled: boolean, injectIntoAgents: boolean }, // retired, still parsed
+    mcp: { enabled: boolean, injectIntoAgents: boolean }, // retired; the response still carries it because the wire requires it
     git: { maxProcessesPerSecond: number, maxProcessConcurrency: number },
     appendSystemPrompt: string,    // appended to supported provider system/developer prompts
     terminalProfiles: TerminalProfile[],  // named shell commands; omitted means DEFAULT_TERMINAL_PROFILES

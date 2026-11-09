@@ -85,16 +85,14 @@ func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw js
 		return
 	}
 
+	// The record is written whether or not the running session can take the change: a provider
+	// that reads its model at launch (Claude) applies it on the next start, and losing the value
+	// would leave no way to change it at all.
+	var applyErr error
 	if req.ModelID != nil && strings.TrimSpace(*req.ModelID) != "" {
 		prov, mod := pi.SplitModelID(*req.ModelID)
 		if _, err := mp.session.SetModel(ctx, prov, mod); err != nil {
-			_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
-				"requestId": req.RequestID,
-				"agentId":   req.AgentID,
-				"accepted":  false,
-				"error":     err.Error(),
-			})
-			return
+			applyErr = err
 		}
 	}
 
@@ -115,9 +113,17 @@ func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw js
 	_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
-		"accepted":  true,
-		"error":     nil,
+		"accepted":  applyErr == nil,
+		"error":     errorText(applyErr),
 	})
+}
+
+// errorText renders an error for a response payload, nil-safe.
+func errorText(err error) any {
+	if err == nil {
+		return nil
+	}
+	return err.Error()
 }
 
 func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -139,16 +145,9 @@ func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw
 		return
 	}
 
+	var applyErr error
 	if req.ThinkingOptionID != nil && strings.TrimSpace(*req.ThinkingOptionID) != "" {
-		if err := mp.session.SetThinkingLevel(ctx, *req.ThinkingOptionID); err != nil {
-			_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
-				"requestId": req.RequestID,
-				"agentId":   req.AgentID,
-				"accepted":  false,
-				"error":     err.Error(),
-			})
-			return
-		}
+		applyErr = mp.session.SetThinkingLevel(ctx, *req.ThinkingOptionID)
 	}
 
 	s.mu.Lock()
@@ -167,14 +166,14 @@ func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw
 	s.broadcastAgentUpdate(recCopy)
 
 	var notice *agentnotices.Notice
-	if midTurn {
+	if midTurn && applyErr == nil {
 		notice = &agentnotices.ThinkingAppliesNextTurn
 	}
 	_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
-		"accepted":  true,
-		"error":     nil,
+		"accepted":  applyErr == nil,
+		"error":     errorText(applyErr),
 		// Nullable and optional: nil is the correct absent value, and an empty object fails the
 		// discriminated union that validates this field.
 		"notice": agentnotices.ToPayload(notice),
@@ -273,12 +272,20 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 		return
 	}
 
+	// A bundle is recorded even when the running session cannot take it (a provider that reads
+	// model/thinking at launch applies the record on the next start). The response says so instead
+	// of reporting success for a change the process never received.
+	var applyErr error
 	if req.Config.ModelID != nil && strings.TrimSpace(*req.Config.ModelID) != "" {
 		prov, mod := pi.SplitModelID(*req.Config.ModelID)
-		_, _ = mp.session.SetModel(ctx, prov, mod)
+		if _, err := mp.session.SetModel(ctx, prov, mod); err != nil {
+			applyErr = err
+		}
 	}
 	if req.Config.ThinkingOptionID != nil && strings.TrimSpace(*req.Config.ThinkingOptionID) != "" {
-		_ = mp.session.SetThinkingLevel(ctx, *req.Config.ThinkingOptionID)
+		if err := mp.session.SetThinkingLevel(ctx, *req.Config.ThinkingOptionID); err != nil && applyErr == nil {
+			applyErr = err
+		}
 	}
 
 	s.mu.Lock()
@@ -306,8 +313,8 @@ func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw
 	_ = sendSessionMsg(ctx, sink, "agent.config.apply.response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
-		"accepted":  true,
-		"error":     nil,
+		"accepted":  applyErr == nil,
+		"error":     errorText(applyErr),
 	})
 }
 

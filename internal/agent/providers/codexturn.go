@@ -26,8 +26,6 @@ var codexModePresets = map[string]codexModePreset{
 	"full-access": {approvalPolicy: "never", sandbox: "danger-full-access"},
 }
 
-const defaultCodexModeID = "auto"
-
 // codexSandboxPolicy renders Codex's per-turn sandbox object.
 //
 // A plain string is not enough: workspace-write carries the network and writable-root decisions the
@@ -96,21 +94,23 @@ func codexTurnParams(st codexTurnState) map[string]any {
 		params["model"] = st.Model
 	}
 
+	// A mode the client never chose must not become a policy: Codex's own config (sandbox_mode,
+	// approval_policy, network access) is the user's answer for an agent that asked for nothing.
+	// The node daemon gated the preset the same way (`hasWorkflowModeOverride`).
 	modeID := strings.TrimSpace(st.ModeID)
-	if modeID == "" {
-		modeID = defaultCodexModeID
-	}
-	if preset, ok := codexModePresets[modeID]; ok {
-		if _, pinned := st.ProviderOptions["approval_policy"]; !pinned {
-			params["approvalPolicy"] = preset.approvalPolicy
-		}
-		if preset.approvalsReviewer != "" {
-			params["approvalsReviewer"] = preset.approvalsReviewer
+	if modeID != "" {
+		if preset, ok := codexModePresets[modeID]; ok {
+			if _, pinned := st.ProviderOptions["approval_policy"]; !pinned {
+				params["approvalPolicy"] = preset.approvalPolicy
+			}
+			if preset.approvalsReviewer != "" {
+				params["approvalsReviewer"] = preset.approvalsReviewer
+			}
 		}
 	}
 
 	sandbox, pinned := st.ProviderOptions["sandbox_mode"].(string)
-	if !pinned {
+	if !pinned && modeID != "" {
 		sandbox = codexModePresets[modeID].sandbox
 	}
 	if sandbox != "" {
@@ -126,6 +126,11 @@ func codexTurnParams(st codexTurnState) map[string]any {
 	}
 	if fast, ok := st.FeatureValues["fast_mode"].(bool); ok && fast && CodexModelSupportsFastMode(st.Model) {
 		params["serviceTier"] = "fast"
+	}
+	// The system prompt also has a top-level channel, independent of any collaboration mode: this is
+	// what makes it arrive even when the mode list was never fetched.
+	if prompt := strings.TrimSpace(st.SystemPrompt); prompt != "" {
+		params["developerInstructions"] = prompt
 	}
 	planMode, _ := st.FeatureValues["plan_mode"].(bool)
 	if mode, ok := pickCodexCollaborationMode(st.CollaborationModes, planMode); ok {

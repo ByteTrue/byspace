@@ -1256,6 +1256,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		}
 		_ = json.Unmarshal(raw, &featReq)
 		accepted := false
+		var featureErr any
 		if rec, _ := s.store.GetAgent(featReq.AgentID); rec != nil && featReq.FeatureID != "" {
 			if rec.Config == nil {
 				rec.Config = &store.AgentConfig{}
@@ -1268,14 +1269,18 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			_ = s.store.UpsertAgent(*rec)
 			s.broadcastAgentUpdate(*rec)
 			accepted = true
-			// Tell the provider when it reads toggles per turn. Writing only the record is what made
-			// the Fast and Plan switches decorative.
+			// A provider that reads toggles per turn takes the change now. One that reads them at
+			// launch (Claude's Fast) keeps the record and says so: reporting success for a value the
+			// running process never received is how these switches became decorative.
 			s.mu.Lock()
 			mp := s.agents[featReq.AgentID]
 			s.mu.Unlock()
 			if mp != nil && mp.session != nil {
 				if setter, ok := mp.session.(providers.FeatureValueSetter); ok {
 					setter.SetFeatureValues(rec.Config.FeatureValues)
+				} else {
+					accepted = false
+					featureErr = rec.Provider + " reads its feature toggles at launch; restart the agent to apply"
 				}
 			}
 		}
@@ -1283,7 +1288,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			"requestId": featReq.RequestID,
 			"agentId":   featReq.AgentID,
 			"accepted":  accepted,
-			"error":     nil,
+			"error":     featureErr,
 		})
 
 	case "abort_request":

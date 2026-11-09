@@ -23,7 +23,6 @@ var SkillTargetIDs = []string{"agents", "claude"}
 // Mirrors LEGACY_SKILL_NAMES in node (operations.ts).
 var legacySkillNames = []string{
 	"byspace-advisor",
-	"byspace-advisor",
 	"byspace-chat",
 	"byspace-committee",
 	"byspace-epic",

@@ -32,7 +32,8 @@ byspace logs <agent-id>
   With `-d`, the daemon prompts you when the child finishes, errors, or needs permission — do not
   poll `byspace ls` to check on it. Agents take 10–30 minutes routinely; go do other work.
 - `--output-schema` (JSON Schema object, or `@file`) makes the child answer with an object
-  instead of prose.
+  instead of prose. Only Codex and OpenCode honour it — another provider fails the create rather
+  than answering in prose.
 
 ## Workspaces
 

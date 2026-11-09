@@ -99,3 +99,35 @@ func IsRuntimeControlEnvKey(key string) bool {
 	}
 	return false
 }
+
+// providerIdentityEnvKeys describe which agent a provider process is running for. They must reach
+// that process and nothing below it: `byspace` inside the agent names the caller with
+// BYSPACE_AGENT_ID, so stripping it there made every delegated agent look top-level.
+var providerIdentityEnvKeys = []string{"BYSPACE_AGENT_ID"}
+
+// ProviderProcessEnv is ExternalProcessEnv for launching an agent's own provider process.
+//
+// It strips the supervisor's runtime-control markers like any child, then restores the identity
+// variables. Restoring from the base rather than an overlay keeps the ordering rule honest: a
+// caller cannot inject an identity the daemon did not set for this agent.
+func ProviderProcessEnv(base []string) []string {
+	env := ExternalProcessEnv(base)
+	values := make(map[string]string, len(providerIdentityEnvKeys))
+	for _, entry := range base {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		for _, wanted := range providerIdentityEnvKeys {
+			if key == wanted {
+				values[key] = value
+			}
+		}
+	}
+	for _, key := range providerIdentityEnvKeys {
+		if value, ok := values[key]; ok {
+			env = append(env, key+"="+value)
+		}
+	}
+	return env
+}

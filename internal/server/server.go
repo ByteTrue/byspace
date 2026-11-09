@@ -2719,6 +2719,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		if req.OutputSchema != nil {
 			setter, ok := mp.session.(providers.OutputSchemaSetter)
 			if !ok {
+				s.discardCreatedAgent(mp, rec.ID)
 				_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 					"status":    "agent_create_failed",
 					"requestId": req.RequestID,
@@ -2727,6 +2728,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 				return
 			}
 			if err := setter.SetNextOutputSchema(req.OutputSchema); err != nil {
+				s.discardCreatedAgent(mp, rec.ID)
 				_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 					"status":    "agent_create_failed",
 					"requestId": req.RequestID,
@@ -5254,4 +5256,19 @@ func requestCwd(raw json.RawMessage) string {
 	}
 	_ = json.Unmarshal(raw, &req)
 	return req.Cwd
+}
+
+// discardCreatedAgent undoes an agent that was created and then refused.
+//
+// The record and the provider process are already live at that point, so a create that fails after
+// starting one has to take both back: otherwise the caller gets an error and `byspace ls` shows an
+// idle agent nothing will ever close.
+func (s *Server) discardCreatedAgent(mp *managedPi, agentID string) {
+	if mp != nil && mp.session != nil {
+		_ = mp.session.Close()
+	}
+	s.mu.Lock()
+	delete(s.agents, agentID)
+	s.mu.Unlock()
+	_ = s.store.DeleteAgent(agentID)
 }
