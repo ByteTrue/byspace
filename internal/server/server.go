@@ -3528,6 +3528,18 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				}
 			}
 
+		case "byspace_provider_subagents":
+			// The provider finished tracking a subagent (subagent-exit). Pi sessions only broadcast
+			// descriptors alongside timeline frames, so a completion that produced no row — the
+			// usual case, the child's result arrives as a custom message — never reached a client
+			// and the row stayed "running".
+			if sub, ok := ev["subagent"].(sdk.SubagentDescriptor); ok {
+				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
+					"kind":     "upsert",
+					"subagent": sub,
+				})
+			}
+
 		case "extension_ui_request":
 			if perm := pi.MapExtensionUIRequestToPermission(ev); perm != nil {
 				// Two consumers: the timeline renders an inline card from the agent_stream

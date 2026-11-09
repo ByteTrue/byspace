@@ -48,6 +48,11 @@ func (n *desktopNotifier) start() {
 		log.Println("byspace notifications: not inside an app bundle; using the web fallback")
 		return
 	}
+	// Windows needs a COM apartment on the thread that starts the service, and the apartment has
+	// to outlive this call; on the other platforms this is a no-op.
+	if !prepareNotificationPlatform() {
+		return
+	}
 	if err := n.svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		log.Printf("byspace notifications: unavailable: %v", err)
 		return
@@ -57,6 +62,8 @@ func (n *desktopNotifier) start() {
 	// Ask at launch, when the user is at the app, not when the first agent finishes and they
 	// may be away from it.
 	n.authorized()
+	// Blocks on Windows (message loop for click activations).
+	pumpNotificationPlatform()
 }
 
 // authorized asks once; later calls reuse the answer (the system remembers it anyway).

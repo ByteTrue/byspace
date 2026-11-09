@@ -331,6 +331,18 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// Only handle assistant message_end; ignore user message_end so previous turns never leak.
 		if msg, ok := ev["message"].(map[string]any); ok {
 			role, _ := msg["role"].(string)
+			if role == "custom" {
+				// An extension's context message (CustomMessage). subagent-exit is how the subagent
+				// tool reports the child's outcome after the launch already returned.
+				if customType, _ := msg["customType"].(string); customType == "subagent-exit" {
+					for _, sub := range s.applySubagentExitLocked(msg["details"]) {
+						extraEvents = append(extraEvents, map[string]any{
+							"type":     "byspace_provider_subagents",
+							"subagent": sub,
+						})
+					}
+				}
+			}
 			if role == "assistant" {
 				s.turnError = assistantErrorMessage(msg)
 				if !s.streamedInTurn {
@@ -474,6 +486,17 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if strings.HasPrefix(toolName, "subagent") {
 			for _, sub := range ParseSubagentDetails(callID, args, ev["result"]) {
 				s.upsertSubagentLocked(sub)
+			}
+		}
+
+	case "custom_message":
+		// The persisted form of the same extension message (session entry type custom_message).
+		if customType, _ := ev["customType"].(string); customType == "subagent-exit" {
+			for _, sub := range s.applySubagentExitLocked(ev["details"]) {
+				extraEvents = append(extraEvents, map[string]any{
+					"type":     "byspace_provider_subagents",
+					"subagent": sub,
+				})
 			}
 		}
 
@@ -1113,6 +1136,28 @@ func (s *Session) GetCommands(ctx context.Context) ([]SlashCommand, error) {
 		}
 	}
 	return wrapper.Commands, nil
+}
+
+// subagentListLocked copies the tracked descriptors. Caller holds s.mu.
+func (s *Session) subagentListLocked() []SubagentDescriptor {
+	out := make([]SubagentDescriptor, 0, len(s.subagents))
+	for _, sub := range s.subagents {
+		out = append(out, sub)
+	}
+	return out
+}
+
+// applySubagentExitLocked folds a subagent-exit custom message onto the tracked descriptors.
+//
+// The launch is the only thing that carries an id; the completion names the child by session. A
+// descriptor that never got its completion stayed "running" in the app forever, which is what a
+// finished subagent looked like.
+func (s *Session) applySubagentExitLocked(details any) []SubagentDescriptor {
+	updates := SubagentExitUpdates(s.subagentListLocked(), details)
+	for _, sub := range updates {
+		s.upsertSubagentLocked(sub)
+	}
+	return updates
 }
 
 func (s *Session) upsertSubagentLocked(sub SubagentDescriptor) {

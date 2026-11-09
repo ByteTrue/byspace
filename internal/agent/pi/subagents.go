@@ -24,21 +24,7 @@ func mapSubagentStatus(raw string) string {
 
 // ParseSubagentDetails extracts subagent metadata from a Pi tool result's details or custom message.
 func ParseSubagentDetails(toolCallID string, args any, details any) []SubagentDescriptor {
-	var records []map[string]any
-	switch v := details.(type) {
-	case map[string]any:
-		if inner, ok := v["details"].(map[string]any); ok {
-			records = append(records, inner)
-		} else {
-			records = append(records, v)
-		}
-	case []any:
-		for _, item := range v {
-			if m, ok := item.(map[string]any); ok {
-				records = append(records, m)
-			}
-		}
-	}
+	records := subagentRecords(details)
 
 	argsMap, _ := args.(map[string]any)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -97,6 +83,29 @@ func ParseSubagentDetails(toolCallID string, args any, details any) []SubagentDe
 	return out
 }
 
+// subagentRecords normalises a tool result's or custom message's details into per-subagent maps.
+//
+// A tool result wraps them one level down (`details.details`); a custom message carries the record
+// itself, or an array of them for a parallel run.
+func subagentRecords(details any) []map[string]any {
+	var records []map[string]any
+	switch v := details.(type) {
+	case map[string]any:
+		if inner, ok := v["details"].(map[string]any); ok {
+			records = append(records, inner)
+		} else {
+			records = append(records, v)
+		}
+	case []any:
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				records = append(records, m)
+			}
+		}
+	}
+	return records
+}
+
 // LocateSubagentSessionFile finds the .jsonl transcript for a subagent by sessionFile or sessionId.
 func LocateSubagentSessionFile(desc SubagentDescriptor, sessionDirOverride string) string {
 	if desc.SessionFile != "" {
@@ -120,4 +129,57 @@ func LocateSubagentSessionFile(desc SubagentDescriptor, sessionDirOverride strin
 		return nil
 	})
 	return found
+}
+
+// SubagentExitUpdates folds a subagent-exit custom message onto the descriptors their launch
+// created.
+//
+// The completion record carries no id: the extension knows the child by the session it started.
+// sessionId is therefore the key that joins a finished task to its descriptor, which is why the
+// launch details hoist it to the top level as well.
+func SubagentExitUpdates(records []SubagentDescriptor, details any) []SubagentDescriptor {
+	raw := subagentRecords(details)
+	bySession := make(map[string]*SubagentDescriptor, len(records))
+	byID := make(map[string]*SubagentDescriptor, len(records))
+	for i := range records {
+		bySession[records[i].SessionID] = &records[i]
+		byID[records[i].ID] = &records[i]
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	out := make([]SubagentDescriptor, 0, len(raw))
+	for _, rec := range raw {
+		rawStatus, _ := rec["status"].(string)
+		sessionID, _ := rec["sessionId"].(string)
+		id, _ := rec["id"].(string)
+		var existing *SubagentDescriptor
+		if id != "" {
+			existing = byID[id]
+		}
+		if existing == nil && sessionID != "" {
+			existing = bySession[sessionID]
+		}
+		if existing == nil {
+			continue
+		}
+		update := *existing
+		update.Status = mapSubagentStatus(rawStatus)
+		update.UpdatedAt = now
+		if v, ok := rec["agent"].(string); ok && strings.TrimSpace(v) != "" {
+			title := strings.TrimSpace(v)
+			update.Title = &title
+		}
+		if v, ok := rec["description"].(string); ok && strings.TrimSpace(v) != "" {
+			desc := strings.TrimSpace(v)
+			update.Description = &desc
+		}
+		if v, ok := rec["sessionFile"].(string); ok && strings.TrimSpace(v) != "" {
+			update.SessionFile = strings.TrimSpace(v)
+		}
+		if v, ok := rec["cwd"].(string); ok && strings.TrimSpace(v) != "" {
+			cwd := strings.TrimSpace(v)
+			update.Cwd = &cwd
+		}
+		out = append(out, update)
+	}
+	return out
 }
