@@ -202,8 +202,9 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	// Tell the provider when it can take a mode mid-session. Recording it and telling the user
 	// "applies next turn" was true for none of the providers: nothing ever read the new value.
 	setter, canSetMode := mp.session.(providers.ModeSetter)
+	var applyErr error
 	if canSetMode {
-		_ = setter.SetMode(ctx, req.ModeID)
+		applyErr = setter.SetMode(ctx, req.ModeID)
 	}
 
 	s.mu.Lock()
@@ -237,14 +238,14 @@ func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw jso
 	}
 
 	var notice *agentnotices.Notice
-	if midTurn {
+	if midTurn && applyErr == nil {
 		notice = &agentnotices.ModeAppliesNextTurn
 	}
 	_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
 		"requestId": req.RequestID,
 		"agentId":   req.AgentID,
-		"accepted":  true,
-		"error":     nil,
+		"accepted":  applyErr == nil,
+		"error":     errorText(applyErr),
 		"notice":    agentnotices.ToPayload(notice),
 	})
 }

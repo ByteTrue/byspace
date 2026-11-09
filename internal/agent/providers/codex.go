@@ -46,7 +46,10 @@ type CodexSession struct {
 	// collaborationModes are Codex's answer to collaborationMode/list. Plan mode and the daemon's
 	// system prompt both travel inside a collaboration mode's settings, so without this list there
 	// is no way to send either.
-	collaborationModes  []codexCollaborationMode
+	collaborationModes []codexCollaborationMode
+	// collabAttempts bounds the retries: a build that never answers the list must not cost a
+	// request (or the deadline) before every turn.
+	collabAttempts      int
 	turnCounter         int
 	nextClientMessageID string
 	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
@@ -803,6 +806,9 @@ func (s *CodexSession) SetMode(_ context.Context, modeID string) error {
 // Plan mode and the daemon's system prompt travel inside one of them, so an empty list means
 // neither is deliverable. Failure is not fatal: turns still run, Codex just keeps its own posture.
 func (s *CodexSession) loadCollaborationModes(ctx context.Context) {
+	s.mu.Lock()
+	s.collabAttempts++
+	s.mu.Unlock()
 	res, err := s.rpcCall(ctx, "collaborationMode/list", map[string]any{})
 	if err != nil {
 		return
@@ -812,15 +818,17 @@ func (s *CodexSession) loadCollaborationModes(ctx context.Context) {
 	s.mu.Unlock()
 }
 
-// ensureCollaborationModes retries the list once per turn while it is still empty.
+// ensureCollaborationModes retries the list while it is still empty, twice at most.
 //
 // The handshake fetch can lose to a slow Codex startup, and a session that never retried sent
-// every turn without the system prompt.
+// every turn without the system prompt. The cap matters as much: a build that never answers would
+// otherwise pay a request — or the deadline — before every turn.
 func (s *CodexSession) ensureCollaborationModes(ctx context.Context) {
 	s.mu.Lock()
 	loaded := len(s.collaborationModes) > 0
+	attempts := s.collabAttempts
 	s.mu.Unlock()
-	if loaded {
+	if loaded || attempts >= 3 {
 		return
 	}
 	listCtx, cancel := context.WithTimeout(ctx, 2*time.Second)

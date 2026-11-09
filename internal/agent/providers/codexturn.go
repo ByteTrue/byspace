@@ -231,8 +231,10 @@ func pickCodexCollaborationMode(modes []codexCollaborationMode, plan bool) (code
 
 // codexCollaborationSettings builds the settings that ride with a collaboration mode.
 //
-// The system prompt has no top-level parameter on turn/start: it is the mode's
-// developer_instructions. That is why a Codex agent ignored the host-wide append prompt entirely.
+// Inside a mode the system prompt is the mode's developer_instructions. That is how the node daemon
+// delivered it, and why a Codex agent ignored the host-wide append prompt when nothing filled this
+// in. When no mode is available the same text goes to the top-level developerInstructions instead,
+// so the prompt is never dropped — but never sent twice either.
 func codexCollaborationSettings(mode codexCollaborationMode, st codexTurnState) map[string]any {
 	settings := map[string]any{}
 	if mode.Model != "" {
