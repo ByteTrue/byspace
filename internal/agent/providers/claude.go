@@ -49,6 +49,9 @@ type ClaudeSession struct {
 	taskState *taskstate.State
 	// subagentLogs holds the activity trace each delegated task shows in its parent's card.
 	subagentLogs *subagentlog.Tracker
+	// lastUsage is the token accounting from the most recent request, for the context ring. Claude
+	// reports it per assistant message and totals it on the turn's result event.
+	lastUsage *sdk.AgentUsage
 	// homeDir is where materialised provider images land. Empty disables image output.
 	homeDir   string
 	nextSubID int
@@ -157,6 +160,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		}
 
 	case "assistant":
+		s.captureClaudeUsageLocked(ev)
 		if parent := parentToolUseID(ev); parent != "" {
 			// A message from inside a subagent. Its tool calls belong to that subagent's
 			// timeline, not to the conversation the user is reading — mixing them made a
@@ -391,6 +395,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		if sid, ok := ev["session_id"].(string); ok && sid != "" {
 			s.sessionID = sid
 		}
+		s.captureClaudeResultLocked(ev)
 		if resTxt, ok := ev["result"].(string); ok && resTxt != "" && s.lastAssistantTextLocked() == "" {
 			s.appendItemLocked(sdk.TimelineItem{
 				Type: "assistant_message",
@@ -509,11 +514,6 @@ func (s *ClaudeSession) LastError() string {
 // TurnToken returns "" for providers without an explicit turn token; the daemon then relies
 // on its own turn id comparison.
 func (s *ClaudeSession) TurnToken() string { return "" }
-
-// Usage reports token/cost accounting when the provider exposes it.
-func (s *ClaudeSession) Usage(_ context.Context) *sdk.AgentUsage {
-	return nil
-}
 
 func (s *ClaudeSession) StreamSeq() int {
 	s.mu.Lock()
@@ -1200,4 +1200,108 @@ func claudeEffortArg(thinking string) string {
 		return strings.TrimSpace(thinking)
 	}
 	return ""
+}
+
+// captureClaudeUsageLocked stores the token accounting from one assistant message.
+//
+// The composer's context ring reads this. Claude reports it per message: the prompt the model just
+// saw is fresh input plus cache creation plus cache read, and that sum is what "context used" means
+// here — reading only input_tokens showed a full 1M window as almost empty.
+//
+// Caller holds s.mu.
+func (s *ClaudeSession) captureClaudeUsageLocked(ev map[string]any) {
+	message, _ := ev["message"].(map[string]any)
+	usage, _ := message["usage"].(map[string]any)
+	if usage == nil {
+		return
+	}
+	prompt := intField(usage, "input_tokens") +
+		intField(usage, "cache_creation_input_tokens") +
+		intField(usage, "cache_read_input_tokens")
+	output := intField(usage, "output_tokens")
+	if prompt == 0 && output == 0 {
+		return
+	}
+	used := prompt
+	entry := &sdk.AgentUsage{
+		InputTokens:             prompt,
+		CachedInputTokens:       intField(usage, "cache_read_input_tokens"),
+		OutputTokens:            output,
+		ContextWindowUsedTokens: &used,
+	}
+	if max := claudeContextWindowMaxTokens(s.model); max > 0 {
+		entry.ContextWindowMaxTokens = &max
+	}
+	if s.lastUsage != nil {
+		entry.TotalCostUSD = s.lastUsage.TotalCostUSD
+	}
+	s.lastUsage = entry
+}
+
+// captureClaudeResultLocked reads the turn total the CLI prints on its result event.
+//
+// It carries the cost and, on a turn that produced no assistant message we could read, the usage
+// itself; the per-message numbers win because they describe the last request rather than the sum of
+// the turn.
+//
+// Caller holds s.mu.
+func (s *ClaudeSession) captureClaudeResultLocked(ev map[string]any) {
+	cost, _ := ev["total_cost_usd"].(float64)
+	if s.lastUsage == nil {
+		if usage, ok := ev["usage"].(map[string]any); ok {
+			prompt := intField(usage, "input_tokens") +
+				intField(usage, "cache_creation_input_tokens") +
+				intField(usage, "cache_read_input_tokens")
+			output := intField(usage, "output_tokens")
+			if prompt > 0 || output > 0 {
+				used := prompt
+				entry := &sdk.AgentUsage{
+					InputTokens:             prompt,
+					CachedInputTokens:       intField(usage, "cache_read_input_tokens"),
+					OutputTokens:            output,
+					ContextWindowUsedTokens: &used,
+				}
+				if max := claudeContextWindowMaxTokens(s.model); max > 0 {
+					entry.ContextWindowMaxTokens = &max
+				}
+				s.lastUsage = entry
+			}
+		}
+	}
+	if s.lastUsage != nil {
+		s.lastUsage.TotalCostUSD = cost
+	}
+}
+
+// claudeContextWindowMaxTokens returns the manifest's window for a model, or 0 when unknown.
+func claudeContextWindowMaxTokens(modelID string) int {
+	normalized := normalizeClaudeModelID(modelID)
+	for _, entry := range claudeModelManifest {
+		if entry.ID == normalized {
+			return entry.ContextWindowMaxTokens
+		}
+	}
+	return 0
+}
+
+// Usage reports the token accounting from the most recent request.
+func (s *ClaudeSession) Usage(_ context.Context) *sdk.AgentUsage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastUsage == nil {
+		return nil
+	}
+	usage := *s.lastUsage
+	return &usage
+}
+
+// intField reads a numeric JSON field.
+func intField(m map[string]any, key string) int {
+	switch value := m[key].(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	}
+	return 0
 }

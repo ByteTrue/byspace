@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -234,5 +235,76 @@ func TestClaudeRefusesLiveModelChange(t *testing.T) {
 	}
 	if err := session.SetThinkingLevel(context.Background(), "high"); err == nil {
 		t.Fatal("SetThinkingLevel must refuse: the CLI reads --effort at launch")
+	}
+}
+
+// The context ring reads used = everything the model saw: fresh input plus both cache buckets.
+// Counting only input_tokens showed a nearly empty window on a long conversation.
+func TestClaudeUsageCountsCacheAsContext(t *testing.T) {
+	session := &ClaudeSession{model: "claude-opus-5"}
+	session.captureClaudeUsageLocked(map[string]any{"message": map[string]any{"usage": map[string]any{
+		"input_tokens":                float64(100),
+		"cache_creation_input_tokens": float64(200),
+		"cache_read_input_tokens":     float64(300),
+		"output_tokens":               float64(40),
+	}}})
+
+	usage := session.Usage(context.Background())
+	if usage == nil {
+		t.Fatal("no usage captured")
+	}
+	if usage.InputTokens != 600 || usage.CachedInputTokens != 300 || usage.OutputTokens != 40 {
+		t.Fatalf("usage = %+v", usage)
+	}
+	if usage.ContextWindowUsedTokens == nil || *usage.ContextWindowUsedTokens != 600 {
+		t.Fatalf("used = %v", usage.ContextWindowUsedTokens)
+	}
+	if usage.ContextWindowMaxTokens == nil || *usage.ContextWindowMaxTokens != 1_000_000 {
+		t.Fatalf("max = %v, want the manifest's window", usage.ContextWindowMaxTokens)
+	}
+}
+
+// The result event totals the turn; it supplies the cost and never overwrites the per-request
+// numbers.
+func TestClaudeResultEventAddsCostOnly(t *testing.T) {
+	session := &ClaudeSession{model: "claude-opus-5"}
+	session.captureClaudeUsageLocked(map[string]any{"message": map[string]any{"usage": map[string]any{
+		"input_tokens": float64(10), "output_tokens": float64(5),
+	}}})
+	session.captureClaudeResultLocked(map[string]any{
+		"total_cost_usd": float64(0.25),
+		"usage":          map[string]any{"input_tokens": float64(9999)},
+	})
+
+	usage := session.Usage(context.Background())
+	if usage == nil || usage.InputTokens != 10 || usage.TotalCostUSD != 0.25 {
+		t.Fatalf("usage = %+v", usage)
+	}
+}
+
+// OpenCode reports usage per step; the ring needs the sum of every bucket, and the cost adds up
+// across the steps of one turn.
+func TestOpenCodeUsageFromStepFinishParts(t *testing.T) {
+	usage := openCodeUsageFromParts([]any{
+		map[string]any{"type": "text", "text": "hello"},
+		map[string]any{"type": "step-finish", "cost": float64(0.1), "tokens": map[string]any{
+			"input": float64(100), "output": float64(20), "reasoning": float64(5),
+			"cache": map[string]any{"read": float64(300), "write": float64(50)},
+		}},
+		map[string]any{"type": "step-finish", "cost": float64(0.2), "tokens": map[string]any{
+			"input": float64(10), "output": float64(5),
+		}},
+	})
+	if usage == nil {
+		t.Fatal("no usage parsed")
+	}
+	if usage.ContextWindowUsedTokens == nil || *usage.ContextWindowUsedTokens != 15 {
+		t.Fatalf("used = %v, want the last step's sum", usage.ContextWindowUsedTokens)
+	}
+	if usage.CachedInputTokens != 0 || usage.InputTokens != 10 || usage.OutputTokens != 5 {
+		t.Fatalf("usage = %+v", usage)
+	}
+	if math.Abs(usage.TotalCostUSD-0.3) > 1e-9 {
+		t.Fatalf("cost = %v, want both steps", usage.TotalCostUSD)
 	}
 }

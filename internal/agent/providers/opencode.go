@@ -40,6 +40,8 @@ type OpenCodeSession struct {
 	activeTurnID     string
 	timeline         []sdk.TimelineEntry
 	finishWaiters    []chan error
+	// lastUsage is the token accounting from the most recent turn, for the context ring.
+	lastUsage        *sdk.AgentUsage
 	eventSubscribers map[int]func(map[string]any)
 	nextSubID        int
 }
@@ -159,8 +161,18 @@ func (s *OpenCodeSession) LastError() string {
 func (s *OpenCodeSession) TurnToken() string { return "" }
 
 // Usage reports token/cost accounting when the provider exposes it.
+// Usage reports the token accounting from the most recent turn.
+//
+// The composer's context ring reads this; without it an OpenCode agent showed no usage at all
+// even though every step reports it.
 func (s *OpenCodeSession) Usage(_ context.Context) *sdk.AgentUsage {
-	return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastUsage == nil {
+		return nil
+	}
+	usage := *s.lastUsage
+	return &usage
 }
 
 func (s *OpenCodeSession) StreamSeq() int {
@@ -263,12 +275,14 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		payload, _ := json.Marshal(body)
 		resp, err := s.httpClient.Post(s.baseURL+"/session/"+sid+"/message", "application/json", bytes.NewReader(payload))
 		var replyText string
+		var turnUsage *sdk.AgentUsage
 		if err == nil {
 			var res map[string]any
 			if json.NewDecoder(resp.Body).Decode(&res) == nil {
 				if t, ok := res["text"].(string); ok {
 					replyText = t
 				} else if parts, ok := res["parts"].([]any); ok {
+					turnUsage = openCodeUsageFromParts(parts)
 					for _, p := range parts {
 						if pm, ok := p.(map[string]any); ok {
 							if t, ok := pm["text"].(string); ok {
@@ -282,6 +296,9 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk
 		}
 
 		s.mu.Lock()
+		if turnUsage != nil {
+			s.lastUsage = turnUsage
+		}
 		if replyText != "" {
 			s.timeline = append(s.timeline, sdk.TimelineEntry{
 				Seq:       len(s.timeline) + 1,
@@ -484,4 +501,39 @@ func (s *OpenCodeSession) RewindConversation(ctx context.Context, messageID stri
 func (s *OpenCodeSession) TreeEntryForMessage(messageID string) (string, bool) {
 	trimmed := strings.TrimSpace(messageID)
 	return trimmed, trimmed != ""
+}
+
+// openCodeUsageFromParts reads the token accounting the turn's step-finish parts carry.
+//
+// OpenCode reports it per step: fresh input, output, reasoning and the two cache buckets. The
+// context ring's "used" is their sum — reading only `input` showed a long conversation as nearly
+// empty — and the cost accumulates across steps.
+func openCodeUsageFromParts(parts []any) *sdk.AgentUsage {
+	usage := &sdk.AgentUsage{}
+	seen := false
+	for _, raw := range parts {
+		part, ok := raw.(map[string]any)
+		if !ok || part["type"] != "step-finish" {
+			continue
+		}
+		tokens, _ := part["tokens"].(map[string]any)
+		cache, _ := tokens["cache"].(map[string]any)
+		used := intField(tokens, "input") + intField(tokens, "output") +
+			intField(tokens, "reasoning") + intField(cache, "read") + intField(cache, "write")
+		if used == 0 {
+			continue
+		}
+		seen = true
+		usage.InputTokens = intField(tokens, "input")
+		usage.CachedInputTokens = intField(cache, "read")
+		usage.OutputTokens = intField(tokens, "output")
+		usage.ContextWindowUsedTokens = &used
+		if cost, ok := part["cost"].(float64); ok {
+			usage.TotalCostUSD += cost
+		}
+	}
+	if !seen {
+		return nil
+	}
+	return usage
 }
