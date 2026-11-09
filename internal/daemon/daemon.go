@@ -61,6 +61,7 @@ func SystemdUnitPath(userHome string) string {
 // RenderLaunchdPlist generates the macOS LaunchAgent XML plist for running `byspace serve`.
 func RenderLaunchdPlist(exe string, args, env []string, logFile string) string {
 	s := func(v string) string { return "<string>" + html.EscapeString(v) + "</string>" }
+	env = append(append([]string{}, env...), ServiceManagedEnv+"=1")
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -98,6 +99,7 @@ func RenderLaunchdPlist(exe string, args, env []string, logFile string) string {
 
 // RenderSystemdUnit generates the Linux systemd user unit text for running `byspace serve`.
 func RenderSystemdUnit(exe string, args, env []string) string {
+	env = append(append([]string{}, env...), ServiceManagedEnv+"=1")
 	var b strings.Builder
 	b.WriteString("# Written by byspace daemon install\n")
 	b.WriteString("[Unit]\nDescription=BySpace AI coding agent daemon\nWants=network-online.target\nAfter=network-online.target\n\n")
@@ -338,6 +340,15 @@ func StartBackgroundWithOptions(options StartOptions) (int, error) {
 		}
 	}
 	return spawnBackground(options.ExePath, options.HomeDir, args)
+}
+
+// StartBackgroundArgs relaunches `serve` with the exact flags it was given.
+//
+// A restart has to reproduce the command line, not the subset StartOptions models: `--web-dir` and
+// any flag added later are invisible to the typed options, and a daemon that comes back slightly
+// different is a restart the user has to notice by hand.
+func StartBackgroundArgs(exePath, homeDir string, serveArgs []string) (int, error) {
+	return spawnBackground(exePath, homeDir, append([]string{"serve"}, serveArgs...))
 }
 
 func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {

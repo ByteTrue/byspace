@@ -487,7 +487,7 @@ func (s *Server) autoUpdateInstalledSkills() {
 	}
 
 	cfg := s.store.LoadDaemonConfig()
-	selection := map[string]any{}
+	selection := defaultSkillSelection()
 	targets := []string{"agents", "claude"}
 	if cfg != nil {
 		if stored, ok := cfg["skillsSelection"].(map[string]any); ok {
@@ -559,13 +559,22 @@ func unconfirmedRemovals(ops []skillOp, confirmed []string) []string {
 	return removals
 }
 
+// defaultSkillSelection is what a home that never chose reports: nothing selected.
+//
+// The default used to be every bundled skill, so the first boot of a home nobody had configured
+// installed the whole bundle, and a host whose user had removed the skills got them back on the
+// next startup repair. Installing is something the user asks for in the picker, never a default.
+func defaultSkillSelection() map[string]any {
+	return map[string]any{"mode": "custom", "skills": []any{}}
+}
+
 // savedSkillsState is the selection and targets the daemon has committed.
 //
 // Split out because a save that fails must not change it: the persisted record is what the next status read reports, so
 // writing it before the copy succeeds leaves the daemon claiming a selection it never installed. The client shows exactly
 // that recording back, which turns a failed save into "the selection changed and nothing happened".
 func savedSkillsState(config map[string]any) (map[string]any, []string) {
-	selection := map[string]any{"mode": "all"}
+	selection := defaultSkillSelection()
 	if config != nil {
 		if raw, ok := config["skillsSelection"].(map[string]any); ok && len(raw) > 0 {
 			selection = raw

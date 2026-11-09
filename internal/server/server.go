@@ -310,9 +310,9 @@ type Server struct {
 	// setupRuns guards against two concurrent setup runs for one workspace.
 	setupRunsMu sync.Mutex
 	setupRuns   map[string]bool
-	// shutdownRequested receives a reason when a client asks the daemon to restart or stop. The
-	// process owner (the CLI's `serve` loop) listens: a server cannot restart itself.
-	shutdownRequested chan string
+	// controlRequests receives a client's restart/stop ask. The process owner listens: the CLI's
+	// `serve` loop, or the desktop app whose daemon runs in-process. A server cannot restart itself.
+	controlRequests chan ControlRequest
 	// notifiedChildren records which (child, reason) pairs already prompted their parent.
 	notifiedChildren   map[string]bool
 	notifiedChildrenMu sync.Mutex
@@ -403,7 +403,7 @@ func New(opts Options) (*Server, error) {
 
 	srv := &Server{
 		providerCatalogs:      make(map[string]*providerCatalog),
-		shutdownRequested:     make(chan string, 1),
+		controlRequests:       make(chan ControlRequest, 1),
 		homeDir:               homeDir,
 		listenAddr:            opts.ListenAddr,
 		capabilityToken:       capabilityToken,
@@ -4907,19 +4907,25 @@ func lastActivityOf(rec store.AgentRecord) string {
 	return rec.UpdatedAt
 }
 
-// ShutdownRequested reports the channel a client's restart/shutdown request arrives on.
+// ControlRequest is a client's restart or stop ask, handed to the process that owns the daemon.
 //
-// A server cannot restart itself — it does not own its process. The command that started it does,
-// so the request is handed over rather than acted on here.
-func (s *Server) ShutdownRequested() <-chan string { return s.shutdownRequested }
+// A server cannot restart itself — it does not own its process. The command or app that started it
+// does, so the ask travels out rather than being acted on here.
+type ControlRequest struct {
+	Restart bool
+	Reason  string
+}
 
-// requestShutdown asks the process owner to exit.
+// ControlRequests reports the channel a client's restart/stop ask arrives on.
+func (s *Server) ControlRequests() <-chan ControlRequest { return s.controlRequests }
+
+// requestControl asks the process owner to restart or stop.
 //
 // Buffered with one slot and non-blocking: two clients pressing restart must not deadlock the
 // second one waiting for the owner to drain the first.
-func (s *Server) requestShutdown(reason string) {
+func (s *Server) requestControl(req ControlRequest) {
 	select {
-	case s.shutdownRequested <- reason:
+	case s.controlRequests <- req:
 	default:
 	}
 }

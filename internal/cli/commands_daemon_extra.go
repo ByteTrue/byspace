@@ -10,6 +10,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/home"
 )
 
 // runDaemonReload re-reads config.json inside the running daemon.
@@ -49,6 +52,88 @@ func runDaemonReload(args []string, stdout io.Writer) error {
 		fmt.Fprintln(stdout, "no changes")
 	}
 	return nil
+}
+
+// daemonControl asks the daemon on addr to restart or stop itself and reports whether it acked.
+//
+// The ask goes over the RPC instead of a signal because the process serving the daemon is not always
+// a `serve` process: in the desktop app the daemon runs inside `byspace tray`, and only that process
+// can bring the daemon back. No ack means an older build or no daemon, so the caller signals instead.
+//
+// COMPAT(daemonControlRPC): daemons before v0.25 never ack this ask; remove the signal fallback at
+// the call sites after 2027-06-01.
+func daemonControl(addr, reason string, restart bool) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ws, err := dialDaemonWS(ctx, addr)
+	if err != nil {
+		return false
+	}
+	defer ws.CloseNow()
+	msgType, wantStatus := "shutdown_server_request", "shutdown_requested"
+	if restart {
+		msgType, wantStatus = "restart_server_request", "restart_requested"
+	}
+	if err := sendSessionReq(ctx, ws, map[string]any{
+		"type":      msgType,
+		"requestId": "cli_daemon_control_1",
+		"reason":    reason,
+	}); err != nil {
+		return false
+	}
+	_, err = waitSessionResp(ctx, ws, "status", wantStatus)
+	return err == nil
+}
+
+// runningDaemonAddr finds this home's daemon and returns the address that answers, plus the pid the
+// lock records when it is alive.
+//
+// The serverId check is what keeps the command from signalling someone else's daemon: a daemon on
+// the same port that reports a different home is not ours to stop, and an id that cannot be read is
+// not proof either.
+func runningDaemonAddr(explicit, homeDir string) (string, int) {
+	st, err := probeRecordedDaemon(explicit, homeDir)
+	if err != nil {
+		return "", 0
+	}
+	srvID, err := home.GetOrCreateServerID(homeDir)
+	if err != nil || srvID == "" || st.ServerID != srvID {
+		return "", 0
+	}
+	if lock, ok := daemon.ReadPIDLock(homeDir); ok && daemon.ProcessAlive(lock.PID) {
+		return st.addr, lock.PID
+	}
+	return st.addr, 0
+}
+
+// awaitDaemonStop waits until addr stops answering /health.
+func awaitDaemonStop(addr string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := probeHealth(addr); err != nil {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
+// awaitDaemonRestart waits for a live daemon with a different pid than pidBefore to answer on addr.
+//
+// Health alone is not proof: the answer can come from the process that was asked to restart before
+// it did anything, and the lock is briefly absent while it hands over. Only a live, different pid
+// means the replacement is up.
+func awaitDaemonRestart(addr, homeDir string, pidBefore int, timeout time.Duration) (int, bool) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := probeHealth(addr); err == nil {
+			if pid, alive := daemon.ReadPID(homeDir); alive && pid != pidBefore {
+				return pid, true
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return 0, false
 }
 
 // printPathList writes one indented line per changed setting, skipping empty lists so a reload that
