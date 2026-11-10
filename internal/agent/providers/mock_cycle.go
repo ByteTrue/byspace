@@ -178,15 +178,12 @@ func buildMockCycleQueue(turnID string, cycle int, reasoningRepeat int) []mockCy
 	pushTokens(mockIntroParagraph(cycle), "assistant_token")
 
 	repeat := reasoningRepeat
-	if repeat < 1 {
-		repeat = 1
+	if repeat < 2 {
+		repeat = 2
 	}
 	parts := make([]string, 0, repeat)
 	for index := 0; index < repeat; index++ {
-		part := mockReasoningText()
-		if reasoningRepeat > 1 {
-			part += " " + mockLongReasoningText()
-		}
+		part := mockReasoningText() + " " + mockLongReasoningText()
 		parts = append(parts, part)
 	}
 	pushTokens(strings.Join(parts, " "), "reasoning_token")

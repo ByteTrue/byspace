@@ -30,7 +30,7 @@ export function SidebarTopBar({
   return (
     <SidebarHeader
       data-wails-drag="true"
-      className={cn("h-9 shrink-0 flex-row items-center gap-1 px-3 py-0", className)}
+      className={cn("h-9 shrink-0 flex-row items-center gap-1 px-3 pt-0 pb-px", className)}
       style={style}
     >
       {children}

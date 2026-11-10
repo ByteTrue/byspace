@@ -866,6 +866,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
   z.object({
     type: z.literal("reasoning"),
     text: z.string(),
+    durationMs: z.number().optional(),
   }),
   ToolCallTimelineItemPayloadSchema,
   z.object({

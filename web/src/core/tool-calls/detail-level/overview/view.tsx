@@ -38,7 +38,7 @@ function GroupScroll({ children }: { children: ReactNode }) {
   }, []);
   return (
     <div ref={scrollRef} className="overflow-y-auto" style={GROUP_SCROLL_STYLE}>
-      <div ref={contentRef} className="px-[13px] pt-1">
+      <div ref={contentRef} className="flex flex-col gap-1 px-1 pt-1">
         {children}
       </div>
     </div>

@@ -14,6 +14,7 @@ import "encoding/json"
 type TimelineItem struct {
 	Type            string `json:"type"`
 	Text            string `json:"text,omitempty"`
+	DurationMs      *int64 `json:"durationMs,omitempty"`
 	MessageID       string `json:"messageId,omitempty"`
 	ClientMessageID string `json:"clientMessageId,omitempty"`
 	CallID          string `json:"callId,omitempty"`
@@ -105,6 +106,9 @@ func (i TimelineItem) MarshalJSON() ([]byte, error) {
 	item := map[string]any{
 		"type": i.Type,
 		"text": i.Text,
+	}
+	if i.DurationMs != nil {
+		item["durationMs"] = *i.DurationMs
 	}
 	if i.MessageID != "" {
 		item["messageId"] = i.MessageID

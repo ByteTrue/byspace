@@ -1792,6 +1792,8 @@ export const ru: TranslationResources = {
     output: "Выходные данные",
   },
   toolCallGroup: {
+    thought: "Обдумал",
+    thoughtFor: "думал {{duration}}",
     editedFiles: {
       one: "изменён {{count}} файл",
       other: "изменены файлы ({{count}})",

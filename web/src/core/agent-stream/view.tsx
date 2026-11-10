@@ -75,6 +75,7 @@ import type { ToolCallSubagentBinding } from "@/components/message";
 import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
+import { formatDuration } from "@/utils/time";
 import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "@/agent-stream/model";
 import { createWebStreamStrategy } from "@/agent-stream/strategy-web";
@@ -883,6 +884,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             key={`${collapseRevision}:${timelineDetailLevel}:${isLiveThought}`}
             text={item.text}
             status={item.status}
+            durationMs={item.durationMs}
             isLastInSequence={layoutItem.isLastInToolSequence}
             defaultExpanded={
               !collapsedDetailIds.has(item.id) &&
@@ -973,7 +975,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const renderNestedToolCallGroup = useCallback(
       (group: OverviewToolCallGroup, isLastInSequence: boolean) => {
         const [parentCall, ...childCalls] = group.run.calls;
-        if (!parentCall) {
+        if (!parentCall || parentCall.kind !== "tool_call") {
           return null;
         }
         const summaryText = formatOverviewSummary(group.summary, t, { capitalize: false });
@@ -991,17 +993,19 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         return (
           <React.Fragment>
             {parentRow}
-            {/* The rail drops from the centre of the parent's glyph (the badge pulls out 13 and
-                pads 8, so the glyph centre is at 6); child rows indent one step past it. */}
-            <div className="ml-1.5 flex flex-col gap-1 border-l pl-3">
-              {childCalls.map((call, index) => (
-                <React.Fragment key={call.id}>
-                  {renderSingleToolCallRow(
-                    call,
-                    index === childCalls.length - 1 && isLastInSequence,
-                  )}
-                </React.Fragment>
-              ))}
+            {/* The rail drops from the centre of the parent's 16px glyph (8px - 1px half-border = 7px);
+                child rows indent one step past it. */}
+            <div className="mt-1 ml-[7px] flex flex-col gap-1 border-l pl-4">
+              {childCalls.map((call, index) =>
+                call.kind === "tool_call" ? (
+                  <React.Fragment key={call.id}>
+                    {renderSingleToolCallRow(
+                      call,
+                      index === childCalls.length - 1 && isLastInSequence,
+                    )}
+                  </React.Fragment>
+                ) : null,
+              )}
             </div>
           </React.Fragment>
         );
@@ -1031,10 +1035,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       projectedToolCalls.groupsByHostId.get(hostId),
     );
     const renderToolCallItem = useCallback(
-      (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "tool_call" }>) => {
+      (
+        layoutItem: StreamLayoutItem,
+        item: Extract<StreamItem, { kind: "tool_call" | "thought" }>,
+      ) => {
         const group = getToolCallGroup(item.id);
         if (!group) {
-          return renderSingleToolCallItem(item, layoutItem.isLastInToolSequence);
+          return item.kind === "thought"
+            ? renderThoughtItem(layoutItem, item)
+            : renderSingleToolCallItem(item, layoutItem.isLastInToolSequence);
         }
         const expanded = expandedToolCallGroupIds.has(group.run.id);
         return (
@@ -1047,10 +1056,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             {expanded
               ? group.run.calls.map((call, index) => (
                   <React.Fragment key={call.id}>
-                    {renderSingleToolCallItem(
-                      call,
-                      index === group.run.calls.length - 1,
-                      GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT,
+                    {call.kind === "thought" ? (
+                      // Reasoning is grouped only in overview mode, where an opened group
+                      // shows each thought as a closed row like any other call.
+                      <ThoughtSlot
+                        key={`${collapseRevision}:${timelineDetailLevel}:false`}
+                        text={call.text}
+                        status={call.status}
+                        durationMs={call.durationMs}
+                        isLastInSequence={index === group.run.calls.length - 1}
+                        defaultExpanded={false}
+                      />
+                    ) : (
+                      renderSingleToolCallItem(
+                        call,
+                        index === group.run.calls.length - 1,
+                        GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT,
+                      )
                     )}
                   </React.Fragment>
                 ))
@@ -1059,10 +1081,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         );
       },
       [
+        collapseRevision,
         expandedToolCallGroupIds,
         getToolCallGroup,
         renderSingleToolCallItem,
+        renderThoughtItem,
         setToolCallGroupExpanded,
+        timelineDetailLevel,
       ],
     );
 
@@ -1077,8 +1102,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return renderAssistantMessageItem(layoutItem, item);
 
           case "thought":
-            return renderThoughtItem(layoutItem, item);
-
           case "tool_call":
             return renderToolCallItem(layoutItem, item);
 
@@ -1104,7 +1127,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return null;
         }
       },
-      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+      [renderUserMessageItem, renderAssistantMessageItem, renderToolCallItem],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
@@ -1483,19 +1506,31 @@ type ToolCallSlotProps = ComponentProps<typeof ToolCall>;
 interface ThoughtSlotProps {
   text: string;
   status: Extract<StreamItem, { kind: "thought" }>["status"];
+  durationMs?: number;
   isLastInSequence: boolean;
   defaultExpanded: boolean;
 }
 
 // Reasoning text is paced the same way assistant text is; see @/hooks/use-revealed-text.
-function ThoughtSlot({ text, status, isLastInSequence, defaultExpanded }: ThoughtSlotProps) {
+function ThoughtSlot({
+  text,
+  status,
+  durationMs,
+  isLastInSequence,
+  defaultExpanded,
+}: ThoughtSlotProps) {
   const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
   const isStreaming = status !== "ready";
+  const durationLabel =
+    !isStreaming && durationMs && durationMs > 0
+      ? formatDuration(Math.max(1000, Math.round(durationMs / 1000) * 1000))
+      : undefined;
   return (
     <ToolCallSlot
       toolName="thinking"
       args={revealedText}
       status={isStreaming ? "executing" : "completed"}
+      summaryOverride={durationLabel}
       isLastInSequence={isLastInSequence}
       defaultExpanded={defaultExpanded}
       followTail={defaultExpanded && isStreaming}

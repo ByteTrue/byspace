@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { formatDuration } from "@/utils/time";
 import type { OverviewSummary } from "./model";
 
 function joinSummaryParts(parts: string[], conjunction: string): string {
@@ -24,6 +25,18 @@ export function formatOverviewSummary(
   options?: { capitalize?: boolean },
 ): string {
   const parts: string[] = [];
+  if (summary.thoughtCount > 0) {
+    if (summary.thoughtDurationMs > 0) {
+      const seconds = Math.max(1, Math.round(summary.thoughtDurationMs / 1000));
+      parts.push(
+        t("toolCallGroup.thoughtFor", {
+          duration: formatDuration(seconds * 1000),
+        }).toLocaleLowerCase(),
+      );
+    } else {
+      parts.push(t("toolCallGroup.thought").toLocaleLowerCase());
+    }
+  }
   const entries = [
     [summary.editedFileCount, "toolCallGroup.editedFiles"],
     [summary.commandCount, "toolCallGroup.commands"],

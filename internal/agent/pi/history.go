@@ -365,9 +365,15 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 				switch bType {
 				case "thinking":
 					if th, _ := block["thinking"].(string); th != "" {
+						var dur *int64
+						if d, ok := msg["durationMs"].(float64); ok && d > 0 {
+							dInt := int64(d)
+							dur = &dInt
+						}
 						appendEntry(ts, TimelineItem{
-							Type: "reasoning",
-							Text: th,
+							Type:       "reasoning",
+							Text:       th,
+							DurationMs: dur,
 						})
 					}
 				case "text":

@@ -110,16 +110,18 @@ static void insetLights(void *p) {
 	[frame layoutSubtreeIfNeeded];
 	BySpaceLights *l = [[[BySpaceLights alloc] init] autorelease];
 	l->win = w;
-	// The web shell's top row: a 36pt header 8pt below the window's top edge (shadcn's inset
-	// sidebar and card padding), so the traffic lights sit dead-center on the row with the
-	// sidebar toggle and the page titles (web/src/core/components/sidebar/sidebar-header-row.tsx).
-	l->height = 52.0;
+	// The web shell's top row: a 36pt header (35pt content box above its 1pt bottom border)
+	// 8pt below the window's top edge (shadcn's inset sidebar and card padding). The 12pt
+	// traffic-light circles sit ~1pt below the vertical center of their 16pt NSButton frames,
+	// so centering the frames in a 49pt band lands the visible circles on y=25.25pt with the
+	// sidebar toggle and page titles (web/src/core/components/sidebar/sidebar-header-row.tsx).
+	l->height = 49.0;
 	NSView *views[5] = {box, bar};
 	for (int i = 0; i < 3; i++) {
 		NSButton *b = [w standardWindowButton:lightKinds[i]];
 		if (b == nil || b.superview != bar) return;
 		l->x[i] = 13.0 + i * 20.0;
-		l->top[i] = (52.0 - NSHeight(b.frame)) / 2.0;
+		l->top[i] = (49.0 - NSHeight(b.frame)) / 2.0;
 		views[2 + i] = b;
 	}
 	objc_setAssociatedObject(w, &lightsKey, l, OBJC_ASSOCIATION_RETAIN);

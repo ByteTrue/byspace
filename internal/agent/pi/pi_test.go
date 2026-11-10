@@ -14,6 +14,35 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
+func TestFinalizeThinkLockedRecordsDuration(t *testing.T) {
+	newSession := func(started time.Time) *Session {
+		return &Session{
+			activeThinkIdx:   0,
+			activeThinkStart: started,
+			timeline:         []TimelineEntry{{Item: TimelineItem{Type: "reasoning", Text: "thinking"}}},
+		}
+	}
+
+	s := newSession(time.Now().Add(-1500 * time.Millisecond))
+	s.finalizeThinkLocked(0)
+	got := s.timeline[0].Item.DurationMs
+	if got == nil || *got < 1000 {
+		t.Fatalf("elapsed reasoning duration = %v, want at least 1000ms", got)
+	}
+
+	// The provider's own duration wins: its clock covers the whole assistant message, not just the
+	// span between the first and last delta this session happened to see.
+	explicit := newSession(time.Now().Add(-10 * time.Second))
+	explicit.finalizeThinkLocked(4200)
+	if got := explicit.timeline[0].Item.DurationMs; got == nil || *got != 4200 {
+		t.Fatalf("explicit reasoning duration = %v, want 4200", got)
+	}
+
+	// No open reasoning row: nothing to stamp, and no panic.
+	empty := &Session{activeThinkIdx: -1}
+	empty.finalizeThinkLocked(1000)
+}
+
 func TestBuildLaunchArgs(t *testing.T) {
 	cmd, argv := BuildLaunchArgs(LaunchOptions{
 		Command:          "/usr/local/bin/pi",
@@ -141,7 +170,7 @@ func TestListImportableSessionsAndLoadTimelineFromJSONL(t *testing.T) {
 		`{"type":"model_change","provider":"anthropic","modelId":"claude-sonnet-4-5"}`,
 		`{"type":"thinking_level_change","thinkingLevel":"high"}`,
 		`{"type":"message","timestamp":"2026-04-20T01:01:00.000Z","message":{"role":"user","content":"Check main.go"}}`,
-		`{"type":"message","timestamp":"2026-04-20T01:01:02.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Reading main.go"},{"type":"toolCall","id":"tc_1","name":"read","arguments":{"path":"main.go"}},{"type":"text","text":"main.go looks clean."}]}}`,
+		`{"type":"message","timestamp":"2026-04-20T01:01:02.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Reading main.go"},{"type":"toolCall","id":"tc_1","name":"read","arguments":{"path":"main.go"}},{"type":"text","text":"main.go looks clean."}],"durationMs":3500}}`,
 		`{"type":"message","timestamp":"2026-04-20T01:01:03.000Z","message":{"role":"toolResult","toolCallId":"tc_1","toolName":"read","content":"package main","isError":false}}`,
 	}, "\n") + "\n"
 
@@ -179,6 +208,9 @@ func TestListImportableSessionsAndLoadTimelineFromJSONL(t *testing.T) {
 	}
 	if entries[0].Item.Type != "user_message" || entries[0].Item.Text != "Check main.go" {
 		t.Fatalf("unexpected entry 0: %+v", entries[0])
+	}
+	if entries[1].Item.Type != "reasoning" || entries[1].Item.DurationMs == nil || *entries[1].Item.DurationMs != 3500 {
+		t.Fatalf("unexpected entry 1: %+v", entries[1])
 	}
 	if entries[2].Item.Type != "tool_call" || entries[2].Item.Name != "read" || entries[2].Item.Status != "completed" {
 		t.Fatalf("unexpected entry 2: %+v", entries[2])

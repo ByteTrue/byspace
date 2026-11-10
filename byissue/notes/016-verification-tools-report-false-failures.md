@@ -56,6 +56,8 @@ internal/webui/dist/.keep`（把产物清掉，保持工作树干净）。二进
 判据：验证之前先确认「正在跑的东西是不是刚构建的那个」。二进制体积、`--version`、
 进程启动时间是三种便宜的做法。
 
+2026-11-10 补充前端静态产物同类陷阱：`web/e2e/support/global-setup.ts` 默认直接用 Node HTTP 服务 `web/dist` 目录，不会在跑 Playwright 前自动重跑 Vite 构建。修改 `web/src/` 后若未先执行 `npm run build --workspace=@bytetrue/web`，Playwright 测到的是上一次残留的 `web/dist`。跑浏览器验证前必须先重建 `web/dist` 并核对构建时间戳。
+
 ## 另一类：并发压测造成的抖动
 
 `go test ./...` 单独跑全绿，但在 `npm run audit` 里（同时还在跑 `make build-full` 和

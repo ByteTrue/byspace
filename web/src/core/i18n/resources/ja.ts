@@ -1788,6 +1788,8 @@ export const ja: TranslationResources = {
     output: "出力",
   },
   toolCallGroup: {
+    thought: "思考",
+    thoughtFor: "{{duration}}思考",
     editedFiles: {
       one: "{{count}}個のファイルを編集",
       other: "{{count}}個のファイルを編集",

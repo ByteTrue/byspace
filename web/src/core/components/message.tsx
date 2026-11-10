@@ -1051,11 +1051,20 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   if (isLoading) status = "running";
   else if (isError) status = "error";
   const line = (
-    <TraceLine status={status}>
+    <TraceLine status={status} className={cn("flex-1 gap-2.5", onOpenFile && onToggle && "pr-6")}>
       <TraceIcon>{leadingIcon}</TraceIcon>
-      <TraceTitle>{label}</TraceTitle>
+      <TraceTitle
+        className={cn(
+          "shrink-0 font-medium text-foreground/80 in-data-[status=error]:text-destructive",
+          secondaryLabel && "min-w-20",
+        )}
+      >
+        {label}
+      </TraceTitle>
       {secondaryLabel ? (
-        <TraceDescription className="min-w-0 shrink truncate">{secondaryLabel}</TraceDescription>
+        <TraceDescription className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+          {secondaryLabel}
+        </TraceDescription>
       ) : null}
     </TraceLine>
   );
@@ -1066,6 +1075,10 @@ export const ExpandableBadge = memo(function ExpandableBadge({
       onClick={onOpenFile}
       aria-label={t("message.actions.openFile")}
       data-testid="tool-call-open-file"
+      className={cn(
+        onToggle &&
+          "absolute right-6 md:opacity-0 md:group-focus-within/trace-row:opacity-100 md:group-hover/trace-row:opacity-100",
+      )}
     >
       <FileSymlink />
     </Button>
@@ -1075,14 +1088,20 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     <Trace
       data-testid={testID}
       className={cn(
+        "*:has-[>[data-slot=trace-line]]:w-full",
         !resolvedDisableOuterSpacing && (isLastInSequence ? "mb-4" : "mb-1"),
         className,
       )}
     >
       {onToggle ? (
         <TraceCollapsible open={isExpanded} onOpenChange={handleOpenChange}>
-          <div className="flex min-w-0 items-center gap-1">
-            <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+          {/* -mx-2 + px-2 grows the hover surface into CONTENT_COLUMN's gutter without moving the
+              leading icon or trailing chevron off the prose's left/right rails; -mr-1 on the
+              chevron is an optical nudge for ChevronRight's internal viewBox inset. */}
+          <div className="group/trace-row relative -mx-2 flex w-[calc(100%+16px)] min-w-0 items-center">
+            <TraceCollapsibleTrigger className="w-full flex-1 justify-between gap-2 rounded-lg px-2 py-1.5 group-hover/trace-row:bg-muted/50 hover:bg-muted/50 [&>[data-slot=trace-icon]]:-mr-1">
+              {line}
+            </TraceCollapsibleTrigger>
             {openFileButton}
           </div>
           <TraceCollapsibleContent
@@ -1095,7 +1114,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
           </TraceCollapsibleContent>
         </TraceCollapsible>
       ) : (
-        <div className="flex min-w-0 items-center gap-1">
+        <div className="-mx-2 flex w-[calc(100%+16px)] min-w-0 items-center gap-1 px-2 py-1.5">
           {line}
           {openFileButton}
         </div>

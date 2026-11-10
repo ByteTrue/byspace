@@ -1810,6 +1810,8 @@ export const fr: TranslationResources = {
     output: "Sortir",
   },
   toolCallGroup: {
+    thought: "Réfléchi",
+    thoughtFor: "a réfléchi pendant {{duration}}",
     editedFiles: {
       one: "a modifié {{count}} fichier",
       other: "a modifié {{count}} fichiers",

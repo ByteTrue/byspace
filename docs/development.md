@@ -153,6 +153,8 @@ make build-web
 
 It runs `npm run build:daemon-web-ui`, which builds `web/` and copies `web/dist` into `internal/webui/dist` for the binary's `//go:embed`, precompressing `.html`, `.js`, `.css`, `.json`, `.svg`, and `.map` files as `.br` and `.gz`. It then deletes the raw copy of every JS file over 1 MB: `internal/webui` serves the compressed copy when the raw file is missing, and the raw copies are most of the binary's web weight.
 
+`npm run build --workspace=@bytetrue/web` alone does not change what the daemon origin serves: the running binary answers from the UI embedded when it was compiled. Rebuilding `web/dist` and pressing reload shows the old page, which reads as a frontend change that "did nothing". Run `make build-web` (or `npm run build:daemon-web-ui`), then rebuild and restart the binary. The desktop window is different: with `BYSPACE_WEB_DIR` set it reads `web/dist` from disk.
+
 Measured size of the daemon web UI at v0.23.6 (`web/`), counting every file in the build; `gzip` and `brotli` count only the precompressed copies, so `raw` excludes them:
 
 - raw: 13.29 MiB

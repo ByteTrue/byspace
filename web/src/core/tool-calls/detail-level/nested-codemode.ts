@@ -145,6 +145,8 @@ function readNestedSummary(metadata: Record<string, unknown> | undefined): Overv
   }
   const counts = raw as Record<string, unknown>;
   const summary: OverviewSummary = {
+    thoughtCount: 0,
+    thoughtDurationMs: 0,
     editedFileCount: readCount(counts.editedFileCount),
     commandCount: readCount(counts.commandCount),
     readFileCount: readCount(counts.readFileCount),

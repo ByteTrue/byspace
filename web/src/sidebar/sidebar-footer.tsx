@@ -8,10 +8,7 @@ import { openHostOverview } from "@/navigation/settings-navigation";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { router } from "~/app/navigation";
-import { Shortcut } from "~/components/shortcut";
 import { SidebarFooter as SidebarFooterFrame } from "~/components/ui/sidebar";
-import { SidebarMenuButton } from "~/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { SidebarHelpMenu } from "~/sidebar/help-menu";
 import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
 
@@ -92,23 +89,16 @@ export function SidebarFooter({
   );
   return (
     <SidebarFooterFrame className="flex-row items-center gap-2 px-2 py-3">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <SidebarMenuButton
-            onClick={run(() => openAddProject())}
-            aria-label={t("sidebar.actions.addProject")}
-            data-testid="sidebar-add-project"
-            className="min-w-0 flex-1"
-          >
-            <FolderPlus />
-            <span>{t("sidebar.actions.addProject")}</span>
-          </SidebarMenuButton>
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          {t("sidebar.actions.addProject")}
-          <Shortcut chord={newAgentKeys} />
-        </TooltipContent>
-      </Tooltip>
+      <SidebarIconButton
+        label={t("sidebar.actions.addProject")}
+        shortcutKeys={newAgentKeys}
+        tooltipSide="top"
+        onClick={run(() => openAddProject())}
+        data-testid="sidebar-add-project"
+        className="mr-auto"
+      >
+        <FolderPlus />
+      </SidebarIconButton>
       <SidebarHostsButton onAddHost={addHost} onOpenHostSettings={openHostSettings} />
       <SidebarIconButton
         label={t("importSession.title")}

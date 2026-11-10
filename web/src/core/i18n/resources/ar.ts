@@ -1770,6 +1770,8 @@ export const ar: TranslationResources = {
     output: "الإخراج",
   },
   toolCallGroup: {
+    thought: "فكّر",
+    thoughtFor: "فكّر لمدة {{duration}}",
     editedFiles: {
       one: "حرّر {{count}} ملفًا",
       other: "حرّر {{count}} ملفات",

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { SPACING } from "@/styles/theme";
 import type { StreamItem } from "@/types/stream";
-import { getAssistantBlockSpacing, isSameAssistantBlockGroup } from "./spacing";
+import {
+  getAssistantBlockSpacing,
+  getGapBetweenStreamItems,
+  isSameAssistantBlockGroup,
+} from "./spacing";
 
 function assistantBlock(params: {
   id: string;
@@ -131,5 +136,25 @@ describe("getAssistantBlockSpacing", () => {
     expect(
       getAssistantBlockSpacing({ item: headBlock, aboveItem: tailBlock, belowItem: null }),
     ).toBe("compactTop");
+  });
+});
+
+describe("getGapBetweenStreamItems", () => {
+  it("leaves breathing room between consecutive tool and thought rows and around assistant prose", () => {
+    const firstTool = toolCallBlock("tc-1");
+    const secondTool = toolCallBlock("tc-2");
+    const thoughtItem: Extract<StreamItem, { kind: "thought" }> = {
+      kind: "thought",
+      id: "th-1",
+      text: "Reasoning...",
+      timestamp: new Date("2026-05-01T00:00:00.000Z"),
+      status: "ready",
+    };
+    const prose = assistantBlock({ id: "a", blockGroupId: "group-1", blockIndex: 0 });
+
+    expect(getGapBetweenStreamItems(firstTool, secondTool)).toBe(SPACING[1]);
+    expect(getGapBetweenStreamItems(firstTool, thoughtItem)).toBe(SPACING[1]);
+    expect(getGapBetweenStreamItems(prose, firstTool)).toBe(SPACING[3]);
+    expect(getGapBetweenStreamItems(thoughtItem, prose)).toBe(SPACING[3]);
   });
 });

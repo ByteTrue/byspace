@@ -4,6 +4,8 @@ import type { OverviewSummary } from "./model";
 import { formatOverviewSummary } from "./summary";
 
 const EMPTY: OverviewSummary = {
+  thoughtCount: 0,
+  thoughtDurationMs: 0,
   editedFileCount: 0,
   commandCount: 0,
   readFileCount: 0,
@@ -48,6 +50,27 @@ describe("formatOverviewSummary", () => {
     expect(formatOverviewSummary(summary, buildT())).toBe("ToolCallGroup.commands.one:1");
     expect(formatOverviewSummary(summary, buildT(), { capitalize: false })).toBe(
       "toolCallGroup.commands.one:1",
+    );
+  });
+
+  it("includes thought at the start of the summary when thinking is folded into the group", () => {
+    expect(
+      formatOverviewSummary(
+        { ...EMPTY, thoughtCount: 1, readFileCount: 1, searchCount: 1 },
+        buildT(),
+        { capitalize: false },
+      ),
+    ).toBe(
+      "toolcallgroup.thought, toolCallGroup.readFiles.one:1, toolCallGroup.and toolCallGroup.searches.one:1",
+    );
+    expect(
+      formatOverviewSummary(
+        { ...EMPTY, thoughtCount: 1, thoughtDurationMs: 17_000, commandCount: 1 },
+        buildT(),
+      ),
+    ).toBe("Toolcallgroup.thoughtfor toolCallGroup.and toolCallGroup.commands.one:1");
+    expect(formatOverviewSummary({ ...EMPTY, thoughtCount: 2 }, buildT())).toBe(
+      "Toolcallgroup.thought",
     );
   });
 });

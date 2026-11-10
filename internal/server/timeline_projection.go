@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 )
 
@@ -222,15 +224,42 @@ func appendCollapsed(existing, incoming []string, kind string) []string {
 	return out
 }
 
+func computeTimelineDurationMs(startStr, endStr string) int64 {
+	if startStr == "" || endStr == "" {
+		return 0
+	}
+	tStart, errStart := time.Parse(time.RFC3339Nano, startStr)
+	if errStart != nil {
+		tStart, errStart = time.Parse(time.RFC3339, startStr)
+	}
+	tEnd, errEnd := time.Parse(time.RFC3339Nano, endStr)
+	if errEnd != nil {
+		tEnd, errEnd = time.Parse(time.RFC3339, endStr)
+	}
+	if errStart != nil || errEnd != nil {
+		return 0
+	}
+	d := tEnd.Sub(tStart).Milliseconds()
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
 // mergeReasoningChunks concatenates adjacent reasoning deltas of the same turn into one row.
 func mergeReasoningChunks(entries []projectedEntry) []projectedEntry {
 	output := make([]projectedEntry, 0, len(entries))
+	startTimes := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if len(output) > 0 {
-			prev := &output[len(output)-1]
+			lastIdx := len(output) - 1
+			prev := &output[lastIdx]
 			if prev.Item.Type == "reasoning" && entry.Item.Type == "reasoning" &&
 				prev.SeqEnd+1 == entry.SeqStart && prev.TurnID == entry.TurnID {
 				prev.Item.Text += entry.Item.Text
+				if dur := computeTimelineDurationMs(startTimes[lastIdx], entry.Timestamp); dur > 0 {
+					prev.Item.DurationMs = &dur
+				}
 				prev.Timestamp = entry.Timestamp
 				prev.SeqEnd = entry.SeqEnd
 				prev.SourceSeqRanges = mergeSeqRanges(prev.SourceSeqRanges, entry.SourceSeqRanges)
@@ -239,6 +268,7 @@ func mergeReasoningChunks(entries []projectedEntry) []projectedEntry {
 			}
 		}
 		output = append(output, entry)
+		startTimes = append(startTimes, entry.Timestamp)
 	}
 	return output
 }

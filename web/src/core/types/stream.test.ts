@@ -710,6 +710,40 @@ describe("stream reducer canonical tool calls", () => {
     assert.strictEqual(assistantMessage?.text, "Hello world");
   });
 
+  it("calculates reasoning duration from streaming deltas and preserves wire durationMs", () => {
+    const streamed = hydrateStreamState([
+      {
+        event: reasoningTimeline("First thought... "),
+        timestamp: new Date("2025-01-01T10:00:00.000Z"),
+      },
+      {
+        event: reasoningTimeline("second thought."),
+        timestamp: new Date("2025-01-01T10:00:17.500Z"),
+      },
+    ]);
+    const thought = streamed.find((item) => item.kind === "thought");
+    expect(thought?.kind).toBe("thought");
+    if (thought?.kind === "thought") {
+      expect(thought.text).toBe("First thought... second thought.");
+      expect(thought.durationMs).toBe(17500);
+    }
+
+    const hydratedWithWireDuration = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "claude",
+          item: { type: "reasoning", text: "Finished thought", durationMs: 42000 },
+        },
+        timestamp: new Date("2025-01-01T10:00:00.000Z"),
+      },
+    ]);
+    const wireThought = hydratedWithWireDuration.find((item) => item.kind === "thought");
+    if (wireThought?.kind === "thought") {
+      expect(wireThought.durationMs).toBe(42000);
+    }
+  });
+
   it("keeps adjacent assistant timeline items separate when message ids differ", () => {
     const state = hydrateStreamState([
       {

@@ -118,6 +118,10 @@ test.describe("Timeline detail level", () => {
     try {
       await expectAgentIdle(page);
 
+      // "Collapse all" folds thinking into its overview group; expanding the group shows the
+      // thinking row collapsed inside it.
+      expect(await thinkingRowStates(page)).toEqual([]);
+      await page.getByTestId("tool-call-group").first().getByRole("button").first().click();
       const overviewThinking = await thinkingRowStates(page);
       expect(overviewThinking.length).toBeGreaterThan(0);
       expect(overviewThinking.every((state) => state === "false")).toBe(true);

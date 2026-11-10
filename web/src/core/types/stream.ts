@@ -743,6 +743,8 @@ export interface ThoughtItem {
   text: string;
   timestamp: Date;
   status: ThoughtStatus;
+  startedAt?: Date;
+  durationMs?: number;
 }
 
 export type OrchestratorToolCallStatus = "executing" | "completed" | "failed";
@@ -886,9 +888,13 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
   if (item.status === "ready") {
     return item;
   }
+  const durationMs =
+    item.durationMs ??
+    (item.startedAt ? Math.max(0, item.timestamp.getTime() - item.startedAt.getTime()) : undefined);
   return {
     ...item,
     status: "ready",
+    ...(durationMs !== undefined ? { durationMs } : {}),
   };
 }
 
@@ -1002,6 +1008,7 @@ function appendThought(
   text: string,
   timestamp: Date,
   timelineCursor?: TimelinePosition,
+  durationMs?: number,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
   if (!chunk) {
@@ -1010,12 +1017,16 @@ function appendThought(
 
   const last = state[state.length - 1];
   if (last && last.kind === "thought") {
+    const startedAt = last.startedAt ?? last.timestamp;
+    const computedDuration = durationMs ?? Math.max(0, timestamp.getTime() - startedAt.getTime());
     const updated: ThoughtItem = {
       ...last,
       ...(timelineCursor ? { timelineCursor } : {}),
       text: `${last.text}${chunk}`,
       timestamp,
       status: "loading",
+      startedAt,
+      durationMs: computedDuration,
     };
     return [...state.slice(0, -1), updated];
   }
@@ -1032,6 +1043,8 @@ function appendThought(
     text: chunk,
     timestamp,
     status: "loading",
+    startedAt: timestamp,
+    ...(durationMs !== undefined ? { durationMs } : {}),
   };
   return [...state, item];
 }
@@ -1575,7 +1588,7 @@ function reduceTimelineEvent(
         ),
       );
     case "reasoning":
-      return appendThought(state, item.text, timestamp, timelineCursor);
+      return appendThought(state, item.text, timestamp, timelineCursor, item.durationMs);
     case "tool_call":
       return finalizeActiveThoughts(
         reduceTimelineToolCall(state, event, item, timestamp, timelineCursor),

@@ -179,6 +179,7 @@ type Session struct {
 	timeline           []TimelineEntry
 	activeTextIdx      int
 	activeThinkIdx     int
+	activeThinkStart   time.Time
 	toolIndexByID      map[string]int
 	toolArgsByID       map[string]any
 	pendingPermissions map[string]map[string]any
@@ -259,6 +260,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if msg, ok := ev["message"].(map[string]any); ok {
 			if role, _ := msg["role"].(string); role == "assistant" {
 				s.activeTextIdx = -1
+				s.finalizeThinkLocked(0)
 				s.activeThinkIdx = -1
 				s.streamedInTurn = false
 				s.activeMessageID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
@@ -272,6 +274,8 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			switch ameType {
 			case "text_delta":
 				if delta != "" {
+					s.finalizeThinkLocked(0)
+					s.activeThinkIdx = -1
 					if s.activeMessageID == "" {
 						s.activeMessageID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
 					}
@@ -313,6 +317,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			case "thinking_delta":
 				if delta != "" {
 					if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
+						s.activeThinkStart = time.Now()
 						s.activeThinkIdx = s.appendItemWithSeqLocked(0, TimelineItem{
 							Type: "reasoning",
 							Text: delta,
@@ -344,6 +349,12 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				}
 			}
 			if role == "assistant" {
+				var msgDur int64
+				if d, ok := msg["durationMs"].(float64); ok && d > 0 {
+					msgDur = int64(d)
+				}
+				s.finalizeThinkLocked(msgDur)
+				s.activeThinkIdx = -1
 				s.turnError = assistantErrorMessage(msg)
 				if !s.streamedInTurn {
 					rawText := extractAssistantText(msg)
@@ -393,6 +404,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.toolArgsByID[callID] = ev["args"]
 		}
 		s.activeTextIdx = -1
+		s.finalizeThinkLocked(0)
 		s.activeThinkIdx = -1
 		s.activeMessageID = ""
 		// A tool the provider renders elsewhere gets no card. Decided here, before the placeholder is
@@ -579,6 +591,23 @@ func (s *Session) subscribersLocked() []func(map[string]any) {
 		subs = append(subs, fn)
 	}
 	return subs
+}
+
+// finalizeThinkLocked records how long the open reasoning block ran, on the row itself. It does not
+// send an update: the row's text already went out, and a repeat carrying the whole text would be
+// appended to the client's copy a second time. The live client measures the same span from the
+// deltas it receives; this field is what a timeline fetch (reload, another device) reads.
+func (s *Session) finalizeThinkLocked(explicitDur int64) {
+	if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
+		return
+	}
+	dur := explicitDur
+	if dur <= 0 && !s.activeThinkStart.IsZero() {
+		dur = time.Since(s.activeThinkStart).Milliseconds()
+	}
+	if dur > 0 {
+		s.timeline[s.activeThinkIdx].Item.DurationMs = &dur
+	}
 }
 
 // flushFramesLocked sends the pending frames: each takes the next seq, which becomes the end of the

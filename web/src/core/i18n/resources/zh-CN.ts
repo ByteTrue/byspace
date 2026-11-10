@@ -1751,6 +1751,8 @@ export const zhCN: TranslationResources = {
     output: "输出",
   },
   toolCallGroup: {
+    thought: "已思考",
+    thoughtFor: "已思考 {{duration}}",
     editedFiles: {
       one: "编辑了 {{count}} 个文件",
       other: "编辑了 {{count}} 个文件",

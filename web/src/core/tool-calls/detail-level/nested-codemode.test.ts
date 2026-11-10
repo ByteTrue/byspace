@@ -68,6 +68,8 @@ describe("nested codemode projection", () => {
     expect(group?.run.calls.map((call) => call.id)).toEqual([parent.id, child0.id, child1.id]);
     expect(group?.run.latest).toBe(parent);
     expect(group?.summary).toEqual({
+      thoughtCount: 0,
+      thoughtDurationMs: 0,
       editedFileCount: 0,
       commandCount: 2,
       readFileCount: 0,
@@ -115,6 +117,8 @@ describe("nested codemode projection", () => {
     expect(projection.tail).toEqual([parent]);
     const group = projection.groupsByParentItemId.get(parent.id);
     expect(group?.summary).toEqual({
+      thoughtCount: 0,
+      thoughtDurationMs: 0,
       editedFileCount: 1,
       commandCount: 2,
       readFileCount: 0,

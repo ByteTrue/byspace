@@ -2,6 +2,8 @@ import { categorizeToolCall } from "@bytetrue/protocol/tool-call-category";
 import { describeToolCall, type ToolCallRun } from "../grouping";
 
 export interface OverviewSummary {
+  thoughtCount: number;
+  thoughtDurationMs: number;
   editedFileCount: number;
   commandCount: number;
   readFileCount: number;
@@ -26,12 +28,22 @@ export function buildOverviewGroup(run: ToolCallRun): OverviewToolCallGroup {
   const editedFiles = new Set<string>();
   const readFiles = new Set<string>();
   let isLoading = false;
+  let thoughtCount = 0;
+  let thoughtDurationMs = 0;
   let commandCount = 0;
   let searchCount = 0;
   let otherToolCount = 0;
   let byspaceCallCount = 0;
 
   for (const call of run.calls) {
+    if (call.kind === "thought") {
+      isLoading ||= call.status !== "ready";
+      thoughtCount += 1;
+      if (call.durationMs) {
+        thoughtDurationMs += call.durationMs;
+      }
+      continue;
+    }
     const descriptor = describeToolCall(call);
     isLoading ||= descriptor.status === "running" || descriptor.status === "executing";
     const match = categorizeToolCall({ name: descriptor.name, detail: descriptor.detail });
@@ -51,6 +63,8 @@ export function buildOverviewGroup(run: ToolCallRun): OverviewToolCallGroup {
   }
 
   const summary = {
+    thoughtCount,
+    thoughtDurationMs,
     editedFileCount: editedFiles.size,
     commandCount,
     readFileCount: readFiles.size,

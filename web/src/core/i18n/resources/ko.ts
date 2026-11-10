@@ -1779,6 +1779,8 @@ export const ko: TranslationResources = {
     output: "출력",
   },
   toolCallGroup: {
+    thought: "생각함",
+    thoughtFor: "{{duration}} 동안 생각함",
     editedFiles: {
       one: "{{count}} 파일을 편집했습니다.",
       other: "{{count}} 파일을 편집했습니다.",

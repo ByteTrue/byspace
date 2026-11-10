@@ -237,6 +237,23 @@ func TestProjectTimelineRowsFoldsDeltas(t *testing.T) {
 	}
 }
 
+func TestProjectTimelineRowsReasoningDuration(t *testing.T) {
+	rows := []pi.TimelineEntry{
+		{Seq: 1, SeqEnd: 1, TurnID: "t1", Timestamp: "2026-05-01T00:00:00.000Z", Item: pi.TimelineItem{Type: "reasoning", Text: "think "}},
+		{Seq: 2, SeqEnd: 2, TurnID: "t1", Timestamp: "2026-05-01T00:00:17.500Z", Item: pi.TimelineItem{Type: "reasoning", Text: "more"}},
+	}
+	projected := projectTimelineRows(rows, "projected")
+	if len(projected) != 1 {
+		t.Fatalf("projected rows = %d, want 1", len(projected))
+	}
+	if projected[0].Item.DurationMs == nil {
+		t.Fatalf("expected DurationMs to be populated")
+	}
+	if *projected[0].Item.DurationMs != 17500 {
+		t.Fatalf("expected DurationMs = 17500, got %d", *projected[0].Item.DurationMs)
+	}
+}
+
 // The canonical projection leaves every delta as its own row: it is what a client that merges
 // client-side asks for, and folding it would hide the raw timeline.
 func TestProjectTimelineRowsCanonicalKeepsEveryRow(t *testing.T) {

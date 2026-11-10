@@ -233,6 +233,8 @@ describe("tool call detail-level projection", () => {
       run: expect.any(Object),
       isLoading: false,
       summary: {
+        thoughtCount: 0,
+        thoughtDurationMs: 0,
         editedFileCount: 1,
         commandCount: 1,
         readFileCount: 2,
@@ -460,5 +462,44 @@ describe("tool call detail-level projection", () => {
     expect(result.head).toEqual([singleCall, plan, speak]);
     expect(result.groupsByHostId.get(singleCall.id)?.run.calls).toEqual([singleCall]);
     expect(result.groupsByHostId.size).toBe(1);
+  });
+
+  it("folds thinking blocks into contiguous overview tool-call groups", () => {
+    const thought: StreamItem = {
+      kind: "thought",
+      id: "thought-1",
+      text: "Checking files",
+      status: "ready",
+      timestamp: new Date(0),
+    };
+    const readCall = toolCall("1", { type: "read", filePath: "/repo/a.ts" });
+    const searchCall = toolCall("2", { type: "search", query: "foo" });
+
+    const singleThought = project({ level: "overview", tail: [thought] });
+    expect(singleThought.tail).toEqual([thought]);
+    expect(singleThought.groupsByHostId.size).toBe(0);
+
+    const grouped = project({
+      level: "overview",
+      tail: [thought],
+      head: [readCall, searchCall],
+      isTurnActive: true,
+      preparedHistory: prepareToolCallHistory("overview", [thought]),
+    });
+    expect(grouped.tail.map((item) => item.id)).toEqual([thought.id]);
+    expect(grouped.head).toEqual([]);
+    expect(grouped.groupsByHostId.get(thought.id)?.run.calls).toEqual([
+      thought,
+      readCall,
+      searchCall,
+    ]);
+    expect(grouped.groupsByHostId.get(thought.id)?.summary).toMatchObject({
+      thoughtCount: 1,
+      readFileCount: 1,
+      searchCount: 1,
+    });
+    expect(grouped.historyGroupUpdatesByHostId.get(thought.id)).toBe(
+      grouped.groupsByHostId.get(thought.id),
+    );
   });
 });
