@@ -545,3 +545,33 @@ func TestBuildLaunchArgsSuppressesPiOnlyFlags(t *testing.T) {
 		t.Fatalf("pi needs both flags: %s", piJoined)
 	}
 }
+
+// Pi 1.5.1+ installs its launcher under ~/.pi and a desktop daemon does not inherit the shell
+// PATH. A bare `pi` must still resolve to that managed install when the catalog is probed or a
+// naming helper starts the CLI directly.
+func TestBuildLaunchArgsResolvesPiManagedInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("PI_COMMAND", "")
+	t.Setenv("PI_ACP_PI_COMMAND", "")
+
+	dir := filepath.Join(home, ".pi", "agent", "bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	name, body := "pi", "#!/bin/sh\nexit 0\n"
+	if runtime.GOOS == "windows" {
+		name, body = "pi.cmd", "@exit /b 0\r\n"
+	}
+	want := filepath.Join(dir, name)
+	if err := os.WriteFile(want, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, _ := BuildLaunchArgs(LaunchOptions{})
+	if cmd != want {
+		t.Fatalf("command = %q, want the managed install %q", cmd, want)
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/execres"
 )
 
 var leadingMagicTagRe = regexp.MustCompile(`^§[0-9]+§[ \t]*`)
@@ -102,6 +103,12 @@ func BuildLaunchArgs(opts LaunchOptions) (string, []string) {
 	}
 	if cmd == "" {
 		cmd = "pi"
+	}
+	// A desktop daemon does not inherit the shell PATH, and Pi 1.5.1+ installs its launcher under
+	// ~/.pi. Resolve a bare name through the standard install dirs so the catalog probe, auto-naming
+	// and direct launches find the same binary that availability detection reports.
+	if resolved := execres.Lookup(cmd); resolved != "" {
+		cmd = resolved
 	}
 
 	argv := append([]string(nil), opts.Args...)

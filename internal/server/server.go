@@ -1526,12 +1526,15 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// The draft wins over the saved entry: the "add provider" form loads models for a provider that is
 		// not in config yet, and while editing one the models list must match what is on screen.
 		providerCfg := mergeProviderConfig(s.providerConfigFor(prov), req.DraftConfig)
-		var models []pi.CatalogModel
-		if prov == "pi" || providers.ResolveProviderSpecWithConfig(prov, providerCfg).Protocol == "pi-rpc" {
-			// cwd scopes the probe; empty means "whatever is cached".
+		spec := providers.ResolveProviderSpecWithConfig(prov, providerCfg)
+		models := s.discoveredModels(ctx, prov, req.Cwd)
+		if len(models) == 0 && spec.Protocol == "pi-rpc" {
+			// A pi-derived profile inherits pi's RPC transport, so it gets pi's probed catalog
+			// rather than the placeholder list in its spec.
 			models = s.probePiModelsInCwd(ctx, req.Cwd)
-		} else {
-			models = providers.GetProviderSpec(prov).Models
+		}
+		if len(models) == 0 {
+			models = spec.Models
 		}
 		// `models` in a provider override replaces the catalog; ignoring it listed only the generic
 		// "<id> Default" row, so a profile with a fixed model list could not be selected at all.

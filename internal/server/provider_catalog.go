@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // providerCatalog is the provider snapshot the daemon serves from memory.
@@ -43,8 +44,14 @@ func providerCatalogKey(cwd string) string {
 //
 // This is the expensive path; do not call it from a request handler that has nothing cached.
 func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) *providerCatalog {
-	models := s.probePiModelsInCwd(ctx, cwd)
-	entries := providers.BuildSnapshotEntries(models, s.piCommand, providersFromConfig(cfg))
+	piModels := s.probePiModelsInCwd(ctx, cwd)
+	entries := providers.BuildSnapshotEntries(func(providerID string) []sdk.CatalogModel {
+		// Pi was just probed (its catalog drives the naming model too); do not spawn it twice.
+		if providerID == "pi" {
+			return piModels
+		}
+		return s.discoveredModels(ctx, providerID, cwd)
+	}, s.piCommand, providersFromConfig(cfg))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &providerCatalog{
 		entries:     entries,
@@ -53,6 +60,27 @@ func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, c
 		generatedAt: now,
 		compact:     providers.BuildCompactSnapshot(entries),
 	}
+}
+
+// discoveredModels asks a provider for the models it actually offers right now.
+//
+// Only providers whose catalog depends on the user's own config live here. The result is empty when
+// the probe fails or the provider has no runtime discovery, and the caller keeps the spec catalog.
+func (s *Server) discoveredModels(ctx context.Context, providerID, cwd string) []sdk.CatalogModel {
+	switch providerID {
+	case "pi":
+		return s.probePiModelsInCwd(ctx, cwd)
+	case "claude":
+		return providers.ClaudeModelsWithSettings()
+	case "opencode":
+		spec, argv := providers.ProviderSpecForLaunch(providerID, s.providerConfigFor(providerID))
+		command := spec.Binary
+		if len(argv) > 0 {
+			command = argv[0]
+		}
+		return providers.ProbeOpenCodeModels(ctx, command, cwd)
+	}
+	return nil
 }
 
 // providerConfigFor returns the daemon-config entry for one provider, or nil.

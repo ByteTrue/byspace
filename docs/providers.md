@@ -55,7 +55,13 @@ Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`
 
 The dev-only `mock` provider (`internal/agent/providers/mock_provider.go`) is also direct. It registers only when `BYSPACE_NODE_ENV=development`, because 76 Playwright specs create agents with `provider: "mock"` and a shipped daemon has no use for synthetic traffic. A beta install that listed "Mock Load Test" beside Claude was that gate missing. `scripts/dev-daemon.mjs` and the e2e daemon helper set the variable; nothing in a packaged install does.
 
-Claude first-party model metadata lives in `packages/server/src/server/agent/providers/claude/model-manifest.ts`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
+Claude first-party model metadata lives in `internal/agent/providers/claudemodels.go`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
+
+Claude's catalog also includes every model named in the user's Claude Code `settings.json`: `modelPicker.options`, `model`, and `env.ANTHROPIC_*_MODEL`. That is how third-party gateways (Z.AI, a local router) are selected, and why the daemon must not ship only the Anthropic manifest.
+
+OpenCode has no reliable static catalog. The daemon asks `opencode models` in the workspace and offers what OpenCode reports, because its provider list depends on the user's own config and credentials; the spec list is only a fallback when the command is unavailable. The command prints ids only, so labels come from the id and thinking variants are not offered; use OpenCode's server model listing when those become required.
+
+Provider binaries are resolved from the daemon's `PATH` plus standard install locations, including Pi's managed `~/.pi/agent/bin` and `~/.pi/agents/bin`. A desktop app does not inherit the shell `PATH`, so a provider that works in a terminal can still be missing without the standard-location search.
 
 BySpace delivers its own tools through the bundled `byspace` skill and the CLI, not through a per-provider tool catalog. A provider needs exactly one thing to participate: an agent process whose shell can run `byspace`. The daemon supplies that in the launch environment (`internal/server/agentenv.go`): `BYSPACE_HOME`, `BYSPACE_HOST`, `BYSPACE_AGENT_ID`, and the daemon's own directory prepended to `PATH`. `BYSPACE_AGENT_ID` is what makes a created agent a subagent of its caller; the CLI sends it as `callerAgentId`.
 

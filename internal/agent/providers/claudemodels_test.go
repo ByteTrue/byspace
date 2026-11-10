@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -161,5 +163,81 @@ func TestProviderFeaturesForFiltersFastMode(t *testing.T) {
 	}
 	if hasFast(ProviderFeaturesFor("codex", "gpt-5.3-codex")) {
 		t.Fatal("codex should not offer fast mode on gpt-5.3-codex")
+	}
+}
+
+// Claude Code is an Anthropic-compatible client: a gateway's models live in the user's own
+// settings.json. The picker has to offer the same ids the CLI would accept.
+func TestClaudeModelsIncludeSettingsModels(t *testing.T) {
+	dir := t.TempDir()
+	settings := `{
+		"model": "opus",
+		"env": {
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": "my-gateway/sonnet",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7"
+		},
+		"modelPicker": {
+			"options": [
+				{"model": "gsmagpie/glm-5.3[1m]", "label": "GLM-5.3", "description": "via magpie"},
+				{"model": "claude-opus-4-7", "label": "Route to Opus"}
+			]
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+
+	models := ClaudeModelsWithSettings()
+	byID := make(map[string]int, len(models))
+	for index, model := range models {
+		byID[model.ID] = index
+	}
+
+	custom, ok := byID["gsmagpie/glm-5.3[1m]"]
+	if !ok {
+		t.Fatal("third-party modelPicker model is missing")
+	}
+	if models[custom].Label != "GLM-5.3" || models[custom].Description != "via magpie" {
+		t.Fatalf("modelPicker label/description = %q/%q", models[custom].Label, models[custom].Description)
+	}
+	if models[custom].DefaultThinkingOptionID != "high" {
+		t.Fatalf("custom model default thinking = %q, want high", models[custom].DefaultThinkingOptionID)
+	}
+	if models[custom].Metadata["contextWindowMaxTokens"] != "1000000" {
+		t.Fatalf("custom [1m] metadata = %v", models[custom].Metadata)
+	}
+
+	if _, ok := byID["my-gateway/sonnet"]; !ok {
+		t.Fatal("env.ANTHROPIC_DEFAULT_SONNET_MODEL model is missing")
+	}
+	if _, ok := byID["opus"]; !ok {
+		t.Fatal("settings.model alias is missing")
+	}
+
+	manifestCount := len(ClaudeManifestModels())
+	seen := make(map[string]bool, len(models))
+	for _, model := range models {
+		if seen[model.ID] {
+			t.Fatalf("duplicate catalog entry %q", model.ID)
+		}
+		seen[model.ID] = true
+	}
+	// One manifest id also appeared in modelPicker options and env: the settings sources must not
+	// duplicate it, and the two genuinely new ids must be appended.
+	if got := len(models) - manifestCount; got != 3 {
+		t.Fatalf("settings additions = %d, want 3 (glm, sonnet, opus)", got)
+	}
+}
+
+// A corrupt settings file must leave the manifest catalog intact rather than empty the picker.
+func TestClaudeSettingsMalformedFallsBackToManifest(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	if got := len(ClaudeModelsWithSettings()); got != len(ClaudeManifestModels()) {
+		t.Fatalf("models = %d, want manifest only", got)
 	}
 }

@@ -1,6 +1,10 @@
 package providers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
+)
 
 // A built-in that the manifest marks `enabledByDefault: false` must start off.
 //
@@ -47,4 +51,36 @@ func TestExplicitEnableOverridesTheDefault(t *testing.T) {
 		return
 	}
 	t.Fatal("omp is missing from the catalog")
+}
+
+// A ready provider's runtime catalog replaces the static spec list; a disabled one is not probed
+// at all, because that would spawn a CLI the user switched off.
+func TestSnapshotUsesDiscoveredModelsOnlyForReadyProviders(t *testing.T) {
+	probed := make(map[string]bool)
+	entries := BuildSnapshotEntries(func(providerID string) []sdk.CatalogModel {
+		probed[providerID] = true
+		if providerID == "pi" {
+			return []sdk.CatalogModel{{ID: "probe/one", Label: "Probe One", Provider: "pi"}}
+		}
+		return nil
+	}, "fake-pi", nil)
+
+	if !probed["pi"] {
+		t.Fatal("pi was not probed although its override makes it available")
+	}
+	if probed["omp"] {
+		t.Fatal("omp was probed although it is disabled by default")
+	}
+
+	for _, entry := range entries {
+		if entry["provider"] != "pi" {
+			continue
+		}
+		models, _ := entry["models"].([]sdk.CatalogModel)
+		if len(models) != 1 || models[0].ID != "probe/one" {
+			t.Fatalf("pi models = %+v, want the discovered catalog", models)
+		}
+		return
+	}
+	t.Fatal("pi is missing from the snapshot")
 }

@@ -878,7 +878,11 @@ func runProviderGroupCmd(args []string, stdout io.Writer) error {
 		return nil
 
 	case "models":
-		_ = sendSessionReq(ctx, ws, map[string]any{"type": "list_provider_models_request", "requestId": "cli_pvm", "provider": "pi"})
+		provider := "pi"
+		if fs.NArg() > 0 {
+			provider = fs.Arg(0)
+		}
+		_ = sendSessionReq(ctx, ws, map[string]any{"type": "list_provider_models_request", "requestId": "cli_pvm", "provider": provider})
 		resp, err := waitSessionResp(ctx, ws, "list_provider_models_response", "")
 		if err != nil {
 			return err
@@ -888,7 +892,11 @@ func runProviderGroupCmd(args []string, stdout io.Writer) error {
 		return nil
 
 	case "diagnostic":
-		_ = sendSessionReq(ctx, ws, map[string]any{"type": "provider_diagnostic_request", "requestId": "cli_pvd", "provider": "pi"})
+		provider := "pi"
+		if fs.NArg() > 0 {
+			provider = fs.Arg(0)
+		}
+		_ = sendSessionReq(ctx, ws, map[string]any{"type": "provider_diagnostic_request", "requestId": "cli_pvd", "provider": provider})
 		resp, err := waitSessionResp(ctx, ws, "provider_diagnostic_response", "")
 		if err != nil {
 			return err

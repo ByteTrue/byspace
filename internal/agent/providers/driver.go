@@ -382,7 +382,12 @@ func ServedProviderIDs() map[string]bool {
 
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
 // including the 6 built-in providers plus any custom/derived providers configured in config.json.
-func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
+//
+// discoverModels is called only for a built-in that is enabled and whose binary resolved, and may
+// be nil. It is where a provider's own runtime catalog wins over the static spec list: OpenCode's
+// models come from its config and credentials, Claude's from the user's settings.json. A provider
+// with no runtime discovery (or a failed probe) keeps its spec models.
+func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	entries := make([]map[string]any, 0, len(BuiltinProviders)+len(customProviders))
 	builtinSet := make(map[string]bool, len(BuiltinProviders))
@@ -401,12 +406,14 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 			}
 		}
 		status := "unavailable"
+		models := spec.Models
 		if enabled && avail {
 			status = "ready"
-		}
-		models := spec.Models
-		if spec.ID == "pi" && len(piModels) > 0 {
-			models = piModels
+			if discoverModels != nil {
+				if discovered := discoverModels(spec.ID); len(discovered) > 0 {
+					models = discovered
+				}
+			}
 		}
 		entries = append(entries, withCatalog(map[string]any{
 			"provider":      spec.ID,
@@ -463,8 +470,10 @@ func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string,
 		// Ignoring them offered only the generic "<id> Default" row, so the picker could not select the model the
 		// config named. A pi-derived provider merges onto pi's probed catalog rather than the placeholder spec.
 		runtimeModels := spec.Models
-		if spec.Protocol == "pi-rpc" && len(piModels) > 0 {
-			runtimeModels = piModels
+		if spec.Protocol == "pi-rpc" && discoverModels != nil {
+			if discovered := discoverModels("pi"); len(discovered) > 0 {
+				runtimeModels = discovered
+			}
 		}
 		label, _ := cfgMap["label"].(string)
 		if label == "" {
@@ -520,7 +529,7 @@ func BuildAvailableProviders(piCommandOverride string) []map[string]any {
 		avail := IsBinaryAvailable(spec, piCommandOverride)
 		out = append(out, map[string]any{
 			"provider":  spec.ID,
-			"available": avail || spec.ID == "pi",
+			"available": avail,
 			"error":     nil,
 		})
 	}

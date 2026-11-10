@@ -45,14 +45,26 @@ func Find(ctx context.Context, name string) string {
 	return ""
 }
 
-// StandardDirs returns the conventional Unix executable locations, after the process PATH.
+// StandardDirs returns conventional install locations, after the process PATH.
 // These are lookup candidates, not an instruction to run a login shell.
+//
+// Pi 1.5.1+ ships a managed install whose launcher lives under ~/.pi and is not added to the
+// desktop app's PATH. Both spellings are listed: the managed install writes `agent`, and the
+// standalone installer has used `agents`.
 func StandardDirs() []string {
-	if runtime.GOOS == "windows" {
-		return nil
+	home, _ := os.UserHomeDir()
+	dirs := make([]string, 0, 5)
+	if home != "" {
+		dirs = append(dirs,
+			filepath.Join(home, ".pi", "agent", "bin"),
+			filepath.Join(home, ".pi", "agents", "bin"),
+		)
 	}
-	dirs := []string{"/usr/local/bin"}
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
+	if runtime.GOOS == "windows" {
+		return dirs
+	}
+	dirs = append(dirs, "/usr/local/bin")
+	if home != "" {
 		dirs = append(dirs, filepath.Join(home, ".local", "bin"))
 	}
 	return append(dirs, "/opt/homebrew/bin")
@@ -228,6 +240,26 @@ func isWindowsExecutableExtension(ext string) bool {
 // IsCommandAvailable reports whether a working binary exists for a command.
 func IsCommandAvailable(ctx context.Context, command string) bool {
 	return Find(ctx, command) != ""
+}
+
+// Lookup returns the first existing executable for a command without running it.
+//
+// Launchers use this instead of Find: probing `--version` on every spawn would execute a provider
+// once before it is launched, and a fake or slow binary on the test path would pay the probe
+// timeout. A name with a path separator is returned as given, preserving a missing-file error at
+// start instead of turning it into "empty command".
+func Lookup(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.ContainsAny(trimmed, `/\`) {
+		return trimmed
+	}
+	if candidates := Enumerate(trimmed); len(candidates) > 0 {
+		return candidates[0]
+	}
+	return ""
 }
 
 // Version reports the output of `<binary> --version`, or an error when it does not run.

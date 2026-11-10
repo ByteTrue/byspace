@@ -1,6 +1,9 @@
 package providers
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -133,6 +136,136 @@ func ClaudeManifestModels() []sdk.CatalogModel {
 		}
 	}
 	return out
+}
+
+// ClaudeModelsWithSettings returns the manifest models plus every model the user's Claude Code
+// settings name.
+//
+// Claude Code is an Anthropic-compatible client: third-party gateways (Z.AI, a local router, an
+// OpenRouter shim) are selected by writing the model id into settings.json — its own picker reads
+// `modelPicker.options`, `model` and the `ANTHROPIC_*_MODEL` env keys. The daemon shipped only the
+// Anthropic manifest, so those users saw no model they could actually run.
+func ClaudeModelsWithSettings() []sdk.CatalogModel {
+	models := ClaudeManifestModels()
+	seen := make(map[string]bool, len(models))
+	for _, model := range models {
+		seen[model.ID] = true
+	}
+
+	for _, configured := range readClaudeSettingsModels() {
+		if seen[configured.ID] {
+			continue
+		}
+		seen[configured.ID] = true
+		models = append(models, claudeCustomCatalogModel(configured))
+	}
+	return models
+}
+
+// claudeSettingsModel is one model named in Claude Code's settings.json.
+type claudeSettingsModel struct {
+	ID          string
+	Label       string
+	Description string
+}
+
+// Claude settings.json keys that name a model. The small/fast and per-family defaults are how
+// Claude Code points a gateway at its own model ids.
+var claudeSettingsModelEnvKeys = []string{
+	"ANTHROPIC_MODEL",
+	"ANTHROPIC_SMALL_FAST_MODEL",
+	"ANTHROPIC_DEFAULT_FABLE_MODEL",
+	"ANTHROPIC_DEFAULT_OPUS_MODEL",
+	"ANTHROPIC_DEFAULT_SONNET_MODEL",
+	"ANTHROPIC_DEFAULT_HAIKU_MODEL",
+}
+
+// claudeConfigDir mirrors Claude Code's own settings location.
+func claudeConfigDir() string {
+	if dir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); dir != "" {
+		return dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".claude")
+}
+
+// readClaudeSettingsModels reads the model ids a user configured, in the order their picker shows
+// them: modelPicker options first, then the single `model`, then the per-family env defaults.
+//
+// A missing or malformed settings file is not an error: the manifest alone is a working catalog,
+// and a user editing the file should not lose every model in the picker.
+func readClaudeSettingsModels() []claudeSettingsModel {
+	path := filepath.Join(claudeConfigDir(), "settings.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var settings struct {
+		Model       string         `json:"model"`
+		Env         map[string]any `json:"env"`
+		ModelPicker struct {
+			Options []struct {
+				Model       string `json:"model"`
+				Label       string `json:"label"`
+				Description string `json:"description"`
+			} `json:"options"`
+		} `json:"modelPicker"`
+	}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return nil
+	}
+
+	out := make([]claudeSettingsModel, 0, len(settings.ModelPicker.Options)+len(claudeSettingsModelEnvKeys)+1)
+	seen := make(map[string]bool)
+	add := func(id, label, description string) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		if strings.TrimSpace(label) == "" {
+			label = id
+		}
+		out = append(out, claudeSettingsModel{ID: id, Label: label, Description: description})
+	}
+	for _, option := range settings.ModelPicker.Options {
+		add(option.Model, option.Label, firstNonEmpty(option.Description, "From Claude settings.json modelPicker"))
+	}
+	add(settings.Model, settings.Model, "From Claude settings.json model")
+	for _, key := range claudeSettingsModelEnvKeys {
+		value, _ := settings.Env[key].(string)
+		add(value, value, "From Claude settings.json env."+key)
+	}
+	return out
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// claudeCustomCatalogModel builds a picker entry for a model the manifest does not know.
+//
+// The gateway accepts the same effort flag as Anthropic's own models, so the standard levels are
+// offered; nothing is claimed about fast mode or a context window the model did not declare.
+func claudeCustomCatalogModel(configured claudeSettingsModel) sdk.CatalogModel {
+	model := sdk.CatalogModel{
+		ID:                      configured.ID,
+		Label:                   configured.Label,
+		Description:             configured.Description,
+		Provider:                "claude",
+		IsSelectable:            true,
+		ThinkingOptions:         claudeThinkingOptions(claudeManifestEntry{EffortLevels: claudeEffortStandard}),
+		DefaultThinkingOptionID: claudeDefaultThinkingOptionID,
+	}
+	if strings.HasSuffix(strings.ToLower(configured.ID), "[1m]") {
+		model.Metadata = map[string]string{"contextWindowMaxTokens": "1000000"}
+	}
+	return model
 }
 
 // claudeThinkingOptions builds a model's thinking menu.

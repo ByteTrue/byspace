@@ -1479,14 +1479,19 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "provider_diagnostic_request":
-		prov := base.Provider
+		prov := strings.TrimSpace(base.Provider)
 		if prov == "" {
 			prov = "pi"
 		}
+		// Bound the probe: resolving a command runs `--version` for each PATH candidate, and the
+		// response must still arrive when a CLI hangs. The answer is the daemon's own view — a
+		// hardcoded "healthy" is what hid an install the daemon could not see.
+		diagCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
 		_ = sendSessionMsg(ctx, sink, "provider_diagnostic_response", map[string]any{
 			"requestId":  base.RequestID,
 			"provider":   prov,
-			"diagnostic": "Pi provider is healthy (Go runtime host)",
+			"diagnostic": providers.BuildProviderDiagnostic(diagCtx, prov, s.piCommand, s.providerConfigFor(prov)),
 		})
 
 	case "set_daemon_config_request":
