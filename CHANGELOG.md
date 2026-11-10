@@ -5,6 +5,23 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.8 - 2026-11-10
+
+### Added
+
+- Agent timelines show how long a reasoning block took: the collapsed work summary reads "Thought for 2s, …" and the expanded row shows its own seconds
+
+### Changed
+
+- "Collapse all" folds reasoning into the tool-call summary instead of leaving a separate Thinking row above it
+- Tool call rows span the conversation column, with the tool name kept whole and one aligned line for its command or path
+
+### Fixed
+
+- Fixed long arguments truncating a tool name to a few letters
+- Fixed "Add project" shrinking to "Add ..." in a narrow sidebar
+- Fixed the macOS window buttons sitting lower than the sidebar toggle and page titles
+
 ## 0.24.7 - 2026-11-08
 
 ### Fixed
