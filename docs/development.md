@@ -216,6 +216,27 @@ BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \
 
 Setting only `BYSPACE_HOME` is not enough — `BYSPACE_LISTEN` still pulls the connection back to 6778.
 
+### Never rewrite the production home to test something
+
+The packaged daemon on `6777` is not only a local service. When BySpace drives a remote session, the
+`~/.byspace` daemon's relay endpoint is the path that session travels over. `byspace onboard
+--relay-endpoint …` plus `daemon reload` rewrites that path in place, so the next reconnect has
+nowhere to land, the remote client loses the host, and the work stops mid-task — including the
+assistant that made the change. The config file being revertible does not help: the running daemon
+keeps the new endpoint until the next reload.
+
+Change production relay, tunnel, or listen settings only when you can afford to lose that session,
+and say so before you start. To exercise a relay or pairing change, point the dev home at it instead:
+
+```bash
+npm run cli -- onboard --relay-endpoint wss://relay.example.net:8443   # writes .dev/byspace-home
+npm run dev:daemon                                                     # 127.0.0.1:6778
+```
+
+Two details that bite in that flow: `--relay-endpoint` needs the `wss://` scheme, because a bare
+`host:8443` is parsed as plaintext (`useTLS := port == 443` in `internal/cli/onboard.go`); and the dev
+home keeps whatever endpoint you set there, so a dev daemon started later reconnects to it.
+
 Automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/delete`, and the full `byspace schedule` group. Heartbeats stay deliberately smaller than schedules: create and delete only. Detach remains an explicit user lifecycle action rather than an agent command. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
 
 An agent runs automation through the CLI like any other caller. `byspace heartbeat` and `byspace run` default their target to `BYSPACE_AGENT_ID`, which the daemon sets in the agent's own process environment, so a live session can schedule itself without looking its id up in `$BYSPACE_HOME/agents/*/*.json`.

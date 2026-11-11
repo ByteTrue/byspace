@@ -6,7 +6,7 @@
 // serves the web UI embedded in the binary, so `make build` (binary only) is the default; set
 // BYSPACE_DEV_BUILD_WEB_UI=1 to re-export the app first.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,11 +46,34 @@ const skipBuild =
 
 if (!skipBuild) {
   const target = process.env.BYSPACE_DEV_BUILD_WEB_UI === "1" ? "build-full" : "build";
-  execFileSync("make", [target], { cwd: rootDir, stdio: "inherit" });
+  try {
+    execFileSync("make", [target], { cwd: rootDir, stdio: "inherit" });
+  } catch (error) {
+    // Windows without make (no WSL, no MSYS): `make build` is one `go build` line, so run it here.
+    // Without this fallback `npm run dev:daemon` dies on spawnSync ENOENT and the dev daemon can
+    // never start, which pushes people to test against the production daemon instead.
+    if (error.code !== "ENOENT") throw error;
+    if (target === "build-full") {
+      execFileSync("npm", ["run", "build:daemon-web-ui"], { cwd: rootDir, stdio: "inherit" });
+    }
+    const { version } = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+    const ldflags = `-s -w -X main.version=${version} -X github.com/ByteTrue/byspace/internal/cli.DefaultVersion=${version}`;
+    execFileSync(
+      "go",
+      ["build", "-tags", "nogui", "-trimpath", "-ldflags", ldflags, "-o", binary, "."],
+      {
+        cwd: rootDir,
+        stdio: "inherit",
+        env: { ...process.env, CGO_ENABLED: "0" },
+      },
+    );
+  }
 }
 
 if (!existsSync(binary)) {
-  process.stderr.write(`${binary} is missing. Run \`make build\` in ${rootDir}.\n`);
+  process.stderr.write(
+    `${binary} is missing. Run \`make build\` (or \`go build -tags nogui -o ${binary} .\`).\n`,
+  );
   process.exit(1);
 }
 
