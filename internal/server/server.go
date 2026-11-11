@@ -457,9 +457,10 @@ func New(opts Options) (*Server, error) {
 	// app should show the terminal the user was using, with its original id so the client's saved
 	// layout still resolves.
 	srv.restorePersistedTerminals()
-	// The daemon ships the skills, so after an update every installed copy is stale until someone
-	// re-saves the selection — and the user has no reason to do that.
-	srv.autoUpdateInstalledSkills()
+	// Skill auto-update deliberately does not run here. Constructing a server is also how tests and
+	// the offline pairing command build one, and this maintenance writes under the real user home
+	// (~/.agents/skills, ~/.claude/skills) — running the suite installed the reference skill into the
+	// developer's machine. The daemon entry points call AutoUpdateInstalledSkills after New instead.
 
 	srv.startRuntimeMetrics()
 	srv.startBackgroundGitFetch()

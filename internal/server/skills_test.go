@@ -18,6 +18,40 @@ func sandboxUserHome(t *testing.T) string {
 	return userHome
 }
 
+// Constructing a server must not write to the developer's real skill homes.
+//
+// It used to run the startup repair from New. Every test that built a server without redirecting
+// the user home installed the reference skill into ~/.agents/skills and ~/.claude/skills, so a
+// skill the developer had uninstalled kept coming back after test runs. The real entry points call
+// AutoUpdateInstalledSkills explicitly; this pins both halves.
+func TestNewDoesNotInstallSkillsUntilTheDaemonEntryPointRuns(t *testing.T) {
+	userHome := sandboxUserHome(t)
+	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	installedAt := func() []string {
+		t.Helper()
+		present := make([]string, 0, 2)
+		for _, home := range skillHomes(userHome) {
+			if _, statErr := os.Stat(filepath.Join(home.Dir, "byspace")); statErr == nil {
+				present = append(present, home.ID)
+			}
+		}
+		return present
+	}
+	if got := installedAt(); len(got) != 0 {
+		t.Fatalf("constructing a server installed skills into %v", got)
+	}
+
+	srv.AutoUpdateInstalledSkills()
+	if got := installedAt(); len(got) != 2 {
+		t.Fatalf("daemon startup installed into %v, want both agent homes", got)
+	}
+}
+
 func TestSkillsInstallAndUninstallRemovesAllManagedSkillDirs(t *testing.T) {
 	sourceDir := resolveSkillsSourceDir()
 	if sourceDir == "" {

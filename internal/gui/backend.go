@@ -365,6 +365,9 @@ func (d *DaemonSupervisor) startInProcess() error {
 		_ = ln.Close()
 		return err
 	}
+	// Daemon startup maintenance belongs here, not in server.New: tests and the offline pairing
+	// command construct a server too, and this writes to the real user skill homes.
+	srv.AutoUpdateInstalledSkills()
 
 	myPID := os.Getpid()
 	exeName := ""

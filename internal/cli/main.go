@@ -393,6 +393,10 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// The daemon ships the skills, so an installed copy can be stale after an update. This runs on
+	// the real entry point, not in server.New: constructing a server must not write to the user's
+	// skill homes (tests and the offline pairing command also construct one).
+	srv.AutoUpdateInstalledSkills()
 	// Closed explicitly before a restart spawns its replacement, so the successor reads settled
 	// agent and terminal state instead of racing this process's teardown. The deferred call covers
 	// every other exit.

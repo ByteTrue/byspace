@@ -467,15 +467,18 @@ func copySkillDir(srcDir, dstDir string) error {
 	})
 }
 
-// autoUpdateInstalledSkills repairs drift at startup, without destructive operations.
+// AutoUpdateInstalledSkills repairs drift at startup, without destructive operations.
 //
 // Ported from autoUpdateInstalledSkills. The daemon ships the skills, so after an update every
 // installed copy is stale until someone re-saves the selection — and the user has no reason to
 // do that. Repairing on boot makes the shipped version the installed version.
 //
+// Call this from a daemon entry point, after New. It writes under the real user home, so a
+// constructor or a test constructing a server must not trigger it.
+//
 // Removal is deliberately excluded: a managed directory can contain files the user put there,
 // so deleting is an interactive operation that requires them to confirm a plan. Repairing is not.
-func (s *Server) autoUpdateInstalledSkills() {
+func (s *Server) AutoUpdateInstalledSkills() {
 	sourceDir := resolveSkillsSourceDir()
 	if sourceDir == "" {
 		return
