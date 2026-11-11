@@ -1,6 +1,6 @@
 # Agent tools
 
-BySpace 启动的 agent 通过 bundled skill + `byspace` CLI 操作 daemon。没有第二种投递面：daemon 不再向 provider 注入自己的 MCP server，也不再声明 provider 原生工具目录。术语是「Agent tools」，UI 上不再有单独的开关——技能默认装，能力随 agent 启动就有。
+BySpace 启动的 agent 通过 bundled skill + `byspace` CLI 操作 daemon。没有第二种投递面：daemon 不再向 provider 注入自己的 MCP server，也不再声明 provider 原生工具目录。术语是「Agent tools」，UI 上不再有单独的开关——技能不默认安装，用户在 host 的 Skills 卡片里显式选择后，能力随 agent 启动就有。
 
 ## 边界
 

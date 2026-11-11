@@ -67,7 +67,7 @@ BySpace delivers its own tools through the bundled `byspace` skill and the CLI, 
 
 A provider whose process environment is not per-agent (a shared server, for example) still gets the CLI, but the agent id is whatever the shared process carries — it cannot name its caller. That is a placement limitation, not a security one: the CLI's authority is the host's own `cli-credential`, the same principal the user's shell uses.
 
-The skill comes from `internal/server/skills/byspace/SKILL.md` and installs into `~/.agents/skills` and `~/.claude/skills`. A client that reads neither has no BySpace tools.
+The skill comes from `internal/server/skills/byspace/SKILL.md` and installs into `~/.agents/skills` and `~/.claude/skills` when the user selects it; nothing is installed by default. A client that reads neither has no BySpace tools.
 
 ### What the daemon can actually send each provider
 

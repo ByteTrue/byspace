@@ -1346,7 +1346,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				// Uninstall is the user saying "not on this host". Recording it is what makes that stick:
 				// a stored selection that still says "all" gets the bundle repaired back on the next
 				// startup where anything drifts, so the skills reappear after the user removed them.
-				sel = noSkillsSelection()
+				sel = defaultSkillSelection()
 				_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
 				ok = true
 				status = getSkillsStatus(sourceDir, userHome, sel, targets)

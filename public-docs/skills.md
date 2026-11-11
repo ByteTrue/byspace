@@ -10,14 +10,14 @@ category: Orchestration
 Skills give your agents reusable instructions for delegation, handoffs, and reviews. You can also [ask for these workflows directly](/docs/orchestration-workflows) without installing skills.
 | Skill | Use it to |
 | ------------------ | -------------------------------------------------------------------- |
-| `/byspace` | Always installed: how to manage agents, workspaces, schedules, and heartbeats. |
+| `/byspace` | How to manage agents, workspaces, schedules, and heartbeats. |
 | `/byspace-handoff` | Transfer a task and its context to another agent. |
 | `/byspace-committee` | Get two independent analyses of a difficult problem. |
 | `/byspace-advisor` | Get a second opinion on your current work. |
 
 ## Installation
 
-- **In BySpace:** Open **Settings → your host → Agents → Orchestration skills** and choose which skills to install on that host. The `/byspace` reference installs by itself — it is how an agent learns the CLI exists — and the workflow skills below are opt-in.
+- **In BySpace:** Open **Settings → your host → Agents → Orchestration skills** and choose which skills to install on that host. Nothing is installed until you choose; `/byspace` is the recommended first choice — it is how an agent learns the CLI exists — and the workflow skills below are optional.
 - **From the terminal:** Run `npx skills add ByteTrue/byspace` on the machine where your agents run.
 
 Use the same settings card to change the selection, update, or uninstall skills. Uninstalling records that choice, so a later start does not put the skills back. The picker also lists the install locations: `~/.agents/skills` (read by Codex, Pi, and other agents that use the shared skills folder) and `~/.claude/skills` (read by Claude Code). Turning a location off deletes the BySpace copies from it on the next save, so you can install only where your agents look. The host also refreshes selected installed BySpace skills on startup.

@@ -23,8 +23,8 @@ func sandboxUserHome(t *testing.T) string {
 // It used to run the startup repair from New. Every test that built a server without redirecting
 // the user home installed the reference skill into ~/.agents/skills and ~/.claude/skills, so a
 // skill the developer had uninstalled kept coming back after test runs. The real entry points call
-// AutoUpdateInstalledSkills explicitly; this pins both halves.
-func TestNewDoesNotInstallSkillsUntilTheDaemonEntryPointRuns(t *testing.T) {
+// AutoUpdateInstalledSkills explicitly; this pins both halves and the empty default.
+func TestSkillInstallRequiresAnExplicitSelection(t *testing.T) {
 	userHome := sandboxUserHome(t)
 	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "test"})
 	if err != nil {
@@ -46,9 +46,19 @@ func TestNewDoesNotInstallSkillsUntilTheDaemonEntryPointRuns(t *testing.T) {
 		t.Fatalf("constructing a server installed skills into %v", got)
 	}
 
+	// A daemon start with no stored selection installs nothing.
+	srv.AutoUpdateInstalledSkills()
+	if got := installedAt(); len(got) != 0 {
+		t.Fatalf("startup without a selection installed into %v", got)
+	}
+
+	// An explicit selection is what makes installation happen.
+	srv.store.SaveDaemonConfig(map[string]any{
+		"skillsSelection": map[string]any{"mode": "custom", "skills": []any{"byspace"}},
+	})
 	srv.AutoUpdateInstalledSkills()
 	if got := installedAt(); len(got) != 2 {
-		t.Fatalf("daemon startup installed into %v, want both agent homes", got)
+		t.Fatalf("startup with an explicit selection installed into %v, want both agent homes", got)
 	}
 }
 

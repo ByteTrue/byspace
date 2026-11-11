@@ -54,6 +54,9 @@ export async function startAgentSkillsSandbox(): Promise<AgentSkillsSandbox> {
   const daemon = await startIsolatedHostDaemon(`agent-skills-${randomUUID()}`, {
     environment: {
       HOME: home,
+      // Windows resolves os.UserHomeDir from USERPROFILE, not HOME; without it a skill
+      // install in this sandbox lands in the developer's real ~/.agents/skills.
+      USERPROFILE: home,
       NODE_ENV: "development",
       CLAUDE_CONFIG_DIR: path.join(root, "ignored-claude-config"),
       CODEX_HOME: path.join(root, "ignored-codex-home"),
@@ -76,8 +79,8 @@ export async function startAgentSkillsSandbox(): Promise<AgentSkillsSandbox> {
     home,
     targets,
     blockAgentsDirectory: async () => {
-      // The daemon installs the reference skill at startup, so `.agents/skills` is a real
-      // directory by the time a spec runs; replacing it with a file has to remove it first.
+      // A fresh host installs nothing, so `.agents/skills` may not exist yet; remove whatever is
+      // there before replacing it with a file.
       await rm(targets.agents, { recursive: true, force: true });
       await mkdir(path.dirname(targets.agents), { recursive: true });
       await writeFile(targets.agents, "not a directory", "utf8");
@@ -154,9 +157,8 @@ export async function expectSkillSelectionOpen(page: Page): Promise<void> {
 
 export async function chooseCustomSkills(page: Page, selected: string[]): Promise<void> {
   // The sheet opens from three states: "All skills" (an existing all-selection),
-  // a partial custom one, or nothing at all (a host that never chose — the
-  // daemon no longer defaults to installing the bundle). Set every row to the
-  // wanted state instead of assuming a starting point.
+  // a partial custom one, or nothing at all (a host that never chose). Set every
+  // row to the wanted state instead of assuming a starting point.
   const all = page.getByRole("switch", { name: "All skills", exact: true });
   if (await all.isChecked()) await all.click();
   const keep = new Set(selected);

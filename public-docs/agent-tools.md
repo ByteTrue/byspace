@@ -12,18 +12,19 @@ An agent running inside BySpace can manage its host: start other agents, create 
 workspaces, run the project's scripts, open terminals, and schedule work. It does that with the
 `byspace` CLI, taught by the bundled **byspace** skill.
 
-There is nothing to enable. BySpace installs the skill when it starts and puts its own binary on
-the agent's `PATH`, so the agent knows the command exists and which daemon to call. The agent also
-receives its own id, so anything it starts is recorded as its subagent.
+The skill is not installed by default. Choose it under **Settings → your host → Agents →
+Orchestration skills**; BySpace then puts its own binary on the agent's `PATH`, so the agent knows
+the command exists and which daemon to call. The agent also receives its own id, so anything it
+starts is recorded as its subagent.
 
 ## What the agent gets
 
-| Piece        | How it arrives                                                                      |
-| ------------ | ----------------------------------------------------------------------------------- |
-| The commands | `byspace` on `PATH`, pointing at the daemon that launched the agent.                |
-| The skill    | `~/.agents/skills/byspace` (and `~/.claude/skills/byspace` when that home is used). |
-| Identity     | `BYSPACE_AGENT_ID`, stamped on agents and schedules the agent creates.              |
-| Credentials  | The host's own CLI credential file. The agent never handles your password.          |
+| Piece        | How it arrives                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| The commands | `byspace` on `PATH`, pointing at the daemon that launched the agent.                                           |
+| The skill    | `~/.agents/skills/byspace` (and `~/.claude/skills/byspace` when that home is used), once selected in Settings. |
+| Identity     | `BYSPACE_AGENT_ID`, stamped on agents and schedules the agent creates.                                         |
+| Credentials  | The host's own CLI credential file. The agent never handles your password.                                     |
 
 Agents read the skill from those directories. A client that does not read them — most ACP
 clients, for example — gets no BySpace tools; the skill can be copied into that client's own skill

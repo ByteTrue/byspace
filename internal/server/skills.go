@@ -506,10 +506,9 @@ func (s *Server) AutoUpdateInstalledSkills() {
 	}
 
 	status := getSkillsStatus(sourceDir, userHome, selection, targets)
-	// A fresh home is not "drift", but it is the case where the reference skill has to arrive:
-	// with nothing installed there is nothing to repair, and the agent would start with no
-	// orchestration surface. An empty desired set produces no add ops, so a user who uninstalled
-	// everything still gets nothing back.
+	// A home that never chose has an empty selection, so a fresh home installs nothing here.
+	// Repairs apply only to an explicit selection; an uninstall stores the empty selection and
+	// therefore stays empty.
 	if len(status.Ops) == 0 {
 		return
 	}
@@ -565,26 +564,13 @@ func unconfirmedRemovals(ops []skillOp, confirmed []string) []string {
 	return removals
 }
 
-// defaultSkillSelection is what a home that never chose reports: the reference skill only.
+// defaultSkillSelection is what a home that never chose reports: no skills.
 //
-// `byspace` is not an optional workflow skill — it is where an agent learns that the daemon is
-// reachable through `byspace …` at all. A home that installed nothing had agents with no
-// orchestration surface, so the reference skill installs by default. Workflow skills (advisor,
-// committee, handoff, …) stay opt-in: the first boot of a home nobody configured used to install
-// the whole bundle, and a host whose user had removed them got them back on the next repair.
-//
-// An explicit empty selection is a real choice and is honoured: it differs from this default, so
-// uninstalling everything does not reinstall the reference skill on the next startup.
+// Installation is always an explicit choice. A daemon-start default that installed the reference
+// skill wrote into the shared user home, so an uninstall on one host came back whenever another
+// daemon home (dev, a test, a fresh checkout) started. The first install opens the picker with
+// nothing selected; `byspace` is recommended, not installed.
 func defaultSkillSelection() map[string]any {
-	return map[string]any{"mode": "custom", "skills": []any{"byspace"}}
-}
-
-// noSkillsSelection is a real, deliberate "install nothing" choice.
-//
-// It is not defaultSkillSelection: uninstall has to record something a later startup will not
-// repair back into an install. With the reference skill in the default, reusing the default here
-// reinstalled exactly what the user removed.
-func noSkillsSelection() map[string]any {
 	return map[string]any{"mode": "custom", "skills": []any{}}
 }
 

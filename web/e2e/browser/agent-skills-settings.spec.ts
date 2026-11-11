@@ -39,8 +39,8 @@ test.describe("Host agent skills", () => {
     const chosen = skills.available.slice(0, 1);
     await openAgentSkillsSettings(page, skills);
 
-    // A fresh host has the reference skill only (agents need it to find the CLI), and the
-    // workflow skills stay unselected: the picker is their only entry point.
+    // A fresh host has nothing installed and nothing selected: the picker is the only entry
+    // point, and `byspace` is a recommendation rather than a default.
     await openSkillSelection(page);
 
     await chooseCustomSkills(page, chosen);
@@ -200,9 +200,9 @@ test.describe("Host agent skills", () => {
     ).toBeVisible();
     await expect(page.getByRole("switch", { name: "All skills", exact: true })).toBeVisible();
     await skills.unblockAgentsDirectory();
-    // The failed save changed nothing. A host that never chose keeps the default, which is the
-    // reference skill: agents learn the `byspace` CLI from it.
-    await expectSavedSelection(skills, { mode: "custom", skills: ["byspace"] });
+    // The failed save changed nothing. A host that never chose has no selection and no
+    // installed skills.
+    await expectSavedSelection(skills, { mode: "custom", skills: [] });
   });
 
   test("serializes concurrent saves through the daemon command surface", async ({ skills }) => {
