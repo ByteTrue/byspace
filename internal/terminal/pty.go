@@ -100,6 +100,10 @@ func StartSession(opts StartOptions) (*Session, error) {
 		cols = 80
 	}
 
+	// Windows: point the PTY backend at the bundled ConPTY before the first pseudo console exists.
+	// The inbox implementation loses the mouse-mode DECSETs a full-screen TUI writes; the bundled
+	// OpenConsole forwards them. No-op on Unix.
+	ensureConptyRuntime()
 	term, err := pty.New()
 	if err != nil {
 		return nil, fmt.Errorf("terminal: create pseudo-terminal: %w", err)

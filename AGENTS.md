@@ -17,6 +17,7 @@ This is an npm workspace monorepo with a unified Go single binary:
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade
 - `packages/highlight` — Cross-package syntax highlighting
+- `third_party/go-pty` — Pinned PTY library with the Windows ConPTY payload loader; read its README before upgrading
 
 ## Docs
 

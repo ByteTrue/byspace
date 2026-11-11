@@ -8,9 +8,11 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -67,6 +69,43 @@ func buildDesktopStatusPayload(homeDir string, sup *DaemonSupervisor, updater *C
 		"updateState":      upd.State,
 		"latestVersion":    upd.LatestVersion,
 	}
+}
+
+// withDesktopOpenURL lets the web UI hand an external link to the system browser.
+//
+// The desktop webview has no tab strip or address bar: navigating it to a page replaces the whole
+// app with that page, and the user has no way back. The endpoint is reachable only from the shell
+// that serves the app's assets (the Wails webview), and accepts http(s) only.
+func withDesktopOpenURL(next http.Handler, open func(string) error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/_byspace/desktop/open-url" || r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		var req struct {
+			URL string `json:"url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		target, err := url.Parse(strings.TrimSpace(req.URL))
+		if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
+			http.Error(w, "only http(s) URLs can be opened", http.StatusBadRequest)
+			return
+		}
+		if open == nil {
+			http.Error(w, "opening URLs is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := open(target.String()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
 
 func withDesktopSettingsAPI(
@@ -356,7 +395,7 @@ func Run(version string, showMain bool, initialLink string) error {
 				WithExplicitConnectionHint(sup.Addr, localHostname).
 				WithLocalCredential(localToken)
 		}
-		assetHandler = withDesktopSettingsAPI(
+		assetHandler = withDesktopOpenURL(withDesktopSettingsAPI(
 			uiHandler,
 			homeDir,
 			sup,
@@ -412,7 +451,12 @@ func Run(version string, showMain bool, initialLink string) error {
 			func() bool {
 				return notifier.ready.Load() && notifier.authorized()
 			},
-		)
+		), func(target string) error {
+			if app == nil {
+				return fmt.Errorf("the app is not ready")
+			}
+			return app.Browser.OpenURL(target)
+		})
 
 		// Start intelligent sleep inhibition (Keep Awake while agents work + 10m grace)
 		go awake.Keep(bgCtx, func() awake.Level {

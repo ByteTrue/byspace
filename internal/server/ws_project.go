@@ -1421,6 +1421,7 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		_ = closedTerms[i].Close()
 		s.mu.Lock()
 		delete(s.terminals, slot)
+		delete(s.terminalSlotsByID, closedTerms[i].ID)
 		s.mu.Unlock()
 	}
 	if len(termSlots) > 0 {
@@ -1667,6 +1668,7 @@ func (s *Server) stopWorkspaceTerminals(workspaceID string) {
 		}
 		terminals = append(terminals, session)
 		delete(s.terminals, slot)
+		delete(s.terminalSlotsByID, session.ID)
 	}
 	s.mu.Unlock()
 

@@ -29,3 +29,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 )
+
+// Bundled copy: the upstream Windows implementation only uses the inbox ConPTY, which drops
+// mouse-mode DECSETs; the fork loads the bundled OpenConsole and falls back when it cannot.
+replace github.com/aymanbagabas/go-pty => ./third_party/go-pty

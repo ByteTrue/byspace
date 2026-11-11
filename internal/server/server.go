@@ -176,6 +176,10 @@ type Server struct {
 	// that says how many frames this daemon is sending and of what kind.
 	startedAt time.Time
 	metrics   *runtimeMetrics
+	// bgCtx bounds work started by New that outlives a request. Close cancels it, so provider
+	// probes do not keep running (and writing into the user home) after the server is gone.
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
 	// directory orders the app's directory replica: projects, workspaces and agents each get a
 	// sequence, and a deletion is remembered as a tombstone so a polling client can be told the row
 	// is gone. See internal/directorysync.
@@ -425,8 +429,9 @@ func New(opts Options) (*Server, error) {
 	srv.lastConfigSnapshot = srv.daemonConfigSnapshot()
 	srv.schedules = schedule.NewService(homeDir, srv.scheduleHooks())
 	srv.prStatus = newPRStatusState()
+	srv.bgCtx, srv.bgCancel = context.WithCancel(context.Background())
 	go func() {
-		pctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		pctx, cancel := context.WithTimeout(srv.bgCtx, 30*time.Second)
 		defer cancel()
 		_ = srv.probeOrCachedPiModels(pctx)
 		// Build the catalog before anyone asks for it. Proving which providers are installed runs
@@ -478,6 +483,9 @@ func (s *Server) Store() *store.Store  { return s.store }
 
 // Close shuts down any live Pi agent subprocesses and PTY sessions.
 func (s *Server) Close() error {
+	if s.bgCancel != nil {
+		s.bgCancel()
+	}
 	if s.schedules != nil {
 		s.schedules.Stop()
 	}
@@ -1077,6 +1085,7 @@ func (s *Server) ensureTerminalSlot(slot uint8, sink frameSink) *terminal.Sessio
 		return existing
 	}
 	s.terminals[slot] = created
+	s.terminalSlotsByID[created.ID] = slot
 	s.mu.Unlock()
 
 	// The creator is a subscriber like any other; registering it means unsubscribe works for

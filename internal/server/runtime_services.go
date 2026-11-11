@@ -699,10 +699,7 @@ func (s *Server) restorePersistedTerminals() {
 		if err != nil {
 			continue
 		}
-		slot := s.nextTerminalSlot()
-		s.mu.Lock()
-		s.terminals[slot] = created
-		s.mu.Unlock()
+		s.registerTerminalSession(created)
 		restored = append(restored, record)
 	}
 
@@ -714,16 +711,30 @@ func (s *Server) restorePersistedTerminals() {
 	}
 }
 
-// nextTerminalSlot returns a free terminal slot index.
-func (s *Server) nextTerminalSlot() uint8 {
+// registerTerminalSession inserts a session and its id under one lock.
+//
+// Every path that puts a terminal in s.terminals must use this. Restore used to pick slots from 1
+// while create used len(s.terminals), so the first tab created after a restart overwrote the last
+// restored session — and with the id map in place, input for that restored tab then reached the
+// new shell. One allocator for every path makes the slot and the id agree by construction.
+func (s *Server) registerTerminalSession(sess *terminal.Session) uint8 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for slot := 1; slot < 255; slot++ {
+	slot := s.freeTerminalSlotLocked()
+	s.terminals[slot] = sess
+	s.terminalSlotsByID[sess.ID] = slot
+	return slot
+}
+
+// freeTerminalSlotLocked returns the first free slot. The caller must hold s.mu.
+func (s *Server) freeTerminalSlotLocked() uint8 {
+	for slot := 0; slot < 255; slot++ {
 		if _, taken := s.terminals[uint8(slot)]; !taken {
 			return uint8(slot)
 		}
 	}
-	return 1
+	// Slots are a single byte; the 256th simultaneous terminal reuses 0 rather than vanishing.
+	return 0
 }
 
 // runPollTick runs one subscription poll, surviving a panic.

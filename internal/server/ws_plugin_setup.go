@@ -557,10 +557,8 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		return nil, startErr
 	}
 
+	s.registerTerminalSession(sess)
 	s.mu.Lock()
-	slot := uint8(len(s.terminals))
-	s.terminals[slot] = sess
-	s.terminalSlotsByID[termID] = slot
 	entry.sess = sess
 	entry.terminalID = termID
 	s.mu.Unlock()
