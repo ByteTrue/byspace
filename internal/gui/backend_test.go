@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 func TestNormalizeDeepLink(t *testing.T) {
@@ -171,5 +174,23 @@ func TestClientUpdaterNeverDownloadsSameOrOlderVersion(t *testing.T) {
 	u.DownloadFound()
 	if st, _ := u.State(); st != "latest" {
 		t.Fatalf("expected state to remain 'latest', got %q", st)
+	}
+}
+
+// The desktop app must bind the address the settings page saved, and dial it through loopback.
+func TestResolveDesktopListenAddr(t *testing.T) {
+	t.Setenv("BYSPACE_LISTEN", "")
+	t.Setenv("BYSPACE_PORT", "")
+	homeDir := t.TempDir()
+	if got := ResolveDesktopListenAddr(homeDir); got != defaultDesktopDaemonAddr {
+		t.Fatalf("fresh home = %q, want %q", got, defaultDesktopDaemonAddr)
+	}
+	store.New(homeDir).SaveDaemonConfig(map[string]any{"listen": "0.0.0.0:6777"})
+	got := ResolveDesktopListenAddr(homeDir)
+	if got != "0.0.0.0:6777" {
+		t.Fatalf("saved home = %q, want the saved listen target", got)
+	}
+	if dial := daemon.DialAddress(got); dial != "127.0.0.1:6777" {
+		t.Fatalf("dial address = %q, want loopback", dial)
 	}
 }

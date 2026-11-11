@@ -111,29 +111,3 @@ func TestSkillsInstallAndUninstallRemovesAllManagedSkillDirs(t *testing.T) {
 		}
 	}
 }
-
-// A home that never chose a selection gets the reference skill, and nothing else.
-//
-// The reference skill is where an agent learns that `byspace` exists; without it a fresh host has
-// no orchestration surface at all. The workflow skills stay opt-in, so a first boot must not drag
-// the whole bundle in.
-func TestBootRepairInstallsOnlyTheReferenceSkillWithoutAStoredSelection(t *testing.T) {
-	userHome := sandboxUserHome(t)
-
-	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "0.0.0-test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer srv.Close()
-
-	for _, home := range []string{".agents", ".claude"} {
-		installed := filepath.Join(userHome, home, "skills", "byspace", "SKILL.md")
-		if _, err := os.Stat(installed); err != nil {
-			t.Fatalf("startup did not install the reference skill at %s: %v", installed, err)
-		}
-		optional := filepath.Join(userHome, home, "skills", "byspace-advisor")
-		if _, err := os.Stat(optional); !os.IsNotExist(err) {
-			t.Fatalf("startup installed the optional skill %s without a selection", optional)
-		}
-	}
-}

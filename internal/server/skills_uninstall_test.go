@@ -50,6 +50,8 @@ func TestUninstallRecordsEmptySelectionSoStartupDoesNotReinstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The startup repair is an explicit entry-point step, not part of constructing the server.
+	srv.AutoUpdateInstalledSkills()
 	repaired := getSkillsStatus(sourceDir, userHome, map[string]any{"mode": "all"}, SkillTargetIDs)
 	if len(repaired.Installed) != len(bundle.Available) {
 		t.Fatalf("expected the startup repair to restore the bundle, got %v", repaired.Installed)
@@ -88,6 +90,7 @@ func TestUninstallRecordsEmptySelectionSoStartupDoesNotReinstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restarted.Close()
+	restarted.AutoUpdateInstalledSkills()
 	for _, name := range repaired.Installed {
 		path := filepath.Join(skillsDir, name)
 		if _, err := os.Stat(path); !os.IsNotExist(err) {

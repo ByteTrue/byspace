@@ -13,7 +13,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - Hosted HTTPS 页面在创建 WebSocket 前拒绝非 loopback 的 `ws://` Direct endpoint，并给出可行动提示；loopback、`wss://`、Relay 与同源 Web UI 不受影响。
 - 上一条让**浏览器装成 PWA 与局域网明文直连互斥**：service worker 只在安全上下文里注册，而从 HTTPS 源加载的浏览器页面又连不了 `ws://192.168.x.x`。Wails v3 Android 客户端（侧载 APK，运行于本地 `https://wails.localhost` 并开启 `MIXED_CONTENT_ALWAYS_ALLOW` 与 `usesCleartextTraffic`）不受此限制，可直接连接局域网/Tailscale 明文 `ws://` daemon。影响到的能力见 [通知送达](notifications.md) 与 [notes/019](../notes/019-wails-v3-in-process-assets-and-android-mixed-content.md)。
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
-- **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
+- **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。监听地址解析优先级为 显式 `--addr` > `BYSPACE_LISTEN` > 持久化 `daemon.listen` > 默认 `127.0.0.1:6777`；显式 flag 会被 `daemon install-service` 烤进 unit，旧安装需要重装才跟随设置。
 
 ## Relay 会话生命周期
 

@@ -58,7 +58,7 @@ func (s *Server) agentEnv(rec store.AgentRecord) []string {
 func setEnv(env []string, key, value string) []string {
 	out := make([]string, 0, len(env)+1)
 	for _, entry := range env {
-		if name, _, ok := strings.Cut(entry, "="); ok && name == key {
+		if name, _, ok := strings.Cut(entry, "="); ok && sameEnvKey(name, key) {
 			continue
 		}
 		out = append(out, entry)
@@ -67,13 +67,24 @@ func setEnv(env []string, key, value string) []string {
 }
 
 func envValue(env []string, key string) string {
-	prefix := key + "="
 	for _, entry := range env {
-		if strings.HasPrefix(entry, prefix) {
-			return entry[len(prefix):]
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && sameEnvKey(name, key) {
+			return value
 		}
 	}
 	return ""
+}
+
+// sameEnvKey compares variable names the way the environment does.
+//
+// Windows names are case-insensitive and the block keeps the spelling of whoever created it: a
+// daemon launched from Explorer carries `Path`, not `PATH`. Matching exactly left that entry in
+// place and appended a second `PATH` holding only our directory; the later duplicate wins on
+// Windows, so every provider child lost node and Pi reported that Node.js was missing on a
+// machine that has it.
+func sameEnvKey(name, key string) bool {
+	return strings.EqualFold(name, key)
 }
 
 func prependPathDir(dir, path string) string {

@@ -1129,6 +1129,16 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 	return cfg
 }
 
+// PersistedListenAddr returns the saved `daemon.listen`, or "" when the home carries none.
+//
+// This is the only network setting that is stored. The wire's `network` block is derived from it:
+// `allowLanAccess` says whether the address is reachable beyond loopback and `tcpPort` says which
+// port it binds, so neither is written back.
+func (s *Store) PersistedListenAddr() string {
+	value, _ := s.loadDaemonConfigRaw()["listen"].(string)
+	return strings.TrimSpace(value)
+}
+
 // stripBOM removes a UTF-8 byte-order mark.
 //
 // Windows editors (PowerShell's `Set-Content -Encoding UTF8`, Notepad, Visual Studio) write one by
@@ -1275,10 +1285,6 @@ func daemonConfigDefaults() map[string]any {
 		"appendSystemPrompt":       "",
 		"agentProfiles":            []any{},
 		"cors":                     map[string]any{"allowedOrigins": []any{}},
-		"network": map[string]any{
-			"allowLanAccess": false,
-			"tcpPort":        6778,
-		},
 		"auth": map[string]any{
 			"passwordSet": false,
 		},
@@ -1366,6 +1372,10 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 		}
 	}
 	dropRemovedProviders(daemon)
+	// `network` is a view of `daemon.listen`, not a setting. Older builds persisted it, and a
+	// stale `allowLanAccess: true` there disagreed with the actual listener; drop it so the file
+	// has one source of truth.
+	delete(daemon, "network")
 	disk["daemon"] = daemon
 	if agentsTouched {
 		disk["agents"] = agents

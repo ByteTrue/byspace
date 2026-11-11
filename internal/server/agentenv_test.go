@@ -101,3 +101,26 @@ func TestAgentEnvAppliesUserVariablesWithoutLosingIdentity(t *testing.T) {
 		t.Errorf("BYSPACE_AGENT_ID = %q, want the real id to win", got)
 	}
 }
+
+// Windows inherits variable names with the parent's spelling — Explorer hands the daemon `Path`.
+// Treating that as a different name left the real PATH untouched and added a second one holding
+// only our directory; the child resolved the later entry and lost node.
+func TestEnvHelpersMatchNamesRegardlessOfCase(t *testing.T) {
+	env := []string{"Path=/usr/bin", "HOME=/home/user"}
+	if got := envValue(env, "PATH"); got != "/usr/bin" {
+		t.Fatalf("envValue = %q, want the inherited value", got)
+	}
+	out := setEnv(env, "PATH", "/opt/byspace:/usr/bin")
+	paths := 0
+	for _, entry := range out {
+		if name, _, ok := strings.Cut(entry, "="); ok && strings.EqualFold(name, "PATH") {
+			paths++
+		}
+	}
+	if paths != 1 {
+		t.Fatalf("PATH-style entries = %d in %v, want exactly the replaced one", paths, out)
+	}
+	if got := envValue(out, "PATH"); got != "/opt/byspace:/usr/bin" {
+		t.Errorf("PATH = %q, want the replacement", got)
+	}
+}

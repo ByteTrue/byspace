@@ -21,6 +21,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
+	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/gui/autostart"
 	"github.com/ByteTrue/byspace/internal/gui/awake"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -340,10 +341,12 @@ func Run(version string, showMain bool, initialLink string) error {
 			assetHandler = http.NotFoundHandler()
 		}
 	} else {
+		listenAddr := ResolveDesktopListenAddr(homeDir)
 		sup = &DaemonSupervisor{
-			Addr:    ResolveDesktopDaemonAddr(),
-			HomeDir: homeDir,
-			Version: version,
+			Addr:       daemon.DialAddress(listenAddr),
+			ListenAddr: listenAddr,
+			HomeDir:    homeDir,
+			Version:    version,
 		}
 		localToken := server.EnsureCLICredential(homeDir)
 		localHostname, _ := os.Hostname()

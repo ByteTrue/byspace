@@ -19,6 +19,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/proc"
 	"github.com/ByteTrue/byspace/internal/server"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 const defaultDesktopDaemonAddr = "127.0.0.1:6777"
@@ -46,10 +47,12 @@ func NormalizeDeepLink(link string) string {
 	return "/"
 }
 
-// ResolveDesktopDaemonAddr returns the loopback address the desktop app attaches to or serves on.
-// Respects BYSPACE_LISTEN, BYSPACE_PORT, and defaults .dev/byspace-home checkouts to port 6778 so
-// dev desktop runs never collide with the production daemon on 6777.
-func ResolveDesktopDaemonAddr() string {
+// ResolveDesktopListenAddr returns where the desktop app should bind the daemon.
+//
+// Respects BYSPACE_LISTEN and BYSPACE_PORT, then the home's saved `daemon.listen` (the settings
+// page writes it when LAN access is toggled), then the dev port for a repository checkout so dev
+// desktop runs never collide with the production daemon on 6777.
+func ResolveDesktopListenAddr(homeDir string) string {
 	if v := strings.TrimSpace(os.Getenv("BYSPACE_LISTEN")); v != "" {
 		return v
 	}
@@ -59,6 +62,11 @@ func ResolveDesktopDaemonAddr() string {
 		}
 		return "127.0.0.1:" + p
 	}
+	if homeDir != "" {
+		if saved := store.New(homeDir).PersistedListenAddr(); saved != "" {
+			return saved
+		}
+	}
 	if h := strings.TrimSpace(os.Getenv("BYSPACE_HOME")); strings.Contains(filepath.ToSlash(h), ".dev/byspace-home") {
 		return "127.0.0.1:6778"
 	}
@@ -67,7 +75,7 @@ func ResolveDesktopDaemonAddr() string {
 
 // ProbeDaemonInfo queries /health on addr and returns whether a daemon is answering along with its version.
 func ProbeDaemonInfo(addr string) (ok bool, version string) {
-	target, err := daemon.ParseListenTarget(addr)
+	target, err := daemon.ParseListenTarget(daemon.DialAddress(addr))
 	if err != nil || target.Kind != "tcp" {
 		return false, ""
 	}
@@ -115,7 +123,11 @@ type DaemonHostStatus struct {
 // every WatchInterval; if it exits (or was never running), the desktop app seamlessly starts an
 // in-process server.Server on Addr.
 type DaemonSupervisor struct {
-	Addr          string
+	// Addr is the address clients dial. A wildcard listen is reached through loopback, so this is
+	// not always the bind target.
+	Addr string
+	// ListenAddr is the target the in-process daemon binds: it may be a wildcard host or a socket.
+	ListenAddr    string
 	HomeDir       string
 	Version       string
 	WatchInterval time.Duration
@@ -140,8 +152,17 @@ func (d *DaemonSupervisor) Start() error {
 		return nil
 	}
 	d.mu.Lock()
+	if d.ListenAddr == "" {
+		if d.Addr != "" {
+			// The caller named an address to serve on (the tests do this); it doubles as the bind
+			// target unless a separate one was given.
+			d.ListenAddr = d.Addr
+		} else {
+			d.ListenAddr = ResolveDesktopListenAddr(d.HomeDir)
+		}
+	}
 	if d.Addr == "" {
-		d.Addr = ResolveDesktopDaemonAddr()
+		d.Addr = daemon.DialAddress(d.ListenAddr)
 	}
 	if d.WatchInterval <= 0 {
 		d.WatchInterval = 15 * time.Second
@@ -342,11 +363,15 @@ func (d *DaemonSupervisor) startInProcess() error {
 		return nil
 	}
 	addr := d.Addr
+	listenAddr := d.ListenAddr
 	homeDir := d.HomeDir
 	version := d.Version
 	d.mu.Unlock()
+	if listenAddr == "" {
+		listenAddr = addr
+	}
 
-	target, err := daemon.ParseListenTarget(addr)
+	target, err := daemon.ParseListenTarget(listenAddr)
 	if err != nil {
 		return err
 	}
@@ -390,7 +415,8 @@ func (d *DaemonSupervisor) startInProcess() error {
 		daemon.RemovePID(srv.HomeDir(), myPID)
 		return fmt.Errorf("supervisor closed")
 	}
-	d.Addr = boundAddr
+	d.Addr = daemon.DialAddress(boundAddr)
+	d.ListenAddr = boundAddr
 	d.HomeDir = srv.HomeDir()
 	d.srv = srv
 	d.httpSrv = httpSrv

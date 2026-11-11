@@ -102,3 +102,21 @@ func TestSocketPathTooLong(t *testing.T) {
 		t.Fatalf("expected an actionable message, got: %v", err)
 	}
 }
+
+// A wildcard bind must be dialed through loopback: Windows refuses a connection to 0.0.0.0.
+func TestDialAddress(t *testing.T) {
+	cases := map[string]string{
+		"0.0.0.0:6777":      "127.0.0.1:6777",
+		"[::]:6777":         "127.0.0.1:6777",
+		"127.0.0.1:6777":    "127.0.0.1:6777",
+		"192.168.1.5:80":    "192.168.1.5:80",
+		"localhost:6777":    "localhost:6777",
+		"":                  "",
+		"/tmp/byspace.sock": "/tmp/byspace.sock",
+	}
+	for in, want := range cases {
+		if got := DialAddress(in); got != want {
+			t.Errorf("DialAddress(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

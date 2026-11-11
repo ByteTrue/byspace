@@ -11,6 +11,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/server"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 // `daemon status` with no --addr must find the daemon this home recorded.
@@ -203,5 +204,26 @@ func TestDaemonStatusIgnoresADaemonFromAnotherBuild(t *testing.T) {
 		[]string{"daemon", "start", "--home", homeDir, "--addr", port, "--no-web-ui"},
 		&startOut, &startErr); code == 0 {
 		t.Fatalf("daemon start reported success against a foreign daemon: %q", startOut.String())
+	}
+}
+
+// A daemon serving a home binds the saved daemon.listen unless the flag or environment owns the
+// address. This is what makes the settings page's LAN toggle take effect on the next start.
+func TestResolveServeListenAddr(t *testing.T) {
+	t.Setenv("BYSPACE_LISTEN", "")
+	homeDir := t.TempDir()
+	if got := resolveServeListenAddr("", homeDir); got != DefaultTCPListen {
+		t.Fatalf("fresh home = %q, want %q", got, DefaultTCPListen)
+	}
+	store.New(homeDir).SaveDaemonConfig(map[string]any{"listen": "0.0.0.0:9100"})
+	if got := resolveServeListenAddr("", homeDir); got != "0.0.0.0:9100" {
+		t.Fatalf("saved home = %q, want the saved address", got)
+	}
+	if got := resolveServeListenAddr("127.0.0.1:9200", homeDir); got != "127.0.0.1:9200" {
+		t.Fatalf("explicit flag = %q, want the flag to win", got)
+	}
+	t.Setenv("BYSPACE_LISTEN", "127.0.0.1:9300")
+	if got := resolveServeListenAddr("", homeDir); got != "127.0.0.1:9300" {
+		t.Fatalf("environment = %q, want BYSPACE_LISTEN to win", got)
 	}
 }

@@ -83,11 +83,12 @@ func AppendStandardDirs(env []string) []string {
 	}
 	out := append([]string(nil), env...)
 	pathIndex := -1
+	pathKey := "PATH"
 	existing := ""
 	for i, entry := range out {
-		key, value, ok := strings.Cut(entry, "=")
-		if ok && key == "PATH" {
+		if key, value, ok := strings.Cut(entry, "="); ok && strings.EqualFold(key, "PATH") {
 			pathIndex = i
+			pathKey = key
 			existing = value
 			break
 		}
@@ -106,7 +107,9 @@ func AppendStandardDirs(env []string) []string {
 		}
 	}
 	if pathIndex >= 0 {
-		out[pathIndex] = "PATH=" + existing
+		// Keep the spelling the caller's block already uses. Appending a second `PATH` beside a
+		// Windows `Path` entry is how a child ended up with only the directories added here.
+		out[pathIndex] = pathKey + "=" + existing
 	} else {
 		out = append(out, "PATH="+existing)
 	}

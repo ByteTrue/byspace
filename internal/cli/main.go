@@ -367,7 +367,7 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 
 func runServe(version string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "listen address")
+	addr := fs.String("addr", "", "listen address (default "+defaultListenAddr()+")")
 	homeDir := fs.String("home", "", "byspace home directory")
 	relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay ws:// or wss:// endpoint")
 	webDir := fs.String("web-dir", os.Getenv("BYSPACE_WEB_DIR"), "optional static web UI directory")
@@ -379,14 +379,22 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	addrExplicit := flagWasSet(fs, "addr")
+	resolvedHome, err := home.Resolve(*homeDir)
+	if err != nil {
+		return err
+	}
+	// The settings page saves `daemon.listen`; honouring it here is what makes the LAN toggle
+	// take effect after a restart. An explicit --addr or BYSPACE_LISTEN still outranks it.
+	listenAddr := resolveServeListenAddr(*addr, resolvedHome)
 
 	srv, err := server.New(server.Options{
-		HomeDir: *homeDir,
+		HomeDir: resolvedHome,
 		Version: version,
 		WebDir:  *webDir,
 		// Agents learn the address the daemon actually binds as BYSPACE_HOST, which for a unix
 		// socket or a wildcard bind is not what was passed on the command line.
-		ListenAddr:   *addr,
+		ListenAddr:   listenAddr,
 		DisableWebUI: *noWebUI && !*webUI,
 		RelayUseTLS:  *relayUseTLS,
 	})
@@ -416,7 +424,7 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if existing, ok := daemon.ReadPIDLock(srv.HomeDir()); ok && !daemon.IsStale(srv.HomeDir(), existing) && existing.PID != myPID {
 		return fmt.Errorf("another byspace daemon is already running (pid %d, started %s)", existing.PID, existing.StartedAt)
 	}
-	listenTarget, err := daemon.ParseListenTarget(*addr)
+	listenTarget, err := daemon.ParseListenTarget(listenAddr)
 	if err != nil {
 		return err
 	}
@@ -424,14 +432,14 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	listenAddr := listenTarget.Address()
+	boundAddr := listenTarget.Address()
 	exeName := ""
 	if exe, exeErr := os.Executable(); exeErr == nil {
 		exeName = filepath.Base(exe)
 	}
 	_ = daemon.WritePIDLock(srv.HomeDir(), daemon.PIDLockInfo{
 		PID:     myPID,
-		Listen:  &listenAddr,
+		Listen:  &boundAddr,
 		ExeName: exeName,
 	})
 	defer daemon.RemovePID(srv.HomeDir(), myPID)
@@ -499,7 +507,14 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if daemon.Supervised() {
 		return errRestartUnderSupervisor
 	}
-	if _, spawnErr := daemon.StartBackgroundArgs("", srv.HomeDir(), args); spawnErr != nil {
+	// A restart asked for from the app has to pick up a saved daemon.listen. The address resolved
+	// at this process's own startup is baked into the command line (or was never there); unless the
+	// user or the environment owns it, drop it so the replacement resolves the saved setting.
+	restartArgs := args
+	if !addrExplicit && strings.TrimSpace(os.Getenv("BYSPACE_LISTEN")) == "" {
+		restartArgs = withoutFlag(args, "addr")
+	}
+	if _, spawnErr := daemon.StartBackgroundArgs("", srv.HomeDir(), restartArgs); spawnErr != nil {
 		fmt.Fprintf(os.Stderr, "daemon restart: %v\n", spawnErr)
 	}
 	return nil
@@ -513,18 +528,22 @@ var errRestartUnderSupervisor = errors.New("restarting under the service manager
 
 func runWeb(version string, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("web", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "listen address")
+	addr := fs.String("addr", "", "listen address (default "+defaultListenAddr()+")")
 	lan := fs.Bool("lan", false, "expose on 0.0.0.0")
 	homeDir := fs.String("home", "", "byspace home directory")
 	webDir := fs.String("web-dir", os.Getenv("BYSPACE_WEB_DIR"), "static web UI directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	resolvedHome, err := home.Resolve(*homeDir)
+	if err != nil {
+		return err
+	}
 
-	listenAddr := *addr
+	listenAddr := resolveServeListenAddr(*addr, resolvedHome)
 	if *lan {
-		_, port, err := net.SplitHostPort(listenAddr)
-		if err == nil {
+		_, port, splitErr := net.SplitHostPort(listenAddr)
+		if splitErr == nil {
 			listenAddr = "0.0.0.0:" + port
 		}
 	}
@@ -535,7 +554,7 @@ func runWeb(version string, args []string, stdout io.Writer) error {
 		return nil
 	}
 
-	return runServe(version, []string{"--addr", listenAddr, "--home", *homeDir, "--web-dir", *webDir}, stdout)
+	return runServe(version, []string{"--addr", listenAddr, "--home", resolvedHome, "--web-dir", *webDir}, stdout)
 }
 
 func runRelay(args []string, stdout io.Writer) error {
@@ -1257,7 +1276,8 @@ func probeHealthPath(addr, healthPath string) (*healthStatus, error) {
 			},
 		}
 	} else if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
-		u = "http://" + u
+		// A wildcard bind is health-checked through loopback; 0.0.0.0 is not connectable on Windows.
+		u = "http://" + daemon.DialAddress(addr)
 	}
 	client := &http.Client{Timeout: 2 * time.Second, Transport: transport}
 	resp, err := client.Get(strings.TrimRight(u, "/") + healthPath)
@@ -1330,7 +1350,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 
 	case "start":
 		fs := flag.NewFlagSet("daemon start", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
+		addr := fs.String("addr", "", "daemon listen address (default "+defaultListenAddr()+")")
 		homeDir := fs.String("home", "", "byspace home directory")
 		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
 		relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
@@ -1344,12 +1364,16 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if st, probeErr := probeHealth(*addr); probeErr == nil {
+		addrExplicit := flagWasSet(fs, "addr")
+		// Probe the address this daemon will actually use, which may be the home's saved
+		// daemon.listen rather than the packaged default.
+		listenAddr := resolveServeListenAddr(*addr, resolvedHome)
+		if st, probeErr := probeHealth(listenAddr); probeErr == nil {
 			srvID, _ := home.GetOrCreateServerID(resolvedHome)
 			if st.ServerID == "" || st.ServerID != srvID {
-				return fmt.Errorf("a daemon that is not this build is already listening on %s; stop it first", *addr)
+				return fmt.Errorf("a daemon that is not this build is already listening on %s; stop it first", listenAddr)
 			}
-			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", *addr, st.ServerID)
+			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", listenAddr, st.ServerID)
 			return nil
 		}
 		// The home may already have a daemon on another address. Starting a second one for the same
@@ -1358,53 +1382,46 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		// port that belongs to a different home is a different daemon.
 		if lock, ok := daemon.ReadPIDLock(resolvedHome); ok && lock.Listen != nil {
 			recorded := strings.TrimSpace(*lock.Listen)
-			if recorded != "" && recorded != *addr {
+			if recorded != "" && recorded != listenAddr {
 				recorded = daemonHostCandidatesForHome(recorded, resolvedHome)[0]
 				if st, recErr := probeHealth(recorded); recErr == nil {
 					fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", recorded, st.ServerID)
-					fmt.Fprintf(stdout, "note: asked for %s; stop the daemon before changing its address\n", *addr)
+					fmt.Fprintf(stdout, "note: asked for %s; stop the daemon before changing its address\n", listenAddr)
 					return nil
 				}
 			}
 		}
 		// The flags are forwarded to the serve process: accepting them here and not passing them on
-		// would leave the user believing a setting took effect.
-		var webUISetting *bool
+		// would leave the user believing a setting took effect. --addr is the exception: a value
+		// the user did not type must stay unresolved so the daemon reads the saved setting on each
+		// start, including the restart a client asks for from the app.
+		serveArgs := []string{"--home", resolvedHome}
+		if addrExplicit {
+			serveArgs = append(serveArgs, "--addr", *addr)
+		}
+		if strings.TrimSpace(*relayURL) != "" {
+			serveArgs = append(serveArgs, "--relay", *relayURL)
+		}
+		if *relayUseTLS {
+			serveArgs = append(serveArgs, "--relay-use-tls")
+		}
 		switch {
 		case *noWebUI && !*webUI:
-			disabled := false
-			webUISetting = &disabled
+			serveArgs = append(serveArgs, "--no-web-ui")
 		case *webUI && !*noWebUI:
-			enabled := true
-			webUISetting = &enabled
+			serveArgs = append(serveArgs, "--web-ui")
 		}
 		if *foreground {
 			// Foreground means "the daemon is this process": no pid lock, no detach, logs on the
 			// terminal. That is what a container entrypoint or a debugger needs, and it is why the
 			// flag exists rather than being sugar for --web-ui.
-			serveArgs := []string{"--addr", *addr, "--home", resolvedHome}
-			if strings.TrimSpace(*relayURL) != "" {
-				serveArgs = append(serveArgs, "--relay", *relayURL)
-			}
-			if *relayUseTLS {
-				serveArgs = append(serveArgs, "--relay-use-tls")
-			}
-			if webUISetting != nil && !*webUISetting {
-				serveArgs = append(serveArgs, "--no-web-ui")
-			}
 			return runServe(cliVersion, serveArgs, stdout)
 		}
 
 		// Record how much log already exists: a failed start has to be diagnosed from what this
 		// attempt wrote, not from the previous daemon's periodic metrics.
 		logStart := daemonLogSize(resolvedHome)
-		pid, err := daemon.StartBackgroundWithOptions(daemon.StartOptions{
-			HomeDir:     resolvedHome,
-			Addr:        *addr,
-			RelayURL:    *relayURL,
-			RelayUseTLS: *relayUseTLS,
-			WebUI:       webUISetting,
-		})
+		pid, err := daemon.StartBackgroundArgs("", resolvedHome, serveArgs)
 		if err != nil {
 			return err
 		}
@@ -1417,8 +1434,8 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		// message.
 		deadline := time.Now().Add(daemonStartTimeout)
 		for time.Now().Before(deadline) {
-			if st, healthErr := probeHealth(*addr); healthErr == nil {
-				fmt.Fprintf(stdout, "started  pid=%d  addr=%s  serverId=%s\n", pid, *addr, st.ServerID)
+			if st, healthErr := probeHealth(listenAddr); healthErr == nil {
+				fmt.Fprintf(stdout, "started  pid=%d  addr=%s  serverId=%s\n", pid, listenAddr, st.ServerID)
 				return nil
 			}
 			if !daemon.ProcessAlive(pid) {
@@ -1471,7 +1488,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 
 	case "restart":
 		fs := flag.NewFlagSet("daemon restart", flag.ContinueOnError)
-		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
+		addr := fs.String("addr", "", "daemon listen address (default "+defaultListenAddr()+")")
 		homeDir := fs.String("home", "", "byspace home directory")
 		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
 		if err := fs.Parse(rest); err != nil {
@@ -1487,11 +1504,10 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		// An unset --addr has to stay unset here, or the address the lock recorded is never probed
 		// and a daemon on a non-default port looks absent.
 		explicitAddr := ""
-		fs.Visit(func(f *flag.Flag) {
-			if f.Name == "addr" {
-				explicitAddr = *addr
-			}
-		})
+		if flagWasSet(fs, "addr") {
+			explicitAddr = *addr
+		}
+		listenAddr := resolveServeListenAddr(*addr, resolvedHome)
 		controlAddr, pidBefore := runningDaemonAddr(explicitAddr, resolvedHome)
 		if controlAddr != "" && daemonControl(controlAddr, "requested by byspace daemon restart", true) {
 			pid, restarted := awaitDaemonRestart(controlAddr, resolvedHome, pidBefore, 60*time.Second)
@@ -1509,26 +1525,33 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		// Wait for the port to be released before starting. Without this the new process can
 		// lose the bind race against the one that is still shutting down, and `restart` reports
 		// success while nothing is listening.
-		daemon.WaitForShutdown(resolvedHome, *addr, 5*time.Second)
+		daemon.WaitForShutdown(resolvedHome, listenAddr, 5*time.Second)
 		// A daemon this CLI cannot signal is not a daemon it can restart: report that instead of
 		// starting a second process that loses the bind race and reporting "already running".
 		if !stopped {
 			probeAddr := controlAddr
 			if probeAddr == "" {
-				probeAddr = *addr
+				probeAddr = listenAddr
 			}
 			if _, probeErr := probeHealth(probeAddr); probeErr == nil {
 				return fmt.Errorf("the daemon on %s did not stop (pid %d); restart it from the app that hosts it",
 					probeAddr, pid)
 			}
 		}
-		return runDaemonCmd(cliVersion, []string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
+		startArgs := []string{"start", "--home", resolvedHome}
+		if explicitAddr != "" {
+			startArgs = append(startArgs, "--addr", explicitAddr)
+		}
+		if strings.TrimSpace(*relayURL) != "" {
+			startArgs = append(startArgs, "--relay", *relayURL)
+		}
+		return runDaemonCmd(cliVersion, startArgs, stdout)
 
 	case "install-service":
 		fs := flag.NewFlagSet("daemon install-service", flag.ContinueOnError)
 		homeDir := fs.String("home", "", "byspace home directory")
-		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
-		fs.StringVar(addr, "listen", defaultListenAddr(), "daemon listen address")
+		addr := fs.String("addr", "", "daemon listen address (default "+defaultListenAddr()+")")
+		fs.StringVar(addr, "listen", "", "daemon listen address (default "+defaultListenAddr()+")")
 		asJSON := fs.Bool("json", false, "output JSON")
 		if err := fs.Parse(rest); err != nil {
 			return err
@@ -1541,9 +1564,16 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if exeErr != nil {
 			return exeErr
 		}
+		// Only an address the operator typed is baked into the unit. Otherwise the service would
+		// pin the value from install time and the settings page's daemon.listen could never take
+		// effect on the next start.
+		serviceArgs := []string{"serve", "--home", resolvedHome}
+		if flagWasSet(fs, "addr") || flagWasSet(fs, "listen") {
+			serviceArgs = append(serviceArgs, "--addr", *addr)
+		}
 		result, installErr := daemon.InstallLoginService(
 			exe,
-			[]string{"serve", "--addr", *addr, "--home", resolvedHome},
+			serviceArgs,
 			daemon.CarriedEnviron(),
 			daemon.LogPath(resolvedHome),
 		)
@@ -1645,6 +1675,57 @@ func defaultListenAddr() string {
 	return DefaultTCPListen
 }
 
+// resolveServeListenAddr is the address a daemon serving this home should bind.
+//
+// An explicit --addr wins, then BYSPACE_LISTEN. Otherwise the home's saved daemon.listen is
+// honoured: that is the value the settings page writes when LAN access is toggled, and reading it
+// here is what makes the change take effect on the next start. The packaged default is the fallback.
+func resolveServeListenAddr(flagValue, homeDir string) string {
+	if v := strings.TrimSpace(flagValue); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("BYSPACE_LISTEN")); v != "" {
+		return v
+	}
+	if homeDir != "" {
+		if saved := store.New(homeDir).PersistedListenAddr(); saved != "" {
+			return saved
+		}
+	}
+	return defaultListenAddr()
+}
+
+// flagWasSet reports whether name was given on the command line rather than defaulted.
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
+// withoutFlag drops a value flag from a serve command line.
+//
+// Used when a client asks a `serve` daemon to restart: the address it bound was resolved from the
+// saved setting, so carrying the resolved value into the replacement would freeze it. Both
+// `-addr value` and `-addr=value` are accepted by the flag package.
+func withoutFlag(args []string, name string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		trimmed := strings.TrimLeft(args[i], "-")
+		switch {
+		case trimmed == name:
+			i++
+		case strings.HasPrefix(trimmed, name+"="):
+		default:
+			out = append(out, args[i])
+		}
+	}
+	return out
+}
+
 // dialDaemonWS connects to a daemon.
 //
 // When no explicit address was given, every recorded candidate is tried: a daemon may be listening
@@ -1682,7 +1763,8 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 	if !strings.HasPrefix(wsURL, "ws://") && !strings.HasPrefix(wsURL, "wss://") {
 		wsURL = strings.TrimPrefix(wsURL, "http://")
 		wsURL = strings.TrimPrefix(wsURL, "https://")
-		wsURL = "ws://" + strings.TrimRight(wsURL, "/") + "/ws"
+		// A wildcard bind is dialed through loopback; 0.0.0.0 is not a connectable address.
+		wsURL = "ws://" + daemon.DialAddress(strings.TrimRight(wsURL, "/")) + "/ws"
 	}
 	// A daemon with a password rejects the upgrade outright, so a bearer has to ride on the
 	// handshake.

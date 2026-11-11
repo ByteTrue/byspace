@@ -1521,16 +1521,55 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if hashErr != nil {
 			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 				"requestId": req.RequestID,
-				"config":    s.store.LoadDaemonConfig(),
+				"config":    s.loadDaemonConfigWithService(),
 				"error":     hashErr.Error(),
 			})
 			return
+		}
+		// LAN access is stored as `daemon.listen`, not as the derived `network` view. Translating
+		// here is what makes the toggle take effect: the next start binds the saved address.
+		lanAccess, hasLANPatch := takeDaemonNetworkPatch(req.Config)
+		persistedListen := s.store.PersistedListenAddr()
+		if hasLANPatch {
+			listen, listenErr := s.daemonListenForLAN(*lanAccess)
+			if listenErr != nil {
+				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"config":    s.loadDaemonConfigWithService(),
+					"error":     listenErr.Error(),
+				})
+				return
+			}
+			req.Config["listen"] = listen
+			persistedListen = listen
+		}
+		// Opening the daemon to the network without a password hands every device on it the
+		// ability to drive agents, so the invariant is enforced here rather than trusted to the
+		// app. Checked on the resulting state so a single patch may disable LAN and clear the
+		// password together.
+		if (hasLANPatch || applyAuth) && lanOpen(s.listenIntent(persistedListen)) {
+			passwordSet := s.store.DaemonPasswordHash() != ""
+			if applyAuth {
+				passwordSet = strings.TrimSpace(passwordHash) != ""
+			}
+			if !passwordSet {
+				message := "set a password before allowing LAN access"
+				if applyAuth {
+					message = "turn LAN access off before clearing the password"
+				}
+				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"config":    s.loadDaemonConfigWithService(),
+					"error":     message,
+				})
+				return
+			}
 		}
 		if validationErr := store.ValidateDaemonConfigForProviders(req.Config, providers.ServedProviderIDs()); validationErr != nil {
 			fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", validationErr)
 			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 				"requestId": req.RequestID,
-				"config":    s.store.LoadDaemonConfig(),
+				"config":    s.loadDaemonConfigWithService(),
 				"error":     validationErr.Error(),
 			})
 			return
@@ -1540,16 +1579,16 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", err)
 				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
 					"requestId": req.RequestID,
-					"config":    s.store.LoadDaemonConfig(),
+					"config":    s.loadDaemonConfigWithService(),
 					"error":     err.Error(),
 				})
 				return
 			}
 		}
-		updated := s.store.SaveDaemonConfig(req.Config)
-		if svc := daemon.BuildServiceView(); svc != nil {
-			updated["service"] = svc
-		}
+		s.store.SaveDaemonConfig(req.Config)
+		// Re-read instead of trusting the merge: the view has to carry the port this daemon
+		// actually bound, and the saved password shows up as `passwordSet` only on a fresh load.
+		updated := s.loadDaemonConfigWithService()
 		s.ApplyRelayConfig(ctx)
 		s.ApplyTunnelConfig()
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
@@ -1954,11 +1993,34 @@ func supportsDaemonServiceInstall() bool {
 }
 
 func (s *Server) loadDaemonConfigWithService() map[string]any {
-	cfg := s.store.LoadDaemonConfig()
+	cfg := withDaemonNetworkView(s.store.LoadDaemonConfig(), s.listenIntent(s.store.PersistedListenAddr()))
 	if svc := daemon.BuildServiceView(); svc != nil {
 		cfg["service"] = svc
 	}
 	return cfg
+}
+
+// withDaemonNetworkView puts the network block into the shape the wire schema requires.
+//
+// Both fields are a view of the listen target, never stored state: `allowLanAccess` says whether
+// that address is reachable beyond loopback, and `tcpPort` is the port it binds (null on a
+// socket/pipe). A home that stores only `daemon.listen` therefore still produces a complete
+// block, and a stale value written by an older build cannot disagree with the listener.
+func withDaemonNetworkView(cfg map[string]any, listenAddr string) map[string]any {
+	cfg["network"] = map[string]any{
+		"allowLanAccess": lanOpen(listenAddr),
+		"tcpPort":        boundTCPPort(listenAddr),
+	}
+	return cfg
+}
+
+// boundTCPPort is the port the listener took, or nil on a socket/pipe where LAN access does not apply.
+func boundTCPPort(listenAddr string) any {
+	target, err := daemon.ParseListenTarget(strings.TrimSpace(listenAddr))
+	if err != nil || target.Kind != "tcp" {
+		return nil
+	}
+	return target.Port
 }
 
 func takeDaemonServicePatch(cfg map[string]any) (install bool, ok bool) {

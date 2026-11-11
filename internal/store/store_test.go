@@ -199,3 +199,28 @@ func TestResolveWorkspaceIDForPathIsSymlinkAware(t *testing.T) {
 		t.Fatalf("trailing separator resolved to %q, want %q", got, ws.WorkspaceID)
 	}
 }
+
+// `daemon.listen` is the persisted network setting; the wire's network block is derived from it.
+// A save must also drop the legacy derived block, or a stale allowLanAccess keeps disagreeing.
+func TestPersistedListenAddrAndLegacyNetworkCleanup(t *testing.T) {
+	dir := t.TempDir()
+	st := New(dir)
+	// Seed the shape an older build wrote: a derived block and no listen.
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
+  "version": 1,
+  "daemon": {"network": {"allowLanAccess": true}}
+}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.PersistedListenAddr(); got != "" {
+		t.Fatalf("PersistedListenAddr = %q, want empty", got)
+	}
+
+	st.SaveDaemonConfig(map[string]any{"listen": "0.0.0.0:6777"})
+	if got := st.PersistedListenAddr(); got != "0.0.0.0:6777" {
+		t.Fatalf("PersistedListenAddr = %q, want the saved address", got)
+	}
+	if _, present := st.LoadDaemonConfig()["network"]; present {
+		t.Fatal("the legacy network block must be dropped on write")
+	}
+}

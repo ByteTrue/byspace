@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -266,5 +267,29 @@ func TestProbeRejectsNonExecutable(t *testing.T) {
 	}
 	if Probe(context.Background(), filepath.Join(dir, "does-not-exist")) {
 		t.Fatal("a missing file must not be reported as available")
+	}
+}
+
+// Windows keeps the caller's spelling (`Path`), so a lookup that only matches `PATH` appended a
+// second entry holding nothing but the directories added here — and the child resolved that one.
+func TestAppendStandardDirsExtendsTheInheritedEntry(t *testing.T) {
+	inherited := filepath.Join(t.TempDir(), "bin")
+	env := AppendStandardDirs([]string{"Path=" + inherited})
+	entries := 0
+	value := ""
+	for _, entry := range env {
+		if name, v, ok := strings.Cut(entry, "="); ok && strings.EqualFold(name, "PATH") {
+			entries++
+			value = v
+		}
+	}
+	if entries != 1 {
+		t.Fatalf("PATH-style entries = %d in %v, want one", entries, env)
+	}
+	if !strings.Contains(value, inherited) {
+		t.Errorf("PATH = %q, want the inherited directory kept", value)
+	}
+	if len(StandardDirs()) > 0 && !strings.Contains(value, StandardDirs()[0]) {
+		t.Errorf("PATH = %q, want the standard directories appended", value)
 	}
 }

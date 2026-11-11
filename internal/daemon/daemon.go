@@ -301,58 +301,13 @@ func StopRunningWithTimeout(homeDir string, grace time.Duration) (int, bool, err
 	return pid, true, nil
 }
 
-// StartBackground spawns `byspace serve` detached in the background, logging to $BYSPACE_HOME/daemon.log.
-// StartOptions are the flags a background start forwards to the serve process.
+// StartBackgroundArgs spawns `byspace serve` detached with the exact flags it was given.
 //
-// Passed through rather than kept as CLI-only flags: `daemon start --no-web-ui` that does not turn
-// the web UI off on the process it launches is worse than not having the flag, because the user
-// believes it worked.
-type StartOptions struct {
-	ExePath  string
-	HomeDir  string
-	Addr     string
-	RelayURL string
-	// RelayUseTLS switches pairing offers to wss://.
-	RelayUseTLS bool
-	// WebUI controls the bundled web UI. Tri-state: nil means "leave to the daemon's config".
-	WebUI *bool
-}
-
-// StartBackgroundWithOptions launches the daemon with the given options.
-func StartBackgroundWithOptions(options StartOptions) (int, error) {
-	args := []string{"serve", "--addr", options.Addr, "--home", options.HomeDir}
-	if strings.TrimSpace(options.RelayURL) != "" {
-		args = append(args, "--relay", strings.TrimSpace(options.RelayURL))
-	}
-	if options.RelayUseTLS {
-		args = append(args, "--relay-use-tls")
-	}
-	if options.WebUI != nil {
-		if *options.WebUI {
-			args = append(args, "--web-ui")
-		} else {
-			args = append(args, "--no-web-ui")
-		}
-	}
-	return spawnBackground(options.ExePath, options.HomeDir, args)
-}
-
-// StartBackgroundArgs relaunches `serve` with the exact flags it was given.
-//
-// A restart has to reproduce the command line, not the subset StartOptions models: `--web-dir` and
-// any flag added later are invisible to the typed options, and a daemon that comes back slightly
-// different is a restart the user has to notice by hand.
+// A restart has to reproduce the command line: `--web-dir` and any flag added later would be
+// invisible to a typed options struct, and a daemon that comes back slightly different is a
+// restart the user has to notice by hand.
 func StartBackgroundArgs(exePath, homeDir string, serveArgs []string) (int, error) {
 	return spawnBackground(exePath, homeDir, append([]string{"serve"}, serveArgs...))
-}
-
-func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
-	return StartBackgroundWithOptions(StartOptions{
-		ExePath:  exePath,
-		HomeDir:  homeDir,
-		Addr:     addr,
-		RelayURL: relayURL,
-	})
 }
 
 // spawnBackground starts the process with the given serve arguments.

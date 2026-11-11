@@ -122,6 +122,27 @@ func (t ListenTarget) Address() string {
 	return t.Path
 }
 
+// DialAddress turns a listen target into an address a client on this machine can dial.
+//
+// A wildcard bind is reached through loopback: `0.0.0.0` is not a connectable address on every
+// platform (Windows refuses it), while a wildcard listener accepts loopback connections. A socket
+// or pipe is returned as-is; it has no host to rewrite.
+func DialAddress(listen string) string {
+	trimmed := strings.TrimSpace(listen)
+	target, err := ParseListenTarget(trimmed)
+	if err != nil {
+		return trimmed
+	}
+	if target.Kind != "tcp" {
+		return target.Path
+	}
+	host := target.Host
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, strconv.Itoa(target.Port))
+}
+
 func expandHome(path string) string {
 	if path == "~" {
 		home, err := os.UserHomeDir()

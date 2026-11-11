@@ -7,10 +7,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/ByteTrue/byspace/internal/execres"
 )
 
+// A bare provider name has to resolve through the standard install dirs a desktop daemon does
+// not inherit over PATH (here, a user-local binary in a home that is not on PATH).
 func TestStartProviderSessionResolvesUserLocalCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses shell scripts")
@@ -20,19 +23,32 @@ func TestStartProviderSessionResolvesUserLocalCommand(t *testing.T) {
 	if err := os.MkdirAll(localBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The launch returns as soon as the process is spawned, so the marker is the evidence that
+	// the resolved executable actually ran; an exit status cannot distinguish a failed launch from
+	// a provider that started and quit.
+	marker := filepath.Join(home, "launched")
 	command := filepath.Join(localBin, "pi")
-	if err := os.WriteFile(command, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(command, []byte("#!/bin/sh\n: > '"+marker+"'\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", t.TempDir())
 
-	_, err := StartProviderSession(LaunchConfig{Provider: "pi"})
-	if err == nil {
-		t.Fatal("the stub provider should exit instead of completing RPC initialization")
+	sess, err := StartProviderSession(LaunchConfig{Provider: "pi"})
+	if err != nil {
+		t.Fatalf("launch failed to use the resolved executable: %v", err)
 	}
-	if _, statErr := os.Stat(command); statErr != nil {
-		t.Fatalf("launch did not resolve the user-local executable: %v", statErr)
+	defer sess.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, statErr := os.Stat(marker); statErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the resolved provider executable did not run")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if resolved := ResolveProviderCommand(context.Background(), "pi"); resolved != command {
 		t.Fatalf("launch resolver = %q, want %q", resolved, command)
