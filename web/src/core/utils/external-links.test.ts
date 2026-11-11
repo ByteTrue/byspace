@@ -33,6 +33,14 @@ function stubFetch(): ReturnType<typeof vi.fn> {
   return fetchSpy;
 }
 
+// Registered after the external-link handler, so that handler still sees an unhandled click.
+// Only suppresses jsdom's own navigation; it cannot hide a missing guard in our handler.
+function preventBrowserNavigation(): void {
+  const prevent = (event: Event) => event.preventDefault();
+  document.addEventListener("click", prevent);
+  disposers.push(() => document.removeEventListener("click", prevent));
+}
+
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
   document.body.replaceChildren();
@@ -61,9 +69,9 @@ describe("installExternalLinkHandler", () => {
     const fetchSpy = stubFetch();
     disposers.push(installExternalLinkHandler());
 
+    preventBrowserNavigation();
+
     const anchor = renderAnchor("/settings/hosts");
-    // Keep jsdom from attempting the navigation the test is not about.
-    anchor.addEventListener("click", (event) => event.preventDefault());
     click(anchor);
 
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -87,11 +95,10 @@ describe("installExternalLinkHandler", () => {
     desktopShell();
     const fetchSpy = stubFetch();
     disposers.push(installExternalLinkHandler());
+    preventBrowserNavigation();
 
     const anchor = renderAnchor("https://example.com/file.zip");
     anchor.setAttribute("download", "");
-    // Keep jsdom from attempting the download's navigation.
-    anchor.addEventListener("click", (event) => event.preventDefault());
     click(anchor);
 
     expect(fetchSpy).not.toHaveBeenCalled();

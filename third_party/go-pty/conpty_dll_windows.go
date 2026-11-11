@@ -28,41 +28,52 @@ type conptyDLL struct {
 }
 
 var (
-	conptyOnce sync.Once
+	conptyMu   sync.Mutex
+	conptyPath string
 	conptyImpl *conptyDLL
 	ptyCounter atomic.Uint64
 )
 
+// loadConptyDLL resolves BYSPACE_CONPTY_DLL on every call until it succeeds.
+//
+// Not a sync.Once: the terminal package may extract the payload after an earlier StartSession had
+// already asked for it (antivirus lock, permission), and a cached nil would keep the inbox
+// implementation for the whole daemon lifetime even after a successful retry.
 func loadConptyDLL() *conptyDLL {
-	conptyOnce.Do(func() {
-		path := os.Getenv("BYSPACE_CONPTY_DLL")
-		if path == "" {
-			return
-		}
-		dll, err := windows.LoadLibraryEx(path, 0, windows.LOAD_WITH_ALTERED_SEARCH_PATH)
-		if err != nil {
-			return
-		}
-		impl := &conptyDLL{}
-		var loadErr error
-		if impl.create, loadErr = windows.GetProcAddress(dll, "ConptyCreatePseudoConsole"); loadErr != nil {
-			_ = windows.FreeLibrary(dll)
-			return
-		}
-		if impl.resize, loadErr = windows.GetProcAddress(dll, "ConptyResizePseudoConsole"); loadErr != nil {
-			_ = windows.FreeLibrary(dll)
-			return
-		}
-		if impl.close, loadErr = windows.GetProcAddress(dll, "ConptyClosePseudoConsole"); loadErr != nil {
-			_ = windows.FreeLibrary(dll)
-			return
-		}
-		if impl.release, loadErr = windows.GetProcAddress(dll, "ConptyReleasePseudoConsole"); loadErr != nil {
-			_ = windows.FreeLibrary(dll)
-			return
-		}
-		conptyImpl = impl
-	})
+	path := os.Getenv("BYSPACE_CONPTY_DLL")
+	conptyMu.Lock()
+	defer conptyMu.Unlock()
+	if conptyImpl != nil && conptyPath == path {
+		return conptyImpl
+	}
+	conptyImpl = nil
+	conptyPath = path
+	if path == "" {
+		return nil
+	}
+	dll, err := windows.LoadLibraryEx(path, 0, windows.LOAD_WITH_ALTERED_SEARCH_PATH)
+	if err != nil {
+		return nil
+	}
+	impl := &conptyDLL{}
+	var loadErr error
+	if impl.create, loadErr = windows.GetProcAddress(dll, "ConptyCreatePseudoConsole"); loadErr != nil {
+		_ = windows.FreeLibrary(dll)
+		return nil
+	}
+	if impl.resize, loadErr = windows.GetProcAddress(dll, "ConptyResizePseudoConsole"); loadErr != nil {
+		_ = windows.FreeLibrary(dll)
+		return nil
+	}
+	if impl.close, loadErr = windows.GetProcAddress(dll, "ConptyClosePseudoConsole"); loadErr != nil {
+		_ = windows.FreeLibrary(dll)
+		return nil
+	}
+	if impl.release, loadErr = windows.GetProcAddress(dll, "ConptyReleasePseudoConsole"); loadErr != nil {
+		_ = windows.FreeLibrary(dll)
+		return nil
+	}
+	conptyImpl = impl
 	return conptyImpl
 }
 
