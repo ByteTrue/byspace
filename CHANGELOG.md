@@ -5,6 +5,27 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.24.9 - 2026-11-11
+
+### Added
+
+- Pi installed through its own installer is detected and launched
+- The model picker lists OpenCode models discovered from the CLI and Claude models configured in Claude Code's settings
+
+### Changed
+
+- Provider settings show the resolved binary, version, PATH matches and config files instead of a fixed healthy line
+- Links in the desktop app open in the system browser instead of the embedded webview
+- A new host installs no agent skills until a selection is saved
+
+### Fixed
+
+- Fixed the LAN access switch saving a flag without changing the daemon's listen address
+- Fixed saving a daemon password failing with a response validation error when the network block omitted the TCP port
+- Fixed Windows agents failing to find Node.js when the inherited PATH was spelled `Path`
+- Fixed restored terminal tabs answering "Terminal not found" after a daemon restart, and the first new tab replacing a restored shell
+- Fixed the mouse wheel becoming arrow keys in full-screen terminal apps on Windows
+
 ## 0.24.8 - 2026-11-10
 
 ### Added
