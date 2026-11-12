@@ -10,6 +10,33 @@ This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
 do not use `createBySpaceDaemon` as a product launch path.
 
+## Multiple daemons and the browser (end-to-end)
+
+Some behaviour only exists once two real daemons and a browser are in the loop: host-list sync, tunnel authorization, the pairing flow, a password gate that only a relay connection hits. Unit tests and the in-process harness below fake the client and run one daemon, so they cannot see it. Two real bugs in the host-sync epic — a dropped direct-connection password, and a CLI command that booted the production home — showed up only on this path.
+
+Run it locally without touching 6777. Build the binary first (`go build -o bin/byspace.exe .`), then:
+
+```bash
+# a relay the two daemons meet on
+./bin/byspace.exe relay --addr 127.0.0.1:8791 &
+
+# two daemons, each with its own home and port, both pointed at that relay
+./bin/byspace.exe serve --addr 127.0.0.1:8792 --home "$TEMP/v2a" --relay ws://127.0.0.1:8791/ws &
+./bin/byspace.exe serve --addr 127.0.0.1:8793 --home "$TEMP/v2b" --relay ws://127.0.0.1:8791/ws &
+
+# the web app, pointed at daemon A
+BYSPACE_LISTEN=127.0.0.1:8792 npm run dev:app &
+```
+
+Drive the browser with the Playwright MCP server. The form fields carry `data-testid`s (`welcome-direct-connection`, `direct-password-input`, `tunnels-add-listen-host`, ...) — click and fill through those, and read state back with `page.evaluate(() => JSON.parse(localStorage.getItem('@byspace:daemon-registry')))`.
+
+Two rules that keep this off the production home:
+
+- **Every daemon gets its own `--home` under a temp dir and a port that is not 6777 or 6778.** `serve --addr` takes the address explicitly; `daemon start` does not, which is the spawn this doc bans.
+- **Do not run `byspace pair`, `onboard`, or any CLI command that resolves a home without pointing it at the temp home.** A command that cannot reach its `--addr` falls back to reading a home, and `--home` unset resolves to `~/.byspace`. That is how `pair` once booted the production home; see [the note](../byissue/notes/2026-11-12-cli-pair-offline-offer-boots-the-home.md). To get a second daemon's pairing link, read `server-id` and `daemon-keypair.json` from its temp home directly, or pass `--home "$TEMP/v2b"`.
+
+Stop the daemons and the web app when done and remove the temp homes. Confirm 6777 is still the production PID before and after.
+
 ## Quick start
 
 ```typescript
