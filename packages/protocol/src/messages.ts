@@ -1652,6 +1652,15 @@ export const HostSyncChangeSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
+// Relay auth: a connection that arrived through the relay proves the daemon password inside the
+// encrypted channel, before it sends hello. The relay forwards the socket but never sees this,
+// because it is ciphertext by then. A daemon with no password set rejects the connection.
+export const RelayPasswordSubmitRequestSchema = z.object({
+  type: z.literal("auth.password.submit.request"),
+  requestId: z.string(),
+  password: z.string(),
+});
+
 export const HostSyncExchangeRequestSchema = z.object({
   type: z.literal("hosts.sync.exchange.request"),
   requestId: z.string(),
@@ -3416,6 +3425,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   HubManagementDaemonDisconnectRequestSchema,
   HubManagementDaemonPermissionsUpdateRequestSchema,
   HostSyncExchangeRequestSchema,
+  RelayPasswordSubmitRequestSchema,
   TunnelListRequestSchema,
   TunnelOpenRequestSchema,
   TunnelCloseRequestSchema,
@@ -3947,6 +3957,10 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(hostSync): added in v0.25.0; remove gate after 2027-11-12. Old daemons
         // have no replica, so the client keeps such a host out of sync and asks for an update.
         hostSync: z.boolean().optional(),
+        // COMPAT(relayPassword): added in v0.25.0; remove gate after 2027-11-12. A daemon that
+        // advertises this checks the relay password inside the encrypted channel and refuses a
+        // relay connection when no password is set. Older daemons check nothing on the relay path.
+        relayPassword: z.boolean().optional(),
         // COMPAT(daemonServiceInstall): added in v0.14.7. When false (or absent on
         // an older daemon), the app hides the service-management switch instead of
         // letting an install appear to succeed.
@@ -5163,6 +5177,14 @@ export const HubManagementDaemonDisconnectResponseSchema = z.object({
 export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
   type: z.literal("hub.management.daemon.permissions.update.response"),
   payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
+});
+
+export const RelayPasswordSubmitResponseSchema = z.object({
+  type: z.literal("auth.password.submit.response"),
+  payload: z.object({
+    requestId: z.string(),
+    ok: z.boolean(),
+  }),
 });
 
 export const HostSyncExchangeResponseSchema = z.object({
@@ -6996,6 +7018,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DaemonConfigReloadResponseSchema,
   HubManagementDaemonConnectResponseSchema,
   HostSyncExchangeResponseSchema,
+  RelayPasswordSubmitResponseSchema,
   TunnelListResponseSchema,
   TunnelOpenResponseSchema,
   TunnelCloseResponseSchema,
@@ -7500,6 +7523,8 @@ export type HostSyncRecord = z.infer<typeof HostSyncRecordSchema>;
 export type HostSyncChange = z.infer<typeof HostSyncChangeSchema>;
 export type HostSyncExchangeRequest = z.infer<typeof HostSyncExchangeRequestSchema>;
 export type HostSyncExchangeResponse = z.infer<typeof HostSyncExchangeResponseSchema>;
+export type RelayPasswordSubmitRequest = z.infer<typeof RelayPasswordSubmitRequestSchema>;
+export type RelayPasswordSubmitResponse = z.infer<typeof RelayPasswordSubmitResponseSchema>;
 export type TunnelListRequest = z.infer<typeof TunnelListRequestSchema>;
 export type TunnelOpenRequest = z.infer<typeof TunnelOpenRequestSchema>;
 export type TunnelCloseRequest = z.infer<typeof TunnelCloseRequestSchema>;

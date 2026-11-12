@@ -68,6 +68,15 @@ done
 	return scriptPath
 }
 
+func mustBase64(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	decoded, err := base64.StdEncoding.DecodeString(string(raw))
+	if err != nil {
+		t.Fatalf("not base64: %s", raw)
+	}
+	return decoded
+}
+
 func readUntilSessionType(t *testing.T, ctx context.Context, ws *websocket.Conn, wantType string, wantStatus string) map[string]any {
 	t.Helper()
 	for {
@@ -259,6 +268,27 @@ func TestServerOverRelayE2EEHandshake(t *testing.T) {
 	var readyMsg e2ee.ReadyMessage
 	if err := json.Unmarshal(readyRaw, &readyMsg); err != nil || readyMsg.Type != "e2ee_ready" {
 		t.Fatalf("expected e2ee_ready, got %s", string(readyRaw))
+	}
+
+	// A relay connection proves the daemon password inside the channel before hello. The daemon
+	// under test has one set; without it the socket is closed and no server_info follows.
+	setDaemonPassword(t, srv, "relay-secret")
+	proof, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "auth.password.submit.request",
+			"requestId": "req_pw",
+			"password":  "relay-secret",
+		},
+	})
+	cipherProof, _ := e2ee.Encrypt(sharedKey, proof)
+	if err := cliWS.Write(ctx, websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(cipherProof))); err != nil {
+		t.Fatal(err)
+	}
+	if _, proofReply, err := cliWS.Read(ctx); err != nil {
+		t.Fatal(err)
+	} else if plain, derr := e2ee.Decrypt(sharedKey, mustBase64(t, proofReply)); derr != nil || !strings.Contains(string(plain), `"ok":true`) {
+		t.Fatalf("password was not accepted: %s (err=%v)", plain, derr)
 	}
 
 	// Send encrypted BySpace hello

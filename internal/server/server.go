@@ -52,6 +52,9 @@ const (
 	wsCloseInvalidHello      = 4002
 	wsCloseIncompatibleProto = 4003
 	wsCloseServerShutdown    = 1001
+	// A relay connection that never proves a password, or proves the wrong one. Distinct from the
+	// hello timeout so a client can tell "set or enter the password" from "the socket stalled".
+	wsCloseRelayAuthRequired = 4004
 	wsHelloTimeout           = 15 * time.Second
 )
 
@@ -269,6 +272,9 @@ type Server struct {
 	// sinkPermissions holds the granted permissions per connection. A connection absent from
 	// this map acts as the owner, which is how a direct local connection behaves.
 	sinkPermissions map[frameSink][]string
+	// relayAuthPending_ marks relay connections that have not yet proven a password inside the
+	// encrypted channel. They hold nothing until they do (see authz.go).
+	relayAuthPending_ map[frameSink]bool
 	// pushHTTPClient overrides the push transport; a test harness needs to reach a local
 	// TLS push service without a trusted certificate.
 	pushHTTPClient *http.Client
@@ -905,6 +911,12 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 	e2eeSess := e2ee.NewDaemonSession(&rawTransportAdapter{ctx: ctx, raw: rawSink}, s.keyPair)
 	adapter := &e2eeSinkAdapter{ctx: ctx, raw: rawSink, sess: e2eeSess}
 
+	// A relay connection is reachable by anyone who saw the pairing offer, which carries the
+	// serverId and public key but not the password. It starts with no permissions and the first
+	// thing it sends inside the encrypted channel must be the password. The HTTP bearer check
+	// never sees this socket: the daemon dials it itself.
+	s.relayAuthPending(adapter)
+
 	// greeted: the remote client's hello already arrived on the relay's control channel.
 	s.serveSessionOnSinkGreeted(ctx, adapter, func(rctx context.Context) (e2ee.Frame, error) {
 		for {
@@ -964,6 +976,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 		delete(s.clientPresence, sink)
 		delete(s.terminalDelivered, sink)
 		s.mu.Unlock()
+		s.relayAuthForget(sink)
 		s.notePRStatusClientsChanged()
 		// A closed socket must stop receiving terminal output; the terminal outlives it.
 		s.releaseTerminalSubscriptions(sink, "")
@@ -1120,6 +1133,12 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 	case "recording_state":
 		return
 	case "hello":
+		// A relay connection proves its password before it is a client. Accepting the hello first
+		// would hand it server_info and a connection slot with no credentials at all.
+		if s.relayAuthIsPending(sink) {
+			_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
+			return
+		}
 		if envelope.ProtocolVersion != WSProtocolVersion {
 			_ = sink.Close(wsCloseIncompatibleProto, "Incompatible protocol version")
 			return
@@ -1330,6 +1349,7 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentConfigApply":             true,
 			"daemonNetworkConfig":          true,
 			"hostSync":                     true,
+			"relayPassword":                true,
 			"daemonServiceInstall":         supportsDaemonServiceInstall(),
 		},
 	}
@@ -1347,6 +1367,18 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	handleStart := time.Now()
 	defer func() { s.metrics.recordLatency(base.Type, time.Since(handleStart)) }()
 
+	// A relay connection owes its password before anything else. The proof travels inside the
+	// encrypted channel, so the relay that forwarded the socket never sees it. Until it lands, the
+	// connection holds no permissions and every other request is refused.
+	if s.relayAuthIsPending(sink) {
+		// Anything but the password proof closes the socket. The proof itself falls through to its
+		// case below; routing it here keeps the message a real route the parity audit can see.
+		if base.Type != "auth.password.submit.request" {
+			_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
+			return
+		}
+	}
+
 	// Every request is authorized before it is dispatched. The table says which semantic
 	// permission each operation needs; a connection that authenticated with a password but was
 	// granted no permissions must not be able to drive agents or edit files just because it
@@ -1362,6 +1394,14 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	}
 
 	switch base.Type {
+	case "auth.password.submit.request":
+		// Only a relay connection still proving itself reaches this with anything to do. A direct
+		// connection already authenticated at the HTTP layer, so the message is a no-op there.
+		if s.relayAuthIsPending(sink) {
+			s.handleRelayPassword(ctx, sink, raw)
+		}
+		return
+
 	case "ping":
 		var ping struct {
 			RequestID    string `json:"requestId"`

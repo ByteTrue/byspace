@@ -7,6 +7,7 @@ import {
   type Logger,
 } from "./daemon-client";
 import { CLIENT_CAPS } from "@bytetrue/protocol/client-capabilities";
+import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
@@ -689,6 +690,56 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
     headers: { Authorization: "Bearer shared-secret" },
     protocols: ["byspace.bearer.shared-secret"],
   });
+});
+
+// A relay connection must not put the password anywhere the relay can read. The subprotocol and
+// the Authorization header are plaintext handshake fields the relay sees; the password belongs in
+// the first session frame, which the relay transport encrypts.
+test("proves a relay password inside the channel instead of the subprotocol", async () => {
+  vi.resetModules();
+  vi.doMock("./daemon-client-relay-e2ee-transport", () => ({
+    createRelayE2eeTransportFactory:
+      (args: { baseFactory: (input: unknown) => unknown }) => (input: unknown) =>
+        args.baseFactory(input),
+  }));
+  const { DaemonClient: Client } = await import("./daemon-client");
+
+  const mock = createMockTransport();
+  const transportFactory = vi.fn(() => mock.transport);
+  const relayUrl = buildRelayWebSocketUrl({
+    endpoint: "relay.example:443",
+    useTls: true,
+    serverId: "srv_test",
+    role: "client",
+  });
+
+  const client = new Client({
+    url: relayUrl,
+    clientId: "clsk_unit_test",
+    password: "shared-secret",
+    reconnect: { enabled: false },
+    transportFactory,
+    e2ee: { enabled: true, daemonPublicKeyB64: "not-a-real-key" },
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ preserveSent: true });
+  await connectPromise;
+
+  // Nothing in the handshake carries the password: no header, no subprotocol.
+  expect(transportFactory).toHaveBeenCalledWith({ url: relayUrl, headers: {} });
+
+  // The password is the first thing sent, inside a session frame the relay transport encrypts,
+  // and it goes out before hello.
+  const frames = mock.sent.map((frame) => JSON.parse(assertStr(frame)));
+  expect(frames[0]?.message?.type).toBe("auth.password.submit.request");
+  expect(frames[0]?.message?.password).toBe("shared-secret");
+  expect(frames[1]?.type).toBe("hello");
+  expect(JSON.stringify(transportFactory.mock.calls)).not.toContain("shared-secret");
+
+  vi.doUnmock("./daemon-client-relay-e2ee-transport");
+  vi.resetModules();
 });
 
 test("advertises client capabilities in hello", async () => {

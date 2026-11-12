@@ -49,6 +49,9 @@ export interface RelayHostConnection {
   relayEndpoint: string;
   useTls?: boolean;
   daemonPublicKeyB64: string;
+  // Proven inside the encrypted channel, never in the relay handshake. Absent until the operator
+  // enters it (unit D owns the prompt); a daemon that requires one closes the socket without it.
+  password?: string;
 }
 
 export type HostConnection =
@@ -147,7 +150,8 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
     return (
       left.relayEndpoint === right.relayEndpoint &&
       left.useTls === right.useTls &&
-      left.daemonPublicKeyB64 === right.daemonPublicKeyB64
+      left.daemonPublicKeyB64 === right.daemonPublicKeyB64 &&
+      left.password === right.password
     );
   }
 
@@ -391,6 +395,7 @@ const StoredHostConnectionSchema = z.discriminatedUnion("type", [
     relayEndpoint: z.string(),
     useTls: z.boolean().optional(),
     daemonPublicKeyB64: z.string(),
+    password: z.string().optional(),
   }),
 ]);
 const StoredHostProfileSchema = z.strictObject({
@@ -456,6 +461,7 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
         relayEndpoint,
         ...(useTls !== undefined ? { useTls } : {}),
         daemonPublicKeyB64,
+        ...(connection.password !== undefined ? { password: connection.password } : {}),
       };
     } catch {
       return null;

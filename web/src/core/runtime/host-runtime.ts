@@ -524,6 +524,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
           useTls: connection.useTls ?? shouldUseTlsForDefaultHostedRelay(connection.relayEndpoint),
           serverId: host.serverId,
         }),
+        ...(connection.password ? { password: connection.password } : {}),
         e2ee: {
           enabled: true,
           daemonPublicKeyB64: connection.daemonPublicKeyB64,

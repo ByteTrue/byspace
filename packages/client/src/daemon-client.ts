@@ -1116,6 +1116,31 @@ interface PingProbe {
   drivesLivenessFailure: boolean;
 }
 
+// relayHandshakeAuth decides what a connection puts in its handshake.
+//
+// A relay connection proves its password inside the encrypted channel, after this handshake, so the
+// handshake carries nothing: the subprotocol and Authorization header are plaintext, and the relay
+// reads both. A direct connection has no such party in the middle, so it keeps the bearer.
+function relayHandshakeAuth(input: {
+  relay: boolean;
+  password: string | null;
+  authHeader?: string;
+}): { headers: Record<string, string>; protocols?: string[] } {
+  if (input.relay) {
+    return { headers: {} };
+  }
+  if (input.password) {
+    return {
+      headers: { Authorization: `Bearer ${input.password}` },
+      protocols: [`byspace.bearer.${input.password}`],
+    };
+  }
+  if (input.authHeader) {
+    return { headers: { Authorization: input.authHeader } };
+  }
+  return { headers: {} };
+}
+
 export class DaemonClient {
   private readonly providerSnapshotUpdates = new ProviderSnapshotUpdates({
     fetch: (cwd) => this.requestProvidersSnapshot({ cwd }),
@@ -1266,12 +1291,15 @@ export class DaemonClient {
 
     const headers: Record<string, string> = {};
     const password = normalizePassword(this.config.password);
-    if (password) {
-      headers.Authorization = `Bearer ${password}`;
-    } else if (this.config.authHeader) {
-      headers.Authorization = this.config.authHeader;
-    }
-    const protocols = password ? [`byspace.bearer.${password}`] : undefined;
+    const relayE2ee =
+      this.config.e2ee?.enabled === true && isRelayClientWebSocketUrl(this.config.url);
+    const handshake = relayHandshakeAuth({
+      relay: relayE2ee,
+      password,
+      authHeader: this.config.authHeader,
+    });
+    Object.assign(headers, handshake.headers);
+    const protocols = handshake.protocols;
 
     try {
       // Reconnect can overlap with browser close/error delivery ordering.
@@ -1336,6 +1364,11 @@ export class DaemonClient {
             this.pendingGenericTransportErrorTimeout = null;
           }
           this.lastErrorValue = null;
+          // The relay password goes out before hello, inside the channel that just opened. The
+          // daemon closes a relay socket that says hello first.
+          if (relayE2ee) {
+            this.sendRelayPassword();
+          }
           this.sendHelloMessage();
         }),
         transport.onClose((event) => {
@@ -5743,6 +5776,21 @@ export class DaemonClient {
 
   private resolveTransportUrlForAttempt(): string {
     return this.config.url;
+  }
+
+  // sendRelayPassword proves the daemon password on a relay connection. It travels as a session
+  // message, which the relay transport encrypts, so the relay forwards ciphertext. A daemon with no
+  // password set rejects this and closes the socket; one that has one answers before server_info.
+  private sendRelayPassword(): void {
+    const password = normalizePassword(this.config.password);
+    this.sendJsonMessage("session", "auth.password.submit.request", {
+      type: "session",
+      message: {
+        type: "auth.password.submit.request",
+        requestId: this.createRequestId(),
+        password: password ?? "",
+      },
+    });
   }
 
   private sendHelloMessage(): void {

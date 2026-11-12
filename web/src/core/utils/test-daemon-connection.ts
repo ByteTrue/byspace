@@ -189,6 +189,7 @@ export async function buildClientConfig(
       useTls: connection.useTls ?? shouldUseTlsForDefaultHostedRelay(connection.relayEndpoint),
       serverId,
     }),
+    ...(connection.password ? { password: connection.password } : {}),
     e2ee: { enabled: true, daemonPublicKeyB64: connection.daemonPublicKeyB64 },
   };
 }

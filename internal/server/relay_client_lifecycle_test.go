@@ -142,11 +142,12 @@ func (r *observedRelay) waitDataSocketClosed(ctx context.Context, cid string) er
 // relayTestClient is a real encrypted v2 client. Tunnel clients use the same transport without
 // opening an App view or reporting browser presence.
 type relayTestClient struct {
-	ws      *websocket.Conn
-	session *e2ee.ClientSession
-	frames  chan e2ee.Frame
-	done    chan struct{}
-	err     error
+	ws       *websocket.Conn
+	session  *e2ee.ClientSession
+	frames   chan e2ee.Frame
+	done     chan struct{}
+	err      error
+	password string
 }
 
 func newRelayTestClient(t *testing.T, ctx context.Context, relayURL string, srv *Server, cid string) *relayTestClient {
@@ -284,6 +285,20 @@ func (c *relayTestClient) nextSession(ctx context.Context, typeName string) (rel
 
 func (c *relayTestClient) hello(t *testing.T, ctx context.Context, clientID string) {
 	t.Helper()
+	// A relay connection proves the daemon password inside the channel before hello. These tests
+	// give the daemon a hash that matches no password, so the proof is the empty string and the
+	// daemon closes the socket — unless the test set a real password, which it then sends here.
+	if err := c.send(ctx, map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "auth.password.submit.request", "requestId": "req_pw", "password": c.password,
+		},
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.nextSession(ctx, "auth.password.submit.response"); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.send(ctx, map[string]any{
 		"type": "hello", "clientId": clientID, "protocolVersion": WSProtocolVersion,
 	}, false); err != nil {
@@ -609,13 +624,12 @@ func TestRelayTunnelForwardsConcurrentStreams(t *testing.T) {
 	srv.mu.Lock()
 	srv.tunnelsEnabled = true
 	srv.mu.Unlock()
-	if err := srv.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
-		t.Fatal(err)
-	}
+	setDaemonPassword(t, srv, "tunnel-secret")
 	srv.store.SaveDaemonConfig(map[string]any{"tunnel": map[string]any{"enabled": true, "allowedPorts": []any{port}}})
 	srv.ApplyTunnelConfig()
 
 	peer := newRelayTestClient(t, ctx, relayURL, srv, "tunnel-peer")
+	peer.password = "tunnel-secret"
 	peer.hello(t, ctx, "daemon-tunnel-peer")
 	for index := 0; index < 6; index++ {
 		streamID := fmt.Sprintf("stream-%d", index)
