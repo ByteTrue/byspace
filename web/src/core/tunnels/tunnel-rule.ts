@@ -158,6 +158,21 @@ export function ruleEndpoints(input: {
   return { sourcePublicKey, targetPublicKey: input.targetPublicKey };
 }
 
+// tunnelEndStates describes the two ends of a tunnel for the rule list.
+//
+// The source end is the daemon that listens locally: its state is the forward's own state. The
+// target end is the daemon whose port is exposed: this device only knows whether that daemon is
+// connected, so "offline" is the strongest statement it can make without asking it.
+export function tunnelEndStates(input: {
+  forwardState: "connecting" | "connected" | "disconnected" | "error";
+  sourceOnline: boolean;
+  targetOnline: boolean;
+}): { source: string; target: string } {
+  const source = input.sourceOnline ? input.forwardState : "offline";
+  const target = input.targetOnline ? "reachable" : "offline";
+  return { source, target };
+}
+
 // DEFAULT_LISTEN_HOST is where a tunnel listens unless the user picks another address. Loopback
 // keeps the forwarded port off the network; anything else is a choice the UI should flag.
 export const DEFAULT_LISTEN_HOST = "127.0.0.1";

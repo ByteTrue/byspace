@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { establishTunnelRule, listenHostIsOpen, type TunnelEndpointClient } from "./tunnel-rule";
+import {
+  establishTunnelRule,
+  listenHostIsOpen,
+  tunnelEndStates,
+  type TunnelEndpointClient,
+} from "./tunnel-rule";
 
 function fakeClient() {
   const calls: { method: string; arg: unknown }[] = [];
@@ -70,6 +75,17 @@ describe("establishTunnelRule", () => {
     const sync = source.calls.find((call) => call.method === "sync");
     expect(JSON.stringify(sync?.arg)).toContain("srv_laptop");
     expect(JSON.stringify(sync?.arg)).toContain("18090");
+  });
+});
+
+describe("tunnelEndStates", () => {
+  test("names each end, and an unreachable daemon is offline regardless of the forward", () => {
+    expect(
+      tunnelEndStates({ forwardState: "connected", sourceOnline: true, targetOnline: true }),
+    ).toEqual({ source: "connected", target: "reachable" });
+    expect(
+      tunnelEndStates({ forwardState: "connected", sourceOnline: false, targetOnline: false }),
+    ).toEqual({ source: "offline", target: "offline" });
   });
 });
 

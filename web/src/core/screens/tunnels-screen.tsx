@@ -21,7 +21,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
-import { createTunnelFromSelection } from "@/tunnels/tunnel-rule";
+import { createTunnelFromSelection, tunnelEndStates } from "@/tunnels/tunnel-rule";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
@@ -502,12 +502,21 @@ function TunnelRow({
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(entry.serverId);
   const isConnected = useHostRuntimeIsConnected(entry.serverId);
+  const targetOnline = useHostRuntimeIsConnected(outboundPeerId(entry));
+  const ends = tunnelEndStates({
+    forwardState: entry.state,
+    sourceOnline: isConnected,
+    targetOnline,
+  });
 
   const isPaused = entry.disabled === true;
 
   const stateLabel = useMemo(() => {
     if (isPaused) {
       return isZh ? "已暂停" : "Paused";
+    }
+    if (ends.source === "offline") {
+      return t("tunnels.state.disconnected");
     }
     switch (entry.state) {
       case "connected":
@@ -519,7 +528,7 @@ function TunnelRow({
       default:
         return t("tunnels.state.disconnected");
     }
-  }, [entry.state, isPaused, isZh, t]);
+  }, [ends.source, entry.state, isPaused, isZh, t]);
 
   const isOutbound = entry.direction === "outbound";
   const badgeClassName = isPaused ? undefined : resolveBadgeClassName(entry.state);
@@ -599,6 +608,9 @@ function TunnelRow({
       <div className="flex flex-row items-center gap-2">
         <Badge variant="secondary" className={badgeClassName}>
           {stateLabel}
+        </Badge>
+        <Badge variant="outline">
+          {ends.target === "offline" ? "target offline" : "target ok"}
         </Badge>
         {isOutbound ? (
           <>
