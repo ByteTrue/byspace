@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/ByteTrue/byspace/internal/tunnel"
 )
@@ -306,6 +307,27 @@ func (s *Server) handleTunnelStats(ctx context.Context, sink frameSink, requestI
 		"requestId": requestID,
 		"entries":   entries,
 	})
+}
+
+// handleTunnelGrant records that a daemon key may open a port on this host.
+//
+// The client calls this on the target while it holds the target's password, which is what makes the
+// grant legitimate. The grant stays in this daemon's tunnel-grants.json and is never synced.
+func (s *Server) handleTunnelGrant(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		PublicKey string `json:"publicKey"`
+		Port      int    `json:"port"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return
+	}
+	err := s.tunnelGrants().Allow(strings.TrimSpace(req.PublicKey), req.Port)
+	payload := map[string]any{"requestId": req.RequestID, "ok": err == nil}
+	if err != nil {
+		payload["error"] = err.Error()
+	}
+	_ = sendSessionMsg(ctx, sink, "tunnel.grant.response", payload)
 }
 
 // handleTunnelCreate configures an outbound peer.

@@ -21,10 +21,16 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
+import { createTunnelFromSelection } from "@/tunnels/tunnel-rule";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
-import { useHosts, useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import {
+  useHosts,
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+  getHostRuntimeStore,
+} from "@/runtime/host-runtime";
 import { SelectField, type SelectFieldDisplay } from "@/components/ui/select-field";
 import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunnel-peer-targets";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
@@ -970,24 +976,31 @@ function AddTunnelSheet({
 
     setSubmitting(true);
     try {
-      const response =
-        selection.kind === "host"
-          ? await client.createTunnel({
-              peerId: selection.target.serverId,
-              peerHostname: selection.target.label,
-              url: selection.target.url,
-              ...(password ? { password } : {}),
-              ...(selection.target.daemonPublicKeyB64
-                ? { daemonPublicKeyB64: selection.target.daemonPublicKeyB64 }
-                : {}),
-              forwards,
-            })
-          : await createTunnelFromOffer({
-              client,
-              offerUrl: selection.url,
-              password,
-              forwards,
-            });
+      const response = await createTunnelFromSelection({
+        selection,
+        sourceServerId: serverId,
+        hosts,
+        sourceClient: client,
+        targetClient:
+          selection.kind === "host"
+            ? getHostRuntimeStore().getClient(selection.target.serverId)
+            : null,
+        forwards,
+        password,
+        createOneSided: () =>
+          selection.kind === "host"
+            ? client.createTunnel({
+                peerId: selection.target.serverId,
+                peerHostname: selection.target.label,
+                url: selection.target.url,
+                ...(password ? { password } : {}),
+                ...(selection.target.daemonPublicKeyB64
+                  ? { daemonPublicKeyB64: selection.target.daemonPublicKeyB64 }
+                  : {}),
+                forwards,
+              })
+            : createTunnelFromOffer({ client, offerUrl: selection.url, password, forwards }),
+      });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
         return;
@@ -998,7 +1011,18 @@ function AddTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [client, localPort, password, onCreated, passwordOptional, remotePort, resolveSelection, t]);
+  }, [
+    client,
+    hosts,
+    localPort,
+    password,
+    onCreated,
+    passwordOptional,
+    remotePort,
+    resolveSelection,
+    serverId,
+    t,
+  ]);
 
   const submit = useCallback(() => {
     void submitAsync();

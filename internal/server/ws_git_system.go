@@ -1686,6 +1686,9 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 	case "tunnel.create.request":
 		s.handleTunnelCreate(ctx, sink, raw)
 
+	case "tunnel.grant.request":
+		s.handleTunnelGrant(ctx, sink, raw)
+
 	case "tunnel.remove.request":
 		s.handleTunnelRemove(ctx, sink, raw)
 

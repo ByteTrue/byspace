@@ -5517,6 +5517,33 @@ export class DaemonClient {
     return response;
   }
 
+  // grantTunnel allows a daemon, identified by its public key, to open a port on this host.
+  //
+  // Written on the target. The caller holds this daemon's password, which is what authorizes the
+  // grant. The grant is local and is not part of the synced replica.
+  async grantTunnel(
+    grant: { publicKey: string; port: number },
+    requestId?: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.grant.request",
+      publicKey: grant.publicKey,
+      port: grant.port,
+      requestId: resolvedRequestId,
+    });
+    return this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.grant.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return { ok: msg.payload.ok, error: msg.payload.error };
+      },
+    });
+  }
+
   async removeTunnel(
     peerId: string,
     requestId?: string,

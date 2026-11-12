@@ -1693,6 +1693,14 @@ export const TunnelStatsRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const TunnelGrantRequestSchema = z.object({
+  type: z.literal("tunnel.grant.request"),
+  requestId: z.string(),
+  // The daemon allowed to open the port, identified by its public key.
+  publicKey: z.string().min(1),
+  port: z.number().int().min(1).max(65535),
+});
+
 export const TunnelCreateRequestSchema = z.object({
   type: z.literal("tunnel.create.request"),
   requestId: z.string(),
@@ -3430,6 +3438,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TunnelOpenRequestSchema,
   TunnelCloseRequestSchema,
   TunnelStatsRequestSchema,
+  TunnelGrantRequestSchema,
   TunnelCreateRequestSchema,
   TunnelRemoveRequestSchema,
   DiagnosticsRequestSchema,
@@ -5240,6 +5249,15 @@ export const TunnelStatsResponseSchema = z.object({
   }),
 });
 
+export const TunnelGrantResponseSchema = z.object({
+  type: z.literal("tunnel.grant.response"),
+  payload: z.object({
+    requestId: z.string(),
+    ok: z.boolean(),
+    error: z.string().optional(),
+  }),
+});
+
 export const TunnelCreateResponseSchema = z.object({
   type: z.literal("tunnel.create.response"),
   payload: z.object({
@@ -7023,6 +7041,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TunnelOpenResponseSchema,
   TunnelCloseResponseSchema,
   TunnelStatsResponseSchema,
+  TunnelGrantResponseSchema,
   TunnelCreateResponseSchema,
   TunnelRemoveResponseSchema,
   HubManagementDaemonGetStatusResponseSchema,
