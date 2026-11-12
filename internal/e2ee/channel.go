@@ -51,6 +51,7 @@ type DaemonSession struct {
 	sharedKey        SharedKey
 	binaryCiphertext bool
 	handshaked       bool
+	peerPublicKey    [KeySize]byte
 }
 
 // NewDaemonSession creates a responder state machine that expects an e2ee_hello text frame first.
@@ -66,6 +67,19 @@ func (s *DaemonSession) IsReady() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.handshaked
+}
+
+// PeerPublicKey is the public key the peer handshook with.
+//
+// It identifies the peer only after a frame from it has decrypted: anyone can claim a key in
+// e2ee_hello, but without the matching secret key their frames never open. A daemon that
+// handshakes with its own static key (tunnels, see ClientSession) is therefore identified by it.
+// The key alone does not stop a replay of an earlier session's frames, because a static-static
+// shared key is the same in every session; authorize on it only behind a per-session challenge.
+func (s *DaemonSession) PeerPublicKey() ([KeySize]byte, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.peerPublicKey, s.handshaked
 }
 
 // Receive processes an incoming raw frame from the transport.
@@ -92,6 +106,7 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 			return nil, err
 		}
 		s.sharedKey = shared
+		s.peerPublicKey = clientPub
 		s.binaryCiphertext = hello.Capabilities != nil && hello.Capabilities.BinaryCiphertext
 		s.handshaked = true
 

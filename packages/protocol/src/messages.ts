@@ -1629,6 +1629,38 @@ export const TunnelEntrySchema = z.object({
   lastError: z.string().nullable().optional(),
 });
 
+// Host sync: every daemon in the user's sync chain holds a replica of the host list, the daemon
+// membership, and the tunnel-rule view. Data never carries credentials; the daemon rejects a
+// record that contains one. Design: byissue/epics/2026-11-12-o-host-sync-chain/spec.md.
+export const HostSyncRecordKindSchema = z.enum(["host", "member", "rule"]);
+
+export const HostSyncRecordSchema = z.object({
+  kind: HostSyncRecordKindSchema,
+  id: z.string().min(1),
+  // Logical clock stamped by the daemon that accepted the edit; clients never pick it.
+  version: z.number().int().nonnegative(),
+  author: z.string(),
+  deleted: z.boolean().optional(),
+  deletedAt: z.number().int().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const HostSyncChangeSchema = z.object({
+  kind: HostSyncRecordKindSchema,
+  id: z.string().min(1),
+  delete: z.boolean().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const HostSyncExchangeRequestSchema = z.object({
+  type: z.literal("hosts.sync.exchange.request"),
+  requestId: z.string(),
+  // Records the client carried over from other replicas; merged as-is.
+  records: z.array(HostSyncRecordSchema).optional(),
+  // The client's own edits; stamped by this daemon after the records are merged.
+  changes: z.array(HostSyncChangeSchema).optional(),
+});
+
 export const TunnelListRequestSchema = z.object({
   type: z.literal("tunnel.list.request"),
   requestId: z.string(),
@@ -3383,6 +3415,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   HubManagementDaemonGetStatusRequestSchema,
   HubManagementDaemonDisconnectRequestSchema,
   HubManagementDaemonPermissionsUpdateRequestSchema,
+  HostSyncExchangeRequestSchema,
   TunnelListRequestSchema,
   TunnelOpenRequestSchema,
   TunnelCloseRequestSchema,
@@ -3911,6 +3944,9 @@ export const ServerInfoStatusPayloadSchema = z
         // Old daemons drop network/auth config patches silently, so clients must
         // hide the network settings instead of letting a save appear to succeed.
         daemonNetworkConfig: z.boolean().optional(),
+        // COMPAT(hostSync): added in v0.25.0; remove gate after 2027-11-12. Old daemons
+        // have no replica, so the client keeps such a host out of sync and asks for an update.
+        hostSync: z.boolean().optional(),
         // COMPAT(daemonServiceInstall): added in v0.14.7. When false (or absent on
         // an older daemon), the app hides the service-management switch instead of
         // letting an install appear to succeed.
@@ -5127,6 +5163,17 @@ export const HubManagementDaemonDisconnectResponseSchema = z.object({
 export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
   type: z.literal("hub.management.daemon.permissions.update.response"),
   payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
+});
+
+export const HostSyncExchangeResponseSchema = z.object({
+  type: z.literal("hosts.sync.exchange.response"),
+  payload: z.object({
+    requestId: z.string(),
+    // The whole replica after the exchange, tombstones included.
+    records: z.array(HostSyncRecordSchema),
+    // Set when the exchange was rejected; the replica is then unchanged.
+    error: z.string().optional(),
+  }),
 });
 
 export const TunnelListResponseSchema = z.object({
@@ -6948,6 +6995,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DaemonGetPairingOfferResponseSchema,
   DaemonConfigReloadResponseSchema,
   HubManagementDaemonConnectResponseSchema,
+  HostSyncExchangeResponseSchema,
   TunnelListResponseSchema,
   TunnelOpenResponseSchema,
   TunnelCloseResponseSchema,
@@ -7448,6 +7496,10 @@ export type WorkspaceGithubSearchRepositoriesRequest = z.infer<
 export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequestSchema>;
 export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
 export type TunnelEntry = z.infer<typeof TunnelEntrySchema>;
+export type HostSyncRecord = z.infer<typeof HostSyncRecordSchema>;
+export type HostSyncChange = z.infer<typeof HostSyncChangeSchema>;
+export type HostSyncExchangeRequest = z.infer<typeof HostSyncExchangeRequestSchema>;
+export type HostSyncExchangeResponse = z.infer<typeof HostSyncExchangeResponseSchema>;
 export type TunnelListRequest = z.infer<typeof TunnelListRequestSchema>;
 export type TunnelOpenRequest = z.infer<typeof TunnelOpenRequestSchema>;
 export type TunnelCloseRequest = z.infer<typeof TunnelCloseRequestSchema>;

@@ -31,6 +31,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/hostsync"
 	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/serviceproxy"
 	"github.com/ByteTrue/byspace/internal/store"
@@ -282,6 +283,8 @@ type Server struct {
 	workspaceScripts   map[string]*workspaceScript
 	// tunnels is the outbound (D1) registry, created on first use.
 	tunnels *tunnel.Registry
+	// hostSync is this daemon's replica of the sync chain; nil until first use (host_sync.go).
+	hostSync *hostsync.Store
 	// tunnelTargetServer is the inbound (D2) handler, created on first use.
 	tunnelTargetServer *tunnel.Target
 	// tunnelStreamSinks maps an inbound stream id to the client that opened it, so downstream
@@ -1326,6 +1329,7 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"agentProfiles":                true,
 			"agentConfigApply":             true,
 			"daemonNetworkConfig":          true,
+			"hostSync":                     true,
 			"daemonServiceInstall":         supportsDaemonServiceInstall(),
 		},
 	}
@@ -1960,6 +1964,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			"checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
 			s.notePRStatusCheckoutChanged(requestCwd(raw))
 		}
+
+	case "hosts.sync.exchange.request":
+		s.handleHostSyncExchange(ctx, sink, raw)
 
 	case "subscribe_terminals_request",
 		"unsubscribe_terminals_request",
