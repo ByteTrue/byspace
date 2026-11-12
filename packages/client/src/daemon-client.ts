@@ -126,6 +126,9 @@ import type {
   AgentSkillsSaveResult,
   AgentSkillTargets,
   HubRelationshipStatus,
+  HostSyncRecord,
+  HostSyncChange,
+  HostSyncExchangeResponse,
 } from "@bytetrue/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -4659,6 +4662,26 @@ export class DaemonClient {
       },
       responseType: "daemon.get_status.response",
       timeout: options?.timeout,
+    });
+  }
+
+  // exchangeHostSync merges records and edits with the daemon's replica and returns the result.
+  //
+  // One call covers pull and push. The daemon rejects the whole exchange when a record carries a
+  // credential, and reports that in `error` rather than throwing.
+  async exchangeHostSync(input: {
+    records?: HostSyncRecord[];
+    changes?: HostSyncChange[];
+    requestId?: string;
+  }): Promise<HostSyncExchangeResponse["payload"]> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "hosts.sync.exchange.request",
+        ...(input.records ? { records: input.records } : {}),
+        ...(input.changes ? { changes: input.changes } : {}),
+      },
+      responseType: "hosts.sync.exchange.response",
     });
   }
 

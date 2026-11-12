@@ -17,6 +17,8 @@ import {
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
+import { isLoopbackEndpoint } from "@/hooks/use-is-local-daemon";
+import { loadSharedReplica, saveSharedReplica } from "@/runtime/host-replica";
 import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
 import {
   buildDaemonWebSocketUrl,
@@ -1347,6 +1349,8 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
+  // Set once the local daemon's replica has been adopted, so later reconnects do not import again.
+  private sharedReplica = false;
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
@@ -2018,7 +2022,61 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
+    await this.writeBrowserCopy(hosts);
+    if (!this.sharedReplica) {
+      return;
+    }
+    // The browser copy is a cache. The copy frontends on this machine share lives on the local
+    // daemon, so a change here is written there too. Passwords stay in the browser copy.
+    const local = this.hosts.find((host) => this.isLocalDaemon(host));
+    const client = local ? this.getClient(local.serverId) : null;
+    if (client) {
+      await saveSharedReplica(client, hosts);
+    }
+  }
+
+  private async writeBrowserCopy(hosts: HostProfile[]): Promise<void> {
     await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(hosts));
+  }
+
+  private isLocalDaemon(host: HostProfile): boolean {
+    return host.connections.some(
+      (connection) => connection.type === "directTcp" && isLoopbackEndpoint(connection.endpoint),
+    );
+  }
+
+  // adoptLocalReplica switches this frontend onto the local daemon's replica the first time that
+  // daemon connects. Frontends on the same machine then see one host list. A daemon that does not
+  // support sync leaves the browser copy in place.
+  private adoptLocalReplica(serverId: string, client: DaemonClient | null): void {
+    if (this.sharedReplica || !client) {
+      return;
+    }
+    const host = this.hosts.find((candidate) => candidate.serverId === serverId);
+    if (!host || !this.isLocalDaemon(host)) {
+      return;
+    }
+    if (client.getLastServerInfoMessage()?.features?.hostSync !== true) {
+      return;
+    }
+    this.sharedReplica = true;
+    void this.applySharedReplica(client);
+  }
+
+  private async applySharedReplica(client: DaemonClient): Promise<void> {
+    try {
+      const shared = await loadSharedReplica(client, this.hosts, this.storage);
+      if (!shared) {
+        this.sharedReplica = false;
+        return;
+      }
+      this.hosts = shared;
+      this.syncHosts(shared);
+      this.emitHostList();
+      await this.writeBrowserCopy(shared);
+    } catch {
+      this.sharedReplica = false;
+    }
   }
 
   private emitHostList(): void {
@@ -2163,6 +2221,7 @@ export class HostRuntimeStore {
       snapshot.connectionStatus === "online" && previousStatus !== "online";
     if (didTransitionOnline) {
       useSessionStore.getState().bumpHistorySyncGeneration(serverId);
+      this.adoptLocalReplica(serverId, snapshot.client);
       // Checkout git data is push-driven; pushes emitted while disconnected are gone for
       // good (the daemon dedupes by snapshot fingerprint). Mark the caches stale so active
       // queries refetch now and evicted ones on their next mount.

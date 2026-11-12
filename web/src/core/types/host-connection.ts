@@ -409,6 +409,23 @@ const StoredHostProfileSchema = z.strictObject({
   updatedAt: z.string().datetime({ offset: true }).optional(),
 });
 export const StoredHostRegistrySchema = z.array(StoredHostProfileSchema);
+
+// withoutSecrets drops every password before a host profile is written to the sync replica.
+//
+// The replica is copied to every daemon the user owns, so a password stored in it would leave this
+// machine. The browser copy keeps the passwords; this is only the shape that travels.
+export function withoutSecrets(profile: HostProfile): HostProfile {
+  return {
+    ...profile,
+    connections: profile.connections.map((connection) => {
+      if (!("password" in connection) || connection.password === undefined) {
+        return connection;
+      }
+      const { password: _password, ...rest } = connection;
+      return rest as HostConnection;
+    }),
+  };
+}
 type StoredHostConnection = z.infer<typeof StoredHostConnectionSchema>;
 
 function normalizeStoredConnection(connection: StoredHostConnection): HostConnection | null {
