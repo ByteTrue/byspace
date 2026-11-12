@@ -66,7 +66,35 @@ func (s *Server) relayAuthIsPending(sink frameSink) bool {
 func (s *Server) relayAuthForget(sink frameSink) {
 	s.mu.Lock()
 	delete(s.relayAuthPending_, sink)
+	delete(s.relayPeerKey, sink)
+	delete(s.relayPasswordAuthed, sink)
 	s.mu.Unlock()
+}
+
+// relayPasswordAuthenticated reports whether a relay socket proved the daemon password. Such a
+// socket belongs to the operator, so it is not subject to the per-daemon tunnel grants.
+func (s *Server) relayPasswordAuthenticated(sink frameSink) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.relayPasswordAuthed[sink]
+}
+
+// setRelayPeerKey records the public key a relay connection proved by answering the session
+// challenge. The tunnel authorizer reads it to decide which grants apply.
+func (s *Server) setRelayPeerKey(sink frameSink, publicKey string) {
+	s.mu.Lock()
+	if s.relayPeerKey == nil {
+		s.relayPeerKey = make(map[frameSink]string)
+	}
+	s.relayPeerKey[sink] = publicKey
+	s.mu.Unlock()
+}
+
+// relayPeerKeyOf returns the proven key for a relay connection, or "" for a local one.
+func (s *Server) relayPeerKeyOf(sink frameSink) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.relayPeerKey[sink]
 }
 
 // handleRelayPassword checks the password a relay connection sent inside the encrypted channel.
@@ -92,6 +120,14 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 	}
 	s.relayAuthResolved(sink)
 	s.SetSinkPermissions(sink, authz.DaemonPermissions)
+	// The password proves this is the operator, not a peer daemon, so tunnel opens from this
+	// socket are gated by the allowlist alone rather than by a per-daemon grant.
+	s.mu.Lock()
+	if s.relayPasswordAuthed == nil {
+		s.relayPasswordAuthed = make(map[frameSink]bool)
+	}
+	s.relayPasswordAuthed[sink] = true
+	s.mu.Unlock()
 	_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
 		"requestId": req.RequestID,
 		"ok":        true,

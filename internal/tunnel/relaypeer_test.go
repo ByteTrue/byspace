@@ -64,6 +64,10 @@ func TestClientSessionHandshakeAndFrame(t *testing.T) {
 	if plain, recvErr := client.Receive(ready); recvErr != nil || plain != nil {
 		t.Fatalf("client handshake: plain=%v err=%v", plain, recvErr)
 	}
+	// The client answered the daemon's nonce as it read the ready message. Deliver it.
+	if _, recvErr := daemon.Receive(daemonSide.take()); recvErr != nil {
+		t.Fatal(recvErr)
+	}
 	if !client.IsReady() || !daemon.IsReady() {
 		t.Fatalf("handshake incomplete: client=%v daemon=%v", client.IsReady(), daemon.IsReady())
 	}

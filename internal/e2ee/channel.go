@@ -1,6 +1,7 @@
 package e2ee
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -28,6 +29,11 @@ type HelloMessage struct {
 type ReadyMessage struct {
 	Type         string        `json:"type"`
 	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	// Challenge is a nonce the peer must echo inside the encrypted channel before it is trusted.
+	// With static keys on both sides the shared key never changes, so a frame recorded from an
+	// earlier session would otherwise decrypt in this one. Answering the nonce proves the peer
+	// holds the key now, not that it recorded someone who did.
+	Challenge string `json:"challenge,omitempty"`
 }
 
 // Frame represents a decrypted or raw WebSocket message.
@@ -52,13 +58,19 @@ type DaemonSession struct {
 	binaryCiphertext bool
 	handshaked       bool
 	peerPublicKey    [KeySize]byte
+	// challenge is the nonce sent in e2ee_ready. challengeOK is set once the peer echoes it.
+	challenge   string
+	challengeOK bool
 }
 
 // NewDaemonSession creates a responder state machine that expects an e2ee_hello text frame first.
 func NewDaemonSession(transport Transport, daemonKeyPair KeyPair) *DaemonSession {
+	nonce := make([]byte, 16)
+	_, _ = rand.Read(nonce)
 	return &DaemonSession{
 		transport:     transport,
 		daemonKeyPair: daemonKeyPair,
+		challenge:     base64.RawURLEncoding.EncodeToString(nonce),
 	}
 }
 
@@ -184,10 +196,29 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Frame{
-		Data:     plaintext,
-		IsBinary: isBinaryPlaintext,
-	}, nil
+	frame := &Frame{Data: plaintext, IsBinary: isBinaryPlaintext}
+	if s.challengeOK {
+		return frame, nil
+	}
+	// The first encrypted frame must carry the nonce back. Anything else, including a frame
+	// replayed from an earlier session, is discarded before it reaches the daemon.
+	var echo struct {
+		Type      string `json:"type"`
+		Challenge string `json:"challenge"`
+	}
+	if json.Unmarshal(plaintext, &echo) == nil && echo.Type == "e2ee_challenge" &&
+		subtle.ConstantTimeCompare([]byte(echo.Challenge), []byte(s.challenge)) == 1 {
+		s.challengeOK = true
+	}
+	return nil, nil
+}
+
+// ChallengeMet reports whether the peer echoed this session's nonce. Until it has, frames are
+// discarded and the peer's key must not be trusted for authorization.
+func (s *DaemonSession) ChallengeMet() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.challengeOK
 }
 
 // Send encrypts and transmits an application frame over the transport.
@@ -214,6 +245,9 @@ func (s *DaemonSession) sendReadyLocked() error {
 	ready := ReadyMessage{Type: "e2ee_ready"}
 	if s.binaryCiphertext {
 		ready.Capabilities = &Capabilities{BinaryCiphertext: true}
+	}
+	if s.challenge != "" {
+		ready.Challenge = s.challenge
 	}
 	b, err := json.Marshal(ready)
 	if err != nil {

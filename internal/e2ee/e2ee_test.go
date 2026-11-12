@@ -98,6 +98,10 @@ func TestClientSessionPreservesTextAndBinaryFrames(t *testing.T) {
 	if plain, err := client.Receive(daemonTransport.sent[0]); err != nil || plain != nil {
 		t.Fatalf("client handshake: plain=%v err=%v", plain, err)
 	}
+	// Deliver the client's answer to the daemon's nonce before any application frame.
+	if _, err := daemon.Receive(clientTransport.sent[len(clientTransport.sent)-1]); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := client.Send(Frame{Data: []byte(`{"type":"hello"}`)}); err != nil {
 		t.Fatal(err)
@@ -192,6 +196,17 @@ func TestDaemonSessionHandshakeAndFrames(t *testing.T) {
 	}
 	if !sess.IsReady() || len(tr.sent) != 1 {
 		t.Fatalf("expected 1 e2ee_ready frame, got %d", len(tr.sent))
+	}
+
+	// The daemon's ready carries a nonce the client must echo before any frame is delivered.
+	var ready ReadyMessage
+	if err := json.Unmarshal(tr.sent[0].Data, &ready); err != nil {
+		t.Fatal(err)
+	}
+	echoBody, _ := json.Marshal(map[string]string{"type": "e2ee_challenge", "challenge": ready.Challenge})
+	echoCipher, _ := Encrypt(clientShared, echoBody)
+	if got, err := sess.Receive(Frame{Data: []byte(base64.StdEncoding.EncodeToString(echoCipher)), IsBinary: false}); err != nil || got != nil {
+		t.Fatalf("challenge echo should be consumed, got %+v err=%v", got, err)
 	}
 
 	// Client sends encrypted JSON text frame (base64 encoded)

@@ -50,6 +50,17 @@ func relaySession(t *testing.T, srv *Server) (*websocket.Conn, e2ee.SharedKey, f
 	}
 	if _, raw, err := conn.Read(dialCtx); err != nil || !strings.Contains(string(raw), "e2ee_ready") {
 		t.Fatalf("expected e2ee_ready, got %q (err=%v)", raw, err)
+	} else {
+		// Answer the daemon's nonce or it will swallow the first real frame.
+		var ready e2ee.ReadyMessage
+		_ = json.Unmarshal(raw, &ready)
+		if ready.Challenge != "" {
+			body, _ := json.Marshal(map[string]string{"type": "e2ee_challenge", "challenge": ready.Challenge})
+			cipher, _ := e2ee.Encrypt(shared, body)
+			if err := conn.Write(dialCtx, websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(cipher))); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	dialCancel()
 

@@ -269,6 +269,13 @@ func TestServerOverRelayE2EEHandshake(t *testing.T) {
 	if err := json.Unmarshal(readyRaw, &readyMsg); err != nil || readyMsg.Type != "e2ee_ready" {
 		t.Fatalf("expected e2ee_ready, got %s", string(readyRaw))
 	}
+	if readyMsg.Challenge != "" {
+		echoBody, _ := json.Marshal(map[string]string{"type": "e2ee_challenge", "challenge": readyMsg.Challenge})
+		echoCipher, _ := e2ee.Encrypt(sharedKey, echoBody)
+		if err := cliWS.Write(ctx, websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(echoCipher))); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// A relay connection proves the daemon password inside the channel before hello. The daemon
 	// under test has one set; without it the socket is closed and no server_info follows.

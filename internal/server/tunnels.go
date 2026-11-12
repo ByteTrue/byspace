@@ -68,6 +68,16 @@ func (s *Server) tunnelTarget() *tunnel.Target {
 	return target
 }
 
+// tunnelGrants reads the local allow list. Read each time rather than cached: a client that just
+// wrote a grant expects the next open to honor it, and the file is a handful of lines.
+func (s *Server) tunnelGrants() *tunnel.Grants {
+	loaded, err := tunnel.LoadGrants(s.homeDir)
+	if err != nil {
+		return &tunnel.Grants{}
+	}
+	return loaded
+}
+
 // tunnelAllowlist reads the forwarded-port whitelist from config.
 //
 // Read through a helper rather than inline so the shape stays in one place: a config edit must

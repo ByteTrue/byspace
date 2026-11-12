@@ -275,6 +275,10 @@ type Server struct {
 	// relayAuthPending_ marks relay connections that have not yet proven a password inside the
 	// encrypted channel. They hold nothing until they do (see authz.go).
 	relayAuthPending_ map[frameSink]bool
+	// relayPeerKey holds the public key a relay peer proved, keyed by its socket.
+	relayPeerKey map[frameSink]string
+	// relayPasswordAuthed marks relay sockets that proved the daemon password.
+	relayPasswordAuthed map[frameSink]bool
 	// pushHTTPClient overrides the push transport; a test harness needs to reach a local
 	// TLS push service without a trusted certificate.
 	pushHTTPClient *http.Client
@@ -934,6 +938,12 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 				return e2ee.Frame{}, err
 			}
 			if plain != nil {
+				// The first frame delivered means the peer answered the nonce, so its key is proven.
+				if e2eeSess.ChallengeMet() {
+					if key, ok := e2eeSess.PeerPublicKey(); ok {
+						s.setRelayPeerKey(adapter, tunnel.PublicKeyOf(key[:]))
+					}
+				}
 				return *plain, nil
 			}
 		}
@@ -1036,6 +1046,15 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 				return encodeErr
 			}
 			return sink.SendBinary(ctx, encoded)
+		}
+		// A relay peer opens ports only when this daemon granted its proven key. A local client
+		// proved the password instead, so the allowlist stays its only gate.
+		if peerKey := s.relayPeerKeyOf(sink); peerKey != "" && !s.relayPasswordAuthenticated(sink) && frame.Opcode == tunnel.OpcodeOpen {
+			if port, ok := tunnel.DecodeOpenPayload(frame.Payload); !ok || !s.tunnelGrants().Allowed(peerKey, port) {
+				_ = send(tunnel.Frame{Opcode: tunnel.OpcodeOpenAck, TunnelID: frame.TunnelID,
+					Payload: tunnel.EncodeOpenAck(false, "This daemon is not authorized to forward that port.")})
+				return
+			}
 		}
 		s.tunnelTarget().HandleFrame(frame, send)
 		return

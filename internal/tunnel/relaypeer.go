@@ -38,6 +38,10 @@ type TunnelReconnector struct {
 	PeerPublicKey string
 	// Token is the daemon password, sent as `byspace.bearer.<token>`.
 	Token string
+	// LocalKey is this daemon's own key pair. Set, the tunnel handshakes with it, so the target can
+	// tell which daemon is connecting and check its grants. Unset, a fresh key is used and the
+	// target cannot authorize the connection.
+	LocalKey *e2ee.KeyPair
 	// ClientID identifies this initiator in relay logs.
 	ClientID string
 
@@ -144,9 +148,12 @@ func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
 		if keyErr != nil {
 			return fmt.Errorf("invalid peer public key: %w", keyErr)
 		}
-		// A per-connection key: the tunnel is a runtime relationship, not an identity, so nothing
-		// is gained by persisting it and something is lost if it is reused.
+		// A per-connection key unless this daemon has its own. With its own key the target can see
+		// who is connecting; a fresh key is anonymous and can only pass a target that grants nothing.
 		localKey, keyErr := e2ee.GenerateKeyPair()
+		if r.LocalKey != nil {
+			localKey, keyErr = *r.LocalKey, nil
+		}
 		if keyErr != nil {
 			return keyErr
 		}

@@ -82,6 +82,13 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 		}
 		s.binaryCiphertext = ready.Capabilities != nil && ready.Capabilities.BinaryCiphertext
 		s.handshaked = true
+		if ready.Challenge != "" {
+			// Answer inside the channel. The daemon drops every frame until it sees this nonce, which a
+			// replay of an older session cannot contain.
+			if err := s.sendChallengeEchoLocked(ready.Challenge); err != nil {
+				return nil, err
+			}
+		}
 		return nil, nil
 	}
 
@@ -153,6 +160,20 @@ func (s *ClientSession) Send(plain Frame) error {
 	}
 	if binaryCiphertext && plain.IsBinary {
 		return s.transport.SendBinary(sealed)
+	}
+	return s.transport.SendText(base64.StdEncoding.EncodeToString(sealed))
+}
+
+// sendChallengeEchoLocked answers the daemon's nonce. Called with s.mu held, straight after the
+// handshake, before any application frame.
+func (s *ClientSession) sendChallengeEchoLocked(challenge string) error {
+	body, err := json.Marshal(map[string]string{"type": "e2ee_challenge", "challenge": challenge})
+	if err != nil {
+		return err
+	}
+	sealed, err := Encrypt(s.sharedKey, body)
+	if err != nil {
+		return err
 	}
 	return s.transport.SendText(base64.StdEncoding.EncodeToString(sealed))
 }
