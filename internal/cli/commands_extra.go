@@ -711,14 +711,20 @@ func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS boo
 	if resolved, err := home.Resolve(homeDir); err == nil {
 		resolvedHome = resolved
 	}
-	srv, err := server.New(server.Options{
-		HomeDir: resolvedHome,
-		Version: version,
-	})
+	// Read the home's identity rather than constructing a Server. server.New runs the daemon's
+	// boot path — EnsureHomeWorkspace, writing the CLI credential, rebuilding the workspace
+	// registry, restoring terminal sessions — and it runs all of that just to print a link.
+	// `byspace pair --addr <an unreachable daemon>` falls through to here, so that boot path was
+	// aimed at whatever home the command resolved to: a command asked for a link wrote the home it
+	// was pointed at.
+	serverID, err := home.GetOrCreateServerID(resolvedHome)
 	if err != nil {
 		return ""
 	}
-	defer srv.Close()
+	_, pubKeyB64, err := home.LoadOrCreateKeyPair(resolvedHome)
+	if err != nil {
+		return ""
+	}
 	cfg := store.New(resolvedHome).LoadDaemonConfig()
 	if strings.TrimSpace(appURL) == "" {
 		appURL = server.StoredAppBaseURL(cfg)
@@ -729,7 +735,7 @@ func buildOfflinePairingOffer(version, homeDir, relayEndpoint string, useTLS boo
 			useTLS = relay.ClientRelayUseTLS()
 		}
 	}
-	return srv.BuildPairingOfferURL(relayEndpoint, useTLS, appURL)
+	return server.BuildPairingOfferURLForHome(serverID, pubKeyB64, version, relayEndpoint, useTLS, appURL)
 }
 
 // resolveScheduleProvider reads --provider (provider or provider/model) and --model, as the Node

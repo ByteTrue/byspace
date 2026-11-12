@@ -74,6 +74,34 @@ func TestOfflinePairingOfferKeepsExplicitOverrides(t *testing.T) {
 	}
 }
 
+// Minting an offer must not run the daemon's boot path.
+//
+// `byspace pair --addr <an unreachable daemon>` falls through to the offline offer, and that path
+// used to construct a Server to read two identity values. server.New creates the home workspace
+// (`chief`), writes the CLI credential, and rebuilds the workspace registry — so pointing `pair` at
+// a home started that home's daemon machinery just to print a link. Read the identity files instead
+// and none of that happens.
+func TestOfflinePairingOfferDoesNotBootTheHome(t *testing.T) {
+	homeDir := t.TempDir()
+	writeHomeConfig(t, homeDir, `{"version": 1}`)
+
+	offer := buildOfflinePairingOffer("0.21.0", homeDir, "", true, "")
+	if !strings.Contains(offer, "#offer=") {
+		t.Fatalf("no offer minted: %q", offer)
+	}
+
+	for _, bootArtifact := range []string{"chief", "cli-credential"} {
+		if _, err := os.Stat(filepath.Join(homeDir, bootArtifact)); err == nil {
+			t.Fatalf("minting the offer created %s, which is a daemon boot side effect", bootArtifact)
+		}
+	}
+
+	// The identity files the offer does need are created on demand and are not side effects.
+	if _, err := os.Stat(filepath.Join(homeDir, "server-id")); err != nil {
+		t.Fatalf("the offer minted without a server id: %v", err)
+	}
+}
+
 func writeHomeConfig(t *testing.T, homeDir, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(homeDir, "config.json"), []byte(body), 0o600); err != nil {

@@ -1372,6 +1372,18 @@ func normalizeRelayEndpoint(endpoint string, useTLS bool) string {
 
 // BuildPairingOfferURL constructs a ConnectionOfferV2 fragment URL (#offer=<base64url>).
 func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBaseURL string) string {
+	return BuildPairingOfferURLForHome(s.serverID, s.pubKeyB64, s.version, relayEndpoint, useTLS, appBaseURL)
+}
+
+// BuildPairingOfferURLForHome mints a pairing offer from a home's identity alone.
+//
+// The offer needs the server id, the public key, the version and the hostname — nothing else. The
+// CLI calls this to mint a link when no daemon is reachable, and it must not construct a Server to
+// do so: server.New runs the daemon's boot path (ensuring the home workspace, writing the CLI
+// credential, rebuilding the workspace registry, restoring terminal sessions), so a `byspace pair`
+// against an unreachable daemon would mutate a home it was only asked to read. Reading the two
+// identity files keeps the command side-effect free.
+func BuildPairingOfferURLForHome(serverID, pubKeyB64, version, relayEndpoint string, useTLS bool, appBaseURL string) string {
 	ep := strings.TrimSpace(relayEndpoint)
 	if ep == "" {
 		ep = strings.TrimSpace(os.Getenv("BYSPACE_RELAY_ENDPOINT"))
@@ -1386,14 +1398,14 @@ func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBase
 		baseURL = strings.TrimSpace(os.Getenv("BYSPACE_APP_BASE_URL"))
 	}
 	if baseURL == "" {
-		baseURL = hostedAppBaseURL(s.version)
+		baseURL = hostedAppBaseURL(version)
 	}
 
 	hostname, _ := os.Hostname()
 	offer := map[string]any{
 		"v":                  2,
-		"serverId":           s.serverID,
-		"daemonPublicKeyB64": s.pubKeyB64,
+		"serverId":           serverID,
+		"daemonPublicKeyB64": pubKeyB64,
 		"relay": map[string]any{
 			"endpoint": ep,
 			"useTls":   useTLS,
