@@ -82,3 +82,26 @@ func (s *Store) Exchange(records []Record, changes []Change) ([]Record, error) {
 	s.doc = next
 	return s.doc.Records(), nil
 }
+
+// JoinMember adds a daemon to the chain.
+//
+// The caller has already authenticated to both this daemon and the one being added, which is what
+// makes the join legitimate: there is no separate pairing code. The record carries the public key
+// and nothing else, so the chain learns who is in it without learning any secret.
+func (s *Store) JoinMember(serverID, publicKey string) error {
+	_, err := s.Exchange(nil, []Change{{Kind: KindMember, ID: serverID, Data: memberData(publicKey)}})
+	return err
+}
+
+// RemoveMember drops a daemon from the chain.
+//
+// The tombstone is permanent, so a replica that still has the member cannot bring it back.
+func (s *Store) RemoveMember(serverID string) error {
+	_, err := s.Exchange(nil, []Change{{Kind: KindMember, ID: serverID, Delete: true}})
+	return err
+}
+
+func memberData(publicKey string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"publicKey": publicKey})
+	return b
+}

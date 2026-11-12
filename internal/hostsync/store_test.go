@@ -78,3 +78,30 @@ func TestStoreChangeOutranksRecordsInSameExchange(t *testing.T) {
 		t.Fatalf("got %+v, want the client change at version 41", got)
 	}
 }
+
+func TestJoinAndRemoveMember(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir, "srv_a")
+	if err := s.JoinMember("srv_b", "pk_b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveMember("srv_b"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A replica that was offline and still holds the member must not bring it back.
+	stale := Record{Kind: KindMember, ID: "srv_b", Version: 1, Author: "srv_c", Data: memberData("pk_b")}
+	got, err := s.Exchange([]Record{stale}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !got[0].Deleted {
+		t.Fatalf("removed member came back: %+v", got)
+	}
+
+	reopened, _ := Open(dir, "srv_a")
+	persisted, _ := reopened.Exchange(nil, nil)
+	if len(persisted) != 1 || !persisted[0].Deleted {
+		t.Fatalf("removal did not persist: %+v", persisted)
+	}
+}

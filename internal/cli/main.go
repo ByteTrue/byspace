@@ -191,6 +191,12 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	case "devices":
+		if err := runDevicesCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace devices:", err)
+			return 1
+		}
+		return 0
 	case "heartbeat", "schedule":
 		if err := runHeartbeatCmd(cmd, rest, stdout); err != nil {
 			fmt.Fprintf(stderr, "byspace %s: %v\n", cmd, err)

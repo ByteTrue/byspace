@@ -50,6 +50,8 @@ import { useIsServingDaemon } from "@/hooks/use-is-local-daemon";
 import { NetworkSection } from "@/screens/settings/network-section";
 import { DaemonServiceSection } from "@/screens/settings/daemon-service-section";
 import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
+import { hostPublicKey } from "@/runtime/host-keys";
+import type { HostSyncRecord } from "@bytetrue/protocol/messages";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -414,12 +416,143 @@ export function HostSettingsPage({
 
       <NetworkSection serverId={serverId} />
 
+      <DevicesSection serverId={serverId} />
+
       <DaemonServiceSection serverId={serverId} />
 
       {!isServingDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isServingDaemon={isServingDaemon} onRemoved={onHostRemoved} />
     </div>
+  );
+}
+
+function DeviceRow({
+  id,
+  label,
+  detail,
+  action,
+  remove,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  detail?: string;
+  action: string;
+  remove: boolean;
+  onChange: (id: string, remove: boolean) => void;
+}) {
+  const onAction = useCallback(() => onChange(id, remove), [id, onChange, remove]);
+  return (
+    <Item>
+      <ItemContent>
+        <ItemTitle>{label}</ItemTitle>
+        {detail ? <ItemDescription>{detail}</ItemDescription> : null}
+      </ItemContent>
+      <Button variant="ghost" onClick={onAction}>
+        {action}
+      </Button>
+    </Item>
+  );
+}
+
+function memberKey(record: HostSyncRecord): string {
+  const data = record.data as { publicKey?: unknown } | undefined;
+  return typeof data?.publicKey === "string" ? data.publicKey : "";
+}
+
+// DevicesSection lists the daemons in the sync chain and adds or removes them.
+//
+// Adding is offered for a host this device already connects to, because that connection is the
+// proof the user holds both passwords. Removing leaves a permanent tombstone, so the daemon cannot
+// be synced back in by a replica that missed the removal.
+function DevicesSection({ serverId }: { serverId: string }) {
+  const client = useHostRuntimeClient(serverId);
+  const hosts = useHosts();
+  const [members, setMembers] = useState<HostSyncRecord[]>([]);
+  const [supported, setSupported] = useState(true);
+
+  const refresh = useCallback(() => {
+    if (!client || client.getLastServerInfoMessage()?.features?.hostSync !== true) {
+      setSupported(false);
+      return;
+    }
+    void client
+      .exchangeHostSync({})
+      .then((result) => {
+        setMembers((result.records ?? []).filter((record) => record.kind === "member"));
+        return undefined;
+      })
+      .catch(() => setSupported(false));
+  }, [client]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const memberIds = useMemo(
+    () => new Set(members.filter((member) => !member.deleted).map((member) => member.id)),
+    [members],
+  );
+
+  const change = useCallback(
+    (id: string, remove: boolean) => {
+      if (!client) return;
+      const host = hosts.find((candidate) => candidate.serverId === id);
+      const key = host ? hostPublicKey(host) : null;
+      void client
+        .exchangeHostSync({
+          changes: [
+            remove
+              ? { kind: "member", id, delete: true }
+              : { kind: "member", id, data: { publicKey: key ?? "" } },
+          ],
+        })
+        .then(() => {
+          refresh();
+          return undefined;
+        })
+        .catch(() => undefined);
+    },
+    [client, hosts, refresh],
+  );
+
+  if (!supported) return null;
+
+  const joinable = hosts.filter(
+    (host) => host.serverId !== serverId && !memberIds.has(host.serverId) && hostPublicKey(host),
+  );
+
+  const active = members.filter((member) => !member.deleted);
+
+  return (
+    <SettingsSection title="Devices">
+      {active.length === 0 ? (
+        <span className="block px-4 py-2 text-sm text-muted-foreground">No other devices yet.</span>
+      ) : (
+        active.map((member) => (
+          <DeviceRow
+            key={member.id}
+            id={member.id}
+            label={hosts.find((host) => host.serverId === member.id)?.label ?? member.id}
+            detail={memberKey(member)}
+            action="Remove"
+            remove
+            onChange={change}
+          />
+        ))
+      )}
+      {joinable.map((host) => (
+        <DeviceRow
+          key={host.serverId}
+          id={host.serverId}
+          label={host.label}
+          action="Add device"
+          remove={false}
+          onChange={change}
+        />
+      ))}
+    </SettingsSection>
   );
 }
 
