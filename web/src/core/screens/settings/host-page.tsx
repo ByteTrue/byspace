@@ -16,7 +16,15 @@ import {
 } from "lucide-react";
 import type { TFunction } from "i18next";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import {
@@ -28,6 +36,7 @@ import { AgentSkillsSection } from "@/agent-skills";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsTextArea } from "@/components/settings-textarea";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { DefaultShellSection } from "@/screens/settings/default-shell-section";
@@ -237,6 +246,66 @@ function HostConnectionError({ serverId }: { serverId: string }) {
   );
 }
 
+// HostPasswordPrompt asks for the password of a relay host that has none stored yet.
+//
+// Each host has its own password, and it lives only on this device. A relay host without one
+// cannot get past the daemon, so the prompt is the way in. Saving writes it onto the connection,
+// which reconnects with it.
+function HostPasswordPrompt({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { upsertRelayConnection } = useHostMutations();
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const relay = host.connections.find((connection) => connection.type === "relay");
+  const save = useCallback(() => {
+    const trimmed = password.trim();
+    if (!relay || relay.type !== "relay" || !trimmed || saving) return;
+    setSaving(true);
+    void upsertRelayConnection({
+      serverId: host.serverId,
+      relayEndpoint: relay.relayEndpoint,
+      useTls: relay.useTls,
+      daemonPublicKeyB64: relay.daemonPublicKeyB64,
+      password: trimmed,
+    })
+      .catch(() => undefined)
+      .finally(() => setSaving(false));
+  }, [host.serverId, password, relay, saving, upsertRelayConnection]);
+  const onChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setPassword(event.target.value),
+    [],
+  );
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter") save();
+    },
+    [save],
+  );
+  if (!relay || relay.type !== "relay" || relay.password) {
+    return null;
+  }
+  return (
+    <div className="mb-3 flex flex-col gap-2">
+      <span className="text-sm leading-[normal] text-muted-foreground">
+        {t("tunnels.addForm.passwordRequired")}
+      </span>
+      <div className="flex flex-row gap-2">
+        <Input
+          type="password"
+          value={password}
+          aria-label={t("tunnels.addForm.passwordLabel")}
+          placeholder={t("tunnels.addForm.passwordPlaceholder")}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+        />
+        <Button onClick={save} disabled={saving || password.trim().length === 0}>
+          {t("connectionMethods.direct.actions.connect")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function HostConnectionsPage({ serverId }: { serverId: string }) {
   const host = useHostProfile(serverId);
 
@@ -247,6 +316,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
   return (
     <div className="flex flex-col">
       <HostConnectionError serverId={serverId} />
+      <HostPasswordPrompt host={host} />
       <ConnectionsSection host={host} />
       <PairDeviceRow serverId={serverId} />
     </div>

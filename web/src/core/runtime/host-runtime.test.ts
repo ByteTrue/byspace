@@ -580,6 +580,8 @@ describe("HostRuntimeController", () => {
           hostname: connection.id,
         }),
         getClientId: async () => "cid_test_runtime",
+        // The re-pair changes the host key, which the guard blocks until the user accepts it.
+        confirmKeyChange: async () => true,
       },
     });
 

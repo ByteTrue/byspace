@@ -19,6 +19,8 @@ import {
 } from "@/types/host-connection";
 import { isLoopbackEndpoint } from "@/hooks/use-is-local-daemon";
 import { loadSharedReplica, saveSharedReplica } from "@/runtime/host-replica";
+import { guardHostKey, memoryKeyStore } from "@/runtime/host-keys";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
 import {
   buildDaemonWebSocketUrl,
@@ -173,6 +175,12 @@ export interface HostRuntimeControllerDeps {
     host: HostProfile;
     connection: HostConnection;
   }) => () => void;
+  // Where accepted host keys are remembered. Defaults to an in-memory store; the app passes the
+  // browser store so the decision survives a reload.
+  keyStore?: HostRuntimeStorage;
+  // Asked before connecting to a host whose public key changed. Defaults to refusing, which is the
+  // safe answer when nobody is there to confirm.
+  confirmKeyChange?: (host: HostProfile) => Promise<boolean>;
 }
 
 export interface HostRuntimeStorage {
@@ -541,6 +549,13 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         trace: nativePerformanceTrace,
       }),
     getClientId: () => getOrCreateClientId(),
+    confirmKeyChange: (host) =>
+      confirmDialog({
+        title: "Host key changed",
+        message: `${host.label} presents a different public key than the one saved on this device. Its address or relay data may have been tampered with. Connect only if you expected this host to be reinstalled.`,
+        confirmLabel: "Connect anyway",
+        destructive: true,
+      }),
     mountClientHandlers: ({ client, host }) => {
       const unmountServerData = mountServerDataPushRouter({
         client,
@@ -574,6 +589,7 @@ export class HostRuntimeController {
   private clientIdHash: string | null = null;
   private switchRequestVersion = 0;
   private probeRequestVersion = 0;
+  private fallbackKeyStore = memoryKeyStore();
   private probeCycleInFlight: Promise<void> | null = null;
 
   constructor(input: {
@@ -1186,6 +1202,16 @@ export class HostRuntimeController {
     }
 
     const nextGeneration = this.snapshot.clientGeneration + 1;
+    if (
+      !(await guardHostKey(
+        this.deps.keyStore ?? this.fallbackKeyStore,
+        this.host,
+        this.deps.confirmKeyChange ?? (async () => false),
+      ))
+    ) {
+      await this.abortSwitchWithClient(existingClient);
+      return;
+    }
     const client =
       existingClient ??
       this.deps.createClient({
@@ -1797,6 +1823,7 @@ export class HostRuntimeStore {
     useTls?: boolean;
     daemonPublicKeyB64: string;
     label?: string;
+    password?: string;
   }): Promise<HostProfile> {
     const useTls = input.useTls ?? false;
     // The offer carries whatever the daemon configured, and a bare host is a legal choice there:
@@ -1808,6 +1835,7 @@ export class HostRuntimeStore {
       throw new Error("daemonPublicKeyB64 is required");
     }
     const explicitUseTls = input.useTls !== undefined;
+    const password = input.password?.trim();
     return this.upsertHostConnection({
       serverId: input.serverId,
       label: input.label,
@@ -1817,6 +1845,7 @@ export class HostRuntimeStore {
         relayEndpoint,
         ...(explicitUseTls ? { useTls } : {}),
         daemonPublicKeyB64,
+        ...(password ? { password } : {}),
       },
     });
   }
@@ -2127,7 +2156,7 @@ export class HostRuntimeStore {
       }
       const controller = new HostRuntimeController({
         host,
-        deps: this.deps,
+        deps: { ...this.deps, keyStore: this.storage },
         onReconcileServerId: (oldId, newId) => this.reconcileServerId(oldId, newId),
       });
       this.controllers.set(host.serverId, controller);
@@ -2698,6 +2727,7 @@ export interface HostMutations {
     useTls?: boolean;
     daemonPublicKeyB64: string;
     label?: string;
+    password?: string;
   }) => Promise<HostProfile>;
   upsertConnectionFromOffer: (offer: ConnectionOffer, label?: string) => Promise<HostProfile>;
   upsertConnectionFromOfferUrl: (
