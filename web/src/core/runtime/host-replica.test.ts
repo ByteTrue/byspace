@@ -161,4 +161,27 @@ describe("rememberPasswords", () => {
     );
     expect(restored?.connections[0]).toMatchObject({ password: "only-a" });
   });
+
+  // A host entered as `localhost` and reported by the daemon as `127.0.0.1` is the same endpoint.
+  // Matching on the raw string dropped the password after the replica overwrote the browser copy.
+  test("keeps the password when the endpoint spelling differs", () => {
+    const typed = {
+      ...profile("srv_a"),
+      connections: [
+        {
+          id: "direct:localhost:8792",
+          type: "directTcp",
+          endpoint: "localhost:8792",
+          password: "typed",
+        },
+      ],
+    } as HostProfile;
+    const reported = {
+      ...profile("srv_a"),
+      connections: [{ id: "direct:127.0.0.1:8792", type: "directTcp", endpoint: "127.0.0.1:8792" }],
+    } as HostProfile;
+
+    const [restored] = rememberPasswords([reported], [typed]);
+    expect(restored?.connections[0]).toMatchObject({ password: "typed" });
+  });
 });

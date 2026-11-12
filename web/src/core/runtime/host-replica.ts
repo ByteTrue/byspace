@@ -1,5 +1,9 @@
 import type { HostSyncRecord } from "@bytetrue/protocol/messages";
 import {
+  normalizeHostPort,
+  normalizeLoopbackToLocalhost,
+} from "@bytetrue/protocol/daemon-endpoints";
+import {
   normalizeStoredHostProfile,
   withoutSecrets,
   type HostProfile,
@@ -51,12 +55,18 @@ export function profilesToChanges(
 //
 // The replica never carries passwords, but the browser copy does. Without this, adopting the
 // replica would forget every password the moment the local daemon answered.
+function normalizeEndpoint(endpoint: string): string {
+  return normalizeLoopbackToLocalhost(normalizeHostPort(endpoint));
+}
+
 function connectionKey(serverId: string, connection: HostProfile["connections"][number]): string {
   if (connection.type === "relay") {
-    return `${serverId}/relay/${connection.relayEndpoint}`;
+    return `${serverId}/relay/${normalizeEndpoint(connection.relayEndpoint)}`;
   }
   if (connection.type === "directTcp") {
-    return `${serverId}/direct/${connection.endpoint}`;
+    // Normalize the endpoint, or a host entered as `localhost` will not match the same host the
+    // daemon reports as `127.0.0.1` and the remembered password is dropped.
+    return `${serverId}/direct/${normalizeEndpoint(connection.endpoint)}`;
   }
   if (connection.type === "remoteSsh") {
     return `${serverId}/ssh/${connection.host}`;
