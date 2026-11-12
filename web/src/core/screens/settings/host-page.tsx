@@ -517,7 +517,15 @@ function DevicesSection({ serverId }: { serverId: string }) {
     [client, hosts, refresh],
   );
 
-  if (!supported) return null;
+  if (!supported) {
+    return (
+      <SettingsSection title="Devices">
+        <span className="block px-4 py-2 text-sm text-muted-foreground">
+          Update this host to sync devices across your machines.
+        </span>
+      </SettingsSection>
+    );
+  }
 
   const joinable = hosts.filter(
     (host) => host.serverId !== serverId && !memberIds.has(host.serverId) && hostPublicKey(host),

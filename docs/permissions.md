@@ -15,6 +15,8 @@ A principal is the durable identity the daemon authorizes. A credential proves t
 
 A pairing invitation is neither. It is an expiring, single-use exchange that creates a principal and credential with the permissions selected by its issuer.
 
+A connection that arrives through the relay starts with no permissions. The relay data socket is dialed by the daemon, so it never passes the HTTP bearer check, and the pairing offer that opens it carries the server id and public key but not the password. The connection proves the password inside the encrypted channel (`auth.password.submit.request`) before it can send anything else; a daemon with no password set refuses the socket. A daemon opening a tunnel proves its identity with its own key instead, and the target allows it only through a local grant (`tunnel-grants.json`) that is never synced. See [spec/connection.md](../byissue/spec/connection.md).
+
 ## Permissions
 
 | Permission          | Authority                                                                  |

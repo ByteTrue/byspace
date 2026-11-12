@@ -181,7 +181,7 @@ Communicates with the daemon via the same WebSocket protocol as the app.
 Enables remote access when the daemon is behind a firewall.
 
 - Curve25519 establishes the relay-session secret; NaCl `box` protects each payload with XSalsa20-Poly1305
-- The relay is zero-knowledge — it routes encrypted bytes and cannot read content
+- The relay is zero-knowledge of frame contents — it routes encrypted bytes and cannot read them. It does see the WebSocket handshake, so a password carried in a subprotocol or header would be visible to it. Relay connections therefore prove the daemon password inside the encrypted channel, and a daemon with no password set refuses relay connections. Host lists and tunnel rules sync between a user's own daemons without the relay storing anything; see [spec/connection.md](../byissue/spec/connection.md).
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
 - New homes keep relay disabled until pairing consent. `DaemonConfigStore` persists the desired state, while the relay runtime starts or stops the outbound transport live; pairing reads that current state instead of a startup snapshot.
