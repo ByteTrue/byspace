@@ -36,6 +36,7 @@ func (s *Server) tunnelRegistry() *tunnel.Registry {
 		// trace of stream ids, sequence rejections and close reasons.
 		slog.Info("tunnel " + fmt.Sprintf(format, args...))
 	})
+	registry.SetLocalKey(s.keyPair)
 	registry.SetEnabled(s.tunnelsEnabled)
 	s.tunnels = registry
 	s.mu.Unlock()

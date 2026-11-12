@@ -2065,6 +2065,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"tunnel.close.request",
 		"tunnel.stats.request",
 		"tunnel.create.request",
+		"tunnel.grant.request",
 		"tunnel.remove.request",
 		"hub.management.daemon.connect.request",
 		"hub.management.daemon.get_status.request",

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 )
 
@@ -74,6 +75,10 @@ type Registry struct {
 	cancellers map[string]context.CancelFunc
 	// ctx bounds every reconnector this registry starts.
 	ctx context.Context
+	// localKey is this daemon's own key. A reconnector handshakes with it so the target can tell
+	// which daemon is connecting and match it against a grant. Nil falls back to an anonymous key,
+	// which no grant can match.
+	localKey *e2ee.KeyPair
 	// started records that the initial dial happened, so a later Start does not tear down and
 	// rebuild every peer just because a config write asked again.
 	started bool
@@ -97,6 +102,13 @@ func NewRegistry(homeDir string, logf func(string, ...any)) *Registry {
 	}
 	r.peers = loadRegistry(homeDir, logf)
 	return r
+}
+
+// SetLocalKey supplies the daemon's own key, used to prove identity when dialing a peer.
+func (r *Registry) SetLocalKey(key e2ee.KeyPair) {
+	r.mu.Lock()
+	r.localKey = &key
+	r.mu.Unlock()
 }
 
 // loadRegistry reads tunnels.json.
@@ -295,6 +307,7 @@ func (r *Registry) runReconnector(peer PeerConfig, manager *Manager) {
 		PeerPublicKey: peer.DaemonPublicKey,
 		Token:         peer.Token,
 		ClientID:      "byspace-tunnel",
+		LocalKey:      r.localKey,
 		OnPeer:        manager.SetPeer,
 		OnState:       manager.SetPeerState,
 		Logf:          r.logf,
