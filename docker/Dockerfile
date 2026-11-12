@@ -53,6 +53,10 @@ ARG TARGETARCH
 
 WORKDIR /src
 
+# `go.mod` replaces go-pty with the pinned fork under third_party, and `go mod download` reads the
+# replacement's go.mod. Copy it before the download layer or the image build fails with
+# "reading third_party/go-pty/go.mod: no such file or directory".
+COPY third_party/go-pty ./third_party/go-pty
 COPY go.mod go.sum ./
 RUN go mod download
 

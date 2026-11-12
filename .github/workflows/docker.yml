@@ -7,6 +7,12 @@ on:
       - "docker/**"
       - ".dockerignore"
       - ".github/workflows/docker.yml"
+      # The image builds the Go binary: a module or replacement change can break it even when no
+      # file under docker/ changed (the go-pty fork was missing from the build context and the
+      # 0.24.9 tag publish failed).
+      - "go.mod"
+      - "go.sum"
+      - "third_party/**"
   push:
     tags:
       - "v*"
