@@ -1,9 +1,11 @@
 package server
 
 import (
-	"context"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 )
 
 // The snapshot has to be a read, not a probe. Building one runs every provider CLI, and a client
@@ -18,17 +20,54 @@ func TestProviderCatalogServesRepeatRequestsFromCache(t *testing.T) {
 	}
 	defer srv.Close()
 
-	ctx := context.Background()
-	first := srv.providerCatalogOrBuild(ctx, "")
+	first := srv.providerCatalogOrBuild("")
 	if first == nil || len(first.entries) == 0 {
 		t.Fatalf("expected a populated catalog, got %#v", first)
 	}
-	second := srv.providerCatalogOrBuild(ctx, "")
+	second := srv.providerCatalogOrBuild("")
 	if second != first {
 		t.Fatalf("second request rebuilt the catalog instead of reading the cache")
 	}
 	if second.hash == "" {
 		t.Fatalf("catalog hash is empty")
+	}
+}
+
+// A cold read must not run provider CLIs. `opencode models` takes seconds, and waiting for it made
+// the app paint an empty provider list — the metadata model picker then opened on the provider
+// step and never reached a model.
+func TestProviderCatalogColdReadSkipsProbes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spawns /bin/sh")
+	}
+	tmp := t.TempDir()
+	slowPi := filepath.Join(tmp, "slow-pi.sh")
+	if err := os.WriteFile(slowPi, []byte("#!/bin/sh\nsleep 2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "test", PiCommand: slowPi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	start := time.Now()
+	catalog := srv.providerCatalogOrBuild("")
+	elapsed := time.Since(start)
+	if catalog == nil || len(catalog.entries) == 0 {
+		t.Fatalf("expected a populated catalog, got %#v", catalog)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("cold read waited for the provider probe: %s", elapsed)
+	}
+
+	// The probing build replaces the placeholder once the CLI answers.
+	deadline := time.Now().Add(10 * time.Second)
+	for srv.cachedProviderCatalog("") == catalog && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if srv.cachedProviderCatalog("") == catalog {
+		t.Fatal("background build never replaced the spec-only catalog")
 	}
 }
 
@@ -127,7 +166,7 @@ func TestProviderCatalogDropsBuildsOvertakenByNewerOnes(t *testing.T) {
 	}
 	defer srv.Close()
 	// The startup prebuild runs in the background; let it land so it cannot race this test.
-	srv.providerCatalogOrBuild(context.Background(), "")
+	srv.providerCatalogOrBuild("")
 
 	older := srv.beginProviderCatalogBuild()
 	newer := srv.beginProviderCatalogBuild()

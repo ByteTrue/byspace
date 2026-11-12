@@ -40,18 +40,12 @@ func providerCatalogKey(cwd string) string {
 	return absolute
 }
 
-// buildProviderCatalog probes and assembles a fresh catalog for one scope.
+// buildCatalog assembles a catalog from the models the caller already has.
 //
-// This is the expensive path; do not call it from a request handler that has nothing cached.
-func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) *providerCatalog {
-	piModels := s.probePiModelsInCwd(ctx, cwd)
-	entries := providers.BuildSnapshotEntries(func(providerID string) []sdk.CatalogModel {
-		// Pi was just probed (its catalog drives the naming model too); do not spawn it twice.
-		if providerID == "pi" {
-			return piModels
-		}
-		return s.discoveredModels(ctx, providerID, cwd)
-	}, s.piCommand, providersFromConfig(cfg))
+// A nil discover func means "spec models only": the runtime model-discovery probes do not run,
+// which is what a request can afford while the probing build is still in flight.
+func (s *Server) buildCatalog(cfg map[string]any, discover func(providerID string) []sdk.CatalogModel) *providerCatalog {
+	entries := providers.BuildSnapshotEntries(discover, s.piCommand, providersFromConfig(cfg))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &providerCatalog{
 		entries:     entries,
@@ -60,6 +54,20 @@ func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, c
 		generatedAt: now,
 		compact:     providers.BuildCompactSnapshot(entries),
 	}
+}
+
+// buildProviderCatalog probes and assembles a fresh catalog for one scope.
+//
+// This is the expensive path; it runs in the background, never in a request handler.
+func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) *providerCatalog {
+	piModels := s.probePiModelsInCwd(ctx, cwd)
+	return s.buildCatalog(cfg, func(providerID string) []sdk.CatalogModel {
+		// Pi was just probed (its catalog drives the naming model too); do not spawn it twice.
+		if providerID == "pi" {
+			return piModels
+		}
+		return s.discoveredModels(ctx, providerID, cwd)
+	})
 }
 
 // discoveredModels asks a provider for the models it actually offers right now.
@@ -166,12 +174,14 @@ func (s *Server) invalidateProviderCatalogs() {
 	s.providerCatalogFloor = s.providerCatalogSeq
 }
 
-// providerCatalogOrBuild returns the cached catalog, building one only when nothing is cached.
+// providerCatalogOrBuild returns the cached catalog, or the spec-only one while the probing build
+// runs in the background.
 //
-// Serving the request synchronously from a fresh probe made the first catalog arrive about a
-// second late and every later one about 190ms late, which is long enough for a client to submit a
-// form before it knows which provider is selected.
-func (s *Server) providerCatalogOrBuild(ctx context.Context, cwd string) *providerCatalog {
+// The read must never wait for a probe. Building runs every provider CLI to discover its models —
+// `opencode models` alone can take seconds, and a stuck one runs to its timeout — so serving the
+// first request synchronously left the app rendering an empty provider list; the model picker then
+// opened before any provider existed and stayed on the provider step.
+func (s *Server) providerCatalogOrBuild(cwd string) *providerCatalog {
 	if catalog := s.cachedProviderCatalog(cwd); catalog != nil {
 		return catalog
 	}
@@ -182,13 +192,67 @@ func (s *Server) providerCatalogOrBuild(ctx context.Context, cwd string) *provid
 			return catalog
 		}
 	}
-	catalog, current := s.rebuildProviderCatalog(ctx, s.store.LoadDaemonConfig(), cwd)
-	if !current {
-		if cached := s.cachedProviderCatalog(cwd); cached != nil {
-			return cached
-		}
+	catalog, stored := s.cacheStaticProviderCatalog(cwd)
+	if stored {
+		s.startProviderCatalogBuild(cwd)
 	}
 	return catalog
+}
+
+// cacheStaticProviderCatalog stores the spec-only catalog unless a probing build got there first.
+//
+// Storing it is what keeps a burst of cold requests from each running the availability probes, and
+// what lets `providerCatalogOrBuild` tell "no catalog yet" from "cache is warm". It reports whether
+// this call stored the catalog, which is also when a background build has to start.
+func (s *Server) cacheStaticProviderCatalog(cwd string) (*providerCatalog, bool) {
+	catalog := s.buildCatalog(s.store.LoadDaemonConfig(), nil)
+	key := providerCatalogKey(cwd)
+	s.providerCatalogMu.Lock()
+	defer s.providerCatalogMu.Unlock()
+	if s.providerCatalogs == nil {
+		s.providerCatalogs = make(map[string]*providerCatalog)
+	}
+	if cached := s.providerCatalogs[key]; cached != nil {
+		return cached, false
+	}
+	s.providerCatalogs[key] = catalog
+	return catalog, true
+}
+
+// startProviderCatalogBuild probes one scope in the background and broadcasts the catalog when it
+// lands. One build per scope at a time: the clients that ask meanwhile read the static catalog.
+func (s *Server) startProviderCatalogBuild(cwd string) {
+	key := providerCatalogKey(cwd)
+	s.providerCatalogMu.Lock()
+	if s.providerCatalogBuilding[key] {
+		s.providerCatalogMu.Unlock()
+		return
+	}
+	if s.providerCatalogBuilding == nil {
+		s.providerCatalogBuilding = make(map[string]bool)
+	}
+	s.providerCatalogBuilding[key] = true
+	s.providerCatalogMu.Unlock()
+
+	go func() {
+		defer func() {
+			s.providerCatalogMu.Lock()
+			delete(s.providerCatalogBuilding, key)
+			s.providerCatalogMu.Unlock()
+		}()
+		ctx := s.backgroundContext()
+		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+	}()
+}
+
+// backgroundContext bounds work that outlives the request that asked for it.
+func (s *Server) backgroundContext() context.Context {
+	if s.bgCtx != nil {
+		return s.bgCtx
+	}
+	return context.Background()
 }
 
 // payload renders the catalog as the body of get_providers_snapshot_response.

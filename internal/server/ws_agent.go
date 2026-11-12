@@ -24,10 +24,6 @@ import (
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
-func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
-	return s.probePiModelsInCwd(ctx, "")
-}
-
 // probePiModelsInCwd probes with an explicit working directory.
 //
 // The cache is keyed on the directory: a checkout can carry repo-local provider config, so a

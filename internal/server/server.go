@@ -327,6 +327,9 @@ type Server struct {
 	providerCatalogSeq       uint64
 	providerCatalogPublished map[string]uint64
 	providerCatalogFloor     uint64
+	// providerCatalogBuilding marks the scopes a background probe is filling, so a burst of cold
+	// requests starts one build instead of one per request (provider_catalog.go).
+	providerCatalogBuilding map[string]bool
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -430,15 +433,10 @@ func New(opts Options) (*Server, error) {
 	srv.schedules = schedule.NewService(homeDir, srv.scheduleHooks())
 	srv.prStatus = newPRStatusState()
 	srv.bgCtx, srv.bgCancel = context.WithCancel(context.Background())
-	go func() {
-		pctx, cancel := context.WithTimeout(srv.bgCtx, 30*time.Second)
-		defer cancel()
-		_ = srv.probeOrCachedPiModels(pctx)
-		// Build the catalog before anyone asks for it. Proving which providers are installed runs
-		// each CLI, and a client that asks first would otherwise wait for that probe — long enough
-		// for the app to submit a form while it still thinks no provider is selected.
-		srv.rebuildProviderCatalog(pctx, srv.store.LoadDaemonConfig(), "")
-	}()
+	// Build the catalog before anyone asks for it. Proving which providers are installed and
+	// discovering their models runs each CLI, and a client that asks first must not wait for that
+	// probe — it reads the spec-only catalog until this lands.
+	srv.startProviderCatalogBuild("")
 
 	// Nothing else drives file and git-diff subscriptions. Without this loop they are
 	// registered and then never fire, so an open editor never sees a file change made by an
@@ -1474,7 +1472,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// Serve from the in-memory catalog. Building one runs every provider CLI to learn whether it
 		// is available, which took long enough that the app could submit a form before it knew the
 		// selected provider — the snapshot has to be a read, not a probe.
-		catalog := s.providerCatalogOrBuild(ctx, req.Cwd)
+		catalog := s.providerCatalogOrBuild(req.Cwd)
 		// The hash covers the entries alone. Comparing `ifNoneMatch` against a tag built from the
 		// daemon identity reported "not modified" after a providers edit, so a removed provider
 		// stayed visible in the sheet until something else invalidated it.

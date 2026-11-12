@@ -79,6 +79,12 @@ created: 2026-11-10
 - 未在 macOS 桌面 App 的真实精简 PATH 下跑过：本机是 Windows，Pi 目录与 OpenCode/Claude 输出用同一套 `StandardDirs` 验证；macOS 的 `~/.pi/agent/bin` 拼写与用户报告一致，但桌面启动环境未实测。
 - OpenCode 的模型显示名与 thinking variants 未做（CLI 只给 id）；`opencode models` 的输出不含 variant，属于已记录的有界简化。
 
+## 发布时发现的回归
+
+运行时模型发现被放进了 `get_providers_snapshot_request` 的同步构建里：构建会跑每个 provider 的 CLI，`opencode models` 单次可到 15s 超时，于是首个快照十几秒才返回，app 先渲染出空 provider 列表；模型选择器在 provider 还没到时就打开，停在 provider 步骤（CI shard 8/9/15 的 metadata、model-search、title、workspace-navigation 失败都是这一个原因）。
+
+`providerCatalogOrBuild` 现在先返回 spec 目录（不跑发现探针），把探测构建放到后台，完成后用 `providers_snapshot_update` 推给客户端；同一 scope 同时只跑一个构建，冷请求不会再各起一个探针。回归测试 `TestProviderCatalogColdReadSkipsProbes`。
+
 ## 关闭结论
 
 四个症状都已在共享发现层修复：Pi 托管安装进入候选目录并被启动路径解析，诊断改为真实探测，OpenCode 与 Claude 的模型目录来自各自的运行时来源。验证以本机真实 CLI 与真实快照为准；macOS 桌面环境复验作为遗留风险保留在上一节，不阻塞关闭（用户 2026-11-11 明确要求审完即关闭）。稳定行为已写入 `docs/providers.md`，外部事实与参考实现缺口写入 `byissue/notes/2026-11-11-provider-model-sources.md`；project spec 无需变更。
