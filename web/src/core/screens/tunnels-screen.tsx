@@ -21,7 +21,12 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
-import { createTunnelFromSelection, tunnelEndStates } from "@/tunnels/tunnel-rule";
+import {
+  createTunnelFromSelection,
+  tunnelEndStates,
+  listenHostIsOpen,
+  DEFAULT_LISTEN_HOST,
+} from "@/tunnels/tunnel-rule";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
@@ -823,6 +828,30 @@ type TunnelPeerSelection =
   | { kind: "host"; target: TunnelPeerTarget }
   | { kind: "offer"; url: string };
 
+function ListenHostField({
+  isZh,
+  listenHost,
+  onChange,
+}: {
+  isZh: boolean;
+  listenHost: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}): ReactElement {
+  return (
+    <Field>
+      <FieldLabel>{isZh ? "监听地址" : "Listen address"}</FieldLabel>
+      <Input value={listenHost} onChange={onChange} data-testid="tunnels-add-listen-host" />
+      {listenHostIsOpen(listenHost) ? (
+        <span className="text-xs leading-[normal] text-red-300">
+          {isZh
+            ? "这个地址对网络开放，任何能访问这台机器的人都能连上转发的端口。"
+            : "This address is open to the network. Anyone who can reach this machine can connect to the forwarded port."}
+        </span>
+      ) : null}
+    </Field>
+  );
+}
+
 function AddTunnelSheet({
   serverId,
   existingPeerIds,
@@ -858,6 +887,11 @@ function AddTunnelSheet({
     [setPassword],
   );
   const [remotePort, setRemotePort] = useState("");
+  const [listenHost, setListenHost] = useState(DEFAULT_LISTEN_HOST);
+  const handleListenHostInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setListenHost(event.target.value),
+    [],
+  );
   const handleRemotePortInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setRemotePort(event.target.value),
     [setRemotePort],
@@ -998,6 +1032,7 @@ function AddTunnelSheet({
             ? getHostRuntimeStore().getClient(selection.target.serverId)
             : null,
         forwards,
+        listenHost,
         password,
         createOneSided: () =>
           selection.kind === "host"
@@ -1026,6 +1061,7 @@ function AddTunnelSheet({
   }, [
     client,
     hosts,
+    listenHost,
     localPort,
     password,
     onCreated,
@@ -1088,6 +1124,7 @@ function AddTunnelSheet({
           />
         </Field>
       ) : undefined}
+      <ListenHostField isZh={isZh} listenHost={listenHost} onChange={handleListenHostInput} />
       <Field>
         <FieldLabel>
           {isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")}

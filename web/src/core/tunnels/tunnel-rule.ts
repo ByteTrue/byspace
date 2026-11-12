@@ -96,6 +96,7 @@ export async function createTunnelFromSelection(input: {
   sourceClient: TunnelEndpointClient;
   targetClient: TunnelEndpointClient | null;
   forwards: { remotePort: number; localPort?: number }[];
+  listenHost?: string;
   password: string;
   offerUrl?: string;
   createOneSided: () => Promise<TunnelRuleResult>;
@@ -126,7 +127,10 @@ export async function createTunnelFromSelection(input: {
       client: input.sourceClient,
     },
     targetPort: first?.remotePort ?? 0,
-    listenHost: DEFAULT_LISTEN_HOST,
+    listenHost:
+      input.listenHost && input.listenHost.trim() !== ""
+        ? input.listenHost.trim()
+        : DEFAULT_LISTEN_HOST,
     listenPort: first?.localPort ?? first?.remotePort ?? 0,
   });
 }

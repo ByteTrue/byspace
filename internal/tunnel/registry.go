@@ -468,9 +468,9 @@ func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
 			if peer.URL == "" {
 				peer.URL = oldPeer.URL
 			}
-			if peer.Token == "" {
-				peer.Token = oldPeer.Token
-			}
+			// The peer password is no longer kept. A tunnel is authorized by the target's grant for
+			// this daemon's key, so a password left in an older tunnels.json is dropped on the next
+			// edit rather than carried forward.
 			if peer.PeerHostname == nil {
 				peer.PeerHostname = oldPeer.PeerHostname
 			}
