@@ -1001,15 +1001,23 @@ func (s *Server) serveSessionOnSinkGreeted(
 	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
 	// Node closes it after 15s with 4001; without the same deadline a half-open client (a
 	// browser tab suspended before the handshake) accumulates until the daemon restarts.
+	// A socket that never gets to hello still may not sit here forever. A relay peer is the
+	// exception that has to survive: it never sends a password or a hello, it proves the e2ee
+	// challenge and then speaks tunnel frames for as long as the tunnel lives. So the deadline
+	// closes a socket that proved nothing, not one that merely stayed quiet.
 	var helloDeadline *time.Timer
-	if !greeted && !s.relayAuthIsPending(sink) {
+	if !greeted {
 		helloDeadline = time.AfterFunc(wsHelloTimeout, func() {
 			s.mu.Lock()
 			accepted := s.clients[sink]
 			s.mu.Unlock()
-			if !accepted {
-				_ = sink.Close(wsCloseHelloTimeout, "Timed out waiting for hello")
+			if accepted {
+				return
 			}
+			if s.relayAuthIsPending(sink) && s.relayPeerKeyOf(sink) != "" {
+				return
+			}
+			_ = sink.Close(wsCloseHelloTimeout, "Timed out waiting for hello")
 		})
 		defer helloDeadline.Stop()
 	}

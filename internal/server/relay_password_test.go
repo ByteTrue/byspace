@@ -14,6 +14,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/relay"
 	"github.com/ByteTrue/byspace/internal/terminal"
+	"github.com/ByteTrue/byspace/internal/tunnel"
 )
 
 // relaySession dials a daemon through an in-process relay and completes the E2EE handshake,
@@ -301,4 +302,42 @@ func soleClientUnhandshaked(t *testing.T, srv *Server) bool {
 	}
 	t.Fatalf("relay socket never registered in s.clients (have %d)", len(srv.clients))
 	return false
+}
+
+// An idle relay socket must not sit in the pending set forever, and a tunnel peer must not be
+// killed by the hello deadline it never answers. Both halves in one test: the peer proved its
+// challenge key, the idle socket proved nothing.
+func TestRelayIdleSocketExpiresButProvenPeerDoesNot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits for the hello deadline")
+	}
+	srv := newTestServer(t, t.TempDir())
+	setDaemonPassword(t, srv, "correct")
+
+	idle, _, idleCleanup := relaySession(t, srv)
+	defer idleCleanup()
+
+	peer, peerShared, peerCleanup := relaySession(t, srv)
+	defer peerCleanup()
+	// One frame does two things: it answers the challenge, which marks the peer key, and it is a
+	// tunnel-family frame, which a proven peer is allowed to send without a password.
+	frameBytes, err := tunnel.EncodeFrame(tunnel.OpcodeDataUpstream, "stream-x", []byte("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEncryptedBinary(t, peer, peerShared, frameBytes)
+
+	time.Sleep(wsHelloTimeout + 2*time.Second)
+
+	idleCtx, idleCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer idleCancel()
+	if _, _, err := idle.Read(idleCtx); err == nil {
+		t.Fatal("an idle relay socket outlived the hello deadline")
+	}
+
+	// The peer socket still answers: only a live socket can accept the password and reply.
+	writeEncrypted(t, peer, peerShared, passwordFrame("correct"))
+	if reply := readEncrypted(t, peer, peerShared); !strings.Contains(reply, `"ok":true`) {
+		t.Fatalf("the proven peer was closed by the hello deadline: %s", reply)
+	}
 }

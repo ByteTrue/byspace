@@ -392,7 +392,13 @@ func newLocalTestClient(t *testing.T, ctx context.Context, srv *Server) *websock
 	t.Helper()
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
-	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	// The daemon carries a password here, so the HTTP layer demands authority on every
+	// request. A browser cannot set an Authorization header on a WebSocket, so the same token
+	// travels as a subprotocol — the path the app itself uses.
+	dialOptions := &websocket.DialOptions{
+		Subprotocols: []string{"byspace.bearer." + EnsureCLICredential(srv.HomeDir())},
+	}
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", dialOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
