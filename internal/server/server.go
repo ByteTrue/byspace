@@ -1452,9 +1452,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	switch base.Type {
 	case "auth.password.submit.request":
-		// Only a relay connection still proving itself reaches this with anything to do. A direct
-		// connection already authenticated at the HTTP layer, so the message is a no-op there.
-		if s.relayAuthIsPending(sink) {
+		// Only a relay connection reaches this with anything to do. A direct connection already
+		// authenticated at the HTTP layer, so the message is a no-op there.
+		if s.relayAuthMarked(sink) {
 			s.handleRelayPassword(ctx, sink, raw)
 		}
 		return

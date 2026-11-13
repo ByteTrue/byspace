@@ -5830,8 +5830,9 @@ export class DaemonClient {
   }
 
   // sendRelayPassword proves the daemon password on a relay connection. It travels as a session
-  // message, which the relay transport encrypts, so the relay forwards ciphertext. A daemon with no
-  // password set rejects this and closes the socket; one that has one answers before server_info.
+  // message, which the relay transport encrypts, so the relay forwards ciphertext. It goes out on every
+  // relay connection, including one to a host with no password: there is nothing to prove then,
+  // and the answer is a plain ok so the handshake continues instead of stalling.
   private sendRelayPassword(): void {
     const password = normalizePassword(this.config.password);
     this.sendJsonMessage("session", "auth.password.submit.request", {

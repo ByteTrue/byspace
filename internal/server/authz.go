@@ -66,6 +66,13 @@ func (s *Server) relayAuthIsPending(sink frameSink) bool {
 	if s.daemonPasswordHash() == "" {
 		return false
 	}
+	return s.relayAuthMarked(sink)
+}
+
+// relayAuthMarked reports whether the socket still carries the pending mark, whatever the host's
+// password is. Routing a submission uses this and not relayAuthIsPending: with no password set
+// nothing is gated, but a submission must still be answered instead of ignored.
+func (s *Server) relayAuthMarked(sink frameSink) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.relayAuthPending_ != nil && s.relayAuthPending_[sink]
