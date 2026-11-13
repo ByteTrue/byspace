@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   establishTunnelRule,
+  isLoopbackListenHost,
   listenHostIsOpen,
   tunnelEndStates,
   type TunnelEndpointClient,
@@ -65,16 +66,45 @@ describe("establishTunnelRule", () => {
     expect(source.calls).toEqual([]);
   });
 
-  test("the recorded rule carries both ends and the listen address", async () => {
+  // Loopback is the daemon default and is not sent, so an older daemon keeps its meaning.
+  test("a loopback listen address is not sent to the daemon", async () => {
     const source = fakeClient();
     await establishTunnelRule({
       ...rule,
+      listenHost: "127.0.0.1",
       target: { serverId: "srv_laptop", publicKey: "pk_laptop", client: fakeClient().client },
       source: { serverId: "srv_vps", publicKey: "pk_vps", client: source.client },
     });
-    const sync = source.calls.find((call) => call.method === "sync");
-    expect(JSON.stringify(sync?.arg)).toContain("srv_laptop");
-    expect(JSON.stringify(sync?.arg)).toContain("18090");
+    const create = source.calls.find((call) => call.method === "create");
+    expect(JSON.stringify(create?.arg)).not.toContain("listenHost");
+  });
+
+  // Anything else is a deliberate interface choice and has to reach the manager, or the listen
+  // address field in the form is describing a bind that never happens.
+  test("a non-loopback listen address reaches the forward config", async () => {
+    const source = fakeClient();
+    const result = await establishTunnelRule({
+      ...rule,
+      listenHost: "172.17.0.1",
+      target: { serverId: "srv_laptop", publicKey: "pk_laptop", client: fakeClient().client },
+      source: { serverId: "srv_vps", publicKey: "pk_vps", client: source.client },
+    });
+    expect(result.ok).toBe(true);
+    const create = source.calls.find((call) => call.method === "create") as {
+      arg: { forwards: { listenHost?: string }[] };
+    };
+    expect(create.arg.forwards[0]?.listenHost).toBe("172.17.0.1");
+  });
+});
+
+describe("isLoopbackListenHost", () => {
+  test("recognizes the default addresses and nothing else", () => {
+    expect(isLoopbackListenHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackListenHost("localhost")).toBe(true);
+    expect(isLoopbackListenHost("  127.0.0.1  ")).toBe(true);
+    expect(isLoopbackListenHost("0.0.0.0")).toBe(false);
+    expect(isLoopbackListenHost("172.17.0.1")).toBe(false);
+    expect(isLoopbackListenHost("::")).toBe(false);
   });
 });
 

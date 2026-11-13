@@ -190,6 +190,13 @@ export function normalizeLoopbackToLocalhost(endpoint: string): string {
   return endpoint;
 }
 
+// normalizeEndpoint is the canonical spelling for comparing two references to the same endpoint:
+// the port is normalized and a loopback address becomes `localhost`, so an endpoint the user typed
+// as 127.0.0.1 matches the same one the daemon reports as localhost.
+export function normalizeEndpoint(endpoint: string): string {
+  return normalizeLoopbackToLocalhost(normalizeHostPort(endpoint));
+}
+
 export function deriveLabelFromEndpoint(endpoint: string): string {
   try {
     const { host } = parseHostPort(endpoint);

@@ -1,14 +1,7 @@
 import { useMemo } from "react";
-import {
-  normalizeHostPort,
-  normalizeLoopbackToLocalhost,
-} from "@bytetrue/protocol/daemon-endpoints";
+import { normalizeEndpoint } from "@bytetrue/protocol/daemon-endpoints";
 import { useHosts, useHostRegistryLoaded } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
-
-function normalizeEndpoint(endpoint: string): string {
-  return normalizeLoopbackToLocalhost(normalizeHostPort(endpoint));
-}
 
 export function browserOriginHost(): string | null {
   if (typeof window === "undefined") return null;

@@ -313,3 +313,43 @@ func (stubPeer) Send(Frame) error     { return nil }
 func (stubPeer) Frames() <-chan Frame { return make(chan Frame) }
 func (stubPeer) Err() error           { return nil }
 func (stubPeer) Close() error         { return nil }
+
+// The listen address in the rule form has to reach the bind. Before it was wired, the manager
+// hardwired loopback and the UI's "open to the network" warning described behavior the daemon
+// never performed.
+func TestAddForwardBindsRequestedListenHost(t *testing.T) {
+	m := NewManager("peer", "peer-host", nil)
+	defer m.Close()
+
+	f, err := m.AddForwardWithLocalPort(3500, 0, "127.0.0.1", "loopback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.listenHost != "127.0.0.1" {
+		t.Fatalf("expected loopback bind, got %q", f.listenHost)
+	}
+
+	// Empty means the default, which is loopback.
+	defaultForward, err := m.AddForwardWithLocalPort(3501, 0, "", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultForward.listenHost != "127.0.0.1" {
+		t.Fatalf("empty listen host should bind loopback, got %q", defaultForward.listenHost)
+	}
+
+	// Status reports the bound address so the rule list shows the truth.
+	states := m.Status()
+	var found bool
+	for _, state := range states {
+		if state.RemotePort == 3500 {
+			found = true
+			if state.ListenHost != "127.0.0.1" {
+				t.Fatalf("status listenHost = %q", state.ListenHost)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("forward 3500 missing from status")
+	}
+}

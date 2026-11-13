@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +17,9 @@ type ForwardState struct {
 	RemotePort int    `json:"remotePort"`
 	Label      string `json:"label,omitempty"`
 	LocalPort  int    `json:"localPort"`
+	// ListenHost is the interface the local listener bound to. Loopback when the rule did not ask
+	// for another address; 0.0.0.0 or :: when the port is deliberately exposed on the network.
+	ListenHost string `json:"listenHost,omitempty"`
 	State      string `json:"state"`
 	Disabled   bool   `json:"disabled,omitempty"`
 	LastError  string `json:"lastError,omitempty"`
@@ -98,6 +102,9 @@ type forward struct {
 	label      string
 	listener   net.Listener
 	localPort  int
+	// listenHost is the interface the local listener bound to. "" would have meant the manager
+	// hardwired loopback; it is recorded so the status and the rule list can show the real address.
+	listenHost string
 	state      string
 	lastError  string
 	// streams keyed by tunnel id.
@@ -148,11 +155,13 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 // AddForward exposes one remote port locally on an ephemeral port (or use AddForwardWithLocalPort
 // to bind a fixed local port).
 func (m *Manager) AddForward(remotePort int, label string) (*forward, error) {
-	return m.AddForwardWithLocalPort(remotePort, 0, label)
+	return m.AddForwardWithLocalPort(remotePort, 0, "", label)
 }
 
 // AddForwardWithLocalPort exposes one remote port locally, binding preferredLocalPort when > 0.
-func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, label string) (*forward, error) {
+// listenHost picks the interface; empty means loopback (127.0.0.1). Binding 0.0.0.0 or :: exposes
+// the port on the network, which the UI warns about before it gets here.
+func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, listenHost, label string) (*forward, error) {
 	if remotePort < 1 || remotePort > 65535 {
 		return nil, fmt.Errorf("remotePort %d out of range", remotePort)
 	}
@@ -160,21 +169,25 @@ func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, la
 		return nil, fmt.Errorf("localPort %d out of range", preferredLocalPort)
 	}
 
-	listenAddr := "127.0.0.1:0"
-	if preferredLocalPort > 0 {
-		listenAddr = fmt.Sprintf("127.0.0.1:%d", preferredLocalPort)
+	host := strings.TrimSpace(listenHost)
+	if host == "" {
+		host = "127.0.0.1"
 	}
+	listenAddr := net.JoinHostPort(host, strconv.Itoa(preferredLocalPort))
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open local listener on %s for remote %d: %w", listenAddr, remotePort, err)
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
+	addr := listener.Addr().(*net.TCPAddr)
+	port := addr.Port
+	listenHostUsed := addr.IP.String()
 
 	f := &forward{
 		remotePort: remotePort,
 		label:      label,
 		listener:   listener,
 		localPort:  port,
+		listenHost: listenHostUsed,
 		state:      StateConnecting,
 		streams:    make(map[string]*stream),
 	}
@@ -189,7 +202,7 @@ func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, la
 	m.mu.Unlock()
 
 	go m.acceptLoop(f)
-	m.logf("tunnel %s: forwarding remote %d as 127.0.0.1:%d", m.peerID, remotePort, port)
+	m.logf("tunnel %s: forwarding remote %d as %s:%d", m.peerID, remotePort, listenHostUsed, port)
 	return f, nil
 }
 
@@ -289,6 +302,7 @@ func (m *Manager) Status() []ForwardState {
 			RemotePort: f.remotePort,
 			Label:      f.label,
 			LocalPort:  f.localPort,
+			ListenHost: f.listenHost,
 			LastError:  f.lastError,
 		})
 	}

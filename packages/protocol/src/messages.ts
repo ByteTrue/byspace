@@ -1716,6 +1716,9 @@ export const TunnelCreateRequestSchema = z.object({
         z.object({
           remotePort: z.number().int().min(1).max(65535),
           localPort: z.number().int().min(1).max(65535).optional(),
+          // COMPAT(tunnelListenHost): added in v0.25.0, remove after 2027-11-13. The local listener
+          // address; absent or empty means loopback. A daemon that ignores it binds 127.0.0.1.
+          listenHost: z.string().optional(),
           disabled: z.boolean().optional(),
           label: z.string().optional(),
         }),

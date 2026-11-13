@@ -1033,7 +1033,6 @@ function AddTunnelSheet({
             : null,
         forwards,
         listenHost,
-        password,
         createOneSided: () =>
           selection.kind === "host"
             ? client.createTunnel({

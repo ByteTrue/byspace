@@ -5492,6 +5492,7 @@ export class DaemonClient {
       forwards: Array<{
         remotePort: number;
         localPort?: number;
+        listenHost?: string;
         disabled?: boolean;
         label?: string;
       }>;

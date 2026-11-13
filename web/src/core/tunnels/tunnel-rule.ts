@@ -10,7 +10,7 @@ export interface TunnelEndpointClient {
     peerId: string;
     url?: string;
     daemonPublicKeyB64?: string;
-    forwards: { remotePort: number; localPort?: number; label?: string }[];
+    forwards: { remotePort: number; localPort?: number; listenHost?: string; label?: string }[];
   }): Promise<{ ok: boolean; error?: string }>;
   exchangeHostSync(input: {
     changes?: { kind: "rule"; id: string; data?: Record<string, unknown> }[];
@@ -33,9 +33,10 @@ export interface TunnelRuleResult {
   error?: string;
 }
 
-// establishTunnelRule writes the grant on the target and the forward on the source, then records the
-// rule in the replica so other devices can see it. The grant is what permits the forward; the
-// replica entry is display only.
+// establishTunnelRule writes the grant on the target, the forward on the source, and a display copy
+// of the rule into the replica. The grant is what permits the forward; the replica entry is there
+// so the chain keeps the rule's shape. The tunnel list itself is assembled live from every host
+// (fetchAggregatedTunnels), so nothing reads the replica entry yet.
 export async function establishTunnelRule(input: TunnelRuleInput): Promise<TunnelRuleResult> {
   const grant = await input.target.client.grantTunnel({
     publicKey: input.source.publicKey,
@@ -52,6 +53,11 @@ export async function establishTunnelRule(input: TunnelRuleInput): Promise<Tunne
       {
         remotePort: input.targetPort,
         localPort: input.listenPort,
+        // The daemon binds this interface. Loopback is the default and is not sent; anything else
+        // (a Docker bridge, 0.0.0.0) is a deliberate choice the UI warned about first.
+        ...(input.listenHost && !isLoopbackListenHost(input.listenHost)
+          ? { listenHost: input.listenHost }
+          : {}),
         ...(input.label ? { label: input.label } : {}),
       },
     ],
@@ -97,8 +103,6 @@ export async function createTunnelFromSelection(input: {
   targetClient: TunnelEndpointClient | null;
   forwards: { remotePort: number; localPort?: number }[];
   listenHost?: string;
-  password: string;
-  offerUrl?: string;
   createOneSided: () => Promise<TunnelRuleResult>;
 }): Promise<TunnelRuleResult> {
   if (input.selection.kind === "offer") {
@@ -180,6 +184,13 @@ export function tunnelEndStates(input: {
 // DEFAULT_LISTEN_HOST is where a tunnel listens unless the user picks another address. Loopback
 // keeps the forwarded port off the network; anything else is a choice the UI should flag.
 export const DEFAULT_LISTEN_HOST = "127.0.0.1";
+
+// isLoopbackListenHost reports whether an address is the daemon's default, which is not sent as a
+// listenHost so an older daemon and the stored config both keep the loopback meaning.
+export function isLoopbackListenHost(host: string): boolean {
+  const trimmed = host.trim();
+  return trimmed === "127.0.0.1" || trimmed.toLowerCase() === "localhost";
+}
 
 // listenHostIsOpen reports whether a listen address accepts connections from the network, which is
 // the case the UI warns about.

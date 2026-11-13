@@ -32,8 +32,10 @@ type PeerConfig struct {
 
 // ForwardConfig is one port to expose locally.
 type ForwardConfig struct {
-	RemotePort int    `json:"remotePort"`
-	LocalPort  int    `json:"localPort,omitempty"`
+	RemotePort int `json:"remotePort"`
+	LocalPort  int `json:"localPort,omitempty"`
+	// ListenHost is the interface the local listener binds to. Empty means loopback.
+	ListenHost string `json:"listenHost,omitempty"`
 	Disabled   bool   `json:"disabled,omitempty"`
 	Label      string `json:"label,omitempty"`
 }
@@ -237,7 +239,7 @@ func (r *Registry) startPeer(peer PeerConfig) error {
 		if forward.Disabled {
 			continue
 		}
-		f, err := manager.AddForwardWithLocalPort(forward.RemotePort, forward.LocalPort, forward.Label)
+		f, err := manager.AddForwardWithLocalPort(forward.RemotePort, forward.LocalPort, forward.ListenHost, forward.Label)
 		if err != nil {
 			_ = manager.Close()
 			return err
@@ -509,6 +511,11 @@ func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
 				if up, exists := incoming[oldFw.RemotePort]; exists {
 					if up.LocalPort == 0 && oldFw.LocalPort > 0 {
 						up.LocalPort = oldFw.LocalPort
+					}
+					// An edit that does not restate the listen address keeps the one already bound,
+					// the same way it keeps a pinned local port.
+					if up.ListenHost == "" && oldFw.ListenHost != "" {
+						up.ListenHost = oldFw.ListenHost
 					}
 					merged = append(merged, up)
 					delete(incoming, oldFw.RemotePort)
