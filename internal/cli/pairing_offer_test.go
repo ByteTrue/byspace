@@ -102,6 +102,25 @@ func TestOfflinePairingOfferDoesNotBootTheHome(t *testing.T) {
 	}
 }
 
+// An explicit --addr that cannot be reached must fail, not silently mint the default home's offer.
+//
+// The two homes have different server ids and keys. Falling back to an offline mint would hand the
+// operator a link that pairs a device against the wrong daemon, with nothing to say the named one
+// was not the one described. Port 1 on loopback is closed, so the dial fails fast. The explicit addr
+// short-circuits candidate resolution, so this never touches the default home's daemon on 6777.
+func TestPairingOfferRefusesToMintForAnotherHomeWhenAddrUnreachable(t *testing.T) {
+	homeDir := t.TempDir()
+	writeHomeConfig(t, homeDir, `{"version": 1}`)
+
+	_, err := pairingOfferURL("0.21.0", homeDir, "127.0.0.1:1")
+	if err == nil {
+		t.Fatal("an unreachable --addr minted an offer instead of failing")
+	}
+	if !strings.Contains(err.Error(), "different home") {
+		t.Fatalf("error does not say the offer would be for another home: %v", err)
+	}
+}
+
 func writeHomeConfig(t *testing.T, homeDir, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(homeDir, "config.json"), []byte(body), 0o600); err != nil {

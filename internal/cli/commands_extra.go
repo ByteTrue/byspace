@@ -666,12 +666,22 @@ func widestLine(text string) int {
 // to. Minting the offer in-process uses the defaults instead, so an operator who pointed the relay
 // at their own host got a link to the hosted relay.
 func pairingOfferURL(version, homeDir, addr string) (string, error) {
+	explicitAddr := strings.TrimSpace(addr) != ""
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	ws, err := dialDaemonWS(ctx, addr)
 	if err != nil {
 		// No daemon running: fall back to the offline offer rather than failing. `pair` is also
 		// how people mint a link before starting the daemon.
+		//
+		// But only when the operator did not name a daemon. An offline offer carries the identity
+		// of `homeDir` — the default home when --home is unset — which is a different serverId and
+		// key than the --addr daemon that could not be reached. Silently minting it would hand back
+		// a link that pairs a device against the wrong daemon, with nothing to say so. Name the
+		// failure instead.
+		if explicitAddr {
+			return "", fmt.Errorf("no daemon reachable at %s (%v); refusing to mint an offer for a different home — start that daemon, or run `byspace pair` with no --addr to mint for this home", addr, err)
+		}
 		return buildOfflinePairingOffer(version, homeDir, "", true, ""), nil
 	}
 	defer ws.CloseNow()
@@ -692,6 +702,12 @@ func pairingOfferURL(version, homeDir, addr string) (string, error) {
 		// been configured reads as off — node defaults the relay to enabled, so this is the
 		// common case on a fresh home. `pair` is a manual command: someone who runs it wants a
 		// link, so mint one from the defaults rather than making them configure the relay first.
+		//
+		// The named-daemon case is the same hazard as the unreachable one: this daemon has no
+		// offer, and an offline mint would describe a different home. Report the real reason.
+		if explicitAddr {
+			return "", fmt.Errorf("the daemon at %s has no relay configured, so it has no pairing offer; enable its relay and retry", addr)
+		}
 		return buildOfflinePairingOffer(version, homeDir, "", true, ""), nil
 	}
 	return url, nil

@@ -37,6 +37,22 @@ Two rules that keep this off the production home:
 
 Stop the daemons and the web app when done and remove the temp homes. Confirm 6777 is still the production PID before and after.
 
+### The relay handshake the browser actually performs
+
+`scripts/e2e-relay-client-check.mjs` drives the shipped TypeScript relay channel (`packages/relay`) against a real daemon through a real relay. Run it after changing anything in the e2ee handshake, the relay auth path, or the binary-frame gates:
+
+```bash
+npm run build:relay
+BYSPACE_HOME=$TEMP/v2a ./bin/byspace.exe relay --addr 127.0.0.1:8791 &
+BYSPACE_HOME=$TEMP/v2a ./bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/v2a --relay ws://127.0.0.1:8791/ws &
+printf 'pw\npw\n' | ./bin/byspace.exe daemon set-password --addr 127.0.0.1:8792
+E2E_HOME=$TEMP/v2a E2E_PASSWORD=pw node scripts/e2e-relay-client-check.mjs
+```
+
+It checks two things a Go test cannot see. First, the daemon's per-session e2ee challenge: the Go client answers it, so the Go relay tests keep passing while the TypeScript client stays silent and every browser frame is dropped — see [the note](../byissue/notes/2026-11-13-ts-relay-client-never-answered-the-e2ee-challenge.md). Second, the terminal gate: the probe sends terminal input from a socket that proved no password, and the daemon's `ws_runtime_metrics` line must keep `sessions.terminals` at 0. `E2E_SKIP_AUTH=1` leaves out the authenticated control, which is what you want on a fresh daemon; a full run ends with `terminals` at 1.
+
+Use a fresh `connectionId` per run (the script does, from a timestamp). A reused one lets a socket left over from an earlier run receive frames meant for this one, which looks like a decryption failure.
+
 ## Quick start
 
 ```typescript
