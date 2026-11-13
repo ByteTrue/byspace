@@ -5,6 +5,33 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.25.0 - 2026-11-13
+
+### Added
+
+- Added a Devices page that adds or removes a daemon from the sync chain
+- Added one host list and one tunnel-rule list shared by every daemon in the chain
+- Added a per-host daemon password, remembered per host, with a changed host key blocked until you confirm it
+- Added a listen address choice for tunnels, and the list shows both ends' state
+- Added `byspace devices add`, `list` and `remove`
+
+### Changed
+
+- Relay connections now prove the daemon password inside the encrypted channel, and a host without one refuses relay connections
+- A tunnel's target now authorizes the connecting daemon's key for each port, so a tunnel created before this release must be re-created from the Tunnels screen
+- Tunnel rules no longer store the peer daemon's password
+
+### Fixed
+
+- Fixed a relay connection opening a terminal or starting a file upload without the daemon password
+- Fixed a relay connection that proved no password receiving agent output and other session broadcasts
+- Fixed one peer driving, resuming or closing another peer's tunnel stream
+- Fixed a deleted host reappearing after the next sync
+- Fixed the tunnel listen address field reporting a binding it never performed
+- Fixed `byspace pair --addr` minting an offer for a different home when the address was unreachable
+- Fixed a host's direct-connection password being forgotten after the shared replica was adopted
+- Fixed the Connect button rendering a raw translation key
+
 ## 0.24.9 - 2026-11-11
 
 ### Added

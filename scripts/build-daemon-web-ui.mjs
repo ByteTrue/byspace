@@ -22,6 +22,11 @@ function fmtMiB(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
 }
 
+// npm is a .cmd shim on Windows; spawn refuses to run a .cmd without a shell, so every release
+// command failed here after the Go build, right before the bundle step.
+const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const NPM_OPTIONS = { shell: process.platform === "win32" };
+
 function run(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -44,10 +49,11 @@ async function buildWebApp() {
   // web/ imports the workspace packages through their built dist/, which a fresh checkout (the
   // release workflow, the Docker build) does not have yet.
   console.log("Building workspace packages...");
-  await run("npm", ["run", "build:app-deps"], { cwd: REPO_ROOT });
+  await run(NPM, ["run", "build:app-deps"], { cwd: REPO_ROOT, ...NPM_OPTIONS });
   console.log("Building the web app (web/)...");
-  await run("npm", ["run", "build", "--workspace=@bytetrue/web"], {
+  await run(NPM, ["run", "build", "--workspace=@bytetrue/web"], {
     cwd: REPO_ROOT,
+    ...NPM_OPTIONS,
   });
 }
 
