@@ -18,7 +18,7 @@ import {
   type HostProfile,
 } from "@/types/host-connection";
 import type { HostSyncRecord } from "@bytetrue/protocol/messages";
-import { missingHostChanges, pullReplica, pushReplica, replicaDiff } from "@/runtime/host-replica";
+import { exchangeReplica, pushReplica, replicaDiff } from "@/runtime/host-replica";
 import { guardHostKey, memoryKeyStore } from "@/runtime/host-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
@@ -2104,31 +2104,20 @@ export class HostRuntimeStore {
 
   private async applySharedReplica(client: DaemonClient): Promise<void> {
     try {
-      const carried = this.carriedRecords;
-      const shared = await pullReplica(client, this.hosts, carried);
+      const shared = await exchangeReplica(client, this.hosts, this.carriedRecords);
       if (!shared) {
         return;
       }
       // Keep the whole replica, not just the hosts this app understands: the tunnel-rule records
       // travel the same way, and dropping them here would stop the chain from learning them.
       this.carriedRecords = shared.records;
-      if (!equal(shared.profiles, this.hosts)) {
-        this.hosts = shared.profiles;
-        this.syncHosts(shared.profiles);
-        this.emitHostList();
-        await this.writeBrowserCopy(shared.profiles);
+      if (equal(shared.profiles, this.hosts)) {
+        return;
       }
-      // A host this daemon has never seen still has to reach it: the browser's pre-sync list on
-      // first run, and anything added while no daemon was reachable. Only unknown ids travel, so a
-      // record the chain already had newer is not restamped.
-      const missing = missingHostChanges(this.hosts, shared.records);
-      if (missing.length > 0) {
-        await pushReplica(client, missing);
-        const after = await pullReplica(client, this.hosts, this.carriedRecords);
-        if (after) {
-          this.carriedRecords = after.records;
-        }
-      }
+      this.hosts = shared.profiles;
+      this.syncHosts(shared.profiles);
+      this.emitHostList();
+      await this.writeBrowserCopy(shared.profiles);
     } catch {
       // A failed exchange leaves the copy as it was; the next connect tries again.
     }

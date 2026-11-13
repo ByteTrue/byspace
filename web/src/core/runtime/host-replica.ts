@@ -119,44 +119,35 @@ export function replicaDiff(
   return changes;
 }
 
-// missingHostChanges lists hosts the replica has never seen. This is the only push that runs on
-// connect: a host the user added while no daemon was reachable, and the browser's pre-sync list on
-// first run. Pushing everything on connect would restamp records the chain already had newer.
-export function missingHostChanges(
-  profiles: readonly HostProfile[],
-  records: readonly HostSyncRecord[],
-): ReplicaChange[] {
-  const known = new Set(
-    records.filter((record) => record.kind === "host").map((result) => result.id),
-  );
-  return profiles
-    .filter((profile) => !known.has(profile.serverId))
-    .map((profile) => {
-      const { serverId, ...data } = withoutSecrets(profile);
-      return { kind: "host" as const, id: serverId, data };
-    });
-}
-
 export interface ReplicaSnapshot {
   profiles: HostProfile[];
   records: HostSyncRecord[];
 }
 
-// pullReplica merges the records this browser carried into one daemon's replica and returns the
-// result. Null means that daemon does not support sync or refused, so the caller keeps its copy.
+// exchangeReplica merges this browser's hosts and the records it carried into one daemon's replica
+// and returns the result. Null means that daemon does not support sync or refused, so the caller
+// keeps its copy.
+//
+// Both halves travel in one round trip, and that matters: a daemon's replica is empty until
+// something writes to it, so a pull that sent no edits would come back empty and adopting it would
+// delete this browser's host list. Sending the edits first turns that case into an import.
 //
 // carried are the records this browser holds from other daemons. Handing them over is what makes
 // the chain converge: the browser is the only participant that reaches every daemon, so a daemon
 // the user reached only from their phone learns the rest of the chain when the phone carries the
 // list back.
-export async function pullReplica(
+export async function exchangeReplica(
   client: ReplicaClient,
   profiles: readonly HostProfile[],
   carried: readonly HostSyncRecord[],
 ): Promise<ReplicaSnapshot | null> {
+  const changes = replicaDiff(profiles, carried);
   let result: ReplicaExchange;
   try {
-    result = await client.exchangeHostSync(carried.length > 0 ? { records: [...carried] } : {});
+    result = await client.exchangeHostSync({
+      changes,
+      ...(carried.length > 0 ? { records: [...carried] } : {}),
+    });
   } catch {
     return null;
   }

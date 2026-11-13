@@ -1,9 +1,8 @@
 import { describe, expect, test } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
 import {
+  exchangeReplica,
   hostRecordsToProfiles,
-  missingHostChanges,
-  pullReplica,
   pushReplica,
   rememberPasswords,
   replicaDiff,
@@ -109,22 +108,16 @@ describe("replicaDiff", () => {
   });
 });
 
-describe("missingHostChanges", () => {
-  test("only lists hosts the replica has never seen", () => {
-    const changes = missingHostChanges(
-      [profile("srv_known"), profile("srv_new")],
-      [record("srv_known", hostData("srv_known"))],
-    );
-    expect(changes.map((change) => change.id)).toEqual(["srv_new"]);
+describe("exchangeReplica", () => {
+  // A daemon's replica is empty until something writes to it. Reading only, then adopting the
+  // reply, deleted the browser's host list on the first connection to a fresh daemon.
+  test("sends the browser's hosts, so an empty replica cannot wipe them", async () => {
+    const { client, calls } = fakeDaemon({ records: [] });
+    await exchangeReplica(client, [profile("srv_a"), profile("srv_b")], []);
+    const [input] = calls as { changes?: { id: string }[] }[];
+    expect(input?.changes?.map((change) => change.id).sort()).toEqual(["srv_a", "srv_b"]);
   });
 
-  test("does not resurrect a deleted host just because this browser still lists it", () => {
-    const changes = missingHostChanges([profile("srv_dead")], [record("srv_dead", {}, true)]);
-    expect(changes).toEqual([]);
-  });
-});
-
-describe("pullReplica", () => {
   test("returns the replica's hosts and keeps the browser's passwords", async () => {
     const stored = profile("srv_b");
     const { client } = fakeDaemon({
@@ -148,7 +141,7 @@ describe("pullReplica", () => {
       ],
     });
 
-    const result = await pullReplica(client, [profile("srv_b", "kept")], []);
+    const result = await exchangeReplica(client, [profile("srv_b", "kept")], []);
 
     expect(result?.profiles.map((item) => item.serverId)).toEqual(["srv_b"]);
     expect(result?.profiles[0]?.connections[0]).toMatchObject({ password: "kept" });
@@ -158,21 +151,25 @@ describe("pullReplica", () => {
 
   test("returns null when the daemon does not support sync, leaving the caller its own copy", async () => {
     const { client } = fakeDaemon({}, true);
-    expect(await pullReplica(client, [profile("srv_a")], [])).toBeNull();
+    expect(await exchangeReplica(client, [profile("srv_a")], [])).toBeNull();
   });
 
   // The browser is the chain's transport: records it holds from another daemon travel with the
   // next exchange, which is how a daemon learns about replicas it has never seen.
   test("carries records from other daemons into the exchange", async () => {
     const { client, calls } = fakeDaemon({ records: [] });
-    await pullReplica(client, [profile("srv_a")], [record("srv_remote", hostData("srv_remote"))]);
+    await exchangeReplica(
+      client,
+      [profile("srv_a")],
+      [record("srv_remote", hostData("srv_remote"))],
+    );
     const [input] = calls as { records?: { id: string }[] }[];
     expect(input?.records?.map((item) => item.id)).toEqual(["srv_remote"]);
   });
 
   test("returns null and sends nothing the daemon rejects", async () => {
     const { client } = fakeDaemon({ error: "hostsync: document exceeds the size limit" });
-    expect(await pullReplica(client, [profile("srv_a")], [])).toBeNull();
+    expect(await exchangeReplica(client, [profile("srv_a")], [])).toBeNull();
   });
 });
 
