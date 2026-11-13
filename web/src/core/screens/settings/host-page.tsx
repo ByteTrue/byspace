@@ -56,7 +56,9 @@ import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
   useHostMutations,
+  useHostLastSeen,
   useHostRuntimeClient,
+  useHostRuntimeConnectionStatuses,
   useHostRuntimeIsConnected,
   useHostRuntimeSnapshot,
   useHosts,
@@ -65,6 +67,7 @@ import { ProvidersSection, AddProviderSection } from "@/screens/settings/provide
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
+import { formatTimeAgo } from "@/utils/time";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
@@ -443,17 +446,29 @@ function DeviceRow({
   onChange: (id: string, remove: boolean) => void;
 }) {
   const onAction = useCallback(() => onChange(id, remove), [id, onChange, remove]);
+  const lastSeen = useHostLastSeen(id);
+  const status = useHostRuntimeConnectionStatuses([id]).get(id);
+  // "Last seen" is this frontend's own observation: the chain has no daemon-to-daemon channel, so
+  // a device's reachability is only known from here.
+  const presence = describeDevicePresence(status, lastSeen);
   return (
     <Item>
       <ItemContent>
         <ItemTitle>{label}</ItemTitle>
-        {detail ? <ItemDescription>{detail}</ItemDescription> : null}
+        <ItemDescription>{presence}</ItemDescription>
+        {detail ? <ItemDescription className="truncate">{detail}</ItemDescription> : null}
       </ItemContent>
       <Button variant="ghost" onClick={onAction}>
         {action}
       </Button>
     </Item>
   );
+}
+
+function describeDevicePresence(status: string | undefined, lastSeen: number | undefined): string {
+  if (status === "online") return "Online now";
+  if (!lastSeen) return "Not reached from this device yet";
+  return `Last seen ${formatTimeAgo(new Date(lastSeen))}`;
 }
 
 function memberKey(record: HostSyncRecord): string {

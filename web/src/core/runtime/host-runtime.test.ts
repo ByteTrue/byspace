@@ -42,6 +42,12 @@ class FakeDaemonClient {
   public sentAgentMessages: Array<Parameters<DaemonClient["sendAgentMessage"]>> = [];
   public sendAgentMessageFailures: Error[] = [];
   public sendAgentMessageResponses: Promise<void>[] = [];
+  public serverInfo: { features?: { hostSync?: boolean } } | null = null;
+  public hostSyncExchanges: Array<{
+    records?: Array<Record<string, unknown>>;
+    changes?: Array<{ kind: string; id: string; delete?: boolean; data?: Record<string, unknown> }>;
+  }> = [];
+  public hostSyncRecords: Array<Record<string, unknown>> = [];
   private agentUpdateListeners = new Set<
     (message: Extract<SessionOutboundMessage, { type: "agent_update" }>) => void
   >();
@@ -119,8 +125,16 @@ class FakeDaemonClient {
     return this.state;
   }
 
-  getLastServerInfoMessage(): null {
-    return null;
+  getLastServerInfoMessage(): { features?: { hostSync?: boolean } } | null {
+    return this.serverInfo;
+  }
+
+  async exchangeHostSync(input: {
+    records?: Array<Record<string, unknown>>;
+    changes?: Array<{ kind: string; id: string; delete?: boolean; data?: Record<string, unknown> }>;
+  }): Promise<{ records: Array<Record<string, unknown>> }> {
+    this.hostSyncExchanges.push(input);
+    return { records: this.hostSyncRecords };
   }
 
   subscribeConnectionStatus(listener: (status: ConnectionState) => void): () => void {
@@ -3829,5 +3843,138 @@ describe("HostRuntimeStore initial connection hint bootstrap", () => {
 
     expect(seenProbes).not.toContainEqual(expect.objectContaining({ endpoint: "metro-host:8081" }));
     expect(store.getHosts()).toHaveLength(0);
+  });
+});
+
+describe("HostRuntimeStore last seen", () => {
+  // The Devices list shows "Last seen ..." per member. The chain has no daemon-to-daemon channel,
+  // so the observation is the frontend's own and has to survive a reload.
+  it("restores when each host was last reached from storage", async () => {
+    const previousOverride = process.env.BYSPACE_LOCAL_DAEMON;
+    process.env.BYSPACE_LOCAL_DAEMON = "not-an-endpoint";
+    const storage = createMemoryHostRuntimeStorage({
+      "@byspace:daemon-last-seen": JSON.stringify({ srv_seen: 1_700_000_000_000, junk: "x" }),
+    });
+    const store = new HostRuntimeStore({
+      storage,
+      deps: {
+        createClient: () => {
+          throw new Error("createClient should not be called");
+        },
+        connectToDaemon: async () => {
+          throw new Error("connectToDaemon should not be called");
+        },
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+    try {
+      const loaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+      store.boot();
+      await loaded;
+      await vi.waitFor(() => expect(store.getHostLastSeen("srv_seen")).toBe(1_700_000_000_000));
+    } finally {
+      process.env.BYSPACE_LOCAL_DAEMON = previousOverride;
+      if (previousOverride === undefined) delete process.env.BYSPACE_LOCAL_DAEMON;
+    }
+
+    // Anything that is not a number is dropped instead of rendering "Last seen NaN".
+    expect(store.getHostLastSeen("junk")).toBeUndefined();
+  });
+});
+
+describe("HostRuntimeStore host sync", () => {
+  // The browser is the chain's transport: it is the only participant that reaches every daemon.
+  // Before this, the exchange was gated on a loopback direct connection, so a frontend that only
+  // ever reached daemons over the relay never carried anything between them.
+  it("exchanges replicas with a daemon that advertises hostSync, whatever the connection type", async () => {
+    const host = makeHost({
+      connections: [
+        {
+          id: "relay:srv_lan",
+          type: "relay",
+          relayEndpoint: "relay.example:443",
+          daemonPublicKeyB64: "pk_lan",
+        },
+      ],
+    });
+    const fakeClient = new FakeDaemonClient();
+    fakeClient.serverInfo = { features: { hostSync: true } };
+    fakeClient.hostSyncRecords = [
+      {
+        kind: "host",
+        id: "srv_remote",
+        version: 3,
+        author: "srv_remote",
+        data: {
+          label: "Remote",
+          connections: [
+            {
+              id: "relay:srv_remote",
+              type: "relay",
+              relayEndpoint: "relay.example:443",
+              daemonPublicKeyB64: "pk_remote",
+            },
+          ],
+        },
+      },
+    ];
+    fakeClient.setConnectionState({ status: "connected" });
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async ({ host: hostProfile }) => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: hostProfile.serverId,
+          hostname: hostProfile.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    store.syncHosts([host]);
+    await waitForHostOnline(store, host.serverId);
+
+    // The exchange ran even though this host is a relay host, not loopback.
+    expect(fakeClient.hostSyncExchanges.length).toBeGreaterThan(0);
+    // And the daemon's replica is adopted, so this frontend now knows the other host.
+    await vi.waitFor(() => expect(store.getSnapshot("srv_remote")).toBeDefined());
+
+    store.syncHosts([]);
+  });
+
+  it("stays out of sync with a daemon that does not advertise it", async () => {
+    const host = makeHost({
+      connections: [
+        {
+          id: "relay:srv_old",
+          type: "relay",
+          relayEndpoint: "relay.example:443",
+          daemonPublicKeyB64: "pk_old",
+        },
+      ],
+    });
+    const fakeClient = new FakeDaemonClient();
+    fakeClient.serverInfo = { features: {} };
+    fakeClient.setConnectionState({ status: "connected" });
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage(),
+      deps: {
+        createClient: () => fakeClient as unknown as DaemonClient,
+        connectToDaemon: async ({ host: hostProfile }) => ({
+          client: fakeClient as unknown as DaemonClient,
+          serverId: hostProfile.serverId,
+          hostname: hostProfile.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    store.syncHosts([host]);
+    await waitForHostOnline(store, host.serverId);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(fakeClient.hostSyncExchanges).toEqual([]);
+    store.syncHosts([]);
   });
 });

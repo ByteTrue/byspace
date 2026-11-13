@@ -2,10 +2,11 @@ import { describe, expect, test } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
 import {
   hostRecordsToProfiles,
-  loadSharedReplica,
-  profilesToChanges,
+  missingHostChanges,
+  pullReplica,
+  pushReplica,
   rememberPasswords,
-  saveSharedReplica,
+  replicaDiff,
   type ReplicaClient,
   type ReplicaExchange,
 } from "./host-replica";
@@ -31,17 +32,6 @@ function profile(serverId: string, password?: string): HostProfile {
   };
 }
 
-function memoryStorage(initial: Record<string, string> = {}) {
-  const items = new Map(Object.entries(initial));
-  return {
-    items,
-    getItem: async (key: string) => items.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      items.set(key, value);
-    },
-  };
-}
-
 // A daemon that records what it was asked to merge and answers with a fixed replica.
 function fakeDaemon(answer: ReplicaExchange, fail = false) {
   const calls: unknown[] = [];
@@ -57,69 +47,16 @@ function fakeDaemon(answer: ReplicaExchange, fail = false) {
   return { client, calls };
 }
 
-describe("profilesToChanges", () => {
-  test("strips passwords before anything is sent to the replica", () => {
-    const changes = profilesToChanges([profile("srv_a", "secret")]);
-    expect(JSON.stringify(changes)).not.toContain("secret");
-    expect(changes[0]?.id).toBe("srv_a");
-  });
-});
+function record(id: string, data: Record<string, unknown>, deleted = false) {
+  return { kind: "host" as const, id, version: 1, author: "srv_local", deleted, data };
+}
 
-describe("loadSharedReplica", () => {
-  test("imports the browser's old list once, keyed by serverId", async () => {
-    const storage = memoryStorage();
-    const { client, calls } = fakeDaemon({ records: [] });
+function hostData(serverId: string) {
+  const { serverId: _ignored, ...data } = profile(serverId);
+  return data as Record<string, unknown>;
+}
 
-    await loadSharedReplica(client, [profile("srv_a", "secret")], storage);
-
-    const first = calls[0] as { changes: { id: string }[] };
-    expect(first.changes.map((change) => change.id)).toEqual(["srv_a"]);
-    expect(JSON.stringify(first)).not.toContain("secret");
-
-    calls.length = 0;
-    await loadSharedReplica(client, [profile("srv_a", "secret")], storage);
-    expect((calls[0] as { changes: unknown[] }).changes).toEqual([]);
-  });
-
-  test("returns the replica's hosts and keeps the browser's passwords", async () => {
-    const stored = profile("srv_b");
-    const { client } = fakeDaemon({
-      records: [
-        {
-          kind: "host",
-          id: "srv_b",
-          version: 1,
-          author: "srv_local",
-          data: {
-            label: stored.label,
-            connections: [
-              {
-                type: "relay",
-                relayEndpoint: "relay.example:443",
-                daemonPublicKeyB64: "key",
-              },
-            ],
-          },
-        },
-      ],
-    });
-
-    const result = await loadSharedReplica(
-      client,
-      [profile("srv_b", "kept")],
-      memoryStorage({ "@byspace:daemon-registry-imported": "1" }),
-    );
-
-    expect(result?.map((item) => item.serverId)).toEqual(["srv_b"]);
-    expect(result?.[0]?.connections[0]).toMatchObject({ password: "kept" });
-  });
-
-  test("returns null when the daemon does not support sync, leaving the caller its own copy", async () => {
-    const { client } = fakeDaemon({}, true);
-    const result = await loadSharedReplica(client, [profile("srv_a")], memoryStorage());
-    expect(result).toBeNull();
-  });
-
+describe("hostRecordsToProfiles", () => {
   test("drops tombstones and records it cannot read", () => {
     const profiles = hostRecordsToProfiles([
       { kind: "host", id: "srv_dead", version: 2, author: "a", deleted: true },
@@ -146,10 +83,109 @@ describe("loadSharedReplica", () => {
   });
 });
 
-describe("saveSharedReplica", () => {
+describe("replicaDiff", () => {
+  test("strips passwords before anything is sent to the replica", () => {
+    const changes = replicaDiff([profile("srv_a", "secret")], []);
+    expect(JSON.stringify(changes)).not.toContain("secret");
+    expect(changes[0]?.id).toBe("srv_a");
+  });
+
+  test("sends nothing when the replica already holds the same host", () => {
+    const changes = replicaDiff([profile("srv_a")], [record("srv_a", hostData("srv_a"))]);
+    expect(changes).toEqual([]);
+  });
+
+  // An edit that only lists the surviving hosts leaves every removed host in the replica, and the
+  // next read brings it back. Removals have to travel as deletes.
+  test("sends removed hosts as deletes", () => {
+    const changes = replicaDiff([profile("srv_a")], [record("srv_gone", hostData("srv_gone"))]);
+    expect(changes).toContainEqual({ kind: "host", id: "srv_gone", delete: true });
+  });
+
+  // A tombstone wins over a stale browser copy, or deleting a host would never stick.
+  test("never re-sends a host the chain deleted", () => {
+    const changes = replicaDiff([profile("srv_dead")], [record("srv_dead", {}, true)]);
+    expect(changes).toEqual([]);
+  });
+});
+
+describe("missingHostChanges", () => {
+  test("only lists hosts the replica has never seen", () => {
+    const changes = missingHostChanges(
+      [profile("srv_known"), profile("srv_new")],
+      [record("srv_known", hostData("srv_known"))],
+    );
+    expect(changes.map((change) => change.id)).toEqual(["srv_new"]);
+  });
+
+  test("does not resurrect a deleted host just because this browser still lists it", () => {
+    const changes = missingHostChanges([profile("srv_dead")], [record("srv_dead", {}, true)]);
+    expect(changes).toEqual([]);
+  });
+});
+
+describe("pullReplica", () => {
+  test("returns the replica's hosts and keeps the browser's passwords", async () => {
+    const stored = profile("srv_b");
+    const { client } = fakeDaemon({
+      records: [
+        {
+          kind: "host",
+          id: "srv_b",
+          version: 1,
+          author: "srv_local",
+          data: {
+            label: stored.label,
+            connections: [
+              {
+                type: "relay",
+                relayEndpoint: "relay.example:443",
+                daemonPublicKeyB64: "key",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = await pullReplica(client, [profile("srv_b", "kept")], []);
+
+    expect(result?.profiles.map((item) => item.serverId)).toEqual(["srv_b"]);
+    expect(result?.profiles[0]?.connections[0]).toMatchObject({ password: "kept" });
+    // The raw records come back so the browser can carry them to the next daemon in the chain.
+    expect(result?.records[0]?.id).toBe("srv_b");
+  });
+
+  test("returns null when the daemon does not support sync, leaving the caller its own copy", async () => {
+    const { client } = fakeDaemon({}, true);
+    expect(await pullReplica(client, [profile("srv_a")], [])).toBeNull();
+  });
+
+  // The browser is the chain's transport: records it holds from another daemon travel with the
+  // next exchange, which is how a daemon learns about replicas it has never seen.
+  test("carries records from other daemons into the exchange", async () => {
+    const { client, calls } = fakeDaemon({ records: [] });
+    await pullReplica(client, [profile("srv_a")], [record("srv_remote", hostData("srv_remote"))]);
+    const [input] = calls as { records?: { id: string }[] }[];
+    expect(input?.records?.map((item) => item.id)).toEqual(["srv_remote"]);
+  });
+
+  test("returns null and sends nothing the daemon rejects", async () => {
+    const { client } = fakeDaemon({ error: "hostsync: document exceeds the size limit" });
+    expect(await pullReplica(client, [profile("srv_a")], [])).toBeNull();
+  });
+});
+
+describe("pushReplica", () => {
   test("reports failure instead of throwing when the daemon rejects the write", async () => {
     const { client } = fakeDaemon({ error: "hostsync: document exceeds the size limit" });
-    expect(await saveSharedReplica(client, [profile("srv_a")])).toBe(false);
+    expect(await pushReplica(client, [{ kind: "host", id: "srv_a", data: {} }])).toBe(false);
+  });
+
+  test("sends nothing when there is nothing to send", async () => {
+    const { client, calls } = fakeDaemon({ records: [] });
+    expect(await pushReplica(client, [])).toBe(true);
+    expect(calls).toEqual([]);
   });
 });
 

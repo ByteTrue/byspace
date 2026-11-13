@@ -17,8 +17,8 @@ import {
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
-import { isLoopbackEndpoint } from "@/hooks/use-is-local-daemon";
-import { loadSharedReplica, saveSharedReplica } from "@/runtime/host-replica";
+import type { HostSyncRecord } from "@bytetrue/protocol/messages";
+import { missingHostChanges, pullReplica, pushReplica, replicaDiff } from "@/runtime/host-replica";
 import { guardHostKey, memoryKeyStore } from "@/runtime/host-keys";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { defaultHostAppearance, type HostBadgeDisplay, type HostColor } from "@/hosts/appearance";
@@ -1301,6 +1301,9 @@ export class HostRuntimeController {
 }
 
 const REGISTRY_STORAGE_KEY = "@byspace:daemon-registry";
+const HOST_LAST_SEEN_STORAGE_KEY = "@byspace:daemon-last-seen";
+// One write a minute per host is enough for a label a person reads.
+const HOST_LAST_SEEN_WRITE_INTERVAL_MS = 60_000;
 const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6777";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 const E2E_STORAGE_KEY = "@byspace:e2e";
@@ -1375,8 +1378,15 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
-  // Set once the local daemon's replica has been adopted, so later reconnects do not import again.
-  private sharedReplica = false;
+  // The whole replica as records, kept so the browser can carry it to the next daemon it reaches.
+  // The browser is the only thing that talks to every daemon, so it is the chain's transport.
+  private carriedRecords: HostSyncRecord[] = [];
+  // Replica exchanges run one at a time. Two daemons coming online at once would otherwise answer
+  // out of order and the slower, staler reply would overwrite the merged list.
+  private replicaSyncTail: Promise<void> = Promise.resolve();
+  // When each host was last seen online, kept on this frontend. The chain has no daemon-to-daemon
+  // channel, so "last seen" is a client-side observation rather than a synced record.
+  private lastSeenByServer = new Map<string, number>();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
@@ -1442,7 +1452,7 @@ export class HostRuntimeStore {
   // registry would replace every stored host instead of merging with it.
   private ensureHostRegistryLoaded(): Promise<void> {
     if (!this.hostRegistryLoadPromise) {
-      this.hostRegistryLoadPromise = this.loadFromStorage();
+      this.hostRegistryLoadPromise = this.loadFromStorage().then(() => this.loadLastSeen());
       // loadFromStorage() never rejects on its own (catch-all body + guarded
       // finally); this only guards against a throwing host-list listener during
       // the finally-block emit, so one bad listener can't brick every mutation.
@@ -2052,59 +2062,75 @@ export class HostRuntimeStore {
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
     await this.writeBrowserCopy(hosts);
-    if (!this.sharedReplica) {
+    // The browser copy is a cache. Every daemon in the chain keeps the shared copy, and this
+    // browser is what carries edits between them: a phone that is the only frontend online still
+    // writes through to every daemon it can reach. Passwords stay in the browser copy.
+    const changes = replicaDiff(hosts, this.carriedRecords);
+    if (changes.length === 0) {
       return;
     }
-    // The browser copy is a cache. The copy frontends on this machine share lives on the local
-    // daemon, so a change here is written there too. Passwords stay in the browser copy.
-    const local = this.hosts.find((host) => this.isLocalDaemon(host));
-    const client = local ? this.getClient(local.serverId) : null;
-    if (client) {
-      await saveSharedReplica(client, hosts);
+    for (const host of this.hosts) {
+      const client = this.getClient(host.serverId);
+      if (!client || !this.supportsHostSync(client)) {
+        continue;
+      }
+      await pushReplica(client, changes);
     }
+  }
+
+  private supportsHostSync(client: DaemonClient): boolean {
+    // COMPAT(hostSync): added in v0.25.0; remove gate after 2027-11-12. A daemon without the
+    // feature has no replica, so it is left out of sync instead of being sent edits it ignores.
+    return client.getLastServerInfoMessage()?.features?.hostSync === true;
   }
 
   private async writeBrowserCopy(hosts: HostProfile[]): Promise<void> {
     await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(hosts));
   }
 
-  private isLocalDaemon(host: HostProfile): boolean {
-    return host.connections.some(
-      (connection) => connection.type === "directTcp" && isLoopbackEndpoint(connection.endpoint),
-    );
-  }
-
-  // adoptLocalReplica switches this frontend onto the local daemon's replica the first time that
-  // daemon connects. Frontends on the same machine then see one host list. A daemon that does not
-  // support sync leaves the browser copy in place.
-  private adoptLocalReplica(serverId: string, client: DaemonClient | null): void {
-    if (this.sharedReplica || !client) {
+  // syncReplicaWithHost exchanges host lists with one daemon of the chain. Any daemon that
+  // advertises hostSync takes part, local or remote: the browser is the only participant that
+  // reaches every daemon, so carrying the records across is what makes the chain converge.
+  // Exchanges are serialized, because two daemons answering out of order would let the staler
+  // reply overwrite the merged list.
+  private syncReplicaWithHost(client: DaemonClient | null): void {
+    if (!client || !this.supportsHostSync(client)) {
       return;
     }
-    const host = this.hosts.find((candidate) => candidate.serverId === serverId);
-    if (!host || !this.isLocalDaemon(host)) {
-      return;
-    }
-    if (client.getLastServerInfoMessage()?.features?.hostSync !== true) {
-      return;
-    }
-    this.sharedReplica = true;
-    void this.applySharedReplica(client);
+    this.replicaSyncTail = this.replicaSyncTail
+      .then(() => this.applySharedReplica(client))
+      .catch(() => undefined);
   }
 
   private async applySharedReplica(client: DaemonClient): Promise<void> {
     try {
-      const shared = await loadSharedReplica(client, this.hosts, this.storage);
+      const carried = this.carriedRecords;
+      const shared = await pullReplica(client, this.hosts, carried);
       if (!shared) {
-        this.sharedReplica = false;
         return;
       }
-      this.hosts = shared;
-      this.syncHosts(shared);
-      this.emitHostList();
-      await this.writeBrowserCopy(shared);
+      // Keep the whole replica, not just the hosts this app understands: the tunnel-rule records
+      // travel the same way, and dropping them here would stop the chain from learning them.
+      this.carriedRecords = shared.records;
+      if (!equal(shared.profiles, this.hosts)) {
+        this.hosts = shared.profiles;
+        this.syncHosts(shared.profiles);
+        this.emitHostList();
+        await this.writeBrowserCopy(shared.profiles);
+      }
+      // A host this daemon has never seen still has to reach it: the browser's pre-sync list on
+      // first run, and anything added while no daemon was reachable. Only unknown ids travel, so a
+      // record the chain already had newer is not restamped.
+      const missing = missingHostChanges(this.hosts, shared.records);
+      if (missing.length > 0) {
+        await pushReplica(client, missing);
+        const after = await pullReplica(client, this.hosts, this.carriedRecords);
+        if (after) {
+          this.carriedRecords = after.records;
+        }
+      }
     } catch {
-      this.sharedReplica = false;
+      // A failed exchange leaves the copy as it was; the next connect tries again.
     }
   }
 
@@ -2113,6 +2139,50 @@ export class HostRuntimeStore {
     for (const listener of this.hostListListeners) {
       listener();
     }
+  }
+
+  // noteHostSeen records that a host answered just now, for the Devices list. Writes are throttled:
+  // a reconnect loop would otherwise hit storage on every attempt.
+  private noteHostSeen(serverId: string): void {
+    const now = Date.now();
+    const previous = this.lastSeenByServer.get(serverId);
+    if (previous !== undefined && now - previous < HOST_LAST_SEEN_WRITE_INTERVAL_MS) {
+      return;
+    }
+    this.lastSeenByServer.set(serverId, now);
+    void this.writeLastSeen();
+  }
+
+  private async writeLastSeen(): Promise<void> {
+    try {
+      await this.storage.setItem(
+        HOST_LAST_SEEN_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries(this.lastSeenByServer)),
+      );
+    } catch {
+      // A failed write only loses the display value; the next online transition rewrites it.
+    }
+  }
+
+  private async loadLastSeen(): Promise<void> {
+    try {
+      const raw = await this.storage.getItem(HOST_LAST_SEEN_STORAGE_KEY);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null) return;
+      for (const [serverId, value] of Object.entries(parsed)) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          this.lastSeenByServer.set(serverId, value);
+        }
+      }
+      this.emitHostList();
+    } catch {
+      // A corrupt entry is dropped: it only drives a label.
+    }
+  }
+
+  getHostLastSeen(serverId: string): number | undefined {
+    return this.lastSeenByServer.get(serverId);
   }
 
   syncHosts(
@@ -2249,8 +2319,9 @@ export class HostRuntimeStore {
     const didTransitionOnline =
       snapshot.connectionStatus === "online" && previousStatus !== "online";
     if (didTransitionOnline) {
+      this.noteHostSeen(serverId);
       useSessionStore.getState().bumpHistorySyncGeneration(serverId);
-      this.adoptLocalReplica(serverId, snapshot.client);
+      this.syncReplicaWithHost(snapshot.client);
       // Checkout git data is push-driven; pushes emitted while disconnected are gone for
       // good (the daemon dedupes by snapshot fingerprint). Mark the caches stale so active
       // queries refetch now and evicted ones on their next mount.
@@ -2642,6 +2713,17 @@ export function useHostRuntimeConnectionStatuses(
     ]);
     return new Map(entries);
   }, [serverIds, store, version]);
+}
+
+// useHostLastSeen returns when this frontend last reached a host, in epoch ms.
+export function useHostLastSeen(serverId: string): number | undefined {
+  const store = getHostRuntimeStore();
+  useSyncExternalStore(
+    (onStoreChange) => store.subscribeHostList(onStoreChange),
+    () => store.getHostListVersion(),
+    () => store.getHostListVersion(),
+  );
+  return store.getHostLastSeen(serverId);
 }
 
 export function useHostRuntimeLastError(serverId: string): string | null {
