@@ -53,6 +53,8 @@ It checks two things a Go test cannot see. First, the daemon's per-session e2ee 
 
 Use a fresh `connectionId` per run (the script does, from a timestamp). A reused one lets a socket left over from an earlier run receive frames meant for this one, which looks like a decryption failure.
 
+`scripts/e2e-host-replica-check.mjs` covers the other half: start one daemon (`./bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/h`) and run it with no relay. It drives `hosts.sync.exchange` through the shipped `packages/client` against that daemon and checks the record round trip: write, read back, delete leaving a tombstone, a record carrying a password refused, a carried record merged in from another replica, and the 256 KB cap. Run it after changing anything in `internal/hostsync` or the sync RPC.
+
 ## Quick start
 
 ```typescript
