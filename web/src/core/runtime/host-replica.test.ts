@@ -109,6 +109,37 @@ describe("replicaDiff", () => {
 });
 
 describe("exchangeReplica", () => {
+  // The replica returns records sorted by id. Adopting that order reshuffled the host list on every
+  // connect, which moved whatever a list index pointed at.
+  test("keeps the caller's host order and appends new hosts", async () => {
+    const hostRecord = (id: string) => ({
+      kind: "host" as const,
+      id,
+      version: 1,
+      author: "srv",
+      data: {
+        label: id,
+        connections: [
+          {
+            id: `relay:${id}`,
+            type: "relay",
+            relayEndpoint: "relay.example:443",
+            daemonPublicKeyB64: "key",
+          },
+        ],
+      },
+    });
+    const { client } = fakeDaemon({
+      records: [hostRecord("srv_a"), hostRecord("srv_m"), hostRecord("srv_z")],
+    });
+    const result = await exchangeReplica(
+      client,
+      [profile("srv_z"), profile("srv_a")],
+      [hostRecord("srv_a"), hostRecord("srv_z")],
+    );
+    expect(result?.profiles.map((entry) => entry.serverId)).toEqual(["srv_z", "srv_a", "srv_m"]);
+  });
+
   // A daemon's replica is empty until something writes to it. Reading only, then adopting the
   // reply, deleted the browser's host list on the first connection to a fresh daemon.
   test("sends the browser's hosts, so an empty replica cannot wipe them", async () => {

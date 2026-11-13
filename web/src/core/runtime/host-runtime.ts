@@ -35,7 +35,7 @@ import { ConnectionOfferSchema, type ConnectionOffer } from "@bytetrue/protocol/
 import { assertDirectTcpConnectionAllowed, connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
 import { z } from "zod";
-import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
+import { readValidatedJson } from "@/storage/validated-storage";
 import {
   selectBestConnection,
   type ConnectionCandidate,
@@ -1384,6 +1384,10 @@ export class HostRuntimeStore {
   // Replica exchanges run one at a time. Two daemons coming online at once would otherwise answer
   // out of order and the slower, staler reply would overwrite the merged list.
   private replicaSyncTail: Promise<void> = Promise.resolve();
+  // Set when the end-to-end browser suite marked this profile (@byspace:e2e). A daemon replica
+  // outlives a browser context, so syncing would leak hosts from one spec into the next; the suite
+  // manages its own host list. Read once at boot, before any controller exists.
+  private e2eMode = false;
   // When each host was last seen online, kept on this frontend. The chain has no daemon-to-daemon
   // channel, so "last seen" is a client-side observation rather than a synced record.
   private lastSeenByServer = new Map<string, number>();
@@ -1442,9 +1446,19 @@ export class HostRuntimeStore {
 
   boot(): Promise<void> {
     if (!this.bootPromise) {
-      this.bootPromise = this.runBoot();
+      this.bootPromise = this.readE2EMode()
+        .catch(() => undefined)
+        .then(() => this.runBoot());
     }
     return this.bootPromise;
+  }
+
+  private async readE2EMode(): Promise<void> {
+    try {
+      this.e2eMode = (await this.storage.getItem(E2E_STORAGE_KEY)) !== null;
+    } catch {
+      this.e2eMode = false;
+    }
   }
 
   // Mutations must never run against a not-yet-loaded registry: the pairing-offer
@@ -1468,13 +1482,7 @@ export class HostRuntimeStore {
     await this.ensureHostRegistryLoaded();
     this.markHostRegistryLoaded();
 
-    let isE2E: string | null = null;
-    try {
-      isE2E = await readValidatedString(this.storage, E2E_STORAGE_KEY, z.string().min(1));
-    } catch {
-      return;
-    }
-    if (isE2E) {
+    if (this.e2eMode) {
       return;
     }
 
@@ -2094,7 +2102,7 @@ export class HostRuntimeStore {
   // Exchanges are serialized, because two daemons answering out of order would let the staler
   // reply overwrite the merged list.
   private syncReplicaWithHost(client: DaemonClient | null): void {
-    if (!client || !this.supportsHostSync(client)) {
+    if (this.e2eMode || !client || !this.supportsHostSync(client)) {
       return;
     }
     this.replicaSyncTail = this.replicaSyncTail

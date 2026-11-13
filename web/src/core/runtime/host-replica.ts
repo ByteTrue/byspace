@@ -119,6 +119,33 @@ export function replicaDiff(
   return changes;
 }
 
+// keepHostOrder carries the caller's order through an exchange.
+//
+// The replica returns records sorted by key, which is stable but alphabetical by serverId. Adopting
+// that order directly reshuffled the host list on every connect, and any list where position
+// matters (a host picker, arrow-key selection) moved under the user.
+function keepHostOrder(
+  replica: readonly HostProfile[],
+  current: readonly HostProfile[],
+): HostProfile[] {
+  const byId = new Map(replica.map((profile) => [profile.serverId, profile]));
+  const ordered: HostProfile[] = [];
+  for (const profile of current) {
+    const next = byId.get(profile.serverId);
+    if (next) {
+      ordered.push(next);
+      byId.delete(profile.serverId);
+    }
+  }
+  for (const profile of replica) {
+    if (byId.has(profile.serverId)) {
+      ordered.push(profile);
+      byId.delete(profile.serverId);
+    }
+  }
+  return ordered;
+}
+
 export interface ReplicaSnapshot {
   profiles: HostProfile[];
   records: HostSyncRecord[];
@@ -156,7 +183,7 @@ export async function exchangeReplica(
   }
   const merged = result.records ?? [];
   return {
-    profiles: rememberPasswords(hostRecordsToProfiles(merged), profiles),
+    profiles: rememberPasswords(keepHostOrder(hostRecordsToProfiles(merged), profiles), profiles),
     records: merged,
   };
 }
