@@ -7,12 +7,13 @@ import {
 } from "./encrypted-channel.js";
 import {
   deriveSharedKey,
+  decrypt,
   encrypt,
   exportPublicKey,
   generateKeyPair,
   importPublicKey,
 } from "./crypto.js";
-import { arrayBufferToBase64 } from "./base64.js";
+import { arrayBufferToBase64, base64ToArrayBuffer } from "./base64.js";
 
 /**
  * Creates a pair of connected mock transports.
@@ -136,6 +137,107 @@ describe("EncryptedChannel", () => {
 
     expect(clientChannel.isOpen()).toBe(true);
     expect(daemonChannel.isOpen()).toBe(true);
+  });
+
+  // The Go daemon (internal/e2ee/channel.go) sends a per-session nonce in e2ee_ready and drops
+  // every application frame until the client echoes it back as the first encrypted frame. A client
+  // that goes straight from ready to app frames is silently unheard. This mirrors that contract.
+  it("echoes the daemon challenge before any application frame", async () => {
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+    const challenge = "nonce-abc123";
+
+    // Ciphertext arrives as base64 text until binaryCiphertext is negotiated, so only a payload
+    // starting with "{" is plaintext handshake traffic.
+    const sentToDaemon: ArrayBuffer[] = [];
+    let clientPublicB64 = "";
+    const transport: Transport = {
+      send: (data: string | ArrayBuffer) => {
+        if (data instanceof ArrayBuffer) {
+          sentToDaemon.push(data);
+        } else if (data.trim().startsWith("{")) {
+          const parsed = JSON.parse(data) as { type: string; key?: string };
+          if (parsed.type === "e2ee_hello" && parsed.key) clientPublicB64 = parsed.key;
+        } else {
+          sentToDaemon.push(base64ToArrayBuffer(data));
+        }
+        return Promise.resolve();
+      },
+      close: () => undefined,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+
+    const clientChannelPromise = createClientChannel(transport, daemonPubKeyB64);
+    await waitForAsyncDelivery();
+    expect(clientPublicB64).not.toBe("");
+
+    // Daemon side derives the shared key and sends ready carrying the nonce.
+    const sharedKey = deriveSharedKey(daemonKeyPair.secretKey, importPublicKey(clientPublicB64));
+    transport.onmessage?.({
+      data: JSON.stringify({ type: "e2ee_ready", challenge }),
+      isBinary: false,
+    });
+
+    const clientChannel = await clientChannelPromise;
+    expect(clientChannel.isOpen()).toBe(true);
+
+    // Queue an application frame; it must land after the challenge echo, not before.
+    await clientChannel.send("hello-app");
+    await waitForAsyncDelivery();
+
+    expect(sentToDaemon.length).toBeGreaterThanOrEqual(2);
+    const first = JSON.parse(new TextDecoder().decode(decrypt(sharedKey, sentToDaemon[0]!))) as {
+      type: string;
+      challenge: string;
+    };
+    expect(first).toEqual({ type: "e2ee_challenge", challenge });
+    const second = new TextDecoder().decode(decrypt(sharedKey, sentToDaemon[1]!));
+    expect(second).toBe("hello-app");
+  });
+
+  it("works against a daemon that sends no challenge", async () => {
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const sentToDaemon: ArrayBuffer[] = [];
+    let clientPublicB64 = "";
+    const transport: Transport = {
+      send: (data: string | ArrayBuffer) => {
+        if (data instanceof ArrayBuffer) {
+          sentToDaemon.push(data);
+        } else if (data.trim().startsWith("{")) {
+          const parsed = JSON.parse(data) as { type: string; key?: string };
+          if (parsed.type === "e2ee_hello" && parsed.key) clientPublicB64 = parsed.key;
+        } else {
+          sentToDaemon.push(base64ToArrayBuffer(data));
+        }
+        return Promise.resolve();
+      },
+      close: () => undefined,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+
+    const clientChannelPromise = createClientChannel(transport, daemonPubKeyB64);
+    await waitForAsyncDelivery();
+
+    const sharedKey = deriveSharedKey(daemonKeyPair.secretKey, importPublicKey(clientPublicB64));
+    transport.onmessage?.({
+      data: JSON.stringify({ type: "e2ee_ready" }),
+      isBinary: false,
+    });
+
+    const clientChannel = await clientChannelPromise;
+    await clientChannel.send("hello-app");
+    await waitForAsyncDelivery();
+
+    // No challenge means the first frame is the application frame itself.
+    expect(sentToDaemon.length).toBe(1);
+    const first = new TextDecoder().decode(decrypt(sharedKey, sentToDaemon[0]!));
+    expect(first).toBe("hello-app");
   });
 
   it("exchanges encrypted messages bidirectionally", async () => {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/relay"
+	"github.com/ByteTrue/byspace/internal/terminal"
 )
 
 // relaySession dials a daemon through an in-process relay and completes the E2EE handshake,
@@ -183,4 +184,114 @@ func TestRelayConnectionRefusesHelloBeforePassword(t *testing.T) {
 	if err == nil {
 		t.Fatal("daemon accepted a hello before the password")
 	}
+}
+
+// writeEncryptedBinary sends one binary frame the way the relay transport seals terminal and
+// tunnel traffic: ciphertext in a WebSocket binary message.
+func writeEncryptedBinary(t *testing.T, conn *websocket.Conn, shared e2ee.SharedKey, plain []byte) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cipher, err := e2ee.Encrypt(shared, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Write(ctx, websocket.MessageBinary, cipher); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A relay socket that answered the e2ee challenge but never proved the daemon password is a
+// tunnel peer at best. Terminal input is an operator surface, so it must not spawn a session:
+// before this gate, any socket holding a pairing offer got a shell on the host.
+func TestRelayConnectionCannotSpawnTerminalWithoutPassword(t *testing.T) {
+	srv := newTestServer(t, t.TempDir())
+	setDaemonPassword(t, srv, "correct")
+	conn, shared, cleanup := relaySession(t, srv)
+	defer cleanup()
+
+	writeEncryptedBinary(t, conn, shared, terminal.EncodeFrame(terminal.OpcodeInput, 7, []byte("id\n")))
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		srv.mu.Lock()
+		_, spawned := srv.terminals[7]
+		srv.mu.Unlock()
+		if spawned {
+			t.Fatal("an unauthenticated relay socket spawned a terminal session")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// The same socket, once it proves the password, is the operator and may drive a terminal.
+	writeEncrypted(t, conn, shared, passwordFrame("correct"))
+	if reply := readEncrypted(t, conn, shared); !strings.Contains(reply, `"ok":true`) {
+		t.Fatalf("password was not accepted: %s", reply)
+	}
+	writeEncryptedBinary(t, conn, shared, terminal.EncodeFrame(terminal.OpcodeInput, 7, []byte("id\n")))
+	waitForTerminalSlot(t, srv, 7)
+}
+
+// waitForTerminalSlot polls until the slot exists; the frame is handled on the read loop's
+// goroutine, so the test observes state instead of waiting on a signal.
+func waitForTerminalSlot(t *testing.T, srv *Server, slot uint8) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		srv.mu.Lock()
+		_, ok := srv.terminals[slot]
+		srv.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("terminal slot %d was never created", slot)
+}
+
+// Broadcasts are session data: agent output, status, workspaces. A relay socket joins the
+// broadcast set only when it proves the password, not when the socket opens. Every broadcast walks
+// s.clients and skips the entries marked unhandshaked, so the mark is the property under test.
+func TestRelayConnectionReceivesNoBroadcastBeforePassword(t *testing.T) {
+	srv := newTestServer(t, t.TempDir())
+	setDaemonPassword(t, srv, "correct")
+	conn, shared, cleanup := relaySession(t, srv)
+	defer cleanup()
+
+	// The socket is registered but unhandshaked: excluded from every broadcast.
+	if !soleClientUnhandshaked(t, srv) {
+		t.Fatal("a relay socket that proved no password is in the broadcast set")
+	}
+
+	writeEncrypted(t, conn, shared, passwordFrame("correct"))
+	if reply := readEncrypted(t, conn, shared); !strings.Contains(reply, `"ok":true`) {
+		t.Fatalf("password was not accepted: %s", reply)
+	}
+
+	// The password flips the same socket into the broadcast set.
+	if soleClientUnhandshaked(t, srv) {
+		t.Fatal("an authenticated relay socket is still outside the broadcast set")
+	}
+}
+
+// soleClientUnhandshaked waits for the relay socket to appear in s.clients and reports whether it
+// is still marked unhandshaked.
+func soleClientUnhandshaked(t *testing.T, srv *Server) bool {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		srv.mu.Lock()
+		count := len(srv.clients)
+		unhandshaked := false
+		for _, handshaked := range srv.clients {
+			unhandshaked = !handshaked
+		}
+		srv.mu.Unlock()
+		if count == 1 {
+			return unhandshaked
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("relay socket never registered in s.clients (have %d)", len(srv.clients))
+	return false
 }

@@ -921,7 +921,10 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 	// never sees this socket: the daemon dials it itself.
 	s.relayAuthPending(adapter)
 
-	// greeted: the remote client's hello already arrived on the relay's control channel.
+	// greeted: false. A relay socket starts unhandshaked, which keeps it out of every broadcast
+	// until it proves the daemon password (handleRelayPassword flips it). A socket that
+	// only proved its e2ee challenge key is a tunnel peer: it exchanges tunnel frames point to
+	// point and must never receive session broadcasts it did not ask for.
 	s.serveSessionOnSinkGreeted(ctx, adapter, func(rctx context.Context) (e2ee.Frame, error) {
 		for {
 			msgType, data, err := ws.Read(rctx)
@@ -947,7 +950,7 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 				return *plain, nil
 			}
 		}
-	}, true)
+	}, false)
 	return nil
 }
 
@@ -985,6 +988,9 @@ func (s *Server) serveSessionOnSinkGreeted(
 		delete(s.selectiveTimeline, sink)
 		delete(s.clientPresence, sink)
 		delete(s.terminalDelivered, sink)
+		// Permissions outlive nothing: a socket that proved the password and then dropped must not
+		// leave its grant behind for a future sink pointer to inherit.
+		delete(s.sinkPermissions, sink)
 		s.mu.Unlock()
 		s.relayAuthForget(sink)
 		s.notePRStatusClientsChanged()
@@ -996,7 +1002,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 	// Node closes it after 15s with 4001; without the same deadline a half-open client (a
 	// browser tab suspended before the handshake) accumulates until the daemon restarts.
 	var helloDeadline *time.Timer
-	if !greeted {
+	if !greeted && !s.relayAuthIsPending(sink) {
 		helloDeadline = time.AfterFunc(wsHelloTimeout, func() {
 			s.mu.Lock()
 			accepted := s.clients[sink]
@@ -1022,6 +1028,20 @@ func (s *Server) serveSessionOnSinkGreeted(
 }
 
 func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []byte) {
+	// A relay socket must prove something before it may move a single binary byte.
+	//
+	// Three identities reach this path: a local socket (never marked pending), an operator that
+	// proved the daemon password, and a tunnel peer daemon that proved only its e2ee challenge
+	// key. A relay socket still pending with no proven key is not even a known peer, so it is
+	// refused outright rather than allowed to drive terminals, uploads or tunnels. A socket that
+	// proved only its challenge key may speak the tunnel family and nothing else — terminal input
+	// and file transfer are operator surfaces.
+	peerKey := s.relayPeerKeyOf(sink)
+	passwordProven := s.relayPasswordAuthenticated(sink)
+	if peerKey == "" && !passwordProven && s.relayAuthIsPending(sink) {
+		return
+	}
+	tunnelOnly := peerKey != "" && !passwordProven
 	// Terminal frames and file-transfer frames share the byte stream; they are discriminated by
 	// opcode. Trying the terminal decoder first dropped every upload silently, because a file
 	// frame carries a request id where the terminal decoder expects a slot.
@@ -1049,14 +1069,19 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 		}
 		// A relay peer opens ports only when this daemon granted its proven key. A local client
 		// proved the password instead, so the allowlist stays its only gate.
-		if peerKey := s.relayPeerKeyOf(sink); peerKey != "" && !s.relayPasswordAuthenticated(sink) && frame.Opcode == tunnel.OpcodeOpen {
+		if tunnelOnly && frame.Opcode == tunnel.OpcodeOpen {
 			if port, ok := tunnel.DecodeOpenPayload(frame.Payload); !ok || !s.tunnelGrants().Allowed(peerKey, port) {
 				_ = send(tunnel.Frame{Opcode: tunnel.OpcodeOpenAck, TunnelID: frame.TunnelID,
 					Payload: tunnel.EncodeOpenAck(false, "This daemon is not authorized to forward that port.")})
 				return
 			}
 		}
-		s.tunnelTarget().HandleFrame(frame, send)
+		// A peer may only drive the streams it opened; an operator drives anything it can reach.
+		s.tunnelTarget().HandleFrame(frame, peerKey, passwordProven || peerKey == "", send)
+		return
+	}
+	if tunnelOnly {
+		// A tunnel peer reached a non-tunnel binary frame: terminal input or a file transfer.
 		return
 	}
 

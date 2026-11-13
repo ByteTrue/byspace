@@ -62,6 +62,10 @@ interface E2EEHelloMessage {
 interface E2EEReadyMessage {
   type: "e2ee_ready";
   capabilities?: E2EECapabilities;
+  // The daemon's per-session nonce. A daemon that sends one discards every application frame
+  // until the client echoes it back inside the encrypted channel, so the echo must be the first
+  // frame the client sends after ready. Absent when talking to a daemon that predates challenges.
+  challenge?: string;
 }
 
 interface E2EECapabilities {
@@ -91,7 +95,12 @@ function isE2EEHelloMessage(value: unknown): value is E2EEHelloMessage {
 }
 
 function isE2EEReadyMessage(value: unknown): value is E2EEReadyMessage {
-  return isRecord(value) && value.type === "e2ee_ready" && isE2EECapabilities(value.capabilities);
+  return (
+    isRecord(value) &&
+    value.type === "e2ee_ready" &&
+    isE2EECapabilities(value.capabilities) &&
+    (value.challenge === undefined || typeof value.challenge === "string")
+  );
 }
 
 function supportsBinaryCiphertext(message: E2EEHelloMessage | E2EEReadyMessage): boolean {
@@ -367,6 +376,7 @@ export class EncryptedChannel {
           this.events.onopen?.();
           for (const cb of this.onOpenCallbacks) cb();
           try {
+            await this.echoChallenge(parsed.challenge);
             await this.flushPendingSends();
           } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -489,6 +499,16 @@ export class EncryptedChannel {
       return encryptedBytes;
     }
     return base64EncryptedWireByteLength(plaintextBytes);
+  }
+
+  // echoChallenge answers the daemon's per-session nonce.
+  //
+  // The daemon drops every application frame until it arrives, and it must be the first encrypted
+  // frame on the channel. A daemon that predates challenges sends none, and then there is nothing
+  // to echo.
+  private async echoChallenge(challenge: string | undefined): Promise<void> {
+    if (!challenge) return;
+    await this.send(JSON.stringify({ type: "e2ee_challenge", challenge }));
   }
 
   private async flushPendingSends(): Promise<void> {

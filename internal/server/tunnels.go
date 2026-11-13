@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 	"strings"
 
@@ -226,7 +227,11 @@ func (s *Server) handleTunnelOpen(ctx context.Context, sink frameSink, raw json.
 	_ = json.Unmarshal(raw, &req)
 
 	target := s.tunnelTarget()
-	result, err := target.Open(req.TunnelID, req.RemotePort, func(frame tunnel.Frame) error {
+	// ownerKey is "": this JSON-RPC path is reachable only by a local socket or one that proved
+	// the daemon password (a pending relay socket is closed before it gets here), and an operator owns
+	// every stream it can reach. A tunnel peer daemon opens streams through the binary frame path,
+	// which threads its proven key instead.
+	result, err := target.Open(req.TunnelID, req.RemotePort, "", func(frame tunnel.Frame) error {
 		encoded, encodeErr := tunnel.EncodeFrame(frame.Opcode, frame.TunnelID, frame.Payload)
 		if encodeErr != nil {
 			return encodeErr
@@ -277,7 +282,7 @@ func (s *Server) handleTunnelClose(ctx context.Context, sink frameSink, raw json
 	s.tunnelTarget().HandleFrame(tunnel.Frame{
 		Opcode:   tunnel.OpcodeClose,
 		TunnelID: req.TunnelID,
-	}, func(tunnel.Frame) error { return nil })
+	}, "", true, func(tunnel.Frame) error { return nil })
 	s.forgetTunnelStream(req.TunnelID)
 
 	_ = sendSessionMsg(ctx, sink, "tunnel.close.response", map[string]any{
@@ -348,6 +353,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 			Forwards          []struct {
 				RemotePort int    `json:"remotePort"`
 				LocalPort  int    `json:"localPort"`
+				ListenHost string `json:"listenHost"`
 				Disabled   bool   `json:"disabled"`
 				Label      string `json:"label"`
 			} `json:"forwards"`
@@ -357,9 +363,21 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 
 	forwards := make([]tunnel.ForwardConfig, 0, len(req.Config.Forwards))
 	for _, forward := range req.Config.Forwards {
+		// Validated here rather than at bind time so a bad address is refused with a clear reason
+		// instead of surfacing as a listener error. Empty means loopback, which is the default.
+		if host := strings.TrimSpace(forward.ListenHost); host != "" && net.ParseIP(host) == nil {
+			_ = sendSessionMsg(ctx, sink, "tunnel.create.response", map[string]any{
+				"requestId": req.RequestID,
+				"peerId":    req.Config.PeerID,
+				"ok":        false,
+				"error":     fmt.Sprintf("listenHost %q is not an IP address", forward.ListenHost),
+			})
+			return
+		}
 		forwards = append(forwards, tunnel.ForwardConfig{
 			RemotePort: forward.RemotePort,
 			LocalPort:  forward.LocalPort,
+			ListenHost: strings.TrimSpace(forward.ListenHost),
 			Disabled:   forward.Disabled,
 			Label:      forward.Label,
 		})

@@ -41,19 +41,19 @@ func TestTargetOpenGates(t *testing.T) {
 	allowed := []int{port}
 
 	disabled := NewTarget(func() bool { return false }, func() bool { return true }, func() []int { return allowed })
-	if result, _ := disabled.Open("", port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := disabled.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a disabled host must refuse")
 	} else if result.Reason == "" {
 		t.Fatal("the refusal must say why")
 	}
 
 	noPassword := NewTarget(func() bool { return true }, func() bool { return false }, func() []int { return allowed })
-	if result, _ := noPassword.Open("", port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := noPassword.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a host without a password must refuse")
 	}
 
 	notAllowed := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{1, 2} })
-	result, _ := notAllowed.Open("", port, func(Frame) error { return nil })
+	result, _ := notAllowed.Open("", port, "", func(Frame) error { return nil })
 	if result.Allowed {
 		t.Fatal("a port outside the allowlist must refuse")
 	}
@@ -62,7 +62,7 @@ func TestTargetOpenGates(t *testing.T) {
 	}
 
 	ok := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
-	opened, _ := ok.Open("", port, func(Frame) error { return nil })
+	opened, _ := ok.Open("", port, "", func(Frame) error { return nil })
 	if !opened.Allowed || opened.TunnelID == "" {
 		t.Fatalf("an allowed port must open: %+v", opened)
 	}
@@ -78,11 +78,11 @@ func TestTargetGatesAreReadPerRequest(t *testing.T) {
 	target := NewTarget(func() bool { return enabled }, func() bool { return true }, func() []int { return []int{port} })
 	defer target.Close()
 
-	if result, _ := target.Open("", port, func(Frame) error { return nil }); result.Allowed {
+	if result, _ := target.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("should be refused while disabled")
 	}
 	enabled = true
-	if result, _ := target.Open("", port, func(Frame) error { return nil }); !result.Allowed {
+	if result, _ := target.Open("", port, "", func(Frame) error { return nil }); !result.Allowed {
 		t.Fatalf("should be allowed once enabled: %s", result.Reason)
 	}
 }
@@ -116,7 +116,7 @@ func TestTargetForwardsBytes(t *testing.T) {
 		return nil
 	}
 
-	opened, _ := target.Open("t1", port, send)
+	opened, _ := target.Open("t1", port, "", send)
 	if !opened.Allowed {
 		t.Fatalf("open refused: %s", opened.Reason)
 	}
@@ -165,11 +165,11 @@ func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
 	defer target.Close()
 	frames := make(chan Frame, 16)
 	send := func(frame Frame) error { frames <- frame; return nil }
-	if _, err := target.Open("half-close", port, send); err != nil {
+	if _, err := target.Open("half-close", port, "", send); err != nil {
 		t.Fatal(err)
 	}
-	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "half-close", Payload: []byte("request")}, send)
-	target.HandleFrame(Frame{Opcode: OpcodeClose, TunnelID: "half-close", Payload: []byte{CloseWrite}}, send)
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "half-close", Payload: []byte("request")}, "", true, send)
+	target.HandleFrame(Frame{Opcode: OpcodeClose, TunnelID: "half-close", Payload: []byte{CloseWrite}}, "", true, send)
 
 	var response []byte
 	deadline := time.After(3 * time.Second)
@@ -196,7 +196,7 @@ func TestTargetResumeAcknowledgesExistingStream(t *testing.T) {
 	stream := &targetStream{id: "resume", send: func(Frame) error { return nil }, resumable: true}
 	target.streams["resume"] = stream
 	frames := make(chan Frame, 1)
-	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, func(frame Frame) error {
+	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, "", true, func(frame Frame) error {
 		frames <- frame
 		return nil
 	})
@@ -252,15 +252,15 @@ func TestTargetReconnectResumesPendingResponse(t *testing.T) {
 		Opcode:   OpcodeOpen,
 		TunnelID: "resume",
 		Payload:  append(EncodeOpenPayload(port), OpenResumeRequested),
-	}, send)
+	}, "", true, send)
 
 	resume := func(fail bool, cursor uint64) {
 		t.Helper()
 		mu.Lock()
 		failing = fail
 		mu.Unlock()
-		target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, send)
-		target.HandleFrame(Frame{Opcode: OpcodeResumeAck, TunnelID: "resume", Payload: encodeSequence(cursor)}, send)
+		target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "resume"}, "", true, send)
+		target.HandleFrame(Frame{Opcode: OpcodeResumeAck, TunnelID: "resume", Payload: encodeSequence(cursor)}, "", true, send)
 	}
 
 	// Two disconnect cycles. The second one is what a resume counter that only ever rose used to
@@ -322,6 +322,103 @@ func waitForStream(t *testing.T, target *Target, tunnelID string, done func(*tar
 
 // sendDownstream is HandleFrame with the send callback the target's pumps use.
 func sendUpstream(target *Target, send func(Frame) error, tunnelID string, payload []byte) error {
-	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: tunnelID, Payload: payload}, send)
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: tunnelID, Payload: payload}, "", true, send)
 	return nil
+}
+
+// A stream belongs to the peer that opened it. Before ownership was checked, any relay socket
+// that learned a stream id could inject bytes into someone else's dialled socket and get an
+// affirmative Resume ack for it.
+func TestTargetStreamOwnerRejectsOtherPeers(t *testing.T) {
+	port, stop := startEchoService(t)
+	defer stop()
+	allowed := []int{port}
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	defer target.Close()
+
+	owner := "peer-owner-key"
+	attacker := "peer-attacker-key"
+
+	opened, _ := target.Open("owned-stream", port, owner, func(Frame) error { return nil })
+	if !opened.Allowed {
+		t.Fatalf("owner open refused: %s", opened.Reason)
+	}
+
+	// The attacker injects upstream bytes into the owner's stream.
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "owned-stream", Payload: []byte("attack")}, attacker, false, func(Frame) error { return nil })
+
+	// The attacker asks to resume the owner's stream: it must not even get an ack.
+	acked := make(chan Frame, 4)
+	target.HandleFrame(Frame{Opcode: OpcodeResume, TunnelID: "owned-stream"}, attacker, false, func(f Frame) error {
+		acked <- f
+		return nil
+	})
+	select {
+	case f := <-acked:
+		t.Fatalf("attacker got a reply on the owner's stream: opcode=%#x", f.Opcode)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// A re-open attempt from the attacker must be refused, not adopted as a reconnect.
+	reopen, _ := target.Open("owned-stream", port, attacker, func(Frame) error { return nil })
+	if reopen.Allowed {
+		t.Fatal("attacker re-opened the owner's stream")
+	}
+
+	// The owner itself still drives the stream: its upstream bytes land on the dialled socket.
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "owned-stream", Payload: []byte("owner-bytes")}, owner, false, func(Frame) error { return nil })
+	waitForStream(t, target, "owned-stream", func(s *targetStream) bool {
+		return s.framesUp.Load() >= 1
+	})
+}
+
+// A local or password-proven operator opens with an empty owner key and owns every stream it can
+// reach: operator sockets must not be locked out of streams opened over JSON-RPC.
+func TestTargetOperatorOwnsEverything(t *testing.T) {
+	port, stop := startEchoService(t)
+	defer stop()
+	allowed := []int{port}
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	defer target.Close()
+
+	opened, _ := target.Open("op-stream", port, "", func(Frame) error { return nil })
+	if !opened.Allowed {
+		t.Fatalf("operator open refused: %s", opened.Reason)
+	}
+	// Another operator socket (also "") can drive it: that is the resume-after-reconnect path.
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "op-stream", Payload: []byte("x")}, "", true, func(Frame) error { return nil })
+	waitForStream(t, target, "op-stream", func(s *targetStream) bool {
+		return s.framesUp.Load() >= 1
+	})
+}
+
+// An operator-opened stream has an empty owner, which must not read as "anyone may drive it". This
+// is the case a single empty-key comparison got wrong: the operator's own tunnels are opened over
+// JSON-RPC, so they all carry an empty owner.
+func TestTargetOperatorStreamRejectsKeyedPeer(t *testing.T) {
+	port, stop := startEchoService(t)
+	defer stop()
+	allowed := []int{port}
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	defer target.Close()
+
+	opened, _ := target.Open("operator-stream", port, "", func(Frame) error { return nil })
+	if !opened.Allowed {
+		t.Fatalf("operator open refused: %s", opened.Reason)
+	}
+
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "operator-stream", Payload: []byte("attack")}, "peer-key", false, func(Frame) error { return nil })
+	time.Sleep(50 * time.Millisecond)
+	waitForStream(t, target, "operator-stream", func(s *targetStream) bool {
+		return s.framesUp.Load() == 0
+	})
+
+	// The operator itself still drives it.
+	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "operator-stream", Payload: []byte("ok")}, "", true, func(Frame) error { return nil })
+	waitForStream(t, target, "operator-stream", func(s *targetStream) bool {
+		return s.framesUp.Load() == 1
+	})
 }

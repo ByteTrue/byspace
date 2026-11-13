@@ -120,13 +120,16 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 	}
 	s.relayAuthResolved(sink)
 	s.SetSinkPermissions(sink, authz.DaemonPermissions)
-	// The password proves this is the operator, not a peer daemon, so tunnel opens from this
-	// socket are gated by the allowlist alone rather than by a per-daemon grant.
+	// The password proves this is the operator, so the socket becomes a real client: it joins the
+	// broadcast set it was held out of until now (a relay socket starts unhandshaked).
 	s.mu.Lock()
 	if s.relayPasswordAuthed == nil {
 		s.relayPasswordAuthed = make(map[frameSink]bool)
 	}
 	s.relayPasswordAuthed[sink] = true
+	if _, tracked := s.clients[sink]; tracked {
+		s.clients[sink] = true
+	}
 	s.mu.Unlock()
 	_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
 		"requestId": req.RequestID,

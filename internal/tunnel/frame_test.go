@@ -199,7 +199,7 @@ func wireManagerToTarget(t *testing.T, allowedPort int) (*Manager, *Target, chan
 			case <-stop:
 				return
 			case frame := <-toTarget:
-				target.HandleFrame(frame, func(outgoing Frame) error {
+				target.HandleFrame(frame, "", true, func(outgoing Frame) error {
 					select {
 					case toManager <- outgoing:
 					case <-stop:

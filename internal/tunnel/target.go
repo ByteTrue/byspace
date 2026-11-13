@@ -41,8 +41,13 @@ type Target struct {
 
 // targetStream is one forwarded connection on the target side.
 type targetStream struct {
-	id           string
-	conn         net.Conn
+	id   string
+	conn net.Conn
+	// ownerKey is the peer public key that opened this stream, or "" for a local or
+	// password-proven operator. A non-empty owner is immutable: every later frame for this stream
+	// must come from the same peer, so a relay socket that learns a stream id cannot inject bytes
+	// into, resume, or close someone else's tunnel.
+	ownerKey     string
 	framesUp     atomic.Uint64
 	framesDown   atomic.Uint64
 	closeReason  atomic.Value // string
@@ -83,7 +88,7 @@ func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []in
 // tunnelID is the initiator's id for this stream. The target adopts it rather than minting its own,
 // because every frame after the open is routed by that id: a target that invented one would answer
 // with a name the initiator never sent.
-func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (OpenResult, error) {
+func (t *Target) Open(tunnelID string, remotePort int, ownerKey string, send func(Frame) error) (OpenResult, error) {
 	if t.Enabled != nil && !t.Enabled() {
 		return OpenResult{Allowed: false, Reason: "Tunnels are disabled on this host."}, nil
 	}
@@ -113,6 +118,11 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 	}
 	if existing, ok := t.streams[id]; ok {
 		t.mu.Unlock()
+		// A stream belongs to the peer that opened it. Another peer asking to resume it is not a
+		// reconnect, it is a takeover attempt.
+		if existing.ownerKey != ownerKey {
+			return OpenResult{TunnelID: id, Allowed: false, Reason: "stream belongs to another peer"}, nil
+		}
 		existing.writeMu.Lock()
 		if !existing.disconnected {
 			existing.writeMu.Unlock()
@@ -134,7 +144,7 @@ func (t *Target) Open(tunnelID string, remotePort int, send func(Frame) error) (
 		t.mu.Unlock()
 		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s:%d: %v", host, remotePort, err)}, nil
 	}
-	stream := &targetStream{id: id, conn: conn, send: send}
+	stream := &targetStream{id: id, conn: conn, send: send, ownerKey: ownerKey}
 	t.streams[id] = stream
 	t.mu.Unlock()
 
@@ -156,7 +166,11 @@ func (t *Target) portAllowed(port int) bool {
 }
 
 // HandleFrame routes a downstream frame into a stream.
-func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
+//
+// peerKey is the proven public key of the relay socket the frame arrived on. operator marks a local
+// socket or one that proved the daemon password: it may drive any stream, because it is the
+// person who holds this machine. A peer may only drive the streams it opened.
+func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send func(Frame) error) {
 	// An open creates the stream, so it is answered before the lookup below: the id is not in the
 	// table yet, and treating it like a stale frame is exactly what dropped every new stream.
 	if frame.Opcode == OpcodeOpen {
@@ -169,7 +183,7 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 			})
 			return
 		}
-		result, err := t.Open(frame.TunnelID, port, send)
+		result, err := t.Open(frame.TunnelID, port, peerKey, send)
 		if len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
 			if stream := t.streams[frame.TunnelID]; stream != nil {
 				stream.resumable = true
@@ -200,6 +214,13 @@ func (t *Target) HandleFrame(frame Frame, send func(Frame) error) {
 	t.mu.Unlock()
 	if stream == nil {
 		// A frame for a stream we already closed. Late bytes after a teardown are normal.
+		return
+	}
+	// Ownership: a peer may only drive the streams it opened. An operator drives everything it can
+	// reach, which is what makes "close this tunnel" work on a stream a peer opened. The two cases
+	// cannot be folded into one empty-key check: an operator stream has an empty owner, and an
+	// empty-owner stream must still reject a keyed peer.
+	if !operator && stream.ownerKey != peerKey {
 		return
 	}
 
