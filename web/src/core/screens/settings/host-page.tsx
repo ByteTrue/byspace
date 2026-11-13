@@ -304,7 +304,7 @@ function HostPasswordPrompt({ host }: { host: HostProfile }) {
           onKeyDown={onKeyDown}
         />
         <Button onClick={save} disabled={saving || password.trim().length === 0}>
-          {t("connectionMethods.direct.actions.connect")}
+          {t("pairing.direct.actions.connect")}
         </Button>
       </div>
     </div>
