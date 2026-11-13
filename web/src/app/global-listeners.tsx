@@ -1,16 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { SessionProvider } from "@/contexts/session-context";
 import { useToast } from "@/contexts/toast-context";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "@/push-notifications/internal/types";
-import {
-  useHostMutations,
-  useHostRuntimeClient,
-  useHostRuntimeIsConnected,
-  useHosts,
-} from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -21,6 +16,7 @@ import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
+import { PairLinkModal } from "@/components/pair-link-modal";
 import { router } from "~/app/navigation";
 import { AppState } from "~/lib/app-state";
 import { setAlertHandler } from "~/lib/alert";
@@ -65,34 +61,49 @@ export function PushNotificationRouter() {
   return null;
 }
 
-/** A `#offer=` pairing link imports the host, then opens the project picker. */
-export function OfferLinkListener() {
-  const { upsertConnectionFromOfferUrl } = useHostMutations();
+/**
+ * A `#offer=` pairing link — clicked, or scanned from `byspace pair`'s QR — opens the pair form with
+ * the link filled in. It must not import the host on its own: the offer never carries the daemon
+ * password, so a password-protected host would land as an offline entry with no way to prove it.
+ */
+export function OfferLinkHost() {
+  const [offerUrl, setOfferUrl] = useState<string | null>(null);
+  const handleClose = useCallback(() => setOfferUrl(null), []);
+  const handleSaved = useCallback(() => {
+    setOfferUrl(null);
+    router.replace(buildOpenProjectRoute());
+  }, []);
+  return (
+    <>
+      <OfferLinkListener onOfferLink={setOfferUrl} />
+      {offerUrl ? (
+        <PairLinkModal
+          visible
+          initialOfferUrl={offerUrl}
+          onClose={handleClose}
+          onSaved={handleSaved}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function OfferLinkListener({ onOfferLink }: { onOfferLink: (url: string) => void }) {
   const handledRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
     const handleUrl = (url: string) => {
       if (!url.includes("#offer=") || handledRef.current === url) return;
       handledRef.current = url;
-      void upsertConnectionFromOfferUrl(url)
-        .then((profile) => {
-          if (cancelled || !profile?.serverId) return;
-          router.replace(buildOpenProjectRoute());
-          return;
-        })
-        .catch((error: unknown) => {
-          if (!cancelled) console.warn("[Linking] Failed to import pairing offer", error);
-        });
+      onOfferLink(url);
     };
     handleUrl(window.location.href);
     const onHashChange = () => handleUrl(window.location.href);
     window.addEventListener("hashchange", onHashChange);
     return () => {
-      cancelled = true;
       window.removeEventListener("hashchange", onHashChange);
     };
-  }, [upsertConnectionFromOfferUrl]);
+  }, [onOfferLink]);
 
   return null;
 }

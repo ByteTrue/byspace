@@ -19,7 +19,7 @@ import {
   DraftFlushOnBackground,
   FaviconStatusSync,
   HostSessionManager,
-  OfferLinkListener,
+  OfferLinkHost,
   PushNotificationRouter,
 } from "~/app/global-listeners";
 import { AddProjectFlowHost } from "@/components/add-project-flow-host";
@@ -52,7 +52,7 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
       <PushNotificationRouter />
       <SidebarCalloutProvider>
         <AppearanceProvider>
-          <OfferLinkListener />
+          <OfferLinkHost />
           <HostSessionManager />
           <FaviconStatusSync />
           <DraftFlushOnBackground />

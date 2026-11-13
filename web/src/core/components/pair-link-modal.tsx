@@ -13,6 +13,8 @@ import { Input } from "~/components/ui/input";
 
 export interface PairLinkModalProps {
   visible: boolean;
+  // Prefills the link field, e.g. for a `#offer=` deep link or QR scan that just arrived.
+  initialOfferUrl?: string;
   onClose: () => void;
   onCancel?: () => void;
   onSaved?: (result: {
@@ -23,13 +25,19 @@ export interface PairLinkModalProps {
   }) => void;
 }
 
-export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkModalProps) {
+export function PairLinkModal({
+  visible,
+  initialOfferUrl,
+  onClose,
+  onCancel,
+  onSaved,
+}: PairLinkModalProps) {
   const theme = useThemeObject();
   const { t } = useTranslation();
   const daemons = useHosts();
   const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
 
-  const offerUrlRef = useRef("");
+  const offerUrlRef = useRef(initialOfferUrl ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
   // The pairing link never carries the daemon password; a relay connection proves it out of band.
   const [daemonPassword, setDaemonPassword] = useState("");
@@ -127,11 +135,12 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         </span>
         <Input
           ref={inputRef}
+          defaultValue={initialOfferUrl}
           data-testid="pair-link-input"
           aria-label={t("pairing.link.label")}
           onChange={handleChangeOfferUrlInput}
           placeholder="https://app.byspace.cc.cd/#offer=..."
-          autoFocus
+          autoFocus={!initialOfferUrl}
           autoCapitalize="none"
           autoCorrect="off"
           inputMode="url"
@@ -145,6 +154,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           aria-label={t("pairing.setupGuide.fields.daemonPassword")}
           onChange={handleChangeDaemonPassword}
           placeholder={t("pairing.setupGuide.fields.daemonPasswordPlaceholder")}
+          autoFocus={Boolean(initialOfferUrl)}
           autoCapitalize="none"
           autoCorrect="off"
         />

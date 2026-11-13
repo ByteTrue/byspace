@@ -24,6 +24,12 @@
 - 权限检查跳过密码证明这一条请求。
 - daemon 增加两条日志：拒绝 relay 会话时写明原因；未证明就发 hello 时写明。此前从客户端只能看到「Server disconnected」。
 
+## 客户端还有第二个缺口
+
+密码字段最初只加在 setup guide 上。欢迎页和 Settings 的「粘贴配对链接」用的是 `PairLinkModal`，同样不传密码，所以那条路仍然失败。现在两个表单共用同一组字段，`setup-guide-pairing.spec.ts` 用同一套真 relay 流程分别走 setup guide 和 paste-link form。
+
+点链接/扫码进来的 `#offer=` 也不再静默导入：`OfferLinkListener` 把链接交给根节点的 `PairLinkModal`，预填链接、焦点放在密码框，按下 Pair 才写入主机。e2e 的第三个用例覆盖这条路。
+
 ## 调试手段
 
 `docs/development.md`「Running one browser spec locally」记了本地跑单个 spec 的三个开关（`E2E_CHANNEL`、`E2E_VIDEO`、`E2E_PRESERVE_HOME`/`E2E_PRINT_CONSOLE`）和 `.exe` 那个坑。
