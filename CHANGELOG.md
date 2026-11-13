@@ -10,7 +10,8 @@
 ### Fixed
 
 - Fixed 0.25.0 serving relay connections to a host with no daemon password set. Relay and LAN access require one again; loopback and SSH do not.
-- Added the daemon password field to the setup guide, so pairing a password-protected host over the relay works from the app instead of failing at the first frame
+- Fixed relay sessions never finishing the encrypted handshake: the client's challenge echo went out after its first frames, the password proof was answered out of order, and the permission table ran before the proof. Pairing over the relay timed out or ended in "Server disconnected".
+- Added the daemon password field to the setup guide and the paste-link form, so pairing a password-protected host over the relay works from the app instead of failing at the first frame
 - Fixed the daemon accepting a config change that enables the relay without a password, or clears the password while the relay is on
 
 ## 0.25.0 - 2026-11-13

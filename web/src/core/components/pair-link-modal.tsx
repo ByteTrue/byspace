@@ -31,6 +31,8 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
 
   const offerUrlRef = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // The pairing link never carries the daemon password; a relay connection proves it out of band.
+  const [daemonPassword, setDaemonPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -72,11 +74,13 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       setIsSaving(true);
       setErrorMessage("");
 
+      const password = daemonPassword.trim();
       const { profile, hostname, isNewHost } = await pairWithOfferUrl({
         rawUrl: raw,
         offer: parsed.offer,
         knownServerIds: daemons.map((daemon) => daemon.serverId),
         upsert: upsertDaemonFromOfferUrl,
+        ...(password ? { daemonPassword: password } : {}),
       });
       onSaved?.({ profile, serverId: parsed.offer.serverId, hostname, isNewHost });
       handleClose();
@@ -87,8 +91,11 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     } finally {
       setIsSaving(false);
     }
-  }, [daemons, handleClose, isSaving, onSaved, t, upsertDaemonFromOfferUrl]);
+  }, [daemonPassword, daemons, handleClose, isSaving, onSaved, t, upsertDaemonFromOfferUrl]);
 
+  const handleChangeDaemonPassword = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setDaemonPassword(event.target.value);
+  }, []);
   const handleChangeOfferUrl = useCallback((next: string) => {
     offerUrlRef.current = next;
   }, []);
@@ -129,6 +136,21 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
           autoCorrect="off"
           inputMode="url"
         />
+        <span className="text-sm leading-[normal] font-medium text-muted-foreground">
+          {t("pairing.setupGuide.fields.daemonPassword")}
+        </span>
+        <Input
+          type="password"
+          data-testid="pair-link-daemon-password-input"
+          aria-label={t("pairing.setupGuide.fields.daemonPassword")}
+          onChange={handleChangeDaemonPassword}
+          placeholder={t("pairing.setupGuide.fields.daemonPasswordPlaceholder")}
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
+        <span className="text-sm leading-[normal] text-muted-foreground">
+          {t("pairing.setupGuide.fields.daemonPasswordHelper")}
+        </span>
         {errorMessage ? (
           <span className="whitespace-pre-line text-sm leading-[normal] text-destructive">
             {errorMessage}

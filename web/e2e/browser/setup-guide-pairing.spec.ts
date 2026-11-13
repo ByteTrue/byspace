@@ -7,61 +7,87 @@ import { startLocalGoRelay } from "../support/helpers/local-go-relay";
 
 const SERVER_ID = "setup-guide-pairing";
 // Relay is the path that requires a daemon password; loopback and SSH do not. The pairing link
-// never carries it, so the guide has to ask.
+// never carries it, so every paste form has to ask.
 const DAEMON_PASSWORD = "setup-guide-secret";
 
-// The welcome screen's setup guide is the only path a self-hoster has from "I just ran
-// `byspace onboard`" to a connected app: paste the printed pairing link, press Pair. Every other
-// e2e pairing test seeds the host registry directly, so this walks the real path once — browser
-// loads the web bundle, talks to a real daemon through the real relay, and lands on the
-// connected app shell.
-test("pairs with a pasted offer through the setup guide", async ({ page, baseURL }) => {
-  const relay = await startLocalGoRelay();
-  const daemon = await startIsolatedHostDaemon(SERVER_ID, {
-    mutableRelay: { enabled: true, endpoint: relay.endpoint },
-  });
-  const client = await connectDaemonClient<DaemonClient>({
-    clientIdPrefix: "setup-guide-pairing",
-    port: daemon.port,
-  });
-  try {
-    // The daemon starts from a config that enables the relay; the relay stays off until a password
-    // exists, and setting one here is what brings it up.
-    await client.patchDaemonConfig({ auth: { password: DAEMON_PASSWORD } });
-    const offer = await client.getDaemonPairingOffer();
-    expect(offer.relayEnabled).toBe(true);
-    expect(offer.url).toContain("#offer=");
+// The welcome screen is the only path a self-hoster has from "I just ran `byspace onboard`" to a
+// connected app: paste the printed pairing link, press Pair. Every other e2e pairing test seeds the
+// host registry directly, so this walks the real path twice — through the setup guide and through
+// the paste-link form — with a real daemon behind the real relay.
+const PAIRING_FLOWS = [
+  {
+    name: "the setup guide",
+    entryTestId: "welcome-setup-guide",
+    modalTestId: "setup-guide-modal",
+    linkTestId: "setup-guide-pairing-link-input",
+    passwordTestId: "setup-guide-daemon-password-input",
+    submitTestId: "setup-guide-submit",
+    showsOnboardCommand: true,
+  },
+  {
+    name: "the paste-link form",
+    entryTestId: "welcome-paste-pairing-link",
+    modalTestId: "pair-link-modal",
+    linkTestId: "pair-link-input",
+    passwordTestId: "pair-link-daemon-password-input",
+    submitTestId: "pair-link-submit",
+    showsOnboardCommand: false,
+  },
+] as const;
 
-    // The auto-seed fixture writes a host registry entry on every navigation. Load once to let it
-    // write the nonce, then replace the registry with an empty one and set its disable-once flag so
-    // the welcome screen is actually reachable.
-    await page.goto("/");
-    await page.evaluate(() => {
-      const nonce = window.localStorage.getItem("@byspace:e2e-seed-nonce");
-      if (!nonce) throw new Error("Expected the e2e seed nonce before clearing the host registry.");
-      window.localStorage.setItem("@byspace:daemon-registry", "[]");
-      window.localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
+for (const flow of PAIRING_FLOWS) {
+  test(`pairs with a pasted offer through ${flow.name}`, async ({ page, baseURL }) => {
+    const relay = await startLocalGoRelay();
+    const daemon = await startIsolatedHostDaemon(SERVER_ID, {
+      mutableRelay: { enabled: true, endpoint: relay.endpoint },
     });
+    const client = await connectDaemonClient<DaemonClient>({
+      clientIdPrefix: "setup-guide-pairing",
+      port: daemon.port,
+    });
+    try {
+      // The daemon starts from a config that enables the relay; the relay stays off until a password
+      // exists, and setting one here is what brings it up.
+      await client.patchDaemonConfig({ auth: { password: DAEMON_PASSWORD } });
+      const offer = await client.getDaemonPairingOffer();
+      expect(offer.relayEnabled).toBe(true);
+      expect(offer.url).toContain("#offer=");
 
-    await page.goto("/welcome");
-    await page.getByTestId("welcome-setup-guide").click();
-    await expect(page.getByTestId("setup-guide-modal")).toBeVisible();
+      // The auto-seed fixture writes a host registry entry on every navigation. Load once to let it
+      // write the nonce, then replace the registry with an empty one and set its disable-once flag so
+      // the welcome screen is actually reachable.
+      await page.goto("/");
+      await page.evaluate(() => {
+        const nonce = window.localStorage.getItem("@byspace:e2e-seed-nonce");
+        if (!nonce) {
+          throw new Error("Expected the e2e seed nonce before clearing the host registry.");
+        }
+        window.localStorage.setItem("@byspace:daemon-registry", "[]");
+        window.localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
+      });
 
-    // A non-hosted origin must teach the self-hosting command, not the hosted one.
-    const origin = new URL(baseURL ?? "http://localhost").origin;
-    await expect(page.getByTestId("setup-guide-onboard-command")).toContainText(
-      "--web-origin " + origin,
-    );
+      await page.goto("/welcome");
+      await page.getByTestId(flow.entryTestId).click();
+      await expect(page.getByTestId(flow.modalTestId)).toBeVisible();
 
-    await page.getByTestId("setup-guide-pairing-link-input").fill(offer.url);
-    await page.getByTestId("setup-guide-daemon-password-input").fill(DAEMON_PASSWORD);
-    await page.getByTestId("setup-guide-submit").click();
+      if (flow.showsOnboardCommand) {
+        // A non-hosted origin must teach the self-hosting command, not the hosted one.
+        const origin = new URL(baseURL ?? "http://localhost").origin;
+        await expect(page.getByTestId("setup-guide-onboard-command")).toContainText(
+          "--web-origin " + origin,
+        );
+      }
 
-    await expect(page.getByTestId("sidebar-settings")).toBeVisible({ timeout: 30_000 });
-    await waitForConnectedHost(page, { serverId: SERVER_ID, endpoint: relay.endpoint });
-  } finally {
-    await client.close().catch(() => undefined);
-    await daemon.close();
-    await relay.close();
-  }
-});
+      await page.getByTestId(flow.linkTestId).fill(offer.url);
+      await page.getByTestId(flow.passwordTestId).fill(DAEMON_PASSWORD);
+      await page.getByTestId(flow.submitTestId).click();
+
+      await expect(page.getByTestId("sidebar-settings")).toBeVisible({ timeout: 30_000 });
+      await waitForConnectedHost(page, { serverId: SERVER_ID, endpoint: relay.endpoint });
+    } finally {
+      await client.close().catch(() => undefined);
+      await daemon.close();
+      await relay.close();
+    }
+  });
+}
