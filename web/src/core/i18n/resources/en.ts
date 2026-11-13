@@ -1609,6 +1609,9 @@ export const en = {
         relayEndpoint: "Relay endpoint (optional)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "Leave empty to use the hosted relay.",
+        daemonPassword: "Daemon password",
+        daemonPasswordPlaceholder: "The password set on that host",
+        daemonPasswordHelper: "Relay needs it. Loopback and SSH do not.",
         pairingLink: "Pairing link",
       },
       actions: {

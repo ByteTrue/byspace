@@ -1598,6 +1598,9 @@ export const ar: TranslationResources = {
         relayEndpoint: "عنوان المرحّل (اختياري)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "اتركه فارغًا لاستخدام المرحّل المستضاف.",
+        daemonPassword: "كلمة مرور daemon",
+        daemonPasswordPlaceholder: "كلمة المرور المعيّنة على ذلك المضيف",
+        daemonPasswordHelper: "يحتاجها المرحّل. لا يحتاجها loopback و SSH.",
         pairingLink: "رابط الاقتران",
       },
       actions: {

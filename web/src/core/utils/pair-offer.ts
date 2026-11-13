@@ -45,6 +45,9 @@ export async function pairWithOfferUrl(args: {
   offer: ConnectionOffer;
   knownServerIds: readonly string[];
   upsert: (url: string, hostname?: string) => Promise<HostProfile>;
+  // The daemon password. A relay connection must prove it, so pairing without one only works
+  // against a host that has none set — which is exactly what this probe finds out.
+  daemonPassword?: string;
 }): Promise<{ profile: HostProfile; hostname: string | null; isNewHost: boolean }> {
   const { client, hostname } = await connectToDaemon(
     {
@@ -56,6 +59,7 @@ export async function pairWithOfferUrl(args: {
       ),
       useTls: args.offer.relay.useTls,
       daemonPublicKeyB64: args.offer.daemonPublicKeyB64,
+      ...(args.daemonPassword ? { password: args.daemonPassword } : {}),
     },
     { serverId: args.offer.serverId },
   );

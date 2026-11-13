@@ -1635,6 +1635,9 @@ export const fr: TranslationResources = {
         relayEndpoint: "Point de terminaison du relais (facultatif)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "Laissez vide pour utiliser le relais hébergé.",
+        daemonPassword: "Mot de passe du daemon",
+        daemonPasswordPlaceholder: "Le mot de passe défini sur cet hôte",
+        daemonPasswordHelper: "Le relais en a besoin. Loopback et SSH non.",
         pairingLink: "Lien d'appairage",
       },
       actions: {

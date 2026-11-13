@@ -64,9 +64,13 @@ export interface SetupGuideModalProps {
 export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalProps) {
   const { t } = useTranslation();
   const daemons = useHosts();
-  const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
+  const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl, upsertRelayConnection } =
+    useHostMutations();
 
   const [relayEndpoint, setRelayEndpoint] = useState("");
+  // The daemon password. Relay is the path that needs one (loopback and SSH do not), and the
+  // offering link never carries it, so this is where the user supplies it.
+  const [daemonPassword, setDaemonPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const offerUrlRef = useRef("");
@@ -128,6 +132,10 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     setErrorMessage(message);
   }, []);
 
+  const handleChangeDaemonPassword = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setDaemonPassword(event.target.value);
+  }, []);
+
   const handlePair = useCallback(async () => {
     if (isSaving) return;
     const raw = offerUrlRef.current.trim();
@@ -139,12 +147,26 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     try {
       setIsSaving(true);
       setErrorMessage("");
+      const password = daemonPassword.trim();
       const { profile, hostname, isNewHost } = await pairWithOfferUrl({
         rawUrl: raw,
         offer: parsed.offer,
         knownServerIds: daemons.map((daemon) => daemon.serverId),
         upsert: upsertDaemonFromOfferUrl,
+        ...(password ? { daemonPassword: password } : {}),
       });
+      if (password) {
+        // Stored on this device only, on the relay connection it belongs to. The probe above used it
+        // once; the connected host needs it for every later reconnect.
+        await upsertRelayConnection({
+          serverId: parsed.offer.serverId,
+          relayEndpoint:
+            profile.connections.find((entry) => entry.type === "relay")?.relayEndpoint ?? "",
+          useTls: parsed.offer.relay.useTls,
+          daemonPublicKeyB64: parsed.offer.daemonPublicKeyB64,
+          password: password,
+        }).catch(() => undefined);
+      }
       onSaved?.({ profile, serverId: parsed.offer.serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
@@ -154,7 +176,17 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     } finally {
       setIsSaving(false);
     }
-  }, [daemons, handleClose, isSaving, onSaved, showError, t, upsertDaemonFromOfferUrl]);
+  }, [
+    daemonPassword,
+    daemons,
+    handleClose,
+    isSaving,
+    onSaved,
+    showError,
+    t,
+    upsertDaemonFromOfferUrl,
+    upsertRelayConnection,
+  ]);
 
   const handlePairPress = useCallback(() => {
     void handlePair();
@@ -229,6 +261,17 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
             autoCorrect="off"
             inputMode="url"
           />
+          <span className={FIELD_LABEL}>{t("pairing.setupGuide.fields.daemonPassword")}</span>
+          <Input
+            type="password"
+            onChange={handleChangeDaemonPassword}
+            placeholder={t("pairing.setupGuide.fields.daemonPasswordPlaceholder")}
+            data-testid="setup-guide-daemon-password-input"
+            aria-label={t("pairing.setupGuide.fields.daemonPassword")}
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
+          <span className={MUTED_TEXT}>{t("pairing.setupGuide.fields.daemonPasswordHelper")}</span>
           {errorMessage ? (
             <span className="text-sm leading-[normal] text-destructive">{errorMessage}</span>
           ) : null}

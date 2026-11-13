@@ -6,6 +6,9 @@ import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon
 import { startLocalGoRelay } from "../support/helpers/local-go-relay";
 
 const SERVER_ID = "setup-guide-pairing";
+// Relay is the path that requires a daemon password; loopback and SSH do not. The pairing link
+// never carries it, so the guide has to ask.
+const DAEMON_PASSWORD = "setup-guide-secret";
 
 // The welcome screen's setup guide is the only path a self-hoster has from "I just ran
 // `byspace onboard`" to a connected app: paste the printed pairing link, press Pair. Every other
@@ -22,6 +25,9 @@ test("pairs with a pasted offer through the setup guide", async ({ page, baseURL
     port: daemon.port,
   });
   try {
+    // The daemon starts from a config that enables the relay; the relay stays off until a password
+    // exists, and setting one here is what brings it up.
+    await client.patchDaemonConfig({ auth: { password: DAEMON_PASSWORD } });
     const offer = await client.getDaemonPairingOffer();
     expect(offer.relayEnabled).toBe(true);
     expect(offer.url).toContain("#offer=");
@@ -48,6 +54,7 @@ test("pairs with a pasted offer through the setup guide", async ({ page, baseURL
     );
 
     await page.getByTestId("setup-guide-pairing-link-input").fill(offer.url);
+    await page.getByTestId("setup-guide-daemon-password-input").fill(DAEMON_PASSWORD);
     await page.getByTestId("setup-guide-submit").click();
 
     await expect(page.getByTestId("sidebar-settings")).toBeVisible({ timeout: 30_000 });

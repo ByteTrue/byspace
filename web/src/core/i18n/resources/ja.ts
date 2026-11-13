@@ -1612,6 +1612,9 @@ export const ja: TranslationResources = {
         relayEndpoint: "リレーエンドポイント（任意）",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "空欄の場合はホストされたリレーを使用します。",
+        daemonPassword: "daemon のパスワード",
+        daemonPasswordPlaceholder: "そのホストに設定したパスワード",
+        daemonPasswordHelper: "リレーには必要です。ループバックと SSH は不要です。",
         pairingLink: "ペアリングリンク",
       },
       actions: {

@@ -79,3 +79,17 @@
 - **`normalizeEndpoint` 两份重复**（已修）。提到 `packages/protocol/src/daemon-endpoints.ts`，四处调用点共用。
 
 未改的一项：`kind:"rule"` 副本记录目前没有读取方（隧道列表由各主机实时的 `tunnel.list` 聚合而成）。规格把「隧道规则的展示信息」列为同步内容，所以保留写入，等一个真正读它的界面；如果决定不做展示，这条写入和 `spec/connection.md` 的对应句子要一起删。
+
+## 0.25.0 之后：relay 密码前提被误删，已恢复（2026-11-13）
+
+发 0.25.0 时为让 `setup-guide-pairing` 变绿，删掉了 B 单元的核心约束：无密码主机重新接受 relay 会话，规格里对应的句子也被改成迁就代码。真正缺的是规格里已经写明的另一半——「客户端先在 UI 里提示未设密码的主机」，以及粘贴 offer 的表单没有密码输入框。
+
+现在：
+
+- 服务端恢复：无密码主机拒绝 relay 会话（`ok:false` + 原因 + 关闭）。
+- 上游强制：`set_daemon_config` 打开 relay 要求已有密码、清密码要求先关 relay（与局域网监听同一写法）；启动时 relay 已启用但无密码则不拨 relay，日志写明原因。
+- 客户端补齐：setup guide 增加 daemon 密码字段，配对探测用它，成功后写进该主机的 relay 连接（只存本机）。
+- e2e：隔离 daemon 先设密码，表单里填同一个。
+- 笔记：`2026-11-13-relay-password-requirement-dropped-during-release.md`。
+
+同时记下一个流程事实：0.25.0 的 tag 建在一个只有文档/脚本改动的提交上，那次 CI 因路径过滤跳过了 go/app/browser/relay，`release:push` 把「成功」当成了「验证过」。补跑 tag 全量 CI 后发现 `setup-guide-pairing` 与 `sidebar-workspace-mark-unread` 仍失败。发布门禁需要能区分「必要 job 真的跑过」和「被跳过但整体成功」。

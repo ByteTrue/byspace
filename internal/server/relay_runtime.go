@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -309,6 +310,13 @@ func (s *Server) ApplyRelayConfig(ctx context.Context) {
 		cfg.Enabled = true
 		cfg.Endpoint = override
 		cfg.UseTLS = s.relayUseTLS || relayEndpointImpliesTLS(override)
+	}
+	if cfg.Enabled && s.daemonPasswordHash() == "" {
+		// Dialling anyway would open sockets this daemon then refuses at the first frame, which
+		// looks like a broken relay instead of a missing password. Say it once, clearly.
+		slog.Warn("relay stays off: this host has no daemon password set",
+			"endpoint", cfg.Endpoint)
+		cfg.Enabled = false
 	}
 	s.relay.Apply(ctx, cfg, func(ctx context.Context, endpoint string) error {
 		return s.ConnectRelay(ctx, relayWebSocketURL(endpoint, cfg.UseTLS))

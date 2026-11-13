@@ -1605,6 +1605,9 @@ export const ko: TranslationResources = {
         relayEndpoint: "릴레이 엔드포인트 (선택)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "비워 두면 호스티드 릴레이를 사용합니다.",
+        daemonPassword: "daemon 비밀번호",
+        daemonPasswordPlaceholder: "해당 호스트에 설정된 비밀번호",
+        daemonPasswordHelper: "릴레이에는 필요합니다. 루프백과 SSH는 필요 없습니다.",
         pairingLink: "페어링 링크",
       },
       actions: {

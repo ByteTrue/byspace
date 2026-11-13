@@ -120,20 +120,23 @@ func passwordFrame(password string) string {
 	return string(b)
 }
 
-// A daemon with no password serves relay connections: that is the plain pairing flow, where
-// the offer carries the host key and nobody is ever asked for a password. Refusing it made the
-// standard "paste an offer" setup dead.
-func TestRelayConnectionServedWhenNoPasswordSet(t *testing.T) {
+// A host with no daemon password refuses relay sessions: the relay is reachable by anyone who
+// saw the offering link, and the password is the only thing that makes the socket the operator's.
+// Loopback and SSH are the paths that do not need one.
+func TestRelayConnectionRefusedWhenNoPasswordSet(t *testing.T) {
 	srv := newTestServer(t, t.TempDir())
 	conn, shared, cleanup := relaySession(t, srv)
 	defer cleanup()
 
-	writeEncrypted(t, conn, shared, mustJSON(t, map[string]any{
-		"type": "hello", "clientId": "no-password", "protocolVersion": 1,
-	}))
+	writeEncrypted(t, conn, shared, passwordFrame(""))
 	reply := readEncrypted(t, conn, shared)
-	if !strings.Contains(reply, "server_info") {
-		t.Fatalf("a passwordless daemon did not serve the relay session: %s", reply)
+	if !strings.Contains(reply, `"ok":false`) || !strings.Contains(reply, "no daemon password") {
+		t.Fatalf("refusal did not explain itself: %s", reply)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, _, err := conn.Read(ctx); err == nil {
+		t.Fatal("passwordless host accepted a relay session")
 	}
 }
 

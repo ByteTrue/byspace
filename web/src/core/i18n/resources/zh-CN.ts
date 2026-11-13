@@ -1581,6 +1581,9 @@ export const zhCN: TranslationResources = {
         relayEndpoint: "中继端点（可选）",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "留空则使用官方托管中继。",
+        daemonPassword: "daemon 密码",
+        daemonPasswordPlaceholder: "那台主机上设置的密码",
+        daemonPasswordHelper: "中继需要它，回环和 SSH 不需要。",
         pairingLink: "配对链接",
       },
       actions: {

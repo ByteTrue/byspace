@@ -1634,6 +1634,9 @@ export const es: TranslationResources = {
         relayEndpoint: "Endpoint del relay (opcional)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "Déjalo vacío para usar el relay alojado.",
+        daemonPassword: "Contraseña del daemon",
+        daemonPasswordPlaceholder: "La contraseña configurada en ese host",
+        daemonPasswordHelper: "El relay la necesita. Loopback y SSH no.",
         pairingLink: "Enlace de emparejamiento",
       },
       actions: {

@@ -1625,6 +1625,9 @@ export const ptBR: TranslationResources = {
         relayEndpoint: "Endpoint do relay (opcional)",
         relayEndpointPlaceholder: "relay.example.com:443",
         relayEndpointHelper: "Deixe vazio para usar o relay hospedado.",
+        daemonPassword: "Senha do daemon",
+        daemonPasswordPlaceholder: "A senha definida naquele host",
+        daemonPasswordHelper: "O relay precisa dela. Loopback e SSH não.",
         pairingLink: "Link de pareamento",
       },
       actions: {

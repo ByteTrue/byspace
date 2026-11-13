@@ -1565,6 +1565,27 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				return
 			}
 		}
+		// The relay is reachable from the internet, and the offering link carries the serverId and
+		// public key but no password. Enabling it without one would hand the machine to anyone
+		// holding that link, so the same invariant as LAN access applies: a password first.
+		if relayConfigFromStore(req.Config).Enabled {
+			passwordSet := s.store.DaemonPasswordHash() != ""
+			if applyAuth {
+				passwordSet = strings.TrimSpace(passwordHash) != ""
+			}
+			if !passwordSet {
+				message := "set a password before enabling the relay"
+				if applyAuth {
+					message = "turn the relay off before clearing the password"
+				}
+				_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
+					"requestId": req.RequestID,
+					"config":    s.loadDaemonConfigWithService(),
+					"error":     message,
+				})
+				return
+			}
+		}
 		if validationErr := store.ValidateDaemonConfigForProviders(req.Config, providers.ServedProviderIDs()); validationErr != nil {
 			fmt.Fprintf(os.Stderr, "daemon config rejected: %v\n", validationErr)
 			_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
