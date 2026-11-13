@@ -78,6 +78,7 @@ export function OfferLinkHost() {
       <OfferLinkListener onOfferLink={setOfferUrl} />
       {offerUrl ? (
         <PairLinkModal
+          key={offerUrl}
           visible
           initialOfferUrl={offerUrl}
           onClose={handleClose}
