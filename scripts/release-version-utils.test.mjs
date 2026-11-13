@@ -4,7 +4,9 @@ import {
   classifyCiState,
   computeNextReleaseVersion,
   getReleaseInfoFromSourceTag,
+  normalizeJobName,
   parseReleaseVersion,
+  verifyReleaseJobs,
 } from "./release-version-utils.mjs";
 
 test("computes the next beta patch from a stable version", () => {
@@ -74,4 +76,40 @@ test("classifies a concluded non-success as failed", () => {
   assert.equal(classifyCiState({ status: "completed", conclusion: "failure" }), "failed");
   assert.equal(classifyCiState({ status: "completed", conclusion: "cancelled" }), "failed");
   assert.equal(classifyCiState({ status: "completed", conclusion: "" }), "failed");
+});
+
+test("normalizeJobName collapses matrix variants", () => {
+  assert.equal(normalizeJobName("playwright (shard 3/16)"), "playwright");
+  assert.equal(normalizeJobName("go-tests (windows-latest)"), "go-tests");
+  assert.equal(normalizeJobName("relay-tests"), "relay-tests");
+});
+
+test("verifyReleaseJobs rejects a run that skipped the suites", () => {
+  // What a version-only commit reports: format, lint, typecheck, and nothing else.
+  const skipped = new Map([
+    ["format", ["success"]],
+    ["lint", ["success"]],
+    ["typecheck", ["success"]],
+    ["go-tests", ["skipped"]],
+    ["app-tests", ["skipped"]],
+    ["playwright", ["skipped"]],
+  ]);
+  const { missing, failed } = verifyReleaseJobs(skipped);
+  assert.deepEqual(missing, ["sdk-tests", "relay-tests", "build-e2e"]);
+  assert.deepEqual(failed, ["go-tests", "app-tests", "playwright"]);
+});
+
+test("verifyReleaseJobs accepts a full green run", () => {
+  const green = new Map([
+    ["format", ["success"]],
+    ["lint", ["success"]],
+    ["typecheck", ["success"]],
+    ["go-tests", ["success", "success"]],
+    ["sdk-tests", ["success"]],
+    ["relay-tests", ["success"]],
+    ["build-e2e", ["success"]],
+    ["app-tests", ["success"]],
+    ["playwright", Array.from({ length: 16 }, () => "success")],
+  ]);
+  assert.deepEqual(verifyReleaseJobs(green), { missing: [], failed: [] });
 });

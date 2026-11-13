@@ -60,7 +60,10 @@ export async function startLocalGoRelay(): Promise<LocalGoRelay> {
   });
   const record = (chunk: Buffer) => {
     logs.push(chunk.toString());
-    if (logs.length > 40) logs.shift();
+    if (logs.length > 400) logs.shift();
+    // Relay-side routing is invisible from the test process otherwise; a stalled pairing flow
+    // needs to see which socket said what.
+    if (process.env.E2E_PRINT_CONSOLE === "1") console.log("[relay] " + chunk.toString().trimEnd());
   };
   child.stdout?.on("data", record);
   child.stderr?.on("data", record);

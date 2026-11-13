@@ -202,6 +202,9 @@ const test = daemonTest.extend<{
           body: entries.join("\n"),
           contentType: "text/plain",
         });
+        // An attachment only lands in an HTML report. Printing on request is what makes a failing
+        // spec debuggable with --reporter=line.
+        if (process.env.E2E_PRINT_CONSOLE === "1") console.log(entries.join("\n"));
       }
     },
     { auto: true },

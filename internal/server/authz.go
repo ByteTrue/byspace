@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/ByteTrue/byspace/internal/authz"
 )
@@ -55,7 +56,6 @@ func (s *Server) relayAuthResolved(sink frameSink) bool {
 	return true
 }
 
-// relayAuthIsPending reports whether a relay connection is still waiting to prove a password.
 // relayAuthIsPending reports whether this socket still has to prove a password.
 //
 // Relay sockets always do, and a host with no password has nothing to prove, so it refuses
@@ -125,6 +125,10 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 		if hash == "" {
 			reason = "This host has no daemon password set."
 		}
+		// The relay turns this close into "Server disconnected", so the reason travels to the client
+		// inside the response and nowhere else. Without this line the daemon side says nothing at
+		// all about a refused relay session.
+		slog.Warn("relay session refused", "reason", reason, "submitted", len(req.Password) > 0)
 		_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
 			"requestId": req.RequestID,
 			"ok":        false,

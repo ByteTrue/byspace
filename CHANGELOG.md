@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.25.1 - 2026-11-13
+
+### Fixed
+
+- Fixed 0.25.0 serving relay connections to a host with no daemon password set. Relay and LAN access require one again; loopback and SSH do not.
+- Added the daemon password field to the setup guide, so pairing a password-protected host over the relay works from the app instead of failing at the first frame
+- Fixed the daemon accepting a config change that enables the relay without a password, or clears the password while the relay is on
+
 ## 0.25.0 - 2026-11-13
 
 ### Added

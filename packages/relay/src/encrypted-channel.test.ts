@@ -634,3 +634,47 @@ describe("EncryptedChannel", () => {
     );
   });
 });
+
+describe("challenge echo ordering", () => {
+  it("sends the echo before anything an open listener writes", async () => {
+    // The daemon discards every frame before the nonce, so a listener that writes from onopen used
+    // to lose its first frames and leave the connection permanently unopened.
+    const clientKeyPair = generateKeyPair();
+    const daemonKeyPair = generateKeyPair();
+    const sharedKey = deriveSharedKey(
+      clientKeyPair.secretKey,
+      importPublicKey(exportPublicKey(daemonKeyPair.publicKey)),
+    );
+    const sent: ArrayBuffer[] = [];
+    const transport: Transport = {
+      send: (data: string | ArrayBuffer) => {
+        if (data instanceof ArrayBuffer) sent.push(data);
+        else if (!data.trim().startsWith("{")) sent.push(base64ToArrayBuffer(data));
+        return Promise.resolve();
+      },
+      close: () => undefined,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+
+    let channel: EncryptedChannel | null = null;
+    channel = new EncryptedChannel(
+      transport,
+      sharedKey,
+      { onopen: () => void channel?.send("from-onopen") },
+      {},
+    );
+
+    transport.onmessage?.({
+      data: JSON.stringify({ type: "e2ee_ready", challenge: "nonce-open-order" }),
+      isBinary: false,
+    });
+    await waitForAsyncDelivery();
+
+    expect(sent.length).toBe(2);
+    const first = JSON.parse(new TextDecoder().decode(decrypt(sharedKey, sent[0]!)));
+    expect(first).toEqual({ type: "e2ee_challenge", challenge: "nonce-open-order" });
+    expect(new TextDecoder().decode(decrypt(sharedKey, sent[1]!))).toBe("from-onopen");
+  });
+});

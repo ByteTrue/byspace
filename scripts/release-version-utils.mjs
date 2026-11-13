@@ -202,3 +202,32 @@ export function classifyCiState(state) {
   // No run yet: the push happened seconds ago and Actions has not created it.
   return "pending";
 }
+
+// The jobs a release tag must actually have run. A path-filtered run reports success with these
+// skipped, and that success tagged v0.25.0 on code no end-to-end suite had ever executed.
+export const RELEASE_REQUIRED_JOBS = [
+  "format",
+  "lint",
+  "typecheck",
+  "go-tests",
+  "sdk-tests",
+  "relay-tests",
+  "build-e2e",
+  "app-tests",
+  "playwright",
+];
+
+export function normalizeJobName(name) {
+  // "playwright (shard 3/16)" and "go-tests (windows-latest)" are variants of one job.
+  return name.replace(/\s*\(.*\)$/, "").trim();
+}
+
+// Returns the required jobs that never ran and those that did not pass, given a map of
+// normalized job name -> list of conclusions (one per variant).
+export function verifyReleaseJobs(conclusions) {
+  const missing = RELEASE_REQUIRED_JOBS.filter((job) => !conclusions.has(job));
+  const failed = RELEASE_REQUIRED_JOBS.filter((job) =>
+    (conclusions.get(job) ?? []).some((conclusion) => conclusion !== "success"),
+  );
+  return { missing, failed };
+}

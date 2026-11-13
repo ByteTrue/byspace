@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -918,11 +919,8 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 	// A relay connection is reachable by anyone who saw the pairing offer, which carries the
 	// serverId and public key but not the password. It starts with no permissions and the first
 	// thing it sends inside the encrypted channel must be the password. The HTTP bearer check
-	// never sees this socket: the daemon dials it itself.
-	// A relay socket is reachable by anyone holding the pairing offer, and the offer carries the
-	// serverId and public key but not the password. It starts with no permissions and the first
-	// thing it sends must be the password; a host with no password does not serve relay
-	// sessions at all (see handleRelayPassword).
+	// never sees this socket: the daemon dials it itself. A host with no password does not
+	// serve relay sessions at all (see handleRelayPassword).
 	s.relayAuthPending(adapter)
 
 	// greeted: false. A relay socket starts unhandshaked, which keeps it out of every broadcast
@@ -1192,6 +1190,7 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		// A relay connection proves its password before it is a client. Accepting the hello first
 		// would hand it server_info and a connection slot with no credentials at all.
 		if s.relayAuthIsPending(sink) {
+			slog.Info("relay socket sent hello before proving the password")
 			_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
 			return
 		}
@@ -1266,7 +1265,12 @@ func sessionMessageNeedsOrder(raw json.RawMessage) bool {
 	}
 	_ = json.Unmarshal(raw, &head)
 	switch head.Type {
-	case "file.upload.request",
+	case
+		// The password proof has to be handled before the next frame is read. Dispatched
+		// asynchronously, the hello that follows it saw an unproven socket and closed the
+		// connection with "Password required" — a relay connection that never finished opening.
+		"auth.password.submit.request",
+		"file.upload.request",
 		"create_terminal_request",
 		"subscribe_terminal_request",
 		"subscribe_terminals_request",
@@ -1430,6 +1434,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		// Anything but the password proof closes the socket. The proof itself falls through to its
 		// case below; routing it here keeps the message a real route the parity audit can see.
 		if base.Type != "auth.password.submit.request" {
+			// Say what arrived. A relay socket that closes before proving the password looks
+			// identical from the client — "Server disconnected" — whatever the request was.
+			slog.Info("relay socket closed before proving the password", "request", base.Type)
 			_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
 			return
 		}
@@ -1440,7 +1447,11 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	// granted no permissions must not be able to drive agents or edit files just because it
 	// reached the handler. Local connections hold everything, which is what keeps the app
 	// working unchanged.
-	if !s.authorizationForSink(sink).AllowsInbound(base.Type) {
+	// The password proof is the one request that must work before permissions exist: it is what
+	// creates them. Running it through the table rejected it on a pending relay socket, so the
+	// proof was answered "Permission denied", the socket stayed unproven, and the hello that
+	// followed closed it — a client saw a relay connection that never finished connecting.
+	if base.Type != "auth.password.submit.request" && !s.authorizationForSink(sink).AllowsInbound(base.Type) {
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 			"status":    "error",
 			"error":     "Permission denied for " + base.Type,

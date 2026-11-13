@@ -304,6 +304,25 @@ Get the session ID from the agent JSON (`persistence.sessionId`), then:
 ~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-{timestamp}-{session-id}.jsonl
 ```
 
+## Running one browser spec locally
+
+`npx playwright install` stalls on some machines, and the suite wants a video encoder it may never
+have downloaded. Two env knobs make a single spec runnable there:
+
+```bash
+cd web
+E2E_CHANNEL=chrome E2E_VIDEO=off npx playwright test e2e/browser/<spec>.spec.ts --project=browser
+```
+
+`E2E_CHANNEL` uses an installed Chrome or Edge instead of the downloaded Chromium; `E2E_VIDEO=off`
+skips recording, which is what needs ffmpeg. Add `E2E_PRESERVE_HOME=1` to keep each isolated
+daemon's temp home, with its `daemon.log` (the daemon's stderr); `E2E_PRINT_CONSOLE=1` prints the
+browser console and the relay log on failure, which otherwise only exist as report attachments.
+
+The e2e harness runs `bin/byspace.exe` on Windows and `bin/byspace` elsewhere. A Go change is
+invisible to a local browser spec until that exact file is rebuilt — `go build -o bin/byspace` on
+Windows silently leaves the stale `.exe` in place.
+
 ## Testing with Playwright MCP
 
 Point Playwright MCP at the running web app. For root checkout dev, `npm run dev:app` reserves `http://localhost:8082`. For BySpace-managed worktree app services, use the service URL or port shown by BySpace for that worktree.

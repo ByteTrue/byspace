@@ -250,6 +250,34 @@ func TestRelayConnectionCannotSpawnTerminalWithoutPassword(t *testing.T) {
 	waitForTerminalSlot(t, srv, 7)
 }
 
+// A client sends its password proof and its hello back to back, without waiting for the reply.
+// The proof used to be dispatched asynchronously, so the hello behind it was handled on the read
+// loop while the socket still looked unproven and closed it with "Password required". Every relay
+// connection from the app hit that, and it surfaced as a pairing flow that timed out.
+func TestRelayConnectionAcceptsHelloBatchedAfterPassword(t *testing.T) {
+	srv := newTestServer(t, t.TempDir())
+	setDaemonPassword(t, srv, "correct")
+	conn, shared, cleanup := relaySession(t, srv)
+	defer cleanup()
+
+	hello, _ := json.Marshal(map[string]any{
+		"type":            "hello",
+		"clientId":        "batched",
+		"protocolVersion": WSProtocolVersion,
+	})
+	writeEncrypted(t, conn, shared, passwordFrame("correct"))
+	writeEncrypted(t, conn, shared, string(hello))
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		reply := readEncrypted(t, conn, shared)
+		if strings.Contains(reply, "server_info") || strings.Contains(reply, "serverId") {
+			return
+		}
+	}
+	t.Fatal("hello sent right after the password proof never produced server_info")
+}
+
 // waitForTerminalSlot polls until the slot exists; the frame is handled on the read loop's
 // goroutine, so the test observes state instead of waiting on a signal.
 func waitForTerminalSlot(t *testing.T, srv *Server, slot uint8) {

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -30,6 +30,10 @@ export interface IsolatedHostDaemonOptions {
   /** Merged over the mutableRelay daemon block (auth, tunnel, ...). */
   daemonConfig?: Record<string, unknown>;
   byspaceHome?: string;
+  /**
+   * Keep the temp home (and its daemon.log) after the run. E2E_PRESERVE_HOME=1 does the same for
+   * every isolated daemon, which is how a failing spec gets its daemon log inspected locally.
+   */
   preserveHome?: boolean;
   /**
    * Test a daemon binary other than bin/byspace — used to exercise a released or
@@ -131,6 +135,7 @@ export async function startIsolatedHostDaemon(
   const webPort = process.env.E2E_WEB_PORT;
   if (!webPort) throw new Error("E2E_WEB_PORT is required to start an isolated host daemon");
 
+  const keepHome = options.preserveHome ?? process.env.E2E_PRESERVE_HOME === "1";
   const byspaceHome =
     options.byspaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-")));
   await writeIsolatedDaemonConfig(byspaceHome, options);
@@ -172,6 +177,11 @@ export async function startIsolatedHostDaemon(
     child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
       stderr = stderr.split("\n").slice(-40).join("\n");
+      // A preserved home keeps the daemon's own log next to its config: the only way to see why a
+      // spec's daemon closed a socket locally, where CI artifacts do not exist.
+      if (keepHome) {
+        void appendFile(path.join(byspaceHome, "daemon.log"), chunk).catch(() => undefined);
+      }
     });
 
     try {
@@ -190,7 +200,7 @@ export async function startIsolatedHostDaemon(
   try {
     child = await spawnDaemon();
   } catch (error) {
-    if (!options.preserveHome) {
+    if (!keepHome) {
       await rm(byspaceHome, { recursive: true, force: true });
     }
     throw error;
@@ -211,7 +221,7 @@ export async function startIsolatedHostDaemon(
       if (closed) return;
       closed = true;
       await killProcessTree(child);
-      if (!options.preserveHome) {
+      if (!keepHome) {
         await rm(byspaceHome, { recursive: true, force: true });
       }
     },

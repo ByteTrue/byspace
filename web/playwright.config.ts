@@ -5,8 +5,13 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL =
   process.env.E2E_BASE_URL ?? `http://localhost:${process.env.E2E_WEB_PORT ?? "8082"}`;
 const relayDeploymentSpec = "**/relay-deployment-reconnect.real.spec.ts";
+// A locally installed browser (chrome/msedge) lets a single spec run on a machine where
+// `playwright install` stalls. CI never sets this: it uses the downloaded build.
+const localChannel = process.env.E2E_CHANNEL;
 
-function videoMode(): "on" | "on-first-retry" | "retain-on-failure" {
+function videoMode(): "on" | "on-first-retry" | "retain-on-failure" | "off" {
+  // Recording needs ffmpeg, which a machine that cannot reach the Playwright CDN never got.
+  if (process.env.E2E_VIDEO === "off") return "off";
   if (process.env.E2E_RECORD_VIDEO === "1") return "on";
   if (process.env.CI) return "on-first-retry";
   return "retain-on-failure";
@@ -35,18 +40,18 @@ export default defineConfig({
     {
       name: "browser",
       testIgnore: ["**/*.real.spec.ts"],
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], ...(localChannel ? { channel: localChannel } : {}) },
     },
     {
       name: "real-provider",
       testMatch: ["**/*.real.spec.ts"],
       testIgnore: [relayDeploymentSpec],
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], ...(localChannel ? { channel: localChannel } : {}) },
     },
     {
       name: "relay-deployment",
       testMatch: [relayDeploymentSpec],
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], ...(localChannel ? { channel: localChannel } : {}) },
     },
   ],
   // Note: Metro is started by global-setup.ts on a dynamic port to allow parallel test runs

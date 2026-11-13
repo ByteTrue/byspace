@@ -372,11 +372,23 @@ export class EncryptedChannel {
         const parsed: unknown = JSON.parse(text);
         if (isE2EEReadyMessage(parsed)) {
           this.options.binaryCiphertext = supportsBinaryCiphertext(parsed);
+          // The challenge echo has to be the first encrypted frame the daemon sees. Emitting
+          // `open` first let every listener send into the channel ahead of it, and the daemon
+          // discards everything that arrives before the nonce — so the connection never opened
+          // and the app sat on "connection timed out".
           this.state = "open";
+          try {
+            await this.echoChallenge(parsed.challenge);
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.events.onerror?.(err);
+            this.state = "closed";
+            this.transport.close(1011, err.message);
+            return;
+          }
           this.events.onopen?.();
           for (const cb of this.onOpenCallbacks) cb();
           try {
-            await this.echoChallenge(parsed.challenge);
             await this.flushPendingSends();
           } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));

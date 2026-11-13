@@ -1868,7 +1868,11 @@ export class HostRuntimeStore {
     });
   }
 
-  async upsertConnectionFromOffer(offer: ConnectionOffer, label?: string): Promise<HostProfile> {
+  async upsertConnectionFromOffer(
+    offer: ConnectionOffer,
+    label?: string,
+    password?: string,
+  ): Promise<HostProfile> {
     // COMPAT(oldRelayOfferTls): added in v0.1.73, remove after 2026-11-10.
     const useTls = offer.relay.useTls ?? shouldUseTlsForDefaultHostedRelay(offer.relay.endpoint);
     const resolvedLabel = label?.trim() || offer.hostname?.trim() || undefined;
@@ -1878,12 +1882,14 @@ export class HostRuntimeStore {
       useTls,
       daemonPublicKeyB64: offer.daemonPublicKeyB64,
       label: resolvedLabel,
+      ...(password ? { password } : {}),
     });
   }
 
   async upsertConnectionFromOfferUrl(
     offerUrlOrFragment: string,
     label?: string,
+    password?: string,
   ): Promise<HostProfile> {
     const marker = "#offer=";
     const idx = offerUrlOrFragment.indexOf(marker);
@@ -1896,7 +1902,7 @@ export class HostRuntimeStore {
     }
     const payload = decodeOfferFragmentPayload(encoded);
     const offer = ConnectionOfferSchema.parse(payload);
-    return this.upsertConnectionFromOffer(offer, label);
+    return this.upsertConnectionFromOffer(offer, label, password);
   }
 
   async upsertConnectionFromListen(input: {
@@ -2808,10 +2814,15 @@ export interface HostMutations {
     label?: string;
     password?: string;
   }) => Promise<HostProfile>;
-  upsertConnectionFromOffer: (offer: ConnectionOffer, label?: string) => Promise<HostProfile>;
+  upsertConnectionFromOffer: (
+    offer: ConnectionOffer,
+    label?: string,
+    password?: string,
+  ) => Promise<HostProfile>;
   upsertConnectionFromOfferUrl: (
     offerUrlOrFragment: string,
     label?: string,
+    password?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
   setHostColor: (serverId: string, color: HostColor) => Promise<void>;
@@ -2828,8 +2839,10 @@ export function useHostMutations(): HostMutations {
       probeAndUpsertDirectConnection: (input) => store.probeAndUpsertDirectConnection(input),
       probeAndUpsertRemoteSshConnection: (input) => store.probeAndUpsertRemoteSshConnection(input),
       upsertRelayConnection: (input) => store.upsertRelayConnection(input),
-      upsertConnectionFromOffer: (offer, label) => store.upsertConnectionFromOffer(offer, label),
-      upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
+      upsertConnectionFromOffer: (offer, label, password) =>
+        store.upsertConnectionFromOffer(offer, label, password),
+      upsertConnectionFromOfferUrl: (url, label, password) =>
+        store.upsertConnectionFromOfferUrl(url, label, password),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
       setHostColor: (serverId, color) => store.setHostColor(serverId, color),
       setHostBadgeDisplay: (serverId, badgeDisplay) =>

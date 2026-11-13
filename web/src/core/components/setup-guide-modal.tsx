@@ -64,8 +64,7 @@ export interface SetupGuideModalProps {
 export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalProps) {
   const { t } = useTranslation();
   const daemons = useHosts();
-  const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl, upsertRelayConnection } =
-    useHostMutations();
+  const { upsertConnectionFromOfferUrl: upsertDaemonFromOfferUrl } = useHostMutations();
 
   const [relayEndpoint, setRelayEndpoint] = useState("");
   // The daemon password. Relay is the path that needs one (loopback and SSH do not), and the
@@ -155,18 +154,6 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
         upsert: upsertDaemonFromOfferUrl,
         ...(password ? { daemonPassword: password } : {}),
       });
-      if (password) {
-        // Stored on this device only, on the relay connection it belongs to. The probe above used it
-        // once; the connected host needs it for every later reconnect.
-        await upsertRelayConnection({
-          serverId: parsed.offer.serverId,
-          relayEndpoint:
-            profile.connections.find((entry) => entry.type === "relay")?.relayEndpoint ?? "",
-          useTls: parsed.offer.relay.useTls,
-          daemonPublicKeyB64: parsed.offer.daemonPublicKeyB64,
-          password: password,
-        }).catch(() => undefined);
-      }
       onSaved?.({ profile, serverId: parsed.offer.serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
@@ -185,7 +172,6 @@ export function SetupGuideModal({ visible, onClose, onSaved }: SetupGuideModalPr
     showError,
     t,
     upsertDaemonFromOfferUrl,
-    upsertRelayConnection,
   ]);
 
   const handlePairPress = useCallback(() => {
