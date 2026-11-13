@@ -120,23 +120,30 @@ func passwordFrame(password string) string {
 	return string(b)
 }
 
-// A daemon with no password refuses a relay connection instead of serving it.
-func TestRelayConnectionRefusedWhenNoPasswordSet(t *testing.T) {
+// A daemon with no password serves relay connections: that is the plain pairing flow, where
+// the offer carries the host key and nobody is ever asked for a password. Refusing it made the
+// standard "paste an offer" setup dead.
+func TestRelayConnectionServedWhenNoPasswordSet(t *testing.T) {
 	srv := newTestServer(t, t.TempDir())
 	conn, shared, cleanup := relaySession(t, srv)
 	defer cleanup()
 
-	writeEncrypted(t, conn, shared, passwordFrame(""))
-	// The refusal names the reason before the socket closes, so the app can say why.
+	writeEncrypted(t, conn, shared, mustJSON(t, map[string]any{
+		"type": "hello", "clientId": "no-password", "protocolVersion": 1,
+	}))
 	reply := readEncrypted(t, conn, shared)
-	if !strings.Contains(reply, `"ok":false`) || !strings.Contains(reply, "no daemon password") {
-		t.Fatalf("refusal did not explain itself: %s", reply)
+	if !strings.Contains(reply, "server_info") {
+		t.Fatalf("a passwordless daemon did not serve the relay session: %s", reply)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, _, err := conn.Read(ctx); err == nil {
-		t.Fatal("passwordless daemon accepted a relay connection")
+}
+
+func mustJSON(t *testing.T, value any) string {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return string(raw)
 }
 
 // The wrong password is refused with a reason, and the socket then closes.

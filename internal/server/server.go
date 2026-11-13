@@ -919,6 +919,11 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 	// serverId and public key but not the password. It starts with no permissions and the first
 	// thing it sends inside the encrypted channel must be the password. The HTTP bearer check
 	// never sees this socket: the daemon dials it itself.
+	// Every relay socket starts in the pending state so a password submitted later is routed and
+	// answered. Whether that state actually gates anything depends on the host having a password:
+	// with none set there is nothing to prove, and the standard pairing flow (paste an offer, connect
+	// over the relay) never asks for one. The encrypted channel still requires the per-session
+	// challenge before the daemon accepts any frame.
 	s.relayAuthPending(adapter)
 
 	// greeted: false. A relay socket starts unhandshaked, which keeps it out of every broadcast

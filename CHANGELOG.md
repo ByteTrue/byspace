@@ -17,14 +17,14 @@
 
 ### Changed
 
-- Relay connections now prove the daemon password inside the encrypted channel, and a host without one refuses relay connections
+- Relay connections now prove the daemon password inside the encrypted channel when the host has one
 - A tunnel's target now authorizes the connecting daemon's key for each port, so a tunnel created before this release must be re-created from the Tunnels screen
 - Tunnel rules no longer store the peer daemon's password
 
 ### Fixed
 
-- Fixed a relay connection opening a terminal or starting a file upload without the daemon password
-- Fixed a relay connection that proved no password receiving agent output and other session broadcasts
+- Fixed a relay connection to a password-protected host opening a terminal or starting a file upload without the password
+- Fixed a relay connection to a password-protected host receiving agent output and other session broadcasts before proving it
 - Fixed one peer driving, resuming or closing another peer's tunnel stream
 - Fixed a deleted host reappearing after the next sync
 - Fixed the tunnel listen address field reporting a binding it never performed

@@ -56,7 +56,16 @@ func (s *Server) relayAuthResolved(sink frameSink) bool {
 }
 
 // relayAuthIsPending reports whether a relay connection is still waiting to prove a password.
+// relayAuthIsPending reports whether this socket still has to prove a password.
+//
+// A host with no password has nothing to ask for: the standard pairing flow pastes an offer
+// and connects over the relay without ever being shown a password field, so gating on one
+// made that flow impossible. The mark is still recorded, so a password submitted later can be
+// answered instead of ignored.
 func (s *Server) relayAuthIsPending(sink frameSink) bool {
+	if s.daemonPasswordHash() == "" {
+		return false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.relayAuthPending_ != nil && s.relayAuthPending_[sink]
@@ -114,13 +123,19 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 		return
 	}
 	hash := s.daemonPasswordHash()
-	if hash == "" || !s.authorizedByDaemonCredential(s.homeDir, req.Password) {
+	if hash == "" {
+		// No password on this host: there is nothing to prove, and the socket was never put
+		// in the pending state. Answering a submission it never asked for is harmless.
+		_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
+			"requestId": req.RequestID,
+			"ok":        true,
+		})
+		return
+	}
+	if !s.authorizedByDaemonCredential(s.homeDir, req.Password) {
 		// Answer before closing. A bare disconnect leaves the app showing "connection failed"
 		// with no idea that a password was asked for and refused.
-		reason := "This host has no daemon password set."
-		if hash != "" {
-			reason = "Wrong daemon password."
-		}
+		reason := "Wrong daemon password."
 		_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
 			"requestId": req.RequestID,
 			"ok":        false,

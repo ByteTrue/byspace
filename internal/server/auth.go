@@ -139,6 +139,11 @@ func EnsureCLICredential(homeDir string) string {
 // Read per request rather than cached: changing the password in settings must take effect
 // without a restart, and a cache would silently keep accepting the old one.
 func (s *Server) daemonPasswordHash() string {
+	// Minimal test servers have no store. A nil store has no password, which is also the
+	// answer that disables every gate depending on one.
+	if s.store == nil {
+		return ""
+	}
 	return s.store.DaemonPasswordHash()
 }
 
