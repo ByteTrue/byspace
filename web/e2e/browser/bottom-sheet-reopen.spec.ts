@@ -80,7 +80,10 @@ async function openTabSwitcher(page: Page) {
 }
 
 async function closeTabSwitcherOutside(page: Page) {
-  await page.mouse.click(MOBILE_VIEWPORT.width / 2, MOBILE_VIEWPORT.height / 2);
+  // Press the header, not the middle of the page: the press that closes the list also reaches the
+  // page below it, and the middle of a streaming conversation is a tool-call card that opens its
+  // detail sheet over the rest of the test.
+  await page.getByTestId("workspace-header-title").click();
   await expect(page.getByTestId("combobox-sheet")).toHaveCount(0);
   // Guard against the regression where the list starts closing, then re-presents.
   await page.waitForTimeout(500);
