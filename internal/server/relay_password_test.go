@@ -126,15 +126,19 @@ func TestRelayConnectionRefusedWhenNoPasswordSet(t *testing.T) {
 	defer cleanup()
 
 	writeEncrypted(t, conn, shared, passwordFrame(""))
+	// The refusal names the reason before the socket closes, so the app can say why.
+	reply := readEncrypted(t, conn, shared)
+	if !strings.Contains(reply, `"ok":false`) || !strings.Contains(reply, "no daemon password") {
+		t.Fatalf("refusal did not explain itself: %s", reply)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _, err := conn.Read(ctx)
-	if err == nil {
+	if _, _, err := conn.Read(ctx); err == nil {
 		t.Fatal("passwordless daemon accepted a relay connection")
 	}
 }
 
-// The wrong password is refused, and the daemon answers nothing useful before it.
+// The wrong password is refused with a reason, and the socket then closes.
 func TestRelayConnectionRefusedOnWrongPassword(t *testing.T) {
 	srv := newTestServer(t, t.TempDir())
 	setDaemonPassword(t, srv, "correct")
@@ -142,10 +146,13 @@ func TestRelayConnectionRefusedOnWrongPassword(t *testing.T) {
 	defer cleanup()
 
 	writeEncrypted(t, conn, shared, passwordFrame("wrong"))
+	reply := readEncrypted(t, conn, shared)
+	if !strings.Contains(reply, `"ok":false`) || !strings.Contains(reply, "Wrong daemon password") {
+		t.Fatalf("refusal did not explain itself: %s", reply)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _, err := conn.Read(ctx)
-	if err == nil {
+	if _, _, err := conn.Read(ctx); err == nil {
 		t.Fatal("daemon accepted a relay connection with the wrong password")
 	}
 }

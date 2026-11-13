@@ -115,7 +115,18 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 	}
 	hash := s.daemonPasswordHash()
 	if hash == "" || !s.authorizedByDaemonCredential(s.homeDir, req.Password) {
-		_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
+		// Answer before closing. A bare disconnect leaves the app showing "connection failed"
+		// with no idea that a password was asked for and refused.
+		reason := "This host has no daemon password set."
+		if hash != "" {
+			reason = "Wrong daemon password."
+		}
+		_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
+			"requestId": req.RequestID,
+			"ok":        false,
+			"error":     reason,
+		})
+		_ = sink.Close(wsCloseRelayAuthRequired, reason)
 		return
 	}
 	s.relayAuthResolved(sink)

@@ -157,9 +157,10 @@ func newRelayTestClient(t *testing.T, ctx context.Context, relayURL string, srv 
 		t.Fatal(err)
 	}
 	client := &relayTestClient{
-		ws:     ws,
-		frames: make(chan e2ee.Frame, 256),
-		done:   make(chan struct{}),
+		ws:       ws,
+		frames:   make(chan e2ee.Frame, 256),
+		done:     make(chan struct{}),
+		password: relayTestPassword,
 	}
 	keys, err := e2ee.GenerateKeyPair()
 	if err != nil {
@@ -334,6 +335,11 @@ func payloadWithType(typeName string, payload map[string]any) map[string]any {
 	return message
 }
 
+// relayTestPassword is the daemon password every relay client in this file proves. A relay
+// connection must prove the password inside the encrypted channel, so a test daemon without one
+// refuses the socket before hello.
+const relayTestPassword = "relay-lifecycle-password"
+
 func startObservedDaemon(t *testing.T, opts Options) (*Server, *observedRelay, string, context.Context, context.CancelFunc) {
 	t.Helper()
 	if opts.HomeDir == "" {
@@ -347,6 +353,9 @@ func startObservedDaemon(t *testing.T, opts Options) (*Server, *observedRelay, s
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
+	if err := srv.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
+		t.Fatal(err)
+	}
 	observed, relayURL := newObservedRelay(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	go func() { observed.controlDone(srv.ConnectRelay(ctx, relayURL)) }()
@@ -700,7 +709,7 @@ func TestTwoDaemonsResumeStreamAfterRelaySocketLoss(t *testing.T) {
 	port, stop := startPausableSSEPort(t, continueResponse)
 	defer stop()
 	target := newTunnelTestServer(t, map[string]any{"enabled": true, "allowedPorts": []any{port}})
-	if err := target.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+	if err := target.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
 		t.Fatal(err)
 	}
 	target.ApplyTunnelConfig()
@@ -710,10 +719,15 @@ func TestTwoDaemonsResumeStreamAfterRelaySocketLoss(t *testing.T) {
 	go func() { _ = target.ConnectRelay(ctx, relayURL) }()
 
 	initiator := newTunnelTestServer(t, map[string]any{"enabled": true})
-	if err := initiator.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+	if err := initiator.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
 		t.Fatal(err)
 	}
 	initiator.ApplyTunnelConfig()
+	// The target authorizes the peer's key for this port. The allowlist says which ports this host
+	// may expose at all; a grant says who may open one.
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
+		t.Fatal(err)
+	}
 	registry := initiator.tunnelRegistry()
 	if err := registry.Add(tunnel.PeerConfig{
 		PeerID: target.ServerID(), URL: relayURL, DaemonPublicKey: target.PublicKeyB64(),
@@ -774,7 +788,7 @@ func testTwoDaemonsForwardConcurrentStreamsOverRelay(t *testing.T, interrupt boo
 	port, stop := startSSEPort(t)
 	defer stop()
 	target := newTunnelTestServer(t, map[string]any{"enabled": true, "allowedPorts": []any{port}})
-	if err := target.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+	if err := target.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
 		t.Fatal(err)
 	}
 	target.ApplyTunnelConfig()
@@ -784,10 +798,18 @@ func testTwoDaemonsForwardConcurrentStreamsOverRelay(t *testing.T, interrupt boo
 	go func() { _ = target.ConnectRelay(ctx, relayURL) }()
 
 	initiator := newTunnelTestServer(t, map[string]any{"enabled": true})
-	if err := initiator.store.SetDaemonPasswordHash("$2a$12$abcdefghijklmnopqrstuv"); err != nil {
+	if err := initiator.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
 		t.Fatal(err)
 	}
 	initiator.ApplyTunnelConfig()
+	// The target authorizes the peer's key for this port. The allowlist says which ports this host
+	// may expose at all; a grant says who may open one.
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
+		t.Fatal(err)
+	}
 	registry := initiator.tunnelRegistry()
 	if err := registry.Add(tunnel.PeerConfig{
 		PeerID: target.ServerID(), URL: relayURL, DaemonPublicKey: target.PublicKeyB64(),
@@ -904,4 +926,20 @@ func startPausableSSEPort(t *testing.T, resume <-chan struct{}) (int, func()) {
 		}
 	}()
 	return listener.Addr().(*net.TCPAddr).Port, func() { _ = listener.Close() }
+}
+
+// tunnelKeyOf is the identity a peer presents over the relay: the daemon's own e2ee key, as the
+// grant list records it.
+func tunnelKeyOf(t *testing.T, srv *Server) string {
+	t.Helper()
+	return tunnel.PublicKeyOf(srv.keyPair.PublicKey[:])
+}
+
+func mustHashPassword(t *testing.T, password string) string {
+	t.Helper()
+	hash, err := HashDaemonPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash
 }
