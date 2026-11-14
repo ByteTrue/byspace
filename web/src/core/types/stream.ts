@@ -694,8 +694,12 @@ export function replaceWithCanonicalStream(
       }
     } else if (
       input.preserveContinuity &&
-      local.timelineCursor &&
-      isAfterCanonicalCoverage(local.timelineCursor, input.canonicalCoverage)
+      // A live row can reach the client before the stream attaches its cursor (a turn from another
+      // client, or the first event after a reload). The head path already treats a cursor-less item
+      // as live; the tail must do the same or the bootstrap replace silently drops the row until the
+      // catch-up lands.
+      (!local.timelineCursor ||
+        isAfterCanonicalCoverage(local.timelineCursor, input.canonicalCoverage))
     ) {
       retainedTailMessages.push(local);
     }

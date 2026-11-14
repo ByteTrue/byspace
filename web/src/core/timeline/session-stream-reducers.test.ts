@@ -1019,6 +1019,36 @@ describe("processTimelineResponse", () => {
     expect(getUserTexts(result.head)).toEqual(["remote live prompt"]);
   });
 
+  it("keeps a live user row that had no cursor yet when the bootstrap page lands", () => {
+    // The row reached the client before the stream attached a cursor (a turn from another client,
+    // or the first event after a reload). The bootstrap page does not contain it; the replace must
+    // still keep it visible until the catch-up reconciles it.
+    const live = createUserMessage({
+      clientMessageId: "remote-no-cursor",
+      text: "remote live prompt before hydration",
+      timestamp: new Date(2000),
+    });
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [live],
+      currentHead: [],
+      isInitializing: true,
+      hasActiveInitDeferred: true,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        startCursor: { seq: 61 },
+        endCursor: { seq: 100 },
+        entries: [makeTimelineEntry(100, "canonical answer")],
+      },
+    });
+
+    expect(getUserTexts([...result.tail, ...result.head])).toEqual([
+      "remote live prompt before hydration",
+    ]);
+  });
+
   it("keeps a provider-acknowledged painted-tail prompt newer than the bootstrap page", () => {
     const submitted = makeSubmittedUserMessage("submitted before bootstrap", "client-message-1");
     const live = processAgentStreamEvent({
