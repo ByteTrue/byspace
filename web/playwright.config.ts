@@ -27,10 +27,11 @@ export default defineConfig({
   // Files run concurrently, while each worker owns its daemon state. Keeping a
   // spec on one worker avoids repeating its file-level setup across daemons.
   fullyParallel: false,
-  // Two workers per shard in CI. The web harness shares one static server and gives each worker
-  // its own daemon; the Expo-era Metro server that made two workers flake on a small runner is
-  // gone. E2E_WORKERS overrides it for a machine that needs one.
-  workers: Number(process.env.E2E_WORKERS ?? (process.env.CI ? "2" : "1")),
+  // Three workers per shard in CI. The web harness shares one static server and gives each worker
+  // its own daemon; the Expo-era Metro server that made multiple workers flake on a small runner is
+  // gone, and the standard runner now has enough cores for three browsers. E2E_WORKERS overrides it
+  // for a machine that needs fewer.
+  workers: Number(process.env.E2E_WORKERS ?? (process.env.CI ? "3" : "1")),
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   use: {
