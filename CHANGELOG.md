@@ -5,15 +5,15 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
-## 0.25.1 - 2026-11-13
+## 0.25.1 - 2026-11-14
 
 ### Fixed
 
-- Fixed 0.25.0 serving relay connections to a host with no daemon password set. Relay and LAN access require one again; loopback and SSH do not.
-- Fixed relay sessions never finishing the encrypted handshake: the client's challenge echo went out after its first frames, the password proof was answered out of order, and the permission table ran before the proof. Pairing over the relay timed out or ended in "Server disconnected".
-- Added the daemon password field to the setup guide and the paste-link form, so pairing a password-protected host over the relay works from the app instead of failing at the first frame
-- Opening a `#offer=` pairing link (or scanning its QR) now opens the pair form with the link filled in, instead of importing the host without asking for its password
-- Fixed the daemon accepting a config change that enables the relay without a password, or clears the password while the relay is on
+- Fixed pairing over the relay timing out or ending in "Server disconnected"
+- Fixed pairing links and QR scans importing a host without asking for its daemon password
+- Fixed pairing a password-protected host over the relay: the setup guide and paste-link form now ask for the password
+- Fixed relay and LAN access being served without a daemon password
+- Fixed the daemon accepting a relay enabled without a password, or a password cleared while the relay is on
 
 ## 0.25.0 - 2026-11-13
 
