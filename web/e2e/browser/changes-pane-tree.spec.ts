@@ -50,7 +50,10 @@ test("changes file actions open below the right-click without a reserved kebab",
   await expect(page.getByTestId("diff-file-0-open-file")).toBeVisible();
   const menuBounds = await page.getByTestId("diff-file-0-context-menu").boundingBox();
   expect(menuBounds).not.toBeNull();
-  expect(Math.abs(menuBounds!.x - (fileRowBounds!.x + 80))).toBeLessThanOrEqual(1);
+  // The popper rounds its anchor against the click's fractional row position; on a loaded runner
+  // the same click can land 1.4px off. The point is that the menu is anchored to the right-click,
+  // not to a reserved kebab, so a 2px tolerance still proves it.
+  expect(Math.abs(menuBounds!.x - (fileRowBounds!.x + 80))).toBeLessThanOrEqual(2);
   expect(menuBounds!.y).toBeGreaterThan(fileRowBounds!.y + 10);
   await page.getByTestId("diff-file-0-open-file").click();
 
