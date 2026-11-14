@@ -3914,7 +3914,11 @@ func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
 	// The sidebar groups workspaces by an aggregate of their agents' buckets, and the descriptor
 	// only carries that aggregate. Publishing after the agent snapshot keeps the two consistent for
 	// whoever listens to both, and this is the one funnel every agent state change goes through.
-	s.publishWorkspaceStatusChanges()
+	//
+	// Agent first is not cosmetic: a client's auto-clear watches the agent snapshot, while the
+	// sidebar row watches the workspace descriptor. Publishing the descriptor first let the row
+	// show attention before the agent did, so a user who left immediately cleared nothing and the
+	// row stayed attention (the CI sidebar-workspace-mark-unread flake).
 	entry := map[string]any{
 		"agent":   s.buildAgentSnapshotPayload(rec),
 		"project": s.buildProjectPlacementForRecord(rec),
@@ -3923,6 +3927,7 @@ func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
 		payload := map[string]any{"kind": "upsert", "agent": entry["agent"], "project": entry["project"]}
 		return s.directory.SequenceAgentUpdate(payload, entry, rec.ID, includeSequence)
 	})
+	s.publishWorkspaceStatusChanges()
 }
 
 func (s *Server) broadcastSessionMsg(msgType string, payload any) {
