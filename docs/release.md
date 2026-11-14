@@ -239,11 +239,14 @@ For Docker-only retries, **do not push or force-push a `v*` release tag**.
 npm run release:push
 ```
 
-`release:push` dispatches a full CI run on the exact `main` SHA and creates the version tag only
-after every suite actually ran and passed. It does not trust the pushed run: path filters can report
-success with go, app, browser and relay all skipped, and that success tagged v0.25.0 on code no
-end-to-end suite had executed. `workflow_dispatch` always runs the full set, so a green dispatched
-run is evidence the push run never is.
+`release:push` waits for the CI run on the exact `main` SHA and creates the version tag only after
+it passes. It inspects that run's jobs instead of trusting its conclusion: a run where every
+required job executed and passed is evidence enough, and the tag follows it. A path-filtered run is
+not evidence — path filters can report success with go, app, browser and relay all skipped, and that
+success tagged v0.25.0 on code no end-to-end suite had executed — so the script dispatches a full CI
+run (`workflow_dispatch` ignores the filters) and waits for that. Waiting for the push run first
+avoids queueing a second full run behind it in the same concurrency group when the push run already
+did the work.
 If CI fails on unchanged test files, check whether the failure is a known flake (seed-timeout
 E2E specs, windows vitest timing assertions) and rerun only the failed jobs with
 `gh run rerun <run-id> --failed`. A run must be completed before `--failed` reruns are accepted.

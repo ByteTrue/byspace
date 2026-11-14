@@ -92,22 +92,23 @@ if (remoteMainCommit !== headCommit) {
   throw new Error(`origin/main is ${remoteMainCommit}, expected ${headCommit}.`);
 }
 
-// Wait for a full CI run on the pushed commit instead of failing immediately.
+// Wait for CI on the pushed commit before tagging.
 //
-// A release pushes the version commit and then has to prove CI is green on exactly that commit
-// before tagging. Failing here forced a two-step release — push, wait ten to twenty minutes, rerun
-// — which is why every release cost an extra turn and an extra look at the Actions tab.
+// The push starts a CI run, and a release has to prove that run green on exactly this commit. In
+// the common case the push run executes the full set; dispatching another full run here would then
+// be queued behind it by the workflow's concurrency group, so the release would pay for two full
+// runs back to back. Wait for the push run first and reuse it when every required job executed.
+// Only a path-filtered run (jobs skipped) forces a dispatch.
 //
 // Set RELEASE_CI_WAIT_MS=0 to keep the old fail-fast behaviour for a script that tags externally.
 const repository = process.env.GITHUB_REPOSITORY || "ByteTrue/byspace";
 const waitMs = Number(process.env.RELEASE_CI_WAIT_MS ?? 45 * 60_000);
 const pollMs = 20_000;
+const noWait = !Number.isFinite(waitMs) || waitMs <= 0;
 
 // A run routed by path filters is not evidence about the commit it reports on. A docs-only or
 // version-only change goes green with go/app/browser/relay skipped, and that "success" was enough
-// to tag v0.25.0 — which then shipped a pairing flow no suite had ever run. Dispatching CI ignores
-// the filters (workflow_dispatch always runs the full set), so the tag is gated on a run where the
-// jobs that catch regressions actually executed.
+// to tag v0.25.0 — which then shipped a pairing flow no suite had ever run.
 function jobConclusions(runId) {
   const out = runQuiet("gh", [
     "api",
@@ -126,7 +127,7 @@ function jobConclusions(runId) {
   return byJob;
 }
 
-function dispatchedRunState(commit) {
+function ciRunState(commit, event) {
   const out = tryRunQuiet("gh", [
     "run",
     "list",
@@ -137,7 +138,7 @@ function dispatchedRunState(commit) {
     "--commit",
     commit,
     "--event",
-    "workflow_dispatch",
+    event,
     "--limit",
     "1",
     "--json",
@@ -151,45 +152,72 @@ function dispatchedRunState(commit) {
   };
 }
 
+async function waitForCi(commit, event, label) {
+  const deadline = Date.now() + waitMs;
+  console.log(`Waiting for ${label} on ${commit.slice(0, 9)}`);
+  let lastReported = "";
+  let runState = { id: "", status: "", conclusion: "" };
+  while (Date.now() < deadline) {
+    runState = ciRunState(commit, event);
+    if (runState.id && runState.status && runState.status !== lastReported) {
+      lastReported = runState.status;
+      console.log(`  CI ${runState.status}`);
+    }
+    if (runState.conclusion) return runState;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  if (!runState.id) {
+    throw new Error(
+      `${label} never appeared for ${commit} within ${Math.round(waitMs / 60_000)}m.`,
+    );
+  }
+  throw new Error(`${label} on ${commit} did not finish within ${Math.round(waitMs / 60_000)}m.`);
+}
+
 const shortSha = headCommit.slice(0, 9);
-const deadline = Date.now() + waitMs;
-console.log(`Dispatching full CI on ${shortSha} (up to ${Math.round(waitMs / 60_000)}m)`);
-run("gh", ["workflow", "run", "CI", "--repo", repository, "--ref", branch]);
-if (!Number.isFinite(waitMs) || waitMs <= 0) {
+
+if (noWait) {
+  console.log(`Dispatching full CI on ${shortSha} (RELEASE_CI_WAIT_MS=0)`);
+  run("gh", ["workflow", "run", "CI", "--repo", repository, "--ref", branch]);
   throw new Error(
     `Dispatched full CI on ${headCommit}; rerun npm run release:push once that run is green.`,
   );
 }
 
-let dispatched = { id: "", status: "", conclusion: "" };
-let lastReported = "";
-while (Date.now() < deadline) {
-  dispatched = dispatchedRunState(headCommit);
-  if (dispatched.id && dispatched.status && dispatched.status !== lastReported) {
-    lastReported = dispatched.status;
-    console.log(`  CI ${dispatched.status}`);
+const pushRun = await waitForCi(headCommit, "push", "the push CI");
+if (pushRun.conclusion !== "success") {
+  throw new Error(
+    `Push CI on ${headCommit} concluded ${pushRun.conclusion}; refusing to tag. Fix main and cut a new version.`,
+  );
+}
+
+const gate = releaseGateAction(pushRun, jobConclusions(pushRun.id));
+if (gate.action === "fail") {
+  throw new Error(`Push CI on ${headCommit} failed; refusing to tag.`);
+}
+if (gate.action === "dispatch") {
+  console.log(`  push CI did not run the full set (${gate.detail}); dispatching full CI`);
+  run("gh", ["workflow", "run", "CI", "--repo", repository, "--ref", branch]);
+  const dispatched = await waitForCi(headCommit, "workflow_dispatch", "the dispatched full CI");
+  if (dispatched.conclusion !== "success") {
+    throw new Error(
+      `Full CI on ${headCommit} concluded ${dispatched.conclusion}; refusing to tag. Fix main and cut a new version.`,
+    );
   }
-  if (dispatched.conclusion) break;
-  await new Promise((resolve) => setTimeout(resolve, pollMs));
-}
-
-if (dispatched.conclusion !== "success") {
-  throw new Error(
-    `Full CI on ${headCommit} concluded ${dispatched.conclusion || "without a result"}; refusing to tag. Fix main and cut a new version.`,
-  );
-}
-
-const { missing, failed } = verifyReleaseJobs(jobConclusions(dispatched.id));
-if (missing.length > 0 || failed.length > 0) {
-  const detail = [
-    missing.length > 0 ? `did not run: ${missing.join(", ")}` : "",
-    failed.length > 0 ? `did not pass: ${failed.join(", ")}` : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
-  throw new Error(
-    `Full CI on ${headCommit} went green without proving anything (${detail}); refusing to tag.`,
-  );
+  const { missing, failed } = verifyReleaseJobs(jobConclusions(dispatched.id));
+  if (missing.length > 0 || failed.length > 0) {
+    const detail = [
+      missing.length > 0 ? `did not run: ${missing.join(", ")}` : "",
+      failed.length > 0 ? `did not pass: ${failed.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    throw new Error(
+      `Full CI on ${headCommit} went green without proving anything (${detail}); refusing to tag.`,
+    );
+  }
+} else {
+  console.log(`  full push CI green on ${shortSha}; reusing it for the tag`);
 }
 console.log(`  full CI green on ${shortSha}`);
 

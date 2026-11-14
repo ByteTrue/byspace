@@ -231,3 +231,26 @@ export function verifyReleaseJobs(conclusions) {
   );
   return { missing, failed };
 }
+
+/**
+ * Decide what the release tag may do with the pushed commit's CI run.
+ *
+ * A full green push run is evidence on its own, and waiting for it avoids dispatching a second
+ * full run that the shared concurrency group would then serialize behind the first one. A green
+ * run that skipped required jobs is not evidence, so the caller dispatches a full run instead.
+ * A pending run means wait; a failed one is terminal.
+ *
+ * @param {{status?: string, conclusion?: string} | null | undefined} pushState
+ * @param {Map<string, string[]> | null | undefined} conclusions normalized job name -> conclusions
+ * @returns {{action: "wait" | "fail" | "tag" | "dispatch", detail: string}}
+ */
+export function releaseGateAction(pushState, conclusions) {
+  const state = classifyCiState(pushState);
+  if (state === "pending") return { action: "wait", detail: "" };
+  if (state === "failed") {
+    return { action: "fail", detail: "the push CI run did not pass" };
+  }
+  const { missing, failed } = verifyReleaseJobs(conclusions ?? new Map());
+  if (missing.length === 0 && failed.length === 0) return { action: "tag", detail: "" };
+  return { action: "dispatch", detail: [...missing, ...failed].join(", ") };
+}

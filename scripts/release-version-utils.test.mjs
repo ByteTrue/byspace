@@ -7,6 +7,7 @@ import {
   normalizeJobName,
   parseReleaseVersion,
   verifyReleaseJobs,
+  releaseGateAction,
 } from "./release-version-utils.mjs";
 
 test("computes the next beta patch from a stable version", () => {
@@ -112,4 +113,65 @@ test("verifyReleaseJobs accepts a full green run", () => {
     ["playwright", Array.from({ length: 16 }, () => "success")],
   ]);
   assert.deepEqual(verifyReleaseJobs(green), { missing: [], failed: [] });
+});
+
+test("releaseGateAction waits for a run that has not appeared yet", () => {
+  assert.equal(releaseGateAction(null, null).action, "wait");
+  assert.equal(releaseGateAction({ status: "in_progress" }, null).action, "wait");
+});
+
+test("releaseGateAction fails a concluded push run that did not pass", () => {
+  assert.equal(
+    releaseGateAction({ status: "completed", conclusion: "failure" }, null).action,
+    "fail",
+  );
+  assert.equal(
+    releaseGateAction({ status: "completed", conclusion: "cancelled" }, null).action,
+    "fail",
+  );
+});
+
+test("releaseGateAction tags on a full green push run", () => {
+  const green = new Map([
+    ["format", ["success"]],
+    ["lint", ["success"]],
+    ["typecheck", ["success"]],
+    ["go-tests", ["success", "success"]],
+    ["sdk-tests", ["success"]],
+    ["relay-tests", ["success"]],
+    ["build-e2e", ["success"]],
+    ["app-tests", ["success"]],
+    ["playwright", Array.from({ length: 16 }, () => "success")],
+  ]);
+  assert.deepEqual(releaseGateAction({ status: "completed", conclusion: "success" }, green), {
+    action: "tag",
+    detail: "",
+  });
+});
+
+test("releaseGateAction dispatches when the push run skipped required suites", () => {
+  // A version-only push reports success with go, app, browser and relay skipped; it is not
+  // evidence that the tagged code passed any of them.
+  const skipped = new Map([
+    ["format", ["success"]],
+    ["lint", ["success"]],
+    ["typecheck", ["success"]],
+    ["go-tests", ["skipped"]],
+    ["app-tests", ["skipped"]],
+    ["playwright", ["skipped"]],
+  ]);
+  const { action, detail } = releaseGateAction(
+    { status: "completed", conclusion: "success" },
+    skipped,
+  );
+  assert.equal(action, "dispatch");
+  assert.match(detail, /go-tests/);
+  assert.match(detail, /playwright/);
+});
+
+test("releaseGateAction dispatches when the job list is unavailable", () => {
+  assert.equal(
+    releaseGateAction({ status: "completed", conclusion: "success" }, null).action,
+    "dispatch",
+  );
 });
