@@ -70,8 +70,9 @@ async function markAsRead(page: Page, workspaceId: string) {
 // The indicator is a round trip: the click reaches the daemon, the daemon recomputes the bucket
 // and broadcasts, and the row re-renders. On a loaded CI runner that trip has taken longer than the
 // 10s default while still getting there — the test budget above does not raise this one, so the
-// assertion needs its own.
-const STATUS_SETTLE_TIMEOUT_MS = 45_000;
+// assertion needs its own. A slow turn completion can land just as the workspace is left, so the
+// wait covers the clear after departure, not only the status change itself.
+const STATUS_SETTLE_TIMEOUT_MS = 90_000;
 
 async function expectStatus(page: Page, workspaceId: string, status: "done" | "attention") {
   await expect(

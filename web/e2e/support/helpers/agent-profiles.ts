@@ -550,11 +550,13 @@ export async function readModelPickerWidth(page: Page): Promise<number> {
 }
 
 export async function expectModelPickerHeight(page: Page, expectedHeight: number): Promise<void> {
-  await expect.poll(() => readModelPickerHeight(page)).toBe(expectedHeight);
+  // The first results paint at the loading frame's taller size on a loaded runner; give the
+  // virtualized list time to settle instead of spending a Playwright retry on it.
+  await expect.poll(() => readModelPickerHeight(page), { timeout: 20_000 }).toBe(expectedHeight);
 }
 
 export async function expectModelPickerWidth(page: Page, expectedWidth: number): Promise<void> {
-  await expect.poll(() => readModelPickerWidth(page)).toBe(expectedWidth);
+  await expect.poll(() => readModelPickerWidth(page), { timeout: 20_000 }).toBe(expectedWidth);
 }
 
 export async function expectSearchResultsVirtualized(

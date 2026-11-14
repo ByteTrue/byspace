@@ -5,6 +5,20 @@ import { pathToFileURL } from "node:url";
 import { getE2EDaemonPort } from "./daemon-port";
 import { createNodeWebSocketFactory, type NodeWebSocketFactory } from "./node-ws-factory";
 
+async function importDaemonClientModule(moduleUrl: string): Promise<unknown> {
+  try {
+    return await import(moduleUrl);
+  } catch (error) {
+    // The prebuilt client dist is shared through an artifact. A worker occasionally reads it while
+    // another process is still settling the graph and sees a missing re-export; a fresh specifier
+    // re-evaluates the entry instead of spending a Playwright retry on the whole test.
+    if (!(error instanceof SyntaxError) || !/does not provide an export/.test(error.message)) {
+      throw error;
+    }
+    return import(`${moduleUrl}?retry=${Date.now()}`);
+  }
+}
+
 export async function loadDaemonClientConstructor<ClientConfig, ClientInstance>(): Promise<
   new (config: ClientConfig) => ClientInstance
 > {
@@ -12,7 +26,7 @@ export async function loadDaemonClientConstructor<ClientConfig, ClientInstance>(
   const moduleUrl = pathToFileURL(
     path.join(repoRoot, "packages/client/dist/daemon-client.js"),
   ).href;
-  const mod = (await import(moduleUrl)) as {
+  const mod = (await importDaemonClientModule(moduleUrl)) as {
     DaemonClient: new (config: ClientConfig) => ClientInstance;
   };
   return mod.DaemonClient;
