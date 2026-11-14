@@ -1,7 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { normalizeJobName, releaseGateAction, verifyReleaseJobs } from "./release-version-utils.mjs";
+import {
+  normalizeJobName,
+  releaseGateAction,
+  verifyReleaseJobs,
+} from "./release-version-utils.mjs";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
