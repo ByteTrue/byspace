@@ -32,11 +32,13 @@ export default defineConfig({
   // gone. Three workers measured no faster (the slowest shard is bound by long tests, not worker
   // count) and used more daemons and browsers, so keep two. E2E_WORKERS overrides it.
   workers: Number(process.env.E2E_WORKERS ?? (process.env.CI ? "2" : "1")),
-  retries: process.env.CI ? 1 : 0,
+  // DIAGNOSTIC: retire after the flake hunt; restores the CI retry safety net.
+  retries: 0,
   reporter: [["list"]],
   use: {
     baseURL,
-    trace: process.env.CI ? "on-first-retry" : "retain-on-failure",
+    // DIAGNOSTIC: capture the failed first attempt, not only the retry.
+    trace: "on",
     screenshot: "only-on-failure",
     video: videoMode(),
   },
