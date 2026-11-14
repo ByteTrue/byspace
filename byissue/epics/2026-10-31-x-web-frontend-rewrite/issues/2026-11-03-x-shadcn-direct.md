@@ -110,7 +110,7 @@ shadcn 现在还有一整套对话界面组件（Message、Message Scroller、Bu
 - **端到端**：本机跑会在 gh 登录的账号里真建 GitHub 临时仓库。这次漏下 7 个 `byspacetmp-pr-pane-*`：`gh repo create --push` 推送失败时仓库已建好，夹具直接抛错，没人删。夹具改为失败时删除已建的仓库，`docs/testing.md` 写明本机用 `GH_CONFIG_DIR` 指向空目录跳过这些用例。已漏下的 7 个等用户确认后再删。
 - **途中另修**：上下文用量圆环的底圈颜色在批 A 改 token 名时被写坏（`var(--surface-3)` 变成了无效的 `varaccent`），空的用量环只剩一个点，改为 `var(--accent)`（`a792ade9f`）。
 - **验证**：类型检查、lint、格式检查通过；`web/` 单元测试全过；本机端到端按改动范围跑了 369 条，失败的只有需要本机没装的 Codex、OpenCode、Claude CLI 的用例（CI 上通过）；开发服务器上首页、对话、设置、主机、Agents、定时任务、隧道、历史、新建工作区在桌面浅色、深色和手机三种下逐页截图看过，无报错。CI `a792ade9f` 全部通过（22 项通过，4 项按路径没有触发）。
-- **未解决**：`sidebar-workspace-mark-unread` 的「普通完成在离开时清除」在 CI 的 `1cdf08474` 上两次都失败，`a792ade9f` 上通过，本机 3 次通过。失败截图里离开后那一行仍是绿点（提醒没清）。原因没查；这一步的逻辑本次没改过，推测是提醒刚到就离开时没清掉，待查。
+- **已解决（2026-11-14）**：`sidebar-workspace-mark-unread` 的「普通完成在离开时清除」在 CI 上偶发失败。根因：daemon 的 `broadcastAgentUpdate` 先发布 workspace 状态桶、再发 agent 快照，侧栏 row 先看到 attention，而客户端的自动清除看的是 agent 快照；用户这时离开，清除看到 `requiresAttention` 还是 false，什么都没清，row 就停在绿点。现在先发 agent 更新、再刷新/发布 workspace 状态桶（`13ea3fcaf`）。
 
 ### 验收后：桌面侧栏恢复可调宽度（2026-11-04）
 
