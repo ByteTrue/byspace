@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.25.3 - 2026-11-14
+
+### Changed
+
+- Removed the legacy v1 relay protocol; relay clients from before v0.21.0 are rejected
+
+### Fixed
+
+- Fixed a relay timeout or dropped connection being reported as "Incorrect password" on the pairing form
+
 ## 0.25.2 - 2026-11-14
 
 ### Fixed
