@@ -37,6 +37,10 @@ async function areAllToolCallsCollapsed(toolCalls: Locator): Promise<boolean> {
 }
 
 test.describe("Agent stream UI", () => {
+  // Every test seeds its own workspace and stream; parallel mode lets the shard's second worker
+  // share the file instead of waiting for the whole file.
+  test.describe.configure({ mode: "parallel" });
+
   test("keeps running agent chrome after page refresh", async ({ page }) => {
     const title = "Running agent refresh";
     const agent = await seedRunningMockAgentWorkspace({

@@ -838,6 +838,10 @@ async function completeDraftCreateSubmission(
 }
 
 test.describe("Agent message submission", () => {
+  // Each test seeds its own workspace and gate state, so the file's tests can use the shard's
+  // second worker (and be spread across shards) instead of serializing behind one file.
+  test.describe.configure({ mode: "parallel" });
+
   test("settles an immediately interrupted first prompt", async ({ page }, testInfo) => {
     const workspace = await seedWorkspace({
       repoPrefix: `submission-immediate-interrupt-${testInfo.workerIndex}-`,

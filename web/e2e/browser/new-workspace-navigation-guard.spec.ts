@@ -2,7 +2,7 @@ import { test } from "../support/fixtures";
 import { verifyDelayedWorkspaceCreation } from "../support/helpers/new-workspace-navigation";
 
 test.describe("Delayed workspace creation", () => {
-  test.describe.configure({ timeout: 120_000 });
+  test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
   for (const launch of ["chat", "terminal", "empty"] as const) {
     test(`${launch}: keeps the workspace chosen during creation`, async ({ page }) => {

@@ -356,11 +356,10 @@ jobs:
       # shard count this high is that a single shard is cheap to re-run.
       fail-fast: false
       matrix:
-        # The length of this list is the shard count. Twenty-four keeps the slowest shard near
-        # three minutes of specs; the suite is roughly 45 minutes of single-worker time, and the
-        # jobs run in parallel, so the run takes as long as its slowest shard.
-        shard:
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        # The length of this list is the shard count. Sixteen keeps the slowest shard near four
+        # minutes of specs; the suite is roughly 45 minutes of single-worker time, and the jobs run
+        # in parallel, so the run takes as long as its slowest shard.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     env:
       PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
       PLAYWRIGHT_ARTIFACT: ${{ matrix.shard }}

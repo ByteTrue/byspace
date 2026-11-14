@@ -32,6 +32,9 @@ import { trackAgentTimelineRequests } from "../support/helpers/agent-timeline-ga
 import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 test.describe("Agent timeline pagination", () => {
+  // Tests build independent timelines; parallel mode keeps the second worker busy on this file.
+  test.describe.configure({ mode: "parallel" });
+
   test("resumes a persisted canonical timeline after its exact end", async ({ page }) => {
     const prompt = "timeline persisted range resumes without tail replay";
     const agent = await seedMockAgentWorkspace({

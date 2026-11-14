@@ -98,6 +98,10 @@ async function expectAgentConsistentlyIdle(page: Page, title: string): Promise<v
 }
 
 test.describe("Viewed agent timelines", () => {
+  // One test waits a full minute for a hidden turn, so keeping the file on one worker leaves the
+  // other worker idle. Each test seeds its own scenario.
+  test.describe.configure({ mode: "parallel" });
+
   test("a turn that finishes while hidden reopens with consistently idle chrome", async ({
     page,
   }) => {
