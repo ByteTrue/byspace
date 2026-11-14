@@ -25,15 +25,16 @@ import (
 func main() {
 	url := flag.String("url", "wss://app.byspace.cc.cd/ws", "relay /ws endpoint")
 	count := flag.Int("n", 300, "frames to send")
+	binary := flag.Bool("binary", false, "send binary frames instead of text")
 	flag.Parse()
 
-	if err := run(*url, *count); err != nil {
+	if err := run(*url, *count, *binary); err != nil {
 		fmt.Fprintln(os.Stderr, "relayprobe:", err)
 		os.Exit(1)
 	}
 }
 
-func run(url string, count int) error {
+func run(url string, count int, binary bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
@@ -70,8 +71,12 @@ func run(url string, count int) error {
 	// Let both sockets finish registering before the burst, so the frames race the relay's
 	// dispatch rather than the handshake.
 	time.Sleep(500 * time.Millisecond)
+	messageType := websocket.MessageText
+	if binary {
+		messageType = websocket.MessageBinary
+	}
 	for i := 1; i <= count; i++ {
-		if err := client.Write(ctx, websocket.MessageText, []byte(strconv.Itoa(i))); err != nil {
+		if err := client.Write(ctx, messageType, []byte(strconv.Itoa(i))); err != nil {
 			return fmt.Errorf("write %d: %w", i, err)
 		}
 	}
@@ -93,9 +98,55 @@ func run(url string, count int) error {
 			}
 		}
 	}
-	fmt.Printf("sent=%d received=%d out_of_place=%d\n", count, len(order), outOfPlace)
+	fmt.Printf("client->server sent=%d received=%d out_of_place=%d\n", count, len(order), outOfPlace)
 	if outOfPlace > 0 {
-		return fmt.Errorf("relay reorders frames, first at %s", first)
+		return fmt.Errorf("relay reorders client->server frames, first at %s", first)
+	}
+
+	// The handshake's first frame travels server -> client (the daemon's challenge), so the reverse
+	// direction needs the same order check.
+	clientReceived := make(chan []int, 1)
+	go func() {
+		order := make([]int, 0, count)
+		for len(order) < count {
+			_, data, readErr := client.Read(ctx)
+			if readErr != nil {
+				break
+			}
+			if value, convErr := strconv.Atoi(string(data)); convErr == nil {
+				order = append(order, value)
+			}
+		}
+		clientReceived <- order
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	for i := 1; i <= count; i++ {
+		if err := server.Write(ctx, messageType, []byte(strconv.Itoa(i))); err != nil {
+			return fmt.Errorf("write %d: %w", i, err)
+		}
+	}
+
+	var reverse []int
+	select {
+	case reverse = <-clientReceived:
+	case <-ctx.Done():
+		return fmt.Errorf("timed out with %d of %d reverse frames", len(reverse), count)
+	}
+
+	reverseOutOfPlace := 0
+	reverseFirst := ""
+	for index, value := range reverse {
+		if value != index+1 {
+			reverseOutOfPlace++
+			if reverseFirst == "" {
+				reverseFirst = fmt.Sprintf("index %d: got %d, want %d", index, value, index+1)
+			}
+		}
+	}
+	fmt.Printf("server->client sent=%d received=%d out_of_place=%d\n", count, len(reverse), reverseOutOfPlace)
+	if reverseOutOfPlace > 0 {
+		return fmt.Errorf("relay reorders server->client frames, first at %s", reverseFirst)
 	}
 	return nil
 }
