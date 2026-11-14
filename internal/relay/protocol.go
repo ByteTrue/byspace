@@ -377,7 +377,9 @@ func (r Router) Disconnected(ctx context.Context, room Room, buf *frameBuffer, c
 	r.disconnected(ctx, room, buf, conn.meta)
 }
 
-// RoomKey identifies the room a connection belongs to.
+// RoomKey identifies the room a connection belongs to. The prefix is the Durable
+// Object name, so it stays `relay-v2` even though v2 is the only protocol: renaming
+// it would split live daemons from new clients until every daemon reconnects.
 func (c Connection) RoomKey() string {
-	return "relay:" + c.meta.ServerID
+	return "relay-v2:" + c.meta.ServerID
 }
