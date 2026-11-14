@@ -77,12 +77,11 @@ When a tag's condition is met, delete the shim and the tag in the same change.
 
 ## Relay wire compatibility
 
-The relay is a separate deployable (hosted Worker, self-hosted Node container), so an old relay will meet a new app and daemon, and a new relay will meet old clients. The handshake is frozen:
+The relay is a separate deployable (hosted Worker, self-hosted Node container), so its wire contract has to be explicit. It is v2 only; v1 (one socket per role) was removed, and a relay or client from before that removal must be updated together.
 
-- Endpoint: `GET /ws` upgrade with `role` (`client` | `server`), `serverId`, and `v` (protocol version, `1` or `2`). `/health` returns `{"status":"ok"}`.
-- Missing/invalid params are rejected with HTTP 400 and fixed message strings (`Missing or invalid role parameter`, `Missing serverId parameter`, `Invalid v parameter (expected 1 or 2)`).
-- `v=1`: one client and one server socket per `serverId`, new connections replace old ones (close 1008), blind bidirectional forwarding.
-- `v=2`: one control socket per server (`server-control`), one data socket per connection id (`server:{connectionId}`), many clients per connection id. Clients get `connected`/`disconnected` control notifications; buffered frames (cap 200) flush when the server data socket attaches.
+- Endpoint: `GET /ws` upgrade with `role` (`client` | `server`), `serverId`, and `v=2`. `/health` returns `{"status":"ok"}`.
+- Missing/invalid params are rejected with HTTP 400 and fixed message strings (`Missing or invalid role parameter`, `Missing serverId parameter`, `Invalid v parameter (expected 2)`).
+- One control socket per server (`server-control`), one data socket per connection id (`server:{connectionId}`), many clients per connection id. Clients get `connected`/`disconnected` control notifications; buffered frames (cap 200) flush when the server data socket attaches.
 - Frame type is part of the contract: text must arrive as text, binary as binary. `ws` reports it separately from the value (both arrive as a `Buffer`), so inferring "not a string therefore binary" silently converts the plaintext hello and the daemon rejects the handshake. `node-adapter.ts` threads `isBinary` through `normalizeIncoming` for this reason.
 - The relay never inspects message payloads beyond plaintext handshake frames; E2EE applies to everything after `e2ee_hello`/`e2ee_ready`.
 

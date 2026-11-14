@@ -6,7 +6,6 @@ import {
   CURRENT_RELAY_PROTOCOL_VERSION,
   extractHostPortFromWebSocketUrl,
   normalizeRelayEndpointHostPort,
-  normalizeRelayProtocolVersion,
   parseConnectionUri,
   serializeConnectionUri,
   serializeConnectionUriForStorage,
@@ -98,7 +97,7 @@ describe("daemon websocket URLs", () => {
 });
 
 describe("relay websocket URL versioning", () => {
-  test("defaults relay URLs to v2", () => {
+  test("sets the v2 protocol version", () => {
     const url = new URL(
       buildRelayWebSocketUrl({
         endpoint: "relay.byspace.cc.cd:443",
@@ -108,7 +107,8 @@ describe("relay websocket URL versioning", () => {
       }),
     );
 
-    expect(url.searchParams.get("v")).toBe(CURRENT_RELAY_PROTOCOL_VERSION);
+    expect(CURRENT_RELAY_PROTOCOL_VERSION).toBe("2");
+    expect(url.searchParams.get("v")).toBe("2");
     expect(url.searchParams.has("connectionId")).toBe(false);
   });
 
@@ -124,29 +124,6 @@ describe("relay websocket URL versioning", () => {
     );
 
     expect(url.searchParams.get("connectionId")).toBe("conn_abc123");
-  });
-
-  test("allows explicitly requesting v1 relay URLs", () => {
-    const url = new URL(
-      buildRelayWebSocketUrl({
-        endpoint: "relay.byspace.cc.cd:443",
-        useTls: true,
-        serverId: "srv_test",
-        role: "server",
-        version: "1",
-      }),
-    );
-
-    expect(url.searchParams.get("v")).toBe("1");
-  });
-
-  test("normalizes numeric relay versions", () => {
-    expect(normalizeRelayProtocolVersion(2)).toBe("2");
-    expect(normalizeRelayProtocolVersion(1)).toBe("1");
-  });
-
-  test("rejects unsupported relay versions", () => {
-    expect(() => normalizeRelayProtocolVersion("3")).toThrow('Relay version must be "1" or "2"');
   });
 });
 

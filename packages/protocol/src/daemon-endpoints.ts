@@ -13,9 +13,8 @@ export interface ParsedConnectionUri extends ConnectionUriParts {
 }
 
 export type RelayRole = "server" | "client";
-export type RelayProtocolVersion = "1" | "2";
-
-export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
+// The relay protocol is v2 only. v1 was removed, and the relay rejects any other value.
+export const CURRENT_RELAY_PROTOCOL_VERSION = "2";
 // The hosted relay lives on the app origin.
 //
 // `relay.byspace.cc.cd` was a second hostname for the same Worker, from when the relay was its own
@@ -27,29 +26,6 @@ export const DEFAULT_RELAY_ENDPOINT = "app.byspace.cc.cd:443";
 
 export function isBySpaceHostedRelayEndpoint(value: string | undefined): boolean {
   return value === DEFAULT_RELAY_ENDPOINT;
-}
-
-export function normalizeRelayProtocolVersion(
-  value: unknown,
-  fallback: RelayProtocolVersion = CURRENT_RELAY_PROTOCOL_VERSION,
-): RelayProtocolVersion {
-  if (value == null) {
-    return fallback;
-  }
-
-  let normalized = "";
-  if (typeof value === "string") {
-    normalized = value.trim();
-  } else if (typeof value === "number") {
-    normalized = String(value);
-  }
-  if (!normalized) {
-    return fallback;
-  }
-  if (normalized === "1" || normalized === "2") {
-    return normalized;
-  }
-  throw new Error('Relay version must be "1" or "2"');
 }
 
 function parsePort(portStr: string, context: string): number {
@@ -227,7 +203,6 @@ export function buildRelayWebSocketUrl(params: {
    * Clients should NOT provide this — the relay assigns a routing ID on connect.
    */
   connectionId?: string;
-  version?: RelayProtocolVersion | 1 | 2;
 }): string {
   const { host, port, isIpv6 } = parseHostPort(params.endpoint);
   const protocol = params.useTls ? "wss" : "ws";
@@ -235,7 +210,7 @@ export function buildRelayWebSocketUrl(params: {
   const url = new URL(`${protocol}://${hostPart}:${port}/ws`);
   url.searchParams.set("serverId", params.serverId);
   url.searchParams.set("role", params.role);
-  url.searchParams.set("v", normalizeRelayProtocolVersion(params.version));
+  url.searchParams.set("v", CURRENT_RELAY_PROTOCOL_VERSION);
   if (params.connectionId) {
     url.searchParams.set("connectionId", params.connectionId);
   }

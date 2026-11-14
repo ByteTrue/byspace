@@ -27,7 +27,7 @@ type Options struct {
 	ObserveSocket func(conn Connection, ws *websocket.Conn)
 }
 
-// Server implements the BySpace Relay HTTP and WebSocket protocol (v1 and v2)
+// Server implements the BySpace Relay HTTP and WebSocket protocol (v2)
 // on top of a plain Go HTTP server.
 type Server struct {
 	mu            sync.Mutex

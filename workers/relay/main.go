@@ -116,7 +116,6 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	writeAttachment(socket.JSValue(), attachment{
 		ServerID:     conn.ServerID(),
 		Role:         conn.Role(),
-		Version:      conn.Version(),
 		ConnectionID: conn.ConnectionID(),
 	})
 
@@ -257,13 +256,9 @@ func (r *room) WebSocketError(_ context.Context, _ *cfws.HibernatingConn, _ erro
 }
 
 // attachment is what a socket remembers about itself across hibernation.
-//
-// The field names match the TypeScript worker's RelaySessionAttachment so a
-// socket accepted by one and messaged by the other would still route.
 type attachment struct {
 	ServerID     string `json:"serverId"`
 	Role         string `json:"role"`
-	Version      string `json:"version"`
 	ConnectionID string `json:"connectionId"`
 }
 
@@ -315,7 +310,7 @@ func connectionFromAttachment(socket js.Value) (relay.Connection, bool) {
 	values := url.Values{}
 	values.Set("serverId", saved.ServerID)
 	values.Set("role", saved.Role)
-	values.Set("v", saved.Version)
+	values.Set("v", relay.CurrentVersion)
 	if saved.ConnectionID != "" {
 		values.Set("connectionId", saved.ConnectionID)
 	}
@@ -360,9 +355,8 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// One object per version and server, not per server: v1 routes frames by role
-	// alone, so a v1 socket sharing a room with v2 sockets would broadcast to
-	// them. The TypeScript worker isolated the versions the same way.
+	// One object per server, so every socket for that daemon reaches the same
+	// in-memory registry.
 	stub, err := ns.Get(ns.IdFromName(conn.RoomKey()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

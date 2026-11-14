@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	// LegacyVersion is the pre-multiplexing relay protocol: one socket per role.
-	LegacyVersion = "1"
-	// CurrentVersion multiplexes one control channel plus one data channel per
-	// client connection.
+	// CurrentVersion is the relay protocol version: one control channel plus one
+	// data channel per client connection. The relay rejects every other value,
+	// including an absent one, so a stale client fails loudly instead of being
+	// routed as a data socket.
 	CurrentVersion = "2"
 	// MaxBufferedFrames caps the frames held for a daemon that is not connected.
 	MaxBufferedFrames = 200
@@ -25,19 +25,6 @@ const (
 // everything it needs arrives per call, because the Cloudflare Workers build
 // gets a fresh instance per request trigger.
 type Router struct{}
-
-// resolveVersion validates the `v` query parameter. An absent value means the
-// pre-multiplexing protocol.
-func resolveVersion(raw string) string {
-	v := strings.TrimSpace(raw)
-	if v == "" {
-		return LegacyVersion
-	}
-	if v == LegacyVersion || v == CurrentVersion {
-		return v
-	}
-	return ""
-}
 
 func randomID16() string {
 	var b [8]byte
@@ -81,8 +68,8 @@ type Peer interface {
 	Send(ctx context.Context, mt MessageType, data []byte) error
 	// Close ends the connection. It must be safe to call more than once.
 	Close(code StatusCode, reason string)
-	// ConnectionID is the v2 connection this peer carries, or "" when the
-	// peer predates v2 (or is a v2 control channel).
+	// ConnectionID is the connection this peer carries on a data socket, or ""
+	// for the control channel.
 	ConnectionID() string
 }
 
@@ -97,22 +84,17 @@ type Room interface {
 type connMeta struct {
 	ServerID     string
 	Role         string
-	Version      string
 	ConnectionID string
 }
 
-// ServerControl reports whether this connection is the v2 control channel.
-//
-// The version check is not redundant with the empty connection id: a v1 server
-// socket also has no connection id, because v1 routes purely by role. Without
-// it that socket would be handed the control channel's sync roster.
+// ServerControl reports whether this connection is the control channel.
 func (m connMeta) ServerControl() bool {
-	return m.Version == CurrentVersion && m.Role == "server" && m.ConnectionID == ""
+	return m.Role == "server" && m.ConnectionID == ""
 }
 
-// ServerData reports whether this connection is a v2 data channel.
+// ServerData reports whether this connection is a server data channel.
 func (m connMeta) ServerData() bool {
-	return m.Version == CurrentVersion && m.Role == "server" && m.ConnectionID != ""
+	return m.Role == "server" && m.ConnectionID != ""
 }
 
 // parseWSQuery validates a /ws query string. It returns the parsed metadata
@@ -123,7 +105,6 @@ func parseWSQuery(q url.Values) (connMeta, string) {
 		Role:         strings.TrimSpace(q.Get("role")),
 		ConnectionID: strings.TrimSpace(q.Get("connectionId")),
 	}
-	meta.Version = resolveVersion(q.Get("v"))
 
 	if meta.Role != "server" && meta.Role != "client" {
 		return meta, "Missing or invalid role parameter"
@@ -131,13 +112,8 @@ func parseWSQuery(q url.Values) (connMeta, string) {
 	if meta.ServerID == "" {
 		return meta, "Missing serverId parameter"
 	}
-	if meta.Version == "" {
-		return meta, "Invalid v parameter (expected 1 or 2)"
-	}
-	if meta.Version == LegacyVersion {
-		// v1 has no connection ids; routing is purely by role.
-		meta.ConnectionID = ""
-		return meta, ""
+	if strings.TrimSpace(q.Get("v")) != CurrentVersion {
+		return meta, "Invalid v parameter (expected 2)"
 	}
 	if meta.Role == "client" && meta.ConnectionID == "" {
 		meta.ConnectionID = "conn_" + randomID16()
@@ -148,10 +124,6 @@ func parseWSQuery(q url.Values) (connMeta, string) {
 // closeReplaced closes whichever connection this new one supersedes. It must
 // run before the new peer is registered, or it would close itself.
 func (Router) closeReplaced(room Room, meta connMeta) {
-	if meta.Version == LegacyVersion {
-		closeTagged(room, meta.Role, StatusPolicyViolation, "Replaced by new connection")
-		return
-	}
 	if meta.ServerControl() {
 		closeTagged(room, "server-control", StatusPolicyViolation, "Replaced by new connection")
 		return
@@ -165,11 +137,6 @@ func (Router) closeReplaced(room Room, meta connMeta) {
 // control channel about a new client, hand a control channel the current
 // roster, and replay anything buffered while a daemon was disconnected.
 func (Router) connected(ctx context.Context, room Room, buf *frameBuffer, self Peer, meta connMeta) {
-	if meta.Version == LegacyVersion {
-		// v1 opens with no bookkeeping at all: no roster, no presence
-		// notifications, nothing to replay. Its frames route by role only.
-		return
-	}
 	if meta.Role == "client" {
 		notifyControls(ctx, room, map[string]any{
 			"type":         "connected",
@@ -191,17 +158,6 @@ func (Router) connected(ctx context.Context, room Room, buf *frameBuffer, self P
 // behaviour, shared by the blocking read loop on the server and by the
 // per-message trigger inside a Durable Object.
 func (Router) frame(ctx context.Context, room Room, buf *frameBuffer, self Peer, meta connMeta, mt MessageType, data []byte) {
-	if meta.Version == LegacyVersion {
-		target := "client"
-		if meta.Role == "client" {
-			target = "server"
-		}
-		for _, peer := range room.Peers(target) {
-			_ = peer.Send(ctx, mt, data)
-		}
-		return
-	}
-
 	if meta.ConnectionID == "" {
 		// Only the control channel reaches here; it speaks ping/pong and
 		// nothing else.
@@ -238,7 +194,7 @@ func (Router) frame(ctx context.Context, room Room, buf *frameBuffer, self Peer,
 
 // disconnected runs the teardown a dropped peer needs.
 func (Router) disconnected(ctx context.Context, room Room, buf *frameBuffer, meta connMeta) {
-	if meta.Version == LegacyVersion || meta.ConnectionID == "" {
+	if meta.ConnectionID == "" {
 		return
 	}
 	if meta.Role == "client" {
@@ -373,8 +329,8 @@ func NewConnection(query url.Values) (Connection, string) {
 // Role is "server" or "client".
 func (c Connection) Role() string { return c.meta.Role }
 
-// ConnectionID is the v2 connection this socket carries, or "" for v1 sockets
-// and for the v2 control channel.
+// ConnectionID is the connection this socket carries on a data socket, or ""
+// for the control channel.
 func (c Connection) ConnectionID() string { return c.meta.ConnectionID }
 
 // ServerID is the server this socket belongs to. The Durable Object writes it
@@ -382,14 +338,8 @@ func (c Connection) ConnectionID() string { return c.meta.ConnectionID }
 // Connection without the original request.
 func (c Connection) ServerID() string { return c.meta.ServerID }
 
-// Version is "1" or "2", the relay protocol the socket speaks.
-func (c Connection) Version() string { return c.meta.Version }
-
 // Tags are the Room tags a peer with this connection must be registered under.
 func (c Connection) Tags() []string {
-	if c.meta.Version == LegacyVersion {
-		return []string{c.meta.Role}
-	}
 	switch {
 	case c.meta.Role == "client":
 		return []string{"client", "client:" + c.meta.ConnectionID}
@@ -427,8 +377,7 @@ func (r Router) Disconnected(ctx context.Context, room Room, buf *frameBuffer, c
 	r.disconnected(ctx, room, buf, conn.meta)
 }
 
-// RoomKey identifies the room a connection belongs to. Protocol version is part
-// of the key because v1 and v2 sockets must never see each other.
+// RoomKey identifies the room a connection belongs to.
 func (c Connection) RoomKey() string {
-	return "relay-v" + c.meta.Version + ":" + c.meta.ServerID
+	return "relay:" + c.meta.ServerID
 }

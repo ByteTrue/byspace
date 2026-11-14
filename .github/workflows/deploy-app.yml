@@ -101,9 +101,8 @@ jobs:
       # Worker, 291 of 300 back-to-back frames arrived out of place. The probe therefore has to run
       # against the build that was just deployed, and the retries cover custom-domain propagation.
       #
-      # The v2 run is the path the app and daemon actually use: a control channel, a client that
-      # asks the relay for a connection id, and the daemon's data socket opened with it. The v1
-      # room only pairs sockets by role, so it cannot see a broken control-to-data handoff.
+      # The probe uses the v2 control/data sockets the app and daemon use, including the immediate
+      # first frame a daemon sends as its E2EE challenge.
       - name: Verify the deployed relay preserves frame order
         run: |
           set -euo pipefail
@@ -114,9 +113,7 @@ jobs:
           fi
           for attempt in 1 2 3; do
             if go run ./workers/relay/probe -url "wss://$host/ws" -n 300 \
-              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -binary \
-              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -v2 \
-              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -v2 -binary; then
+              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -binary; then
               exit 0
             fi
             sleep 10
