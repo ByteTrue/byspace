@@ -5,6 +5,13 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.25.2 - 2026-11-14
+
+### Fixed
+
+- Fixed a finished workspace keeping its attention dot after the user left it
+- Fixed a just-sent message disappearing while a reload finished loading the conversation
+
 ## 0.25.1 - 2026-11-14
 
 ### Fixed
