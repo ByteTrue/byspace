@@ -15,7 +15,9 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # The pairing smoke launches Playwright's Chromium, which has no Ubuntu 26.04 build; the e2e
+    # job in ci.yml pins the same image for the same reason.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +100,10 @@ jobs:
       # dispatches those events serially, so no local test can see it — measured on the deployed
       # Worker, 291 of 300 back-to-back frames arrived out of place. The probe therefore has to run
       # against the build that was just deployed, and the retries cover custom-domain propagation.
+      #
+      # The v2 run is the path the app and daemon actually use: a control channel, a client that
+      # asks the relay for a connection id, and the daemon's data socket opened with it. The v1
+      # room only pairs sockets by role, so it cannot see a broken control-to-data handoff.
       - name: Verify the deployed relay preserves frame order
         run: |
           set -euo pipefail
@@ -107,10 +113,41 @@ jobs:
             host=app.byspace.cc.cd
           fi
           for attempt in 1 2 3; do
-            if go run ./workers/relay/probe -url "wss://$host/ws" -n 300; then
+            if go run ./workers/relay/probe -url "wss://$host/ws" -n 300 \
+              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -binary \
+              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -v2 \
+              && go run ./workers/relay/probe -url "wss://$host/ws" -n 300 -v2 -binary; then
               exit 0
             fi
             sleep 10
           done
           echo "$host reorders frames; roll the deploy back" >&2
+          exit 1
+
+      # The probes above never load the web bundle or speak the encrypted handshake. This starts a
+      # throwaway daemon against the deployed relay, opens the deployed app in a fresh browser, and
+      # pairs with a password — the path every new device takes. Both halves live in the same
+      # Worker, so a bundle or route problem that only exists after deploy shows up here.
+      - name: Build the daemon for the pairing smoke
+        run: make build
+
+      - name: Install Playwright Chromium
+        timeout-minutes: 10
+        run: npx playwright install chromium
+
+      - name: Pair a fresh browser through the deployed relay
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+            origin=https://app-beta.byspace.cc.cd
+          else
+            origin=https://app.byspace.cc.cd
+          fi
+          for attempt in 1 2; do
+            if DEPLOY_WEB_ORIGIN="$origin" node scripts/deploy-pairing-smoke.mjs; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "pairing through $origin failed; roll the deploy back" >&2
           exit 1
