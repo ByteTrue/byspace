@@ -115,12 +115,24 @@ function isIncorrectPasswordFailure(input: {
     return false;
   }
   const details = [input.reason, input.lastError].filter(Boolean).join("\n").toLowerCase();
-  return (
+  if (
     details.includes("401") ||
-    details.includes("4001") ||
+    details.includes("4004") ||
     details.includes("unauthorized") ||
-    details.includes("code 1006")
-  );
+    details.includes("wrong daemon password") ||
+    details.includes("password required")
+  ) {
+    return true;
+  }
+  // A relay closes an unproven or wrong password with 4004; a 4001 there is the hello deadline
+  // and a 1006 is an abnormal drop. Reporting either as a password error sent a relay outage
+  // hunting for a password that was already correct.
+  if (input.config.e2ee?.enabled === true) {
+    return false;
+  }
+  // A direct browser WebSocket upgrade rejected with 401 surfaces as a bare 1006, with no status
+  // to read, so it is the only auth signal available on that path.
+  return details.includes("code 1006");
 }
 
 export class DaemonConnectionTestError extends Error {

@@ -347,11 +347,62 @@ describe("test-daemon-connection connectToDaemon", () => {
     expect(probe.createdConfigs()[1]?.url).toMatch(/^ws:\/\/relay\.byspace\.cc\.cd:443\/ws\?/);
   });
 
-  it("surfaces auth rejection as an incorrect password", async () => {
+  it("surfaces a relay auth rejection as an incorrect password", async () => {
     const { connectToDaemon } = await import("./test-daemon-connection");
     probe.failNextConnection(
-      new Error("Transport closed (code 4001)"),
-      "Transport closed (code 4001)",
+      new Error("Transport closed (code 4004)"),
+      "Transport closed (code 4004)",
+    );
+
+    await expect(
+      connectToDaemon(
+        {
+          id: "relay:wss:relay.example:443",
+          type: "relay",
+          relayEndpoint: "relay.example:443",
+          useTls: true,
+          daemonPublicKeyB64: "pubkey",
+          password: "wrong-secret",
+        },
+        { serverId: "srv_probe_test" },
+        probe.deps,
+      ),
+    ).rejects.toMatchObject({
+      message: "Incorrect password",
+    });
+  });
+
+  // 4001 is the daemon's hello deadline and 1006 is an abnormal drop. Calling either a password
+  // error hides a relay outage behind "Incorrect password" on the pairing form.
+  it("keeps a relay hello timeout or abnormal drop out of the password error", async () => {
+    const { connectToDaemon } = await import("./test-daemon-connection");
+
+    for (const lastError of ["Transport closed (code 4001)", "Transport closed (code 1006)"]) {
+      probe.failNextConnection(new Error(lastError), lastError);
+      await expect(
+        connectToDaemon(
+          {
+            id: "relay:wss:relay.example:443",
+            type: "relay",
+            relayEndpoint: "relay.example:443",
+            useTls: true,
+            daemonPublicKeyB64: "pubkey",
+            password: "shared-secret",
+          },
+          { serverId: "srv_probe_test" },
+          probe.deps,
+        ),
+      ).rejects.toMatchObject({ message: lastError });
+    }
+  });
+
+  // The browser cannot read a rejected upgrade's status, so a wrong password on a direct
+  // connection arrives as a bare abnormal close and 1006 is the only signal there is.
+  it("surfaces a direct connection's abnormal close as an incorrect password", async () => {
+    const { connectToDaemon } = await import("./test-daemon-connection");
+    probe.failNextConnection(
+      new Error("Transport closed (code 1006)"),
+      "Transport closed (code 1006)",
     );
 
     await expect(
