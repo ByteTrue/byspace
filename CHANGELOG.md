@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.26.3 - 2026-11-15
+
+### Fixed
+
+- Fixed relay rooms staying pinned far from users
+- Fixed the Windows IME candidate window jumping to the top-left of the screen after alt+tab
+- Fixed the Windows restore button showing a mirrored icon
+
 ## 0.26.2 - 2026-11-15
 
 ### Fixed
