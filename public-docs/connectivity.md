@@ -83,8 +83,10 @@ Requirements:
 - Tunnels are enabled on both daemons (experimental). Open **Tunnels** on each
   machine and press **Enable**, or set `daemon.tunnel.enabled: true` in
   `config.json`.
-- The remote daemon lists the port in its tunnel allowlist (**Tunnels** page on
-  the remote machine, or `daemon.tunnel.allowedPorts` in its `config.json`).
+- The remote daemon lists the destination in its tunnel allowlist (**Tunnels** page on
+  the remote machine, or `daemon.tunnel.allowedPorts` and `daemon.tunnel.allowedTargets`
+  in its `config.json`). A bare port means the remote machine itself; `host:port`
+  reaches another machine on its network.
 
 Tunnels use the relay that the remote daemon's pairing link carries — the same
 relay your app connections use. If the remote daemon is paired through a
@@ -94,8 +96,9 @@ end-to-end encrypted either way.
 To create one, open **Tunnels** — the row in the sidebar's BySpace menu, or the
 command center action, or `/tunnels` — on the machine where you want the local port, press **Add tunnel**, and paste the remote
 daemon's pairing link (`byspace daemon pair` prints it) with its password and
-the remote port. The tunnel is persistent: it reconnects on its own after
-either daemon or the relay restarts.
+the remote port. **Remote host** defaults to the remote machine; set it to
+another machine on that network to reach a service there. The tunnel is
+persistent: it reconnects on its own after either daemon or the relay restarts.
 
 ## Tailscale
 

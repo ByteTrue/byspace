@@ -1186,6 +1186,9 @@ func (s *Store) loadDaemonConfigRaw() map[string]any {
 		if tun["allowedPorts"] == nil {
 			tun["allowedPorts"] = []int{}
 		}
+		if tun["allowedTargets"] == nil {
+			tun["allowedTargets"] = []string{}
+		}
 	}
 	// COMPAT(daemonMcp): the wire still requires this object, so a hand-edited `mcp: null` or an
 	// object missing injectIntoAgents must not reach the client — it rejects the whole config
@@ -1289,8 +1292,9 @@ func daemonConfigDefaults() map[string]any {
 			"passwordSet": false,
 		},
 		"tunnel": map[string]any{
-			"enabled":      false,
-			"allowedPorts": []int{},
+			"enabled":        false,
+			"allowedPorts":   []int{},
+			"allowedTargets": []string{},
 		},
 	}
 }

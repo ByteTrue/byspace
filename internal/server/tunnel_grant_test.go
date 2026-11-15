@@ -24,7 +24,7 @@ func TestTunnelGrantRecordsAndReplies(t *testing.T) {
 	if !strings.Contains(joined, "tunnel.grant.response") {
 		t.Fatalf("no grant response: %s", joined)
 	}
-	if !srv.tunnelGrants().Allowed("pk_source", 3425) {
+	if !srv.tunnelGrants().Allowed("pk_source", "", 3425) {
 		t.Fatal("grant was not recorded")
 	}
 }

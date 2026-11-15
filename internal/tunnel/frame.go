@@ -21,14 +21,15 @@ func encodeSequence(sequence uint64) []byte {
 
 // Frame opcodes, allocated after the file-transfer block in protocol/src/binary-frames/tunnel.ts.
 const (
-	// OpcodeOpen asks the target to dial one of its ports and start a stream.
+	// OpcodeOpen asks the target to dial one of its destinations and start a stream.
 	//
 	// The node daemon did this with a `tunnel.open.request` JSON message and awaited
 	// `tunnel.open.response` before sending bytes. Keeping it on the binary channel instead means the
 	// handshake cannot be reordered against the data it gates: both travel on the same socket, so a
 	// `DataUpstream` can never overtake its own `Open`.
 	//
-	// Payload: 2-byte big-endian remote port.
+	// Payload: 2-byte big-endian remote port, a flags byte, then the destination host as raw UTF-8.
+	// The host is absent when the initiator wants the target's own loopback.
 	OpcodeOpen byte = 0x1f
 	// OpcodeOpenAck answers an open: one status byte, then a UTF-8 reason when it is not 0.
 	OpcodeOpenAck byte = 0x23
@@ -66,7 +67,21 @@ const (
 	OpenResumeCapable byte = 2
 	// OpenResumeRequested follows the two-byte port in Open when the initiator supports replay.
 	OpenResumeRequested byte = 1
+	// OpenHostCapable reports that the target read the destination host after the flag byte.
+	//
+	// An initiator that asked for a non-loopback host must refuse the stream unless the ack carries
+	// this bit: a target from before host support read the port, ignored the rest of the payload and
+	// dialled its own loopback — the wrong service, silently. Proving it in the ack needs no version
+	// lookup on either side, and the refusal can name the update that fixes it.
+	//
+	// Sent only in answer to a payload that carried a host: an initiator from before hosts treats an
+	// unknown status byte as a malformed ack, so a plain loopback stream must keep its old answer.
+	OpenHostCapable byte = 4
 )
+
+// MaxRemoteHostLength bounds a destination host. DNS names stop at 253 bytes and the open frame
+// carries the host verbatim, so a longer value is not a host.
+const MaxRemoteHostLength = 253
 
 // MaxTunnelIDLength bounds the stream id. The wire format stores its length in one byte.
 const MaxTunnelIDLength = 255
@@ -140,21 +155,41 @@ func IsTunnelOpcode(opcode byte) bool {
 	}
 }
 
-// EncodeOpenPayload writes the port an open request asks for.
-func EncodeOpenPayload(remotePort int) []byte {
-	return []byte{byte(remotePort >> 8), byte(remotePort)}
+// EncodeOpenPayload writes the destination an open request asks for. The host is appended after
+// the flag byte only when it is set, so a loopback request stays the same three bytes it was before
+// hosts existed.
+func EncodeOpenPayload(remotePort int, remoteHost string) []byte {
+	payload := []byte{byte(remotePort >> 8), byte(remotePort), OpenResumeRequested}
+	return append(payload, remoteHost...)
 }
 
-// DecodeOpenPayload reads that port back.
-func DecodeOpenPayload(payload []byte) (int, bool) {
+// DecodeOpenPayload reads that destination back. An empty host means the target's loopback, which is
+// also what a payload from a daemon that predates hosts decodes to.
+func DecodeOpenPayload(payload []byte) (int, string, bool) {
 	if len(payload) < 2 {
-		return 0, false
+		return 0, "", false
 	}
 	port := int(payload[0])<<8 | int(payload[1])
 	if port < 1 || port > 65535 {
-		return 0, false
+		return 0, "", false
 	}
-	return port, true
+	host := ""
+	if len(payload) > 3 {
+		host = string(payload[3:])
+	}
+	if len(host) > MaxRemoteHostLength {
+		return 0, "", false
+	}
+	return port, host, true
+}
+
+// OpenAck is a target's answer to an open request.
+type OpenAck struct {
+	Allowed bool
+	// HostCapable reports that the target dialled the host it was asked for rather than its own
+	// loopback.
+	HostCapable bool
+	Reason      string
 }
 
 // EncodeOpenAck writes an acknowledgement: status byte, then the denial reason.
@@ -169,16 +204,17 @@ func EncodeOpenAck(allowed bool, reason string) []byte {
 }
 
 // DecodeOpenAck reads an acknowledgement.
-func DecodeOpenAck(payload []byte) (allowed bool, reason string, ok bool) {
+func DecodeOpenAck(payload []byte) (OpenAck, bool) {
 	if len(payload) < 1 {
-		return false, "", false
+		return OpenAck{}, false
 	}
-	switch payload[0] {
-	case OpenAllowed, OpenAllowed | OpenResumeCapable:
-		return true, "", true
-	case OpenDenied:
-		return false, string(payload[1:]), true
+	status := payload[0]
+	switch {
+	case status == OpenDenied:
+		return OpenAck{Reason: string(payload[1:])}, true
+	case status&^(OpenResumeCapable|OpenHostCapable) == 0:
+		return OpenAck{Allowed: true, HostCapable: status&OpenHostCapable != 0}, true
 	default:
-		return false, "", false
+		return OpenAck{}, false
 	}
 }

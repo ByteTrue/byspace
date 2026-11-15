@@ -1077,12 +1077,15 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 			}
 			return sink.SendBinary(ctx, encoded)
 		}
-		// A relay peer opens ports only when this daemon granted its proven key. A local client
+		// A relay peer opens destinations only when this daemon granted its proven key. A local client
 		// proved the password instead, so the allowlist stays its only gate.
+		//
+		// The grant is per destination: a grant for this machine's loopback does not authorize the
+		// same port on another host, which is what the check would degrade to if it compared ports.
 		if tunnelOnly && frame.Opcode == tunnel.OpcodeOpen {
-			if port, ok := tunnel.DecodeOpenPayload(frame.Payload); !ok || !s.tunnelGrants().Allowed(peerKey, port) {
+			if !s.tunnelOpenAuthorized(peerKey, frame.Payload) {
 				_ = send(tunnel.Frame{Opcode: tunnel.OpcodeOpenAck, TunnelID: frame.TunnelID,
-					Payload: tunnel.EncodeOpenAck(false, "This daemon is not authorized to forward that port.")})
+					Payload: tunnel.EncodeOpenAck(false, "This daemon is not authorized to forward that destination.")})
 				return
 			}
 		}
@@ -1358,7 +1361,12 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			// Implemented: registry, relay client, target-side forwarding. The experimental gate
 			// (issue 063) still starts closed, so the UI shows the entry point and the feature is
 			// off until the operator opts in — which is the published behaviour.
-			"daemonTunnels":              true,
+			"daemonTunnels": true,
+			// COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15.
+			// A forward can name a destination host on the peer's network instead of its loopback.
+			// The client hides the host field without this flag, because a daemon that ignores the
+			// field would persist a rule that silently forwards to the wrong machine.
+			"daemonTunnelRemoteHost":     true,
 			"projectSetupSkill":          true,
 			"terminalAgentHookProviders": true,
 			"terminalShellConfig":        true,

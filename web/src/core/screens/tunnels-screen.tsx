@@ -23,10 +23,18 @@ import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
 import {
   createTunnelFromSelection,
+  grantTunnelDestination,
   tunnelEndStates,
   listenHostIsOpen,
+  isLoopbackTargetHost,
+  isLoopbackListenHost,
   DEFAULT_LISTEN_HOST,
 } from "@/tunnels/tunnel-rule";
+import {
+  resolveTunnelPeerTarget,
+  resolveTunnelPeerTargets,
+  type TunnelPeerTarget,
+} from "@/tunnels/tunnel-peer-targets";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
@@ -37,8 +45,8 @@ import {
   getHostRuntimeStore,
 } from "@/runtime/host-runtime";
 import { SelectField, type SelectFieldDisplay } from "@/components/ui/select-field";
-import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunnel-peer-targets";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
+import type { HostProfile } from "@/types/host-connection";
 import { Input } from "~/components/ui/input";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Item, ItemGroup } from "~/components/ui/item";
@@ -73,6 +81,14 @@ function outboundPeerId(entry: AggregatedTunnelEntry): string {
   return entry.tunnelId.split(":")[0];
 }
 
+function parsePortToken(token: string): number | null {
+  const n = Number.parseInt(token, 10);
+  if (!Number.isInteger(n) || n < 1 || n > 65535 || String(n) !== token) {
+    return null;
+  }
+  return n;
+}
+
 function parsePortList(raw: string): number[] | null {
   const tokens = raw
     .split(/[\s,，]+/)
@@ -83,8 +99,8 @@ function parsePortList(raw: string): number[] | null {
   }
   const out: number[] = [];
   for (const tok of tokens) {
-    const n = Number.parseInt(tok, 10);
-    if (!Number.isInteger(n) || n < 1 || n > 65535 || String(n) !== tok) {
+    const n = parsePortToken(tok);
+    if (n === null) {
       return null;
     }
     if (!out.includes(n)) {
@@ -92,6 +108,146 @@ function parsePortList(raw: string): number[] | null {
     }
   }
   return out;
+}
+
+// buildForwards pins each rule's local port and its destinations. Loopback is the daemon default on
+// both ends and is not sent, so a daemon that does not know a field keeps the visible meaning.
+function buildForwards(input: {
+  remotePorts: number[];
+  localPorts?: number[];
+  remoteHost: string;
+  listenHost: string;
+}): Array<{ remotePort: number; remoteHost?: string; localPort?: number; listenHost?: string }> {
+  const targetHost = input.remoteHost.trim();
+  const boundHost = input.listenHost.trim();
+  return input.remotePorts.map((remotePort, idx) => {
+    let localPort = remotePort;
+    if (input.localPorts !== undefined) {
+      localPort =
+        input.localPorts.length === 1 && input.remotePorts.length === 1
+          ? input.localPorts[0]
+          : input.localPorts[idx];
+    }
+    return {
+      remotePort,
+      // Always stated, even for loopback: a request that omits the host means "this machine" to an
+      // older daemon only, and the daemon refuses an unstated host when the port has two rules.
+      remoteHost: targetHost || DEFAULT_LISTEN_HOST,
+      ...(boundHost && !isLoopbackListenHost(boundHost) ? { listenHost: boundHost } : {}),
+      ...(localPort ? { localPort } : {}),
+    };
+  });
+}
+
+// grantIfDestinationChanged records the target's permission when an edit moves a rule to another
+// destination. The grant is per destination, so the edited forward alone would be refused. Returns
+// the message to show, or null when the destination did not change or the grant was written.
+async function grantIfDestinationChanged(input: {
+  entry: AggregatedTunnelEntry;
+  peerId: string;
+  hosts: readonly HostProfile[];
+  remoteHost: string;
+  remotePort: number;
+}): Promise<string | null> {
+  const nextHost = input.remoteHost.trim();
+  const beforeHost = (input.entry.remoteHost ?? "").trim();
+  const hostUnchanged =
+    beforeHost === nextHost || (isLoopbackTargetHost(beforeHost) && isLoopbackTargetHost(nextHost));
+  const unchanged = hostUnchanged && input.remotePort === input.entry.remotePort;
+  if (unchanged) {
+    return null;
+  }
+  const peerProfile = input.hosts.find((host) => host.serverId === input.peerId);
+  const peerTarget = peerProfile ? resolveTunnelPeerTarget(peerProfile) : null;
+  const grant = await grantTunnelDestination({
+    targetClient: getHostRuntimeStore().getClient(input.peerId),
+    sourceServerId: input.entry.serverId,
+    targetServerId: input.peerId,
+    targetPublicKey: peerTarget?.daemonPublicKeyB64 ?? null,
+    hosts: input.hosts,
+    host: input.remoteHost,
+    port: input.remotePort,
+  });
+  return grant.ok ? null : (grant.error ?? "The target refused the grant.");
+}
+
+// formatHostPort renders an endpoint the way ssh does: brackets only for IPv6.
+function formatHostPort(host: string, port: number | null): string {
+  const value = host.trim().replace(/^\[|\]$/g, "");
+  return value.includes(":") ? `[${value}]:${port ?? "—"}` : `${value}:${port ?? "—"}`;
+}
+
+// formatAllowedTarget is the allowlist's on-disk form: host:port, with brackets around an IPv6 host
+// so the daemon can split it.
+function formatAllowedTarget(host: string, port: number): string {
+  const value = host.trim().replace(/^\[|\]$/g, "");
+  return value.includes(":") ? `[${value}]:${port}` : `${value}:${port}`;
+}
+
+function parseAllowedTarget(raw: string): { host: string; port: number } | null {
+  const separator = raw.lastIndexOf(":");
+  if (separator < 0) {
+    return null;
+  }
+  const host = raw
+    .slice(0, separator)
+    .trim()
+    .replace(/^\[|\]$/g, "");
+  const port = parsePortToken(raw.slice(separator + 1).trim());
+  if (!host || port === null) {
+    return null;
+  }
+  return { host, port };
+}
+
+// parseTargetList reads the allowlist field. A bare port is this machine; host:port is another
+// machine on its network.
+function parseTargetList(raw: string): {
+  ports: number[];
+  targets: { host: string; port: number }[];
+} | null {
+  const tokens = raw
+    .split(/[\s,，]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (tokens.length === 0) {
+    return null;
+  }
+  const ports: number[] = [];
+  const targets: { host: string; port: number }[] = [];
+  const addPort = (port: number) => {
+    if (!ports.includes(port)) {
+      ports.push(port);
+    }
+  };
+  for (const token of tokens) {
+    if (/^\d+$/.test(token)) {
+      const port = parsePortToken(token);
+      if (port === null) {
+        return null;
+      }
+      addPort(port);
+      continue;
+    }
+    const target = parseAllowedTarget(token);
+    if (!target || /[^A-Za-z0-9.:_-]/.test(target.host)) {
+      return null;
+    }
+    if (isLoopbackTargetHost(target.host)) {
+      addPort(target.port);
+      continue;
+    }
+    if (!targets.some((t) => t.host === target.host && t.port === target.port)) {
+      targets.push(target);
+    }
+  }
+  return { ports, targets };
+}
+
+interface AllowedRow {
+  kind: "port" | "target";
+  host: string;
+  port: number;
 }
 
 export function TunnelsScreen(): ReactElement {
@@ -266,7 +422,12 @@ function TunnelsEnabledBody({
           string,
           {
             peerHostname?: string | null;
-            forwards: Array<{ remotePort: number; localPort?: number; disabled: boolean }>;
+            forwards: Array<{
+              remotePort: number;
+              remoteHost?: string;
+              localPort?: number;
+              disabled: boolean;
+            }>;
           }
         >();
         for (const e of outboundEntries) {
@@ -278,6 +439,7 @@ function TunnelsEnabledBody({
           }
           group.forwards.push({
             remotePort: e.remotePort,
+            remoteHost: e.remoteHost || DEFAULT_LISTEN_HOST,
             ...(e.localPort ? { localPort: e.localPort } : {}),
             disabled,
           });
@@ -548,6 +710,7 @@ function TunnelRow({
           forwards: [
             {
               remotePort: entry.remotePort,
+              remoteHost: entry.remoteHost || DEFAULT_LISTEN_HOST,
               ...(entry.localPort ? { localPort: entry.localPort } : {}),
               disabled: !enabled,
             },
@@ -566,14 +729,26 @@ function TunnelRow({
   const remove = useCallback(() => {
     if (!client || !isConnected || !isOutbound) return;
     void client
-      .removeTunnel(outboundPeerId(entry), undefined, entry.remotePort)
+      .removeTunnel(
+        outboundPeerId(entry),
+        undefined,
+        entry.remotePort,
+        entry.remoteHost || DEFAULT_LISTEN_HOST,
+      )
       .then(() => onRemoved())
       .catch(() => undefined);
   }, [client, isConnected, isOutbound, entry, onRemoved]);
 
   const peerLabel = entry.peerHostname ?? outboundPeerId(entry);
-  const localEndpoint = entry.localPort == null ? "127.0.0.1:—" : `127.0.0.1:${entry.localPort}`;
-  const remoteEndpoint = `${peerLabel}:${entry.remotePort}`;
+  const remoteHost = entry.remoteHost ?? "";
+  const localEndpoint =
+    entry.localPort == null
+      ? formatHostPort(entry.listenHost ?? DEFAULT_LISTEN_HOST, null)
+      : formatHostPort(entry.listenHost ?? DEFAULT_LISTEN_HOST, entry.localPort);
+  const remoteEndpoint = formatHostPort(
+    isLoopbackTargetHost(remoteHost) ? peerLabel : remoteHost,
+    entry.remotePort,
+  );
 
   const subtitle = isOutbound
     ? t("tunnels.outboundSubtitle", {
@@ -657,6 +832,9 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const { config, patchConfig } = useDaemonConfig(serverId);
+  // A daemon without host support would accept the patch and drop the key, leaving the user with an
+  // allowlist entry that never applies.
+  const supportsHostTargets = useHostFeature(serverId, "daemonTunnelRemoteHost");
   const [draft, setDraft] = useState("");
   const handleDraftInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value),
@@ -667,21 +845,55 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   const [saving, setSaving] = useState(false);
 
   const allowedPorts = useMemo(() => config?.tunnel?.allowedPorts ?? [], [config]);
+  const allowedTargets = useMemo(() => config?.tunnel?.allowedTargets ?? [], [config]);
+  const rows = useMemo<AllowedRow[]>(() => {
+    const parsed: AllowedRow[] = allowedPorts.map((port) => ({
+      kind: "port",
+      host: DEFAULT_LISTEN_HOST,
+      port,
+    }));
+    for (const text of allowedTargets) {
+      const target = parseAllowedTarget(text);
+      if (target) {
+        parsed.push({ kind: "target", host: target.host, port: target.port });
+      }
+    }
+    return parsed;
+  }, [allowedPorts, allowedTargets]);
 
-  const addPortAsync = useCallback(async () => {
-    const parsedPorts = parsePortList(draft);
-    if (!parsedPorts) {
+  const addTargetsAsync = useCallback(async () => {
+    const parsed = parseTargetList(draft);
+    if (!parsed) {
       setError(t("tunnels.allowlist.invalidPort"));
       return;
     }
-    const merged = [...allowedPorts];
-    for (const p of parsedPorts) {
-      if (!merged.includes(p)) {
-        merged.push(p);
+    if (parsed.targets.length > 0 && !supportsHostTargets) {
+      setError(
+        isZh
+          ? "这台主机还不支持 host:port 白名单，请先更新它。"
+          : "Update this host to allow host:port destinations.",
+      );
+      return;
+    }
+    const mergedPorts = [...allowedPorts];
+    for (const port of parsed.ports) {
+      if (!mergedPorts.includes(port)) {
+        mergedPorts.push(port);
       }
     }
-    merged.sort((a, b) => a - b);
-    if (merged.length === allowedPorts.length) {
+    mergedPorts.sort((a, b) => a - b);
+    const mergedTargets = [...allowedTargets];
+    for (const target of parsed.targets) {
+      const text = formatAllowedTarget(target.host, target.port);
+      if (!mergedTargets.includes(text)) {
+        mergedTargets.push(text);
+      }
+    }
+    mergedTargets.sort();
+    if (
+      mergedPorts.length === allowedPorts.length &&
+      mergedTargets.length === allowedTargets.length
+    ) {
       setDraft("");
       setResetSeq((n) => n + 1);
       setError(null);
@@ -689,7 +901,7 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
     }
     setSaving(true);
     try {
-      await patchConfig({ tunnel: { allowedPorts: merged } });
+      await patchConfig({ tunnel: { allowedPorts: mergedPorts, allowedTargets: mergedTargets } });
       setDraft("");
       setResetSeq((n) => n + 1);
       setError(null);
@@ -698,36 +910,45 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
     } finally {
       setSaving(false);
     }
-  }, [draft, allowedPorts, patchConfig, t]);
+  }, [draft, allowedPorts, allowedTargets, isZh, patchConfig, supportsHostTargets, t]);
 
-  const addPort = useCallback(() => {
-    void addPortAsync();
-  }, [addPortAsync]);
-  const handleAddPortEnter = useCallback(
+  const addTargets = useCallback(() => {
+    void addTargetsAsync();
+  }, [addTargetsAsync]);
+  const handleAddTargetsEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter" && !event.nativeEvent.isComposing) addPort();
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) addTargets();
     },
-    [addPort],
+    [addTargets],
   );
 
-  const removePort = useCallback(
-    async (port: number) => {
+  const removeRow = useCallback(
+    async (row: AllowedRow) => {
       setSaving(true);
       try {
-        await patchConfig({ tunnel: { allowedPorts: allowedPorts.filter((p) => p !== port) } });
+        if (row.kind === "port") {
+          await patchConfig({
+            tunnel: { allowedPorts: allowedPorts.filter((p) => p !== row.port) },
+          });
+        } else {
+          const text = formatAllowedTarget(row.host, row.port);
+          await patchConfig({
+            tunnel: { allowedTargets: allowedTargets.filter((target) => target !== text) },
+          });
+        }
       } catch {
         setError(t("tunnels.allowlist.saveFailed"));
       } finally {
         setSaving(false);
       }
     },
-    [allowedPorts, patchConfig, t],
+    [allowedPorts, allowedTargets, patchConfig, t],
   );
-  const makeRemovePortHandler = useCallback(
-    (port: number) => () => {
-      void removePort(port);
+  const makeRemoveRowHandler = useCallback(
+    (row: AllowedRow) => () => {
+      void removeRow(row);
     },
-    [removePort],
+    [removeRow],
   );
 
   if (!config) {
@@ -743,41 +964,40 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
             defaultValue={draft}
             key={resetSeq}
             onChange={handleDraftInput}
-            onKeyDown={handleAddPortEnter}
-            placeholder={
-              isZh ? "输入端口号（可填多个，如 3425, 3430）" : "Enter port(s), e.g. 3425, 3430"
-            }
-            inputMode="numeric"
+            onKeyDown={handleAddTargetsEnter}
+            placeholder={t("tunnels.allowlist.portPlaceholder")}
             data-testid="tunnels-allowlist-input"
           />
           <Button
             variant="secondary"
             size="sm"
-            onClick={addPort}
+            onClick={addTargets}
             disabled={saving || draft.trim().length === 0}
           >
             {saving ? t("tunnels.allowlist.saving") : t("tunnels.allowlist.add")}
           </Button>
         </Item>
-        {allowedPorts.length === 0 ? (
+        {rows.length === 0 ? (
           <Item variant="outline">
             <span className="text-xs leading-[normal] text-muted-foreground">
               {t("tunnels.allowlist.empty")}
             </span>
           </Item>
         ) : (
-          allowedPorts.map((port) => (
-            <Item variant="outline" key={port}>
+          rows.map((row) => (
+            <Item variant="outline" key={row.kind + ":" + row.host + ":" + row.port}>
               <div className="flex flex-1 flex-row items-center gap-3">
-                <Badge variant="secondary">127.0.0.1:{port}</Badge>
-                <span className="text-xs leading-[normal] text-muted-foreground">
-                  {t("tunnels.allowlist.port", { port })}
-                </span>
+                <Badge variant="secondary">{formatHostPort(row.host, row.port)}</Badge>
+                {row.kind === "port" ? (
+                  <span className="text-xs leading-[normal] text-muted-foreground">
+                    {t("tunnels.allowlist.port", { port: row.port })}
+                  </span>
+                ) : undefined}
               </div>
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={makeRemovePortHandler(port)}
+                onClick={makeRemoveRowHandler(row)}
                 disabled={saving}
               >
                 {TRASH_ICON}
@@ -802,7 +1022,12 @@ async function createTunnelFromOffer(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   offerUrl: string;
   password: string;
-  forwards: Array<{ remotePort: number; localPort?: number }>;
+  forwards: Array<{
+    remotePort: number;
+    remoteHost?: string;
+    localPort?: number;
+    listenHost?: string;
+  }>;
 }): Promise<{ ok: boolean; error?: string }> {
   const parsed = parsePairingOfferUrl(input.offerUrl);
   if (!parsed.ok) {
@@ -832,15 +1057,17 @@ function ListenHostField({
   isZh,
   listenHost,
   onChange,
+  testID = "tunnels-add-listen-host",
 }: {
   isZh: boolean;
   listenHost: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  testID?: string;
 }): ReactElement {
   return (
     <Field>
       <FieldLabel>{isZh ? "监听地址" : "Listen address"}</FieldLabel>
-      <Input value={listenHost} onChange={onChange} data-testid="tunnels-add-listen-host" />
+      <Input value={listenHost} onChange={onChange} data-testid={testID} />
       {listenHostIsOpen(listenHost) ? (
         <span className="text-xs leading-[normal] text-red-300">
           {isZh
@@ -848,6 +1075,44 @@ function ListenHostField({
             : "This address is open to the network. Anyone who can reach this machine can connect to the forwarded port."}
         </span>
       ) : null}
+    </Field>
+  );
+}
+
+function RemoteHostField({
+  isZh,
+  supported,
+  remoteHost,
+  onChange,
+  testID = "tunnels-add-remote-host-input",
+  label,
+}: {
+  isZh: boolean;
+  supported: boolean;
+  remoteHost: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  testID?: string;
+  label?: string;
+}): ReactElement | null {
+  if (!supported) {
+    return null;
+  }
+  return (
+    <Field>
+      <FieldLabel>{label ?? (isZh ? "远端主机（可选，默认对端本机）" : "Remote host")}</FieldLabel>
+      <Input
+        defaultValue={remoteHost}
+        onChange={onChange}
+        placeholder="127.0.0.1"
+        autoCapitalize="none"
+        autoCorrect="off"
+        data-testid={testID}
+      />
+      <span className="text-xs leading-[normal] text-muted-foreground">
+        {isZh
+          ? "对端网络上要连的机器。对端的白名单需要放行这个地址和端口。"
+          : "The machine to reach on the paired host's network. Its allowlist must include this destination."}
+      </span>
     </Field>
   );
 }
@@ -866,6 +1131,7 @@ function AddTunnelSheet({
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(serverId);
+  const supportsRemoteHost = useHostFeature(serverId, "daemonTunnelRemoteHost");
   const hosts = useHosts();
   const peerTargets = useMemo(() => resolveTunnelPeerTargets(hosts), [hosts]);
   const selectableTargets = useMemo(
@@ -887,6 +1153,11 @@ function AddTunnelSheet({
     [setPassword],
   );
   const [remotePort, setRemotePort] = useState("");
+  const [remoteHost, setRemoteHost] = useState("");
+  const handleRemoteHostInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setRemoteHost(event.target.value),
+    [],
+  );
   const [listenHost, setListenHost] = useState(DEFAULT_LISTEN_HOST);
   const handleListenHostInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setListenHost(event.target.value),
@@ -1005,19 +1276,11 @@ function AddTunnelSheet({
     const selection = resolveSelection();
     if (!selection) return;
 
-    const forwards = remotePorts.map((rp, idx) => {
-      let lp = rp;
-      if (parsedLocalPorts !== undefined) {
-        lp =
-          parsedLocalPorts.length === 1 && remotePorts.length === 1
-            ? parsedLocalPorts[0]
-            : parsedLocalPorts[idx];
-      }
-      const item: { remotePort: number; localPort?: number } = { remotePort: rp };
-      if (lp) {
-        item.localPort = lp;
-      }
-      return item;
+    const forwards = buildForwards({
+      remotePorts,
+      localPorts: parsedLocalPorts,
+      remoteHost,
+      listenHost,
     });
 
     setSubmitting(true);
@@ -1065,6 +1328,7 @@ function AddTunnelSheet({
     password,
     onCreated,
     passwordOptional,
+    remoteHost,
     remotePort,
     resolveSelection,
     serverId,
@@ -1124,6 +1388,12 @@ function AddTunnelSheet({
         </Field>
       ) : undefined}
       <ListenHostField isZh={isZh} listenHost={listenHost} onChange={handleListenHostInput} />
+      <RemoteHostField
+        isZh={isZh}
+        supported={supportsRemoteHost}
+        remoteHost={remoteHost}
+        onChange={handleRemoteHostInput}
+      />
       <Field>
         <FieldLabel>
           {isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")}
@@ -1192,10 +1462,24 @@ function EditTunnelSheet({
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(entry.serverId);
+  const hosts = useHosts();
+  const supportsRemoteHost = useHostFeature(entry.serverId, "daemonTunnelRemoteHost");
   const [remotePort, setRemotePort] = useState(String(entry.remotePort));
   const handleRemotePortInput2 = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setRemotePort(event.target.value),
     [setRemotePort],
+  );
+  // Kept even when the daemon has no host support, so saving an untouched rule does not silently
+  // rewrite its destination to loopback.
+  const [remoteHost, setRemoteHost] = useState(entry.remoteHost ?? "");
+  const handleRemoteHostInput2 = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setRemoteHost(event.target.value),
+    [setRemoteHost],
+  );
+  const [listenHost, setListenHost] = useState(entry.listenHost || DEFAULT_LISTEN_HOST);
+  const handleListenHostInput2 = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setListenHost(event.target.value),
+    [setListenHost],
   );
   const [localPort, setLocalPort] = useState(
     entry.localPort != null ? String(entry.localPort) : String(entry.remotePort),
@@ -1231,11 +1515,35 @@ function EditTunnelSheet({
 
     setSubmitting(true);
     try {
+      const grantError = await grantIfDestinationChanged({
+        entry,
+        peerId,
+        hosts,
+        remoteHost,
+        remotePort: rp,
+      });
+      if (grantError) {
+        setError(grantError);
+        return;
+      }
+      // The stored rule may ask for 0.0.0.0 while the bound address reads "::" (dual stack). Sending
+      // the bound address back would rewrite the rule, so an untouched field is not restated at all
+      // and the daemon keeps the interface it already has.
+      const boundListenHost = entry.listenHost?.trim() || DEFAULT_LISTEN_HOST;
+      const nextListenHost = listenHost.trim() || DEFAULT_LISTEN_HOST;
       const response = await client.createTunnel({
         peerId,
         ...(entry.peerHostname ? { peerHostname: entry.peerHostname } : {}),
         replaceRemotePort: entry.remotePort,
-        forwards: [{ remotePort: rp, localPort: lp }],
+        replaceRemoteHost: entry.remoteHost ?? "",
+        forwards: [
+          {
+            remotePort: rp,
+            remoteHost: remoteHost.trim() || DEFAULT_LISTEN_HOST,
+            localPort: lp,
+            ...(nextListenHost === boundListenHost ? {} : { listenHost: nextListenHost }),
+          },
+        ],
       });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
@@ -1247,7 +1555,7 @@ function EditTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [client, entry.peerHostname, entry.remotePort, localPort, onSaved, peerId, remotePort, t]);
+  }, [client, entry, hosts, listenHost, localPort, onSaved, peerId, remoteHost, remotePort, t]);
 
   const save = useCallback(() => {
     void saveAsync();
@@ -1268,8 +1576,14 @@ function EditTunnelSheet({
 
   return (
     <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-edit-sheet">
+      <ListenHostField
+        isZh={isZh}
+        listenHost={listenHost}
+        onChange={handleListenHostInput2}
+        testID="tunnels-edit-listen-host"
+      />
       <Field>
-        <FieldLabel>{isZh ? "本地监听端口 (127.0.0.1)" : "Local port (127.0.0.1)"}</FieldLabel>
+        <FieldLabel>{isZh ? "本地监听端口" : "Local port"}</FieldLabel>
         <Input
           defaultValue={localPort}
           onChange={handleLocalPortInput2}
@@ -1279,10 +1593,16 @@ function EditTunnelSheet({
           data-testid="tunnels-edit-local-port-input"
         />
       </Field>
+      <RemoteHostField
+        isZh={isZh}
+        supported={supportsRemoteHost}
+        remoteHost={remoteHost}
+        onChange={handleRemoteHostInput2}
+        testID="tunnels-edit-remote-host-input"
+        label={isZh ? `远端主机（${peerLabel} 网络）` : `Remote host (on ${peerLabel})`}
+      />
       <Field>
-        <FieldLabel>
-          {isZh ? `远端目标端口 (${peerLabel})` : `Remote port (${peerLabel})`}
-        </FieldLabel>
+        <FieldLabel>{isZh ? "远端目标端口" : "Remote port"}</FieldLabel>
         <Input
           defaultValue={remotePort}
           onChange={handleRemotePortInput2}

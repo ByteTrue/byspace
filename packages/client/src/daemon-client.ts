@@ -5489,8 +5489,10 @@ export class DaemonClient {
       password?: string;
       daemonPublicKeyB64?: string;
       replaceRemotePort?: number;
+      replaceRemoteHost?: string;
       forwards: Array<{
         remotePort: number;
+        remoteHost?: string;
         localPort?: number;
         listenHost?: string;
         disabled?: boolean;
@@ -5518,18 +5520,19 @@ export class DaemonClient {
     return response;
   }
 
-  // grantTunnel allows a daemon, identified by its public key, to open a port on this host.
+  // grantTunnel allows a daemon, identified by its public key, to open a destination on this host.
   //
   // Written on the target. The caller holds this daemon's password, which is what authorizes the
   // grant. The grant is local and is not part of the synced replica.
   async grantTunnel(
-    grant: { publicKey: string; port: number },
+    grant: { publicKey: string; host?: string; port: number },
     requestId?: string,
   ): Promise<{ ok: boolean; error?: string }> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "tunnel.grant.request",
       publicKey: grant.publicKey,
+      ...(grant.host ? { host: grant.host } : {}),
       port: grant.port,
       requestId: resolvedRequestId,
     });
@@ -5549,12 +5552,14 @@ export class DaemonClient {
     peerId: string,
     requestId?: string,
     remotePort?: number,
+    remoteHost?: string,
   ): Promise<Extract<TunnelRemoveResponse, { type: "tunnel.remove.response" }>["payload"]> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "tunnel.remove.request",
       peerId,
       ...(remotePort !== undefined ? { remotePort } : {}),
+      ...(remoteHost ? { remoteHost } : {}),
       requestId: resolvedRequestId,
     });
     const response = await this.sendRequest({

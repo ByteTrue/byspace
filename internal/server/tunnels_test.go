@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -61,7 +63,7 @@ func TestTunnelOpenRefusedWhileGateClosed(t *testing.T) {
 
 	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(port)}})
 
-	result, err := srv.tunnelTarget().Open("t1", port, "", func(tunnel.Frame) error { return nil })
+	result, err := srv.tunnelTarget().Open("t1", port, "", "", func(tunnel.Frame) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +85,7 @@ func TestTunnelOpenRefusedWithoutPassword(t *testing.T) {
 	srv.tunnelsEnabled = true
 	srv.mu.Unlock()
 
-	result, _ := srv.tunnelTarget().Open("t1", port, "", func(tunnel.Frame) error { return nil })
+	result, _ := srv.tunnelTarget().Open("t1", port, "", "", func(tunnel.Frame) error { return nil })
 	if result.Allowed {
 		t.Fatal("a host without a password must refuse")
 	}
@@ -95,15 +97,24 @@ func TestTunnelOpenRefusedWithoutPassword(t *testing.T) {
 // The allowlist is the third gate. An absent allowlist must deny everything rather than permit
 // everything — a missing config key is not consent.
 func TestTunnelAllowlistReadsConfig(t *testing.T) {
-	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(3000), float64(3001)}})
-	got := tunnelAllowlist(srv.store.LoadDaemonConfig())
-	if len(got) != 2 || got[0] != 3000 || got[1] != 3001 {
-		t.Fatalf("allowlist = %v", got)
+	srv := newTunnelTestServer(t, map[string]any{
+		"allowedPorts":   []any{float64(3000), float64(3001)},
+		"allowedTargets": []any{"192.168.1.9:5432", "not-an-endpoint"},
+	})
+	got := tunnelEndpoints(srv.store.LoadDaemonConfig())
+	if len(got) != 3 {
+		t.Fatalf("allowlist = %+v", got)
 	}
-	if got := tunnelAllowlist(map[string]any{}); got != nil {
+	if got[0] != (tunnel.Endpoint{Port: 3000}) || got[1] != (tunnel.Endpoint{Port: 3001}) {
+		t.Fatalf("loopback entries = %+v", got[:2])
+	}
+	if got[2] != (tunnel.Endpoint{Host: "192.168.1.9", Port: 5432}) {
+		t.Fatalf("host entry = %+v", got[2])
+	}
+	if got := tunnelEndpoints(map[string]any{}); got != nil {
 		t.Fatalf("absent allowlist = %v", got)
 	}
-	if got := tunnelAllowlist(nil); got != nil {
+	if got := tunnelEndpoints(nil); got != nil {
 		t.Fatalf("nil config = %v", got)
 	}
 }
@@ -125,7 +136,7 @@ func TestTunnelOpenForwardsBytes(t *testing.T) {
 	})
 
 	upstream := make(chan tunnel.Frame, 16)
-	result, err := srv.tunnelTarget().Open("t1", port, "", func(frame tunnel.Frame) error {
+	result, err := srv.tunnelTarget().Open("t1", port, "", "", func(frame tunnel.Frame) error {
 		select {
 		case upstream <- frame:
 		default:
@@ -250,6 +261,172 @@ func TestRolePromptReachesTheAgent(t *testing.T) {
 	plain := srv.systemPromptFor(store.AgentRecord{ID: "agt_x", Labels: map[string]string{"team": "infra"}})
 	if strings.Contains(plain, "You are Chief") {
 		t.Fatalf("a roleless agent got Chief's prompt: %q", plain)
+	}
+}
+
+// The two security seams this feature adds: the grant is per destination, and the JSON create path
+// must carry the old destination when it replaces one.
+func TestTunnelOpenAuthorizationIsPerDestination(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	if err := srv.tunnelGrants().Allow("pk_host", "192.168.1.9", 5432); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.tunnelGrants().Allow("pk_loop", "", 5432); err != nil {
+		t.Fatal(err)
+	}
+
+	if !srv.tunnelOpenAuthorized("pk_host", tunnel.EncodeOpenPayload(5432, "192.168.1.9")) {
+		t.Fatal("the granted host destination was refused")
+	}
+	// A grant for this machine's loopback must not authorize the same port elsewhere, and the reverse
+	// must not either: comparing ports alone would blur them.
+	if srv.tunnelOpenAuthorized("pk_host", tunnel.EncodeOpenPayload(5432, "")) {
+		t.Fatal("a host grant authorized loopback")
+	}
+	if srv.tunnelOpenAuthorized("pk_loop", tunnel.EncodeOpenPayload(5432, "192.168.1.9")) {
+		t.Fatal("a loopback grant authorized another host")
+	}
+	if srv.tunnelOpenAuthorized("pk_host", []byte{0x15}) {
+		t.Fatal("a malformed open payload must not authorize anything")
+	}
+}
+
+// Editing a rule goes through tunnel.create with the OLD destination in replaceRemoteHost/Port. A
+// dropped JSON field here turns every edit into "append a second rule".
+func TestTunnelCreateReplacesRemoteHost(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	sink := &recordingSink{}
+	send := func(payload map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv.handleSessionMessage(context.Background(), sink, raw)
+	}
+
+	send(map[string]any{
+		"type":      "tunnel.create.request",
+		"requestId": "c1",
+		"config": map[string]any{
+			"peerId":   "peer-edit",
+			"url":      "wss://relay.example.com",
+			"forwards": []any{map[string]any{"remotePort": 5432}},
+		},
+	})
+	send(map[string]any{
+		"type":      "tunnel.create.request",
+		"requestId": "c2",
+		"config": map[string]any{
+			"peerId":            "peer-edit",
+			"replaceRemotePort": 5432,
+			"forwards": []any{
+				map[string]any{"remotePort": 6432, "remoteHost": "10.0.0.9", "localPort": 16432},
+			},
+		},
+	})
+
+	// The gate is off, so the config is persisted without a listener. Read the file: it is the answer
+	// the next boot uses, and it also pins the JSON field this test is about.
+	raw, err := os.ReadFile(filepath.Join(srv.homeDir, tunnel.RegistryFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Peers []tunnel.PeerConfig `json:"peers"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Peers) != 1 {
+		t.Fatalf("expected one peer, got %+v", file.Peers)
+	}
+	forwards := file.Peers[0].Forwards
+	if len(forwards) != 1 {
+		t.Fatalf("expected the replaced rule to be the only one, got %+v", forwards)
+	}
+	if forwards[0].RemotePort != 6432 || forwards[0].RemoteHost != "10.0.0.9" {
+		t.Fatalf("edit did not reach tunnels.json: %+v", forwards[0])
+	}
+}
+
+// An app from before host support omits remoteHost, so it cannot say which of two rules on one port
+// it means. The daemon refuses that request instead of mutating the loopback rule the user did not
+// click; a request that states the host still works.
+func TestTunnelHandlersRefuseAmbiguousHostlessRequest(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	registry := srv.tunnelRegistry()
+	if err := registry.Add(tunnel.PeerConfig{
+		PeerID: "peer-ambiguous",
+		URL:    "wss://relay.example.com",
+		Forwards: []tunnel.ForwardConfig{
+			{RemotePort: 5432},
+			{RemotePort: 5432, RemoteHost: "10.0.0.9"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sink := &recordingSink{}
+	send := func(payload map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv.handleSessionMessage(context.Background(), sink, raw)
+	}
+
+	// A host-less remove must not pick the loopback rule.
+	send(map[string]any{
+		"type":       "tunnel.remove.request",
+		"requestId":  "r1",
+		"peerId":     "peer-ambiguous",
+		"remotePort": 5432,
+	})
+	// A host-less create (what an old app's toggle sends) must not add a third rule either.
+	send(map[string]any{
+		"type":      "tunnel.create.request",
+		"requestId": "c1",
+		"config": map[string]any{
+			"peerId":   "peer-ambiguous",
+			"forwards": []any{map[string]any{"remotePort": 5432}},
+		},
+	})
+
+	readForwards := func() []tunnel.ForwardConfig {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join(srv.homeDir, tunnel.RegistryFilename))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var file struct {
+			Peers []tunnel.PeerConfig `json:"peers"`
+		}
+		if err := json.Unmarshal(raw, &file); err != nil {
+			t.Fatal(err)
+		}
+		if len(file.Peers) != 1 {
+			t.Fatalf("expected one peer, got %+v", file.Peers)
+		}
+		return file.Peers[0].Forwards
+	}
+
+	if forwards := readForwards(); len(forwards) != 2 {
+		t.Fatalf("an ambiguous request changed the rules: %+v", forwards)
+	}
+
+	// Stating the host resolves the ambiguity.
+	send(map[string]any{
+		"type":       "tunnel.remove.request",
+		"requestId":  "r2",
+		"peerId":     "peer-ambiguous",
+		"remotePort": 5432,
+		"remoteHost": "127.0.0.1",
+	})
+	forwards := readForwards()
+	if len(forwards) != 1 || forwards[0].RemoteHost != "10.0.0.9" {
+		t.Fatalf("the explicit loopback rule was not the one removed: %+v", forwards)
 	}
 }
 

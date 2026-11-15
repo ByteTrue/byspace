@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -30,14 +32,74 @@ type PeerConfig struct {
 	Forwards        []ForwardConfig `json:"forwards"`
 }
 
-// ForwardConfig is one port to expose locally.
+// ForwardConfig is one destination on a peer, exposed as a local port.
 type ForwardConfig struct {
 	RemotePort int `json:"remotePort"`
-	LocalPort  int `json:"localPort,omitempty"`
+	// RemoteHost is the destination on the peer's side. Empty means the peer's loopback, which is
+	// also what a tunnels.json written before hosts existed means.
+	RemoteHost string `json:"remoteHost,omitempty"`
+	LocalPort  int    `json:"localPort,omitempty"`
 	// ListenHost is the interface the local listener binds to. Empty means loopback.
 	ListenHost string `json:"listenHost,omitempty"`
 	Disabled   bool   `json:"disabled,omitempty"`
 	Label      string `json:"label,omitempty"`
+}
+
+// Endpoint is one destination a peer may reach on this machine's network.
+type Endpoint struct {
+	// Host is another machine on this network. Empty means this machine's loopback.
+	Host string
+	Port int
+}
+
+// loopbackHost is the canonical spelling of "this machine".
+const loopbackHost = "127.0.0.1"
+
+// CanonicalHost folds every spelling of loopback into one, so a port-only allowlist entry and a
+// request for "localhost" agree. Anything else is compared case-insensitively and otherwise kept,
+// so an allowlist entry matches the host the operator typed.
+func CanonicalHost(host string) string {
+	h := strings.ToLower(unbracket(host))
+	switch h {
+	case "", loopbackHost, "localhost", "::1", "0:0:0:0:0:0:0:1":
+		return loopbackHost
+	}
+	return h
+}
+
+// FormatEndpoint renders a destination as host:port for display, ids and comparisons.
+func FormatEndpoint(host string, port int) string {
+	return net.JoinHostPort(CanonicalHost(host), strconv.Itoa(port))
+}
+
+// unbracket strips the [ ] an operator may type around an IPv6 literal. JoinHostPort adds them.
+func unbracket(host string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(host), "["), "]")
+}
+
+// ValidateRemoteHost rejects a destination that cannot be dialled as written.
+func ValidateRemoteHost(host string) error {
+	trimmed := strings.TrimSpace(host)
+	if trimmed == "" {
+		return nil
+	}
+	if len(trimmed) > MaxRemoteHostLength {
+		return fmt.Errorf("remote host is longer than %d bytes", MaxRemoteHostLength)
+	}
+	// No scheme, path, userinfo or spaces. Dial would resolve some of them differently than the
+	// operator reading the rule expects, and the target must dial exactly the allowlisted host.
+	if strings.ContainsAny(trimmed, " /\\@?#") {
+		return fmt.Errorf("remote host %q is not a host name or address", host)
+	}
+	for _, r := range trimmed {
+		if r < 0x21 || r == 0x7f {
+			return fmt.Errorf("remote host %q contains a control character", host)
+		}
+	}
+	if strings.Contains(unbracket(trimmed), ":") && net.ParseIP(unbracket(trimmed)) == nil {
+		return fmt.Errorf("remote host %q is not an IPv6 address", host)
+	}
+	return nil
 }
 
 // registryFile is the on-disk shape. The version field matches the node schema so the two
@@ -239,7 +301,7 @@ func (r *Registry) startPeer(peer PeerConfig) error {
 		if forward.Disabled {
 			continue
 		}
-		f, err := manager.AddForwardWithLocalPort(forward.RemotePort, forward.LocalPort, forward.ListenHost, forward.Label)
+		f, err := manager.AddForward(*forward)
 		if err != nil {
 			_ = manager.Close()
 			return err
@@ -387,22 +449,25 @@ func (r *Registry) List() []PeerStatus {
 			State:        StateDisconnected,
 		}
 		if enabled {
-			liveByRemote := make(map[int]ForwardState)
+			liveByEndpoint := make(map[string]ForwardState)
 			if item.manager != nil {
 				for _, st := range item.manager.Status() {
-					liveByRemote[st.RemotePort] = st
+					liveByEndpoint[FormatEndpoint(st.RemoteHost, st.RemotePort)] = st
 				}
 			}
 			for _, fw := range item.peer.Forwards {
+				endpoint := FormatEndpoint(fw.RemoteHost, fw.RemotePort)
 				if !fw.Disabled {
-					if live, ok := liveByRemote[fw.RemotePort]; ok {
+					if live, ok := liveByEndpoint[endpoint]; ok {
 						status.Forwards = append(status.Forwards, live)
 						continue
 					}
 				}
 				status.Forwards = append(status.Forwards, ForwardState{
 					RemotePort: fw.RemotePort,
+					RemoteHost: fw.RemoteHost,
 					LocalPort:  fw.LocalPort,
+					ListenHost: fw.ListenHost,
 					Label:      fw.Label,
 					State:      StateDisconnected,
 					Disabled:   fw.Disabled,
@@ -451,22 +516,48 @@ func aggregateState(forwards []ForwardState) string {
 	}
 }
 
-// Add configures a peer or updates/merges forwards on an existing peer.
-func (r *Registry) Add(peer PeerConfig) error {
-	return r.AddOrUpdate(peer, 0)
+// inheritForward carries the fields an update does not restate. The destination (host and port) is
+// the caller's; the local binding, label and paused state are not part of the edit form.
+//
+// keepDisabled is false for a merge that came from a toggle: that request states the state it wants.
+func inheritForward(up ForwardConfig, old ForwardConfig, keepDisabled bool) ForwardConfig {
+	if up.LocalPort == 0 && old.LocalPort > 0 {
+		up.LocalPort = old.LocalPort
+	}
+	if up.ListenHost == "" && old.ListenHost != "" {
+		up.ListenHost = old.ListenHost
+	}
+	if up.Label == "" && old.Label != "" {
+		up.Label = old.Label
+	}
+	if keepDisabled && !up.Disabled {
+		up.Disabled = old.Disabled
+	}
+	return up
 }
 
-// AddOrUpdate configures a peer or updates an existing peer's forwards. When replaceRemotePort > 0,
-// that previous remotePort entry is replaced by peer.Forwards (supporting editing remotePort/localPort
-// in place without re-entering credentials).
-func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
+// Add configures a peer or updates/merges forwards on an existing peer.
+func (r *Registry) Add(peer PeerConfig) error {
+	return r.AddOrUpdate(peer, ForwardConfig{})
+}
+
+// AddOrUpdate configures a peer or updates an existing peer's forwards. A replace entry with a
+// positive RemotePort names one existing destination that the incoming forwards replace, which is
+// how the edit sheet changes a host or port in place without re-entering credentials. The host is
+// part of the identity: the same port on two different machines is two rules.
+func (r *Registry) AddOrUpdate(peer PeerConfig, replace ForwardConfig) error {
 	if peer.PeerID == "" {
 		return fmt.Errorf("peerId is required")
 	}
 	if len(peer.Forwards) == 0 {
 		return fmt.Errorf("at least one forward is required")
 	}
-	for _, forward := range peer.Forwards {
+	for i := range peer.Forwards {
+		forward := &peer.Forwards[i]
+		if err := ValidateRemoteHost(forward.RemoteHost); err != nil {
+			return err
+		}
+		forward.RemoteHost = strings.TrimSpace(forward.RemoteHost)
 		if forward.RemotePort < 1 || forward.RemotePort > 65535 {
 			return fmt.Errorf("remotePort %d out of range", forward.RemotePort)
 		}
@@ -493,40 +584,71 @@ func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
 				peer.DaemonPublicKey = oldPeer.DaemonPublicKey
 			}
 			merged := make([]ForwardConfig, 0, len(oldPeer.Forwards)+len(peer.Forwards))
-			incoming := make(map[int]ForwardConfig, len(peer.Forwards))
+			incoming := make(map[string]ForwardConfig, len(peer.Forwards))
 			for _, fw := range peer.Forwards {
-				incoming[fw.RemotePort] = fw
+				incoming[FormatEndpoint(fw.RemoteHost, fw.RemotePort)] = fw
+			}
+			replaceKey := ""
+			if replace.RemotePort > 0 {
+				replaceKey = FormatEndpoint(replace.RemoteHost, replace.RemotePort)
+			}
+			// An edit can move a rule onto a destination another rule already owns. Checked before the
+			// merge and independent of the rules' order: the merge treats the incoming destination as
+			// an update, so whichever of the two came second was silently consumed and the other
+			// vanished from the list.
+			if replaceKey != "" && len(peer.Forwards) > 0 {
+				first := peer.Forwards[0]
+				replacementKey := FormatEndpoint(first.RemoteHost, first.RemotePort)
+				if replacementKey != replaceKey {
+					for _, oldFw := range oldPeer.Forwards {
+						oldKey := FormatEndpoint(oldFw.RemoteHost, oldFw.RemotePort)
+						if oldKey != replaceKey && oldKey == replacementKey {
+							r.mu.Unlock()
+							return fmt.Errorf("a forward to %s already exists", replacementKey)
+						}
+					}
+				}
 			}
 			for _, oldFw := range oldPeer.Forwards {
-				if replaceRemotePort > 0 && oldFw.RemotePort == replaceRemotePort {
+				oldKey := FormatEndpoint(oldFw.RemoteHost, oldFw.RemotePort)
+				if replaceKey != "" && oldKey == replaceKey {
 					if len(peer.Forwards) > 0 {
 						first := peer.Forwards[0]
-						if _, ok := incoming[first.RemotePort]; ok {
-							merged = append(merged, first)
-							delete(incoming, first.RemotePort)
+						firstKey := FormatEndpoint(first.RemoteHost, first.RemotePort)
+						if up, ok := incoming[firstKey]; ok {
+							// The replacement is a different destination, but the rule's local binding and
+							// paused state were not part of the edit.
+							merged = append(merged, inheritForward(up, oldFw, true))
+							delete(incoming, firstKey)
 						}
 					}
 					continue
 				}
-				if up, exists := incoming[oldFw.RemotePort]; exists {
-					if up.LocalPort == 0 && oldFw.LocalPort > 0 {
-						up.LocalPort = oldFw.LocalPort
-					}
-					// An edit that does not restate the listen address keeps the one already bound,
-					// the same way it keeps a pinned local port.
-					if up.ListenHost == "" && oldFw.ListenHost != "" {
-						up.ListenHost = oldFw.ListenHost
-					}
-					merged = append(merged, up)
-					delete(incoming, oldFw.RemotePort)
+				if up, exists := incoming[oldKey]; exists {
+					merged = append(merged, inheritForward(up, oldFw, false))
+					delete(incoming, oldKey)
 				} else {
 					merged = append(merged, oldFw)
 				}
 			}
 			for _, fw := range peer.Forwards {
-				if up, still := incoming[fw.RemotePort]; still {
+				key := FormatEndpoint(fw.RemoteHost, fw.RemotePort)
+				if up, still := incoming[key]; still {
 					merged = append(merged, up)
+					delete(incoming, key)
 				}
+			}
+			// An edit can land on a destination another rule already uses (the edit sheet names the old
+			// one, not the new). Two rules for one destination collide in the manager, which keys by
+			// destination, so one of them would silently replace the other and leak its listener.
+			seen := make(map[string]bool, len(merged))
+			for _, fw := range merged {
+				key := FormatEndpoint(fw.RemoteHost, fw.RemotePort)
+				if seen[key] {
+					r.mu.Unlock()
+					return fmt.Errorf("a forward to %s already exists", key)
+				}
+				seen[key] = true
 			}
 			peer.Forwards = merged
 			r.peers[index] = peer
@@ -558,12 +680,34 @@ func (r *Registry) AddOrUpdate(peer PeerConfig, replaceRemotePort int) error {
 	return nil
 }
 
-// RemoveForward deletes a single forwarded remotePort from a peer, or removes the entire peer
-// when remotePort <= 0 or when it was the peer's last forward.
-func (r *Registry) RemoveForward(peerID string, remotePort int) error {
+// PortUsedByHostRule reports whether this peer already forwards the port to another machine.
+//
+// A client from before host support omits remoteHost, so when the same port is also forwarded to a
+// host, its request cannot say which rule it means. The handlers refuse that request instead of
+// guessing (and mutating the loopback rule the user did not click).
+func (r *Registry) PortUsedByHostRule(peerID string, port int) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, peer := range r.peers {
+		if peer.PeerID != peerID {
+			continue
+		}
+		for _, forward := range peer.Forwards {
+			if forward.RemotePort == port && CanonicalHost(forward.RemoteHost) != loopbackHost {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// RemoveForward deletes one destination from a peer, or removes the entire peer when remotePort
+// <= 0 or when it was the peer's last forward.
+func (r *Registry) RemoveForward(peerID string, remoteHost string, remotePort int) error {
 	if remotePort <= 0 {
 		return r.Remove(peerID)
 	}
+	want := FormatEndpoint(remoteHost, remotePort)
 	r.mu.Lock()
 	var updatedPeer *PeerConfig
 	for i := range r.peers {
@@ -572,13 +716,13 @@ func (r *Registry) RemoveForward(peerID string, remotePort int) error {
 		}
 		kept := make([]ForwardConfig, 0, len(r.peers[i].Forwards))
 		for _, fw := range r.peers[i].Forwards {
-			if fw.RemotePort != remotePort {
+			if FormatEndpoint(fw.RemoteHost, fw.RemotePort) != want {
 				kept = append(kept, fw)
 			}
 		}
 		if len(kept) == len(r.peers[i].Forwards) {
 			r.mu.Unlock()
-			return fmt.Errorf("tunnel forward %s:%d not found", peerID, remotePort)
+			return fmt.Errorf("tunnel forward %s not found", want)
 		}
 		if len(kept) == 0 {
 			r.mu.Unlock()
