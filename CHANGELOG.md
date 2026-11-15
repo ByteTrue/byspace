@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.26.1 - 2026-11-15
+
+### Added
+
+- Added a Listen on selector to tunnel forwards, so either end can be any host in the chain
+
+### Fixed
+
+- Fixed a paused tunnel row hiding its listen address
+
 ## 0.26.0 - 2026-11-15
 
 ### Added
