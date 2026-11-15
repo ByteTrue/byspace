@@ -17,10 +17,11 @@ import { asUint8Array } from "./terminal.js";
 
 export const TunnelFrameOpcode = {
   /**
-   * Ask the target to dial one of its ports and start a stream.
+   * Ask the target to dial one of its destinations and start a stream.
    *
-   * Payload is a 2-byte big-endian port. The daemon keeps this handshake on the binary channel so a
-   * `DataUpstream` can never overtake the open that gates it.
+   * Payload is a 2-byte big-endian port, a flags byte, then the optional destination host as UTF-8.
+   * The daemon keeps this handshake on the binary channel so a `DataUpstream` can never overtake the
+   * open that gates it.
    */
   Open: 0x1f,
   /** Stream bytes for tunnelId, D1→D2 (client to target host). */

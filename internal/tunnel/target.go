@@ -8,13 +8,14 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Target serves a peer's open requests: it dials the requested loopback port and pumps bytes
-// back over the tunnel.
+// Target serves a peer's open requests: it dials the requested destination and pumps bytes back
+// over the tunnel.
 //
 // Ported from session/tunnel/tunnel-session.ts. This is the D2 half — the machine whose ports are
 // being forwarded. Three gates before anything is dialled, all of them server-side because a
@@ -22,15 +23,17 @@ import (
 //
 //  1. the experimental feature gate (issue 063) — tunnels are off until the operator opts in;
 //  2. a daemon password must be configured — an unauthenticated forwarder is an open proxy;
-//  3. the requested port must be on the allowlist.
+//  3. the requested destination must be on the allowlist. A destination is host:port, so allowing
+//     a port on loopback does not also open the same port on every machine this one can reach.
 type Target struct {
 	// Enabled is the feature gate. Read per request so a config change applies without a restart.
 	Enabled func() bool
 	// PasswordSet reports whether a daemon password is configured.
 	PasswordSet func() bool
-	// AllowedPorts is the forward whitelist. Read per request for the same reason.
-	AllowedPorts func() []int
-	// DialHost is where forwarded connections go. Empty means 127.0.0.1.
+	// Allowed is the destination whitelist. Read per request for the same reason.
+	Allowed func() []Endpoint
+	// DialHost is where forwarded connections go when the request names no host. Empty means
+	// 127.0.0.1.
 	DialHost string
 
 	mu      sync.Mutex
@@ -70,42 +73,51 @@ type OpenResult struct {
 }
 
 // NewTarget builds a target-side server.
-func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []int) *Target {
+func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []Endpoint) *Target {
 	return &Target{
-		Enabled:      enabled,
-		PasswordSet:  passwordSet,
-		AllowedPorts: allowed,
-		streams:      make(map[string]*targetStream),
+		Enabled:     enabled,
+		PasswordSet: passwordSet,
+		Allowed:     allowed,
+		streams:     make(map[string]*targetStream),
 	}
 }
 
 // Open answers a tunnel.open request.
 //
 // The denials are distinguished in the reason text rather than a code because the client shows
-// it verbatim: "port 9999 is not in the tunnel allowlist" tells the user what to fix, while a bare
-// refusal leaves them guessing which of the three gates closed.
+// it verbatim: "192.168.1.9:5432 is not in the tunnel allowlist" tells the user what to fix, while a
+// bare refusal leaves them guessing which of the three gates closed.
 //
 // tunnelID is the initiator's id for this stream. The target adopts it rather than minting its own,
 // because every frame after the open is routed by that id: a target that invented one would answer
 // with a name the initiator never sent.
-func (t *Target) Open(tunnelID string, remotePort int, ownerKey string, send func(Frame) error) (OpenResult, error) {
+func (t *Target) Open(tunnelID string, remotePort int, remoteHost string, ownerKey string, send func(Frame) error) (OpenResult, error) {
 	if t.Enabled != nil && !t.Enabled() {
 		return OpenResult{Allowed: false, Reason: "Tunnels are disabled on this host."}, nil
 	}
 	if t.PasswordSet != nil && !t.PasswordSet() {
 		return OpenResult{Allowed: false, Reason: "This host has no daemon password set, so tunnels are disabled."}, nil
 	}
-	if !t.portAllowed(remotePort) {
-		return OpenResult{
-			Allowed: false,
-			Reason:  fmt.Sprintf("Port %d is not in the tunnel allowlist.", remotePort),
-		}, nil
+	if remotePort < 1 || remotePort > 65535 {
+		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Port %d is out of range.", remotePort)}, nil
+	}
+	if err := ValidateRemoteHost(remoteHost); err != nil {
+		return OpenResult{Allowed: false, Reason: fmt.Sprintf("%v.", err)}, nil
+	}
+	requestHost := strings.TrimSpace(remoteHost)
+	destination := FormatEndpoint(requestHost, remotePort)
+	if !t.endpointAllowed(requestHost, remotePort) {
+		return OpenResult{Allowed: false, Reason: fmt.Sprintf("%s is not in the tunnel allowlist.", destination)}, nil
 	}
 
-	host := t.DialHost
+	host := requestHost
 	if host == "" {
-		host = "127.0.0.1"
+		host = t.DialHost
 	}
+	if host == "" {
+		host = loopbackHost
+	}
+	dialed := net.JoinHostPort(unbracket(host), strconv.Itoa(remotePort))
 
 	id := tunnelID
 	if id == "" {
@@ -139,10 +151,10 @@ func (t *Target) Open(tunnelID string, remotePort int, ownerKey string, send fun
 		existing.writeMu.Unlock()
 		return OpenResult{TunnelID: id, Allowed: true}, nil
 	}
-	conn, err := net.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)))
+	conn, err := net.Dial("tcp", dialed)
 	if err != nil {
 		t.mu.Unlock()
-		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s:%d: %v", host, remotePort, err)}, nil
+		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s: %v", dialed, err)}, nil
 	}
 	stream := &targetStream{id: id, conn: conn, send: send, ownerKey: ownerKey}
 	t.streams[id] = stream
@@ -152,13 +164,15 @@ func (t *Target) Open(tunnelID string, remotePort int, ownerKey string, send fun
 	return OpenResult{TunnelID: id, Allowed: true}, nil
 }
 
-// portAllowed checks the whitelist.
-func (t *Target) portAllowed(port int) bool {
-	if t.AllowedPorts == nil {
+// endpointAllowed checks the whitelist. Comparison is on the canonical endpoint, so a loopback
+// request matches a bare port entry and nothing else can borrow that entry's permission.
+func (t *Target) endpointAllowed(host string, port int) bool {
+	if t.Allowed == nil {
 		return false
 	}
-	for _, allowed := range t.AllowedPorts() {
-		if allowed == port {
+	want := FormatEndpoint(host, port)
+	for _, allowed := range t.Allowed() {
+		if FormatEndpoint(allowed.Host, allowed.Port) == want {
 			return true
 		}
 	}
@@ -174,7 +188,7 @@ func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send fu
 	// An open creates the stream, so it is answered before the lookup below: the id is not in the
 	// table yet, and treating it like a stale frame is exactly what dropped every new stream.
 	if frame.Opcode == OpcodeOpen {
-		port, ok := DecodeOpenPayload(frame.Payload)
+		port, remoteHost, ok := DecodeOpenPayload(frame.Payload)
 		if !ok {
 			_ = send(Frame{
 				Opcode:   OpcodeOpenAck,
@@ -183,7 +197,7 @@ func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send fu
 			})
 			return
 		}
-		result, err := t.Open(frame.TunnelID, port, peerKey, send)
+		result, err := t.Open(frame.TunnelID, port, remoteHost, peerKey, send)
 		if len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
 			if stream := t.streams[frame.TunnelID]; stream != nil {
 				stream.resumable = true
@@ -198,8 +212,16 @@ func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send fu
 			return
 		}
 		ack := EncodeOpenAck(result.Allowed, result.Reason)
-		if result.Allowed && len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
-			ack[0] |= OpenResumeCapable
+		if result.Allowed {
+			if len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
+				ack[0] |= OpenResumeCapable
+			}
+			// Only when the request carried a host. An initiator from before hosts rejects a status
+			// byte it does not know, so a loopback stream must keep the old answer; a request with a
+			// host can only come from a build that understands this bit.
+			if len(frame.Payload) > 3 {
+				ack[0] |= OpenHostCapable
+			}
 		}
 		_ = send(Frame{
 			Opcode:   OpcodeOpenAck,

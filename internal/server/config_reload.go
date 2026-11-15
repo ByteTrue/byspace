@@ -21,6 +21,7 @@ var reloadablePaths = []string{
 	"daemon.relay.useTls",
 	"daemon.tunnel.enabled",
 	"daemon.tunnel.allowedPorts",
+	"daemon.tunnel.allowedTargets",
 	"daemon.hostnames",
 	"daemon.cors.allowedOrigins",
 	"daemon.trustedProxies",

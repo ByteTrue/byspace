@@ -61,9 +61,9 @@ func (s *Server) tunnelTarget() *tunnel.Target {
 			return s.tunnelsEnabled
 		},
 		func() bool { return s.daemonPasswordHash() != "" },
-		func() []int {
+		func() []tunnel.Endpoint {
 			config := s.store.LoadDaemonConfig()
-			return tunnelAllowlist(config)
+			return tunnelEndpoints(config)
 		},
 	)
 	s.tunnelTargetServer = target
@@ -81,11 +81,23 @@ func (s *Server) tunnelGrants() *tunnel.Grants {
 	return loaded
 }
 
-// tunnelAllowlist reads the forwarded-port whitelist from config.
+// tunnelOpenAuthorized reports whether a relay peer may open the destination encoded in an open
+// payload. The grant is per destination, so a grant for this machine's loopback must not authorize
+// the same port on another host.
+func (s *Server) tunnelOpenAuthorized(peerKey string, payload []byte) bool {
+	port, host, ok := tunnel.DecodeOpenPayload(payload)
+	if !ok {
+		return false
+	}
+	return s.tunnelGrants().Allowed(peerKey, host, port)
+}
+
+// tunnelEndpoints reads the forwarded-destination whitelist from config.
 //
-// Read through a helper rather than inline so the shape stays in one place: a config edit must
-// apply to the next open without a restart, which rules out caching it on the target.
-func tunnelAllowlist(config map[string]any) []int {
+// allowedPorts are this machine's own ports; allowedTargets are "host:port" destinations elsewhere
+// on its network. Read through a helper rather than inline so the shape stays in one place: a config
+// edit must apply to the next open without a restart, which rules out caching it on the target.
+func tunnelEndpoints(config map[string]any) []tunnel.Endpoint {
 	if config == nil {
 		return nil
 	}
@@ -93,20 +105,38 @@ func tunnelAllowlist(config map[string]any) []int {
 	if !ok {
 		return nil
 	}
-	list, ok := raw["allowedPorts"].([]any)
-	if !ok {
-		return nil
-	}
-	ports := make([]int, 0, len(list))
-	for _, item := range list {
-		switch value := item.(type) {
-		case float64:
-			ports = append(ports, int(value))
-		case int:
-			ports = append(ports, value)
+	endpoints := make([]tunnel.Endpoint, 0, 8)
+	if list, ok := raw["allowedPorts"].([]any); ok {
+		for _, item := range list {
+			switch value := item.(type) {
+			case float64:
+				endpoints = append(endpoints, tunnel.Endpoint{Port: int(value)})
+			case int:
+				endpoints = append(endpoints, tunnel.Endpoint{Port: value})
+			}
 		}
 	}
-	return ports
+	if list, ok := raw["allowedTargets"].([]any); ok {
+		for _, item := range list {
+			text, ok := item.(string)
+			if !ok {
+				continue
+			}
+			host, portText, splitErr := net.SplitHostPort(strings.TrimSpace(text))
+			if splitErr != nil {
+				continue
+			}
+			port, convErr := strconv.Atoi(portText)
+			if convErr != nil || port < 1 || port > 65535 {
+				continue
+			}
+			endpoints = append(endpoints, tunnel.Endpoint{Host: host, Port: port})
+		}
+	}
+	if len(endpoints) == 0 {
+		return nil
+	}
+	return endpoints
 }
 
 // ApplyTunnelConfig reconciles the tunnel gate with the stored config.
@@ -160,10 +190,12 @@ func (s *Server) handleTunnelList(ctx context.Context, sink frameSink, requestID
 	for _, peer := range registry.List() {
 		for _, forward := range peer.Forwards {
 			entries = append(entries, map[string]any{
-				"tunnelId":     peer.PeerID + ":" + strconv.Itoa(forward.RemotePort),
+				"tunnelId":     peer.PeerID + ":" + tunnel.FormatEndpoint(forward.RemoteHost, forward.RemotePort),
 				"direction":    "outbound",
 				"remotePort":   forward.RemotePort,
+				"remoteHost":   forward.RemoteHost,
 				"localPort":    forward.LocalPort,
+				"listenHost":   forward.ListenHost,
 				"peerHostname": peer.PeerHostname,
 				"state":        forward.State,
 				"disabled":     forward.Disabled,
@@ -223,6 +255,7 @@ func (s *Server) handleTunnelOpen(ctx context.Context, sink frameSink, raw json.
 		RequestID  string `json:"requestId"`
 		TunnelID   string `json:"tunnelId"`
 		RemotePort int    `json:"remotePort"`
+		RemoteHost string `json:"remoteHost"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -231,7 +264,7 @@ func (s *Server) handleTunnelOpen(ctx context.Context, sink frameSink, raw json.
 	// the daemon password (a pending relay socket is closed before it gets here), and an operator owns
 	// every stream it can reach. A tunnel peer daemon opens streams through the binary frame path,
 	// which threads its proven key instead.
-	result, err := target.Open(req.TunnelID, req.RemotePort, "", func(frame tunnel.Frame) error {
+	result, err := target.Open(req.TunnelID, req.RemotePort, req.RemoteHost, "", func(frame tunnel.Frame) error {
 		encoded, encodeErr := tunnel.EncodeFrame(frame.Opcode, frame.TunnelID, frame.Payload)
 		if encodeErr != nil {
 			return encodeErr
@@ -302,7 +335,7 @@ func (s *Server) handleTunnelStats(ctx context.Context, sink frameSink, requestI
 	for _, peer := range registry.List() {
 		for _, forward := range peer.Forwards {
 			entries = append(entries, map[string]any{
-				"tunnelId":   peer.PeerID + ":" + strconv.Itoa(forward.RemotePort),
+				"tunnelId":   peer.PeerID + ":" + tunnel.FormatEndpoint(forward.RemoteHost, forward.RemotePort),
 				"remotePort": forward.RemotePort,
 				"bytesUp":    0,
 				"bytesDown":  0,
@@ -323,12 +356,21 @@ func (s *Server) handleTunnelGrant(ctx context.Context, sink frameSink, raw json
 	var req struct {
 		RequestID string `json:"requestId"`
 		PublicKey string `json:"publicKey"`
+		Host      string `json:"host"`
 		Port      int    `json:"port"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return
 	}
-	err := s.tunnelGrants().Allow(strings.TrimSpace(req.PublicKey), req.Port)
+	// Validate before writing: a grant for a port or host that can never be opened is permanently
+	// inert, and the person who wrote it sees "ok" instead of the mistake.
+	err := tunnel.ValidateRemoteHost(req.Host)
+	if err == nil && (req.Port < 1 || req.Port > 65535) {
+		err = fmt.Errorf("port %d is out of range", req.Port)
+	}
+	if err == nil {
+		err = s.tunnelGrants().Allow(strings.TrimSpace(req.PublicKey), req.Host, req.Port)
+	}
 	payload := map[string]any{"requestId": req.RequestID, "ok": err == nil}
 	if err != nil {
 		payload["error"] = err.Error()
@@ -350,16 +392,37 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 			Token             string  `json:"password"`
 			DaemonPublicKey   string  `json:"daemonPublicKeyB64"`
 			ReplaceRemotePort int     `json:"replaceRemotePort"`
+			ReplaceRemoteHost string  `json:"replaceRemoteHost"`
 			Forwards          []struct {
-				RemotePort int    `json:"remotePort"`
-				LocalPort  int    `json:"localPort"`
-				ListenHost string `json:"listenHost"`
-				Disabled   bool   `json:"disabled"`
-				Label      string `json:"label"`
+				RemotePort int     `json:"remotePort"`
+				RemoteHost *string `json:"remoteHost"`
+				LocalPort  int     `json:"localPort"`
+				ListenHost string  `json:"listenHost"`
+				Disabled   bool    `json:"disabled"`
+				Label      string  `json:"label"`
 			} `json:"forwards"`
 		} `json:"config"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	registry := s.tunnelRegistry()
+	// A request that does not state a host can only mean this machine's loopback. When the port is also
+	// forwarded to another host, refuse rather than apply it to the wrong rule: that is what an app
+	// from before host support sends for either row.
+	for _, forward := range req.Config.Forwards {
+		if forward.RemoteHost == nil && registry.PortUsedByHostRule(req.Config.PeerID, forward.RemotePort) {
+			_ = sendSessionMsg(ctx, sink, "tunnel.create.response", map[string]any{
+				"requestId": req.RequestID,
+				"peerId":    req.Config.PeerID,
+				"ok":        false,
+				"error": fmt.Sprintf(
+					"port %d is also forwarded to another host; update the app to change this rule",
+					forward.RemotePort,
+				),
+			})
+			return
+		}
+	}
 
 	forwards := make([]tunnel.ForwardConfig, 0, len(req.Config.Forwards))
 	for _, forward := range req.Config.Forwards {
@@ -376,6 +439,7 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 		}
 		forwards = append(forwards, tunnel.ForwardConfig{
 			RemotePort: forward.RemotePort,
+			RemoteHost: strings.TrimSpace(derefOrEmpty(forward.RemoteHost)),
 			LocalPort:  forward.LocalPort,
 			ListenHost: strings.TrimSpace(forward.ListenHost),
 			Disabled:   forward.Disabled,
@@ -384,14 +448,17 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 	}
 
 	s.ApplyTunnelConfig()
-	err := s.tunnelRegistry().AddOrUpdate(tunnel.PeerConfig{
+	err := registry.AddOrUpdate(tunnel.PeerConfig{
 		PeerID:          req.Config.PeerID,
 		PeerHostname:    req.Config.PeerHostname,
 		URL:             req.Config.URL,
 		Token:           req.Config.Token,
 		DaemonPublicKey: req.Config.DaemonPublicKey,
 		Forwards:        forwards,
-	}, req.Config.ReplaceRemotePort)
+	}, tunnel.ForwardConfig{
+		RemoteHost: strings.TrimSpace(req.Config.ReplaceRemoteHost),
+		RemotePort: req.Config.ReplaceRemotePort,
+	})
 	payload := map[string]any{
 		"requestId": req.RequestID,
 		"peerId":    req.Config.PeerID,
@@ -403,16 +470,33 @@ func (s *Server) handleTunnelCreate(ctx context.Context, sink frameSink, raw jso
 	_ = sendSessionMsg(ctx, sink, "tunnel.create.response", payload)
 }
 
-// handleTunnelRemove deletes an outbound peer.
+// handleTunnelRemove deletes an outbound peer or one of its destinations.
 func (s *Server) handleTunnelRemove(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID  string `json:"requestId"`
-		PeerID     string `json:"peerId"`
-		RemotePort int    `json:"remotePort"`
+		RequestID  string  `json:"requestId"`
+		PeerID     string  `json:"peerId"`
+		RemotePort int     `json:"remotePort"`
+		RemoteHost *string `json:"remoteHost"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	err := s.tunnelRegistry().RemoveForward(req.PeerID, req.RemotePort)
+	registry := s.tunnelRegistry()
+	// Same ambiguity as create: a host-less request means loopback, so it cannot pick between two
+	// destinations on one port.
+	if req.RemoteHost == nil && registry.PortUsedByHostRule(req.PeerID, req.RemotePort) {
+		_ = sendSessionMsg(ctx, sink, "tunnel.remove.response", map[string]any{
+			"requestId": req.RequestID,
+			"peerId":    req.PeerID,
+			"ok":        false,
+			"error": fmt.Sprintf(
+				"port %d is also forwarded to another host; update the app to remove this rule",
+				req.RemotePort,
+			),
+		})
+		return
+	}
+
+	err := registry.RemoveForward(req.PeerID, derefOrEmpty(req.RemoteHost), req.RemotePort)
 	payload := map[string]any{
 		"requestId": req.RequestID,
 		"peerId":    req.PeerID,
@@ -430,4 +514,14 @@ func nullableString(value string) any {
 		return nil
 	}
 	return value
+}
+
+// derefOrEmpty reads an optional JSON string. Absent and empty mean the same thing to the code that
+// takes a destination, which is why only the handlers need the distinction (they use nil to mean "the
+// client did not say which host", not "loopback").
+func derefOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

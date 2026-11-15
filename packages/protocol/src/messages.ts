@@ -318,11 +318,14 @@ export const MutableDaemonConfigSchema = z
       .passthrough()
       .optional(),
     // Daemon tunnel (issue 062/063): experimental, off by default. Patchable
-    // from the app; persisted to daemon.tunnel.{enabled,allowedPorts}.
+    // from the app; persisted to daemon.tunnel.{enabled,allowedPorts,allowedTargets}.
     tunnel: z
       .object({
         enabled: z.boolean().default(false),
         allowedPorts: z.array(z.number().int().min(1).max(65535)).default([]),
+        // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. Destinations
+        // on this network, as "host:port"; an older daemon omits the field.
+        allowedTargets: z.array(z.string()).optional(),
       })
       .passthrough()
       .optional(),
@@ -391,6 +394,8 @@ export const MutableDaemonConfigPatchSchema = z
       .object({
         enabled: z.boolean().optional(),
         allowedPorts: z.array(z.number().int().min(1).max(65535)).optional(),
+        // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15.
+        allowedTargets: z.array(z.string()).optional(),
       })
       .passthrough()
       .optional(),
@@ -1622,7 +1627,13 @@ export const TunnelEntrySchema = z.object({
   // "inbound": a peer daemon connected to this daemon (D2 view).
   direction: z.enum(["outbound", "inbound"]),
   remotePort: z.number().int(),
+  // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. The destination on
+  // the peer's side; absent means its loopback, which is what every older daemon forwards to.
+  remoteHost: z.string().optional(),
   localPort: z.number().int().nullable().optional(),
+  // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. The local interface
+  // the listener bound to; absent means loopback.
+  listenHost: z.string().optional(),
   peerHostname: z.string().nullable().optional(),
   state: z.enum(["connecting", "connected", "disconnected", "error"]),
   disabled: z.boolean().optional(),
@@ -1678,8 +1689,10 @@ export const TunnelListRequestSchema = z.object({
 export const TunnelOpenRequestSchema = z.object({
   type: z.literal("tunnel.open.request"),
   requestId: z.string(),
-  // Port on the D2 host (127.0.0.1:<remotePort>) to forward to.
+  // Destination on the D2 host to forward to. Absent host means 127.0.0.1 there.
   remotePort: z.number().int().min(1).max(65535),
+  // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15.
+  remoteHost: z.string().optional(),
 });
 
 export const TunnelCloseRequestSchema = z.object({
@@ -1696,8 +1709,11 @@ export const TunnelStatsRequestSchema = z.object({
 export const TunnelGrantRequestSchema = z.object({
   type: z.literal("tunnel.grant.request"),
   requestId: z.string(),
-  // The daemon allowed to open the port, identified by its public key.
+  // The daemon allowed to open the destination, identified by its public key.
   publicKey: z.string().min(1),
+  // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. A host on this
+  // network; absent means this machine's loopback.
+  host: z.string().optional(),
   port: z.number().int().min(1).max(65535),
 });
 
@@ -1711,10 +1727,16 @@ export const TunnelCreateRequestSchema = z.object({
     password: z.string().optional(),
     daemonPublicKeyB64: z.string().optional(),
     replaceRemotePort: z.number().int().min(1).max(65535).optional(),
+    // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. The destination
+    // host of the rule being replaced; absent means loopback.
+    replaceRemoteHost: z.string().optional(),
     forwards: z
       .array(
         z.object({
           remotePort: z.number().int().min(1).max(65535),
+          // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. The
+          // destination on the peer's side; absent means its loopback.
+          remoteHost: z.string().optional(),
           localPort: z.number().int().min(1).max(65535).optional(),
           // COMPAT(tunnelListenHost): added in v0.25.0, remove after 2027-11-13. The local listener
           // address; absent or empty means loopback. A daemon that ignores it binds 127.0.0.1.
@@ -1732,6 +1754,9 @@ export const TunnelRemoveRequestSchema = z.object({
   requestId: z.string(),
   peerId: z.string().min(1),
   remotePort: z.number().int().min(1).max(65535).optional(),
+  // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15. Which rule on that
+  // port; absent means loopback.
+  remoteHost: z.string().optional(),
 });
 
 export const PluginCatalogGetRequestSchema = z.object({
@@ -3905,6 +3930,11 @@ export const ServerInfoStatusPayloadSchema = z
         // tunnel.* RPCs, so an older host has nowhere to put a tunnel and no
         // config field to enable one.
         daemonTunnels: z.boolean().optional(),
+        // COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15.
+        // The daemon accepts a destination host on the peer's network for a forward. Without it
+        // the client hides the host field: a daemon that does not parse the field would persist a
+        // rule that silently forwards to the wrong machine.
+        daemonTunnelRemoteHost: z.boolean().optional(),
         // COMPAT(providerSubagentNesting): added in v0.7, remove gate after 2027-03-04.
         providerSubagentNesting: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.

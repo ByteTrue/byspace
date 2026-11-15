@@ -648,7 +648,7 @@ func TestRelayTunnelForwardsConcurrentStreams(t *testing.T) {
 	peer.hello(t, ctx, "daemon-tunnel-peer")
 	for index := 0; index < 6; index++ {
 		streamID := fmt.Sprintf("stream-%d", index)
-		open, err := tunnel.EncodeFrame(tunnel.OpcodeOpen, streamID, tunnel.EncodeOpenPayload(port))
+		open, err := tunnel.EncodeFrame(tunnel.OpcodeOpen, streamID, tunnel.EncodeOpenPayload(port, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -682,12 +682,19 @@ func TestRelayTunnelForwardsConcurrentStreams(t *testing.T) {
 			}
 			switch decoded.Opcode {
 			case tunnel.OpcodeOpenAck:
-				allowed, reason, valid := tunnel.DecodeOpenAck(decoded.Payload)
-				if !valid || !allowed {
-					t.Fatalf("tunnel open failed: %s", reason)
+				ack, valid := tunnel.DecodeOpenAck(decoded.Payload)
+				if !valid || !ack.Allowed {
+					t.Fatalf("tunnel open failed: %s", ack.Reason)
 				}
 			case tunnel.OpcodeDataDownstream:
 				responses[decoded.TunnelID] += string(decoded.Payload)
+			case tunnel.OpcodeDataDownstreamSeq:
+				// An open that asked for resume gets sequenced downstream frames: the bytes, then
+				// an eight-byte sequence that is not part of the response.
+				if len(decoded.Payload) < 8 {
+					t.Fatalf("%s: malformed sequenced frame", decoded.TunnelID)
+				}
+				responses[decoded.TunnelID] += string(decoded.Payload[:len(decoded.Payload)-8])
 			case tunnel.OpcodeClose:
 				if !strings.HasSuffix(responses[decoded.TunnelID], "data: [DONE]\n\n") {
 					t.Fatalf("%s closed before its complete response", decoded.TunnelID)
@@ -731,7 +738,7 @@ func TestTwoDaemonsResumeStreamAfterRelaySocketLoss(t *testing.T) {
 	initiator.ApplyTunnelConfig()
 	// The target authorizes the peer's key for this port. The allowlist says which ports this host
 	// may expose at all; a grant says who may open one.
-	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), "", port); err != nil {
 		t.Fatal(err)
 	}
 	registry := initiator.tunnelRegistry()
@@ -807,13 +814,13 @@ func testTwoDaemonsForwardConcurrentStreamsOverRelay(t *testing.T, interrupt boo
 	if err := initiator.store.SetDaemonPasswordHash(mustHashPassword(t, relayTestPassword)); err != nil {
 		t.Fatal(err)
 	}
-	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), "", port); err != nil {
 		t.Fatal(err)
 	}
 	initiator.ApplyTunnelConfig()
 	// The target authorizes the peer's key for this port. The allowlist says which ports this host
 	// may expose at all; a grant says who may open one.
-	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), port); err != nil {
+	if err := target.tunnelGrants().Allow(tunnelKeyOf(t, initiator), "", port); err != nil {
 		t.Fatal(err)
 	}
 	registry := initiator.tunnelRegistry()

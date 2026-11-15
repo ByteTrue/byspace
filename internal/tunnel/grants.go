@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ByteTrue/byspace/internal/home"
 )
@@ -15,10 +16,16 @@ import (
 // replica cannot open a port here.
 const GrantsFilename = "tunnel-grants.json"
 
-// Grant allows one daemon, identified by its public key, to open one local port.
+// Grant allows one daemon, identified by its public key, to open one destination.
+//
+// An older build reading this file compares ports only, so a host grant degrades to a loopback grant
+// on the same port there. Do not share a home with an older daemon while host grants exist.
 type Grant struct {
 	PublicKey string `json:"publicKey"`
-	Port      int    `json:"port"`
+	// Host is another machine on this network. Empty means this machine's loopback, which is what
+	// every grant written before hosts existed means.
+	Host string `json:"host,omitempty"`
+	Port int    `json:"port"`
 }
 
 type grantsFile struct {
@@ -50,21 +57,24 @@ func LoadGrants(homeDir string) (*Grants, error) {
 	return g, nil
 }
 
-// Allow records that a daemon key may open a port. Repeated calls for the same pair do nothing.
-func (g *Grants) Allow(publicKey string, port int) error {
+// Allow records that a daemon key may open a destination. Repeated calls for the same endpoint do
+// nothing.
+func (g *Grants) Allow(publicKey string, host string, port int) error {
+	endpoint := FormatEndpoint(host, port)
 	for _, grant := range g.grants {
-		if grant.PublicKey == publicKey && grant.Port == port {
+		if grant.PublicKey == publicKey && FormatEndpoint(grant.Host, grant.Port) == endpoint {
 			return nil
 		}
 	}
-	g.grants = append(g.grants, Grant{PublicKey: publicKey, Port: port})
+	g.grants = append(g.grants, Grant{PublicKey: publicKey, Host: strings.TrimSpace(host), Port: port})
 	return g.save()
 }
 
-// Allowed reports whether a daemon key may open a port.
-func (g *Grants) Allowed(publicKey string, port int) bool {
+// Allowed reports whether a daemon key may open a destination.
+func (g *Grants) Allowed(publicKey string, host string, port int) bool {
+	endpoint := FormatEndpoint(host, port)
 	for _, grant := range g.grants {
-		if grant.PublicKey == publicKey && grant.Port == port {
+		if grant.PublicKey == publicKey && FormatEndpoint(grant.Host, grant.Port) == endpoint {
 			return true
 		}
 	}

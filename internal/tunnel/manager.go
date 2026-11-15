@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,7 +15,9 @@ import (
 
 // ForwardState is the per-port state reported to clients.
 type ForwardState struct {
-	RemotePort int    `json:"remotePort"`
+	RemotePort int `json:"remotePort"`
+	// RemoteHost is the destination on the peer's side. Empty means its loopback.
+	RemoteHost string `json:"remoteHost,omitempty"`
 	Label      string `json:"label,omitempty"`
 	LocalPort  int    `json:"localPort"`
 	// ListenHost is the interface the local listener bound to. Loopback when the rule did not ask
@@ -83,7 +86,9 @@ func (s *stream) enqueue(frame Frame) bool {
 // openResult is the target's answer to an open request.
 type openResult struct {
 	allowed bool
-	reason  string
+	// hostCapable reports that the target dialled the requested host rather than its own loopback.
+	hostCapable bool
+	reason      string
 }
 
 // settleOpen delivers an open result at most once.
@@ -96,9 +101,11 @@ func (s *stream) settleOpen(result openResult) {
 	})
 }
 
-// forward is one remote port exposed locally.
+// forward is one destination on the peer, exposed as a local listener.
 type forward struct {
 	remotePort int
+	// remoteHost is the destination on the peer's side. Empty means its loopback.
+	remoteHost string
 	label      string
 	listener   net.Listener
 	localPort  int
@@ -116,9 +123,11 @@ type forward struct {
 // Ported from tunnel-manager.ts. The manager owns the local listeners and the byte pumps; it does
 // not own the relay connection, which arrives as a PeerConn.
 type Manager struct {
-	peerID     string
-	peerHost   string
-	forwards   map[int]*forward
+	peerID   string
+	peerHost string
+	// forwards is keyed by FormatEndpoint, because one peer can forward the same port number on
+	// two different hosts.
+	forwards   map[string]*forward
 	peer       PeerConn
 	nextStream atomic.Uint64
 	// idPrefix keeps stream ids unique per manager instance. The target keeps a stream for up to
@@ -143,7 +152,7 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 	return &Manager{
 		peerID:   peerID,
 		peerHost: peerHost,
-		forwards: make(map[int]*forward),
+		forwards: make(map[string]*forward),
 		closeCh:  make(chan struct{}),
 		logf:     logf,
 		grace:    30 * time.Second,
@@ -152,39 +161,42 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 	}
 }
 
-// AddForward exposes one remote port locally on an ephemeral port (or use AddForwardWithLocalPort
-// to bind a fixed local port).
-func (m *Manager) AddForward(remotePort int, label string) (*forward, error) {
-	return m.AddForwardWithLocalPort(remotePort, 0, "", label)
-}
-
-// AddForwardWithLocalPort exposes one remote port locally, binding preferredLocalPort when > 0.
-// listenHost picks the interface; empty means loopback (127.0.0.1). Binding 0.0.0.0 or :: exposes
-// the port on the network, which the UI warns about before it gets here.
-func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, listenHost, label string) (*forward, error) {
-	if remotePort < 1 || remotePort > 65535 {
-		return nil, fmt.Errorf("remotePort %d out of range", remotePort)
+// AddForward exposes one destination on the peer behind a local listener.
+//
+// cfg.LocalPort pins the local port when > 0 and lets the OS pick otherwise. cfg.ListenHost picks
+// the interface; empty means loopback (127.0.0.1). Binding 0.0.0.0 or :: exposes the port on the
+// network, which the UI warns about before it gets here. cfg.RemoteHost is the destination on the
+// peer; empty means its loopback.
+func (m *Manager) AddForward(cfg ForwardConfig) (*forward, error) {
+	if cfg.RemotePort < 1 || cfg.RemotePort > 65535 {
+		return nil, fmt.Errorf("remotePort %d out of range", cfg.RemotePort)
 	}
-	if preferredLocalPort < 0 || preferredLocalPort > 65535 {
-		return nil, fmt.Errorf("localPort %d out of range", preferredLocalPort)
+	if err := ValidateRemoteHost(cfg.RemoteHost); err != nil {
+		return nil, err
+	}
+	if cfg.LocalPort < 0 || cfg.LocalPort > 65535 {
+		return nil, fmt.Errorf("localPort %d out of range", cfg.LocalPort)
 	}
 
-	host := strings.TrimSpace(listenHost)
+	host := strings.TrimSpace(cfg.ListenHost)
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	listenAddr := net.JoinHostPort(host, strconv.Itoa(preferredLocalPort))
+	remoteHost := strings.TrimSpace(cfg.RemoteHost)
+	remote := FormatEndpoint(remoteHost, cfg.RemotePort)
+	listenAddr := net.JoinHostPort(host, strconv.Itoa(cfg.LocalPort))
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open local listener on %s for remote %d: %w", listenAddr, remotePort, err)
+		return nil, fmt.Errorf("cannot open local listener on %s for %s: %w", listenAddr, remote, err)
 	}
 	addr := listener.Addr().(*net.TCPAddr)
 	port := addr.Port
 	listenHostUsed := addr.IP.String()
 
 	f := &forward{
-		remotePort: remotePort,
-		label:      label,
+		remotePort: cfg.RemotePort,
+		remoteHost: remoteHost,
+		label:      cfg.Label,
 		listener:   listener,
 		localPort:  port,
 		listenHost: listenHostUsed,
@@ -198,11 +210,19 @@ func (m *Manager) AddForwardWithLocalPort(remotePort, preferredLocalPort int, li
 		_ = listener.Close()
 		return nil, errors.New("manager closed")
 	}
-	m.forwards[remotePort] = f
+	if _, exists := m.forwards[remote]; exists {
+		// The registry rejects a duplicate rule; this is the last line of defence. Overwriting the map
+		// entry kept the first listener running and untracked, so its port accepted connections
+		// nobody could see or close.
+		m.mu.Unlock()
+		_ = listener.Close()
+		return nil, fmt.Errorf("%s is already forwarded", remote)
+	}
+	m.forwards[remote] = f
 	m.mu.Unlock()
 
 	go m.acceptLoop(f)
-	m.logf("tunnel %s: forwarding remote %d as %s:%d", m.peerID, remotePort, listenHostUsed, port)
+	m.logf("tunnel %s: forwarding %s as %s:%d", m.peerID, remote, listenHostUsed, port)
 	return f, nil
 }
 
@@ -292,14 +312,14 @@ func (m *Manager) Status() []ForwardState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]ForwardState, 0, len(m.forwards))
-	for _, port := range m.sortedPorts() {
-		f := m.forwards[port]
+	for _, f := range m.sortedForwards() {
 		// The stored state is the answer. Inferring "connected" from `m.peer != nil` reported a
 		// live tunnel whenever a connection object existed — and one always does after the first
 		// dial, even when the peer daemon has been stopped and the relay is holding an idle socket.
 		out = append(out, ForwardState{
 			State:      f.state,
 			RemotePort: f.remotePort,
+			RemoteHost: f.remoteHost,
 			Label:      f.label,
 			LocalPort:  f.localPort,
 			ListenHost: f.listenHost,
@@ -309,18 +329,19 @@ func (m *Manager) Status() []ForwardState {
 	return out
 }
 
-// sortedPorts returns the remote ports in ascending order, so list output is stable.
-func (m *Manager) sortedPorts() []int {
-	ports := make([]int, 0, len(m.forwards))
-	for port := range m.forwards {
-		ports = append(ports, port)
+// sortedForwards orders forwards by port, then host, so list output is stable. Caller holds m.mu.
+func (m *Manager) sortedForwards() []*forward {
+	out := make([]*forward, 0, len(m.forwards))
+	for _, f := range m.forwards {
+		out = append(out, f)
 	}
-	for i := 1; i < len(ports); i++ {
-		for j := i; j > 0 && ports[j] < ports[j-1]; j-- {
-			ports[j], ports[j-1] = ports[j-1], ports[j]
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].remotePort != out[j].remotePort {
+			return out[i].remotePort < out[j].remotePort
 		}
-	}
-	return ports
+		return out[i].remoteHost < out[j].remoteHost
+	})
+	return out
 }
 
 // Close tears down every listener and stream.
@@ -398,7 +419,7 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	if err := peer.Send(Frame{
 		Opcode:   OpcodeOpen,
 		TunnelID: id,
-		Payload:  append(EncodeOpenPayload(f.remotePort), OpenResumeRequested),
+		Payload:  EncodeOpenPayload(f.remotePort, f.remoteHost),
 	}); err != nil {
 		m.dropStream(f, s, "peer send failed: "+err.Error())
 		return
@@ -415,6 +436,19 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 		if reason == "" {
 			reason = "target refused the stream"
 		}
+		m.setError(f, reason)
+		m.dropStream(f, s, reason)
+		return
+	}
+	// A rule that names a host needs a target that read it. An older one dialled its own loopback
+	// and answered allowed, which would have silently served a different service (or a different
+	// listener, when the host was a loopback alias the target resolves differently).
+	if strings.TrimSpace(f.remoteHost) != "" && !result.hostCapable {
+		reason := "The peer does not support forwarding to another host; update it to use this tunnel."
+		// The target dialled its own loopback and is holding that socket for this stream id. Closing
+		// the stream is what releases it; dropping only the local side would leave the target's
+		// socket open until the peer socket dies.
+		_ = peer.Send(Frame{Opcode: OpcodeClose, TunnelID: s.id})
 		m.setError(f, reason)
 		m.dropStream(f, s, reason)
 		return
@@ -629,12 +663,12 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 
 	switch frame.Opcode {
 	case OpcodeOpenAck:
-		allowed, reason, ok := DecodeOpenAck(frame.Payload)
+		ack, ok := DecodeOpenAck(frame.Payload)
 		if !ok {
-			allowed, reason = false, "malformed open acknowledgement"
+			ack = OpenAck{Reason: "malformed open acknowledgement"}
 		}
-		target.settleOpen(openResult{allowed: allowed, reason: reason})
-		if allowed {
+		target.settleOpen(openResult{allowed: ack.Allowed, hostCapable: ack.HostCapable, reason: ack.Reason})
+		if ack.Allowed {
 			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 		}
 	case OpcodeDataDownstream:
@@ -731,6 +765,19 @@ func (m *Manager) setError(f *forward, message string) {
 	m.mu.Unlock()
 }
 
+// forwardState reads one forward's state by its remote port. Test helper: two hosts can use the
+// same port, so a caller that needs an exact answer must key by endpoint.
+func (m *Manager) forwardState(remotePort int) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, f := range m.forwards {
+		if f.remotePort == remotePort {
+			return f.state, true
+		}
+	}
+	return "", false
+}
+
 // WaitForState blocks until the given port reaches want, or the deadline passes.
 //
 // Tests use it instead of sleeping: the connection state is what they assert on, and polling a
@@ -738,14 +785,7 @@ func (m *Manager) setError(f *forward, message string) {
 func (m *Manager) WaitForState(remotePort int, want string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		m.mu.Lock()
-		f, ok := m.forwards[remotePort]
-		state := ""
-		if ok {
-			state = f.state
-		}
-		m.mu.Unlock()
-		if ok && state == want {
+		if state, ok := m.forwardState(remotePort); ok && state == want {
 			return true
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -753,13 +793,15 @@ func (m *Manager) WaitForState(remotePort int, want string, timeout time.Duratio
 	return false
 }
 
-// LocalPort reports the bound local port for a remote port.
+// LocalPort reports the bound local port for a remote port. Test helper: two hosts can use the same
+// port, so a caller that needs an exact answer must key by endpoint.
 func (m *Manager) LocalPort(remotePort int) (int, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	f, ok := m.forwards[remotePort]
-	if !ok {
-		return 0, false
+	for _, f := range m.forwards {
+		if f.remotePort == remotePort {
+			return f.localPort, true
+		}
 	}
-	return f.localPort, true
+	return 0, false
 }

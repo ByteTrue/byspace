@@ -33,6 +33,139 @@ func startEchoService(t *testing.T) (port int, stop func()) {
 	return listener.Addr().(*net.TCPAddr).Port, func() { _ = listener.Close() }
 }
 
+// startEchoServiceOn is the same service on another address, skipping when the platform cannot bind
+// it. Used to prove that a destination on another host is reachable by name only.
+func startEchoServiceOn(t *testing.T, host string) (port int, stop func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", host+":0")
+	if err != nil {
+		t.Skipf("cannot bind %s: %v", host, err)
+	}
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				_, _ = io.Copy(c, c)
+			}(conn)
+		}
+	}()
+	return listener.Addr().(*net.TCPAddr).Port, func() { _ = listener.Close() }
+}
+
+// loopbackAllowlist is the common test allowlist: these ports on the target's own machine.
+func loopbackAllowlist(ports ...int) func() []Endpoint {
+	return func() []Endpoint {
+		out := make([]Endpoint, 0, len(ports))
+		for _, port := range ports {
+			out = append(out, Endpoint{Port: port})
+		}
+		return out
+	}
+}
+
+// A destination on another machine is allowed only by name. A port-only entry opens that port on
+// loopback and nothing else, or the allowlist would be a gateway to every host this machine reaches.
+func TestTargetAllowlistNamesTheHost(t *testing.T) {
+	port, stop := startEchoServiceOn(t, "127.0.0.2")
+	defer stop()
+	allow := func() []Endpoint { return []Endpoint{{Host: "127.0.0.2", Port: port}} }
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, allow)
+	defer target.Close()
+
+	opened, _ := target.Open("", port, "127.0.0.2", "", func(Frame) error { return nil })
+	if !opened.Allowed {
+		t.Fatalf("the allowlisted destination was refused: %s", opened.Reason)
+	}
+
+	other, _ := target.Open("", port, "127.0.0.3", "", func(Frame) error { return nil })
+	if other.Allowed {
+		t.Fatal("the same port on another host was allowed by name")
+	}
+	if !strings.Contains(other.Reason, "127.0.0.3:") || !strings.Contains(other.Reason, "allowlist") {
+		t.Fatalf("the refusal should name the destination: %q", other.Reason)
+	}
+
+	loopback, _ := target.Open("", port, "", "", func(Frame) error { return nil })
+	if loopback.Allowed {
+		t.Fatal("a host:port entry must not also open the loopback port")
+	}
+}
+
+// Loopback keeps its port-only meaning, and every spelling of it matches.
+func TestTargetLoopbackAliasesMatchPortEntries(t *testing.T) {
+	port, stop := startEchoService(t)
+	defer stop()
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
+	defer target.Close()
+	for _, host := range []string{"", "127.0.0.1", "localhost"} {
+		opened, _ := target.Open("", port, host, "", func(Frame) error { return nil })
+		if !opened.Allowed {
+			t.Fatalf("loopback destination %q was refused: %s", host, opened.Reason)
+		}
+	}
+}
+
+// A target that read a host says so; a loopback request keeps the old acknowledgement, because an
+// initiator from before hosts rejects a status byte it does not know.
+func TestTargetAckAdvertisesHostCapabilityOnlyWhenAsked(t *testing.T) {
+	port, stop := startEchoService(t)
+	defer stop()
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
+	defer target.Close()
+
+	ackFor := func(tunnelID string, payload []byte) OpenAck {
+		t.Helper()
+		frames := make(chan Frame, 4)
+		target.HandleFrame(
+			Frame{Opcode: OpcodeOpen, TunnelID: tunnelID, Payload: payload},
+			"",
+			true,
+			func(frame Frame) error { frames <- frame; return nil },
+		)
+		select {
+		case frame := <-frames:
+			ack, ok := DecodeOpenAck(frame.Payload)
+			if !ok {
+				t.Fatalf("acknowledgement did not decode: %+v", frame)
+			}
+			return ack
+		case <-time.After(2 * time.Second):
+			t.Fatal("no acknowledgement")
+		}
+		return OpenAck{}
+	}
+
+	if ack := ackFor("loopback", EncodeOpenPayload(port, "")); ack.HostCapable {
+		t.Fatal("a loopback request must not advertise host support")
+	}
+	if ack := ackFor("with-host", EncodeOpenPayload(port, "127.0.0.1")); !ack.HostCapable {
+		t.Fatal("a request that carried a host must prove the target read it")
+	}
+}
+
+// A host that is not a dialable endpoint is refused before the allowlist is consulted, so a malformed
+// request cannot be smuggled in as a name.
+func TestTargetRejectsMalformedHost(t *testing.T) {
+	for _, host := range []string{"http://192.168.1.9", "192.168.1.9/path", "user@192.168.1.9"} {
+		// Allowlisted as written, so only the validation can refuse it.
+		target := NewTarget(func() bool { return true }, func() bool { return true }, func() []Endpoint {
+			return []Endpoint{{Host: host, Port: 5432}}
+		})
+		result, _ := target.Open("", 5432, host, "", func(Frame) error { return nil })
+		target.Close()
+		if result.Allowed {
+			t.Fatalf("host %q was accepted", host)
+		}
+	}
+}
+
 // The three gates exist because a client can lie about all of them. Each denial names the gate
 // that closed, since the client shows the reason verbatim.
 func TestTargetOpenGates(t *testing.T) {
@@ -40,20 +173,20 @@ func TestTargetOpenGates(t *testing.T) {
 	defer stop()
 	allowed := []int{port}
 
-	disabled := NewTarget(func() bool { return false }, func() bool { return true }, func() []int { return allowed })
-	if result, _ := disabled.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
+	disabled := NewTarget(func() bool { return false }, func() bool { return true }, loopbackAllowlist(allowed...))
+	if result, _ := disabled.Open("", port, "", "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a disabled host must refuse")
 	} else if result.Reason == "" {
 		t.Fatal("the refusal must say why")
 	}
 
-	noPassword := NewTarget(func() bool { return true }, func() bool { return false }, func() []int { return allowed })
-	if result, _ := noPassword.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
+	noPassword := NewTarget(func() bool { return true }, func() bool { return false }, loopbackAllowlist(allowed...))
+	if result, _ := noPassword.Open("", port, "", "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("a host without a password must refuse")
 	}
 
-	notAllowed := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{1, 2} })
-	result, _ := notAllowed.Open("", port, "", func(Frame) error { return nil })
+	notAllowed := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(1, 2))
+	result, _ := notAllowed.Open("", port, "", "", func(Frame) error { return nil })
 	if result.Allowed {
 		t.Fatal("a port outside the allowlist must refuse")
 	}
@@ -61,8 +194,8 @@ func TestTargetOpenGates(t *testing.T) {
 		t.Fatalf("the reason should mention the allowlist: %q", result.Reason)
 	}
 
-	ok := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
-	opened, _ := ok.Open("", port, "", func(Frame) error { return nil })
+	ok := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(allowed...))
+	opened, _ := ok.Open("", port, "", "", func(Frame) error { return nil })
 	if !opened.Allowed || opened.TunnelID == "" {
 		t.Fatalf("an allowed port must open: %+v", opened)
 	}
@@ -75,14 +208,14 @@ func TestTargetGatesAreReadPerRequest(t *testing.T) {
 	defer stop()
 
 	enabled := false
-	target := NewTarget(func() bool { return enabled }, func() bool { return true }, func() []int { return []int{port} })
+	target := NewTarget(func() bool { return enabled }, func() bool { return true }, loopbackAllowlist(port))
 	defer target.Close()
 
-	if result, _ := target.Open("", port, "", func(Frame) error { return nil }); result.Allowed {
+	if result, _ := target.Open("", port, "", "", func(Frame) error { return nil }); result.Allowed {
 		t.Fatal("should be refused while disabled")
 	}
 	enabled = true
-	if result, _ := target.Open("", port, "", func(Frame) error { return nil }); !result.Allowed {
+	if result, _ := target.Open("", port, "", "", func(Frame) error { return nil }); !result.Allowed {
 		t.Fatalf("should be allowed once enabled: %s", result.Reason)
 	}
 }
@@ -104,7 +237,7 @@ func TestTargetForwardsBytes(t *testing.T) {
 	port, stop := startEchoService(t)
 	defer stop()
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
 	defer target.Close()
 
 	upstream := make(chan Frame, 16)
@@ -116,7 +249,7 @@ func TestTargetForwardsBytes(t *testing.T) {
 		return nil
 	}
 
-	opened, _ := target.Open("t1", port, "", send)
+	opened, _ := target.Open("t1", port, "", "", send)
 	if !opened.Allowed {
 		t.Fatalf("open refused: %s", opened.Reason)
 	}
@@ -161,11 +294,11 @@ func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
 		_, _ = conn.Write([]byte("data: complete\n\ndata: [DONE]\n\n"))
 	}()
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
 	defer target.Close()
 	frames := make(chan Frame, 16)
 	send := func(frame Frame) error { frames <- frame; return nil }
-	if _, err := target.Open("half-close", port, "", send); err != nil {
+	if _, err := target.Open("half-close", port, "", "", send); err != nil {
 		t.Fatal(err)
 	}
 	target.HandleFrame(Frame{Opcode: OpcodeDataUpstream, TunnelID: "half-close", Payload: []byte("request")}, "", true, send)
@@ -192,7 +325,7 @@ func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
 }
 
 func TestTargetResumeAcknowledgesExistingStream(t *testing.T) {
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{1} })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(1))
 	stream := &targetStream{id: "resume", send: func(Frame) error { return nil }, resumable: true}
 	target.streams["resume"] = stream
 	frames := make(chan Frame, 1)
@@ -229,7 +362,7 @@ func TestTargetReconnectResumesPendingResponse(t *testing.T) {
 		}
 	}()
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return []int{port} })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
 	defer target.Close()
 
 	// One send callback for the whole test: only the socket behind it changes, which is exactly
@@ -251,7 +384,7 @@ func TestTargetReconnectResumesPendingResponse(t *testing.T) {
 	target.HandleFrame(Frame{
 		Opcode:   OpcodeOpen,
 		TunnelID: "resume",
-		Payload:  append(EncodeOpenPayload(port), OpenResumeRequested),
+		Payload:  EncodeOpenPayload(port, ""),
 	}, "", true, send)
 
 	resume := func(fail bool, cursor uint64) {
@@ -334,13 +467,13 @@ func TestTargetStreamOwnerRejectsOtherPeers(t *testing.T) {
 	defer stop()
 	allowed := []int{port}
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(allowed...))
 	defer target.Close()
 
 	owner := "peer-owner-key"
 	attacker := "peer-attacker-key"
 
-	opened, _ := target.Open("owned-stream", port, owner, func(Frame) error { return nil })
+	opened, _ := target.Open("owned-stream", port, "", owner, func(Frame) error { return nil })
 	if !opened.Allowed {
 		t.Fatalf("owner open refused: %s", opened.Reason)
 	}
@@ -361,7 +494,7 @@ func TestTargetStreamOwnerRejectsOtherPeers(t *testing.T) {
 	}
 
 	// A re-open attempt from the attacker must be refused, not adopted as a reconnect.
-	reopen, _ := target.Open("owned-stream", port, attacker, func(Frame) error { return nil })
+	reopen, _ := target.Open("owned-stream", port, "", attacker, func(Frame) error { return nil })
 	if reopen.Allowed {
 		t.Fatal("attacker re-opened the owner's stream")
 	}
@@ -380,10 +513,10 @@ func TestTargetOperatorOwnsEverything(t *testing.T) {
 	defer stop()
 	allowed := []int{port}
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(allowed...))
 	defer target.Close()
 
-	opened, _ := target.Open("op-stream", port, "", func(Frame) error { return nil })
+	opened, _ := target.Open("op-stream", port, "", "", func(Frame) error { return nil })
 	if !opened.Allowed {
 		t.Fatalf("operator open refused: %s", opened.Reason)
 	}
@@ -402,10 +535,10 @@ func TestTargetOperatorStreamRejectsKeyedPeer(t *testing.T) {
 	defer stop()
 	allowed := []int{port}
 
-	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []int { return allowed })
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(allowed...))
 	defer target.Close()
 
-	opened, _ := target.Open("operator-stream", port, "", func(Frame) error { return nil })
+	opened, _ := target.Open("operator-stream", port, "", "", func(Frame) error { return nil })
 	if !opened.Allowed {
 		t.Fatalf("operator open refused: %s", opened.Reason)
 	}

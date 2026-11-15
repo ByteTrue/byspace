@@ -47,7 +47,7 @@ func TestLocalPortReachesPeerAndBack(t *testing.T) {
 	m := NewManager("peer-1", "target-host", t.Logf)
 	defer func() { _ = m.Close() }()
 
-	if _, err := m.AddForward(3000, "dev server"); err != nil {
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3000, Label: "dev server"}); err != nil {
 		t.Fatal(err)
 	}
 	localPort, ok := m.LocalPort(3000)
@@ -88,7 +88,7 @@ func TestConnectionWithoutPeerFails(t *testing.T) {
 	m := NewManager("peer-2", "", t.Logf)
 	defer func() { _ = m.Close() }()
 
-	if _, err := m.AddForward(3001, ""); err != nil {
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3001, Label: ""}); err != nil {
 		t.Fatal(err)
 	}
 	localPort, _ := m.LocalPort(3001)
@@ -116,7 +116,7 @@ func TestPeerReplacementTearsDownStreams(t *testing.T) {
 	m := NewManager("peer-3", "", t.Logf)
 	defer func() { _ = m.Close() }()
 
-	if _, err := m.AddForward(3002, ""); err != nil {
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3002, Label: ""}); err != nil {
 		t.Fatal(err)
 	}
 	localPort, _ := m.LocalPort(3002)
@@ -166,7 +166,7 @@ func TestStreamCloseLogIdentifiesFramesAndReason(t *testing.T) {
 		}
 	})
 	defer func() { _ = m.Close() }()
-	_, err := m.AddForward(3002, "")
+	_, err := m.AddForward(ForwardConfig{RemotePort: 3002, Label: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestAddForwardRejectsBadPort(t *testing.T) {
 	m := NewManager("peer-4", "", t.Logf)
 	defer func() { _ = m.Close() }()
 	for _, port := range []int{0, -1, 70000} {
-		if _, err := m.AddForward(port, ""); err == nil {
+		if _, err := m.AddForward(ForwardConfig{RemotePort: port, Label: ""}); err == nil {
 			t.Fatalf("port %d should be rejected", port)
 		}
 	}
@@ -219,7 +219,7 @@ func TestStatusIsSorted(t *testing.T) {
 	m := NewManager("peer-5", "", t.Logf)
 	defer func() { _ = m.Close() }()
 	for _, port := range []int{3005, 3001, 3003} {
-		if _, err := m.AddForward(port, ""); err != nil {
+		if _, err := m.AddForward(ForwardConfig{RemotePort: port, Label: ""}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -234,7 +234,7 @@ func TestStatusIsSorted(t *testing.T) {
 // Close releases the listeners; the ports must be free afterwards.
 func TestCloseReleasesListeners(t *testing.T) {
 	m := NewManager("peer-6", "", t.Logf)
-	if _, err := m.AddForward(3006, ""); err != nil {
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3006, Label: ""}); err != nil {
 		t.Fatal(err)
 	}
 	localPort, _ := m.LocalPort(3006)
@@ -272,7 +272,7 @@ func itoa(value int) string {
 func TestStatusDoesNotInferConnectedFromAPeerObject(t *testing.T) {
 	manager := NewManager("srv_peer", "peer-host", t.Logf)
 	t.Cleanup(func() { _ = manager.Close() })
-	if _, err := manager.AddForward(5432, "db"); err != nil {
+	if _, err := manager.AddForward(ForwardConfig{RemotePort: 5432, Label: "db"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -314,6 +314,153 @@ func (stubPeer) Frames() <-chan Frame { return make(chan Frame) }
 func (stubPeer) Err() error           { return nil }
 func (stubPeer) Close() error         { return nil }
 
+// A target from before host support read the port, ignored the host and dialled its own loopback,
+// then answered allowed. Refusing that stream is the difference between an update notice and
+// silently serving a different machine's service.
+func TestNonLoopbackForwardRequiresHostCapableTarget(t *testing.T) {
+	m := NewManager("peer-host", "target-host", t.Logf)
+	defer func() { _ = m.Close() }()
+
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3600, RemoteHost: "192.168.1.9"}); err != nil {
+		t.Fatal(err)
+	}
+	localPort, ok := m.LocalPort(3600)
+	if !ok {
+		t.Fatal("no local listener")
+	}
+
+	peer, far := Pipe(16)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case frame, open := <-far.Frames():
+				if !open {
+					return
+				}
+				if frame.Opcode == OpcodeOpen {
+					// An older target's answer: allowed, with no host bit.
+					_ = far.Send(Frame{Opcode: OpcodeOpenAck, TunnelID: frame.TunnelID, Payload: EncodeOpenAck(true, "")})
+				}
+			}
+		}
+	}()
+	m.SetPeer(peer)
+
+	conn, err := net.Dial("tcp", "127.0.0.1:"+itoa(localPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, readErr := conn.Read(make([]byte, 1)); readErr == nil {
+		t.Fatal("a stream to a destination the target did not dial must be closed, not served")
+	}
+	if !m.WaitForState(3600, StateError, 2*time.Second) {
+		t.Fatal("the forward should report an error, so the UI can name the update")
+	}
+}
+
+// The same port on two different machines is two rules, not an edit of one.
+func TestForwardsDistinguishHostsWithTheSamePort(t *testing.T) {
+	m := NewManager("peer-hosts", "target-host", t.Logf)
+	defer func() { _ = m.Close() }()
+
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3700}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3700, RemoteHost: "192.168.1.9"}); err != nil {
+		t.Fatal(err)
+	}
+	states := m.Status()
+	if len(states) != 2 {
+		t.Fatalf("expected two forwards, got %+v", states)
+	}
+	seen := make(map[string]bool)
+	for _, state := range states {
+		seen[FormatEndpoint(state.RemoteHost, state.RemotePort)] = true
+	}
+	if !seen["127.0.0.1:3700"] || !seen["192.168.1.9:3700"] {
+		t.Fatalf("destinations = %v", seen)
+	}
+}
+
+// An edit names the destination it replaces, not the new one, so it can land on a destination another
+// rule already uses. Two rules for one destination collide in the manager and one silently replaces
+// the other, so the edit is refused instead.
+func TestRegistryRejectsDuplicateDestinationOnEdit(t *testing.T) {
+	// The rule being replaced comes last in the second case: putting the collision second was the
+	// order that slipped through the merge and deleted the other rule.
+	cases := [][]ForwardConfig{
+		{{RemotePort: 5432}, {RemotePort: 5433}},
+		{{RemotePort: 5433}, {RemotePort: 5432}},
+	}
+	for index, forwards := range cases {
+		r := NewRegistry(t.TempDir(), t.Logf)
+		r.SetPeerFactory(func(PeerConfig) (PeerConn, error) { return nil, nil })
+		r.SetEnabled(true)
+
+		if err := r.Add(PeerConfig{
+			PeerID:   "peer-dup",
+			URL:      "wss://relay.example.com",
+			Forwards: forwards,
+		}); err != nil {
+			r.Close()
+			t.Fatal(err)
+		}
+
+		err := r.AddOrUpdate(PeerConfig{
+			PeerID:   "peer-dup",
+			Forwards: []ForwardConfig{{RemotePort: 5433}},
+		}, ForwardConfig{RemotePort: 5432})
+		if err == nil {
+			r.Close()
+			t.Fatalf("case %d: editing a rule onto an existing destination must be refused", index)
+		}
+
+		// The rejected edit changed nothing: both rules are still there.
+		kept := r.List()[0].Forwards
+		if len(kept) != 2 {
+			r.Close()
+			t.Fatalf("case %d: rejected edit mutated the rules: %+v", index, kept)
+		}
+		ports := map[int]bool{}
+		for _, fw := range kept {
+			ports[fw.RemotePort] = true
+		}
+		if !ports[5432] || !ports[5433] {
+			r.Close()
+			t.Fatalf("case %d: rules = %+v", index, kept)
+		}
+		r.Close()
+	}
+}
+
+// The manager keys forwards by destination, so a duplicate would overwrite the map entry and leave
+// the first listener running untracked.
+func TestAddForwardRejectsDuplicateDestination(t *testing.T) {
+	m := NewManager("peer-dup", "", t.Logf)
+	defer m.Close()
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3800}); err != nil {
+		t.Fatal(err)
+	}
+	localPort, _ := m.LocalPort(3800)
+	if _, err := m.AddForward(ForwardConfig{RemotePort: 3800}); err == nil {
+		t.Fatal("a second forward to the same destination must be refused")
+	}
+	if _, ok := m.LocalPort(3800); !ok {
+		t.Fatal("the first forward should still be registered")
+	}
+	conn, err := net.Dial("tcp", "127.0.0.1:"+itoa(localPort))
+	if err != nil {
+		t.Fatalf("the first listener was closed by the rejected duplicate: %v", err)
+	}
+	_ = conn.Close()
+}
+
 // The listen address in the rule form has to reach the bind. Before it was wired, the manager
 // hardwired loopback and the UI's "open to the network" warning described behavior the daemon
 // never performed.
@@ -321,7 +468,7 @@ func TestAddForwardBindsRequestedListenHost(t *testing.T) {
 	m := NewManager("peer", "peer-host", nil)
 	defer m.Close()
 
-	f, err := m.AddForwardWithLocalPort(3500, 0, "127.0.0.1", "loopback")
+	f, err := m.AddForward(ForwardConfig{RemotePort: 3500, ListenHost: "127.0.0.1", Label: "loopback"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +477,7 @@ func TestAddForwardBindsRequestedListenHost(t *testing.T) {
 	}
 
 	// Empty means the default, which is loopback.
-	defaultForward, err := m.AddForwardWithLocalPort(3501, 0, "", "default")
+	defaultForward, err := m.AddForward(ForwardConfig{RemotePort: 3501, Label: "default"})
 	if err != nil {
 		t.Fatal(err)
 	}
