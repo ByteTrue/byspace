@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -377,9 +378,13 @@ func (r Router) Disconnected(ctx context.Context, room Room, buf *frameBuffer, c
 	r.disconnected(ctx, room, buf, conn.meta)
 }
 
-// RoomKey identifies the room a connection belongs to. The prefix is the Durable
-// Object name, so it stays `relay-v2` even though v2 is the only protocol: renaming
-// it would split live daemons from new clients until every daemon reconnects.
+// RoomKey identifies the room a connection belongs to. The version prefix is part of the Durable
+// Object name; it is not the wire protocol version. A Durable Object never moves after it is
+// created, so bumping the version is the only way to move a room (see RoomKeyVersion), and a bump
+// strands the sockets still in the old room until they reconnect.
+const RoomKeyVersion = 3
+
+// RoomKey is the Durable Object name for one server's room.
 func (c Connection) RoomKey() string {
-	return "relay-v2:" + c.meta.ServerID
+	return "relay-v" + strconv.Itoa(RoomKeyVersion) + ":" + c.meta.ServerID
 }

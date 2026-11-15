@@ -13,7 +13,7 @@ func TestRoomKeySeparatesServers(t *testing.T) {
 	if problem != "" {
 		t.Fatalf("connection rejected: %s", problem)
 	}
-	if got, want := conn.RoomKey(), "relay-v2:srv_1"; got != want {
+	if got, want := conn.RoomKey(), "relay-v3:srv_1"; got != want {
 		t.Fatalf("room key = %q, want %q", got, want)
 	}
 

@@ -78,6 +78,21 @@ func newRoom(state *durableobjects.DurableObjectState, _ js.Value) (durableobjec
 
 // ServeHTTP handles the object's fetch trigger: the /ws handshake.
 func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// The Worker creates a room through this path before it forwards an upgrade. Reaching the object
+	// is the whole point: it is what makes Cloudflare place a new room at the location hint, and a
+	// Durable Object never moves afterwards. The response itself is never read.
+	if req.URL.Path == "/placement" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	// COMPAT(relay-room-v3): added 2026-11, remove after 2026-12-15. A room created before the key
+	// bump cannot move, so its sockets are closed here and their owners reconnect to the current
+	// room. Once every daemon has reconnected, the old key has no sockets and this path can go.
+	if req.URL.Path == "/migrate" {
+		r.closeAllSockets()
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	// The object only ever sees upgrades that already passed the Worker's checks;
 	// it still validates so a direct object fetch cannot skip them.
 	conn, problem := relay.NewConnection(req.URL.Query())
@@ -117,6 +132,7 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ServerID:     conn.ServerID(),
 		Role:         conn.Role(),
 		ConnectionID: conn.ConnectionID(),
+		KeyVersion:   relay.RoomKeyVersion,
 	})
 
 	// Opening bookkeeping runs on this request, exactly like the TypeScript
@@ -131,6 +147,17 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // It may run on a brand new wasm instance after hibernation, so nothing from
 // ServeHTTP survives here except what was serialized onto the socket.
 func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn, mt cfws.MessageType, data []byte) error {
+	saved, ok := attachmentOf(socket.JSValue())
+	if !ok {
+		return nil
+	}
+	// A socket accepted under an older room key cannot reach its peers any more: new connections
+	// route to a room created under the current key. Close it (and its peers) so every end reconnects
+	// to the current room, which is the only way a room moves to a better region.
+	if saved.KeyVersion != relay.RoomKeyVersion {
+		r.closeAllSockets()
+		return nil
+	}
 	conn, ok := connectionFromAttachment(socket.JSValue())
 	if !ok {
 		return nil
@@ -192,6 +219,108 @@ func (m *meter) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(decision)
+}
+
+// placedRooms remembers the rooms this isolate already created with a location hint. The placement
+// round trip is paid once per room, not on every handshake.
+var placedRooms sync.Map
+
+// placeRoom creates a room under the APAC hint. Cloudflare honours a location hint only while the
+// object is being created, and a Durable Object never moves, so this is the one moment a room can be
+// put near its users. Best effort: a failed placement leaves the room wherever Cloudflare picks.
+func placeRoom(roomKey string) {
+	if _, done := placedRooms.LoadOrStore(roomKey, struct{}{}); done {
+		return
+	}
+	ns, err := durableobjects.NewDurableObjectNamespace("RELAY")
+	if err != nil {
+		placedRooms.Delete(roomKey)
+		return
+	}
+	id, err := ns.IDFromName(roomKey)
+	if err != nil {
+		placedRooms.Delete(roomKey)
+		return
+	}
+	stub, err := ns.Get(id, durableobjects.DurableObjectNamespaceGetDurableObjectOptions{
+		LocationHint: durableobjects.DurableObjectLocationHintApac,
+	})
+	if err != nil {
+		placedRooms.Delete(roomKey)
+		return
+	}
+	req := js.Global().Get("Request").New("https://relay-room.internal/placement")
+	promise, ok := callJS(stub, "fetch", req)
+	if !ok {
+		placedRooms.Delete(roomKey)
+		return
+	}
+	if _, err := awaitPromise(promise); err != nil {
+		placedRooms.Delete(roomKey)
+	}
+}
+
+// awaitPromise blocks the wasm goroutine until the JS promise settles.
+func awaitPromise(promise js.Value) (js.Value, error) {
+	results := make(chan js.Value, 1)
+	failures := make(chan error, 1)
+	var then, catch js.Func
+	then = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer then.Release()
+		results <- args[0]
+		return js.Undefined()
+	})
+	catch = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer catch.Release()
+		failures <- fmt.Errorf("promise rejected: %s", args[0].String())
+		return js.Undefined()
+	})
+	promise.Call("then", then).Call("catch", catch)
+	select {
+	case result := <-results:
+		// The promise settled: the reject handler will never run, and an unreleased js.Func leaks.
+		catch.Release()
+		return result, nil
+	case err := <-failures:
+		then.Release()
+		return js.Value{}, err
+	}
+}
+
+// migratedRooms remembers the servers whose previous-key room this isolate already drained.
+var migratedRooms sync.Map
+
+// migrateOldRoom closes the sockets left in the room created under the previous key. Both ends route
+// to the current key, so a socket in the old room cannot reach them: without this, an idle daemon
+// would sit there until it happened to send a frame, and every client would see it offline.
+//
+// COMPAT(relay-room-v3): added 2026-11, remove after 2026-12-15 with the /migrate handler.
+func migrateOldRoom(serverID string) {
+	if _, done := migratedRooms.LoadOrStore(serverID, struct{}{}); done {
+		return
+	}
+	oldKey := "relay-v" + strconv.Itoa(relay.RoomKeyVersion-1) + ":" + serverID
+	ns, err := cloudflare.NewDurableObjectNamespace("RELAY")
+	if err != nil {
+		migratedRooms.Delete(serverID)
+		return
+	}
+	stub, err := ns.Get(ns.IdFromName(oldKey))
+	if err != nil {
+		migratedRooms.Delete(serverID)
+		return
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://relay-room.internal/migrate", nil)
+	if err != nil {
+		migratedRooms.Delete(serverID)
+		return
+	}
+	res, err := stub.Fetch(req)
+	if err != nil {
+		migratedRooms.Delete(serverID)
+		return
+	}
+	_ = res.Body.Close()
 }
 
 func takeDailyBudget() (relay.MeterDecision, error) {
@@ -260,6 +389,9 @@ type attachment struct {
 	ServerID     string `json:"serverId"`
 	Role         string `json:"role"`
 	ConnectionID string `json:"connectionId"`
+	// KeyVersion is the room key generation that accepted this socket. Sockets from an older one are
+	// closed on their next message so both ends reconnect to the current room.
+	KeyVersion int `json:"keyVersion,omitempty"`
 }
 
 // writeAttachment serializes a socket's routing identity onto the socket.
@@ -298,13 +430,8 @@ func callJS(receiver js.Value, method string, args ...any) (result js.Value, ok 
 
 // connectionFromAttachment rebuilds the Connection a socket belongs to.
 func connectionFromAttachment(socket js.Value) (relay.Connection, bool) {
-	// Same reason as writeAttachment: the method must be invoked on the socket.
-	raw, ok := callJS(socket, "deserializeAttachment")
-	if !ok || raw.Type() != js.TypeString || raw.String() == "" {
-		return relay.Connection{}, false
-	}
-	var saved attachment
-	if err := json.Unmarshal([]byte(raw.String()), &saved); err != nil {
+	saved, ok := attachmentOf(socket)
+	if !ok {
 		return relay.Connection{}, false
 	}
 	values := url.Values{}
@@ -316,6 +443,32 @@ func connectionFromAttachment(socket js.Value) (relay.Connection, bool) {
 	}
 	conn, problem := relay.NewConnection(values)
 	return conn, problem == ""
+}
+
+// attachmentOf reads a socket's serialized routing identity. Same reason as writeAttachment: the
+// method must be invoked on the socket.
+func attachmentOf(socket js.Value) (attachment, bool) {
+	raw, ok := callJS(socket, "deserializeAttachment")
+	if !ok || raw.Type() != js.TypeString || raw.String() == "" {
+		return attachment{}, false
+	}
+	var saved attachment
+	if err := json.Unmarshal([]byte(raw.String()), &saved); err != nil {
+		return attachment{}, false
+	}
+	return saved, true
+}
+
+// closeAllSockets closes every socket in this room, which makes both ends reconnect through the
+// Worker and join the room for the current key version.
+func (r *room) closeAllSockets() {
+	sockets, ok := callJS(r.state.JSValue(), "getWebSockets")
+	if !ok {
+		return
+	}
+	for i := 0; i < sockets.Length(); i++ {
+		_ = cfws.HibernatingConnFromJS(sockets.Index(i)).Close(1012, "relay room moved")
+	}
 }
 
 // handleFetch forwards /ws into the Durable Object that owns the requested
@@ -343,12 +496,9 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	decision, err := takeDailyBudget()
-	if err != nil {
-		js.Global().Get("console").Call("warn", "relay meter unavailable; accepting an uncounted handshake: "+err.Error())
-	} else if decision.Reason != "" {
-		js.Global().Get("console").Call("warn", decision.Reason, decision.State.Requests)
-	}
+	// Placement runs before the upgrade so the room is created under the hint. A fresh room is the
+	// only chance to choose its region; after this the object is wherever Cloudflare put it.
+	placeRoom(conn.RoomKey())
 
 	ns, err := cloudflare.NewDurableObjectNamespace("RELAY")
 	if err != nil {
@@ -374,6 +524,21 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 	// nowhere to put.
 	if err := stub.FetchWebSocket(w, req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// Background: the previous key's room still holds the sockets that were open when the key
+	// changed. Drain it without delaying this handshake.
+	serverID := conn.ServerID()
+	cloudflare.WaitUntil(func() { migrateOldRoom(serverID) })
+
+	// Meter after the upgrade, not before it. The decision only logs and never refuses a handshake,
+	// so its Durable Object round trip has no business sitting between the client and its socket.
+	decision, err := takeDailyBudget()
+	if err != nil {
+		js.Global().Get("console").Call("warn", "relay meter unavailable; accepting an uncounted handshake: "+err.Error())
+	} else if decision.Reason != "" {
+		js.Global().Get("console").Call("warn", decision.Reason, decision.State.Requests)
 	}
 }
 
