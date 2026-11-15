@@ -1,11 +1,11 @@
 ---
 kind: issue
-title: "Windows 客户端 IME 候选框飞到屏幕左上角（resize 后）"
+title: "Windows 客户端 IME 候选框飞到屏幕左上角（resize / alt+tab 后）"
 type: bug
 created: 2026-11-04
 ---
 
-# Windows 客户端 IME 候选框飞到屏幕左上角（resize 后）
+# Windows 客户端 IME 候选框飞到屏幕左上角（resize / alt+tab 后）
 
 ## 预期 / 实际
 
@@ -36,6 +36,7 @@ Windows 客户端：拖拽窗口边框缩放 → 立刻用拼音打字 → 候�
 
 - 护栏已实现：`web/src/core/utils/ime-anchor.ts`（防抖 120ms → blur → 60ms → focus + 选区/滚动还原，合成中等待 compositionend，仅 Windows+Wails 启用），挂在 `web/src/main.tsx`。单测 5 例全绿（含合成中不打断、非编辑元素不动），typecheck / lint 绿。
 - 2026-11-05：用户在 Windows 客户端真机确认——拖边框缩放后立刻拼音打字，候选框贴在光标下。上游 #5675 未修，护栏长期保留。
+- 2026-11-15：用户反馈 alt+tab 切走再切回后必现同一现象（候选框跳左上角 + 焦点丢失），原护栏只监听 `resize`，覆盖不到。现在 Go 侧把 Windows 窗口激活（`WindowActive`）转发为 `byspace:window-focus`，前端在窗口重新获得焦点后立即重锚；WebView2 丢 DOM 焦点时把焦点放回最后编辑过的元素，但如果失焦前用户已经点了非编辑区域则保持现状不抢焦点。待 Windows 真机验证。
 
 ## 关闭结论
 

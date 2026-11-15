@@ -538,6 +538,12 @@ func Run(version string, showMain bool, initialLink string) error {
 			})
 
 			if runtime.GOOS == "windows" {
+				// WebView2 does not dispatch a DOM focus event when the host window is reactivated,
+				// and reactivation drops the IME caret anchor (WebView2Feedback#5675). Forward the
+				// native activation so the frontend can re-anchor its focused editor.
+				w.OnWindowEvent(events.Windows.WindowActive, func(*application.WindowEvent) {
+					w.EmitEvent("byspace:window-focus")
+				})
 				w.OnWindowEvent(events.Windows.WindowMaximise, func(*application.WindowEvent) {
 					w.EmitEvent("byspace:window-maximized", true)
 				})

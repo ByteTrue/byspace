@@ -199,7 +199,12 @@ export function DesktopWindowTitleBar({
           onClick={onMaximizeClick}
           className="flex w-11 items-center justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
         >
-          {isMaximized ? <Copy size={12} /> : <Square size={12} />}
+          {isMaximized ? (
+            // lucide's Copy is the Windows restore glyph mirrored; flip it back.
+            <Copy size={12} className="-scale-x-100" />
+          ) : (
+            <Square size={12} />
+          )}
         </button>
         <button
           type="button"

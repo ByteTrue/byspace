@@ -9,8 +9,8 @@ import { bindRouter } from "~/app/navigation";
 import "./index.css";
 
 installCryptoPolyfills(globalThis.crypto);
-// Windows/WebView2 loses the IME caret anchor after an interactive resize (WebView2Feedback#5675);
-// the guard re-anchors the focused editable and no-ops everywhere else.
+// Windows/WebView2 loses the IME caret anchor after an interactive resize or an alt+tab round trip
+// (WebView2Feedback#5675); the guard re-anchors the focused editable and no-ops everywhere else.
 installImeAnchorGuard();
 // The desktop webview has no address bar: an external link must leave through the system browser
 // instead of replacing the app with the page.

@@ -1,16 +1,29 @@
 import { isWailsDesktopContainer } from "@/utils/wails";
 
 /**
- * Windows/WebView2 drops the IME caret anchor after an interactive window resize: the TSF text
- * store loses the caret layout, GetTextExt fails, and the IME candidate window falls back to the
- * screen origin (top-left) while the caret itself still works. Clicking elsewhere heals it.
- * Upstream: MicrosoftEdge/WebView2Feedback#5675. Heal it by re-anchoring the focused editable
- * element (blur -> 60ms -> focus) once the resize settles, which makes WebView2 re-query the
- * caret. Shorter delays measurably fail (sync blur+focus, setTimeout(0)), so 60ms is the floor.
+ * Windows/WebView2 drops the IME caret anchor after an interactive window resize and after the
+ * window is deactivated and reactivated (alt+tab): the TSF text store loses the caret layout,
+ * GetTextExt fails, and the IME candidate window falls back to the screen origin (top-left) while
+ * the caret itself still works. Clicking elsewhere heals it. Upstream:
+ * MicrosoftEdge/WebView2Feedback#5675. Heal it by re-anchoring the focused editable element
+ * (blur -> 60ms -> focus) after a resize settles or the window is activated, which makes
+ * WebView2 re-query the caret. Shorter delays measurably fail (sync blur+focus, setTimeout(0)),
+ * so 60ms is the floor.
  */
 
 const RESIZE_SETTLE_MS = 120;
 const REFOCUS_DELAY_MS = 60;
+// Clicking a node inside a contenteditable editor targets a descendant, so resolve the host.
+const EDITABLE_SELECTOR = "input, textarea, [contenteditable]";
+// WebView2 does not dispatch a DOM window focus event on alt+tab (Wails restores native focus
+// through MoveFocus, but the page gets no focus event and the TSF caret layout stays stale), so
+// the desktop shell forwards native window activation instead.
+const WINDOW_FOCUS_EVENT = "byspace:window-focus";
+
+interface WailsEvents {
+  On?: (name: string, callback: () => void) => () => void;
+}
+type WailsWindow = Window & { wails?: { Events?: WailsEvents } };
 
 export interface EditableState {
   start: number | null;
@@ -27,6 +40,10 @@ function isEditable(el: Element | null): el is HTMLElement {
     return !el.disabled && !el.readOnly;
   }
   return el instanceof HTMLElement && el.isContentEditable;
+}
+
+function focusIsLost(el: Element | null): boolean {
+  return !el || el === document.body || el === document.documentElement;
 }
 
 /** Snapshot everything a blur/focus round trip could disturb. */
@@ -89,6 +106,11 @@ export function installImeAnchorGuard(): () => void {
   let refocusTimer: number | undefined;
   let cancelRefocus: (() => void) | undefined;
   let interrupted: { el: HTMLElement; state: EditableState } | undefined;
+  // WebView2 can drop DOM focus entirely when the window is deactivated; remember the last
+  // editor so returning to the window can put focus back where the user left it.
+  let lastEditable: HTMLElement | undefined = isEditable(document.activeElement)
+    ? document.activeElement
+    : undefined;
 
   // This is a native WebView caret reset, not the user leaving an editor. Keep React's
   // focusout/blur handlers (rename commits, draft cancellation) out of this round trip.
@@ -119,7 +141,10 @@ export function installImeAnchorGuard(): () => void {
   const reanchor = (fallback?: { el: HTMLElement; state: EditableState }) => {
     cancelRefocus?.();
     const active = document.activeElement;
-    const el = isEditable(active) ? active : (fallback?.el ?? null);
+    const focusLost = focusIsLost(active);
+    let el: HTMLElement | null = null;
+    if (isEditable(active)) el = active;
+    else if (focusLost) el = fallback?.el ?? null;
     if (!isEditable(el)) return;
     const state = active === el ? saveEditableState(el) : fallback?.state;
     if (!state) return;
@@ -167,15 +192,44 @@ export function installImeAnchorGuard(): () => void {
     refocusTimer = window.setTimeout(restoreFocus, REFOCUS_DELAY_MS);
   };
 
-  const onResize = () => {
-    const pending = interrupted;
+  const scheduleReanchor = (
+    delay: number,
+    fallback?: { el: HTMLElement; state: EditableState },
+  ) => {
     cancelRefocus?.();
     window.clearTimeout(refocusTimer);
     window.clearTimeout(settleTimer);
     settleTimer = window.setTimeout(() => {
       settleTimer = undefined;
-      reanchor(pending);
-    }, RESIZE_SETTLE_MS);
+      reanchor(fallback);
+    }, delay);
+  };
+
+  const onResize = () => {
+    const pending = interrupted;
+    scheduleReanchor(RESIZE_SETTLE_MS, pending);
+  };
+
+  // Reactivation loses the same TSF caret layout as a resize. Heal right away, and refocus the
+  // editor if WebView2 dropped DOM focus while the window was in the background.
+  const onWindowFocus = () => {
+    const active = document.activeElement;
+    const fallbackEl = focusIsLost(active) && lastEditable?.isConnected ? lastEditable : undefined;
+    scheduleReanchor(
+      0,
+      fallbackEl ? { el: fallbackEl, state: saveEditableState(fallbackEl) } : undefined,
+    );
+  };
+
+  // Clicking non-focusable content (the message stream, a toolbar) moves focus to body without
+  // touching an editable, so a stale editor must not be refocused on the next window activation.
+  const onPointerDown = (event: PointerEvent) => {
+    const target = event.target instanceof Element ? event.target.closest(EDITABLE_SELECTOR) : null;
+    lastEditable = target instanceof HTMLElement && isEditable(target) ? target : undefined;
+  };
+
+  const onFocusIn = (event: FocusEvent) => {
+    if (event.target instanceof Element && isEditable(event.target)) lastEditable = event.target;
   };
 
   const onCompositionStart = () => {
@@ -197,11 +251,28 @@ export function installImeAnchorGuard(): () => void {
     }
   };
 
+  let offWindowFocus: (() => void) | undefined;
+  // The app bundle can execute before /wails/runtime.js (both are module scripts, and the
+  // runtime is injected after the bundle), so attach now when it is already there and again on
+  // load, by which point every module script has run.
+  const attachWindowFocus = () => {
+    if (offWindowFocus) return;
+    offWindowFocus = (window as WailsWindow).wails?.Events?.On?.(WINDOW_FOCUS_EVENT, onWindowFocus);
+  };
+  attachWindowFocus();
+  window.addEventListener("load", attachWindowFocus);
+
   window.addEventListener("resize", onResize);
+  window.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("focusin", onFocusIn, true);
   document.addEventListener("compositionstart", onCompositionStart);
   document.addEventListener("compositionend", onCompositionEnd);
   return () => {
+    offWindowFocus?.();
+    window.removeEventListener("load", attachWindowFocus);
     window.removeEventListener("resize", onResize);
+    window.removeEventListener("pointerdown", onPointerDown, true);
+    document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("compositionstart", onCompositionStart);
     document.removeEventListener("compositionend", onCompositionEnd);
     window.clearTimeout(settleTimer);

@@ -7,7 +7,13 @@ import {
   saveEditableState,
 } from "./ime-anchor";
 
-type WailsWindow = Window & { wails?: unknown };
+type WailsWindow = Window & {
+  wails?: {
+    Events?: {
+      On?: (name: string, callback: () => void) => () => void;
+    };
+  };
+};
 
 describe("isWindowsWailsWebview", () => {
   it("arms only for the Windows desktop client", () => {
@@ -38,10 +44,19 @@ describe("saveEditableState / restoreEditableState", () => {
 describe("installImeAnchorGuard", () => {
   let input: HTMLInputElement;
   let dispose: () => void;
+  let emitWindowFocus: () => void;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    (window as WailsWindow).wails = {};
+    emitWindowFocus = () => {};
+    (window as WailsWindow).wails = {
+      Events: {
+        On: (name, callback) => {
+          if (name === "byspace:window-focus") emitWindowFocus = callback;
+          return () => {};
+        },
+      },
+    };
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
       "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/154",
     );
@@ -76,6 +91,107 @@ describe("installImeAnchorGuard", () => {
     expect(input.selectionStart).toBe(2);
     expect(input.selectionEnd).toBe(9);
     expect(document.activeElement).toBe(input);
+  });
+
+  it("re-anchors the focused editable when the window regains focus", () => {
+    const blurSpy = vi.spyOn(input, "blur");
+    const focusSpy = vi.spyOn(input, "focus");
+    dispose = installImeAnchorGuard();
+
+    emitWindowFocus();
+    vi.advanceTimersByTime(0);
+    expect(blurSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60);
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(9);
+  });
+
+  it("refocuses the last editor when WebView2 dropped DOM focus in the background", () => {
+    dispose = installImeAnchorGuard();
+    input.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    emitWindowFocus();
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(9);
+  });
+
+  it("does not steal focus from another control on window focus", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    dispose = installImeAnchorGuard();
+    input.blur();
+    button.focus();
+
+    emitWindowFocus();
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(button);
+    button.remove();
+  });
+
+  it("does not refocus after the user clicked away from the editor", () => {
+    dispose = installImeAnchorGuard();
+    // Clicking non-focusable content (the message stream) blurs the editor without focus moving
+    // to another control.
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    input.blur();
+
+    emitWindowFocus();
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("keeps the editor as the focus fallback after clicking back into it", () => {
+    dispose = installImeAnchorGuard();
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    input.blur();
+
+    emitWindowFocus();
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("attaches to the native focus event when the runtime loads after startup", () => {
+    (window as WailsWindow).wails = {};
+    const blurSpy = vi.spyOn(input, "blur");
+    dispose = installImeAnchorGuard();
+
+    (window as WailsWindow).wails = {
+      Events: {
+        On: (name, callback) => {
+          if (name === "byspace:window-focus") emitWindowFocus = callback;
+          return () => {};
+        },
+      },
+    };
+    window.dispatchEvent(new Event("load"));
+    emitWindowFocus();
+    vi.advanceTimersByTime(60);
+
+    expect(blurSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not steal focus from a control clicked before the window heal starts", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    dispose = installImeAnchorGuard();
+    input.blur();
+    emitWindowFocus();
+    button.focus();
+
+    vi.advanceTimersByTime(60);
+
+    expect(document.activeElement).toBe(button);
+    button.remove();
   });
 
   it("waits for an active composition to end before re-anchoring", () => {
