@@ -5,6 +5,13 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.26.2 - 2026-11-15
+
+### Fixed
+
+- Fixed hosts appearing offline on other devices when the shared host record carried only the local address
+- Fixed the app connecting to the local daemon instead of a remote host that had a loopback route
+
 ## 0.26.1 - 2026-11-15
 
 ### Added

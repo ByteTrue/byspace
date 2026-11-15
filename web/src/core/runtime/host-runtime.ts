@@ -181,6 +181,10 @@ export interface HostRuntimeControllerDeps {
   // Asked before connecting to a host whose public key changed. Defaults to refusing, which is the
   // safe answer when nobody is there to confirm.
   confirmKeyChange?: (host: HostProfile) => Promise<boolean>;
+  // The daemon running on the machine this app is open on. A loopback direct connection only means
+  // that machine; another host's record may still carry one, and using it dials this machine's own
+  // daemon instead. Null while the bootstrap has not learned it.
+  getLocalDaemonServerId?: () => string | null;
 }
 
 export interface HostRuntimeStorage {
@@ -471,6 +475,35 @@ function findConnectionById(host: HostProfile, connectionId: string | null): Hos
   return host.connections.find((connection) => connection.id === connectionId) ?? null;
 }
 
+// isLoopbackDirectConnection reports whether a direct socket addresses this machine. The host list
+// is shared across devices, so such a route is only meaningful to the daemon that wrote it.
+export function isLoopbackDirectConnection(connection: HostConnection): boolean {
+  if (connection.type !== "directTcp") {
+    return false;
+  }
+  const endpoint = connection.endpoint.trim().toLowerCase();
+  return (
+    endpoint.startsWith("localhost:") ||
+    endpoint.startsWith("127.") ||
+    endpoint.startsWith("[::1]:") ||
+    endpoint.startsWith("::1:")
+  );
+}
+
+// connectionUsableOnThisMachine hides another machine's loopback route. Adopting a host record from
+// the chain used to leave a remote host pointing at localhost, so the runtime connected to the daemon
+// on this machine under the remote host's name (or failed outright).
+export function connectionUsableOnThisMachine(input: {
+  connection: HostConnection;
+  hostServerId: string;
+  localDaemonServerId: string | null;
+}): boolean {
+  if (!isLoopbackDirectConnection(input.connection)) {
+    return true;
+  }
+  return input.localDaemonServerId === null || input.localDaemonServerId === input.hostServerId;
+}
+
 function probeIntervalForConnection(
   firstSeenAt: number,
   isActiveOnline: boolean,
@@ -621,6 +654,21 @@ export class HostRuntimeController {
 
   getClient(): DaemonClient | null {
     return this.snapshot.client;
+  }
+
+  private connectionUsable(connection: HostConnection): boolean {
+    return connectionUsableOnThisMachine({
+      connection,
+      hostServerId: this.host.serverId,
+      localDaemonServerId: this.deps.getLocalDaemonServerId?.() ?? null,
+    });
+  }
+
+  private buildCandidates(): ConnectionCandidate[] {
+    return buildConnectionCandidates({
+      ...this.host,
+      connections: this.host.connections.filter((connection) => this.connectionUsable(connection)),
+    });
   }
 
   subscribe(listener: () => void): () => void {
@@ -782,6 +830,9 @@ export class HostRuntimeController {
     const hasActiveOnlineConnection = isOnline && activeConnectionId !== null;
 
     const connectionsToProbe = this.host.connections.filter((connection) => {
+      if (!this.connectionUsable(connection)) {
+        return false;
+      }
       const lastProbed = this.connectionLastProbedAt.get(connection.id);
       if (lastProbed == null) {
         return true;
@@ -857,9 +908,14 @@ export class HostRuntimeController {
         ? probeByConnectionId.get(currentActiveConnectionId)
         : null;
 
-      if (!currentActiveConnectionId || !findConnectionById(this.host, currentActiveConnectionId)) {
+      const activeConnection = findConnectionById(this.host, currentActiveConnectionId);
+      if (
+        !currentActiveConnectionId ||
+        !activeConnection ||
+        !this.connectionUsable(activeConnection)
+      ) {
         const nextConnectionId = selectBestConnection({
-          candidates: buildConnectionCandidates(this.host),
+          candidates: this.buildCandidates(),
           probeByConnectionId,
         });
         if (nextConnectionId) {
@@ -873,7 +929,7 @@ export class HostRuntimeController {
 
       if (activeProbe?.status === "unavailable") {
         const nextConnectionId = selectBestConnection({
-          candidates: buildConnectionCandidates(this.host),
+          candidates: this.buildCandidates(),
           probeByConnectionId,
         });
         if (nextConnectionId && nextConnectionId !== currentActiveConnectionId) {
@@ -1388,6 +1444,9 @@ export class HostRuntimeStore {
   // outlives a browser context, so syncing would leak hosts from one spec into the next; the suite
   // manages its own host list. Read once at boot, before any controller exists.
   private e2eMode = false;
+  // The daemon on this machine, learned from the bootstrap connection. The host list is shared across
+  // devices, so a loopback connection in it may describe another machine's daemon.
+  private localDaemonServerId: string | null = null;
   // When each host was last seen online, kept on this frontend. The chain has no daemon-to-daemon
   // channel, so "last seen" is a client-side observation rather than a synced record.
   private lastSeenByServer = new Map<string, number>();
@@ -1562,15 +1621,21 @@ export class HostRuntimeStore {
 
   private async bootstrapDefaultLocalhost(): Promise<void> {
     const connection = connectionFromListen(LOCALHOST_FALLBACK_ENDPOINT);
-    if (!connection || registryHasConnection(this.hosts, connection)) {
+    if (!connection) {
+      return;
+    }
+    const existing = this.hosts.find((host) => registryHasConnection([host], connection));
+    if (existing) {
+      this.localDaemonServerId = existing.serverId;
       return;
     }
 
     try {
-      await this.probeAndUpsertConnection({
+      const bootstrapped = await this.probeAndUpsertConnection({
         connection,
         timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
       });
+      this.localDaemonServerId = bootstrapped.serverId;
     } catch (error) {
       console.warn("[HostRuntime] bootstrap probe failed", {
         endpoint: LOCALHOST_FALLBACK_ENDPOINT,
@@ -1585,6 +1650,10 @@ export class HostRuntimeStore {
       return;
     }
     if (registryHasConnection(this.hosts, connection)) {
+      const existing = this.hosts.find((host) => registryHasConnection([host], connection));
+      if (existing) {
+        this.localDaemonServerId = existing.serverId;
+      }
       return;
     }
     if (this.configuredOverrideBootstrapInFlight) {
@@ -1607,10 +1676,11 @@ export class HostRuntimeStore {
     while (!registryHasConnection(this.hosts, connection)) {
       attempt += 1;
       try {
-        await this.probeAndUpsertConnection({
+        const bootstrapped = await this.probeAndUpsertConnection({
           connection,
           timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
         });
+        this.localDaemonServerId = bootstrapped.serverId;
         return;
       } catch (error) {
         if (attempt === 1 || attempt % 10 === 0) {
@@ -1644,6 +1714,9 @@ export class HostRuntimeStore {
       const matched = this.hosts.find((h) => registryHasConnection([h], connectionWithHint));
       const existingCred =
         matched?.connections[0]?.type === "directTcp" ? matched.connections[0].password : undefined;
+      if (matched) {
+        this.localDaemonServerId = matched.serverId;
+      }
       if (hint.password && existingCred !== hint.password) {
         // Fall through to probeAndUpsertConnection so a refreshed local CLI credential or a
         // newly seeded dev home updates the stored connection and serverId.
@@ -1656,11 +1729,12 @@ export class HostRuntimeStore {
     }
 
     try {
-      await this.probeAndUpsertConnection({
+      const bootstrapped = await this.probeAndUpsertConnection({
         connection: connectionWithHint,
         ...(hint.label ? { label: hint.label } : {}),
         timeoutMs: DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS,
       });
+      this.localDaemonServerId = bootstrapped.serverId;
       return true;
     } catch (error) {
       console.warn("[HostRuntime] initial connection hint probe failed", {
@@ -2229,7 +2303,11 @@ export class HostRuntimeStore {
       }
       const controller = new HostRuntimeController({
         host,
-        deps: { ...this.deps, keyStore: this.storage },
+        deps: {
+          ...this.deps,
+          keyStore: this.storage,
+          getLocalDaemonServerId: () => this.localDaemonServerId,
+        },
         onReconcileServerId: (oldId, newId) => this.reconcileServerId(oldId, newId),
       });
       this.controllers.set(host.serverId, controller);

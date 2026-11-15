@@ -16,6 +16,7 @@ import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
 import { queryClient } from "@/data/query-client";
 import {
+  connectionUsableOnThisMachine,
   HostRuntimeController,
   HostRuntimeStore,
   readInitialDaemonConnectionHint,
@@ -3976,5 +3977,95 @@ describe("HostRuntimeStore host sync", () => {
 
     expect(fakeClient.hostSyncExchanges).toEqual([]);
     store.syncHosts([]);
+  });
+});
+
+describe("connectionUsableOnThisMachine", () => {
+  const loopback: HostConnection = {
+    id: "direct:localhost:6777",
+    type: "directTcp",
+    endpoint: "localhost:6777",
+    useTls: false,
+  };
+  const lan: HostConnection = {
+    id: "direct:192.168.1.9:6777",
+    type: "directTcp",
+    endpoint: "192.168.1.9:6777",
+    useTls: false,
+  };
+  const relay: HostConnection = {
+    id: "relay:relay.byspace.cc.cd:443",
+    type: "relay",
+    relayEndpoint: "relay.byspace.cc.cd:443",
+    daemonPublicKeyB64: "pk_test",
+  };
+
+  it("keeps a loopback route only for the daemon on this machine", () => {
+    expect(
+      connectionUsableOnThisMachine({
+        connection: loopback,
+        hostServerId: "srv_me",
+        localDaemonServerId: "srv_me",
+      }),
+    ).toBe(true);
+    expect(
+      connectionUsableOnThisMachine({
+        connection: loopback,
+        hostServerId: "srv_other",
+        localDaemonServerId: "srv_me",
+      }),
+    ).toBe(false);
+    // The bootstrap has not learned the local daemon yet: nothing is hidden.
+    expect(
+      connectionUsableOnThisMachine({
+        connection: loopback,
+        hostServerId: "srv_other",
+        localDaemonServerId: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not hide relay or LAN routes", () => {
+    for (const connection of [relay, lan]) {
+      expect(
+        connectionUsableOnThisMachine({
+          connection,
+          hostServerId: "srv_other",
+          localDaemonServerId: "srv_me",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("does not probe another machine's loopback route", async () => {
+    useHostRuntimeClock();
+    const host = makeHost({
+      serverId: "srv_remote",
+      connections: [loopback, relay],
+      preferredConnectionId: relay.id,
+    });
+    const probeAttempts: string[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        createClient: () => {
+          throw new Error("probe clients only");
+        },
+        connectToDaemon: async ({ host: hostProfile, connection }) => {
+          probeAttempts.push(connection.id);
+          return {
+            client: makeConnectedProbeClient(20) as unknown as DaemonClient,
+            serverId: hostProfile.serverId,
+            hostname: hostProfile.label ?? null,
+          };
+        },
+        getClientId: async () => "cid_test_runtime",
+        getLocalDaemonServerId: () => "srv_local",
+      },
+    });
+
+    await controller.start({ autoProbe: false });
+    expect(probeAttempts).toEqual([relay.id]);
+    expect(controller.getSnapshot().activeConnectionId).toBe(relay.id);
   });
 });
