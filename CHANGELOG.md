@@ -5,6 +5,20 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.26.0 - 2026-11-15
+
+### Added
+
+- Added a Remote host field to tunnel forwards, so a forward can reach another machine on the paired host's network
+- Added host:port destinations to the Tunnels allowlist
+
+### Fixed
+
+- Fixed creating a tunnel from the Tunnels page failing with "url is required"
+- Fixed an edited tunnel destination not being authorized on the paired host
+- Fixed editing a tunnel onto a destination another rule already uses removing that rule
+- Fixed editing a tunnel resetting its listen address and paused state
+
 ## 0.25.3 - 2026-11-14
 
 ### Changed
