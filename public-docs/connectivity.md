@@ -93,12 +93,14 @@ relay your app connections use. If the remote daemon is paired through a
 self-hosted relay, tunnels go through that relay too; traffic stays
 end-to-end encrypted either way.
 
-To create one, open **Tunnels** — the row in the sidebar's BySpace menu, or the
-command center action, or `/tunnels` — on the machine where you want the local port, press **Add tunnel**, and paste the remote
-daemon's pairing link (`byspace daemon pair` prints it) with its password and
-the remote port. **Remote host** defaults to the remote machine; set it to
-another machine on that network to reach a service there. The tunnel is
-persistent: it reconnects on its own after either daemon or the relay restarts.
+To create one, open **Tunnels** on any host you are connected to, press
+**Add tunnel**, and choose both ends: **Listen on** is the host that opens the
+local port, **Port host** is the host whose port is exposed. Either direction
+works, so a rule can run from a host that is not the one you are looking at.
+The port host must list the destination in its tunnel allowlist, and **Remote
+host** (defaulting to that host's own machine) reaches another machine on its
+network. The tunnel is persistent: it reconnects on its own after either daemon
+or the relay restarts.
 
 ## Tailscale
 

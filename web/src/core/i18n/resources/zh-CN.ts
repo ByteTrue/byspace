@@ -1215,8 +1215,8 @@ export const zhCN: TranslationResources = {
     },
     addForm: {
       title: "添加隧道",
-      peerLabel: "已配对主机",
-      peerPlaceholder: "选择一个已配对主机",
+      peerLabel: "端口所在主机",
+      peerPlaceholder: "选择一台主机",
       peerViaRelay: "经 relay",
       peerDirect: "直连",
       pasteOffer: "粘贴配对链接",

@@ -269,16 +269,6 @@ function TunnelsScreenContent(): ReactElement {
   const entries = loadState.status === "loaded" ? loadState.data : EMPTY_TUNNEL_ENTRIES;
   const tunnelsEnabled = config?.tunnel?.enabled === true;
 
-  const existingPeerIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of entries) {
-      if (e.direction === "outbound") {
-        s.add(outboundPeerId(e));
-      }
-    }
-    return s;
-  }, [entries]);
-
   const openCreateForm = useCallback(() => {
     setFormState({ mode: "create" });
   }, []);
@@ -314,8 +304,8 @@ function TunnelsScreenContent(): ReactElement {
       </div>
       {formState.mode === "create" && localDaemonServerId && tunnelsEnabled ? (
         <AddTunnelSheet
-          serverId={localDaemonServerId}
-          existingPeerIds={existingPeerIds}
+          localDaemonServerId={localDaemonServerId}
+          entries={entries}
           onClose={closeForm}
           onCreated={handleSaved}
         />
@@ -396,7 +386,6 @@ function TunnelsEnabledBody({
 }): ReactElement {
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
-  const client = useHostRuntimeClient(localDaemonServerId);
   const [batchBusy, setBatchBusy] = useState(false);
   const forwardsTitle = isZh ? "端口转发 (Port forwards)" : "Port forwards";
 
@@ -415,22 +404,32 @@ function TunnelsEnabledBody({
 
   const setAllOutboundDisabled = useCallback(
     async (disabled: boolean) => {
-      if (!client || outboundEntries.length === 0) return;
+      if (outboundEntries.length === 0) return;
       setBatchBusy(true);
       try {
-        const byPeer = new Map<
+        // An outbound rule lives on the host that listens, so the batch writes each host's rules to
+        // that host. Sending them all to one daemon moved other hosts' rules onto it.
+        const byHost = new Map<
           string,
-          {
-            peerHostname?: string | null;
-            forwards: Array<{
-              remotePort: number;
-              remoteHost?: string;
-              localPort?: number;
-              disabled: boolean;
-            }>;
-          }
+          Map<
+            string,
+            {
+              peerHostname?: string | null;
+              forwards: Array<{
+                remotePort: number;
+                remoteHost?: string;
+                localPort?: number;
+                disabled: boolean;
+              }>;
+            }
+          >
         >();
         for (const e of outboundEntries) {
+          let byPeer = byHost.get(e.serverId);
+          if (!byPeer) {
+            byPeer = new Map();
+            byHost.set(e.serverId, byPeer);
+          }
           const pid = outboundPeerId(e);
           let group = byPeer.get(pid);
           if (!group) {
@@ -444,12 +443,18 @@ function TunnelsEnabledBody({
             disabled,
           });
         }
-        for (const [peerId, group] of byPeer) {
-          await client.createTunnel({
-            peerId,
-            ...(group.peerHostname ? { peerHostname: group.peerHostname } : {}),
-            forwards: group.forwards,
-          });
+        for (const [hostServerId, byPeer] of byHost) {
+          const hostClient = getHostRuntimeStore().getClient(hostServerId);
+          if (!hostClient) {
+            continue;
+          }
+          for (const [peerId, group] of byPeer) {
+            await hostClient.createTunnel({
+              peerId,
+              ...(group.peerHostname ? { peerHostname: group.peerHostname } : {}),
+              forwards: group.forwards,
+            });
+          }
         }
         onRemoved();
       } catch {
@@ -458,7 +463,7 @@ function TunnelsEnabledBody({
         setBatchBusy(false);
       }
     },
-    [client, onRemoved, outboundEntries],
+    [onRemoved, outboundEntries],
   );
 
   const handleStartAll = useCallback(() => {
@@ -741,10 +746,10 @@ function TunnelRow({
 
   const peerLabel = entry.peerHostname ?? outboundPeerId(entry);
   const remoteHost = entry.remoteHost ?? "";
-  const localEndpoint =
-    entry.localPort == null
-      ? formatHostPort(entry.listenHost ?? DEFAULT_LISTEN_HOST, null)
-      : formatHostPort(entry.listenHost ?? DEFAULT_LISTEN_HOST, entry.localPort);
+  const localEndpoint = formatHostPort(
+    entry.listenHost || DEFAULT_LISTEN_HOST,
+    entry.localPort ?? null,
+  );
   const remoteEndpoint = formatHostPort(
     isLoopbackTargetHost(remoteHost) ? peerLabel : remoteHost,
     entry.remotePort,
@@ -1117,27 +1122,87 @@ function RemoteHostField({
   );
 }
 
+// tunnelSourceLabel names the listening end in the add form; the other selector names the port's host.
+function tunnelSourceLabel(isZh: boolean): string {
+  return isZh ? "监听主机" : "Listen on";
+}
+
+// nextTargetAfterSourceChange keeps the two selectors from naming the same host. Changing the
+// listening host only replaces the target when it was that same host (the paste-offer choice is
+// never a host and stays).
+function nextTargetAfterSourceChange(
+  targets: readonly TunnelPeerTarget[],
+  sourceServerId: string,
+  currentPeerId: string,
+): { serverId: string; password: string } {
+  const current = targets.find((target) => target.serverId === currentPeerId);
+  if (currentPeerId === PASTE_OFFER_OPTION_ID || currentPeerId !== sourceServerId) {
+    return { serverId: currentPeerId, password: current?.password ?? "" };
+  }
+  const fallback = targets.find((target) => target.serverId !== sourceServerId);
+  if (!fallback) {
+    return { serverId: PASTE_OFFER_OPTION_ID, password: "" };
+  }
+  return { serverId: fallback.serverId, password: fallback.password ?? "" };
+}
+
+function SourceTunnelHint({
+  isZh,
+  config,
+}: {
+  isZh: boolean;
+  config: MutableDaemonConfig | null;
+}): ReactElement | null {
+  if (!config || config.tunnel?.enabled === true) {
+    return null;
+  }
+  return (
+    <span className="text-xs leading-[normal] text-red-300">
+      {isZh
+        ? "这台主机没有开启隧道功能，规则会保存但不会开始监听。"
+        : "Tunnels are disabled on this host; the rule is saved but will not listen."}
+    </span>
+  );
+}
+
 function AddTunnelSheet({
-  serverId,
-  existingPeerIds,
+  localDaemonServerId,
+  entries,
   onClose,
   onCreated,
 }: {
-  serverId: string;
-  existingPeerIds: Set<string>;
+  localDaemonServerId: string;
+  entries: AggregatedTunnelEntry[];
   onClose: () => void;
   onCreated: () => void;
 }): ReactElement {
   const { t, i18n } = useTranslation();
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
-  const client = useHostRuntimeClient(serverId);
-  const supportsRemoteHost = useHostFeature(serverId, "daemonTunnelRemoteHost");
   const hosts = useHosts();
   const peerTargets = useMemo(() => resolveTunnelPeerTargets(hosts), [hosts]);
-  const selectableTargets = useMemo(
-    () => peerTargets.filter((target) => target.serverId !== serverId),
-    [peerTargets, serverId],
+  // Both ends are hosts in the chain: "Listen on" chooses the daemon that opens the local port, and
+  // the paired host chooses whose port is exposed. The local daemon is only the default listener.
+  const [sourceServerId, setSourceServerId] = useState<string>(() =>
+    peerTargets.some((target) => target.serverId === localDaemonServerId)
+      ? localDaemonServerId
+      : (peerTargets[0]?.serverId ?? ""),
   );
+  const sourceClient = useHostRuntimeClient(sourceServerId);
+  const supportsRemoteHost = useHostFeature(sourceServerId, "daemonTunnelRemoteHost");
+  const { config: sourceConfig } = useDaemonConfig(sourceServerId);
+  const selectableTargets = useMemo(
+    () => peerTargets.filter((target) => target.serverId !== sourceServerId),
+    [peerTargets, sourceServerId],
+  );
+  const existingPeerIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of entries) {
+      if (entry.direction === "outbound" && entry.serverId === sourceServerId) {
+        ids.add(outboundPeerId(entry));
+      }
+    }
+    return ids;
+  }, [entries, sourceServerId]);
 
   const [selectedPeerId, setSelectedPeerId] = useState<string>(
     selectableTargets[0]?.serverId ?? PASTE_OFFER_OPTION_ID,
@@ -1238,6 +1303,46 @@ function AddTunnelSheet({
     [selectableTargets],
   );
 
+  const selectedSource = useMemo(
+    () => peerTargets.find((target) => target.serverId === sourceServerId) ?? null,
+    [peerTargets, sourceServerId],
+  );
+  const sourceOptions = useMemo(
+    () =>
+      peerTargets.map((target) => ({
+        id: target.serverId,
+        value: target.serverId,
+        label: target.label,
+        description: target.viaRelay
+          ? t("tunnels.addForm.peerViaRelay")
+          : t("tunnels.addForm.peerDirect"),
+        testID: "tunnels-add-source-option-" + target.serverId,
+      })),
+    [peerTargets, t],
+  );
+  const sourceDisplay = useMemo<SelectFieldDisplay>(
+    () =>
+      selectedSource
+        ? {
+            label: selectedSource.label,
+            description: selectedSource.viaRelay
+              ? t("tunnels.addForm.peerViaRelay")
+              : t("tunnels.addForm.peerDirect"),
+          }
+        : { label: "", description: "" },
+    [selectedSource, t],
+  );
+  const handleSourceChange = useCallback(
+    (value: string) => {
+      setSourceServerId(value);
+      setError(null);
+      const next = nextTargetAfterSourceChange(peerTargets, value, selectedPeerId);
+      setSelectedPeerId(next.serverId);
+      setPassword(next.password);
+    },
+    [peerTargets, selectedPeerId],
+  );
+
   const resolveSelection = useCallback((): TunnelPeerSelection | null => {
     if (selectedTarget) {
       return { kind: "host", target: selectedTarget };
@@ -1251,7 +1356,7 @@ function AddTunnelSheet({
   }, [offerUrl, selectedTarget, t]);
 
   const submitAsync = useCallback(async () => {
-    if (!client) {
+    if (!sourceClient) {
       setError(t("workspace.terminal.hostDisconnected"));
       return;
     }
@@ -1287,9 +1392,9 @@ function AddTunnelSheet({
     try {
       const response = await createTunnelFromSelection({
         selection,
-        sourceServerId: serverId,
+        sourceServerId,
         hosts,
-        sourceClient: client,
+        sourceClient,
         targetClient:
           selection.kind === "host"
             ? getHostRuntimeStore().getClient(selection.target.serverId)
@@ -1298,7 +1403,7 @@ function AddTunnelSheet({
         listenHost,
         createOneSided: () =>
           selection.kind === "host"
-            ? client.createTunnel({
+            ? sourceClient.createTunnel({
                 peerId: selection.target.serverId,
                 peerHostname: selection.target.label,
                 url: selection.target.url,
@@ -1308,7 +1413,12 @@ function AddTunnelSheet({
                   : {}),
                 forwards,
               })
-            : createTunnelFromOffer({ client, offerUrl: selection.url, password, forwards }),
+            : createTunnelFromOffer({
+                client: sourceClient,
+                offerUrl: selection.url,
+                password,
+                forwards,
+              }),
       });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
@@ -1321,7 +1431,6 @@ function AddTunnelSheet({
       setSubmitting(false);
     }
   }, [
-    client,
     hosts,
     listenHost,
     localPort,
@@ -1331,7 +1440,8 @@ function AddTunnelSheet({
     remoteHost,
     remotePort,
     resolveSelection,
-    serverId,
+    sourceClient,
+    sourceServerId,
     t,
   ]);
 
@@ -1349,6 +1459,19 @@ function AddTunnelSheet({
 
   return (
     <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-add-sheet">
+      <SelectField
+        label={tunnelSourceLabel(isZh)}
+        value={sourceServerId}
+        selectedDisplay={sourceDisplay}
+        options={sourceOptions}
+        onChange={handleSourceChange}
+        placeholder={t("tunnels.addForm.peerPlaceholder")}
+        emptyText={t("common.empty.noOptionsMatchSearch")}
+        searchable={peerTargets.length > 6}
+        testID="tunnels-add-source"
+        triggerTestID="tunnels-add-source-trigger"
+      />
+      <SourceTunnelHint isZh={isZh} config={sourceConfig} />
       <SelectField
         label={t("tunnels.addForm.peerLabel")}
         value={selectedPeerId}

@@ -1238,8 +1238,8 @@ export const en = {
     },
     addForm: {
       title: "Add tunnel",
-      peerLabel: "Paired host",
-      peerPlaceholder: "Select a paired host",
+      peerLabel: "Port host",
+      peerPlaceholder: "Select a host",
       peerViaRelay: "Via relay",
       peerDirect: "Direct connection",
       pasteOffer: "Paste a pairing link",
