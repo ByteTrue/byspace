@@ -10,7 +10,6 @@ routing:
   - ".github/actions/**"
 
 workspace:
-  - ".mise.toml"
   - "package-lock.json"
   - "patches/**"
   - "tsconfig.json"

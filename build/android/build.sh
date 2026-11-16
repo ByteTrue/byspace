@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 VERSION="${VERSION:-$(node -p "require('./package.json').version" 2>/dev/null || echo dev)}"
-ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.local/share/mise/installs/android-sdk/21.0}}"
-if [ ! -d "$ANDROID_SDK" ]; then
-  echo "error: ANDROID_HOME not found at $ANDROID_SDK" >&2
+ANDROID_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [ -z "$ANDROID_SDK" ] || [ ! -d "$ANDROID_SDK" ]; then
+  echo "error: Android SDK not found at '${ANDROID_SDK:-unset}'; set ANDROID_HOME to your Android SDK directory" >&2
   exit 1
 fi
 export ANDROID_HOME="$ANDROID_SDK"
@@ -18,7 +18,7 @@ if [ -z "${JAVA_HOME:-}" ] && [ -d "/opt/homebrew/opt/openjdk@21" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
-NDK_DIR="${ANDROID_NDK_HOME:-$(ls -d "$ANDROID_SDK"/ndk/* 2>/dev/null | sort -V | tail -n 1)}"
+NDK_DIR="${ANDROID_NDK_HOME:-$(ls -d "$ANDROID_SDK"/ndk/* 2>/dev/null | sort -V | tail -n 1 || true)}"
 if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
   echo "error: Android NDK not found under $ANDROID_SDK/ndk" >&2
   exit 1

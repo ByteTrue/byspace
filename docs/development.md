@@ -29,6 +29,16 @@ The launcher passes the current Git branch as `BYSPACE_DEV_BUILD_LABEL`, which t
 
 Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
 
+## Android build
+
+`make build-android` runs `build/android/build.sh` and needs a local Android toolchain:
+
+- `ANDROID_HOME` set to an SDK containing platform `android-36` and build-tools `36.0.0` (the SDK Android Studio installs works).
+- An NDK under `$ANDROID_HOME/ndk` (release CI uses `27.1.12297006`), or `ANDROID_NDK_HOME` pointing at one.
+- JDK 21: set `JAVA_HOME`, or `brew install openjdk@21` — the script falls back to `/opt/homebrew/opt/openjdk@21`.
+
+Release CI installs these itself (`.github/workflows/release.yml`, `build-android` job).
+
 ## Worktree starting refs
 
 A new worktree starts from the current branch's upstream, or the local branch when it has no
