@@ -15,7 +15,7 @@
 
 - 类型：用户决定（2026-10-29 确认，扩展 004）+ 外部观察（Wails/WebView2/Android 平台行为，实测）。
 - 被否决的相关方案：Electron（已退役）；Android 跑本地 daemon（壳只做远程客户端）；应用商店分发；npm 分发；macOS 安装默认 .app。
-- 证据或复核方式：`byissue/archive/v1/decisions/005-wails-v3-unified-desktop-and-android-client.md`；笔记 `byissue/archive/v1/notes/019-wails-v3-in-process-assets-and-android-mixed-content.md`、`2026-11-05-wails-frameless-windows-drag-and-resize.md`、`2026-11-05-webview2-ime-anchor-after-resize.md`、`2026-11-09-daemon-control-owner.md`；代码 `internal/gui`、`internal/selfupdate`、`build/android/`。
+- 证据或复核方式：`bywork/archive/v1/decisions/005-wails-v3-unified-desktop-and-android-client.md`；笔记 `bywork/archive/v1/notes/019-wails-v3-in-process-assets-and-android-mixed-content.md`、`2026-11-05-wails-frameless-windows-drag-and-resize.md`、`2026-11-05-webview2-ime-anchor-after-resize.md`、`2026-11-09-daemon-control-owner.md`；代码 `internal/gui`、`internal/selfupdate`、`build/android/`。
 - 适用条件：Wails v3（alpha 阶段 API 可能变）；WebView2 IME 结论基于上游 issue #5675 未修复期间。
 
 ## 重访条件

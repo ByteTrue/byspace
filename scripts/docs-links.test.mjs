@@ -12,7 +12,7 @@ import test from "node:test";
 //   - relative paths  `](../docs/thing.md)`   resolved against the linking file
 //   - docs routes     `](/docs/thing)`        resolved against public-docs/<thing>.md
 //
-// Skipped on purpose: http(s) URLs, mailto, bare anchors, and byissue/ history.
+// Skipped on purpose: http(s) URLs, mailto, bare anchors, and bywork/ history.
 // byissue entries are frozen records of what was true when they were written;
 // rewriting their links would falsify the record.
 
@@ -24,8 +24,6 @@ const SCANNED = [
   "CONTRIBUTING.md",
   "SECURITY.md",
   "README.md",
-  "README.ja.md",
-  "README.ko.md",
   "README.zh-CN.md",
   "docs",
   "public-docs",

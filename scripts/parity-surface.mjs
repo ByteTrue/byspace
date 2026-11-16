@@ -146,9 +146,9 @@ export function envVarGaps(root) {
 // say so here instead of quietly editing the snapshot. Each entry is one name a client could type,
 // so the list doubles as the record of what an older client will find missing.
 const RETIRED_MCP_TOOLS_DECISION =
-  "byissue/archive/v1/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (BySpace tools moved to the bundled skill + CLI)";
+  "bywork/archive/v1/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (BySpace tools moved to the bundled skill + CLI)";
 const RETIRED_HTTP_ROUTES_DECISION =
-  "byissue/archive/v1/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (the pi subagent report endpoint was a stub)";
+  "bywork/archive/v1/issues/2026-11-09-x-retire-mcp-tools-for-skill-cli.md (the pi subagent report endpoint was a stub)";
 
 const RETIRED_MCP_TOOLS = new Set([
   "archive_agent",

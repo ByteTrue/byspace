@@ -34,7 +34,7 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "~/comp
  * decides whether you can start a BySpace agent session with this backend;
  * the hook switch decides whether it reports terminal activity. Turning a
  * provider off must not turn its hook off — see
- * `byissue/memory/settings-taxonomy.md`.
+ * `bywork/memory/settings-taxonomy.md`.
  */
 
 interface ProviderTerminalIntegrationProps {

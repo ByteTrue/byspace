@@ -11,7 +11,7 @@
 
 - 类型：可重跑证明（泄漏均实际发生并清理过）+ 外部观察（macOS 绑定优先级、GitHub 限流文本）。
 - 被否决的相关方案：信任 try/catch cleanup（静默失败）；重启 daemon 释放 tunnel 端口（开机重绑）。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/011-playwright-spec-cross-file-project-leak.md`、`012-github-fixture-repo-leak.md`、`2026-10-15-byspace-stray-daemon-inventory-and-cleanup.md`、`2026-11-02-test-tunnels-bind-real-ports.md`；fixture `web/e2e/support/fixtures.ts`（projectOwnership、createTempGithubRepo 仍在用）。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/011-playwright-spec-cross-file-project-leak.md`、`012-github-fixture-repo-leak.md`、`2026-10-15-byspace-stray-daemon-inventory-and-cleanup.md`、`2026-11-02-test-tunnels-bind-real-ports.md`；fixture `web/e2e/support/fixtures.ts`（projectOwnership、createTempGithubRepo 仍在用）。
 - 适用条件：e2e、tunnel 测试、worktree 开发。AGENTS.md 禁止为复现问题起 daemon，用 in-process harness（docs/ad-hoc-daemon-testing.md）。
 
 ## 重访条件

@@ -17,6 +17,7 @@
     "**/*.gen.tsx",
     "web/public/schemas/*.json",
     "archive/**",
+    "bywork/**",
     "design/references/**",
     "design/sheet-assets/**",
     "design/component-sheet.html",

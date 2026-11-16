@@ -15,7 +15,7 @@
 
 - 类型：用户决定（2026-11-09 退役 MCP 交付）。理由：投递面从「每个 provider 一套适配」降到「provider 只要有 shell」；MCP 已在 pi / codex / omp 写出三种实现，ACP 一家都没接上。
 - 被否决的相关方案：per-provider 工具交付（三种实现、ACP 零接入）；技能文本复述参数（与二进制漂移）；`byspaceTools` 过滤（没有执行点，parse-only）；三 home 技能安装（从第一版实现照抄，从未被论证；按各 agent 自己的 skill 根目录选）。
-- 证据或复核方式：`byissue/archive/v1/decisions/2026-11-09-retire-mcp-tool-delivery.md`、`byissue/archive/v1/spec/agent-tools.md`、`byissue/archive/v1/notes/2026-10-16-skill-install-targets-and-retired-dirs.md`；代码 `internal/server/skills.go`；守卫 `scripts/parity-surface.mjs`（RETIRED_MCP_TOOLS / RETIRED_HTTP_ROUTES，含 `/api/subagent-report`）。
+- 证据或复核方式：`bywork/archive/v1/decisions/2026-11-09-retire-mcp-tool-delivery.md`、`bywork/archive/v1/spec/agent-tools.md`、`bywork/archive/v1/notes/2026-10-16-skill-install-targets-and-retired-dirs.md`；代码 `internal/server/skills.go`；守卫 `scripts/parity-surface.mjs`（RETIRED_MCP_TOOLS / RETIRED_HTTP_ROUTES，含 `/api/subagent-report`）。
 - 适用条件：所有 provider 的工具交付与技能安装。OpenCode 共享 serve 的例外仍在。
 
 ## 重访条件

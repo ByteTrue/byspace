@@ -1642,7 +1642,7 @@ export const TunnelEntrySchema = z.object({
 
 // Host sync: every daemon in the user's sync chain holds a replica of the host list, the daemon
 // membership, and the tunnel-rule view. Data never carries credentials; the daemon rejects a
-// record that contains one. Design: byissue/archive/v1/epics/2026-11-12-o-host-sync-chain/spec.md.
+// record that contains one. Design: bywork/archive/v1/epics/2026-11-12-o-host-sync-chain/spec.md.
 export const HostSyncRecordKindSchema = z.enum(["host", "member", "rule"]);
 
 export const HostSyncRecordSchema = z.object({

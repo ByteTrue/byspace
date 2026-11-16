@@ -8,9 +8,7 @@ import {
 
 describe("parseAppLanguage", () => {
   it("accepts system and all supported language locales", () => {
-    expect(
-      ["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"].map(parseAppLanguage),
-    ).toEqual(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"]);
+    expect(["system", "en", "zh-CN"].map(parseAppLanguage)).toEqual(["system", "en", "zh-CN"]);
   });
 
   it("returns null for unknown values", () => {
@@ -19,69 +17,31 @@ describe("parseAppLanguage", () => {
   });
 
   it("offers system plus all supported languages", () => {
-    expect(LANGUAGE_OPTIONS.map((option) => option.value)).toEqual([
-      "system",
-      "ar",
-      "en",
-      "es",
-      "fr",
-      "ja",
-      "ko",
-      "pt-BR",
-      "ru",
-      "zh-CN",
-    ]);
+    expect(LANGUAGE_OPTIONS.map((option) => option.value)).toEqual(["system", "en", "zh-CN"]);
   });
 });
 
 describe("formatLanguageOptionLabel", () => {
   it("shows the native language name and English name in English UI", () => {
-    const arabic = LANGUAGE_OPTIONS.find((option) => option.value === "ar");
-    const japanese = LANGUAGE_OPTIONS.find((option) => option.value === "ja");
-    const korean = LANGUAGE_OPTIONS.find((option) => option.value === "ko");
-    const portuguese = LANGUAGE_OPTIONS.find((option) => option.value === "pt-BR");
-    const spanish = LANGUAGE_OPTIONS.find((option) => option.value === "es");
     const chinese = LANGUAGE_OPTIONS.find((option) => option.value === "zh-CN");
 
-    expect([
-      formatLanguageOptionLabel(arabic!, "en", "System"),
-      formatLanguageOptionLabel(japanese!, "en", "System"),
-      formatLanguageOptionLabel(korean!, "en", "System"),
-      formatLanguageOptionLabel(portuguese!, "en", "System"),
-      formatLanguageOptionLabel(spanish!, "en", "System"),
-      formatLanguageOptionLabel(chinese!, "en", "System"),
-    ]).toEqual([
-      "العربية - Arabic",
-      "日本語 - Japanese",
-      "한국어 - Korean",
-      "Português brasileiro - Brazilian Portuguese",
-      "Español - Spanish",
+    expect(formatLanguageOptionLabel(chinese!, "en", "System")).toBe(
       "简体中文 - Simplified Chinese",
-    ]);
+    );
   });
 
   it("shows the native language name and Chinese name in Chinese UI", () => {
-    const arabic = LANGUAGE_OPTIONS.find((option) => option.value === "ar");
     const english = LANGUAGE_OPTIONS.find((option) => option.value === "en");
-    const spanish = LANGUAGE_OPTIONS.find((option) => option.value === "es");
 
-    expect([
-      formatLanguageOptionLabel(arabic!, "zh-CN", "系统"),
-      formatLanguageOptionLabel(english!, "zh-CN", "系统"),
-      formatLanguageOptionLabel(spanish!, "zh-CN", "系统"),
-    ]).toEqual(["العربية - 阿拉伯语", "English - 英语", "Español - 西班牙语"]);
+    expect(formatLanguageOptionLabel(english!, "zh-CN", "系统")).toBe("English - 英语");
   });
 
   it("uses a single label when both language names match", () => {
     const english = LANGUAGE_OPTIONS.find((option) => option.value === "en");
-    const japanese = LANGUAGE_OPTIONS.find((option) => option.value === "ja");
-    const korean = LANGUAGE_OPTIONS.find((option) => option.value === "ko");
-    const portuguese = LANGUAGE_OPTIONS.find((option) => option.value === "pt-BR");
+    const chinese = LANGUAGE_OPTIONS.find((option) => option.value === "zh-CN");
 
     expect(formatLanguageOptionLabel(english!, "en", "System")).toBe("English");
-    expect(formatLanguageOptionLabel(japanese!, "ja", "システム")).toBe("日本語");
-    expect(formatLanguageOptionLabel(korean!, "ko", "시스템")).toBe("한국어");
-    expect(formatLanguageOptionLabel(portuguese!, "pt-BR", "Sistema")).toBe("Português brasileiro");
+    expect(formatLanguageOptionLabel(chinese!, "zh-CN", "系统")).toBe("简体中文");
   });
 
   it("uses the active-language name for System", () => {
@@ -93,42 +53,13 @@ describe("formatLanguageOptionLabel", () => {
 
 describe("resolveSupportedLocale", () => {
   it("respects explicit language choices", () => {
-    expect(resolveSupportedLocale("ar", ["en-US"])).toBe("ar");
     expect(resolveSupportedLocale("en", ["zh-CN"])).toBe("en");
-    expect(resolveSupportedLocale("es", ["en-US"])).toBe("es");
-    expect(resolveSupportedLocale("fr", ["en-US"])).toBe("fr");
-    expect(resolveSupportedLocale("ja", ["en-US"])).toBe("ja");
-    expect(resolveSupportedLocale("ko", ["en-US"])).toBe("ko");
-    expect(resolveSupportedLocale("pt-BR", ["en-US"])).toBe("pt-BR");
-    expect(resolveSupportedLocale("ru", ["en-US"])).toBe("ru");
     expect(resolveSupportedLocale("zh-CN", ["en-US"])).toBe("zh-CN");
   });
 
-  it("maps supported system locales", () => {
-    expect(resolveSupportedLocale("system", ["ar-EG"])).toBe("ar");
+  it("maps English system locales to English", () => {
+    expect(resolveSupportedLocale("system", ["en"])).toBe("en");
     expect(resolveSupportedLocale("system", ["en-US"])).toBe("en");
-    expect(resolveSupportedLocale("system", ["es-MX"])).toBe("es");
-    expect(resolveSupportedLocale("system", ["fr-CA"])).toBe("fr");
-    expect(resolveSupportedLocale("system", ["ja-JP"])).toBe("ja");
-    expect(resolveSupportedLocale("system", ["ko-KR"])).toBe("ko");
-    expect(resolveSupportedLocale("system", ["pt-BR"])).toBe("pt-BR");
-    expect(resolveSupportedLocale("system", ["pt"])).toBe("pt-BR");
-    expect(resolveSupportedLocale("system", ["ru-RU"])).toBe("ru");
-  });
-
-  it("maps Korean system locales to Korean", () => {
-    expect(resolveSupportedLocale("system", ["ko"])).toBe("ko");
-    expect(resolveSupportedLocale("system", ["ko-KR"])).toBe("ko");
-    expect(resolveSupportedLocale("system", ["ko-KP"])).toBe("ko");
-  });
-
-  it("does not map non-Brazilian Portuguese system locales to Brazilian Portuguese", () => {
-    expect(resolveSupportedLocale("system", ["pt-PT"])).toBe("en");
-    expect(resolveSupportedLocale("system", ["pt-AO"])).toBe("en");
-  });
-
-  it("keeps English when Spanish is a secondary system language", () => {
-    expect(resolveSupportedLocale("system", ["en-US", "es-GB"])).toBe("en");
   });
 
   it("maps Chinese system locales to Simplified Chinese", () => {
@@ -145,6 +76,7 @@ describe("resolveSupportedLocale", () => {
 
   it("maps unsupported or missing system locales to English", () => {
     expect(resolveSupportedLocale("system", ["de-DE"])).toBe("en");
+    expect(resolveSupportedLocale("system", ["ja-JP"])).toBe("en");
     expect(resolveSupportedLocale("system", [])).toBe("en");
   });
 });

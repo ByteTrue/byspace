@@ -10,7 +10,7 @@
 
 - 类型：可重跑证明（483 次调用的仲裁实际做过）。
 - 被否决的相关方案：信模型对历史的转述；把 rg 输出异常直接当工具故障。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/003-tool-echo-pollution-three-culprits.md`。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/003-tool-echo-pollution-three-culprits.md`。
 - 适用条件：排查 agent 行为争议、审计工具调用历史。JSONL 路径是 pi 的存储约定，pi 版本变化需复核。
 
 ## 重访条件

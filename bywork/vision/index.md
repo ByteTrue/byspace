@@ -1,6 +1,6 @@
 # Vision
 
-> 目标世界写在这里。当前行为以代码与 `docs/` 为准；v1 行为规格快照在 `byissue/archive/v1/spec/`（冻结记录，可能过时）。跨任务的长期判断在 `byissue/memory/`。
+> 目标世界写在这里。当前行为以代码与 `docs/` 为准；v1 行为规格快照在 `bywork/archive/v1/spec/`（冻结记录，可能过时）。跨任务的长期判断在 `bywork/memory/`。
 
 ## 目标世界
 

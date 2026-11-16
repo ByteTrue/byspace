@@ -10,7 +10,7 @@
 
 - 类型：用户决定（2026-10-31 两篇：先 shadcn 换肤再重写；重写独立大工程）。
 - 被否决的相关方案：保留 Expo（为 Electron+native 共享而生，两者都退役后只剩负担）；Next/Remix（无 SSR 需求，要嵌进 Go）；Svelte/Solid（React 逻辑不可复用）；magpie 全手写 JS（UI 复杂度不匹配）；TanStack Router（约 20 页，一张路由表够）。更早失败的换肤尝试：Linear 局部换肤、Claude 暖羊皮纸、impeccable 选方向流程。
-- 证据或复核方式：`byissue/archive/v1/decisions/2026-10-31-web-frontend-rewrite.md`、`2026-10-31-shadcn-restyle-before-frontend-rewrite.md`；`design/references/shadcn/README.md`；AGENTS.md「Platform gating」节。
+- 证据或复核方式：`bywork/archive/v1/decisions/2026-10-31-web-frontend-rewrite.md`、`2026-10-31-shadcn-restyle-before-frontend-rewrite.md`；`design/references/shadcn/README.md`；AGENTS.md「Platform gating」节。
 - 适用条件：web/ 全部 UI 工作。换肤先行付出的代价（组件写两遍）已结清，样板页规格按 shadcn 主题变量记录供沿用。
 
 ## 重访条件

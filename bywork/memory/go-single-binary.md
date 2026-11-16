@@ -13,8 +13,8 @@
 - 类型：用户决定（2026-10-19 架构拍板）+ 可重跑证明（六次自发明陷阱都是 owner 真实使用中抓到的）。
 - 六次自发明陷阱（正确行为以 Node 为准）：timeline 落盘快照（Node 是纯内存 + provider 重建）；process_exit 发 turn_completed 保留 runtime（应为 turn_failed + closeAgent）；steer 无条件下发（应先查活跃轮次，否则 inactive 开新轮）；pairing QR 用 SHA-256 伪矩阵（应为 qrcode 真 QR）；skills status 硬编码 up-to-date（应为三态 + 逐 op targets）；ACP 预设当常驻内置（应为 6 内置 + Add provider 按需）。
 - 被否决的相关方案：参考 magpie 的行为实现（形状可借，行为必须翻译）；「测试绿即完成」（后三类缺陷测试全绿仍存在）。
-- 证据或复核方式：`byissue/archive/v1/decisions/004-go-single-binary-architecture.md`；对账守卫 `scripts/go-parity-audit.mjs`、`scripts/go-emit-parity.mjs`、`scripts/reaudit-ledger-check.mjs`（`npm run audit`）；锁守卫 `internal/server/lock_hygiene_test.go`（同类锁 bug 复发 3 次后加的 AST 检查）。
-- 适用条件：Go daemon 的所有行为改动。Node 原版已删（commit 20721fdcf），行为基准现在是对账快照 `scripts/node-surface-snapshot.json` 与归档账本 `byissue/archive/v1/issues/node-reaudit-log.md`。
+- 证据或复核方式：`bywork/archive/v1/decisions/004-go-single-binary-architecture.md`；对账守卫 `scripts/go-parity-audit.mjs`、`scripts/go-emit-parity.mjs`、`scripts/reaudit-ledger-check.mjs`（`npm run audit`）；锁守卫 `internal/server/lock_hygiene_test.go`（同类锁 bug 复发 3 次后加的 AST 检查）。
+- 适用条件：Go daemon 的所有行为改动。Node 原版已删（commit 20721fdcf），行为基准现在是对账快照 `scripts/node-surface-snapshot.json` 与归档账本 `bywork/archive/v1/issues/node-reaudit-log.md`。
 
 ## 重访条件
 

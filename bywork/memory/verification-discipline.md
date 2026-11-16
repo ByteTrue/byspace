@@ -11,7 +11,7 @@
 
 - 类型：可重跑证明（各误判均有事故记录）。
 - 被否决的相关方案：静态 unused 报告直接当删除依据；整体 CI success 当发布验证；空输出当通过。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/001-dead-code-audit-criteria-and-traps.md`、`016-verification-tools-report-false-failures.md`、`2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（audit 汇总假绿）；账本 `byissue/archive/v1/epics/2026-11-12-o-host-sync-chain/ledger.md:95`（跳过 job 事故）。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/001-dead-code-audit-criteria-and-traps.md`、`016-verification-tools-report-false-failures.md`、`2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（audit 汇总假绿）；账本 `bywork/archive/v1/epics/2026-11-12-o-host-sync-chain/ledger.md:95`（跳过 job 事故）。
 - 适用条件：删除代码、发布、解读任何守卫/CI 结果时。
 
 ## 重访条件

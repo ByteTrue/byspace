@@ -11,7 +11,7 @@
 
 - 类型：用户决定。Owner（2026-10-06）原话：「之后派将会是一等公民，会优先给派做适配。这些以ByteTrue开头的是我自己做的这些扩展，这些扩展也将会是一等公民扩展，我们只按照这些来适配。」「Pi 排第一，其余 provider 维护降级为 best-effort。」「非白名单扩展，就现在这样就好了。现在怎么样就怎么样，我们不特意去搞它。」
 - 被否决的相关方案：为所有 provider 平等做新 UI 适配（维护面过大）；为非白名单扩展预留抽象（owner 明确不特意搞）。
-- 证据或复核方式：`byissue/archive/v1/decisions/003-pi-first-class-and-bytetrue-extension-whitelist.md`；讨论背景 `byissue/archive/v1/talks/006-pi-subagent-first-class-adaptation.md`；首个落地 `byissue/archive/v1/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md`。
+- 证据或复核方式：`bywork/archive/v1/decisions/003-pi-first-class-and-bytetrue-extension-whitelist.md`；讨论背景 `bywork/archive/v1/talks/006-pi-subagent-first-class-adaptation.md`；首个落地 `bywork/archive/v1/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md`。
 - 适用条件：决定于 2026-10-06，此后未被推翻。白名单扩展的实际包名以 `@bytetrue/` 前缀为准（归档笔记中部分简写无前缀）。
 
 ## 重访条件

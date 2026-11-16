@@ -107,7 +107,7 @@ describe("i18n key contract between code and resources", () => {
   it("resolves every statically referenced t() key in the en tree", () => {
     expect(
       missing,
-      `Missing i18n keys render as raw key strings in the UI. Add them to en.ts (and the other 8 locales) or fix the call site:\n${missing
+      `Missing i18n keys render as raw key strings in the UI. Add them to en.ts (and zh-CN.ts) or fix the call site:\n${missing
         .map((m) => `  ${m.key}  (used in ${m.files.join(", ")})`)
         .join("\n")}`,
     ).toEqual([]);

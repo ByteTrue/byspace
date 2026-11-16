@@ -10,7 +10,7 @@
 
 - 类型：可重跑证明（缺陷实例均有修复）+ 长期约束（docs/providers.md 检查表）。
 - 被否决的相关方案：相信「存进配置就生效」（五连漏证明不成立）；给新字段只加类型不加登记（编译器不管显式白名单）。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/2026-11-09-settings-stored-but-not-transmitted.md`、`010-agentsessionconfig-field-three-registries.md`（Node 时代原始三处登记）；Go 代码注释 `internal/server/server.go:2625-2647`（三个静默丢弃实例的记录）。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/2026-11-09-settings-stored-but-not-transmitted.md`、`010-agentsessionconfig-field-three-registries.md`（Node 时代原始三处登记）；Go 代码注释 `internal/server/server.go:2625-2647`（三个静默丢弃实例的记录）。
 - 适用条件：所有 provider 设置与会话配置字段改动。Node 三处登记的具体文件已不存在，Go 的对应点是解码 struct 与持久化路径。
 
 ## 重访条件

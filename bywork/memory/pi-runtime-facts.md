@@ -12,7 +12,7 @@
 
 - 类型：外部观察（pi 与 provider 的行为，实测；非本仓库代码可推导）。
 - 被否决的相关方案：依赖 pi-subagent timeoutMs 做时限（定时器不可靠）；用 stopReason 或消息累积判定失败（aborted 与 retry 路径会误判）。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/004-pi-advisor-flow-silent-model-takeover.md`、`007-pi-subagent-timer-lateness-and-notify-gating.md`、`008-pi-builtin-mcp-registration-and-timeline-order.md`、`2026-11-07-pi-model-call-failure-shape.md`、`2026-11-11-provider-model-sources.md`。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/004-pi-advisor-flow-silent-model-takeover.md`、`007-pi-subagent-timer-lateness-and-notify-gating.md`、`008-pi-builtin-mcp-registration-and-timeline-order.md`、`2026-11-07-pi-model-call-failure-shape.md`、`2026-11-11-provider-model-sources.md`。
 - 适用条件：Pi 版本演进可能改变这些行为；版本号是测量时点记录。MCP 注册事实仍影响用户自有 MCP server 的注册方式（见 agent-tools-delivery：注册不带 exposure）。
 
 ## 重访条件

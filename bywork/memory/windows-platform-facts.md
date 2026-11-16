@@ -11,7 +11,7 @@
 
 - 类型：外部观察（平台行为，实测）+ 可重跑证明（修复已落库）。
 - 被否决的相关方案：用 URL.pathname 当磁盘路径；用大小写敏感的环境变量遍历；用 os.Getenv 探针验证子进程环境（探针与目标读法不同，掩盖问题）。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（6 处已修）、`2026-11-11-windows-conpty-mouse-modes.md`、`2026-11-11-windows-env-block-key-case.md`。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/2026-11-04-windows-url-pathname-is-not-a-disk-path.md`（6 处已修）、`2026-11-11-windows-conpty-mouse-modes.md`、`2026-11-11-windows-env-block-key-case.md`。
 - 适用条件：Windows 目标的全部脚本与 daemon 代码。ConPTY 结论绑定 go-pty v0.2.3（third_party/go-pty 是 pinned 库，升级前读其 README）。
 
 ## 重访条件

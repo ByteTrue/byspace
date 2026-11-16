@@ -10,7 +10,7 @@
 
 - 类型：可重跑证明（漂移与转义事故均实际发生）。
 - 被否决的相关方案：生成物一律提交或一律不提交（判据是外部契约）；把 fromCharCode 当冗余简化。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/002-generated-artifacts-and-remote-urls.md`、`009-generated-source-escaping-in-template-literals.md`；mermaid 生成器 `web/src/core/components/markdown/fence/mermaid/build-runtime.mjs`。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/002-generated-artifacts-and-remote-urls.md`、`009-generated-source-escaping-in-template-literals.md`；mermaid 生成器 `web/src/core/components/markdown/fence/mermaid/build-runtime.mjs`。
 - 适用条件：提交生成物、写批量改名脚本、改生成器模板时。009 的原始事故点已随 mermaid 重写变化，规则本身仍适用。
 
 ## 重访条件

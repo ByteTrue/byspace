@@ -12,7 +12,7 @@
 
 - 类型：外部观察（CF 平台行为与实测数字）+ 用户决定（否决 P2P）。
 - 被否决的相关方案：P2P 打洞（owner 网络下从未成功）；追上游 Paseo 解决延迟（上游冻结，见 product-scope）。
-- 证据或复核方式：笔记 `byissue/archive/v1/notes/003-relay-frame-budget-and-large-payloads.md`、`006-relay-runtime-frame-representation.md`、`018-durable-object-billing-and-hibernation.md`、`008-tunnel-performance-and-relay-vs-p2p.md`；`byissue/archive/v1/spec/connection.md`（hosted deployment 节）；守卫 `scripts/relay-worker.test.mjs`。
+- 证据或复核方式：笔记 `bywork/archive/v1/notes/003-relay-frame-budget-and-large-payloads.md`、`006-relay-runtime-frame-representation.md`、`018-durable-object-billing-and-hibernation.md`、`008-tunnel-performance-and-relay-vs-p2p.md`；`bywork/archive/v1/spec/connection.md`（hosted deployment 节）；守卫 `scripts/relay-worker.test.mjs`。
 - 适用条件：32 MiB 上限是部署侧配置，改 worker 配置会变；计费数字是 2026-10/11 实测，CF 定价变化需重测；延迟数字依赖测量时点的网络路径。
 
 ## 重访条件

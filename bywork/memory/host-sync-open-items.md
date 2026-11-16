@@ -8,7 +8,7 @@
 ## 依据
 
 - 类型：可重跑证明（账本记录的执行状态）+ 待 owner 决定的设计开口。
-- 证据或复核方式：`byissue/archive/v1/epics/2026-11-12-o-host-sync-chain/ledger.md:81`（rule 无读者）、`:95`（跳过 job 事故）；代码 `internal/hostsync/`（HostSyncRecordKindSchema 含 "rule"，packages/protocol/src/messages.ts:1646）；spec 句子在 `byissue/archive/v1/spec/connection.md`（host-sync 节）。
+- 证据或复核方式：`bywork/archive/v1/epics/2026-11-12-o-host-sync-chain/ledger.md:81`（rule 无读者）、`:95`（跳过 job 事故）；代码 `internal/hostsync/`（HostSyncRecordKindSchema 含 "rule"，packages/protocol/src/messages.ts:1646）；spec 句子在 `bywork/archive/v1/spec/connection.md`（host-sync 节）。
 - 适用条件：host-sync epic 主体已于 2026-11-13 全部做完（含三方对抗评审修复），只剩这两个开口。S17 场景是本机双 daemon + 127.0.0.1 隔离端口 relay 测的，不是真实 laptop↔VPS。
 
 ## 重访条件
