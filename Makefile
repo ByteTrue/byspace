@@ -39,25 +39,25 @@ build:
 build-app:
 	CGO_ENABLED=1 GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(APP_BINARY) .
 
-## app: 构建 macOS BySpace.app bundle 并打包 dist/byspace-darwin-$(GOARCH).zip
+## app: 构建 macOS dist/BySpace.app bundle 并打包 dist/byspace-darwin-$(GOARCH).zip
 app: build-app
-	@rm -rf BySpace.app build/darwin/BySpace.iconset
-	@mkdir -p BySpace.app/Contents/MacOS BySpace.app/Contents/Resources build/darwin/BySpace.iconset dist
-	@cp $(APP_BINARY) BySpace.app/Contents/MacOS/byspace
+	@rm -rf dist/BySpace.app build/darwin/BySpace.iconset
+	@mkdir -p dist/BySpace.app/Contents/MacOS dist/BySpace.app/Contents/Resources build/darwin/BySpace.iconset
+	@cp $(APP_BINARY) dist/BySpace.app/Contents/MacOS/byspace
 	@for s in 16 32 128 256 512; do \
 		sips -z $$s $$s internal/gui/icon.png --out build/darwin/BySpace.iconset/icon_$${s}x$${s}.png >/dev/null 2>&1; \
 		sips -z $$((s*2)) $$((s*2)) internal/gui/icon.png --out build/darwin/BySpace.iconset/icon_$${s}x$${s}@2x.png >/dev/null 2>&1; \
 	done
-	@iconutil -c icns build/darwin/BySpace.iconset -o BySpace.app/Contents/Resources/BySpace.icns && rm -rf build/darwin/BySpace.iconset
-	@sed 's/@VERSION@/$(VERSION)/g' build/darwin/Info.plist > BySpace.app/Contents/Info.plist
-	@ditto -c -k --sequesterRsrc --keepParent BySpace.app dist/byspace-darwin-$(GOARCH).zip
-	@echo "● Built BySpace.app and dist/byspace-darwin-$(GOARCH).zip"
+	@iconutil -c icns build/darwin/BySpace.iconset -o dist/BySpace.app/Contents/Resources/BySpace.icns && rm -rf build/darwin/BySpace.iconset
+	@sed 's/@VERSION@/$(VERSION)/g' build/darwin/Info.plist > dist/BySpace.app/Contents/Info.plist
+	@ditto -c -k --sequesterRsrc --keepParent dist/BySpace.app dist/byspace-darwin-$(GOARCH).zip
+	@echo "● Built dist/BySpace.app and dist/byspace-darwin-$(GOARCH).zip"
 
 ## dmg: 构建 macOS dist/byspace-darwin-$(GOARCH).dmg 安装镜像
 dmg: app
 	@rm -rf build/darwin/dmg dist/byspace-darwin-$(GOARCH).dmg
 	@mkdir -p build/darwin/dmg dist
-	@cp -R BySpace.app build/darwin/dmg/
+	@cp -R dist/BySpace.app build/darwin/dmg/
 	@ln -s /Applications build/darwin/dmg/Applications
 	@hdiutil create -volname BySpace -srcfolder build/darwin/dmg -ov -format UDZO dist/byspace-darwin-$(GOARCH).dmg >/dev/null
 	@rm -rf build/darwin/dmg
@@ -119,6 +119,6 @@ vet:
 
 ## clean: 清掉构建产物
 clean:
-	rm -rf bin/byspace $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk BySpace.app rsrc_windows_*.syso dist
+	rm -rf bin/byspace $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk rsrc_windows_*.syso dist
 	rm -rf internal/webui/dist/*
 	touch internal/webui/dist/.keep

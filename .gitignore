@@ -94,7 +94,6 @@ app.json
 
 # Go single-binary build & embedded web assets
 /byspace
-/BySpace.app/
 /bin/
 !/build/
 /build/*
