@@ -1,82 +1,53 @@
 # Vision
 
-> **读者：** 想理解 BySpace 最终为谁创造什么，并从这里找到下一步该读哪的人。目标世界写在这里；当前现实读 `byissue/spec/index.md`。
+> 目标世界写在这里。当前行为以代码与 `docs/` 为准；v1 行为规格快照在 `byissue/archive/v1/spec/`（冻结记录，可能过时）。跨任务的长期判断在 `byissue/memory/`。
 
----
-
-## 产品核心
+## 目标世界
 
 BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI coding agent。Daemon 装在你的机器上，代码、密钥和 agent 进程都不离开它。
 
 它是 daemon 优先、web 优先的。在任何一台机器上装一个 daemon，打开浏览器就能用全部功能，不需要 VPN，不需要先装某个客户端。桌面 App 和手机 App 提供各自平台的便利，不是使用前提。
 
-**Agent 有两条并行的运行方式，都是一等公民。**
+Agent 有两条并行的运行方式，都是一等公民，谁也不取代谁：
 
-- **结构化会话。** BySpace 与 provider 的协议对接，把时间线、工具调用、权限批准、subagent 拆成界面元素。换来的是移动端和窄屏上真正可读可操作的体验，代价是每个 provider 都要维护适配。适配分先后：Pi 是一等公民，界面新能力先适配 Pi，其余 provider 维护为 best-effort；Pi 的扩展适配只认 @bytetrue/\* 白名单。见 `byissue/decisions/003-pi-first-class-and-bytetrue-extension-whitelist.md`。
-- **Terminal 会话。** agent 以自己的 TUI 在 PTY 里运行，BySpace 提供宿主、活动提示和通知。换来的是任何 agent 都能跑、没有第二份状态真相，代价是全屏 TUI 在手机上很难用。
+- 结构化会话：BySpace 与 provider 的协议对接，把时间线、工具调用、权限批准、subagent 拆成界面元素。换来移动端和窄屏上真正可读可操作的体验，代价是每个 provider 都要维护适配。适配分先后：Pi 一等公民，其余 best-effort，见 [pi-first-class](../memory/pi-first-class.md)。
+- Terminal 会话：agent 以自己的 TUI 在 PTY 里运行，BySpace 提供宿主、活动提示和通知。换来任何 agent 都能跑、没有第二份状态真相，代价是全屏 TUI 在手机上很难用。
 
-两条路解决的是不同场景，不是过渡关系，谁也不取代谁。选哪条由 provider 支持情况和当前设备决定。
+两条路解决不同场景，不是过渡关系。选哪条由 provider 支持情况和当前设备决定。为什么两条路共存、为什么不转向 terminal-native 独立 fork，完整讨论在 [talks/001](../archive/v1/talks/001-terminal-native-hard-fork.md)（结论：撤回 hard-fork）。
 
 目标用户是单人开发者：使用多个 agent，多设备多机器工作，在乎自己拥有工具和数据。
 
-## 用户怎样获得结果
+用语：活动状态指圆点与通知背后的粗粒度状态；Hook 指安装进 agent 配置目录、把事件转成活动状态发给 daemon 的小段代码。结构化会话的状态来自协议事件，terminal 会话的状态来自 hook，两者汇入同一套圆点、workspace 汇总和通知。
 
-- **开始一项工作。** 从侧栏选 project，进入 workspace 或新开一个 worktree，起一个 agent 会话或一个 terminal。多个会话并排各占一个 pane。深入读 `byissue/spec/workspace.md`。
-- **跟一个 agent 协作。** 结构化会话里读时间线、展开工具调用、批准权限、追问。深入读 `byissue/spec/agent-conversation.md`。
-- **跑任何一个 TUI agent。** terminal 里启动它，用它自己的界面。tab 圆点和通知告诉你它在跑、在等你，还是结束了。深入读 `byissue/spec/terminal.md`、`docs/terminal-activity.md`。
-- **离开，然后被叫回来。** 关掉窗口或出门。turn 结束、需要输入时收到通知。回来后时间线和 terminal 滚动历史都在。
-- **从手机接管。** 手机上继续同一个会话。结构化会话在手机上可读可操作；terminal 会话在手机上以"够用"为目标。
-- **看 agent 改了什么。** 会话旁边看 Changes、diff 和文件树，确认或撤回。
-- **在别的机器上跑。** daemon 放在远程机器或 VM 上，通过 E2EE Relay 连接，浏览器里的体验与本地一致。深入读 `byissue/spec/connection.md`。
-- **让 agent 按时自己跑。** 定时任务、MCP 和 CLI 创建的会话，结果同样出现在界面和通知里。
+## 旅程与能力方向
 
-## 能力怎样支撑旅程
+- 开始一项工作：从侧栏选 project，进入 workspace 或新开一个 worktree，起一个 agent 会话或一个 terminal，多个会话并排各占一个 pane。支撑能力：project 组织、分支与推送状态、worktree 创建。行为细节见 [workspace 规格快照](../archive/v1/spec/workspace.md)。
+- 跟一个 agent 协作：结构化会话里读时间线、展开工具调用、批准权限、追问。支撑能力：provider 适配、时间线、工具调用、权限、subagent。见 [agent-conversation 规格快照](../archive/v1/spec/agent-conversation.md)。
+- 跑任何一个 TUI agent：terminal 里启动它，用它自己的界面；tab 圆点和通知告诉你它在跑、在等你，还是结束了。支撑能力：PTY 宿主、快照、恢复、daemon 重启后的标签恢复、性能。见 [terminal 规格快照](../archive/v1/spec/terminal.md) 与 [docs/terminal-activity.md](../../docs/terminal-activity.md)。
+- 离开，然后被叫回来：关掉窗口或出门，turn 结束、需要输入时收到通知；回来后时间线和 terminal 滚动历史都在。支撑能力：Web Push 与平台系统通知，见 [notifications 规格快照](../archive/v1/spec/notifications.md)。
+- 从手机接管：手机上继续同一个会话。结构化会话在手机上可读可操作；terminal 会话在手机上以「够用」为目标。
+- 看 agent 改了什么：会话旁边看 Changes、diff 和文件树，确认或撤回；forge 上的 PR 同面板可见。
+- 在别的机器上跑：daemon 放在远程机器或 VM 上，通过 E2EE Relay 连接，浏览器里的体验与本地一致。见 [connection 规格快照](../archive/v1/spec/connection.md)。
+- 让 agent 按时自己跑：定时任务、bundled skill + byspace CLI 创建的会话，结果同样出现在界面和通知里。自动化通道是 skill + CLI，MCP 交付已退役，见 [agent-tools-delivery](../memory/agent-tools-delivery.md)。
 
-- **Workspace 与 worktree。** project 组织、分支与推送状态、worktree 创建。
-- **Agent 会话。** provider 适配、时间线、工具调用、权限、subagent。支撑"跟一个 agent 协作"。
-- **Terminal。** PTY 宿主、快照、恢复、daemon 重启后的标签恢复、性能。支撑"跑任何一个 TUI agent"。
-- **活动与通知。** 结构化会话从协议事件得到状态；terminal 会话从装进 agent 配置的 hook 得到状态。两者汇入同一套圆点、workspace 汇总和通知。
-- **远程访问。** Relay 与 web 客户端。桌面外壳只是包了 web 的窗口。
-- **Changes 与文件。** diff、Changes、explorer、forge 上的 PR。
-- **自动化。** 定时任务、MCP、CLI。
+## 候选与边界
 
-## 边界与探索空间
-
-**产品形态：**
+已确认的边界：
 
 - 任何机器都可以装 daemon，daemon 是唯一的运行时。
-- 浏览器打开即用，并拥有全部功能；不存在"只有桌面 App 才有"的能力。
-- 远程访问经 E2EE Relay，不依赖 Tailscale、VPN 或端口转发。
+- 浏览器打开即用，并拥有全部功能；不存在「只有桌面 App 才有」的能力。
+- 远程访问经 E2EE Relay，不依赖 Tailscale、VPN 或端口转发；P2P 已被 owner 否决。
 - 不绑定任何客户端 App。手机与桌面 App 只提供该平台特有的便利，例如推送与系统通知。
 - terminal 会话里，terminal 内容是 agent 状态的唯一真相。hook 上报的活动状态是提示，允许不准，不允许把用户锁在错误状态里。
+- 与上游的关系：以 Paseo 为基线，最后一次同步停在 v0.8.0（2026-09-11），此后不追上游，只作参考。身份迁移已改掉包作用域、wire 字面量与磁盘命名空间，不设兼容层，见 [docs/protocol-compatibility.md](../../docs/protocol-compatibility.md)。
+- orca 吸收已放弃（owner 2026-10-14 drop，Epic 003）。原则仍是借交互不借架构、UI 按 BySpace 设计系统重做，但吸收工作本身停止。
+- 能力准入判据：一个能力属于 BySpace，当且仅当它不替代用户本来就会调用的东西；工作流住在用户自己的 agent 配置里。VelaTerm 是反例：同一件事两套实现，加上没人管的悬挂。完整不做列表与判据见 [product-scope](../memory/product-scope.md)。
 
-**与上游的关系。** BySpace 以 Paseo 为基线，最后一次同步停在 Paseo v0.8.0（2026-09-11），此后不再追上游。Paseo 只作参考：取修复与我们要的能力，不取与本项目方向无关的部分。身份迁移已经改掉包作用域、wire 字面量与磁盘命名空间，不设兼容层，见 `docs/protocol-compatibility.md`。
+候选（未确认，推进前需要 owner 决定）：
 
-**参考产品。** orca 是 terminal agent 体验的吸收来源，只借交互，不借架构，按区域逐块吸收而不整体照搬。它 MIT 授权，移植代码需保留版权声明；栈不同，UI 按 BySpace 设计系统重做，daemon 侧逻辑可以移植。当前吸收工作在 Epic 003。
+- 侧栏 project → worktree → agent 行的模型。
+- 语音听写进 terminal 输入栏。
 
-**不做什么。** 一条能力该不该进 ADE，判据是它是否在替换用户本来会去调用的那个东西，见 [note 005 能力边界判据](../notes/005-ade-scope-criteria.md)。VelaTerm（一个功能面很宽的桌面 ADE）是反例：代价不是功能多，是同一件事出现两套实现，以及两个没人管的悬挂。
+已放弃的候选：
 
-**探索中或候选：**
-
-- terminal 会话的转录投影视图：从 agent 写在磁盘上的会话转录派生只读对话，压在活的 PTY 之上，发送回 PTY。orca 用它解决全屏 TUI 在手机上不可读的问题，但其支持列表不含 Pi。随 Epic 003 drop 放弃。
-- 侧栏 project → worktree → agent 行的模型。候选。
-- 语音听写进 terminal 输入栏。候选。
-
-## 演化地图
-
-- `byissue/epics/003-d-orca-terminal-agent-experience/spec.md`：已放弃。Owner 于 2026-10-14 决定 drop，不再推进 terminal agent 体验的 orca 吸收。
-- `byissue/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md`：已交付并关闭。Pi 升为一等公民 provider 后的首批交付：pi-subagent 的 subagents track 与时间线适配。
-- `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
-- `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
-- `byissue/talks/001-terminal-native-hard-fork.md`：一次关于"要不要转向 terminal-native 并独立 fork"的完整讨论，结论是撤回。想知道为什么两条路共存、为什么不以 orca 为底、为什么继续同步上游，读它。
-
-## 用语与下一步读哪
-
-- **结构化会话：** BySpace 通过 provider 协议驱动的 agent 会话，有时间线与工具调用界面。
-- **Terminal 会话：** agent 以自己的 TUI 在 PTY 里运行的会话。
-- **活动状态：** 圆点与通知背后的粗粒度状态。terminal 一侧由 hook 上报，尽力而为。
-- **Hook：** 安装进 agent 配置目录、把事件转成活动状态发给 daemon 的小段代码。
-- **吸收：** 从 orca 借鉴交互做法，在 BySpace 自己的架构和设计系统里重做。
-- 想理解方向怎么来的 → `byissue/talks/001-terminal-native-hard-fork.md`
-- 想知道现在能做什么 → `byissue/spec/index.md`
-- 想摘开发切片 → `byissue/epics/004-x-pi-first-class-and-bytetrue-extensions/spec.md` 与根 `issues/`
+- terminal 会话的转录投影视图（从磁盘会话转录派生只读对话压在活 PTY 之上）：随 Epic 003 drop 放弃，orca 的支持列表也不含 Pi。

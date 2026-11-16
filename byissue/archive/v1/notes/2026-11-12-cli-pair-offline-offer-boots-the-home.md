@@ -19,4 +19,4 @@
 - **第 2 条（身份错配）单独看。** 触发条件是「显式 `--addr` + 连不上」，不是「没给 addr」。`pairingOfferURL` 现在区分 `explicitAddr`：给了 addr 又拨不通（或那台 daemon 的 relay 没配、返回空 url），就返回错误，错误文案点明「offer 会是别的 home 的」；没给 addr 才走离线铸法。实测中这条正是 S17 端到端里 `pair --addr 127.0.0.1:8793` 铸出生产 serverId 的直接原因——8793 设了密码、CLI 凭证对不上，连接被拒，于是拿默认 home 铸了 offer。
 - **第 2 条的守卫测试：** `TestPairingOfferRefusesToMintForAnotherHomeWhenAddrUnreachable` —— 显式 addr 指向 `127.0.0.1:1`（关闭端口，秒拒，不碰 6777），断言报错且文案含 `different home`。把错误分支改回静默铸 offer 会让它失败（实测报 `minted an offer instead of failing`）。
 
-**相关：** [docs/ad-hoc-daemon-testing.md](../../docs/ad-hoc-daemon-testing.md) · [docs/development.md 不要为了测东西重写生产 home](../../docs/development.md#never-rewrite-the-production-home-to-test-something) · epic [host-sync-chain](../epics/2026-11-12-o-host-sync-chain/spec.md)
+**相关：** [docs/ad-hoc-daemon-testing.md](../../../../docs/ad-hoc-daemon-testing.md) · [docs/development.md 不要为了测东西重写生产 home](../../../../docs/development.md#never-rewrite-the-production-home-to-test-something) · epic [host-sync-chain](../epics/2026-11-12-o-host-sync-chain/spec.md)

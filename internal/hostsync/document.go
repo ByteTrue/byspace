@@ -5,7 +5,7 @@
 // whose absence blocks sync. Replicas converge by merging record by record: a document-level
 // last-writer-wins would drop one side's edits whenever two daemons were changed while apart.
 //
-// Design and the decisions behind it: byissue/epics/2026-11-12-o-host-sync-chain/spec.md.
+// Design and the decisions behind it: byissue/archive/v1/epics/2026-11-12-o-host-sync-chain/spec.md.
 package hostsync
 
 import (

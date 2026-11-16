@@ -63,11 +63,11 @@ T15 保留在历史 catalog 中作为 Owner 已取消项：不得修改或删除
 
 ### 当前架构优先
 
-- Terminal 修改遵守 [`docs/terminal-performance.md`](../../../docs/terminal-performance.md) 的低延迟、backpressure、revision 和 retained-panel 不变量。
-- Terminal activity 修改遵守 [`docs/terminal-activity.md`](../../../docs/terminal-activity.md) 的单一 tracker、provider registry 与 opt-in hook 安装边界。
-- Timeline 修改遵守 [`docs/timeline-sync.md`](../../../docs/timeline-sync.md) 的 live/authoritative 双路径、单一 owner、paged-to-completion 和 replica lifetime 边界。
-- 协议修改遵守 [`docs/protocol-compatibility.md`](../../../docs/protocol-compatibility.md)：append-only、可选字段、单点 capability gate、纯结构 wire schema。
-- Workspace hover 遵守 [`docs/hover.md`](../../../docs/hover.md)；Compact UI 遵守 [`docs/mobile-panels.md`](../../../docs/mobile-panels.md)。
+- Terminal 修改遵守 [`docs/terminal-performance.md`](../../../../../docs/terminal-performance.md) 的低延迟、backpressure、revision 和 retained-panel 不变量。
+- Terminal activity 修改遵守 [`docs/terminal-activity.md`](../../../../../docs/terminal-activity.md) 的单一 tracker、provider registry 与 opt-in hook 安装边界。
+- Timeline 修改遵守 [`docs/timeline-sync.md`](../../../../../docs/timeline-sync.md) 的 live/authoritative 双路径、单一 owner、paged-to-completion 和 replica lifetime 边界。
+- 协议修改遵守 [`docs/protocol-compatibility.md`](../../../../../docs/protocol-compatibility.md)：append-only、可选字段、单点 capability gate、纯结构 wire schema。
+- Workspace hover 遵守 [`docs/hover.md`](../../../../../docs/hover.md)；Compact UI 遵守 [`docs/mobile-panels.md`](../../../docs/mobile-panels.md)。
 
 ### 证据驱动
 

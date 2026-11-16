@@ -33,7 +33,7 @@ Drive the browser with the Playwright MCP server. The form fields carry `data-te
 Two rules that keep this off the production home:
 
 - **Every daemon gets its own `--home` under a temp dir and a port that is not 6777 or 6778.** `serve --addr` takes the address explicitly; `daemon start` does not, which is the spawn this doc bans.
-- **Do not run `byspace pair`, `onboard`, or any CLI command that resolves a home without pointing it at the temp home.** A command that cannot reach its `--addr` falls back to reading a home, and `--home` unset resolves to `~/.byspace`. That is how `pair` once booted the production home; see [the note](../byissue/notes/2026-11-12-cli-pair-offline-offer-boots-the-home.md). To get a second daemon's pairing link, read `server-id` and `daemon-keypair.json` from its temp home directly, or pass `--home "$TEMP/v2b"`.
+- **Do not run `byspace pair`, `onboard`, or any CLI command that resolves a home without pointing it at the temp home.** A command that cannot reach its `--addr` falls back to reading a home, and `--home` unset resolves to `~/.byspace`. That is how `pair` once booted the production home; see [the note](../byissue/archive/v1/notes/2026-11-12-cli-pair-offline-offer-boots-the-home.md). To get a second daemon's pairing link, read `server-id` and `daemon-keypair.json` from its temp home directly, or pass `--home "$TEMP/v2b"`.
 
 Stop the daemons and the web app when done and remove the temp homes. Confirm 6777 is still the production PID before and after.
 
@@ -49,7 +49,7 @@ printf 'pw\npw\n' | ./bin/byspace.exe daemon set-password --addr 127.0.0.1:8792
 E2E_HOME=$TEMP/v2a E2E_PASSWORD=pw node scripts/e2e-relay-client-check.mjs
 ```
 
-It checks two things a Go test cannot see. First, the daemon's per-session e2ee challenge: the Go client answers it, so the Go relay tests keep passing while the TypeScript client stays silent and every browser frame is dropped — see [the note](../byissue/notes/2026-11-13-ts-relay-client-never-answered-the-e2ee-challenge.md). Second, the terminal gate: the probe sends terminal input from a socket that proved no password, and the daemon's `ws_runtime_metrics` line must keep `sessions.terminals` at 0. `E2E_SKIP_AUTH=1` leaves out the authenticated control, which is what you want on a fresh daemon; a full run ends with `terminals` at 1.
+It checks two things a Go test cannot see. First, the daemon's per-session e2ee challenge: the Go client answers it, so the Go relay tests keep passing while the TypeScript client stays silent and every browser frame is dropped — see [the note](../byissue/archive/v1/notes/2026-11-13-ts-relay-client-never-answered-the-e2ee-challenge.md). Second, the terminal gate: the probe sends terminal input from a socket that proved no password, and the daemon's `ws_runtime_metrics` line must keep `sessions.terminals` at 0. `E2E_SKIP_AUTH=1` leaves out the authenticated control, which is what you want on a fresh daemon; a full run ends with `terminals` at 1.
 
 Use a fresh `connectionId` per run (the script does, from a timestamp). A reused one lets a socket left over from an earlier run receive frames meant for this one, which looks like a decryption failure.
 

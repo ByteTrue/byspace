@@ -52,4 +52,4 @@
 
 这十项没有一项是「功能多」的后果，全部是「加东西时不删旧的」的后果。
 
-**相关：** [026-d 跨 workspace 的统一编排入口（已放弃）](../issues/026-d-cross-workspace-orchestrator.md) · [note 001 死代码审计的判据与陷阱](001-dead-code-audit-criteria-and-traps.md) · [byissue/vision/index.md](../vision/index.md)
+**相关：** [026-d 跨 workspace 的统一编排入口（已放弃）](../issues/026-d-cross-workspace-orchestrator.md) · [note 001 死代码审计的判据与陷阱](001-dead-code-audit-criteria-and-traps.md) · [byissue/vision/index.md](../../../vision/index.md)

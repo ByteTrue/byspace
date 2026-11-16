@@ -28,7 +28,7 @@ created: 2026-10-16
 留下的 `~/.agents/skills` 与 `~/.claude/skills` 也不再同构写入：用户可以在 `Choose skills` 里
 只留一个。选中的 home 存在 `agents.skills.targets`，`save_selection.request.targets` 省略即保持
 已存值，所以不知道 target 的老 app 不会把安装收窄成零个 home。wire 上的字段是顶层
-`skillTargets` 而不是 `skills.targets`，理由见 [protocol-compatibility.md](../../docs/protocol-compatibility.md)。
+`skillTargets` 而不是 `skills.targets`，理由见 [protocol-compatibility.md](../../../../docs/protocol-compatibility.md)。
 
 关掉一个 home 产生的是普通的 `delete` op，走既有的 `confirmedRemovals` 确认流程，没有新增
 删除语义。两个都关时 Save 禁用，否则「一个 home 都不写」会被静默当成「卸载并保留偏好」。

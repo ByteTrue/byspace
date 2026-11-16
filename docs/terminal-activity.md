@@ -63,7 +63,7 @@ A hooked agent that dies without reporting idle (SIGKILL, crash, a suspend that 
 no provider event to clear it. The shell's OSC 633 `D` — the same signal that drives command
 finished — clears `working` when the foreground job ends, so the dot does not stay on forever.
 That fallback only exists where BySpace installs shell integration: zsh and PowerShell. See
-[terminal.md](../byissue/spec/terminal.md) for which shells emit it.
+[terminal.md](../byissue/archive/v1/spec/terminal.md) for which shells emit it.
 
 Codex hook mapping:
 
@@ -102,7 +102,7 @@ Client heartbeats include the focused terminal id. When a visible client focuses
 
 ### Agent hook installation
 
-Installing hooks edits the user's real agent config files, so each provider is opt-in. The daemon stores switches under `daemon.terminalAgentHooks`; an absent key is disabled. Hosts advertising provider-scoped hooks show one switch per agent, in the **Terminal** tab of that provider's detail sheet (**Host → Agents → provider**); older hosts keep the global switch. Toggling one provider installs or removes only that provider's BySpace-owned hook. The switch is independent of whether the provider is enabled for BySpace agent sessions — see [byissue/decisions/001-settings-taxonomy-and-integration-layers.md](../byissue/decisions/001-settings-taxonomy-and-integration-layers.md).
+Installing hooks edits the user's real agent config files, so each provider is opt-in. The daemon stores switches under `daemon.terminalAgentHooks`; an absent key is disabled. Hosts advertising provider-scoped hooks show one switch per agent, in the **Terminal** tab of that provider's detail sheet (**Host → Agents → provider**); older hosts keep the global switch. Toggling one provider installs or removes only that provider's BySpace-owned hook. The switch is independent of whether the provider is enabled for BySpace agent sessions — see [byissue/memory/settings-taxonomy.md](../byissue/memory/settings-taxonomy.md).
 
 When the provider map is absent, the legacy `daemon.enableTerminalAgentHooks` switch applies only to the providers it originally controlled: Claude Code, Codex, and OpenCode. Pi stays disabled until the user explicitly enables it, so upgrading a host cannot install a new Pi extension from an old persisted `true`. The first provider edit materializes that effective map and updates the legacy aggregate to `true` when any provider is enabled. A later legacy-switch edit from an old app updates only Claude Code, Codex, and OpenCode; explicit Pi or future-provider settings remain unchanged.
 

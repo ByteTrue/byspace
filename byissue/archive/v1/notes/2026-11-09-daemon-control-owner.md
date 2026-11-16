@@ -15,4 +15,4 @@
 - **桌面 App 侧的接线点是 `DaemonSupervisor.SetControlHandler`。** 它在 `startInProcess` 里起一个 goroutine 把 `ControlRequests()` 转给 App；App 用自己的 relaunch（`BYSPACE_REPLACES` 握手，与更新路径同一个 `exitForRelaunch`）。attached 到外部 daemon 时 `sup.srv == nil`，没有这个 goroutine，请求由那个外部 `serve` 自己处理。
 - 桌面 App 上的 stop 等于退出 App —— 它就是 host，而 `watchLoop` 会在几秒内把被停掉的 in-process daemon 重新拉起来。
 
-**相关：** [快改：daemon restart 三条入口都没有真的重启](../issues/2026-11-09-x-ff-daemon-restart-rpc.md) · [Node 时代 stop 走 RPC 的约定](../issues/043-x-daemon-service-install.md) · [docs/architecture.md](../../docs/architecture.md)
+**相关：** [快改：daemon restart 三条入口都没有真的重启](../issues/2026-11-09-x-ff-daemon-restart-rpc.md) · [Node 时代 stop 走 RPC 的约定](../issues/043-x-daemon-service-install.md) · [docs/architecture.md](../../../../docs/architecture.md)

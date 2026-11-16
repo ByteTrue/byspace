@@ -54,9 +54,9 @@ Owner 已确认方向，并要求先跟踪、暂不实施：当前优先整理�
 
 现有链路是 agent 调用注入工具 → daemon 操作目标会话 → 完成、报错或权限请求回传调用者。它具备编排原语，但不等于已经有全局会话管家。
 
-- [编排能力说明](../../public-docs/orchestration.md)：已有创建 agent、后续指令与异步回传的使用路径。
-- [Agent 生命周期](../../docs/agent-lifecycle.md)：父子归属与归档联动，观察关系不能直接套用为父子关系。
-- [Daemon 权限](../../docs/permissions.md)：现有权限边界；新增编排入口不能绕过授权。
+- [编排能力说明](../../../../public-docs/orchestration.md)：已有创建 agent、后续指令与异步回传的使用路径。
+- [Agent 生命周期](../../../../docs/agent-lifecycle.md)：父子归属与归档联动，观察关系不能直接套用为父子关系。
+- [Daemon 权限](../../../../docs/permissions.md)：现有权限边界；新增编排入口不能绕过授权。
 - `packages/server/src/server/agent/tools/paseo-tools.ts`：已有 workspace/agent 列表、状态、近期内容、发送 prompt 和权限响应工具。agent 调用 `list_agents` 时默认按调用者的 `cwd` 过滤，不能当作全局发现接口。
 - `packages/server/src/server/agent/agent-prompt.ts`：已有与创建、后台跟进操作关联的结果回传；不自动订阅全部已存在会话。
 

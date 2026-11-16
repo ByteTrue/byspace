@@ -91,7 +91,7 @@ Go 重写把 Node 的每个能力逐条翻译过来，所以「翻译漏了」�
 `go vet` 和 `go build` 都不看这个。
 
 同类还有：`os/exec` 找 Shell 的方式（`sh -c` 在 Windows 没有）、路径分隔符、进程组终止
-（Windows 没有 POSIX 进程组，见 [notes/017](../byissue/notes/017-go-process-termination-needs-the-group.md)）。
+（Windows 没有 POSIX 进程组，见 [notes/017](../byissue/archive/v1/notes/017-go-process-termination-needs-the-group.md)）。
 
 ## 它看不见什么
 

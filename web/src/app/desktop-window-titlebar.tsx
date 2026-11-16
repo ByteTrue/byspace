@@ -129,8 +129,8 @@ export function WindowsShellFrame({
 /**
  * The 36px strip above the framed content card on the Windows frameless window: drag region,
  * double-click zoom, and the — □ ✕ controls. Sits on the sidebar backdrop so the card below it
- * forms the Feishu-style L-shaped shell (byissue/issues/2026-10-30-x-ff-agcopilot-framed-card-
- * window-shell.md).
+ * forms the Feishu-style L-shaped shell (byissue/archive/v1/issues/2026-10-30-x-ff-agcopilot-
+ * framed-card-window-shell.md).
  */
 export function DesktopWindowTitleBar({
   showLeadingNav,

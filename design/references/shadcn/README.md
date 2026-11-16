@@ -1,6 +1,6 @@
 # shadcn/ui 参照快照
 
-UI 美化 Epic（`byissue/epics/2026-10-31-o-ui-style-refresh/`）的唯一组件参照。样板页和后续实现里的数值都从这里抄，不凭印象。
+UI 美化 Epic（`byissue/archive/v1/epics/2026-10-31-o-ui-style-refresh/`）的唯一组件参照。样板页和后续实现里的数值都从这里抄，不凭印象。
 
 - 上游：<https://github.com/shadcn-ui/ui>
 - 版本：commit `b8d7baa15b1dca5716f13153e63795fc3d741f6b`（2026-10-30）

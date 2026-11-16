@@ -95,7 +95,7 @@ created: 2026-09-18
 
 **状态视图与判定「由服务托管」。** daemon 不应仅凭「服务文件存在」就自报托管（文件可能是陈旧残留）。状态判定分级：`not-installed`（无服务文件）/ `installed-stopped` / `installed-running-not-this-process` / `managed-by-service`（服务定义的 pid 或 label 与当前进程一致）。判定方式按平台取最可靠信号（launchd：`launchctl print gui/<uid>/<label>` 的 pid；systemd：`systemctl --user show -p MainPID`；Windows：任务的上次运行结果 + 进程匹配）。拿不到可靠信号时降级为 `unknown`，UI 不显示开关而不是显示错误状态。
 
-**RPC 与能力门控。** 新 RPC 按 [rpc-namespacing.md](../../docs/rpc-namespacing.md) 用 `daemon.service.install.request` / `.response` 成对；权限复用 `daemon.manage`。App 侧用 `features.daemonServiceInstall` 门控整个分区（老 daemon 隐藏而非假成功），模型同 `NetworkSection` 的 `daemonNetworkConfig`。注册/卸载后需要重启或至少重新查询状态——沿用 `NetworkSection`「操作成功后引导重启 + 刷新」的既有交互，不新造模式。
+**RPC 与能力门控。** 新 RPC 按 [rpc-namespacing.md](../../../../docs/rpc-namespacing.md) 用 `daemon.service.install.request` / `.response` 成对；权限复用 `daemon.manage`。App 侧用 `features.daemonServiceInstall` 门控整个分区（老 daemon 隐藏而非假成功），模型同 `NetworkSection` 的 `daemonNetworkConfig`。注册/卸载后需要重启或至少重新查询状态——沿用 `NetworkSection`「操作成功后引导重启 + 刷新」的既有交互，不新造模式。
 
 **有界简化（明确不做）：**
 
@@ -131,7 +131,7 @@ created: 2026-09-18
 - 手测（**核心验收**）：macOS 上 `install-service` → 在一个新的 Terminal 里 `byspace daemon restart`（或直接由服务拉起）→ **Cmd+Q 退出所有 Terminal** → 在 App 里给 agent 发一条消息，确认模型请求成功、不再出现 `Connection error`；同时 `log show` 中该窗口无 `Got local network blocked notification`
 - 手测：`byspace daemon stop` 后进程确实不再被拉起；`service-status` 状态正确；`uninstall-service` 后开机不再自启
 - `npm run typecheck`、`npm run lint`、`npm run format`；i18n resources 测试（9 locale key 对齐）
-- 跨平台：Linux/Windows 的真机验证列入发布清单（CI 只覆盖可自动化的单元部分，遵循 [docs/qa.md](../../docs/qa.md) 的平台矩阵与证据要求）
+- 跨平台：Linux/Windows 的真机验证列入发布清单（CI 只覆盖可自动化的单元部分，遵循 [docs/qa.md](../../../../docs/qa.md) 的平台矩阵与证据要求）
 
 ## 执行记录
 

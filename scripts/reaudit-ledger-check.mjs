@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const LEDGER = "byissue/issues/node-reaudit-log.md";
+const LEDGER = "byissue/archive/v1/issues/node-reaudit-log.md";
 const ROOTS = [
   ["archive/packages/server/src", "server"],
   ["archive/packages/cli/src", "cli"],

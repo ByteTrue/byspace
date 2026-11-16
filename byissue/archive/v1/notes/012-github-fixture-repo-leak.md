@@ -38,6 +38,6 @@ gh api --paginate "user/repos?per_page=100&affiliation=owner" --jq '.[].name' \
 
 判定「这台机器能不能跑 GitHub 测试」的代码曾有四份拷贝，三份只看 `gh auth status`、不查 scope，其中两份在 server 的手动用例里，CI 从没跑过。081 收敛成每包一处；Node 版 server 归档后只剩 `web/e2e/support/helpers/github-fixtures.ts` 的 `canCreateGithubFixtures()` 这一处。
 
-写测试的规则在 [docs/testing.md](../../docs/testing.md) 的 "Running tests locally"。
+写测试的规则在 [docs/testing.md](../../../../docs/testing.md) 的 "Running tests locally"。
 
 相关：[011-playwright-spec-cross-file-project-leak](011-playwright-spec-cross-file-project-leak.md) 是同一类问题的另一半 —— daemon **项目**记录泄漏，这条是 GitHub **仓库**泄漏。两者的共同形状：清理失败被 `catch` 吞掉，症状延后到下一个不相关的测试才出现。
