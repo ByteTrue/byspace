@@ -57,7 +57,6 @@ export interface BuildGitActionsInput {
   forgeBrandLabel: string;
   /** Short change-request noun label (e.g. "PR", "MR") for forge-neutral unavailable copy. */
   forgeChangeRequestNoun: string;
-  githubAutoMergeActionsEnabled: boolean;
   hasPullRequest: boolean;
   pullRequestUrl: string | null;
   pullRequestState: "open" | "closed" | null;
@@ -582,7 +581,6 @@ function canEnablePrAutoMerge(input: BuildGitActionsInput): boolean {
   const capability = input.mergeCapability;
   return (
     input.githubFeaturesEnabled &&
-    input.githubAutoMergeActionsEnabled &&
     input.hasPullRequest &&
     input.pullRequestState === "open" &&
     !input.pullRequestIsDraft &&
@@ -746,7 +744,7 @@ function shouldShowPullRequestAction(
     return true;
   }
   if (id === "disable-pr-auto-merge") {
-    return input.githubAutoMergeActionsEnabled && input.mergeCapability?.autoMergeEnabled === true;
+    return input.mergeCapability?.autoMergeEnabled === true;
   }
   if (isDirectPullRequestMergeActionId(id)) {
     return canMergePr(input) && getAllowedDirectPullRequestMergeActionIds(input).includes(id);

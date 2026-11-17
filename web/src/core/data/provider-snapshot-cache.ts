@@ -12,7 +12,6 @@ type SnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 
 const CACHE_VERSION = 2;
 const CACHE_KEY_PREFIX = "@byspace/provider-snapshot/v2";
-const CACHE_INDEX_KEY = "@byspace/provider-snapshot-index/v2";
 const DEFAULT_MAX_CACHE_BYTES = 4 * 1024 * 1024;
 
 interface ProviderSnapshotStorage {
@@ -126,14 +125,6 @@ export function createProviderSnapshotCache(
 
   async function reconcileCache(): Promise<void> {
     const allKeys = await storage.getAllKeys();
-    // COMPAT(providerSnapshotCache): added in v0.7.2, remove legacy cleanup after 2027-03-06.
-    const legacyKeys = allKeys.filter(
-      (key) =>
-        key.startsWith("@byspace/provider-snapshot/v1:") ||
-        key === "@byspace/provider-snapshot-index/v1" ||
-        key === CACHE_INDEX_KEY,
-    );
-    if (legacyKeys.length) await storage.multiRemove(legacyKeys);
     const keys = allKeys.filter((key) => key.startsWith(`${CACHE_KEY_PREFIX}:`));
     const values = await storage.multiGet(keys);
     const keysToRemove: string[] = [];

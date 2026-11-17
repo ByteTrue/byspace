@@ -51,7 +51,6 @@ function createOwner(storage: TimelineReplicaStorage): ViewedTimelineOwner {
     replaceDemandedAgentIds: () => undefined,
     drainQueuedAgentMessage: () => undefined,
     ports: {
-      initialDeliveryMode: "legacy",
       setSubscription: async () => undefined,
       readCursor: () => undefined,
       fetchPage: async () => ({ hasNewer: false, endCursor: null }),
@@ -471,7 +470,7 @@ function createSqliteCache() {
     },
   };
   const storage = createSqliteReplicaRowStore({ open: async () => connection }, 1);
-  const cache = new ReplicaCache(storage, { clearLegacyCache: async () => {} });
+  const cache = new ReplicaCache(storage);
   return {
     cache,
     database,

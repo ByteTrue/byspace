@@ -1,8 +1,4 @@
-import type {
-  SidebarProjectEntry,
-  SidebarWorkspacePlacement,
-} from "@/hooks/use-sidebar-workspaces-list";
-import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
+import type { SidebarWorkspacePlacement } from "@/hooks/use-sidebar-workspaces-list";
 
 export interface SidebarShortcutWorkspaceTarget {
   serverId: string;
@@ -26,32 +22,6 @@ function createShortcutTarget(
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
   };
-}
-
-export function buildSidebarShortcutModel(input: {
-  projects: SidebarProjectEntry[];
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.projects.map((project) => ({
-      workspaces: project.workspaces,
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
-}
-
-export function buildStatusSidebarShortcutModel(input: {
-  groups: readonly StatusGroup[];
-  collapsedStatusGroupKeys?: ReadonlySet<string>;
-  shortcutLimit?: number;
-}): SidebarShortcutModel {
-  return buildSidebarShortcutSections({
-    sections: input.groups.map((group) => ({
-      workspaces: group.rows,
-      collapsed: input.collapsedStatusGroupKeys?.has(group.bucket),
-    })),
-    shortcutLimit: input.shortcutLimit,
-  });
 }
 
 export function buildSidebarShortcutSections(input: {

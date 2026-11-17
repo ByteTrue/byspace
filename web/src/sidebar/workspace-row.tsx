@@ -33,7 +33,6 @@ import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import type { ShortcutKey } from "@/utils/format-shortcut";
@@ -297,7 +296,6 @@ function useWorkspaceMenuActions({
   const toast = useToast();
   const isFixedActionRow = isHomeWorkspace(workspace);
   const { archive, isArchiving } = useRowArchive(workspace, selected, isFixedActionRow);
-  const supportsAgentRename = useHostFeature(workspace.serverId, "workspaceAgentRename");
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
   const clipboard = useWorkspaceClipboardActions();
   const { hasClearableAttention, canMarkUnread, clearAttention, markUnread } =
@@ -337,8 +335,7 @@ function useWorkspaceMenuActions({
       onCopyPath: copyPath,
       onCopyBranchName: canCopyBranchName ? copyBranchName : undefined,
       onRename: editable ? openRename : undefined,
-      onRenameWithAgent:
-        allowRenameWithAgent && supportsAgentRename && editable ? renameWithAgent : undefined,
+      onRenameWithAgent: allowRenameWithAgent && editable ? renameWithAgent : undefined,
       onMarkAsRead: hasClearableAttention ? markAsRead : undefined,
       onMarkAsUnread: canMarkUnread ? markAsUnread : undefined,
       isPinned: workspace.pinnedAt != null && editable,
@@ -365,7 +362,6 @@ function useWorkspaceMenuActions({
       openRename,
       renameWithAgent,
       selected,
-      supportsAgentRename,
       togglePin,
       workspace,
     ],

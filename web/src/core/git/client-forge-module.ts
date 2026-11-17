@@ -63,8 +63,6 @@ export type ForgeSpecificEnvelope = { forge: string } & Record<string, unknown>;
 
 type CheckoutPrStatus = NonNullable<CheckoutPrStatusResponse["payload"]["status"]>;
 
-export type LegacyGithubMergeFacts = NonNullable<CheckoutPrStatus["github"]>;
-
 export interface MergeCapability {
   /** The change request can be merged directly right now. */
   directMergeReady: boolean;

@@ -16,19 +16,13 @@ const (
 	RehandshakeMismatchCloseReason = "E2EE re-handshake key mismatch"
 )
 
-type Capabilities struct {
-	BinaryCiphertext bool `json:"binaryCiphertext,omitempty"`
-}
-
 type HelloMessage struct {
-	Type         string        `json:"type"`
-	Key          string        `json:"key"`
-	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	Type string `json:"type"`
+	Key  string `json:"key"`
 }
 
 type ReadyMessage struct {
-	Type         string        `json:"type"`
-	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	Type string `json:"type"`
 	// Challenge is a nonce the peer must echo inside the encrypted channel before it is trusted.
 	// With static keys on both sides the shared key never changes, so a frame recorded from an
 	// earlier session would otherwise decrypt in this one. Answering the nonce proves the peer
@@ -51,13 +45,12 @@ type Transport interface {
 
 // DaemonSession wraps a responder (daemon-side) encrypted channel after e2ee_hello.
 type DaemonSession struct {
-	mu               sync.Mutex
-	transport        Transport
-	daemonKeyPair    KeyPair
-	sharedKey        SharedKey
-	binaryCiphertext bool
-	handshaked       bool
-	peerPublicKey    [KeySize]byte
+	mu            sync.Mutex
+	transport     Transport
+	daemonKeyPair KeyPair
+	sharedKey     SharedKey
+	handshaked    bool
+	peerPublicKey [KeySize]byte
 	// challenge is the nonce sent in e2ee_ready. challengeOK is set once the peer echoes it.
 	challenge   string
 	challengeOK bool
@@ -119,7 +112,6 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 		}
 		s.sharedKey = shared
 		s.peerPublicKey = clientPub
-		s.binaryCiphertext = hello.Capabilities != nil && hello.Capabilities.BinaryCiphertext
 		s.handshaked = true
 
 		if err := s.sendReadyLocked(); err != nil {
@@ -133,9 +125,8 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 		trimmed := strings.TrimSpace(string(raw.Data))
 		if strings.HasPrefix(trimmed, "{") {
 			var probe struct {
-				Type         string        `json:"type"`
-				Key          string        `json:"key"`
-				Capabilities *Capabilities `json:"capabilities,omitempty"`
+				Type string `json:"type"`
+				Key  string `json:"key"`
 			}
 			if err := json.Unmarshal([]byte(trimmed), &probe); err == nil {
 				switch probe.Type {
@@ -161,35 +152,19 @@ func (s *DaemonSession) Receive(raw Frame) (*Frame, error) {
 		}
 	}
 
+	// Binary frames carry raw binary ciphertext; text frames carry base64 ciphertext.
 	var ciphertext []byte
 	var isBinaryPlaintext bool
-	if s.binaryCiphertext {
-		if raw.IsBinary {
-			ciphertext = raw.Data
-			isBinaryPlaintext = true
-		} else {
-			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
-			if err != nil {
-				return nil, fmt.Errorf("invalid base64 ciphertext: %w", err)
-			}
-			ciphertext = decoded
-			isBinaryPlaintext = false
-		}
+	if raw.IsBinary {
+		ciphertext = raw.Data
+		isBinaryPlaintext = true
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
 		if err != nil {
-			// COMPAT(binaryCiphertext): added in v0.2.3, remove base64-only receive mode after
-			// 2027-01-27. Peers that never negotiated the capability may send raw binary ciphertext.
-			if raw.IsBinary {
-				ciphertext = raw.Data
-				isBinaryPlaintext = true
-			} else {
-				return nil, fmt.Errorf("invalid legacy base64 ciphertext: %w", err)
-			}
-		} else {
-			ciphertext = decoded
-			isBinaryPlaintext = false
+			return nil, fmt.Errorf("invalid base64 ciphertext: %w", err)
 		}
+		ciphertext = decoded
+		isBinaryPlaintext = false
 	}
 
 	plaintext, err := Decrypt(s.sharedKey, ciphertext)
@@ -229,13 +204,12 @@ func (s *DaemonSession) Send(plain Frame) error {
 		return errors.New("encrypted channel not open")
 	}
 	shared := s.sharedKey
-	binaryCap := s.binaryCiphertext
 
 	ciphertext, err := Encrypt(shared, plain.Data)
 	if err != nil {
 		return err
 	}
-	if binaryCap && plain.IsBinary {
+	if plain.IsBinary {
 		return s.transport.SendBinary(ciphertext)
 	}
 	return s.transport.SendText(base64.StdEncoding.EncodeToString(ciphertext))
@@ -243,9 +217,6 @@ func (s *DaemonSession) Send(plain Frame) error {
 
 func (s *DaemonSession) sendReadyLocked() error {
 	ready := ReadyMessage{Type: "e2ee_ready"}
-	if s.binaryCiphertext {
-		ready.Capabilities = &Capabilities{BinaryCiphertext: true}
-	}
 	if s.challenge != "" {
 		ready.Challenge = s.challenge
 	}

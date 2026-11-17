@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
@@ -20,7 +19,6 @@ import {
   type StreamItem,
 } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
-import { clearLegacyReplicaCache } from "./legacy-cleanup";
 import {
   REPLICA_SINGLETON_ROW_ID,
   type ReplicaRow,
@@ -76,21 +74,10 @@ const TimelinePositionSchema = z.strictObject({
   epoch: z.string(),
   seq: z.number().int().nonnegative(),
 });
-const PluginTimelineDataSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number(),
-    z.string(),
-    z.array(PluginTimelineDataSchema),
-    z.record(z.string(), PluginTimelineDataSchema),
-  ]),
-);
-
 const TimelineItemBaseShape = {
   id: z.string(),
   timelineCursor: TimelinePositionSchema.optional(),
-  // COMPAT(active-turn-membership): absent on caches written before turn membership.
+  // Optional: only items emitted inside an identified turn carry a turnId.
   turnId: z.string().optional(),
   timestamp: IsoDateSchema,
 };
@@ -166,15 +153,6 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
     kind: z.literal("tool_call"),
     provider: AgentProviderSchema,
     item: AgentTimelineItemPayloadSchema.refine((item) => item.type === "tool_call"),
-  }),
-  z.strictObject({
-    ...TimelineItemBaseShape,
-    kind: z.literal("plugin"),
-    pluginId: z.string(),
-    pluginItemId: z.string(),
-    itemKind: z.string(),
-    version: z.number().int().positive(),
-    data: PluginTimelineDataSchema,
   }),
 ]);
 
@@ -365,7 +343,6 @@ type StoredProject = z.infer<typeof StoredProjectSchema>;
 
 interface ReplicaCacheOptions {
   maxBytes?: number;
-  clearLegacyCache?: () => Promise<void>;
 }
 
 type StructuredReplicaUpsert =
@@ -487,40 +464,10 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         provider: item.payload.data.provider,
         item: serializeAgentToolCall(item.payload.data),
       };
-    case "plugin":
-      return {
-        ...base,
-        kind: item.kind,
-        pluginId: item.pluginId,
-        pluginItemId: item.pluginItemId,
-        itemKind: item.itemKind,
-        version: item.version,
-        data: item.data as JsonValue,
-      };
   }
 }
 
 function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
-  if (item.kind === "plugin") {
-    return {
-      id: item.id,
-      ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
-      ...(item.turnId ? { turnId: item.turnId } : {}),
-      timestamp: new Date(item.timestamp),
-      kind: item.kind,
-      pluginId: item.pluginId,
-      pluginItemId: item.pluginItemId,
-      itemKind: item.itemKind,
-      version: item.version,
-      data: item.data as JsonValue,
-    };
-  }
-  return deserializeBuiltinTimelineItem(item);
-}
-
-function deserializeBuiltinTimelineItem(
-  item: Exclude<StoredTimelineItem, { kind: "plugin" }>,
-): StreamItem {
   if (item.kind === "custom_message") {
     return deserializeCustomMessageItem(item);
   }
@@ -932,10 +879,7 @@ export class ReplicaCache {
     options: ReplicaCacheOptions = {},
   ) {
     this.maxBytes = Math.max(options.maxBytes ?? MAX_CACHE_BYTES, 0);
-    this.clearLegacyCache = options.clearLegacyCache ?? clearLegacyReplicaCache;
   }
-
-  private readonly clearLegacyCache: () => Promise<void>;
 
   async readAgent(serverId: string, agentId: string): Promise<Agent | undefined> {
     const rows = await this.readRows(serverId, ["agent"], [agentId]);
@@ -1517,8 +1461,6 @@ export class ReplicaCache {
   private prepareStore(): Promise<void> {
     this.preparePromise ??= (async () => {
       await this.rowStore.open();
-      // COMPAT(replica-blob-cache): remove after 2026-11
-      await this.clearLegacyCache().catch(() => undefined);
     })();
     return this.preparePromise;
   }

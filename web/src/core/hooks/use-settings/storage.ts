@@ -9,14 +9,12 @@ import {
 } from "@/components/sidebar/display-preferences/checks-display";
 import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
-  isChecksHiddenByLegacyRowItem,
   type SidebarRowItems,
 } from "@/components/sidebar/display-preferences/row-items";
 
 import { FONT_SIZE, THEME_OPTIONS, type ThemePreference } from "@/styles/theme";
 import { z } from "zod";
-import { APP_SETTINGS_KEY, LEGACY_SETTINGS_KEY } from "./keys";
-import { migrateAppSettings } from "./migrations";
+import { APP_SETTINGS_KEY } from "./keys";
 
 export { APP_SETTINGS_KEY } from "./keys";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
@@ -192,27 +190,10 @@ const SidebarRowItemsSchema = z
     project: z.boolean().catch(DEFAULT_SIDEBAR_ROW_ITEMS.project),
     host: z.boolean().catch(DEFAULT_SIDEBAR_ROW_ITEMS.host),
     changeRequest: z.boolean().catch(DEFAULT_SIDEBAR_ROW_ITEMS.changeRequest),
-    services: z.boolean().optional().catch(undefined),
+    services: z.boolean().catch(DEFAULT_SIDEBAR_ROW_ITEMS.services),
     labels: z.boolean().catch(DEFAULT_SIDEBAR_ROW_ITEMS.labels),
-    // COMPAT(sidebarRowItemsChecks): migrated in v0.3.0, remove after 2027-08-05.
-    checks: z.boolean().optional().catch(undefined),
-    // COMPAT(sidebarRowItemsScripts): migrated in v0.3.0, remove after 2027-08-05.
-    scripts: z.boolean().optional().catch(undefined),
   })
   .catch(DEFAULT_SIDEBAR_ROW_ITEMS);
-
-type StoredAppSettingsFallback = AppSettings & {
-  uiFontSize?: number;
-  compactToolCalls?: boolean;
-  manageBuiltInDaemon?: boolean;
-  releaseChannel?: ReleaseChannel;
-  needsWrite: boolean;
-};
-
-const DEFAULT_STORED_APP_SETTINGS = {
-  ...DEFAULT_CLIENT_SETTINGS,
-  needsWrite: false,
-} satisfies StoredAppSettingsFallback;
 
 const StoredAppSettingsSchema = z
   .looseObject({
@@ -227,14 +208,12 @@ const StoredAppSettingsSchema = z
     ).catch(DEFAULT_TERMINAL_SCROLLBACK_LINES),
     uiFontFamily: sanitizedFontFamily().catch(""),
     monoFontFamily: sanitizedFontFamily().catch(""),
-    uiBaseFontSize: clampedNumber(MIN_UI_BASE_FONT_SIZE, MAX_UI_BASE_FONT_SIZE)
-      .optional()
-      .catch(undefined),
-    contentFontSize: clampedNumber(MIN_CONTENT_FONT_SIZE, MAX_CONTENT_FONT_SIZE)
-      .optional()
-      .catch(DEFAULT_CONTENT_FONT_SIZE),
-    // COMPAT(uiFontSizeScale): replaced by the literal base size in v0.4, remove after 2027-08-17.
-    uiFontSize: clampedNumber(11, 24).optional().catch(undefined),
+    uiBaseFontSize: clampedNumber(MIN_UI_BASE_FONT_SIZE, MAX_UI_BASE_FONT_SIZE).catch(
+      DEFAULT_UI_BASE_FONT_SIZE,
+    ),
+    contentFontSize: clampedNumber(MIN_CONTENT_FONT_SIZE, MAX_CONTENT_FONT_SIZE).catch(
+      DEFAULT_CONTENT_FONT_SIZE,
+    ),
     codeFontSize: clampedNumber(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE).catch(
       DEFAULT_CODE_FONT_SIZE,
     ),
@@ -244,100 +223,28 @@ const StoredAppSettingsSchema = z
     sidebarRowItems: SidebarRowItemsSchema,
     sidebarChecksDisplay: z
       .enum(["iconAndText", "icon", "none"])
-      .optional()
       .catch(DEFAULT_SIDEBAR_CHECKS_DISPLAY),
     sidebarNavItems: z.array(z.object({ key: z.string(), visible: z.boolean() })).catch([]),
-    timelineDetailLevel: z.enum(TIMELINE_DETAIL_LEVELS).optional().catch(undefined),
-    // COMPAT(timelineDetailLevel): replaced autoExpandReasoning + toolCallDetailLevel in v0.6,
-    // remove after 2027-10-10.
-    autoExpandReasoning: z.boolean().optional().catch(undefined),
-    // COMPAT(timelineDetailLevel): see above.
-    toolCallDetailLevel: z
-      .enum(["overview", "detailed"])
-      .or(z.literal("concise").transform(() => "overview" as const))
-      .optional()
-      .catch(undefined),
-    // COMPAT(compactToolCalls): migrated in v0.1.105, remove after 2027-01-12.
-    compactToolCalls: z.boolean().optional().catch(undefined),
+    timelineDetailLevel: z.enum(TIMELINE_DETAIL_LEVELS).catch("detailed"),
     chatOutlineEnabled: z.boolean().catch(true),
     vimKeybindings: z.boolean().catch(false),
     openInSidePane: z
       .object({
         explorerFiles: z.boolean().catch(false),
-        diffs: z.boolean().optional(),
-        // COMPAT(diffDestinationPreference): legacy split preferences, remove after 2027-02-26.
-        explorerChanges: z.boolean().optional(),
-        changesLinks: z.boolean().optional(),
+        diffs: z.boolean().catch(false),
         chatFiles: z.boolean().catch(false),
         diffFiles: z.boolean().catch(false),
         subagents: z.boolean().catch(false),
-        // COMPAT(pullRequestOpenLocation): legacy side-pane toggle, remove after 2027-02-26.
-        pullRequests: z.boolean().optional(),
       })
-      .transform(({ explorerChanges, changesLinks, pullRequests, ...preferences }) => ({
-        ...preferences,
-        diffs: preferences.diffs ?? explorerChanges ?? changesLinks ?? false,
-        legacyPullRequestsInSidePane: pullRequests,
-      }))
-      .catch({
-        ...DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
-        legacyPullRequestsInSidePane: undefined,
-      }),
-    pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).optional(),
+      .catch(DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES),
+    pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).catch("explorer"),
     defaultHostByProject: z.record(z.string(), z.string()).catch({}),
     newWorkspaceIsolationByProject: z.record(z.string(), z.enum(["local", "worktree"])).catch({}),
     defaultBaseBranchByProject: z.record(z.string(), z.string()).catch({}),
-    // COMPAT(explorerSidebarRouting): replaced by source-specific side-pane preferences in v0.6.
-    openSupportingTabsInSidePanel: z.boolean().optional().catch(undefined),
-    // COMPAT(rendererRecord<string, never>): these fields used to share this renderer-owned key.
-    manageBuiltInDaemon: z.boolean().optional().catch(undefined),
-    releaseChannel: z.enum(["stable", "beta"]).optional().catch(undefined),
   })
-  .transform((stored) => {
-    const { legacyPullRequestsInSidePane, ...openInSidePane } = stored.openInSidePane;
-    const needsWrite =
-      (stored.uiBaseFontSize === undefined && stored.uiFontSize !== undefined) ||
-      stored.contentFontSize === undefined ||
-      // Persist the level derived from the retired autoExpandReasoning/toolCallDetailLevel
-      // fields so the legacy mapping runs exactly once.
-      stored.timelineDetailLevel === undefined;
-    const uiBaseFontSize =
-      stored.uiBaseFontSize ??
-      (stored.uiFontSize === undefined
-        ? DEFAULT_UI_BASE_FONT_SIZE
-        : Math.round((FONT_SIZE.base * stored.uiFontSize) / 16));
-    const sidebarChecksDisplay =
-      stored.sidebarChecksDisplay ??
-      (isChecksHiddenByLegacyRowItem(stored.sidebarRowItems)
-        ? "none"
-        : DEFAULT_SIDEBAR_CHECKS_DISPLAY);
-    const timelineDetailLevel =
-      stored.timelineDetailLevel ??
-      (stored.autoExpandReasoning
-        ? "expanded"
-        : (stored.toolCallDetailLevel ?? (stored.compactToolCalls ? "overview" : "detailed")));
-    return {
-      ...stored,
-      timelineDetailLevel,
-      openInSidePane,
-      pullRequestOpenLocation:
-        stored.pullRequestOpenLocation ?? (legacyPullRequestsInSidePane ? "side" : "explorer"),
-      uiBaseFontSize,
-      contentFontSize: stored.contentFontSize ?? uiBaseFontSize,
-      sidebarChecksDisplay,
-      sidebarRowItems: {
-        ...stored.sidebarRowItems,
-        services:
-          stored.sidebarRowItems.services ??
-          (stored.sidebarRowItems.scripts === false ? false : DEFAULT_SIDEBAR_ROW_ITEMS.services),
-      },
-      needsWrite,
-    };
-  })
-  .catch(DEFAULT_STORED_APP_SETTINGS);
+  .catch(DEFAULT_CLIENT_SETTINGS as AppSettings & Record<string, unknown>);
 
 type StoredAppSettings = z.output<typeof StoredAppSettingsSchema>;
-export type PersistedAppSettings = Omit<StoredAppSettings, "needsWrite">;
 
 export interface KeyValueStorage {
   getItem(key: string): Promise<string | null>;
@@ -371,49 +278,12 @@ export async function saveAppSettings(input: {
 
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
   try {
-    const read = await readAppSettings(deps);
-    if (read.needsWrite) {
-      await writeAppSettings(deps.storage, read.stored, read.settings);
-    }
-    const { needsWrite: _needsWrite, ...stored } = read.stored;
-    return await migrateAppSettings(read.settings, deps.storage, stored);
+    const stored = await readSettingsObject(deps.storage, APP_SETTINGS_KEY);
+    return normalizeAppSettings(stored ?? StoredAppSettingsSchema.parse({}));
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
     throw error;
   }
-}
-
-/**
- * Reads whichever of the settings blobs exists, without migrating. `needsWrite` covers the reads
- * that produce settings the stored blob does not already spell out.
- */
-async function readAppSettings(
-  deps: SettingsDeps,
-): Promise<{ settings: AppSettings; needsWrite: boolean; stored: StoredAppSettings }> {
-  const stored = await readSettingsObject(deps.storage, APP_SETTINGS_KEY);
-  if (stored) {
-    return {
-      settings: normalizeAppSettings(stored),
-      // COMPAT(uiFontSizeScale): persist the converted base size, remove after 2027-08-17.
-      needsWrite: stored.needsWrite,
-      stored,
-    };
-  }
-
-  const legacyStored = await readSettingsObject(deps.storage, LEGACY_SETTINGS_KEY);
-  if (legacyStored) {
-    return {
-      settings: {
-        ...DEFAULT_CLIENT_SETTINGS,
-        ...pickAppSettingsFromLegacy(legacyStored),
-      } satisfies AppSettings,
-      needsWrite: true,
-      stored: legacyStored,
-    };
-  }
-
-  const defaultStored = StoredAppSettingsSchema.parse({});
-  return { settings: DEFAULT_CLIENT_SETTINGS, needsWrite: true, stored: defaultStored };
 }
 
 export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
@@ -427,29 +297,13 @@ export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Setti
 }
 
 export function normalizeAppSettings(value: unknown): AppSettings {
+  // Renderer-owned fields (desktop daemon management) must not leak into app settings.
   const {
-    needsWrite: _needsWrite,
     manageBuiltInDaemon: _manageBuiltInDaemon,
     releaseChannel: _releaseChannel,
-    compactToolCalls: _compactToolCalls,
-    uiFontSize: _uiFontSize,
-    // COMPAT(timelineDetailLevel): retired fields folded into timelineDetailLevel, remove
-    // after 2027-10-10.
-    autoExpandReasoning: _autoExpandReasoning,
-    toolCallDetailLevel: _toolCallDetailLevel,
     ...settings
   } = StoredAppSettingsSchema.parse(value);
   return settings;
-}
-
-function pickAppSettingsFromLegacy(legacy: StoredAppSettings): AppSettings {
-  const settings = normalizeAppSettings(legacy);
-  return {
-    ...settings,
-    // The legacy key rendered content on the interface ramp. Freeze that
-    // rendered value into the new independent preference during migration.
-    contentFontSize: legacy.uiBaseFontSize,
-  };
 }
 
 export function parseTerminalScrollbackLines(value: unknown): number | null {
@@ -529,14 +383,12 @@ async function writeAppSettings(
   stored: StoredAppSettings,
   settings: AppSettings,
 ): Promise<void> {
-  const { needsWrite: _needsWrite, ...persistedStored } = stored;
-  const storedSidebarRowItems = persistedStored.sidebarRowItems;
   await storage.setItem(
     APP_SETTINGS_KEY,
     JSON.stringify({
-      ...persistedStored,
+      ...stored,
       ...settings,
-      sidebarRowItems: { ...storedSidebarRowItems, ...settings.sidebarRowItems },
+      sidebarRowItems: { ...stored.sidebarRowItems, ...settings.sidebarRowItems },
     }),
   );
 }

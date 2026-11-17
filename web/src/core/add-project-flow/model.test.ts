@@ -15,20 +15,11 @@ import {
   setNewDirectoryName,
   type AddProjectHost,
 } from "./model";
-import {
-  addProjectMethodEmptyText,
-  buildAddProjectMethods,
-  buildCloneLocationOptions,
-  buildManualGithubRepositoryChoices,
-} from "./options";
+import { buildCloneLocationOptions, buildManualGithubRepositoryChoices } from "./options";
 
 const HOST: AddProjectHost = {
   serverId: "host-1",
   label: "Local",
-  canAddProject: true,
-  canCloneGithubRepositories: true,
-  canSearchGithubRepositories: true,
-  canCreateDirectory: true,
 };
 
 describe("Add Project navigation", () => {
@@ -110,42 +101,6 @@ describe("Add Project navigation", () => {
 });
 
 describe("Add Project options", () => {
-  it("hides every mutating method when the host lacks stable project identity", () => {
-    const outdatedHost = { ...HOST, canAddProject: false };
-
-    expect(buildAddProjectMethods(outdatedHost)).toEqual([]);
-    expect(addProjectMethodEmptyText(outdatedHost)).toBe("Update the host to use Add Project.");
-  });
-
-  it("keeps host-upgrade methods discoverable with disabled descriptions", () => {
-    expect(
-      buildAddProjectMethods({
-        ...HOST,
-        canCloneGithubRepositories: false,
-        canSearchGithubRepositories: false,
-        canCreateDirectory: false,
-      }),
-    ).toEqual([
-      {
-        id: "directory-search",
-        label: "Search for directory",
-        description: "Find a directory on Local",
-      },
-      {
-        id: "github",
-        label: "Clone from GitHub",
-        description: "Update this host to clone GitHub repositories",
-        disabled: true,
-      },
-      {
-        id: "new-directory",
-        label: "New directory",
-        description: "Update this host to create directories",
-        disabled: true,
-      },
-    ]);
-  });
-
   it("offers manual URL and protocol-specific owner/repo clone choices", () => {
     expect(buildManualGithubRepositoryChoices("git@github.com:bytetrue/byspace.git")).toEqual([
       expect.objectContaining({

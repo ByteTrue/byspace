@@ -6,12 +6,10 @@ import {
 } from "./terminal-agent-hooks-config";
 
 describe("terminal agent hook provider settings", () => {
-  it("keeps newly added providers disabled while the provider map is absent", () => {
-    expect(isTerminalAgentHookProviderEnabled(undefined, false, "claude")).toBe(false);
-    expect(isTerminalAgentHookProviderEnabled(undefined, true, "codex")).toBe(true);
-    expect(isTerminalAgentHookProviderEnabled(undefined, true, "pi")).toBe(false);
-    expect(isTerminalAgentHookProviderEnabled({ claude: true }, true, "codex")).toBe(false);
-    expect(isTerminalAgentHookProviderEnabled({ claude: true }, false, "claude")).toBe(true);
+  it("reads enablement from the provider map", () => {
+    expect(isTerminalAgentHookProviderEnabled(undefined, "claude")).toBe(false);
+    expect(isTerminalAgentHookProviderEnabled({ claude: true }, "codex")).toBe(false);
+    expect(isTerminalAgentHookProviderEnabled({ claude: true }, "claude")).toBe(true);
   });
 
   it("creates a provider-scoped daemon config patch", () => {

@@ -478,20 +478,6 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("xhigh");
   });
 
-  it("normalizes legacy model id 'default' from initial values to the provider default model", () => {
-    const resolved = resolveFormState(
-      { model: "default" },
-      { provider: "codex" },
-      CODEX_MODELS,
-      INITIAL_USER_MODIFIED,
-      makeState({ provider: "codex" }).form,
-
-      codexProviderMap,
-    );
-
-    expect(resolved.model).toBe("gpt-5.3-codex");
-  });
-
   it("keeps an explicit initial thinking option when it is valid", () => {
     const resolved = resolveFormState(
       { model: "gpt-5.3-codex", thinkingOptionId: "low" },

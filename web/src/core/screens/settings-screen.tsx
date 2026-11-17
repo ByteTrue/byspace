@@ -25,7 +25,6 @@ import {
   Server,
   Network,
   Bot,
-  Gauge,
   Info,
   Bell,
   Plus,
@@ -99,7 +98,6 @@ import {
   HostConnectionsPage,
   HostAgentsPage,
   HostSettingsPage,
-  HostUsagePage,
 } from "@/screens/settings/host-page";
 
 import ProjectsScreen from "@/screens/projects-screen";
@@ -150,7 +148,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "projects", labelKey: "settings.hostSections.projects", icon: FolderGit2 },
   { id: "connections", labelKey: "settings.hostSections.connections", icon: Network },
   { id: "agents", labelKey: "settings.hostSections.agents", icon: Bot },
-  { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
 ];
 
 function renderHostSettingsContent(
@@ -164,8 +161,6 @@ function renderHostSettingsContent(
       return <HostConnectionsPage serverId={view.serverId} />;
     case "agents":
       return <HostAgentsPage serverId={view.serverId} />;
-    case "usage":
-      return <HostUsagePage serverId={view.serverId} />;
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }

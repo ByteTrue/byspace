@@ -545,7 +545,6 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 			Number      int    `json:"number"`
 			ProjectPath string `json:"projectPath"`
 		} `json:"checkoutSource"`
-		GithubPrNumber *int `json:"githubPrNumber"`
 		// ProjectID names the project when the caller is not inside it — the sidebar creates a
 		// worktree from a project row, and without the id the new worktree was registered under
 		// whatever directory happened to be current.
@@ -587,7 +586,6 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		BranchName:     req.BranchName,
 		RefName:        req.RefName,
 		Action:         req.Action,
-		GithubPRNumber: req.GithubPrNumber,
 	}
 	if req.CheckoutSource != nil {
 		intentInput.CheckoutSource = &workspace.CheckoutSource{

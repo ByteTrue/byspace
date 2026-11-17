@@ -366,7 +366,6 @@ export const zhCN: TranslationResources = {
     },
     status: {
       connectHost: "连接到 Host 以导入会话",
-      updateHost: "更新 Host 以导入会话。",
       noProviders: "没有已启用的可导入 Provider。",
       loading: "正在加载最近会话...",
       failedProvider: "无法加载 {{provider}} 的会话",
@@ -408,7 +407,6 @@ export const zhCN: TranslationResources = {
       hostOffline: "{{hostName}} 已离线",
       cannotReachHost: "无法连接 {{hostName}}",
       hostStatus: "Host 状态：{{status}}",
-      needsHostUpgrade: "更新你的 Host 以恢复此 workspace",
       manageHost: "管理 Host",
       recovery: {
         archivedTitle: "Workspace 已归档",
@@ -534,7 +532,6 @@ export const zhCN: TranslationResources = {
     },
     terminal: {
       hostDisconnected: "Host 未连接",
-      updateHost: "请更新主机以使用原生终端渲染器。",
       unableToSubscribe: "无法订阅 Terminal",
       clipboardImageTooLarge: "剪贴板图片过大（最大 50 MiB）",
       clipboardReadFailed: "无法读取剪贴板图片",
@@ -962,7 +959,6 @@ export const zhCN: TranslationResources = {
     createConfirm: "创建",
     creating: "创建中…",
     name: "标签名称",
-    updateHostUse: "请更新此主机以使用标签。",
     errors: { update: "无法更新标签", load: "无法加载标签" },
     colors: {
       violet: "紫色",
@@ -994,7 +990,6 @@ export const zhCN: TranslationResources = {
       deleteMessage_one: "这会从此主机的{{count}}个工作区中移除该标签。",
       deleteMessage_other: "这会从此主机的{{count}}个工作区中移除该标签。",
       offline: "此主机离线。",
-      updateHost: "请更新此主机以管理标签。",
     },
   },
   changelog: {
@@ -1121,7 +1116,6 @@ export const zhCN: TranslationResources = {
       toasts: {
         hostDisconnected: "Host 未连接",
         removeFailed: "部分 workspace 移除失败",
-        updateHostToRemove: "更新 host 以移除 projects。",
       },
       empty: {
         title: "还没有 projects",
@@ -1619,7 +1613,6 @@ export const zhCN: TranslationResources = {
       notNow: "暂不",
       directConnectionHint:
         "不使用中继时，请通过 TCP、Tailscale 或其他 VPN 直接连接。不会生成二维码。",
-      updateRequired: "请更新主机，以便从 BySpace 启用中继。",
       unavailable: "配对 offer 不可用。",
       hint: "用手机上的 BySpace 扫描此二维码，或复制下方链接。",
       securityWarning: "请像保管密码一样保管此配对链接。任何获得此链接的人都可以访问此守护进程。",
@@ -1743,7 +1736,6 @@ export const zhCN: TranslationResources = {
       directoryMissing: "未找到 workspace 目录。",
       empty: "没有更改",
       loadError: "加载差异失败",
-      capabilityMissing: "请更新主机以查看提交差异。",
     },
   },
   toolCallDetails: {
@@ -1877,7 +1869,6 @@ export const zhCN: TranslationResources = {
       projects: "项目",
       connections: "连接",
       agents: "Agents",
-      usage: "使用情况",
       host: "概览",
     },
     metadataGeneration: {
@@ -2285,7 +2276,6 @@ export const zhCN: TranslationResources = {
       agentProfiles: {
         sectionTitle: "Agent 配置",
         unavailable: "连接到这个 Host 以管理 Agent 配置",
-        unsupported: "此 Host 运行的 Daemon 尚不支持 Agent 配置",
         emptyState: "还没有配置。添加一个以便使用保存的 Provider 和 Model 启动 Agent。",
         addProfileTitle: "添加 Agent 配置",
         newProfile: "新建配置",
@@ -2400,8 +2390,6 @@ export const zhCN: TranslationResources = {
           dialogFailedMessage: "无法打开重启确认对话框。",
         },
         update: {
-          desktopManagedHint:
-            "此 Daemon 由 BySpace Desktop 管理。请在 Host 上更新 BySpace Desktop。",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2558,7 +2546,6 @@ export const zhCN: TranslationResources = {
         description: "让 Agent 检查此仓库，并推荐 worktree 准备、服务和常用命令",
         configure: "通过 Agent 配置",
         review: "通过 Agent 检查",
-        updateHost: "更新 Host 后即可使用 Agent 辅助的 Project 设置",
         prompt:
           "使用 byspace-project-setup Skill 检查此仓库，并提出让干净 worktree 可重复准备、高频命令易于发现、长期服务可安全并行运行的最小且有证据支持的改动。先检查并向我展示建议，不要直接修改文件。",
       },

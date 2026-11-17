@@ -102,23 +102,6 @@ function isUrlSafeWorkspaceId(value: string): boolean {
   return /^[A-Za-z0-9._~-]+$/.test(value);
 }
 
-function isLegacyPathLikeWorkspaceValue(value: string): boolean {
-  return value.includes("/") || value.includes("\\") || /^[A-Za-z]:[\\/]/.test(value);
-}
-
-function hasLegacyDecodeNoise(value: string): boolean {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint == null) continue;
-    if (codePoint < 0x20 || codePoint === 0x7f || codePoint === 0xfffd) return true;
-  }
-  return false;
-}
-
-function isCleanLegacyPathDecode(value: string): boolean {
-  return isLegacyPathLikeWorkspaceValue(value) && !hasLegacyDecodeNoise(value);
-}
-
 export type WorkspaceOpenIntent =
   | { kind: "agent"; agentId: string }
   | { kind: "terminal"; terminalId: string }
@@ -215,17 +198,6 @@ export function decodeWorkspaceIdFromPathSegment(workspaceIdSegment: string): st
     const prefixedDecoded =
       tryDecodeBase64UrlNoPadUtf8(encodedPayload) ?? decodeBase64UrlNoPadUtf8(encodedPayload);
     return prefixedDecoded ? normalizeWorkspaceId(prefixedDecoded) : null;
-  }
-
-  // COMPAT(legacyPathWorkspaceId): IDs were path-shaped before v0.1.95. Remove when deep-link floor >= v0.2.0.
-  const base64Decoded = tryDecodeBase64UrlNoPadUtf8(decoded);
-  if (base64Decoded && isCleanLegacyPathDecode(base64Decoded)) {
-    return normalizeWorkspaceId(base64Decoded);
-  }
-
-  const relaxedBase64Decoded = decodeBase64UrlNoPadUtf8(decoded);
-  if (relaxedBase64Decoded && isCleanLegacyPathDecode(relaxedBase64Decoded)) {
-    return normalizeWorkspaceId(relaxedBase64Decoded);
   }
 
   return normalizeWorkspaceId(decoded);
@@ -404,22 +376,6 @@ export function buildHostRootRoute(serverId: string) {
   return `/h/${encodeSegment(normalized)}` as const;
 }
 
-export function buildHostOpenProjectRoute(serverId: string) {
-  const base = buildHostRootRoute(serverId);
-  if (base === "/") {
-    return "/" as const;
-  }
-  return `${base}/open-project` as const;
-}
-
-export function buildHostSessionsRoute(serverId: string) {
-  const base = buildHostRootRoute(serverId);
-  if (base === "/") {
-    return "/" as const;
-  }
-  return `${base}/sessions` as const;
-}
-
 export function buildSessionsRoute() {
   return "/sessions" as const;
 }
@@ -501,32 +457,16 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
   return (SETTINGS_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
-export const HOST_SECTION_SLUGS = ["projects", "connections", "agents", "usage", "host"] as const;
+export const HOST_SECTION_SLUGS = ["projects", "connections", "agents", "host"] as const;
 
 export type HostSectionSlug = (typeof HOST_SECTION_SLUGS)[number];
-
-const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
-  orchestration: "agents",
-  daemon: "host",
-  // COMPAT(pluginsSection): plugin management retired in v0.14.x; old deep links
-  // fall back to the host overview instead of an unknown section. Remove after 2027-09-15.
-  plugins: "host",
-  // COMPAT(settingsConsolidation): sections folded in the 2026-09 settings
-  // consolidation (issue 050). Remove after 2027-09-24.
-  "pair-device": "connections",
-  metadata: "agents",
-  workspaces: "host",
-};
 
 export function isHostSectionSlug(value: string): value is HostSectionSlug {
   return (HOST_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
 export function normalizeHostSectionSlug(value: string): HostSectionSlug | null {
-  if (isHostSectionSlug(value)) {
-    return value;
-  }
-  return LEGACY_HOST_SECTION_SLUGS[value] ?? null;
+  return isHostSectionSlug(value) ? value : null;
 }
 
 export function buildSettingsRoute() {

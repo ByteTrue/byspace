@@ -55,7 +55,6 @@ describe("useNewWorkspaceProjectPicker", () => {
           routeProject,
           routeProjectContextViewKey: routePlacement.viewKey,
           lastActiveProject: null,
-          allowAllProjects: true,
         }),
       {
         initialProps: {
@@ -112,7 +111,6 @@ describe("useNewWorkspaceProjectPicker", () => {
         routeProject: null,
         routeProjectContextViewKey: null,
         lastActiveProject: null,
-        allowAllProjects: true,
       }),
     );
 

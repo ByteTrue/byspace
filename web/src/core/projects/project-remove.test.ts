@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  getProjectRemoveReadiness,
-  getProjectRemoveReadinessForTargets,
-  removeProjectFromHosts,
-  type ProjectRemoveProject,
-} from "./project-remove";
-
-const project: ProjectRemoveProject = {
-  hosts: [
-    { serverId: "host-a", projectId: "prj_host_a" },
-    { serverId: "host-b", projectId: "prj_host_b" },
-  ],
-};
+import { removeProjectFromHosts } from "./project-remove";
 
 function createProjectRemoveClient() {
   const removedProjectKeys: string[] = [];
@@ -27,36 +15,15 @@ function createProjectRemoveClient() {
 }
 
 describe("project remove policy", () => {
-  it("requires every host to support project removal", () => {
-    const readiness = getProjectRemoveReadiness({
-      project,
-      supportsProjectRemove: (serverId) => serverId === "host-a",
-    });
-
-    expect(readiness).toEqual({
-      kind: "needs_host_update",
-      serverIds: ["host-b"],
-    });
-  });
-
   it("removes the project from every participating host", async () => {
     const hostA = createProjectRemoveClient();
     const hostB = createProjectRemoveClient();
-    const readiness = getProjectRemoveReadiness({
-      project,
-      supportsProjectRemove: () => true,
-    });
 
-    expect(readiness).toEqual({
-      kind: "ready",
+    const outcome = await removeProjectFromHosts({
       targets: [
         { serverId: "host-a", projectId: "prj_host_a" },
         { serverId: "host-b", projectId: "prj_host_b" },
       ],
-    });
-
-    const outcome = await removeProjectFromHosts({
-      targets: readiness.kind === "ready" ? readiness.targets : [],
       getClient: (serverId) => {
         if (serverId === "host-a") return hostA.client;
         if (serverId === "host-b") return hostB.client;
@@ -88,18 +55,8 @@ describe("project remove policy", () => {
     const hostA = createProjectRemoveClient();
     const hostB = createProjectRemoveClient();
 
-    const readiness = getProjectRemoveReadinessForTargets({
-      targets: [{ serverId: "host-a", projectId: "prj_host_a" }],
-      supportsProjectRemove: () => true,
-    });
-
-    expect(readiness).toEqual({
-      kind: "ready",
-      targets: [{ serverId: "host-a", projectId: "prj_host_a" }],
-    });
-
     const outcome = await removeProjectFromHosts({
-      targets: readiness.kind === "ready" ? readiness.targets : [],
+      targets: [{ serverId: "host-a", projectId: "prj_host_a" }],
       getClient: (serverId) => {
         if (serverId === "host-a") return hostA.client;
         if (serverId === "host-b") return hostB.client;

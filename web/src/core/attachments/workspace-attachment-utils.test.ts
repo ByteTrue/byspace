@@ -27,7 +27,7 @@ describe("workspace attachment utilities", () => {
 
   it("strips context attachments from user draft attachments", () => {
     const normalAttachment: ComposerAttachment = {
-      kind: "github_issue",
+      kind: "forge_issue",
       item: {
         kind: "issue",
         number: 12,

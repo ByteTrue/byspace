@@ -13,11 +13,10 @@ import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { requestTimelineReplacement } from "@/timeline/timeline-replacement";
 import {
   consumeForcedTimelineTailReplacement,
-  type TimelineDeliveryMode,
   type TimelineResponsePayload,
   type ViewedTimelineOwner,
 } from "@/timeline/viewed-timeline-sync";
-import type { AgentAttachment, SessionOutboundMessage } from "@bytetrue/protocol/messages";
+import type { SessionOutboundMessage } from "@bytetrue/protocol/messages";
 import { parseServerInfoStatusPayload } from "@bytetrue/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
@@ -27,8 +26,6 @@ import {
 } from "@bytetrue/protocol/agent-attention-notification";
 
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import type { AgentSessionConfig } from "@bytetrue/protocol/agent-types";
-import type { GitSetupOptions } from "@bytetrue/protocol/messages";
 import type { AgentPermissionResponse } from "@bytetrue/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import {
@@ -45,10 +42,7 @@ import {
   createInitDeferred,
   rejectInitDeferred,
 } from "@/utils/agent-initialization";
-import { encodeImages } from "@/utils/encode-images";
-import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
-import type { AttachmentMetadata } from "@/attachments/types";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
@@ -68,11 +62,6 @@ export type {
   ExplorerEncoding,
   AgentFileExplorerState,
 } from "@/stores/session-store";
-
-// COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
-function getTimelineDeliveryMode(selectiveAgentTimeline?: boolean): TimelineDeliveryMode {
-  return selectiveAgentTimeline ? "selective" : "legacy";
-}
 
 const findLatestAssistantMessageText = (items: StreamItem[]): string | null => {
   for (let i = items.length - 1; i >= 0; i -= 1) {
@@ -154,7 +143,7 @@ function notifyVoiceAbortFailure(
 }
 
 interface SessionProviderSharedProps {
-  children: ReactNode;
+  children?: ReactNode;
   serverId: string;
 }
 
@@ -309,10 +298,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       serverId: serverInfo.serverId,
       hostname: serverInfo.hostname,
       version: serverInfo.version,
-      ...(serverInfo.desktopManaged !== undefined
-        ? { desktopManaged: serverInfo.desktopManaged }
-        : {}),
-      ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
       ...(serverInfo.features ? { features: serverInfo.features } : {}),
     });
   }, [client, serverId, updateSessionServerInfo]);
@@ -346,11 +331,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   useEffect(() => {
     const setAgentInitializing = createSetAgentInitializing(serverId, setInitializingAgents);
-    const initialDeliveryMode = getTimelineDeliveryMode(
-      client.getLastServerInfoMessage()?.features?.selectiveAgentTimeline,
-    );
     const sync = getHostRuntimeStore().createViewedTimelineOwner(serverId, {
-      initialDeliveryMode,
       setSubscription: (agentIds) => client.setAgentTimelineSubscription(agentIds),
       readCursor: (agentId) => {
         const timeline = selectAgentTimelineState(
@@ -518,17 +499,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (message.type !== "status") return;
       const serverInfo = parseServerInfoStatusPayload(message.payload);
       if (serverInfo) {
-        viewedTimelineSyncRef.current?.setDeliveryMode(
-          getTimelineDeliveryMode(serverInfo.features?.selectiveAgentTimeline),
-        );
         updateSessionServerInfo(serverId, {
           serverId: serverInfo.serverId,
           hostname: serverInfo.hostname,
           version: serverInfo.version,
-          ...(serverInfo.desktopManaged !== undefined
-            ? { desktopManaged: serverInfo.desktopManaged }
-            : {}),
-          ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
           ...(serverInfo.features ? { features: serverInfo.features } : {}),
         });
         return;
@@ -674,64 +648,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
       void client.restartServer(reason).catch((error) => {
         console.error("[Session] Failed to restart server:", error);
-      });
-    },
-    [client],
-  );
-
-  const _createAgent = useCallback(
-    async ({
-      config,
-      initialPrompt,
-      images,
-      attachments: attachmentsInput,
-      git,
-      worktreeName,
-      requestId,
-    }: {
-      config: AgentSessionConfig;
-      initialPrompt: string;
-      images?: AttachmentMetadata[];
-      attachments?: AgentAttachment[];
-      git?: GitSetupOptions;
-      worktreeName?: string;
-      requestId?: string;
-    }) => {
-      if (!client) {
-        console.warn("[Session] createAgent skipped: daemon unavailable");
-        return;
-      }
-      const trimmedPrompt = initialPrompt.trim();
-      let imagesData: Array<{ data: string; mimeType: string }> | undefined;
-      try {
-        imagesData = await encodeImages(images);
-      } catch (error) {
-        console.error("[Session] Failed to prepare images for agent creation:", error);
-      }
-      let attachments = attachmentsInput;
-      let budgetedImages = imagesData;
-      if (client && imagesData && imagesData.length > 0) {
-        try {
-          const budgeted = await enforceImageWireBudget({
-            client,
-            text: trimmedPrompt,
-            images: imagesData,
-            attachments: attachments ?? [],
-          });
-          budgetedImages = budgeted.images.length > 0 ? budgeted.images : undefined;
-          attachments = budgeted.attachments;
-        } catch (error) {
-          console.error("[Session] Failed to enforce image wire budget:", error);
-        }
-      }
-      await client.createAgent({
-        config,
-        ...(trimmedPrompt ? { initialPrompt: trimmedPrompt } : {}),
-        ...(budgetedImages && budgetedImages.length > 0 ? { images: budgetedImages } : {}),
-        ...(attachments && attachments.length > 0 ? { attachments } : {}),
-        ...(git ? { git } : {}),
-        ...(worktreeName ? { worktreeName } : {}),
-        ...(requestId ? { requestId } : {}),
       });
     },
     [client],

@@ -28,7 +28,7 @@ export type PickerItem =
 
 export type PickerCheckoutRequest = Pick<
   CreateBySpaceWorktreeInput,
-  "action" | "refName" | "checkoutSource" | "githubPrNumber"
+  "action" | "refName" | "checkoutSource"
 >;
 
 const BRANCH_OPTION_PREFIX = "branch:";
@@ -163,9 +163,6 @@ function refQualifier(refName: string): string | null {
 export function defaultBasePickerItem(status: BaseRefCheckoutStatus): PickerItem | null {
   const currentBranch = status.currentBranch;
   if (!currentBranch) return null;
-  // COMPAT(checkoutUpstreamRef): added in v0.2.6, remove after 2027-02-01 once the daemon
-  // floor sends upstreamRef. Daemons that predate it omit the field, which lands on the
-  // local ref — the base those daemons always used.
   const refName = status.upstreamRef ?? `refs/heads/${currentBranch}`;
   // The upstream branch can be named differently from the local one, so the row reads the
   // ref rather than the branch the user happens to be on.
@@ -239,14 +236,6 @@ export function pickerItemToCheckoutRequest(
           number: item.item.number,
           ...(item.item.projectPath ? { projectPath: item.item.projectPath } : {}),
         },
-        ...(forge === "github"
-          ? {
-              // COMPAT(githubPrNumber): send the legacy GitHub checkout input
-              // to daemons predating checkoutSource. Remove after 2027-01-17
-              // once the supported daemon floor is >= v0.2.0.
-              githubPrNumber: item.item.number,
-            }
-          : {}),
       };
     }
   }

@@ -75,7 +75,8 @@ export function resolveTurnPresentation(
 }
 
 function closeTurn(current: TurnLiveness, turnId: string | null): TurnLiveness {
-  // COMPAT(agentTurnIdentity): added in v0.2.6, remove after 2027-01-31 once daemon floor >= v0.2.6.
+  // A terminal event without a turn id (non-Pi providers emit bare turn_start/turn_end)
+  // closes whatever turn is open; an identified event only closes its own turn.
   const targetsDifferentIdentifiedTurn =
     current.phase === "open" &&
     turnId !== null &&
@@ -85,7 +86,7 @@ function closeTurn(current: TurnLiveness, turnId: string | null): TurnLiveness {
 }
 
 function openTurn(current: TurnLiveness, activeTurn: ActiveTurnIdentity): TurnLiveness {
-  // COMPAT(agentTurnIdentity): added in v0.2.6, remove after 2027-01-31 once daemon floor >= v0.2.6.
+  // Two null turn ids are the same unidentified turn (non-Pi providers omit the id).
   const sameTurn =
     current.phase === "open" &&
     ((activeTurn.turnId !== null && current.turnId === activeTurn.turnId) ||

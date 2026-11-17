@@ -3,7 +3,6 @@ import { isHomeWorkspace } from "@/chief/home-workspace";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useSidebarWorkspacePinController } from "@/hooks/use-sidebar-workspace-pin";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
-import { useHostFeature } from "@/runtime/host-features";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
@@ -35,11 +34,10 @@ export function useGlobalWorkspacePinAction() {
     // the status/label mode, or not be rendered at all when the shortcut fires.
     isHome: isHomeWorkspace(workspace),
   }));
-  const canPin = useHostFeature(serverId, "workspacePinning");
   const togglePin = useSidebarWorkspacePinController();
 
   const handle = useCallback(() => {
-    if (!serverId || !fields || !canPin || fields.isHome) {
+    if (!serverId || !fields || fields.isHome) {
       return false;
     }
     const workspaceKey = buildWorkspaceTabPersistenceKey({
@@ -56,12 +54,12 @@ export function useGlobalWorkspacePinAction() {
       pinnedAt: fields.pinnedAt,
     });
     return true;
-  }, [canPin, fields, serverId, togglePin]);
+  }, [fields, serverId, togglePin]);
 
   useKeyboardActionHandler({
     handlerId: "workspace-pin-global",
     actions: WORKSPACE_PIN_ACTIONS,
-    enabled: serverId !== null && fields !== null && canPin && !fields?.isHome,
+    enabled: serverId !== null && fields !== null && !fields?.isHome,
     priority: 0,
     handle,
   });

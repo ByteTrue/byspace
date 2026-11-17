@@ -58,7 +58,6 @@ import {
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { encodeImages } from "@/utils/encode-images";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
 import { ReplicaCache } from "@/runtime/replica-cache";
@@ -525,7 +524,6 @@ function probeIntervalForConnection(
 
 function createDefaultDeps(): HostRuntimeControllerDeps {
   // Browser host automation was desktop-only and is retired (issue 025 A3).
-  const appCapabilities = {};
 
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
@@ -536,7 +534,6 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         clientType: "mobile",
         appVersion: resolveAppVersion() ?? undefined,
         runtimeGeneration,
-        capabilities: appCapabilities,
         trace: nativePerformanceTrace,
         providerSnapshots: "wire",
       } satisfies Omit<DaemonClientConfig, "url">;
@@ -578,7 +575,6 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       connectToDaemon(connection, {
         ...(host.serverId ? { serverId: host.serverId } : {}),
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-        capabilities: appCapabilities,
         trace: nativePerformanceTrace,
       }),
     getClientId: () => getOrCreateClientId(),
@@ -1947,8 +1943,7 @@ export class HostRuntimeStore {
     label?: string,
     password?: string,
   ): Promise<HostProfile> {
-    // COMPAT(oldRelayOfferTls): added in v0.1.73, remove after 2026-11-10.
-    const useTls = offer.relay.useTls ?? shouldUseTlsForDefaultHostedRelay(offer.relay.endpoint);
+    const useTls = offer.relay.useTls ?? false;
     const resolvedLabel = label?.trim() || offer.hostname?.trim() || undefined;
     return this.upsertRelayConnection({
       serverId: offer.serverId,
@@ -2159,17 +2154,9 @@ export class HostRuntimeStore {
     }
     for (const host of this.hosts) {
       const client = this.getClient(host.serverId);
-      if (!client || !this.supportsHostSync(client)) {
-        continue;
-      }
+      if (!client) continue;
       await pushReplica(client, changes);
     }
-  }
-
-  private supportsHostSync(client: DaemonClient): boolean {
-    // COMPAT(hostSync): added in v0.25.0; remove gate after 2027-11-12. A daemon without the
-    // feature has no replica, so it is left out of sync instead of being sent edits it ignores.
-    return client.getLastServerInfoMessage()?.features?.hostSync === true;
   }
 
   private async writeBrowserCopy(hosts: HostProfile[]): Promise<void> {
@@ -2182,7 +2169,7 @@ export class HostRuntimeStore {
   // Exchanges are serialized, because two daemons answering out of order would let the staler
   // reply overwrite the merged list.
   private syncReplicaWithHost(client: DaemonClient | null): void {
-    if (this.e2eMode || !client || !this.supportsHostSync(client)) {
+    if (this.e2eMode || !client) {
       return;
     }
     this.replicaSyncTail = this.replicaSyncTail
@@ -2433,16 +2420,11 @@ export class HostRuntimeStore {
         write: (update) => useSessionStore.getState().setQueuedMessages(serverId, update),
       },
       submitMessage: async ({ text, attachments }) => {
-        const supportsForgeAttachments =
-          useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;
         await dispatchComposerAgentMessage({
           client,
           agentId,
           text,
           attachments,
-          attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
-            supportsForgeAttachments,
-          }),
           encodeImages,
           submission: createMessageSubmissionWriter(serverId),
         });

@@ -194,19 +194,9 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   }, [textPublication]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      await useDraftStore.getState().hydrateDraftInput({ draftKey });
-      if (!cancelled) {
-        const hydratedText = useDraftStore.getState().getDraftInput(draftKey)?.text ?? "";
-        publishTextReplacement(hydratedText);
-        setHydratedDraftKey(draftKey);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    const hydratedText = useDraftStore.getState().getDraftInput(draftKey)?.text ?? "";
+    publishTextReplacement(hydratedText);
+    setHydratedDraftKey(draftKey);
   }, [draftKey, publishTextReplacement]);
 
   const providerSelection = useMemo<ProviderSelectionState>(

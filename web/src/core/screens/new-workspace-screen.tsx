@@ -11,10 +11,7 @@ import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "luci
 import { Composer } from "@/composer";
 import { KeyboardTranslateView } from "@/components/keyboard-translate-view";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
-import {
-  resolveComposerAttachmentSubmitFormat,
-  splitComposerAttachmentsForSubmit,
-} from "@/composer/attachments/submit";
+import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
@@ -47,7 +44,6 @@ import {
   useHosts,
   type HostRuntimeConnectionStatus,
 } from "@/runtime/host-runtime";
-import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import type { HostProfile } from "@/types/host-connection";
 import {
   navigateToWorkspace,
@@ -91,10 +87,7 @@ import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-dr
 import type { MessagePayload } from "@/composer/types";
 import type { UserComposerAttachment } from "@/attachments/types";
 import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/protocol/messages";
-import type {
-  CreateBySpaceWorktreeInput,
-  DaemonClient,
-} from "@bytetrue/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "@/screens/new-workspace-empty";
@@ -582,7 +575,6 @@ function NewWorkspaceProjectPickerOption({
   projectIconDataByProjectViewKey,
   selectedServerId,
   isPending,
-  supportsWorkspaceMultiplicity,
 }: {
   option: ComboboxOptionType;
   selected: boolean;
@@ -592,7 +584,6 @@ function NewWorkspaceProjectPickerOption({
   projectIconDataByProjectViewKey: Map<string, string | null>;
   selectedServerId: string;
   isPending: boolean;
-  supportsWorkspaceMultiplicity: boolean;
 }) {
   const project = projectByOptionId.get(option.id);
   if (!project) return null;
@@ -608,11 +599,7 @@ function NewWorkspaceProjectPickerOption({
       description={sourceDirectory}
       selected={selected}
       active={active}
-      disabled={
-        isPending ||
-        (!supportsWorkspaceMultiplicity &&
-          !project.hosts.some((host) => host.worktreeSupport !== "unsupported"))
-      }
+      disabled={isPending}
       onPress={onPress}
     />
   );
@@ -708,18 +695,17 @@ interface WorkspaceIsolationState {
 // Preserve the user's worktree choice while route metadata is provisional. Once
 // the authoritative placement arrives, unsupported projects fall back to local.
 function useWorkspaceIsolation(input: {
-  supportsMultiplicity: boolean;
   worktreeSupport: "supported" | "unsupported" | "unknown";
   projectIsolation?: "local" | "worktree" | null;
 }): WorkspaceIsolationState {
-  const { supportsMultiplicity, worktreeSupport, projectIsolation } = input;
+  const { worktreeSupport, projectIsolation } = input;
   // Precedence: manual pick > project default (issue 068) > remembered global choice.
   // A manual in-screen pick overrides the defaults until the screen remounts.
   const { preferences, updatePreferences } = useFormPreferences();
   const [manualIsolation, setManualIsolation] = useState<"local" | "worktree" | null>(null);
   // Precedence: manual pick > project default (issue 068) > remembered global choice > local.
   const isolation = manualIsolation ?? projectIsolation ?? preferences.isolation ?? "local";
-  const canCreateWorktree = supportsMultiplicity && worktreeSupport !== "unsupported";
+  const canCreateWorktree = worktreeSupport !== "unsupported";
   const isWorktree = isolation === "worktree" && canCreateWorktree;
 
   const setIsolation = useCallback(
@@ -735,7 +721,7 @@ function useWorkspaceIsolation(input: {
     setIsolation,
     effectiveIsolation: isWorktree ? "worktree" : "local",
     canCreateWorktree,
-    showRefPicker: !supportsMultiplicity || isWorktree,
+    showRefPicker: isWorktree,
   };
 }
 
@@ -790,7 +776,6 @@ interface SubmitDraftInput {
   attachments: ComposerAttachment[];
   provider: AgentProvider;
   composerState: NewWorkspaceComposerState;
-  supportsForgeSearch: boolean;
   resolveClient: () => DaemonClient;
   isStillOnCreateScreen: () => boolean;
 }
@@ -808,30 +793,6 @@ interface WorkspaceDraftSubmissionConfig {
   featureValues: Record<string, unknown> | undefined;
   role: string | null;
   target: WorkspaceTabTarget;
-}
-
-async function createAndMergeWorkspace(input: {
-  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
-  createInput: Parameters<
-    NonNullable<ReturnType<typeof useHostRuntimeClient>>["createBySpaceWorktree"]
-  >[0];
-  mergeWorkspaces: (
-    serverId: string,
-    workspaces: ReturnType<typeof normalizeWorkspaceDescriptor>[],
-  ) => void;
-  serverId: string;
-  createFailedMessage: string;
-}): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
-  const payload = await input.client.createBySpaceWorktree(input.createInput);
-  if (payload.error || !payload.workspace) {
-    throw new Error(payload.error ?? input.createFailedMessage);
-  }
-  const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
-  const workspaceForInitialMerge = input.createInput.firstAgentContext
-    ? { ...normalizedWorkspace, status: "running" as const, statusEnteredAt: new Date() }
-    : normalizedWorkspace;
-  input.mergeWorkspaces(input.serverId, [workspaceForInitialMerge]);
-  return normalizedWorkspace;
 }
 
 async function createMultiplicityWorkspace(input: {
@@ -899,7 +860,6 @@ interface CreateChatAgentInput {
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   draftId?: string;
   draftContextScopeKey: string | null;
-  supportsForgeSearch: boolean;
   resolveClient: () => DaemonClient;
   isStillOnCreateScreen: () => boolean;
   labels: {
@@ -970,12 +930,7 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOu
   if (!provider) {
     throw new Error(input.labels.selectModel);
   }
-  const attachmentSubmitFormat = resolveComposerAttachmentSubmitFormat({
-    supportsForgeAttachments: input.supportsForgeSearch,
-  });
-  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments, {
-    format: attachmentSubmitFormat,
-  });
+  const { attachments: reviewAttachments } = splitComposerAttachmentsForSubmit(attachments);
   const workspaceNamingAttachments = getWorkspaceNamingAttachments(reviewAttachments);
   const ensuredWorkspace = await ensureWorkspace({
     cwd,
@@ -1003,7 +958,6 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOu
     attachments,
     provider,
     composerState,
-    supportsForgeSearch: input.supportsForgeSearch,
     resolveClient: input.resolveClient,
     isStillOnCreateScreen: input.isStillOnCreateScreen,
   });
@@ -1086,11 +1040,7 @@ async function submitWorkspaceDraft(input: SubmitDraftInput): Promise<SubmitOutc
   const draftId = draftIdInput?.trim() || generateDraftId();
   const clientMessageId = generateMessageId();
   const timestamp = Date.now();
-  const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
-    format: resolveComposerAttachmentSubmitFormat({
-      supportsForgeAttachments: input.supportsForgeSearch,
-    }),
-  });
+  const wirePayload = splitComposerAttachmentsForSubmit(attachments);
   const submission = resolveWorkspaceDraftSubmissionConfig({
     draftId,
     workspaceDirectory,
@@ -1169,7 +1119,6 @@ function useNewWorkspaceHostSelector(input: {
   projects: HostProjectListItem[];
   lastActiveProject: HostProjectListItem | null;
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
-  workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
   pinnedServerId: string | null;
   localServerId: string | null;
 }) {
@@ -1182,7 +1131,6 @@ function useNewWorkspaceHostSelector(input: {
         lastActiveProject: input.lastActiveProject,
         projects: input.projects,
         hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
-        workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
         pinnedServerId: input.pinnedServerId,
         localServerId: input.localServerId,
       }),
@@ -1192,7 +1140,6 @@ function useNewWorkspaceHostSelector(input: {
       input.initialServerId,
       input.lastActiveProject,
       input.projects,
-      input.workspaceMultiplicityByServerId,
       input.pinnedServerId,
       input.localServerId,
     ],
@@ -1217,7 +1164,6 @@ function useNewWorkspaceHostSelector(input: {
               lastActiveProject: input.lastActiveProject,
               projects: input.projects,
               hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
-              workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
               pinnedServerId: input.pinnedServerId,
               localServerId: input.localServerId,
               currentServerId: current.serverId,
@@ -1238,7 +1184,6 @@ function useNewWorkspaceHostSelector(input: {
     input.initialServerId,
     input.lastActiveProject,
     input.projects,
-    input.workspaceMultiplicityByServerId,
     input.pinnedServerId,
     input.localServerId,
     routeServerId,
@@ -1343,7 +1288,6 @@ function useNewWorkspaceInitialContext({
     [lastWorkspace, lastWorkspaceServerId],
   );
   const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(allServerIds);
-  const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
   const localServerId = useLocalDaemonServerId();
   const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
   // The settings screen writes the pin under the cross-host view key from the project list. A
@@ -1375,7 +1319,6 @@ function useNewWorkspaceInitialContext({
     projects,
     lastActiveProject,
     hostConnectionStatusByServerId,
-    workspaceMultiplicityByServerId,
     pinnedServerId,
     localServerId,
   });
@@ -1736,9 +1679,6 @@ export function NewWorkspaceScreen({
     }),
     [defaultBaseBranchByProject, newWorkspaceIsolationByProject, pinViewKey],
   );
-  // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
-  const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
-  const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
@@ -1817,7 +1757,6 @@ export function NewWorkspaceScreen({
     routeProject,
     routeProjectContextViewKey,
     lastActiveProject,
-    allowAllProjects: supportsWorkspaceMultiplicity,
   });
 
   // Host options: a pinned project (manual pick or routed context) only offers
@@ -1909,11 +1848,7 @@ export function NewWorkspaceScreen({
     : "unsupported";
   const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
   const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
-    useWorkspaceIsolation({
-      supportsMultiplicity: supportsWorkspaceMultiplicity,
-      worktreeSupport,
-      projectIsolation,
-    });
+    useWorkspaceIsolation({ worktreeSupport, projectIsolation });
 
   const branchSuggestionsQuery = useQuery({
     queryKey: [
@@ -1968,7 +1903,6 @@ export function NewWorkspaceScreen({
     cwd: selectedSourceDirectory ?? "",
     query: debouncedPickerSearchQuery,
     kinds: ["change_request"],
-    supportsForgeSearch,
     enabled: pickerQueryEnabled,
   });
 
@@ -2176,36 +2110,6 @@ export function NewWorkspaceScreen({
     setProjectPickerOpen(nextOpen);
   }, []);
 
-  const buildCreateWorktreeInput = useCallback(
-    (input: {
-      cwd: string;
-      prompt: string;
-      attachments: AgentAttachment[];
-      checkoutRequest: PickerCheckoutRequest | undefined;
-    }): CreateBySpaceWorktreeInput => {
-      if (!selectedProject) {
-        throw new Error("Choose a project");
-      }
-      if (!selectedSourceDirectory) {
-        throw new Error("Choose a host for this project");
-      }
-      const firstAgentContext = buildFirstAgentContext(input);
-      const hostProjectId = getHostProjectId(selectedProject, selectedServerId);
-      if (!hostProjectId) {
-        throw new Error("Project is not available on the selected host");
-      }
-
-      return {
-        cwd: selectedSourceDirectory,
-        projectId: hostProjectId,
-        worktreeSlug: createNameId(),
-        ...(firstAgentContext ? { firstAgentContext } : {}),
-        ...input.checkoutRequest,
-      };
-    },
-    [selectedProject, selectedServerId, selectedSourceDirectory],
-  );
-
   const ensureWorkspace = useCallback(
     async (input: {
       cwd: string;
@@ -2223,7 +2127,7 @@ export function NewWorkspaceScreen({
         throw new Error("Choose a host for this project");
       }
       const connectedClient = withConnectedClient();
-      const createsWorktree = !supportsWorkspaceMultiplicity || effectiveIsolation === "worktree";
+      const createsWorktree = effectiveIsolation === "worktree";
       const checkoutStatusForCreate = createsWorktree
         ? await ensureCheckoutStatus({
             queryClient,
@@ -2241,32 +2145,23 @@ export function NewWorkspaceScreen({
             }),
           )
         : undefined;
-      const normalizedWorkspace = supportsWorkspaceMultiplicity
-        ? await createMultiplicityWorkspace({
-            client: connectedClient,
-            isolation: effectiveIsolation,
-            project: selectedProject,
-            sourceDirectory: selectedSourceDirectory,
-            checkoutRequest,
-            withInitialAgent: input.withInitialAgent,
-            prompt: input.prompt,
-            attachments: input.attachments,
-            mergeWorkspaces,
-            serverId: selectedServerId,
-            createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
-          })
-        : await createAndMergeWorkspace({
-            client: connectedClient,
-            createInput: buildCreateWorktreeInput({ ...input, checkoutRequest }),
-            mergeWorkspaces,
-            serverId: selectedServerId,
-            createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
-          });
+      const normalizedWorkspace = await createMultiplicityWorkspace({
+        client: connectedClient,
+        isolation: effectiveIsolation,
+        project: selectedProject,
+        sourceDirectory: selectedSourceDirectory,
+        checkoutRequest,
+        withInitialAgent: input.withInitialAgent,
+        prompt: input.prompt,
+        attachments: input.attachments,
+        mergeWorkspaces,
+        serverId: selectedServerId,
+        createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
+      });
       setCreatedWorkspace(normalizedWorkspace);
       return normalizedWorkspace;
     },
     [
-      buildCreateWorktreeInput,
       createdWorkspace,
       effectiveIsolation,
       mergeWorkspaces,
@@ -2276,7 +2171,6 @@ export function NewWorkspaceScreen({
       selectedProject,
       selectedServerId,
       selectedSourceDirectory,
-      supportsWorkspaceMultiplicity,
       t,
       withConnectedClient,
     ],
@@ -2322,7 +2216,6 @@ export function NewWorkspaceScreen({
           draftKey,
           draftId,
           draftContextScopeKey,
-          supportsForgeSearch,
           resolveClient: withConnectedClient,
           isStillOnCreateScreen,
           labels: {
@@ -2351,7 +2244,6 @@ export function NewWorkspaceScreen({
       isStillOnCreateScreen,
       launchTarget,
       selectedServerId,
-      supportsForgeSearch,
       t,
       toast,
       updateFormPreferences,
@@ -2456,16 +2348,9 @@ export function NewWorkspaceScreen({
         projectIconDataByProjectViewKey={projectIconDataByProjectViewKey}
         selectedServerId={selectedServerId}
         isPending={isPending}
-        supportsWorkspaceMultiplicity={supportsWorkspaceMultiplicity}
       />
     ),
-    [
-      isPending,
-      projectByOptionId,
-      projectIconDataByProjectViewKey,
-      selectedServerId,
-      supportsWorkspaceMultiplicity,
-    ],
+    [isPending, projectByOptionId, projectIconDataByProjectViewKey, selectedServerId],
   );
 
   const contentLayout = getContentLayout({ isCompact });

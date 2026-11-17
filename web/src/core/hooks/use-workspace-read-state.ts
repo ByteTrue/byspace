@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import { i18n } from "@/i18n/i18next";
-import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
@@ -57,9 +56,8 @@ export function useWorkspaceReadState({
   workspaceId: string;
 }): WorkspaceReadStateController {
   const status = useWorkspaceFields(serverId, workspaceId, (workspace) => workspace.status);
-  const supportsMarkUnread = useHostFeature(serverId, "workspaceMarkUnread");
   const hasClearableAttention = status === "attention" || status === "failed";
-  const offersMarkUnread = supportsMarkUnread && status === "done";
+  const offersMarkUnread = status === "done";
   const hasMarkableAgent = useSessionStore(
     (state) =>
       offersMarkUnread && workspaceHasMarkableAgent(state.sessions[serverId]?.agents, workspaceId),

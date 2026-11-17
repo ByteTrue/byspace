@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 describe("selectSubagentsForParent", () => {
-  it("hides cached provider children when the host does not support them", () => {
+  it("selects cached provider children with their subtitle", () => {
     useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
       kind: "upsert",
       subagent: {
@@ -91,16 +91,12 @@ describe("selectSubagentsForParent", () => {
     const params = { serverId: SERVER_ID, parentAgentId: "parent-a" };
 
     expect(
-      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), params, false),
-    ).toEqual([]);
-    expect(
-      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), params, true).map(
+      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), params).map(
         (row) => row.id,
       ),
     ).toEqual(["provider-child"]);
     expect(
-      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), params, true)[0]
-        ?.subtitle,
+      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), params)[0]?.subtitle,
     ).toBe("Codex worker · 4.2k tokens");
   });
 
@@ -123,11 +119,10 @@ describe("selectSubagentsForParent", () => {
     store.hideFromTrack(SERVER_ID, "parent-a", ["provider-child"]);
 
     expect(
-      selectProviderSubagentsForParent(
-        useProviderSubagentStore.getState(),
-        { serverId: SERVER_ID, parentAgentId: "parent-a" },
-        true,
-      ),
+      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), {
+        serverId: SERVER_ID,
+        parentAgentId: "parent-a",
+      }),
     ).toEqual([]);
     expect(useProviderSubagentStore.getState().descriptors.size).toBe(1);
   });
@@ -159,24 +154,17 @@ describe("selectSubagentsForParent", () => {
     });
 
     expect(
-      selectProviderSubagentsForParent(
-        useProviderSubagentStore.getState(),
-        { serverId: SERVER_ID, parentAgentId: "parent-a" },
-        true,
-        true,
-      ).map((row) => row.id),
+      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), {
+        serverId: SERVER_ID,
+        parentAgentId: "parent-a",
+      }).map((row) => row.id),
     ).toEqual(["direct"]);
     expect(
-      selectProviderSubagentsForParent(
-        useProviderSubagentStore.getState(),
-        {
-          serverId: SERVER_ID,
-          parentAgentId: "parent-a",
-          providerParentSubagentId: "direct",
-        },
-        true,
-        true,
-      ).map((row) => row.id),
+      selectProviderSubagentsForParent(useProviderSubagentStore.getState(), {
+        serverId: SERVER_ID,
+        parentAgentId: "parent-a",
+        providerParentSubagentId: "direct",
+      }).map((row) => row.id),
     ).toEqual(["nested"]);
   });
 

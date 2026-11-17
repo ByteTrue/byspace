@@ -9,10 +9,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { useToast } from "@/contexts/toast-context";
 import { useHosts, getHostRuntimeStore } from "@/runtime/host-runtime";
-import {
-  getCurrentProjectRemoveReadinessForTargets,
-  removeProjectFromHosts,
-} from "@/projects/project-remove";
+import { removeProjectFromHosts } from "@/projects/project-remove";
 
 export interface ProjectRemoveModalHostItem {
   serverId: string;
@@ -97,16 +94,8 @@ export function ProjectRemoveModal({
     async (host: ProjectRemoveModalHostItem) => {
       setPendingServerId(host.serverId);
       try {
-        const readiness = getCurrentProjectRemoveReadinessForTargets([
-          { serverId: host.serverId, projectId: host.projectId },
-        ]);
-        if (readiness.kind === "needs_host_update") {
-          toast.error(t("sidebar.project.toasts.updateHostToRemove"));
-          return;
-        }
-
         const outcome = await removeProjectFromHosts({
-          targets: readiness.targets,
+          targets: [{ serverId: host.serverId, projectId: host.projectId }],
           getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
         });
 
@@ -133,16 +122,8 @@ export function ProjectRemoveModal({
   const handleRemoveAllHosts = useCallback(async () => {
     setPendingServerId("all");
     try {
-      const readiness = getCurrentProjectRemoveReadinessForTargets(
-        hosts.map((host) => ({ serverId: host.serverId, projectId: host.projectId })),
-      );
-      if (readiness.kind === "needs_host_update") {
-        toast.error(t("sidebar.project.toasts.updateHostToRemove"));
-        return;
-      }
-
       const outcome = await removeProjectFromHosts({
-        targets: readiness.targets,
+        targets: hosts.map((host) => ({ serverId: host.serverId, projectId: host.projectId })),
         getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
       });
 

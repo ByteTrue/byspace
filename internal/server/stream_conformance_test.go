@@ -77,12 +77,176 @@ func writeFaithfulFakePi(t *testing.T) string {
 	return path
 }
 
+// streamFrame is one agent_stream event as the conformance tests observe it.
+type streamFrame struct {
+	seq     int
+	kind    string
+	item    map[string]any
+	payload map[string]any
+}
+
+// subscribeTimelineAndWait mirrors the real client: agent_stream is scoped to the socket's
+// viewed-agent set, so a test that reads stream events must subscribe to the created agent.
+// It drains frames until the agent_created status, subscribes to that agent, then fetches the
+// timeline — the submitted prompt row is broadcast before agent_created, so like the app
+// (use-agent-initialization) it is recovered from the fetch, not the stream. Stream frames that
+// arrive while waiting for the fetch response are accumulated, not discarded, so the caller
+// loses no events. Returns the agent id, the fetched timeline rows, and the early stream frames.
+func subscribeTimelineAndWait(t *testing.T, ctx context.Context, ws *websocket.Conn) (string, []map[string]any, []streamFrame) {
+	t.Helper()
+	return subscribeTimeline(t, ctx, ws, true)
+}
+
+// subscribeTimelineOnly subscribes without fetching the timeline. A fetch calls ensureAgentLoaded,
+// which rebuilds a runtime that has just died — a test that asserts the dead runtime is dropped
+// must not fetch, or it would resurrect exactly what it is checking was released.
+func subscribeTimelineOnly(t *testing.T, ctx context.Context, ws *websocket.Conn) (string, []streamFrame) {
+	t.Helper()
+	agentID, _, early := subscribeTimeline(t, ctx, ws, false)
+	return agentID, early
+}
+
+// createdAgentSnapshot holds the agent snapshot from the most recent agent_created status the
+// subscribe helper observed. The running agent_update is broadcast at turn start, before
+// agent_created, so a test that subscribes after creation reads the live status from here.
+var createdAgentSnapshot map[string]any
+
+func subscribeTimeline(t *testing.T, ctx context.Context, ws *websocket.Conn, fetch bool) (string, []map[string]any, []streamFrame) {
+	t.Helper()
+	created := readUntilSessionType(t, ctx, ws, "status", "agent_created")
+	agentID, _ := created["agentId"].(string)
+	if agentID == "" {
+		t.Fatal("agent_created carried no agentId")
+	}
+	createdAgentSnapshot, _ = created["agent"].(map[string]any)
+	sub, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "agent.timeline.set_subscription.request",
+			"requestId": "sub_" + agentID,
+			"agentIds":  []string{agentID},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, sub); err != nil {
+		t.Fatal(err)
+	}
+
+	var early []streamFrame
+	parseFrame := func(data []byte) {
+		var env struct {
+			Type    string `json:"type"`
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil || env.Type != "session" {
+			return
+		}
+		if env.Message.Type == "agent_stream" {
+			event, _ := env.Message.Payload["event"].(map[string]any)
+			if event == nil {
+				return
+			}
+			kind, _ := event["type"].(string)
+			item, _ := event["item"].(map[string]any)
+			seq := 0
+			if raw, ok := env.Message.Payload["seq"].(float64); ok {
+				seq = int(raw)
+			}
+			early = append(early, streamFrame{seq: seq, kind: kind, item: item, payload: env.Message.Payload})
+		}
+	}
+
+	if !fetch {
+		// Wait for the subscription to land, accumulating stream frames that arrive first so the
+		// caller loses no events (the dying provider's turn_failed races the handshake).
+		for {
+			_, data, err := ws.Read(ctx)
+			if err != nil {
+				t.Fatalf("read waiting for set_subscription.response: %v", err)
+			}
+			var probe struct {
+				Type    string `json:"type"`
+				Message struct {
+					Type string `json:"type"`
+				} `json:"message"`
+			}
+			parseFrame(data)
+			if json.Unmarshal(data, &probe) == nil && probe.Type == "session" &&
+				probe.Message.Type == "agent.timeline.set_subscription.response" {
+				break
+			}
+		}
+		return agentID, nil, early
+	}
+
+	fetchReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "fetch_agent_timeline_request",
+			"requestId": "fetch_" + agentID,
+			"agentId":   agentID,
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, fetchReq); err != nil {
+		t.Fatal(err)
+	}
+
+	var resp map[string]any
+	for {
+		_, data, err := ws.Read(ctx)
+		if err != nil {
+			t.Fatalf("read waiting for fetch_agent_timeline_response: %v", err)
+		}
+		var env struct {
+			Type    string `json:"type"`
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil || env.Type != "session" {
+			continue
+		}
+		if env.Message.Type == "fetch_agent_timeline_response" {
+			resp = env.Message.Payload
+			break
+		}
+		parseFrame(data)
+	}
+	rawRows, _ := resp["entries"].([]any)
+	rows := make([]map[string]any, 0, len(rawRows))
+	for _, raw := range rawRows {
+		if row, ok := raw.(map[string]any); ok {
+			rows = append(rows, row)
+		}
+	}
+	return agentID, rows, early
+}
+
 // TestStreamConformanceMultiStepTurn locks in the invariants the browser relies on but that
 // no schema validation can catch: token-level streaming, single turn completion, monotonic
 // sequence numbers, one user bubble per prompt, and idle only at the real end of the turn.
 func TestStreamConformanceMultiStepTurn(t *testing.T) {
 	tmp := t.TempDir()
 	fakePi := writeFaithfulFakePi(t)
+	// The faithful script emits the whole turn in one burst, faster than the client can subscribe.
+	// Pace the second step's deltas so the turn is still running when the subscription lands — the
+	// test must observe a running agent_update and stream the deltas live, not recover them from a
+	// fetch after the turn already finished.
+	if runtime.GOOS != "windows" {
+		raw, readErr := os.ReadFile(fakePi)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		paced := strings.ReplaceAll(string(raw),
+			`echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta"`,
+			`sleep 0.15; echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta"`)
+		if writeErr := os.WriteFile(fakePi, []byte(paced), 0o755); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+	}
 	workDir := filepath.Join(tmp, "project")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -125,6 +289,7 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
+	_, initialRows, earlyFrames := subscribeTimelineAndWait(t, ctx, ws)
 
 	type streamEvent struct {
 		seq     int
@@ -143,6 +308,41 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 		statuses      []string
 		idleAfterDone bool
 	)
+
+	// The running agent_update is broadcast at turn start, before agent_created, so the subscribe
+	// helper drains past it. The agent_created snapshot carries the live status — seed it so the
+	// running→idle transition is observed even though the turn began before the subscription.
+	if createdAgentSnapshot != nil {
+		if status, ok := createdAgentSnapshot["status"].(string); ok {
+			statuses = append(statuses, status)
+		}
+	}
+
+	// Stream frames that arrived during the subscribe/fetch handshake are part of the turn too.
+	for _, f := range earlyFrames {
+		events = append(events, streamEvent{seq: f.seq, kind: f.kind, item: f.item})
+		switch f.kind {
+		case "turn_completed":
+			turnCompleted++
+		case "timeline":
+			itemType, _ := f.item["type"].(string)
+			switch itemType {
+			case "user_message":
+				userMessages++
+				if cid, ok := f.item["clientMessageId"].(string); ok {
+					userClientID = cid
+				}
+			case "reasoning":
+				sawReasoning = true
+			case "tool_call":
+				sawToolCall = true
+			case "assistant_message":
+				if text, ok := f.item["text"].(string); ok && text != "" {
+					textDeltas = append(textDeltas, text)
+				}
+			}
+		}
+	}
 
 	deadline := time.Now().Add(12 * time.Second)
 	for time.Now().Before(deadline) {
@@ -219,6 +419,29 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 		// Keep draining after turn_completed: the terminal snapshot arrives behind it.
 		if idleAfterDone {
 			break
+		}
+	}
+
+	// The fake provider runs the whole turn before the subscribe/fetch handshake completes, so the
+	// timeline content (prompt row, reasoning, tool call, assistant text) is recovered from the
+	// initial fetch — exactly what the app does via use-agent-initialization. Inspect the rows.
+	for _, row := range initialRows {
+		item, _ := row["item"].(map[string]any)
+		itemType, _ := item["type"].(string)
+		switch itemType {
+		case "user_message":
+			userMessages++
+			if cid, ok := item["clientMessageId"].(string); ok {
+				userClientID = cid
+			}
+		case "reasoning":
+			sawReasoning = true
+		case "tool_call":
+			sawToolCall = true
+		case "assistant_message":
+			if text, ok := item["text"].(string); ok && text != "" {
+				textDeltas = append(textDeltas, text)
+			}
 		}
 	}
 
@@ -338,9 +561,17 @@ esac
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
+	agentID, earlyFrames := subscribeTimelineOnly(t, ctx, ws)
 
-	var agentID string
 	var sawTurnFailed, sawTurnCompleted bool
+	for _, f := range earlyFrames {
+		switch f.kind {
+		case "turn_failed":
+			sawTurnFailed = true
+		case "turn_completed":
+			sawTurnCompleted = true
+		}
+	}
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) {
 		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
@@ -386,12 +617,21 @@ esac
 		t.Fatal("provider died mid-turn but no turn_failed was emitted; the client would wait forever")
 	}
 
-	// The dead runtime must be gone, otherwise the next prompt writes into a closed pipe.
-	srv.mu.Lock()
-	_, stillRegistered := srv.agents[agentID]
-	srv.mu.Unlock()
-	if stillRegistered {
-		t.Fatal("dead provider runtime is still registered; the next send would fail silently")
+	// The dead runtime must be gone, otherwise the next prompt writes into a closed pipe. The
+	// deletion races with the turn_failed broadcast, so poll until it lands.
+	deadlineDrop := time.Now().Add(3 * time.Second)
+	for {
+		srv.mu.Lock()
+		mp, stillRegistered := srv.agents[agentID]
+		srv.mu.Unlock()
+		if !stillRegistered {
+			break
+		}
+		if time.Now().After(deadlineDrop) {
+			t.Logf("DEBUG agentID=%s sawTurnFailed=%v mp.record.LastStatus=%s", agentID, sawTurnFailed, mp.record.LastStatus)
+			t.Fatal("dead provider runtime is still registered; the next send would fail silently")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
@@ -468,6 +708,7 @@ done
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
+	subscribeTimelineAndWait(t, ctx, ws)
 
 	waitTurnCompleted := func(label string) string {
 		t.Helper()

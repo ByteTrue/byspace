@@ -258,7 +258,9 @@ describe("useComposerForgeAutoAttach", () => {
   it("does not add a second pill when the ref is already attached", async () => {
     vi.useFakeTimers();
     const client = createSearchClient([pr101]);
-    const initialAttachments: UserComposerAttachment[] = [{ kind: "github_pr", item: pr101 }];
+    const initialAttachments: UserComposerAttachment[] = [
+      { kind: "forge_change_request", item: pr101 },
+    ];
     const { result } = renderHook(() => useHarness(client, { initialAttachments }), {
       wrapper: createWrapper(),
     });
@@ -276,7 +278,9 @@ describe("useComposerForgeAutoAttach", () => {
   it("does not re-add a GitHub ref removed earlier in the same composer session", async () => {
     vi.useFakeTimers();
     const client = createSearchClient([pr101]);
-    const initialAttachments: UserComposerAttachment[] = [{ kind: "github_pr", item: pr101 }];
+    const initialAttachments: UserComposerAttachment[] = [
+      { kind: "forge_change_request", item: pr101 },
+    ];
     const { result } = renderHook(() => useHarness(client, { initialAttachments }), {
       wrapper: createWrapper(),
     });

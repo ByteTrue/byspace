@@ -1,10 +1,6 @@
 export interface AddProjectHost {
   serverId: string;
   label: string;
-  canAddProject: boolean;
-  canCloneGithubRepositories: boolean;
-  canSearchGithubRepositories: boolean;
-  canCreateDirectory: boolean;
 }
 
 export interface GithubRepositoryChoice {

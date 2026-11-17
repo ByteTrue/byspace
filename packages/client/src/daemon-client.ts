@@ -1,14 +1,8 @@
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
 import type { SessionEventSubscription } from "@bytetrue/protocol/messages";
-import {
-  ConnectionSubscriptions,
-  DEFAULT_CLIENT_CAPABILITIES,
-  type TimelineSubscription,
-} from "./connection/index.js";
+import { ConnectionSubscriptions, type TimelineSubscription } from "./connection/index.js";
 import type { z } from "zod";
-import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@bytetrue/protocol/agent-attention-notification";
-import { parsePluginSourceReference } from "@bytetrue/protocol/plugin-source-reference";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -40,7 +34,6 @@ import type {
   FileWriteResult,
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
-  GitSetupOptions,
   CheckoutStatusResponse,
   CheckoutCommit,
   ParsedDiffFile,
@@ -54,9 +47,7 @@ import type {
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
   CheckoutForgeSetAutoMergeResponse,
-  CheckoutGithubSetAutoMergeResponse,
   CheckoutForgeGetCheckDetailsResponse,
-  CheckoutGithubGetCheckDetailsResponse,
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
   CheckoutSwitchBranchResponse,
@@ -67,13 +58,10 @@ import type {
   BranchSuggestionsResponse,
   ForgeSearchResponse,
   ForgeSearchRequest,
-  GitHubSearchResponse,
-  GitHubSearchRequest,
   DirectorySuggestionsResponse,
   BySpaceWorktreeListResponse,
   BySpaceWorktreeArchiveResponse,
   ProjectIconSource,
-  ProjectIconResponse,
   ProjectIconGetResponse,
   ProjectAddResponse,
   ProjectCreateDirectoryResponse,
@@ -91,11 +79,9 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
-  ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
-  DaemonPermission,
   TunnelOpenResponse,
   TunnelListResponse,
   TunnelCreateResponse,
@@ -117,15 +103,10 @@ import type {
   BySpaceConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
-  PluginListItem,
-  PluginLogEntry,
-  PluginSourceStatusItem,
-  PluginSourceUpdateItem,
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
   AgentSkillTargets,
-  HubRelationshipStatus,
   HostSyncRecord,
   HostSyncChange,
   HostSyncExchangeResponse,
@@ -170,7 +151,6 @@ import {
 } from "./daemon-client-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
-  normalizeListProviderModelsPayload,
   normalizeProviderSnapshotUpdateMessage,
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
@@ -369,7 +349,6 @@ export interface DaemonClientConfig {
   runtimeMetricsIntervalMs?: number;
   runtimeMetricsWindowMs?: number;
   trace?: DaemonClientTrace;
-  capabilities?: Partial<Record<ClientCapability, unknown>>;
 }
 
 export interface DaemonClientTrace {
@@ -408,11 +387,10 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   outputSchema?: Record<string, unknown>;
   images?: CreateAgentRequestMessage["images"];
   attachments?: CreateAgentRequestMessage["attachments"];
-  git?: GitSetupOptions;
   worktree?: CreateAgentRequestMessage["worktree"];
   autoArchive?: CreateAgentRequestMessage["autoArchive"];
-  // COMPAT(createAgentWorktree): low-level old callers may still send the
-  // create-agent worktree field. Added in v0.2.0; remove after 2027-01-17.
+  // Simple form of a BySpace-owned worktree for this agent; the structured
+  // `worktree` field above is the one the UI sends.
   worktreeName?: string;
   requestId?: string;
   labels?: Record<string, string>;
@@ -427,7 +405,6 @@ export interface CreateBySpaceWorktreeInput extends Pick<
   | "refName"
   | "action"
   | "checkoutSource"
-  | "githubPrNumber"
 > {}
 
 type CheckoutStatusPayload = CheckoutStatusResponse["payload"];
@@ -445,9 +422,7 @@ type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
 type CheckoutForgeSetAutoMergePayload = CheckoutForgeSetAutoMergeResponse["payload"];
-type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
 type CheckoutForgeGetCheckDetailsPayload = CheckoutForgeGetCheckDetailsResponse["payload"];
-type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsResponse["payload"];
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
 type CheckoutSwitchBranchPayload = CheckoutSwitchBranchResponse["payload"];
@@ -458,7 +433,6 @@ type StashListPayload = StashListResponse["payload"];
 type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
 type ForgeSearchPayload = ForgeSearchResponse["payload"];
-type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
 type BySpaceWorktreeListPayload = BySpaceWorktreeListResponse["payload"];
 type BySpaceWorktreeArchivePayload = BySpaceWorktreeArchiveResponse["payload"];
@@ -499,7 +473,6 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
-type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -528,7 +501,6 @@ interface ListCommandsOptions {
   requestId?: string;
   draftConfig?: ListCommandsDraftConfig;
 }
-type LegacyListCommandsOptions = Omit<ListCommandsOptions, "agentId">;
 type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 type CreateTerminalPayload = CreateTerminalResponse["payload"];
@@ -587,7 +559,6 @@ export interface FetchAgentOptions {
   requestId?: string;
   timeout?: number;
 }
-type LegacyFetchAgentOptions = Omit<FetchAgentOptions, "agentId">;
 export interface FetchAgentTimelineOptions {
   direction?: FetchAgentTimelineDirection;
   cursor?: FetchAgentTimelineCursor;
@@ -619,33 +590,6 @@ export interface FetchProviderSubagentTimelineOptions {
   timeout?: number;
 }
 
-// COMPAT(daemon-client-object-options): added in v0.1.102; remove after
-// 2026-12-29 once SDK callers have migrated to object parameters.
-function normalizeFetchAgentOptions(
-  input: FetchAgentOptions | string,
-  legacyOptions?: LegacyFetchAgentOptions | string,
-): FetchAgentOptions {
-  if (typeof input !== "string") {
-    return input;
-  }
-  if (typeof legacyOptions === "string") {
-    return { agentId: input, requestId: legacyOptions };
-  }
-  return { agentId: input, ...legacyOptions };
-}
-
-function normalizeListCommandsOptions(
-  input: ListCommandsOptions | string,
-  legacyOptions?: LegacyListCommandsOptions | string,
-): ListCommandsOptions {
-  if (typeof input !== "string") {
-    return input;
-  }
-  if (typeof legacyOptions === "string") {
-    return { agentId: input, requestId: legacyOptions };
-  }
-  return { agentId: input, ...legacyOptions };
-}
 export interface AgentForkContextOptions {
   boundaryCursor?: FetchAgentTimelineCursor;
   boundaryMessageId?: string;
@@ -903,28 +847,6 @@ type CorrelatedResponsePayload<TType extends CorrelatedResponseType> = Extract<
   CorrelatedResponseMessage,
   { type: TType }
 >["payload"];
-type NormalizedHubRelationshipStatus = Omit<HubRelationshipStatus, "permissions"> & {
-  permissions: DaemonPermission[];
-};
-
-// COMPAT(semanticHubPermissions): normalize legacy scope responses at the client boundary until 2027-09-15.
-function normalizeHubRelationshipResponse<
-  T extends { requestId: string; status: HubRelationshipStatus },
->(payload: T): Omit<T, "status"> & { status: NormalizedHubRelationshipStatus } {
-  let permissions: DaemonPermission[];
-  if (payload.status.permissions) {
-    permissions = [...payload.status.permissions];
-  } else if (payload.status.scopes?.includes("hub.execution.*")) {
-    permissions = ["hub.execute"];
-  } else {
-    permissions = [];
-  }
-  return {
-    ...payload,
-    status: { ...payload.status, permissions },
-  };
-}
-
 class DaemonRpcError extends Error {
   readonly requestId: string;
   readonly requestType?: string;
@@ -1622,26 +1544,9 @@ export class DaemonClient {
   onAgentAttentionRequired(
     handler: (notification: AgentAttentionRequiredNotification) => void,
   ): () => void {
-    const unsubscribeLegacy = this.on("agent_stream", (message) => {
-      if (message.payload.event.type !== "attention_required") {
-        return;
-      }
-      const event = message.payload.event;
-      handler({
-        agentId: message.payload.agentId,
-        reason: event.reason,
-        timestamp: event.timestamp,
-        shouldNotify: event.shouldNotify,
-        ...(event.notification ? { notification: event.notification } : {}),
-      });
-    });
-    const unsubscribeDedicated = this.on("agent_attention_required", (message) => {
+    return this.on("agent_attention_required", (message) => {
       handler(message.payload);
     });
-    return () => {
-      unsubscribeLegacy();
-      unsubscribeDedicated();
-    };
   }
 
   // ============================================================================
@@ -2542,17 +2447,7 @@ export class DaemonClient {
     });
   }
 
-  async fetchAgent(options: FetchAgentOptions): Promise<FetchAgentResult | null>;
-  async fetchAgent(agentId: string, requestId?: string): Promise<FetchAgentResult | null>;
-  async fetchAgent(
-    agentId: string,
-    options?: LegacyFetchAgentOptions,
-  ): Promise<FetchAgentResult | null>;
-  async fetchAgent(
-    input: FetchAgentOptions | string,
-    legacyOptions?: LegacyFetchAgentOptions | string,
-  ): Promise<FetchAgentResult | null> {
-    const options = normalizeFetchAgentOptions(input, legacyOptions);
+  async fetchAgent(options: FetchAgentOptions): Promise<FetchAgentResult | null> {
     const resolvedRequestId = this.createRequestId(options.requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "fetch_agent_request",
@@ -2635,7 +2530,6 @@ export class DaemonClient {
   // ============================================================================
 
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
-    if (options.idempotencyKey !== undefined) this.requireAgentRequestReceipts();
     const requestId = this.createRequestId(options.requestId);
     const config = resolveAgentConfig(options);
 
@@ -2654,7 +2548,6 @@ export class DaemonClient {
       ...(options.attachments && options.attachments.length > 0
         ? { attachments: options.attachments }
         : {}),
-      ...(options.git ? { git: options.git } : {}),
       ...(options.worktree ? { worktree: options.worktree } : {}),
       ...(options.autoArchive !== undefined ? { autoArchive: options.autoArchive } : {}),
       ...(options.worktreeName ? { worktreeName: options.worktreeName } : {}),
@@ -2689,13 +2582,6 @@ export class DaemonClient {
     return status.agent;
   }
 
-  private requireAgentRequestReceipts(): void {
-    // COMPAT(agentRequestReceipts): added in v0.7.3; remove gate after 2027-03-05.
-    if (this.lastServerInfoMessage?.features?.agentRequestReceipts !== true) {
-      throw new Error("Update the host to use retry-safe agent creation.");
-    }
-  }
-
   async deleteAgent(agentId: string): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
@@ -2716,6 +2602,52 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    });
+  }
+
+  async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.get_status.request", requestId },
+      responseType: "agent.skills.get_status.response",
+    });
+  }
+
+  async reconcileAgentSkills(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.reconcile.request", requestId },
+      responseType: "agent.skills.reconcile.response",
+    });
+  }
+
+  async uninstallAgentSkills(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.uninstall.request", requestId },
+      responseType: "agent.skills.uninstall.response",
+    });
+  }
+
+  /**
+   * Omitting `targets` keeps whatever the daemon already stores, which is how a
+   * caller that predates install targets avoids narrowing the install to none.
+   */
+  async saveAgentSkillsSelection(
+    selection: AgentSkillSelection,
+    targets?: AgentSkillTargets,
+    confirmedRemovals?: readonly string[],
+  ): Promise<AgentSkillsSaveResult> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "agent.skills.save_selection.request",
+        requestId,
+        selection,
+        ...(targets ? { targets: [...targets] } : {}),
+        ...(confirmedRemovals ? { confirmedRemovals: [...confirmedRemovals] } : {}),
+      },
+      responseType: "agent.skills.save_selection.response",
     });
   }
 
@@ -3043,19 +2975,6 @@ export class DaemonClient {
     return payload;
   }
 
-  async appendAgentTimelineItem(
-    agentId: string,
-    item: Omit<import("@bytetrue/protocol/agent-types").PluginTimelineItem, "pluginId">,
-  ): Promise<{ seq: number; epoch: string }> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "agent.timeline.append.request", requestId, agentId, item },
-      responseType: "agent.timeline.append.response",
-    });
-    return { seq: payload.seq, epoch: payload.epoch };
-  }
-
   async listAgentTimelinePrompts(
     agentId: string,
     options: { requestId?: string; timeout?: number } = {},
@@ -3192,12 +3111,6 @@ export class DaemonClient {
 
   private async sendEventSubscription(events: SessionEventSubscription[]): Promise<void> {
     if (this.connectionState.status !== "connected") return;
-    // COMPAT(explicitEventSubscriptions): added in v0.8.0, remove legacy broadcast handling after 2027-03-08.
-    if (
-      !this.lastServerInfoMessage?.features?.explicitEventSubscriptions ||
-      this.config.capabilities?.[CLIENT_CAPS.explicitEventSubscriptions] === false
-    )
-      return;
     await this.sendCorrelatedSessionRequest({
       message: { type: "session.events.set_subscription.request", events },
       responseType: "session.events.set_subscription.response",
@@ -3206,13 +3119,6 @@ export class DaemonClient {
 
   private async sendTimelineSubscription(agentIds: string[]): Promise<void> {
     if (this.connectionState.status !== "connected") return;
-    // COMPAT(selectiveAgentTimeline): added in v0.1.106. Old daemons keep their
-    // legacy global stream and do not understand this RPC. Remove after
-    // 2027-01-12 once the supported daemon floor is >= v0.1.106.
-    if (!this.lastServerInfoMessage?.features?.selectiveAgentTimeline) {
-      return;
-    }
-
     const requestId = this.createRequestId();
     const normalizedAgentIds = [...new Set(agentIds)].sort();
     const message = SessionInboundMessageSchema.parse({
@@ -3939,22 +3845,6 @@ export class DaemonClient {
     });
   }
 
-  async checkoutGithubSetAutoMerge(
-    cwd: string,
-    input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
-    requestId?: string,
-  ): Promise<CheckoutGithubSetAutoMergePayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"checkout.github.set_auto_merge.response">({
-      requestId,
-      message: {
-        type: "checkout.github.set_auto_merge.request",
-        cwd,
-        enabled: input.enabled,
-        ...(input.enabled ? { mergeMethod: input.method } : {}),
-      },
-    });
-  }
-
   async checkoutForgeGetCheckDetails(
     input: {
       cwd: string;
@@ -3979,31 +3869,6 @@ export class DaemonClient {
           changeRequestNumber: input.changeRequestNumber,
         },
         timeout: 60000,
-      },
-    );
-  }
-
-  async checkoutGithubGetCheckDetails(
-    input: {
-      cwd: string;
-      repoOwner?: string;
-      repoName?: string;
-      checkRunId?: number;
-      workflowRunId?: number;
-    },
-    requestId?: string,
-  ): Promise<CheckoutGithubGetCheckDetailsPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"checkout.github.get_check_details.response">(
-      {
-        requestId,
-        message: {
-          type: "checkout.github.get_check_details.request",
-          cwd: input.cwd,
-          repoOwner: input.repoOwner,
-          repoName: input.repoName,
-          checkRunId: input.checkRunId,
-          workflowRunId: input.workflowRunId,
-        },
       },
     );
   }
@@ -4164,7 +4029,6 @@ export class DaemonClient {
         ...(input.refName !== undefined ? { refName: input.refName } : {}),
         ...(input.action !== undefined ? { action: input.action } : {}),
         ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
-        ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
       responseType: "create_byspace_worktree_response",
     });
@@ -4238,23 +4102,6 @@ export class DaemonClient {
       },
       responseType: "forge.search.response",
       timeout: 15000,
-    });
-  }
-
-  async searchGitHub(
-    options: { cwd: string; query: string; limit?: number; kinds?: GitHubSearchRequest["kinds"] },
-    requestId?: string,
-  ): Promise<GitHubSearchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "github_search_request",
-        cwd: options.cwd,
-        query: options.query,
-        limit: options.limit,
-        kinds: options.kinds,
-      },
-      responseType: "github_search_response",
     });
   }
 
@@ -4528,20 +4375,6 @@ export class DaemonClient {
     });
   }
 
-  async requestProjectIcon(
-    cwd: string,
-    requestId?: string,
-  ): Promise<ProjectIconResponse["payload"]> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "project_icon_request",
-        cwd,
-      },
-      responseType: "project_icon_response",
-    });
-  }
-
   async getProjectIcon(
     projectId: string,
     requestId?: string,
@@ -4571,7 +4404,7 @@ export class DaemonClient {
       // Provider SDK cold starts (especially model discovery) can exceed 60s.
       timeout: 90000,
     });
-    return normalizeListProviderModelsPayload(payload);
+    return payload;
   }
 
   async listProviderModes(
@@ -4686,7 +4519,6 @@ export class DaemonClient {
   }
 
   async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
-    this.requireDaemonConfigReloadSupport();
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
       message: { type: "daemon.config.reload.request" },
@@ -4699,20 +4531,18 @@ export class DaemonClient {
     permissions: readonly string[] = [],
     requestId?: string,
   ) {
-    this.requireHubRelationshipSupport();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: { type: "hub.management.daemon.connect.request", hubUrl, token, permissions },
       responseType: "hub.management.daemon.connect.response",
     });
-    return normalizeHubRelationshipResponse(payload);
+    return payload;
   }
 
   async updateHubPermissions(
     input: { grant?: readonly string[]; revoke?: readonly string[] },
     requestId?: string,
   ) {
-    this.requireHubRelationshipSupport();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: {
@@ -4722,27 +4552,25 @@ export class DaemonClient {
       },
       responseType: "hub.management.daemon.permissions.update.response",
     });
-    return normalizeHubRelationshipResponse(payload);
+    return payload;
   }
 
   async getHubStatus(requestId?: string) {
-    this.requireHubRelationshipSupport();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: { type: "hub.management.daemon.get_status.request" },
       responseType: "hub.management.daemon.get_status.response",
     });
-    return normalizeHubRelationshipResponse(payload);
+    return payload;
   }
 
   async disconnectHub(force = false, requestId?: string) {
-    this.requireHubRelationshipSupport();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: { type: "hub.management.daemon.disconnect.request", force },
       responseType: "hub.management.daemon.disconnect.response",
     });
-    return normalizeHubRelationshipResponse(payload);
+    return payload;
   }
 
   async getDaemonPairingOffer(
@@ -4837,26 +4665,7 @@ export class DaemonClient {
     });
   }
 
-  async listProviderUsage(options?: { requestId?: string }): Promise<ProviderUsageListPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "provider.usage.list.request",
-      },
-    });
-  }
-
-  async listCommands(options: ListCommandsOptions): Promise<ListCommandsPayload>;
-  async listCommands(agentId: string, requestId?: string): Promise<ListCommandsPayload>;
-  async listCommands(
-    agentId: string,
-    options?: LegacyListCommandsOptions,
-  ): Promise<ListCommandsPayload>;
-  async listCommands(
-    input: ListCommandsOptions | string,
-    legacyOptions?: LegacyListCommandsOptions | string,
-  ): Promise<ListCommandsPayload> {
-    const options = normalizeListCommandsOptions(input, legacyOptions);
+  async listCommands(options: ListCommandsOptions): Promise<ListCommandsPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
@@ -4883,216 +4692,6 @@ export class DaemonClient {
       requestId,
       response,
     });
-  }
-
-  async getPluginCatalog() {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.catalog.get.request", requestId },
-      responseType: "plugin.catalog.get.response",
-    });
-    return payload.plugins;
-  }
-
-  async listPlugins(): Promise<PluginListItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.list.request", requestId },
-      responseType: "plugin.list.response",
-    });
-    return payload.plugins;
-  }
-
-  async getPluginLogs(pluginId: string): Promise<PluginLogEntry[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.logs.get.request", requestId, pluginId },
-      responseType: "plugin.logs.get.response",
-    });
-    return payload.entries;
-  }
-
-  async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.get_status.request", requestId },
-      responseType: "agent.skills.get_status.response",
-    });
-  }
-
-  async reconcileAgentSkills(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.reconcile.request", requestId },
-      responseType: "agent.skills.reconcile.response",
-    });
-  }
-
-  async uninstallAgentSkills(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.uninstall.request", requestId },
-      responseType: "agent.skills.uninstall.response",
-    });
-  }
-
-  /**
-   * Omitting `targets` keeps whatever the daemon already stores, which is how a
-   * caller that predates install targets avoids narrowing the install to none.
-   */
-  async saveAgentSkillsSelection(
-    selection: AgentSkillSelection,
-    targets?: AgentSkillTargets,
-    confirmedRemovals?: readonly string[],
-  ): Promise<AgentSkillsSaveResult> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: {
-        type: "agent.skills.save_selection.request",
-        requestId,
-        selection,
-        ...(targets ? { targets: [...targets] } : {}),
-        ...(confirmedRemovals ? { confirmedRemovals: [...confirmedRemovals] } : {}),
-      },
-      responseType: "agent.skills.save_selection.response",
-    });
-  }
-
-  async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{
-    imported: boolean;
-    selection: AgentSkillSelection;
-  }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: {
-        type: "agent.skills.import_legacy_selection.request",
-        requestId,
-        selection,
-      },
-      responseType: "agent.skills.import_legacy_selection.response",
-    });
-  }
-
-  async installDirectoryPlugin(path: string, id?: string): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.install.request", requestId, path, ...(id ? { id } : {}) },
-      responseType: "plugin.directory.install.response",
-    });
-    return payload.plugin;
-  }
-
-  async installPluginSource(input: {
-    source: string;
-    id?: string;
-    ref?: string;
-  }): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const reference = parsePluginSourceReference(input.source);
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.install.request",
-        requestId,
-        source: reference.source,
-        ...(reference.pluginPath ? { pluginPath: reference.pluginPath } : {}),
-        ...(input.id ? { id: input.id } : {}),
-        ...(input.ref ? { ref: input.ref } : {}),
-      },
-      responseType: "plugin.source.install.response",
-    });
-    return payload.plugin;
-  }
-
-  async getPluginSourceStatus(pluginId?: string): Promise<PluginSourceStatusItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.status.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.status.response",
-    });
-    return payload.plugins;
-  }
-
-  async updatePluginSources(pluginId?: string): Promise<PluginSourceUpdateItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.update.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.update.response",
-    });
-    return payload.plugins;
-  }
-
-  async inspectDirectoryPlugin(path: string): Promise<{ id: string }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.inspect.request", requestId, path },
-      responseType: "plugin.directory.inspect.response",
-    });
-  }
-
-  async reloadPlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("reload", pluginId);
-  }
-
-  async enablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("enable", pluginId);
-  }
-
-  async disablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("disable", pluginId);
-  }
-
-  async removePlugin(pluginId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.remove.request", requestId, pluginId },
-      responseType: "plugin.remove.response",
-    });
-  }
-
-  private async managePlugin(
-    action: "reload" | "enable" | "disable",
-    pluginId: string,
-  ): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: `plugin.${action}.request`, requestId, pluginId },
-      responseType: `plugin.${action}.response`,
-    });
-    return payload.plugin;
-  }
-
-  async invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.rpc.invoke.request",
-        requestId,
-        pluginId,
-        method,
-        input,
-      },
-      responseType: "plugin.rpc.invoke.response",
-    });
-    return payload.output;
   }
 
   async respondToPermissionAndWait(
@@ -5816,20 +5415,6 @@ export class DaemonClient {
     return this.lastServerInfoMessage;
   }
 
-  private requireHubRelationshipSupport(): void {
-    // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
-      throw new Error("Update the host to use Hub relationship management.");
-    }
-  }
-
-  private requireDaemonConfigReloadSupport(): void {
-    // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
-    if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
-      throw new Error("Update the host to reload daemon configuration.");
-    }
-  }
-
   private resolveTransportUrlForAttempt(): string {
     return this.config.url;
   }
@@ -5866,10 +5451,6 @@ export class DaemonClient {
         clientId: this.config.clientId,
         clientType: this.config.clientType ?? "cli",
         protocolVersion: 1,
-        capabilities: {
-          ...DEFAULT_CLIENT_CAPABILITIES,
-          ...this.config.capabilities,
-        },
         ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
       });
     } catch (error) {
@@ -6127,30 +5708,7 @@ export class DaemonClient {
     }
 
     if (frame.opcode === FileTransferOpcode.FileChunk) {
-      // COMPAT(fileReadByteBudget): added in v0.5.0, remove after 2027-02-21 once daemon floor >= v0.5.0.
-      // Old daemons stream despite maxBytes; discard before client-side accumulation.
-      if (transfer.maxBytes && transfer.size > transfer.maxBytes) {
-        return;
-      }
       transfer.chunks.push(frame.payload);
-      return;
-    }
-
-    // COMPAT(fileReadByteBudget): added in v0.5.0, remove after 2027-02-21 once daemon floor >= v0.5.0.
-    if (transfer.maxBytes && transfer.size > transfer.maxBytes) {
-      this.activeBinaryFileTransfers.delete(frame.requestId);
-      this.handleSessionMessage({
-        type: "file_explorer_response",
-        payload: {
-          cwd: transfer.cwd,
-          path: transfer.path,
-          mode: "file",
-          directory: null,
-          file: null,
-          error: "File is too large to display",
-          requestId: frame.requestId,
-        },
-      });
       return;
     }
 
@@ -6597,7 +6155,6 @@ function resolveAgentConfig(options: CreateAgentRequestOptions): AgentSessionCon
     workspaceId: _workspaceId,
     initialPrompt: _initialPrompt,
     images: _images,
-    git: _git,
     worktreeName: _worktreeName,
     requestId: _requestId,
     labels: _labels,

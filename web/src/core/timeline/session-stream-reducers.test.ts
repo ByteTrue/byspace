@@ -68,23 +68,6 @@ function makeToolCallTimelineEntry(
   };
 }
 
-function makePluginTimelineEntry(seq: number, status: string): TimelineResponseEntry {
-  return {
-    seqStart: seq,
-    seqEnd: seq,
-    provider: "claude",
-    item: {
-      type: "plugin" as const,
-      id: "review-1",
-      pluginId: "review",
-      kind: "review",
-      version: 1,
-      data: { status },
-    },
-    timestamp: new Date(1000 + seq).toISOString(),
-  };
-}
-
 function makeTimelineEvent(
   text: string,
   type: string = "assistant_message",
@@ -1633,43 +1616,6 @@ describe("processTimelineResponse", () => {
     expect(result.error).toBe(null);
   });
 
-  it("reconciles a legacy canonical user message by content during an after-page response", () => {
-    const existingCursor: TimelineCursor = {
-      epoch: "epoch-1",
-      startSeq: 1,
-      endSeq: 1,
-    };
-    const submitted = makeSubmittedUserMessage("sent while catching up", "submitted-after");
-
-    const result = processTimelineResponse({
-      ...baseTimelineInput,
-      currentTail: [submitted],
-      currentCursor: existingCursor,
-      payload: {
-        ...baseTimelineInput.payload,
-        epoch: "epoch-1",
-        entries: [
-          {
-            ...makeTimelineEntry(2, "sent while catching up", "user_message"),
-            item: {
-              type: "user_message",
-              text: "sent while catching up",
-              messageId: "canonical-after",
-            },
-          },
-        ],
-      },
-    });
-
-    const userMessages = result.tail.filter((item) => item.kind === "user_message");
-    expect(userMessages).toHaveLength(1);
-    expect(userMessages[0]).toMatchObject({
-      id: "submitted-after",
-      clientMessageId: "submitted-after",
-      messageId: "canonical-after",
-    });
-  });
-
   it("reconciles a submitted user message by client message id", () => {
     const submitted = makeSubmittedUserMessage("local presentation", "client-message");
 
@@ -1760,7 +1706,12 @@ describe("processTimelineResponse", () => {
         entries: [
           {
             ...makeTimelineEntry(2, "first prompt", "user_message"),
-            item: { type: "user_message", text: "first prompt", messageId: "submitted-first" },
+            item: {
+              type: "user_message",
+              text: "first prompt",
+              messageId: "submitted-first",
+              clientMessageId: "submitted-first",
+            },
           },
           {
             ...makeTimelineEntry(3, "second prompt", "user_message"),
@@ -1768,6 +1719,7 @@ describe("processTimelineResponse", () => {
               type: "user_message",
               text: "second prompt",
               messageId: "submitted-second",
+              clientMessageId: "submitted-second",
             },
           },
         ],
@@ -2272,6 +2224,7 @@ describe("processTimelineResponse", () => {
               type: "user_message",
               text: "New prompt",
               messageId: "new-prompt",
+              clientMessageId: "new-prompt",
             },
           },
         ],
@@ -2507,6 +2460,7 @@ describe("processTimelineResponse", () => {
               type: "user_message",
               text: "Local prompt",
               messageId: "local-prompt",
+              clientMessageId: "local-prompt",
             },
           },
         ],
@@ -2823,73 +2777,6 @@ describe("processTimelineResponse", () => {
       endSeq: 5,
     });
     expect(result.older).toBe("none");
-  });
-
-  it("keeps only projected entries anchored in an older response page", () => {
-    const currentTail: StreamItem[] = [
-      {
-        kind: "user_message",
-        id: "current-81",
-        text: "current-81",
-        timestamp: new Date(81000),
-      },
-    ];
-
-    const result = processTimelineResponse({
-      ...baseTimelineInput,
-      currentTail,
-      currentCursor: { epoch: "epoch-1", startSeq: 81, endSeq: 100 },
-      payload: {
-        ...baseTimelineInput.payload,
-        direction: "before",
-        projection: "projected",
-        epoch: "epoch-1",
-        startCursor: { seq: 41 },
-        endCursor: { seq: 80 },
-        hasOlder: true,
-        entries: [
-          makeTimelineEntry(1, "wide assistant", "assistant_message", 80),
-          makeTimelineEntry(50, "owned by this page", "user_message"),
-        ],
-      },
-    });
-
-    expect(getAssistantTexts(result.tail)).toEqual([]);
-    expect(getUserTexts(result.tail)).toEqual(["owned by this page", "current-81"]);
-    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 41, endSeq: 100 });
-    expect(result.older).toBe("available");
-  });
-
-  it("advances through an older projected page with no anchored entries", () => {
-    const currentTail: StreamItem[] = [
-      {
-        kind: "user_message",
-        id: "current-81",
-        text: "current-81",
-        timestamp: new Date(81000),
-      },
-    ];
-
-    const result = processTimelineResponse({
-      ...baseTimelineInput,
-      currentTail,
-      currentCursor: { epoch: "epoch-1", startSeq: 81, endSeq: 100 },
-      payload: {
-        ...baseTimelineInput.payload,
-        direction: "before",
-        projection: "projected",
-        epoch: "epoch-1",
-        startCursor: { seq: 41 },
-        endCursor: { seq: 80 },
-        hasOlder: true,
-        entries: [makeTimelineEntry(1, "wide assistant", "assistant_message", 80)],
-      },
-    });
-
-    expect(result.tail).toBe(currentTail);
-    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 41, endSeq: 100 });
-    expect(result.cursorChanged).toBe(true);
-    expect(result.older).toBe("available");
   });
 
   it("gives prepended assistant blocks unique ids across independently hydrated pages", () => {
@@ -3469,43 +3356,6 @@ describe("processTimelineResponse", () => {
         detailType: "read",
       },
     ]);
-  });
-
-  it("keeps the newest plugin row across the older-page prepend boundary", () => {
-    const currentTail = hydrateStreamState(
-      [
-        {
-          event: {
-            type: "timeline",
-            provider: "claude",
-            item: makePluginTimelineEntry(3, "complete").item,
-          },
-          timestamp: new Date(3000),
-        },
-      ],
-      { source: "canonical" },
-    );
-
-    const result = processTimelineResponse({
-      ...baseTimelineInput,
-      currentTail,
-      currentCursor: { epoch: "epoch-1", startSeq: 3, endSeq: 5 },
-      payload: {
-        ...baseTimelineInput.payload,
-        direction: "before",
-        epoch: "epoch-1",
-        startCursor: { seq: 1 },
-        endCursor: { seq: 2 },
-        entries: [makePluginTimelineEntry(1, "running")],
-      },
-    });
-
-    expect(result.tail).toHaveLength(1);
-    expect(result.tail[0]).toMatchObject({
-      kind: "plugin",
-      id: "review/review-1",
-      data: { status: "complete" },
-    });
   });
 
   it("removes a reconciled submitted prompt before coalescing a tool call at the pagination seam", () => {

@@ -281,11 +281,7 @@ async function subscribeAndRegister(
 }
 
 async function unregisterToken(client: DaemonClient | null, token: string | null): Promise<void> {
-  if (
-    !token ||
-    !client?.isConnected ||
-    client.getLastServerInfoMessage()?.features?.pushTokenRevocation !== true
-  ) {
+  if (!token || !client?.isConnected) {
     return;
   }
   try {

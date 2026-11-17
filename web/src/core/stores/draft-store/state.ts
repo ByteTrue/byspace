@@ -5,15 +5,8 @@ import {
 } from "@/attachments/types";
 import { z } from "zod";
 
-export const DRAFT_STORE_VERSION = 5;
+export const DRAFT_STORE_VERSION = 6;
 export const FINALIZED_DRAFT_TTL_MS = 5 * 60 * 1000;
-
-export interface LegacyDraftImage {
-  uri: string;
-  mimeType?: string;
-}
-
-export type PersistedDraftImage = AttachmentMetadata | LegacyDraftImage;
 
 export interface DraftInput {
   text: string;
@@ -45,10 +38,6 @@ export const AttachmentMetadataSchema = z.strictObject({
   byteSize: z.number().nullable().optional(),
   createdAt: z.number(),
 }) satisfies z.ZodType<AttachmentMetadata>;
-export const LegacyDraftImageSchema: z.ZodType<LegacyDraftImage> = z.strictObject({
-  uri: z.string(),
-  mimeType: z.string().optional(),
-});
 const UploadedFileSchema = z.strictObject({
   type: z.literal("uploaded_file"),
   id: z.string(),
@@ -93,10 +82,8 @@ export const UserComposerAttachmentSchema: z.ZodType<UserComposerAttachment> = z
       ]),
     }),
     z.strictObject({ kind: z.literal("forge_issue"), item: IssueItemSchema }),
-    z.strictObject({ kind: z.literal("forge_change_request"), item: ChangeRequestItemSchema }),
-    z.strictObject({ kind: z.literal("github_issue"), item: IssueItemSchema }),
     z.strictObject({
-      kind: z.literal("github_pr"),
+      kind: z.literal("forge_change_request"),
       item: ChangeRequestItemSchema,
       owner: z.literal(NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER).optional(),
     }),
@@ -105,8 +92,6 @@ export const UserComposerAttachmentSchema: z.ZodType<UserComposerAttachment> = z
 export const CanonicalDraftInputSchema = z.strictObject({
   text: z.string(),
   attachments: z.array(UserComposerAttachmentSchema),
-  // COMPAT(draft-cwd): accept legacy persisted drafts that include cwd. Stop accepting after 2026-11-09.
-  cwd: z.string().optional(),
 });
 const DraftRecordSchema: z.ZodType<DraftRecord> = z.strictObject({
   input: CanonicalDraftInputSchema,
@@ -121,10 +106,6 @@ export const DraftStoreStateSchema: z.ZodType<DraftStoreState> = z.strictObject(
 
 export function isAttachmentMetadata(value: unknown): value is AttachmentMetadata {
   return AttachmentMetadataSchema.safeParse(value).success;
-}
-
-export function isLegacyDraftImage(value: unknown): value is LegacyDraftImage {
-  return LegacyDraftImageSchema.safeParse(value).success;
 }
 
 export function normalizeAttachmentMetadata(image: AttachmentMetadata): AttachmentMetadata {

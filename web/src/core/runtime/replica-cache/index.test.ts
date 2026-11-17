@@ -30,7 +30,6 @@ class MemoryStorage implements ReplicaRowStore {
     ids?: readonly string[];
   }> = [];
   writes = 0;
-  cleanups = 0;
   nextWriteFailure: Error | null = null;
   readGate: Promise<void> | null = null;
   onRead: (() => void) | null = null;
@@ -99,13 +98,8 @@ class MemoryStorage implements ReplicaRowStore {
   }
 }
 
-const noLegacyCleanup = { clearLegacyCache: async () => undefined };
-
 function createCache(storage: MemoryStorage, maxBytes?: number): ReplicaCache {
-  const cache = new ReplicaCache(storage, {
-    ...noLegacyCleanup,
-    ...(maxBytes ? { maxBytes } : {}),
-  });
+  const cache = new ReplicaCache(storage, maxBytes ? { maxBytes } : {});
   cache.setHosts([SERVER_ID]);
   return cache;
 }
@@ -455,64 +449,6 @@ describe("ReplicaCache", () => {
     expect((await cache.readTimeline(SERVER_ID, "agent-1"))?.items).toEqual([timelineItem("New")]);
   });
 
-  it("round-trips plugin timeline items", async () => {
-    const storage = new MemoryStorage();
-    const writer = createCache(storage);
-    const pluginItem: StreamItem = {
-      kind: "plugin",
-      id: "reports/test-report/1",
-      pluginId: "reports",
-      pluginItemId: "test-report/1",
-      itemKind: "test-report",
-      version: 1,
-      data: { passed: 4, failed: 0 },
-      timestamp: new Date("2026-07-18T08:02:00.000Z"),
-      timelineCursor: { epoch: "epoch-1", seq: 12 },
-    };
-    writer.commitTimeline(SERVER_ID, "agent-1", {
-      agentId: "agent-1",
-      items: [pluginItem],
-      range: { epoch: "epoch-1", startSeq: 12, endSeq: 12 },
-      hasOlder: true,
-    });
-    await writer.flush();
-
-    const reader = createCache(storage);
-    expect((await reader.readTimeline(SERVER_ID, "agent-1"))?.items).toEqual([pluginItem]);
-  });
-
-  it("drops cached plugin timeline items without a plugin-local id", async () => {
-    const storage = new MemoryStorage();
-    const writer = createCache(storage);
-    const pluginItem = {
-      kind: "plugin",
-      id: "reports/test-report/1",
-      pluginId: "reports",
-      pluginItemId: "test-report/1",
-      itemKind: "test-report",
-      version: 1,
-      data: { passed: 4 },
-      timestamp: new Date("2026-07-18T08:02:00.000Z"),
-    } satisfies StreamItem;
-    writer.commitTimeline(SERVER_ID, "agent-1", {
-      agentId: "agent-1",
-      items: [pluginItem],
-      range: { epoch: "epoch-1", startSeq: 12, endSeq: 12 },
-      hasOlder: true,
-    });
-    await writer.flush();
-    const row = [...storage.rows.values()].find((candidate) => candidate.kind === "timeline");
-    if (!row) throw new Error("timeline row was not written");
-    const payload = JSON.parse(row.payload) as { items: Array<Record<string, unknown>> };
-    delete payload.items[0]?.pluginItemId;
-    storage.rows.set(`${row.serverId}:${row.kind}:${row.id}`, {
-      ...row,
-      payload: JSON.stringify(payload),
-    });
-
-    expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toBeUndefined();
-  });
-
   it("reads one requested agent and the focused timeline without scanning directory rows", async () => {
     const storage = new MemoryStorage();
     const writer = createCache(storage);
@@ -580,7 +516,7 @@ describe("ReplicaCache", () => {
   it("removes a targeted corrupt row from eviction bookkeeping", async () => {
     const otherServerId = "other-host";
     const storage = new MemoryStorage();
-    const writer = new ReplicaCache(storage, noLegacyCleanup);
+    const writer = new ReplicaCache(storage);
     writer.setHosts([SERVER_ID, otherServerId]);
     commitDirectory(writer, SERVER_ID, directory());
     writer.commitTimeline(SERVER_ID, "agent-1", timeline());
@@ -596,7 +532,7 @@ describe("ReplicaCache", () => {
       (total, row) => total + Buffer.byteLength(row.payload),
       0,
     );
-    const cache = new ReplicaCache(storage, { ...noLegacyCleanup, maxBytes: initialBytes + 100 });
+    const cache = new ReplicaCache(storage, { maxBytes: initialBytes + 100 });
     cache.setHosts([SERVER_ID, otherServerId]);
     commitDirectory(cache, otherServerId, directory());
     await cache.flush();
@@ -720,7 +656,7 @@ describe("ReplicaCache", () => {
 
   it("rebuilds every directory row before restoring its checkpoint after eviction", async () => {
     const storage = new MemoryStorage();
-    const cache = new ReplicaCache(storage, { ...noLegacyCleanup, maxBytes: 2_500 });
+    const cache = new ReplicaCache(storage, { maxBytes: 2_500 });
     cache.setHosts([SERVER_ID, "other-host"]);
     const cachedDirectory = directory();
     commitDirectory(cache, SERVER_ID, cachedDirectory);
@@ -748,21 +684,5 @@ describe("ReplicaCache", () => {
         .map((row) => row.kind)
         .sort(),
     ).toEqual(["agent", "checkpoint", "project", "workspace"]);
-  });
-
-  it("runs legacy cleanup once when storage is first used", async () => {
-    const storage = new MemoryStorage();
-    const cache = new ReplicaCache(storage, {
-      clearLegacyCache: async () => {
-        storage.cleanups += 1;
-      },
-    });
-    cache.setHosts([SERVER_ID]);
-
-    await cache.readAgent(SERVER_ID, "missing");
-    commitDirectory(cache, SERVER_ID, directory());
-    await cache.flush();
-
-    expect(storage.cleanups).toBe(1);
   });
 });

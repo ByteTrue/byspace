@@ -321,9 +321,9 @@ remains authoritative during reload.
 
 `agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 
-Speech, dictation, and voice mode are retired (issue 025 C8). `features.dictation`,
-`features.voiceMode`, and the `providers.*.stt`/`tts` keys are still accepted by the config schema
-so files written by older daemons load, but nothing reads them.
+Speech, dictation, and voice mode are retired (issue 025 C8). The
+`features.dictation`/`features.voiceMode` and `providers.*.stt`/`tts` keys are gone;
+config files that still carry them load normally and the keys are ignored.
 
 ---
 

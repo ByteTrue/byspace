@@ -22,7 +22,7 @@ var (
 	// mockStreamUpdatesPattern drives the streaming/coalescing specs: it asks for a fixed number of updates so a
 	// test can assert the client coalesced them into the expected number of frames. The plural "updates" is
 	// load-bearing: "emit 1 ... update" (singular) deliberately does not match and falls through to the default
-	// cycle stream, which is how provider-usage-tooltip starts a long turn.
+	// cycle stream, which is how the long-turn browser specs start a long turn.
 	mockStreamUpdatesPattern = regexp.MustCompile(`(?i)emit\s+(\d+)\s+(coalesced\s+)?agent stream updates`)
 	mockUserMsgBeforeTurn    = regexp.MustCompile(`(?i)emit\s+synthetic\s+user\s+message\s+before\s+accepting\s+turn`)
 	mockWithholdUserMsg      = regexp.MustCompile(`(?i)withhold\s+synthetic\s+user\s+message\s+until\s+interrupted`)

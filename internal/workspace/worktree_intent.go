@@ -83,8 +83,6 @@ type WorktreeIntentInput struct {
 	RefName        string
 	Action         string // "branch-off" | "checkout" | ""
 	CheckoutSource *CheckoutSource
-	// GithubPRNumber is the legacy field the protocol still accepts.
-	GithubPRNumber *int
 }
 
 // WorktreeIntentDeps is what the resolver needs from the environment.
@@ -163,15 +161,9 @@ func ResolveWorktreeIntent(ctx context.Context, input WorktreeIntentInput, repoR
 	}, nil
 }
 
-// resolveInputChangeRequest picks the change-request reference, preferring the structured field.
-//
-// `githubPrNumber` is the legacy shape; the protocol keeps accepting it, so it is read here
-// rather than at the call site.
+// resolveInputChangeRequest picks the structured change-request reference.
 func resolveInputChangeRequest(input WorktreeIntentInput, workspaceForge string) (*CheckoutSource, error) {
 	source := input.CheckoutSource
-	if source == nil && input.GithubPRNumber != nil {
-		source = &CheckoutSource{Number: *input.GithubPRNumber}
-	}
 	if source == nil || source.Number <= 0 {
 		return nil, nil
 	}

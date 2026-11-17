@@ -107,13 +107,8 @@ export type UserComposerAttachment =
   | { kind: "file"; attachment: UploadedFileAttachment }
   | WorkspaceFileComposerAttachment
   | { kind: "forge_issue"; item: ForgeSearchItem }
-  | { kind: "forge_change_request"; item: ForgeSearchItem }
-  // COMPAT(githubAttachmentKinds): legacy persisted attachment kinds retained
-  // when forge-neutral kinds shipped in v0.2.0-beta.1. Remove after 2027-01-17
-  // once supported floors are >= v0.2.0 and old drafts no longer need them.
-  | { kind: "github_issue"; item: ForgeSearchItem }
   | {
-      kind: "github_pr";
+      kind: "forge_change_request";
       item: ForgeSearchItem;
       owner?: typeof NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER;
     };

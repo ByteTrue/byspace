@@ -67,16 +67,9 @@ presentation layer share the trait constants in
 `packages/protocol/src/check-traits.ts` — use those instead of string literals
 so classification and emission cannot drift apart.
 
-Shipped GitHub compatibility stays separate:
-
-- The forge compatibility layer first shipped in `v0.2.0-beta.1`. Its initial
-  six-month cleanup target is `2027-01-17`, after supported client and daemon
-  floors reach stable `v0.2.0`.
-- `status.github` remains accepted for released peers.
-- The server keeps the `COMPAT(forgeSpecific)` mirror that copies GitHub facts
-  into `status.github` for older clients.
-- Do not add a compatibility shim unless a released peer (<= 0.1.102) can
-  actually produce the state.
+Every forge delivers its native merge facts through `status.forgeSpecific`.
+There is no GitHub mirror: app and daemon ship together, so a single shape
+serves every client.
 
 ## Server
 
@@ -184,8 +177,8 @@ are stale, run `npm run build:server`.
 
 ## Gotchas
 
-- GitHub is a normal registry entry plus released compatibility shims. Keep all
-  real shims tagged with `COMPAT(name)`.
+- GitHub is a normal registry entry, like every other forge. All forge facts
+  flow through `forgeSpecific`; there are no version-compat shims.
 - Gitea-family facts use `forgeSpecific.forge === "gitea"` even when the
   top-level brand is Forgejo or Codeberg.
 - Gitea's legacy Actions task endpoint cannot filter by commit, may enforce a

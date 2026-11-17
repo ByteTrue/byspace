@@ -69,18 +69,13 @@ Forge-neutral behavior currently uses `checkout.forge.*` for checkout-scoped ope
 
 Do not put GitHub-specific enums or semantics into `checkout.forge.*` RPC names. A generic forge RPC should only exist when the behavior is genuinely forge-neutral.
 
-## Compatibility
+## Migrating flat names
 
-The existing flat RPC names remain part of the protocol until they are intentionally migrated:
+The existing flat RPC names remain until they are migrated:
 
 ```ts
 checkout_pr_merge_request;
 checkout_pr_merge_response;
 ```
 
-Do not add new flat names. When migrating old RPCs, keep protocol compatibility rules in mind:
-
-- Add the new names first.
-- Gate new feature behavior through `server_info.features.*` when an old host cannot support it.
-- Keep old names accepted until the compatibility window expires.
-- Mark shims with `COMPAT(...)` and a removal date.
+Do not add new flat names. When migrating an old RPC, rename it on both sides in the same change — daemon handler and client caller together. No dual names, no feature gate, no shim.

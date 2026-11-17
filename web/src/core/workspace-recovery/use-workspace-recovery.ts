@@ -38,13 +38,12 @@ export function useWorkspaceRecovery(input: {
   const client = useHostRuntimeClient(input.serverId);
   const isConnected = useHostRuntimeIsConnected(input.serverId);
   const serverInfo = useSessionStore((store) => store.sessions[input.serverId]?.serverInfo ?? null);
-  const supportsRecovery = serverInfo?.features?.workspaceRecovery === true;
 
   const inspection = useFetchQuery({
     queryKey: ["workspaceRecovery", input.serverId, input.workspaceId],
     dataShape: "value",
     staleTimeMs: 5_000,
-    enabled: Boolean(input.enabled && client && isConnected && supportsRecovery),
+    enabled: Boolean(input.enabled && client && isConnected),
     queryFn: async () => {
       if (!client) {
         throw new Error("The host client is unavailable.");
@@ -76,7 +75,6 @@ export function useWorkspaceRecovery(input: {
         connected: isConnected,
         hasClient: client !== null,
         hasServerInfo: serverInfo !== null,
-        supportsRecovery,
         inspection: {
           pending: inspection.isPending,
           error: inspection.isError ? toErrorMessage(inspection.error) : null,
@@ -99,7 +97,6 @@ export function useWorkspaceRecovery(input: {
       restoreMutation.isError,
       restoreMutation.isPending,
       serverInfo,
-      supportsRecovery,
     ],
   );
 

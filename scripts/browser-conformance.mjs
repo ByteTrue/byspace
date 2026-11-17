@@ -450,25 +450,50 @@ try {
   // labelled "<name> <description> Create profile from this model". The chosen model shows up as
   // the composer button's label, which is matched back to the catalog to learn its declared levels.
   let chosenModel = null;
-  if (await hasButton("Select model (Select model)")) {
-    await button("Select model (Select model)").click();
+  const snapshot = queryProviderSnapshot();
+  const thinkingModels = snapshot.flatMap((provider) =>
+    (Array.isArray(provider.models) ? provider.models : []).filter(
+      (model) => Array.isArray(model.thinkingOptions) && model.thinkingOptions.length > 0,
+    ),
+  );
+  // A workspace usually already has a model chosen (default or remembered), so match the
+  // label form too — gating on the literal "Select model" placeholder skips the whole check.
+  const selectModelButton = /^Select model \(/;
+  if (await hasButton(selectModelButton)) {
+    await button(selectModelButton).click();
     await sleep(1300);
+    // Prefer a provider whose catalog declares thinking levels: the first provider may be a
+    // dynamic catalog whose models carry no thinkingOptions, and then there is no menu to check.
+    const providerWithThinking = thinkingModels[0]?.provider ?? null;
+    const providerLabel =
+      snapshot.find((p) => p.provider === providerWithThinking)?.label ?? providerWithThinking;
+    const preferredProvider = providerLabel ? new RegExp(`^${providerLabel} \\d+ models?$`) : null;
     const providerEntry = /^.+ \d+ models?$/;
-    if (await hasButton(providerEntry)) {
+    if (preferredProvider && (await hasButton(preferredProvider))) {
+      await button(preferredProvider).click();
+      await sleep(1200);
+    } else if (await hasButton(providerEntry)) {
       await button(providerEntry).click();
       await sleep(1200);
     }
     const modelEntry = /^.+ Create profile from this model$/;
-    if (await hasButton(modelEntry)) {
+    const preferredModel = thinkingModels.find((m) => m.provider === providerWithThinking);
+    const preferredModelEntry = preferredModel
+      ? new RegExp(`^${preferredModel.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} `)
+      : null;
+    if (preferredModelEntry && (await hasButton(preferredModelEntry))) {
+      await button(preferredModelEntry).click();
+      await sleep(1600);
+    } else if (await hasButton(modelEntry)) {
       await button(modelEntry).click();
       await sleep(1600);
-      s2 = await dismissOverlays();
-      const selected = s2.match(/button "Select model \(([^)]+)\)"/)?.[1] ?? null;
-      chosenModel =
-        queryProviderSnapshot()
-          .flatMap((provider) => (Array.isArray(provider.models) ? provider.models : []))
-          .find((model) => model.label === selected || model.id === selected) ?? null;
     }
+    s2 = await dismissOverlays();
+    const selected = s2.match(/button "Select model \(([^)]+)\)"/)?.[1] ?? null;
+    chosenModel =
+      snapshot
+        .flatMap((provider) => (Array.isArray(provider.models) ? provider.models : []))
+        .find((model) => model.label === selected || model.id === selected) ?? null;
   }
   const thinkingName = /^Select thinking option/;
   if (!(await hasButton(thinkingName))) {

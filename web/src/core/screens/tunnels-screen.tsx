@@ -834,12 +834,8 @@ function TunnelRow({
 }
 
 function AllowlistSection({ serverId }: { serverId: string }): ReactElement | null {
-  const { t, i18n } = useTranslation();
-  const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
+  const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
-  // A daemon without host support would accept the patch and drop the key, leaving the user with an
-  // allowlist entry that never applies.
-  const supportsHostTargets = useHostFeature(serverId, "daemonTunnelRemoteHost");
   const [draft, setDraft] = useState("");
   const handleDraftInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value),
@@ -870,14 +866,6 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
     const parsed = parseTargetList(draft);
     if (!parsed) {
       setError(t("tunnels.allowlist.invalidPort"));
-      return;
-    }
-    if (parsed.targets.length > 0 && !supportsHostTargets) {
-      setError(
-        isZh
-          ? "这台主机还不支持 host:port 白名单，请先更新它。"
-          : "Update this host to allow host:port destinations.",
-      );
       return;
     }
     const mergedPorts = [...allowedPorts];
@@ -915,7 +903,7 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
     } finally {
       setSaving(false);
     }
-  }, [draft, allowedPorts, allowedTargets, isZh, patchConfig, supportsHostTargets, t]);
+  }, [draft, allowedPorts, allowedTargets, patchConfig, t]);
 
   const addTargets = useCallback(() => {
     void addTargetsAsync();
@@ -1086,22 +1074,17 @@ function ListenHostField({
 
 function RemoteHostField({
   isZh,
-  supported,
   remoteHost,
   onChange,
   testID = "tunnels-add-remote-host-input",
   label,
 }: {
   isZh: boolean;
-  supported: boolean;
   remoteHost: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   testID?: string;
   label?: string;
-}): ReactElement | null {
-  if (!supported) {
-    return null;
-  }
+}): ReactElement {
   return (
     <Field>
       <FieldLabel>{label ?? (isZh ? "远端主机（可选，默认对端本机）" : "Remote host")}</FieldLabel>
@@ -1188,7 +1171,6 @@ function AddTunnelSheet({
       : (peerTargets[0]?.serverId ?? ""),
   );
   const sourceClient = useHostRuntimeClient(sourceServerId);
-  const supportsRemoteHost = useHostFeature(sourceServerId, "daemonTunnelRemoteHost");
   const { config: sourceConfig } = useDaemonConfig(sourceServerId);
   const selectableTargets = useMemo(
     () => peerTargets.filter((target) => target.serverId !== sourceServerId),
@@ -1511,12 +1493,7 @@ function AddTunnelSheet({
         </Field>
       ) : undefined}
       <ListenHostField isZh={isZh} listenHost={listenHost} onChange={handleListenHostInput} />
-      <RemoteHostField
-        isZh={isZh}
-        supported={supportsRemoteHost}
-        remoteHost={remoteHost}
-        onChange={handleRemoteHostInput}
-      />
+      <RemoteHostField isZh={isZh} remoteHost={remoteHost} onChange={handleRemoteHostInput} />
       <Field>
         <FieldLabel>
           {isZh ? "远端端口（支持填多个，如 3425, 3430）" : t("tunnels.addForm.remotePortLabel")}
@@ -1586,7 +1563,6 @@ function EditTunnelSheet({
   const isZh = (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase().startsWith("zh");
   const client = useHostRuntimeClient(entry.serverId);
   const hosts = useHosts();
-  const supportsRemoteHost = useHostFeature(entry.serverId, "daemonTunnelRemoteHost");
   const [remotePort, setRemotePort] = useState(String(entry.remotePort));
   const handleRemotePortInput2 = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setRemotePort(event.target.value),
@@ -1718,7 +1694,6 @@ function EditTunnelSheet({
       </Field>
       <RemoteHostField
         isZh={isZh}
-        supported={supportsRemoteHost}
         remoteHost={remoteHost}
         onChange={handleRemoteHostInput2}
         testID="tunnels-edit-remote-host-input"

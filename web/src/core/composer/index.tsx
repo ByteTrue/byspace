@@ -110,7 +110,6 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import type { PickedFile } from "@/attachments/picked-file";
-import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useWorkspaceAttachmentsForScopes } from "@/attachments/workspace-attachments-store";
 import { droppedItemsToPickedFiles } from "@/composer/attachments/drop";
@@ -243,8 +242,6 @@ function renderContextWindowMeter(
   contextWindowUsedTokens: number | null,
   totalCostUsd: number | null,
   showPercentage: boolean,
-  serverId: string,
-  provider: string | null,
   pending: boolean,
   glyphSize: number,
 ): ReactElement | null {
@@ -258,8 +255,6 @@ function renderContextWindowMeter(
       usedTokens={contextWindowUsedTokens}
       totalCostUsd={totalCostUsd}
       showPercentage={showPercentage}
-      serverId={serverId}
-      provider={provider}
       pending={pending}
       glyphSize={glyphSize}
     />
@@ -652,10 +647,7 @@ function ImageAttachmentPill({
 }
 
 interface GithubAttachmentPillProps {
-  attachment: Extract<
-    ComposerAttachment,
-    { kind: "forge_change_request" | "forge_issue" | "github_pr" | "github_issue" }
-  >;
+  attachment: Extract<ComposerAttachment, { kind: "forge_change_request" | "forge_issue" }>;
   index: number;
   disabled: boolean;
   onOpen: (attachment: ComposerAttachment) => void;
@@ -1044,9 +1036,6 @@ function ComposerContentImpl({
   });
   const setSelectedAttachments = onChangeAttachments;
   const checkoutStatusQuery = useCheckoutStatusQuery({ serverId, cwd });
-  const supportsForgeSearch = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.forgeSearch === true,
-  );
   const forgeAutoAttach = useComposerForgeAutoAttach({
     text: userInput,
     remoteUrl: resolveCheckoutRemoteUrl(checkoutStatusQuery.status),
@@ -1055,7 +1044,6 @@ function ComposerContentImpl({
     isConnected,
     serverId,
     cwd,
-    supportsForgeSearch,
     setAttachments: setSelectedAttachments,
     onChangeRequestDetected: onForgeChangeRequestDetected,
     onChangeRequestAdded: onForgeChangeRequestAutoAttach,
@@ -1251,9 +1239,6 @@ function ComposerContentImpl({
         agentId: targetAgentId,
         text,
         attachments: sendAttachments,
-        attachmentSubmitFormat: resolveComposerAttachmentSubmitFormat({
-          supportsForgeAttachments: supportsForgeSearch,
-        }),
         encodeImages,
         submission: createMessageSubmissionWriter(serverId),
         activeTurnBehavior,
@@ -1267,7 +1252,7 @@ function ComposerContentImpl({
       });
       onAttentionPromptSend?.();
     };
-  }, [appSettings.sendBehavior, client, onAttentionPromptSend, serverId, supportsForgeSearch, t]);
+  }, [appSettings.sendBehavior, client, onAttentionPromptSend, serverId, t]);
 
   useEffect(() => {
     onSubmitMessageRef.current = onSubmitMessage;
@@ -1676,8 +1661,6 @@ function ComposerContentImpl({
         contextWindowUsedTokens,
         agentState.totalCostUsd,
         false,
-        serverId,
-        agentState.provider,
         contextWindowPending,
         contextWindowMeterGlyphSize,
       ),
@@ -1685,8 +1668,6 @@ function ComposerContentImpl({
       contextWindowMaxTokens,
       contextWindowUsedTokens,
       agentState.totalCostUsd,
-      serverId,
-      agentState.provider,
       contextWindowPending,
       contextWindowMeterGlyphSize,
     ],
@@ -1702,10 +1683,7 @@ function ComposerContentImpl({
     () =>
       selectedAttachments.some(
         (attachment) =>
-          attachment.kind === "forge_change_request" ||
-          attachment.kind === "forge_issue" ||
-          attachment.kind === "github_pr" ||
-          attachment.kind === "github_issue",
+          attachment.kind === "forge_change_request" || attachment.kind === "forge_issue",
       ),
     [selectedAttachments],
   );
@@ -1724,7 +1702,6 @@ function ComposerContentImpl({
     serverId,
     cwd,
     query: githubSearchQueryTrimmed,
-    supportsForgeSearch,
     enabled: resolveGithubSearchEnabled(isGithubPickerOpen, isConnected, cwd),
   });
 

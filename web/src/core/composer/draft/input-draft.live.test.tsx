@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDraftStore } from "@/stores/draft-store";
-import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
+import type { AttachmentMetadata } from "@/attachments/types";
 import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
 
 const { asyncStorage } = vi.hoisted(() => ({
@@ -142,7 +142,6 @@ describe("useAgentInputDraft live contract", () => {
   beforeEach(() => {
     asyncStorage.clear();
     document.body.innerHTML = "<div id='root'></div>";
-    localStorage.clear();
 
     useDraftStore.setState({
       drafts: {},
@@ -243,140 +242,6 @@ describe("useAgentInputDraft live contract", () => {
     expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
   });
 
-  it("migrates legacy image drafts to image attachments on hydration", async () => {
-    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
-    const image: AttachmentMetadata = {
-      id: "legacy-image",
-      mimeType: "image/png",
-      storageType: "web-indexeddb",
-      storageKey: "attachments/legacy-image",
-      createdAt: 10,
-      fileName: "legacy.png",
-      byteSize: 512,
-    };
-
-    function getLatest(): ReturnType<typeof useAgentInputDraft> {
-      if (!latest) {
-        throw new Error("Expected hook result");
-      }
-      return latest;
-    }
-
-    useDraftStore.setState({
-      drafts: {
-        "draft:legacy": {
-          input: {
-            text: "legacy text",
-            images: [image],
-          },
-          lifecycle: "active",
-          updatedAt: Date.now(),
-          version: 1,
-        } as unknown as DraftRecordForTest,
-      },
-      createModalDraft: null,
-    });
-
-    function Probe() {
-      latest = useAgentInputDraft({ draftKey: "draft:legacy" });
-      return null;
-    }
-
-    const queryClient = new QueryClient();
-    const container = document.getElementById("root");
-    if (!container) {
-      throw new Error("Missing root container");
-    }
-
-    const root = createTestRoot(container);
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={queryClient}>
-          <Probe />
-        </QueryClientProvider>,
-      );
-    });
-
-    expect(getLatest().text).toBe("legacy text");
-    expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
-    expect(useDraftStore.getState().drafts["draft:legacy"]?.input).toEqual({
-      text: "legacy text",
-      attachments: [{ kind: "image", metadata: image }],
-    });
-  });
-
-  it("hydrates drafts saved by old builds with cwd", async () => {
-    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
-    const githubIssue: ComposerAttachment = {
-      kind: "github_issue",
-      item: {
-        kind: "issue",
-        number: 42,
-        title: "Unify attachments",
-        url: "https://github.com/bytetrue/byspace/issues/42",
-        state: "open",
-        body: "body",
-        labels: ["composer"],
-      },
-    };
-
-    function getLatest(): ReturnType<typeof useAgentInputDraft> {
-      if (!latest) {
-        throw new Error("Expected hook result");
-      }
-      return latest;
-    }
-
-    useDraftStore.setState({
-      drafts: {
-        "draft:new-shape": {
-          input: {
-            text: "new text",
-            attachments: [githubIssue],
-            cwd: "/persisted",
-          },
-          lifecycle: "active",
-          updatedAt: Date.now(),
-          version: 1,
-        } as unknown as DraftRecordForTest,
-      },
-      createModalDraft: null,
-    });
-
-    function Probe() {
-      latest = useAgentInputDraft({ draftKey: "draft:new-shape" });
-      return null;
-    }
-
-    const queryClient = new QueryClient();
-    const container = document.getElementById("root");
-    if (!container) {
-      throw new Error("Missing root container");
-    }
-
-    const root = createTestRoot(container);
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={queryClient}>
-          <Probe />
-        </QueryClientProvider>,
-      );
-    });
-
-    expect(getLatest().text).toBe("new text");
-    expect(getLatest().attachments).toEqual([githubIssue]);
-
-    await act(async () => {
-      root.unmount();
-    });
-
-    expect(useDraftStore.getState().drafts["draft:new-shape"]?.input).toEqual({
-      text: "new text",
-      attachments: [githubIssue],
-      cwd: "/persisted",
-    });
-  });
-
   it("updates and persists attachments through setAttachments", async () => {
     let latest: ReturnType<typeof useAgentInputDraft> | null = null;
     const image: AttachmentMetadata = {
@@ -433,18 +298,18 @@ describe("useAgentInputDraft live contract", () => {
     });
   });
 
-  it("attaches to an unmounted legacy draft without losing its input", async () => {
+  it("attaches to an unmounted draft without losing its input", async () => {
     const image: AttachmentMetadata = {
-      id: "legacy-image",
+      id: "existing-image",
       mimeType: "image/png",
       storageType: "web-indexeddb",
-      storageKey: "attachments/legacy-image",
+      storageKey: "attachments/existing-image",
       createdAt: 10,
     };
     useDraftStore.setState({
       drafts: {
-        "draft:legacy-workspace-file": {
-          input: { text: "legacy text", images: [image] },
+        "draft:workspace-file": {
+          input: { text: "existing text", attachments: [{ kind: "image", metadata: image }] },
           lifecycle: "active",
           updatedAt: Date.now(),
           version: 1,
@@ -452,13 +317,13 @@ describe("useAgentInputDraft live contract", () => {
       },
     });
 
-    await useDraftStore.getState().attachWorkspaceFile({
-      draftKey: "draft:legacy-workspace-file",
+    useDraftStore.getState().attachWorkspaceFile({
+      draftKey: "draft:workspace-file",
       attachment: createWorkspaceFileAttachment({ path: "src/app.ts" }),
     });
 
-    expect(useDraftStore.getState().getDraftInput("draft:legacy-workspace-file")).toEqual({
-      text: "legacy text",
+    expect(useDraftStore.getState().getDraftInput("draft:workspace-file")).toEqual({
+      text: "existing text",
       attachments: [
         { kind: "image", metadata: image },
         createWorkspaceFileAttachment({ path: "src/app.ts" }),

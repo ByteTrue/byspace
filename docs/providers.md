@@ -215,29 +215,6 @@ promise for completion: equal results, including equal discovery timestamps, emi
 
 ---
 
-## Provider Usage Fetchers
-
-Provider plan usage is fetch-on-demand, not a daemon push subscription. The app calls `provider.usage.list.request` through React Query when the usage tooltip or Host Usage settings screen is shown, and the daemon returns the normalized `ProviderUsage` list directly.
-
-To add plan usage for a provider, add `packages/server/src/services/quota-fetcher/providers/<provider>.ts` and register it in `packages/server/src/services/quota-fetcher/manifest.ts`. The provider file exports only its fetcher class; provider auth, endpoint constants, API schemas, and normalization helpers stay private in that file. A fetcher owns provider auth/API parsing and returns the generic shape:
-
-- `providerId`, `displayName`, `status`, and optional `planLabel`
-- any number of `windows` such as Session, Weekly, or Biweekly
-- optional `balances` for credits, USD, requests, or tokens
-- optional `details` for provider-specific rows
-
-Keep the protocol shape provider-agnostic. Do not add provider-specific renderers for new limit windows; labels and generic bars should carry the UI. API responses should be parsed and normalized with Zod inside the fetcher, while the protocol boundary stays strict so old/new client compatibility is explicit.
-
-Kimi Code usage follows the CLI-managed credential file at `KIMI_CODE_HOME` or `~/.kimi-code/credentials/kimi-code.json`; do not probe the legacy `~/.kimi` path as the primary source for current Kimi Code installs.
-
-Cursor usage reads the desktop `state.vscdb` token first, then `cursor-agent`'s `~/.config/cursor/auth.json`. Headless hosts only have the CLI file.
-
-### Usage fetchers are read-only on credentials
-
-A fetcher reads the provider's credential file and never writes it. On a 401 or 403 it returns `unavailable` and leaves refresh to the provider's own CLI: redeeming a refresh token in the fetcher invalidates the CLI's copy (refresh tokens are single-use), and rewriting the file through the fetcher's Zod schema drops any field the schema does not model, corrupting the file for the CLI.
-
----
-
 ## ACP Provider Checklist
 
 ### 1. Create the provider class

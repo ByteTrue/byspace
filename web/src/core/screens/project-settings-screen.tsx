@@ -48,7 +48,6 @@ import {
   useHostRuntimeIsConnected,
   useHostRuntimeSnapshot,
 } from "@/runtime/host-runtime";
-import { useHostFeature } from "@/runtime/host-features";
 import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
 import { useToast } from "@/contexts/toast-context";
@@ -550,7 +549,6 @@ function ProjectSettingsBody({
   );
 
   const data = readQuery.data;
-  const supportsCustomIcon = useHostFeature(selectedHost.serverId, "projectCustomIcon");
   const customIconRevision = selectedHost.customIconRevision ?? null;
   const projectIconTargets = useMemo(() => {
     const target = createProjectIconTarget({
@@ -621,7 +619,6 @@ function ProjectSettingsBody({
         projectId={selectedHost.projectId}
         projectViewKey={project.viewKey}
         client={client}
-        supportsCustomIcon={supportsCustomIcon}
         snapshot={editSnapshot}
       />
 
@@ -1237,7 +1234,6 @@ function ProjectSetupAgentCard({
 }: ProjectSetupAgentCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const isSupported = useHostFeature(selectedHost.serverId, "projectSetupSkill");
   const actionVersionRef = useRef(0);
   useEffect(
     () => () => {
@@ -1252,7 +1248,6 @@ function ProjectSetupAgentCard({
   const statusQuery = useQuery<AgentSkillsStatus, Error>({
     queryKey: statusQueryKey,
     queryFn: () => client.getAgentSkillsStatus(),
-    enabled: isSupported,
     retry: false,
   });
   const prepareSkillsMutation = useMutation({
@@ -1340,24 +1335,18 @@ function ProjectSetupAgentCard({
         <Item variant="outline">
           <ItemContent>
             <ItemTitle>{t("settings.project.projectSetup.actionTitle")}</ItemTitle>
-            <ItemDescription>
-              {isSupported
-                ? t("settings.project.projectSetup.description")
-                : t("settings.project.projectSetup.updateHost")}
-            </ItemDescription>
+            <ItemDescription>{t("settings.project.projectSetup.description")}</ItemDescription>
           </ItemContent>
-          {isSupported ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAction}
-              data-testid="project-setup-agent-action"
-              disabled={isWorking}
-            >
-              {isWorking ? <Spinner data-icon="inline-start" /> : null}
-              {statusQuery.isError ? t("common.actions.retry") : actionLabel}
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAction}
+            data-testid="project-setup-agent-action"
+            disabled={isWorking}
+          >
+            {isWorking ? <Spinner data-icon="inline-start" /> : null}
+            {statusQuery.isError ? t("common.actions.retry") : actionLabel}
+          </Button>
         </Item>
         {error ? (
           <div className="mt-3 flex flex-col">

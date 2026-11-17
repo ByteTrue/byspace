@@ -1190,14 +1190,6 @@ func (s *Store) loadDaemonConfigRaw() map[string]any {
 			tun["allowedTargets"] = []string{}
 		}
 	}
-	// COMPAT(daemonMcp): the wire still requires this object, so a hand-edited `mcp: null` or an
-	// object missing injectIntoAgents must not reach the client — it rejects the whole config
-	// frame and the Settings page never resolves. Nothing reads the values.
-	if mcp, ok := cfg["mcp"].(map[string]any); !ok {
-		cfg["mcp"] = daemonConfigDefaults()["mcp"]
-	} else if _, hasInject := mcp["injectIntoAgents"].(bool); !hasInject {
-		mcp["injectIntoAgents"] = true
-	}
 	liftAgentSettings(cfg, disk["agents"])
 	if daemon, ok := disk["daemon"].(map[string]any); ok {
 		liftAgentSettings(cfg, daemon["agents"])
@@ -1275,15 +1267,9 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 
 func daemonConfigDefaults() map[string]any {
 	return map[string]any{
-		// COMPAT(daemonMcp): the wire schema still requires `daemon.mcp.injectIntoAgents`, so a
-		// config response without it fails validation on every client and the Settings page never
-		// resolves. Nothing reads it — BySpace no longer injects a server — but it has to stay in
-		// the payload until the schema makes the field optional. Remove after that.
-		"mcp":                      map[string]any{"enabled": true, "injectIntoAgents": true},
 		"providers":                map[string]any{},
 		"metadataGeneration":       map[string]any{"providers": []any{}},
 		"autoArchiveAfterMerge":    false,
-		"enableTerminalAgentHooks": false,
 		"terminalAgentHooks":       map[string]bool{},
 		"appendSystemPrompt":       "",
 		"agentProfiles":            []any{},

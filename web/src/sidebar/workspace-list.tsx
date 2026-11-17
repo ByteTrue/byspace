@@ -31,7 +31,6 @@ import {
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { useProjectIcons } from "@/projects/icons";
-import { useHostFeatureMap } from "@/runtime/host-features";
 import { useHostRuntimeConnectionStatuses, useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
@@ -72,8 +71,6 @@ interface ListContext {
   autoHostLabelProjectKeys: ReadonlySet<string>;
   hostLabelByServerId: ReadonlyMap<string, string>;
   projectNameCueByViewKey: ReadonlyMap<string, string>;
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
-  supportsPinningByServerId: ReadonlyMap<string, boolean>;
   preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onWorkspacePress?: () => void;
@@ -119,7 +116,7 @@ function DetachedWorkspaceRow({
       shortcutNumber={context.shortcutIndexByWorkspaceKey.get(workspace.workspaceKey) ?? null}
       showShortcutBadge={context.showShortcutBadges}
       canCopyBranchName={workspace.projectKind === "git"}
-      canPin={context.supportsPinningByServerId.get(workspace.serverId) === true}
+      canPin
       onToggleWorkspacePin={context.onToggleWorkspacePin}
       onWorkspacePress={context.onWorkspacePress}
       allowRenameWithAgent={!inStatusGroup}
@@ -280,8 +277,6 @@ function ProjectBlockItem({
       autoHostLabelProjectKeys={context.autoHostLabelProjectKeys}
       hostLabelByServerId={context.hostLabelByServerId}
       projectNameCueByViewKey={context.projectNameCueByViewKey}
-      supportsMultiplicityByServerId={context.supportsMultiplicityByServerId}
-      supportsPinningByServerId={context.supportsPinningByServerId}
       preferredServerIdsByProjectViewKey={context.preferredServerIdsByProjectViewKey}
       onToggleWorkspacePin={context.onToggleWorkspacePin}
       onWorkspacePress={context.onWorkspacePress}
@@ -405,8 +400,6 @@ function useHostLookups(projects: SidebarProjectEntry[]) {
   return {
     hostLabelByServerId,
     hostBadgeByServerId: useHostBadges({ enabled: rowItems.host }),
-    supportsMultiplicityByServerId: useHostFeatureMap(serverIds, "workspaceMultiplicity"),
-    supportsPinningByServerId: useHostFeatureMap(serverIds, "workspacePinning"),
     preferredServerIdsByProjectViewKey,
   };
 }

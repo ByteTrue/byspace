@@ -5,7 +5,6 @@ import { compactProviderSnapshot } from "@bytetrue/protocol/provider-snapshot-co
 import { createProviderSnapshotCache, type ProviderSnapshotCache } from "./provider-snapshot-cache";
 
 const SNAPSHOT_KEY_PREFIX = "@byspace/provider-snapshot/v2:";
-const SNAPSHOT_INDEX_KEY = "@byspace/provider-snapshot-index/v2";
 function createStorage(maxSnapshotBytes = Number.POSITIVE_INFINITY) {
   const values = new Map<string, string>();
   const stats = { getAllKeysCalls: 0 };
@@ -104,7 +103,6 @@ function snapshotBytes(values: Map<string, string>): number {
 }
 
 function expectConsistentSnapshots(values: Map<string, string>): void {
-  expect(values.has(SNAPSHOT_INDEX_KEY)).toBe(false);
   for (const [key, value] of values) {
     if (!key.startsWith(SNAPSHOT_KEY_PREFIX)) continue;
     const [serverId, kind] = JSON.parse(key.slice(SNAPSHOT_KEY_PREFIX.length));
@@ -255,7 +253,10 @@ describe("provider snapshot cache", () => {
   it("discards an invalid cache record", async () => {
     const storage = createStorage();
     const cache = createProviderSnapshotCache(storage);
-    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/repo"]', "not json");
+    storage.values.set(
+      `${SNAPSHOT_KEY_PREFIX}${JSON.stringify(["server-1", "cwd", "/repo"])}`,
+      "not json",
+    );
 
     await expect(cache.read("server-1", "/repo")).resolves.toBeNull();
     expect([...storage.values.keys()].some((key) => key.startsWith(SNAPSHOT_KEY_PREFIX))).toBe(
@@ -301,7 +302,7 @@ describe("provider snapshot cache", () => {
 
   it("clears unindexed snapshots once when creating the cache index", async () => {
     const storage = createStorage();
-    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set(`${SNAPSHOT_KEY_PREFIX}legacy`, "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await cache.write({
@@ -312,26 +313,26 @@ describe("provider snapshot cache", () => {
       compactSnapshot: compactProviderSnapshot(snapshotEntries("current")),
     });
 
-    expect(storage.values.has('@byspace/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
+    expect(storage.values.has(`${SNAPSHOT_KEY_PREFIX}legacy`)).toBe(false);
     await expect(cache.read("server-1", "/current")).resolves.not.toBeNull();
     expectConsistentSnapshots(storage.values);
   });
 
   it("clears unindexed snapshots on the first read", async () => {
     const storage = createStorage();
-    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set(`${SNAPSHOT_KEY_PREFIX}legacy`, "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await expect(cache.read("server-1", "/legacy")).resolves.toBeNull();
 
-    expect(storage.values.has('@byspace/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
+    expect(storage.values.has(`${SNAPSHOT_KEY_PREFIX}legacy`)).toBe(false);
     expectConsistentSnapshots(storage.values);
     expect(storage.stats.getAllKeysCalls).toBe(1);
   });
 
   it("initializes the cache index once when the first read and write race", async () => {
     const storage = createStorage();
-    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set(`${SNAPSHOT_KEY_PREFIX}legacy`, "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await Promise.all([
@@ -395,9 +396,8 @@ describe("provider snapshot cache", () => {
     expectConsistentSnapshots(storage.values);
   });
 
-  it("removes obsolete index data before accepting another snapshot", async () => {
+  it("removes unparseable snapshot records before accepting another snapshot", async () => {
     const storage = createStorage();
-    storage.values.set(SNAPSHOT_INDEX_KEY, "corrupt");
     storage.values.set(`${SNAPSHOT_KEY_PREFIX}legacy`, "legacy");
     const cache = createProviderSnapshotCache(storage);
 
@@ -494,7 +494,7 @@ describe("provider snapshot cache", () => {
     },
   );
 
-  it("repairs partial eviction, stale index metadata, and preserves unrelated storage", async () => {
+  it("repairs partial eviction and preserves unrelated storage", async () => {
     const storage = createStorage();
     const maxBytes = 1_000;
     const cache = createProviderSnapshotCache(storage, { maxBytes });
@@ -515,13 +515,6 @@ describe("provider snapshot cache", () => {
       label: "newest",
       generatedAt: "2026-08-03T00:00:00.000Z",
     });
-    storage.values.set(
-      SNAPSHOT_INDEX_KEY,
-      JSON.stringify({
-        version: 1,
-        entries: [{ key: `${SNAPSHOT_KEY_PREFIX}phantom`, bytes: 999_999, writtenAt: "bad" }],
-      }),
-    );
 
     const restarted = createProviderSnapshotCache(storage, { maxBytes });
     await writeSnapshot(restarted, {

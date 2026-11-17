@@ -60,7 +60,6 @@ describe("pickerItemToCheckoutRequest", () => {
       action: "checkout",
       refName: "feature/picker",
       checkoutSource: { kind: "change_request", forge: "github", number: 42 },
-      githubPrNumber: 42,
     });
   });
 
@@ -79,11 +78,10 @@ describe("pickerItemToCheckoutRequest", () => {
       action: "checkout",
       refName: "orphan",
       checkoutSource: { kind: "change_request", forge: "github", number: 7 },
-      githubPrNumber: 7,
     });
   });
 
-  it("does not send the legacy githubPrNumber for non-GitHub change requests", () => {
+  it("maps a non-GitHub change request to checkout with its project path", () => {
     const item: PickerItem = {
       kind: "github-pr",
       item: {

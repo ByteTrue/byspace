@@ -44,7 +44,6 @@ func TestSessionMessageSerializesSkillsCommands(t *testing.T) {
 		"agent.skills.reconcile.request",
 		"agent.skills.uninstall.request",
 		"agent.skills.save_selection.request",
-		"agent.skills.import_legacy_selection.request",
 	} {
 		raw, _ := json.Marshal(map[string]any{"type": msgType, "requestId": "r1"})
 		if !sessionMessageSerializes(raw) {

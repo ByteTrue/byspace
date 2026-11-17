@@ -516,52 +516,6 @@ describe("workspace message schemas", () => {
     expect(response.success).toBe(false);
   });
 
-  test("parses legacy editor RPC messages for compatibility", () => {
-    const listRequest = SessionInboundMessageSchema.parse({
-      type: "list_available_editors_request",
-      requestId: "req-editors",
-    });
-    const openRequest = SessionInboundMessageSchema.parse({
-      type: "open_in_editor_request",
-      requestId: "req-open-editor",
-      editorId: "unknown-editor",
-      path: "/tmp/repo",
-      mode: "reveal",
-      cwd: "/tmp",
-    });
-    const listResponse = SessionOutboundMessageSchema.parse({
-      type: "list_available_editors_response",
-      payload: {
-        requestId: "req-editors",
-        editors: [{ id: "unknown-editor", label: "Unknown Editor" }],
-        error: null,
-      },
-    });
-    const openResponse = SessionOutboundMessageSchema.parse({
-      type: "open_in_editor_response",
-      payload: {
-        requestId: "req-open-editor",
-        error: "Editor opening moved to the desktop app",
-      },
-    });
-
-    expect(listRequest.type).toBe("list_available_editors_request");
-    expect(openRequest.type).toBe("open_in_editor_request");
-    expect(listResponse.type).toBe("list_available_editors_response");
-    expect(openResponse.type).toBe("open_in_editor_response");
-  });
-
-  test("rejects empty legacy editor ids", () => {
-    const result = SessionInboundMessageSchema.safeParse({
-      type: "open_in_editor_request",
-      requestId: "req-open-empty",
-      editorId: "",
-      path: "/tmp/repo",
-    });
-
-    expect(result.success).toBe(false);
-  });
-
   test("rejects invalid workspace update payload", () => {
     const result = SessionOutboundMessageSchema.safeParse({
       type: "workspace_update",

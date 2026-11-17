@@ -33,21 +33,17 @@ func (r *recordingSink) reset() {
 
 func newTimelineTestServer() *Server {
 	return &Server{
-		clients:           make(map[frameSink]bool),
-		timelineViews:     make(map[frameSink]map[string]bool),
-		selectiveTimeline: make(map[frameSink]bool),
+		clients:       make(map[frameSink]bool),
+		timelineViews: make(map[frameSink]map[string]bool),
 	}
 }
 
-func helloFrame(t *testing.T, caps string) []byte {
+func helloFrame(t *testing.T) []byte {
 	t.Helper()
 	envelope := map[string]any{
 		"type":            "hello",
 		"clientId":        "c1",
 		"protocolVersion": WSProtocolVersion,
-	}
-	if caps != "" {
-		envelope["capabilities"] = json.RawMessage(caps)
 	}
 	raw, err := json.Marshal(envelope)
 	if err != nil {
@@ -72,29 +68,28 @@ func subscribeFrame(t *testing.T, requestID string, agentIDs []string) []byte {
 	return raw
 }
 
-// A client that declares selective_agent_timeline receives agent_stream only for the agents it
-// subscribed to. Node's forwardAgentStream scopes per source the same way, and the capability is
-// what keeps the filtering legal: a client that never declared it keeps getting every stream.
+// agent_stream is scoped to each socket's viewed-agent set: a socket that never subscribed
+// receives no agent timelines at all.
 func TestAgentStreamIsScopedToViewedAgents(t *testing.T) {
 	srv := newTimelineTestServer()
 	ctx := context.Background()
 
 	selective := &recordingSink{}
-	legacy := &recordingSink{}
-	srv.handleTextFrame(ctx, selective, helloFrame(t, `{"selective_agent_timeline":true}`))
-	srv.handleTextFrame(ctx, legacy, helloFrame(t, ""))
+	unsubscribed := &recordingSink{}
+	srv.handleTextFrame(ctx, selective, helloFrame(t))
+	srv.handleTextFrame(ctx, unsubscribed, helloFrame(t))
 	srv.handleTextFrame(ctx, selective, subscribeFrame(t, "r1", []string{"agent_viewed"}))
 
 	selective.reset()
-	legacy.reset()
+	unsubscribed.reset()
 	srv.broadcastSessionMsg("agent_stream", map[string]any{"agentId": "agent_hidden", "event": "x"})
 	srv.broadcastSessionMsg("agent_stream", map[string]any{"agentId": "agent_viewed", "event": "y"})
 
 	if got := sessionTypes(selective); len(got) != 1 {
 		t.Fatalf("selective client got %v, want exactly the viewed agent's stream", got)
 	}
-	if got := sessionTypes(legacy); len(got) != 2 {
-		t.Fatalf("legacy client got %v, want both streams", got)
+	if got := sessionTypes(unsubscribed); len(got) != 0 {
+		t.Fatalf("unsubscribed client got %v, want no streams", got)
 	}
 
 	// Non-stream messages are not scoped: agent_update carries the sidebar roster, including
@@ -111,24 +106,5 @@ func TestAgentStreamIsScopedToViewedAgents(t *testing.T) {
 	srv.broadcastSessionMsg("agent_stream", map[string]any{"agentId": "agent_viewed", "event": "y"})
 	if got := sessionTypes(selective); len(got) != 0 {
 		t.Fatalf("after clearing the subscription the client got %v, want nothing", got)
-	}
-}
-
-func TestHelloDeclaresSelectiveTimeline(t *testing.T) {
-	cases := []struct {
-		name string
-		raw  string
-		want bool
-	}{
-		{"absent", "", false},
-		{"empty object", "{}", false},
-		{"declared true", `{"selective_agent_timeline":true}`, true},
-		{"declared false", `{"selective_agent_timeline":false}`, false},
-		{"other caps only", `{"voice":true}`, false},
-	}
-	for _, tc := range cases {
-		if got := helloDeclaresSelectiveTimeline(json.RawMessage(tc.raw)); got != tc.want {
-			t.Errorf("%s: got %v want %v", tc.name, got, tc.want)
-		}
 	}
 }

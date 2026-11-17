@@ -94,7 +94,7 @@ describe("EncryptedChannel", () => {
       transport,
       deriveSharedKey(first.secretKey, second.publicKey),
       {},
-      { binaryCiphertext: true },
+      {},
     );
     channel.setState("open");
     let completed = false;
@@ -147,8 +147,8 @@ describe("EncryptedChannel", () => {
     const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
     const challenge = "nonce-abc123";
 
-    // Ciphertext arrives as base64 text until binaryCiphertext is negotiated, so only a payload
-    // starting with "{" is plaintext handshake traffic.
+    // Text ciphertext arrives as base64, so only a payload starting with "{" is plaintext
+    // handshake traffic.
     const sentToDaemon: ArrayBuffer[] = [];
     let clientPublicB64 = "";
     const transport: Transport = {
@@ -397,7 +397,6 @@ describe("EncryptedChannel", () => {
     transport.onmessage?.({
       data: JSON.stringify({
         type: "e2ee_ready",
-        capabilities: { binaryCiphertext: true },
       }),
       isBinary: false,
     });
@@ -494,7 +493,7 @@ describe("EncryptedChannel", () => {
     expect(daemonTransport.close).toHaveBeenCalledWith(1008, "E2EE re-handshake key mismatch");
   });
 
-  it("preserves ASCII-only binary frames in negotiated mode", async () => {
+  it("preserves ASCII-only binary frames as binary ciphertext", async () => {
     const [daemonTransport, clientTransport] = createMockTransportPair();
     const daemonKeyPair = generateKeyPair();
     const daemonMessages: (string | ArrayBuffer)[] = [];
@@ -526,7 +525,7 @@ describe("EncryptedChannel", () => {
     expect(new Uint8Array(daemonMessages[0] as ArrayBuffer)).toEqual(new Uint8Array(binary));
   });
 
-  it("keeps negotiated text as base64 text frames", async () => {
+  it("keeps text as base64 text frames", async () => {
     const [daemonTransport, clientTransport] = createMockTransportPair();
     const daemonKeyPair = generateKeyPair();
     const daemonMessages: (string | ArrayBuffer)[] = [];
@@ -555,40 +554,7 @@ describe("EncryptedChannel", () => {
     expect(daemonMessages).toEqual(["text payload"]);
   });
 
-  it("new client stays base64-only when an old daemon does not accept the capability", async () => {
-    const daemonKeyPair = generateKeyPair();
-    const clientTransport: Transport = {
-      send: vi.fn(),
-      close: vi.fn(),
-      onmessage: null,
-      onclose: null,
-      onerror: null,
-    };
-    let resolveOpen: (() => void) | null = null;
-    const opened = new Promise<void>((resolve) => {
-      resolveOpen = resolve;
-    });
-    const clientChannel = await createClientChannel(
-      clientTransport,
-      exportPublicKey(daemonKeyPair.publicKey),
-      { onopen: () => resolveOpen?.() },
-    );
-
-    const hello = JSON.parse(
-      (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string,
-    ) as { key: string };
-    expect(hello).toMatchObject({ capabilities: { binaryCiphertext: true } });
-    clientTransport.onmessage?.({ data: JSON.stringify({ type: "e2ee_ready" }), isBinary: false });
-    await opened;
-
-    (clientTransport.send as ReturnType<typeof vi.fn>).mockClear();
-    await clientChannel.send(new TextEncoder().encode("legacy binary").buffer);
-    expect(typeof (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe(
-      "string",
-    );
-  });
-
-  it("new daemon stays base64-only for an old client and drains pipelined traffic", async () => {
+  it("drains pipelined traffic after the daemon handshake", async () => {
     const daemonKeyPair = generateKeyPair();
     const clientKeyPair = generateKeyPair();
     const daemonMessages: (string | ArrayBuffer)[] = [];
@@ -629,8 +595,8 @@ describe("EncryptedChannel", () => {
 
     (daemonTransport.send as ReturnType<typeof vi.fn>).mockClear();
     await daemonChannel.send(new Uint8Array([1, 2, 3]).buffer);
-    expect(typeof (daemonTransport.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe(
-      "string",
+    expect((daemonTransport.send as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBeInstanceOf(
+      ArrayBuffer,
     );
   });
 });

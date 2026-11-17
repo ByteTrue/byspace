@@ -128,7 +128,7 @@ func TestClientSessionPreservesTextAndBinaryFrames(t *testing.T) {
 	}
 	wireBinary := clientTransport.sent[len(clientTransport.sent)-1]
 	if !wireBinary.IsBinary {
-		t.Fatal("binary plaintext must use binary ciphertext when negotiated")
+		t.Fatal("binary plaintext must use binary ciphertext on a binary websocket frame")
 	}
 	binary, err := daemon.Receive(wireBinary)
 	if err != nil || binary == nil || !binary.IsBinary || !bytes.Equal(binary.Data, binaryPlaintext) {
@@ -143,36 +143,6 @@ func TestClientSessionPreservesTextAndBinaryFrames(t *testing.T) {
 	}
 }
 
-func TestClientSessionReadsLegacyRawBinaryCiphertext(t *testing.T) {
-	clientKeys, err := GenerateKeyPair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := NewClientSession(&mockTransport{}, clientKeys)
-	peerKeys, err := GenerateKeyPair()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Begin(peerKeys.PublicKey); err != nil {
-		t.Fatal(err)
-	}
-	shared, err := DeriveSharedKey(clientKeys.SecretKey, peerKeys.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plaintext := []byte("legacy binary ciphertext")
-	sealed, err := Encrypt(shared, plaintext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client.handshaked = true
-	client.binaryCiphertext = false
-	frame, err := client.Receive(Frame{Data: sealed, IsBinary: true})
-	if err != nil || frame == nil || !frame.IsBinary || !bytes.Equal(frame.Data, plaintext) {
-		t.Fatalf("legacy binary ciphertext = %+v, err=%v", frame, err)
-	}
-}
-
 func TestDaemonSessionHandshakeAndFrames(t *testing.T) {
 	daemonKP, _ := GenerateKeyPair()
 	clientKP, _ := GenerateKeyPair()
@@ -182,9 +152,8 @@ func TestDaemonSessionHandshakeAndFrames(t *testing.T) {
 	sess := NewDaemonSession(tr, daemonKP)
 
 	helloBytes, _ := json.Marshal(HelloMessage{
-		Type:         "e2ee_hello",
-		Key:          ExportKey(clientKP.PublicKey),
-		Capabilities: &Capabilities{BinaryCiphertext: true},
+		Type: "e2ee_hello",
+		Key:  ExportKey(clientKP.PublicKey),
 	})
 
 	out, err := sess.Receive(Frame{Data: helloBytes, IsBinary: false})
@@ -229,7 +198,7 @@ func TestDaemonSessionHandshakeAndFrames(t *testing.T) {
 	}
 	lastSent := tr.sent[len(tr.sent)-1]
 	if !lastSent.IsBinary {
-		t.Fatal("expected binary ciphertext frame when binaryCiphertext=true")
+		t.Fatal("expected binary ciphertext frame for binary plaintext")
 	}
 	openedTerm, err := Decrypt(clientShared, lastSent.Data)
 	if err != nil || !bytes.Equal(openedTerm, termBytes) {

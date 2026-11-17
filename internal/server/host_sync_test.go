@@ -181,13 +181,3 @@ func findHostRecord(t *testing.T, records []hostsync.Record, id string) hostsync
 	return hostsync.Record{}
 }
 
-func TestServerInfoAdvertisesHostSync(t *testing.T) {
-	srv := newTestServer(t, t.TempDir())
-	b, err := json.Marshal(srv.buildServerInfoPayload())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), `"hostSync":true`) {
-		t.Fatalf("server_info does not advertise hostSync: %s", b)
-	}
-}

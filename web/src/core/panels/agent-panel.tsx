@@ -60,7 +60,6 @@ import {
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
-import { useHasPluginComposerPills } from "@/plugins";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import {
   type HostRuntimeConnectionStatus,
@@ -96,7 +95,6 @@ import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/vi
 import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents";
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
-import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
@@ -303,13 +301,10 @@ function storeFetchedAgentDetail(input: {
   result: NonNullable<FetchAgentResult>;
 }): Agent {
   const normalized = normalizeAgentSnapshot(input.result.agent, input.serverId);
-  const hydrated: Agent = applyLegacyDaemonWorkspaceOwnership({
-    serverId: input.serverId,
-    agent: {
-      ...normalized,
-      projectPlacement: input.result.project,
-    },
-  });
+  const hydrated: Agent = {
+    ...normalized,
+    projectPlacement: input.result.project,
+  };
   const store = useSessionStore.getState();
 
   if (shouldStoreFetchedAgentInActiveDirectory(hydrated)) {
@@ -412,7 +407,7 @@ function DraftPanel() {
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
-      const agent = applyLegacyDaemonWorkspaceOwnership({ serverId, agent: normalized });
+      const agent = normalized;
       getHostRuntimeStore().acceptAgentSnapshot(serverId, agent);
       retargetCurrentTab({ kind: "agent", agentId: agentSnapshot.id });
     },
@@ -1270,7 +1265,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     parentAgentId: agentId,
     rows: subagentRows,
   });
-  const hasPluginComposerPills = useHasPluginComposerPills(serverId, workspaceId, agentId);
   const hasActiveComposer = !agentState.archivedAt && !isArchivingCurrentAgent;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const handleCollapseAll = useCallback(
@@ -1298,7 +1292,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       subagentRows,
       tasks,
       archiveFinishedStatus: archiveFinishedSubagents.status,
-      hasPluginComposerPills,
     });
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
@@ -1386,13 +1379,11 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         <AgentTracks
           serverId={serverId}
           workspaceId={workspaceId}
-          agentId={agentId}
           cwd={cwd}
           subagentRows={subagentRows}
           tasks={tasks}
           archiveFinishedStatus={archiveFinishedSubagents.status}
           onArchiveFinished={archiveFinishedSubagents.archiveFinished}
-          hasPluginComposerPills={hasPluginComposerPills}
           actions={streamControls}
         />
       ) : null}

@@ -25,7 +25,6 @@ interface ComposerForgeAutoAttachInput {
   isConnected: boolean;
   serverId: string;
   cwd: string;
-  supportsForgeSearch?: boolean;
   setAttachments: Dispatch<SetStateAction<UserComposerAttachment[]>>;
   onChangeRequestDetected?: () => void;
   onChangeRequestAdded?: (item: ForgeSearchItem) => void;
@@ -478,7 +477,6 @@ async function fetchForgeRefSearch({
         serverId: snapshot.serverId,
         cwd: snapshot.cwd,
         query: String(ref.number),
-        supportsForgeSearch: snapshot.supportsForgeSearch,
         enabled: true,
       }),
     );
@@ -521,12 +519,7 @@ function forgeRefKey(ref: ForgeRef): string {
 }
 
 function attachmentKey(attachment: ComposerAttachment | undefined): string | null {
-  if (
-    attachment?.kind !== "forge_change_request" &&
-    attachment?.kind !== "forge_issue" &&
-    attachment?.kind !== "github_pr" &&
-    attachment?.kind !== "github_issue"
-  ) {
+  if (attachment?.kind !== "forge_change_request" && attachment?.kind !== "forge_issue") {
     return null;
   }
   return `${attachment.item.kind}:${attachment.item.number}`;

@@ -1,13 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import localStorageAsync from "~/lib/local-storage-async";
-import type { AttachmentMetadata, WorkspaceFileComposerAttachment } from "@/attachments/types";
+import type { WorkspaceFileComposerAttachment } from "@/attachments/types";
 import { appendWorkspaceFileAttachment } from "@/attachments/workspace-file";
-import {
-  garbageCollectAttachments,
-  persistAttachmentFromDataUrl,
-  persistAttachmentFromFileUri,
-} from "@/attachments/service";
+import { garbageCollectAttachments } from "@/attachments/service";
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
@@ -16,9 +12,7 @@ import {
   applyClearDraftRecord,
   collectReferencedAttachmentIdsFromState,
   DRAFT_STORE_VERSION,
-  isAttachmentMetadata,
-  isCanonicalDraftInput,
-  isLegacyDraftImage,
+  DraftStoreStateSchema,
   normalizeComposerAttachment,
   pruneFinalizedDraftRecords,
   toDraftInputIfReady,
@@ -27,12 +21,6 @@ import {
   type DraftRecord,
   type DraftStoreState,
 } from "./state";
-import {
-  migrateDraftInput,
-  migratePersistedState,
-  type MigrateLegacyImages,
-  PersistedDraftStoreSchema,
-} from "./migration";
 import { createDraftPersistStorage } from "./persistence";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 
@@ -40,7 +28,6 @@ export type { DraftInput, DraftLifecycleState } from "./state";
 
 interface DraftStoreActions {
   getDraftInput: (draftKey: string) => DraftInput | undefined;
-  hydrateDraftInput: (input: { draftKey: string }) => Promise<DraftInput | undefined>;
   saveDraftInput: (input: { draftKey: string; draft: DraftInput }) => void;
   markDraftLifecycle: (input: { draftKey: string; lifecycle: DraftLifecycleState }) => void;
   clearDraftInput: (input: {
@@ -50,7 +37,7 @@ interface DraftStoreActions {
   attachWorkspaceFile: (input: {
     draftKey: string;
     attachment: WorkspaceFileComposerAttachment;
-  }) => Promise<void>;
+  }) => void;
   getCreateModalDraft: () => DraftInput | null;
   saveCreateModalDraft: (draft: DraftInput | null) => void;
   collectActiveAttachmentIds: () => string[];
@@ -64,7 +51,7 @@ type DraftStore = DraftStoreState & DraftStoreRuntimeState & DraftStoreActions;
 
 let gcScheduled = false;
 const draftPersistStorage = createDraftPersistStorage(
-  createValidatedPersistStorage(localStorageAsync, PersistedDraftStoreSchema),
+  createValidatedPersistStorage(localStorageAsync, DraftStoreStateSchema),
 );
 
 export function flushDraftPersistStorage(): Promise<void> {
@@ -86,45 +73,6 @@ function createDraftRecord(input: {
     version: (input.previousVersion ?? 0) + 1,
   };
 }
-
-const migrateLegacyImages: MigrateLegacyImages = async (images) => {
-  if (images.length === 0) {
-    return [];
-  }
-
-  const migrated = await Promise.all(
-    images.map(async (entry) => {
-      if (isAttachmentMetadata(entry)) {
-        return entry;
-      }
-      if (!isLegacyDraftImage(entry)) {
-        return null;
-      }
-
-      try {
-        if (entry.uri.startsWith("data:")) {
-          return await persistAttachmentFromDataUrl({
-            dataUrl: entry.uri,
-            mimeType: entry.mimeType,
-          });
-        }
-
-        return await persistAttachmentFromFileUri({
-          uri: entry.uri,
-          mimeType: entry.mimeType,
-        });
-      } catch (error) {
-        console.warn("[DraftStore] Failed to migrate legacy draft attachment", {
-          uri: entry.uri,
-          error,
-        });
-        return null;
-      }
-    }),
-  );
-
-  return migrated.filter((entry): entry is AttachmentMetadata => entry !== null);
-};
 
 async function runAttachmentGc(): Promise<void> {
   gcScheduled = false;
@@ -230,24 +178,6 @@ function scheduleAttachmentGc(): void {
   }, 0);
 }
 
-async function migrateAllLegacyDrafts(): Promise<void> {
-  const state = useDraftStore.getState();
-  const keys = Object.entries(state.drafts)
-    .filter(([, record]) => record.lifecycle === "active" && !isCanonicalDraftInput(record.input))
-    .map(([draftKey]) => draftKey);
-
-  for (const draftKey of keys) {
-    try {
-      await state.hydrateDraftInput({ draftKey });
-    } catch (error) {
-      console.warn("[DraftStore] Failed to migrate draft during startup", {
-        draftKey,
-        error,
-      });
-    }
-  }
-}
-
 export const useDraftStore = create<DraftStore>()(
   persist(
     (set, get) => ({
@@ -258,45 +188,6 @@ export const useDraftStore = create<DraftStore>()(
       getDraftInput: (draftKey) => {
         const record = get().drafts[draftKey];
         return toDraftInputIfReady(record);
-      },
-
-      hydrateDraftInput: async ({ draftKey }) => {
-        const current = get().drafts[draftKey];
-        if (!current) {
-          return undefined;
-        }
-        if (current.lifecycle !== "active") {
-          return undefined;
-        }
-        const ready = toDraftInputIfReady(current);
-        if (ready) {
-          return ready;
-        }
-
-        const migratedDraft = await migrateDraftInput(
-          { rawInput: current.input },
-          { migrateLegacyImages },
-        );
-
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          if (!existing || existing.version !== current.version) {
-            return state;
-          }
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: createDraftRecord({
-                draft: migratedDraft,
-                lifecycle: existing.lifecycle,
-                previousVersion: existing.version,
-              }),
-            },
-          };
-        });
-
-        scheduleAttachmentGc();
-        return migratedDraft;
       },
 
       saveDraftInput: ({ draftKey, draft }) => {
@@ -364,8 +255,7 @@ export const useDraftStore = create<DraftStore>()(
         scheduleAttachmentGc();
       },
 
-      attachWorkspaceFile: async ({ draftKey, attachment }) => {
-        await get().hydrateDraftInput({ draftKey });
+      attachWorkspaceFile: ({ draftKey, attachment }) => {
         set((state) => {
           const existing = state.drafts[draftKey];
           const draft = toDraftInputIfReady(existing) ?? { text: "", attachments: [] };
@@ -420,14 +310,8 @@ export const useDraftStore = create<DraftStore>()(
       version: DRAFT_STORE_VERSION,
       storage: draftPersistStorage,
       partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),
-      migrate: (state) =>
-        migratePersistedState(state, {
-          migrateLegacyImages,
-          nowMs: Date.now(),
-        }),
       onRehydrateStorage: () => {
         return () => {
-          void migrateAllLegacyDrafts();
           scheduleAttachmentGc();
         };
       },

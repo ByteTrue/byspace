@@ -126,6 +126,14 @@ class FakeDirectoryClient {
   getLastServerInfoMessage(): null {
     return null;
   }
+
+  async listWorkspaceLabels(): Promise<Awaited<ReturnType<DaemonClient["listWorkspaceLabels"]>>> {
+    return {
+      requestId: "labels",
+      labels: [],
+      sync: { mode: "snapshot", generation: "labels-1", headSeq: 0, removals: [] },
+    };
+  }
 }
 
 const serverIds = new Set<string>();
@@ -401,7 +409,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
 
     await directory.refreshAll();
@@ -421,7 +428,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
 
     directory.setAgentRouteDemand(["agent-1"]);
@@ -508,7 +514,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
 
     const refresh = directory.refreshWorkspaces();
@@ -588,7 +593,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true, directorySync: true },
     });
 
     const refresh = directory.refreshWorkspaces();
@@ -649,7 +653,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true, directorySync: true },
     });
 
     const refresh = directory.refreshWorkspaces();
@@ -786,7 +789,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { directorySync: true, workspaceMultiplicity: true },
     });
 
     const refresh = directory.refreshAgents();
@@ -839,7 +841,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { directorySync: true, workspaceMultiplicity: true },
     });
 
     await directory.refreshAgents({
@@ -874,7 +875,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
     await refresh;
 
@@ -892,7 +892,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true, projectList: true },
     });
 
     await directory.refreshWorkspaces();
@@ -965,7 +964,6 @@ describe("DirectorySync session readiness", () => {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true, projectList: true, directorySync: true },
     });
     client.projectResult = {
       requestId: "projects",
@@ -1035,13 +1033,13 @@ describe("DirectorySync session readiness", () => {
   it("buffers workspace and project updates in the same hydration transaction", async () => {
     const serverId = "workspace-project-transaction";
     const { client, directory } = createDirectory(serverId);
+    client.projectResult = { requestId: "projects", projects: [] };
     const store = useSessionStore.getState();
     store.initializeSession(serverId, client as unknown as DaemonClient, 1);
     store.updateSessionServerInfo(serverId, {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
     const completeFetch = client.holdWorkspaceFetch();
 
@@ -1103,13 +1101,13 @@ describe("DirectorySync session readiness", () => {
   it("buffers project updates from the online epoch before workspace hydration starts", async () => {
     const serverId = "project-before-workspace-hydration";
     const { client, directory } = createDirectory(serverId);
+    client.projectResult = { requestId: "projects", projects: [] };
     const store = useSessionStore.getState();
     store.initializeSession(serverId, client as unknown as DaemonClient, 1);
     store.updateSessionServerInfo(serverId, {
       serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: true },
     });
 
     client.emit({
@@ -1167,7 +1165,7 @@ function createSqliteCache() {
     },
   };
   const storage = createSqliteReplicaRowStore({ open: async () => connection }, 1);
-  const cache = new ReplicaCache(storage, { clearLegacyCache: async () => {} });
+  const cache = new ReplicaCache(storage);
   return {
     cache,
     database,

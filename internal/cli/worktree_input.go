@@ -82,9 +82,12 @@ func buildWorktreeCreateRequest(options worktreeCreateOptions, cwd string) (map[
 			return nil, fmt.Errorf("invalid --pr: %q, expected a positive integer", options.PRNumber)
 		}
 		request := map[string]any{
-			"cwd":            cwd,
-			"action":         "checkout",
-			"githubPrNumber": number,
+			"cwd":    cwd,
+			"action": "checkout",
+			"checkoutSource": map[string]any{
+				"kind":   "change_request",
+				"number": number,
+			},
 		}
 		if slug := strings.TrimSpace(options.Slug); slug != "" {
 			request["worktreeSlug"] = slug

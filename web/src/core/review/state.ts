@@ -19,7 +19,6 @@ export interface ReviewDraftStoreState {
 
 export interface SerializedReviewDraftState {
   drafts: Record<string, ReviewDraftComment[]>;
-  activeModesByScope?: Record<string, ReviewDraftMode>;
 }
 
 const IsoDateTimeSchema = z.string().datetime({ offset: true });
@@ -36,8 +35,6 @@ export const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictO
 export const SerializedReviewDraftStateSchema: z.ZodType<SerializedReviewDraftState> =
   z.strictObject({
     drafts: z.record(z.string(), z.array(ReviewDraftCommentSchema)),
-    // COMPAT(reviewDraftModes): v1 persisted this field; v2 discards it during migration.
-    activeModesByScope: z.record(z.string(), z.enum(["uncommitted", "base"])).optional(),
   });
 
 export function addCommentToState(
@@ -111,13 +108,6 @@ export function serializeReviewDraftState(
 ): SerializedReviewDraftState {
   return {
     drafts: state.drafts,
-  };
-}
-
-export function normalizePersistedState(state: unknown): ReviewDraftStoreState {
-  const result = SerializedReviewDraftStateSchema.safeParse(state);
-  return {
-    drafts: result.success ? result.data.drafts : {},
   };
 }
 

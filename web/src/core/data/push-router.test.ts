@@ -40,7 +40,6 @@ const daemonConfig: MutableDaemonConfig = {
   providers: {},
   metadataGeneration: { providers: [] },
   autoArchiveAfterMerge: false,
-  enableTerminalAgentHooks: false,
   appendSystemPrompt: "",
 };
 

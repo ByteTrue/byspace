@@ -169,7 +169,6 @@ vi.mock("@/components/ui/select-field", () => ({
 const mockSnapshot = vi.hoisted(() => ({
   current: {
     entries: undefined as ProviderSnapshotEntry[] | undefined,
-    supportsSnapshot: false,
   },
 }));
 
@@ -180,22 +179,9 @@ vi.mock("@/hooks/use-providers-snapshot", () => ({
     isFetching: false,
     isRefreshing: false,
     error: null,
-    supportsSnapshot: mockSnapshot.current.supportsSnapshot,
     refresh: vi.fn(),
     refetchIfStale: vi.fn(),
   }),
-}));
-
-const mockHostFeatures = vi.hoisted(() => ({
-  current: { importSessionSearch: true, importSessionWorkspaceTarget: true } as Record<
-    string,
-    boolean
-  >,
-}));
-
-vi.mock("@/runtime/host-features", () => ({
-  useHostFeature: (_serverId: string | null, feature: string) =>
-    mockHostFeatures.current[feature] === true,
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
@@ -217,22 +203,15 @@ interface RenderOptions {
   onImported?: (agent: Awaited<ReturnType<DaemonClient["importAgent"]>>) => void;
   cwd?: string | null;
   workspaceId?: string;
-  supportsSearch?: boolean;
   projects?: Array<{ iconWorkingDir: string; projectName: string }>;
   snapshot?: {
     entries?: ProviderSnapshotEntry[];
-    supportsSnapshot?: boolean;
   };
 }
 
 function applyHostMocks(options?: RenderOptions) {
   mockSnapshot.current = {
     entries: options?.snapshot?.entries,
-    supportsSnapshot: options?.snapshot?.supportsSnapshot ?? false,
-  };
-  mockHostFeatures.current = {
-    importSessionSearch: options?.supportsSearch ?? true,
-    importSessionWorkspaceTarget: true,
   };
   mockHostProjects.current = options?.projects ?? [];
 }
@@ -356,19 +335,6 @@ describe("ImportSessionSheet", () => {
     vi.clearAllMocks();
   });
 
-  it("shows an update-host message when the daemon does not support provider snapshots", async () => {
-    const fetchRecentProviderSessions = vi.fn();
-    const importAgent = vi.fn();
-
-    renderSheet({ fetchRecentProviderSessions, importAgent } as Pick<
-      DaemonClient,
-      "fetchRecentProviderSessions" | "importAgent"
-    >);
-
-    await screen.findByText("Update the host to import sessions.");
-    expect(fetchRecentProviderSessions).not.toHaveBeenCalled();
-  });
-
   it("shows a loading state while provider snapshot is loading", async () => {
     const fetchRecentProviderSessions = vi.fn(
       () => new Promise<Awaited<ReturnType<DaemonClient["fetchRecentProviderSessions"]>>>(() => {}),
@@ -381,7 +347,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: undefined },
+        snapshot: { entries: undefined },
       },
     );
 
@@ -402,7 +368,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -423,7 +389,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -443,7 +409,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -473,7 +439,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -511,7 +477,6 @@ describe("ImportSessionSheet", () => {
     });
     mockSnapshot.current = {
       entries: [createSnapshotEntry("claude")],
-      supportsSnapshot: true,
     };
 
     function TestSheet({ visible }: { visible: boolean }) {
@@ -587,7 +552,7 @@ describe("ImportSessionSheet", () => {
         onClose,
         onImportedAgent,
         workspaceId: "ws-current",
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -632,7 +597,7 @@ describe("ImportSessionSheet", () => {
       {
         onClose,
         onImportedAgent,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -675,7 +640,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [
             createSnapshotEntry("claude"),
             createSnapshotEntry("codex"),
@@ -741,7 +705,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
         },
       },
@@ -779,7 +742,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
         },
       },
@@ -815,7 +777,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [
             createSnapshotEntry("codex"),
             createSnapshotEntry("claude", { enabled: false }),
@@ -842,7 +803,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [
             createSnapshotEntry("claude", { enabled: false }),
             createSnapshotEntry("codex", { enabled: false }),
@@ -878,7 +838,7 @@ describe("ImportSessionSheet", () => {
       >,
       {
         cwd: null,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -923,7 +883,7 @@ describe("ImportSessionSheet", () => {
         onClose,
         onImported,
         onImportedAgent,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -952,7 +912,7 @@ describe("ImportSessionSheet", () => {
 
     renderSheet(client, {
       cwd: null,
-      snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      snapshot: { entries: [createSnapshotEntry("claude")] },
     });
     await screen.findByText("Sessions on workbench");
     expect(screen.queryByTestId("import-session-show-all")).toBeNull();
@@ -960,7 +920,7 @@ describe("ImportSessionSheet", () => {
 
     renderSheet(client, {
       workspaceId: "ws-current",
-      snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      snapshot: { entries: [createSnapshotEntry("claude")] },
     });
     await screen.findByText("This workspace");
     screen.getByTestId("import-session-show-all");
@@ -1010,7 +970,7 @@ describe("ImportSessionSheet", () => {
       {
         cwd: null,
         projects: [{ iconWorkingDir: "/home/me/byspace", projectName: "byspace" }],
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -1052,7 +1012,7 @@ describe("ImportSessionSheet", () => {
       {
         workspaceId: "ws-current",
         projects: [{ iconWorkingDir: "/repo/byspace", projectName: "byspace" }],
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -1074,7 +1034,7 @@ describe("ImportSessionSheet", () => {
       >,
       {
         cwd: null,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -1095,31 +1055,6 @@ describe("ImportSessionSheet", () => {
     });
   });
 
-  it("hides the search field when the host cannot search sessions", async () => {
-    const fetchRecentProviderSessions = vi.fn(async () => ({
-      requestId: "recent-provider-sessions",
-      entries: [],
-    }));
-    const importAgent = vi.fn();
-
-    renderSheet(
-      { fetchRecentProviderSessions, importAgent } as Pick<
-        DaemonClient,
-        "fetchRecentProviderSessions" | "importAgent"
-      >,
-      {
-        cwd: null,
-        supportsSearch: false,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
-      },
-    );
-
-    await waitFor(() => {
-      expect(fetchRecentProviderSessions).toHaveBeenCalled();
-    });
-    expect(screen.queryByTestId("import-session-search")).toBeNull();
-  });
-
   it("asks for a larger page when Load more is pressed, and stops offering it on a short page", async () => {
     const fetchRecentProviderSessions = vi.fn(async (options: { limit?: number } | undefined) => ({
       requestId: "recent-provider-sessions",
@@ -1134,7 +1069,7 @@ describe("ImportSessionSheet", () => {
       >,
       {
         cwd: null,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -1179,7 +1114,6 @@ describe("ImportSessionSheet", () => {
       >,
       {
         snapshot: {
-          supportsSnapshot: true,
           entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
         },
       },
@@ -1218,7 +1152,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("codex")] },
+        snapshot: { entries: [createSnapshotEntry("codex")] },
       },
     );
 
@@ -1250,7 +1184,7 @@ describe("ImportSessionSheet", () => {
         workspaceId: "ws-current",
         onImported,
         onImportedAgent,
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 
@@ -1295,7 +1229,7 @@ describe("ImportSessionSheet", () => {
         "fetchRecentProviderSessions" | "importAgent"
       >,
       {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+        snapshot: { entries: [createSnapshotEntry("claude")] },
       },
     );
 

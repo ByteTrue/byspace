@@ -45,7 +45,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/service-proxy.md](docs/service-proxy.md)                       | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                      |
 | [docs/development.md](docs/development.md)                           | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                     |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                   | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                           |
-| [docs/protocol-compatibility.md](docs/protocol-compatibility.md)     | Why app/daemon versions drift, protocol vs feature contract, capability gating, COMPAT tagging                 |
+| [docs/protocol-compatibility.md](docs/protocol-compatibility.md)     | No version drift — app/daemon ship together; schema rules, features semantics, relay wire contract             |
 | [docs/protocol-validation.md](docs/protocol-validation.md)           | zod-aot generated inbound WebSocket validation, patched compiler regressions, schema-purity rules              |
 | [docs/permissions.md](docs/permissions.md)                           | Semantic daemon permissions, principals, credentials, pairing invitations, and Hub authority                   |
 | [docs/terminal-performance.md](docs/terminal-performance.md)         | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                     |
@@ -54,7 +54,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/go-parity-audit.md](docs/go-parity-audit.md)                   | Go 版本对齐审计 — 四个检查各挡什么、基线守卫、出站审计的下钻与局限                                             |
 | [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 何时读、怎么读、能回答什么、四个对齐守卫、何时可以删                                    |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                     |
-| [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                      |
+| [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, performance, UI proof                                     |
 | [docs/explorer-sidebar.md](docs/explorer-sidebar.md)                 | Explorer sidebar and ordinary side-pane host contracts, lifecycle, placement, and routing preferences          |
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md)       | Isolated in-process daemon test harness                                                                        |
 | [docs/docker.md](docs/docker.md)                                     | Self-hosted web+relay container, TLS, plain-HTTP tradeoffs, running the daemon in your own container           |
@@ -138,10 +138,9 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 - **Always use npm scripts for linting and formatting.** Do not run tools directly with `npx eslint`, `npx oxfmt`, `npx oxlint`, or package-local binaries. For targeted checks, pass file paths through the npm script:
   - `npm run lint -- web/src/core/components/message.tsx`
   - `npm run format:files -- AGENTS.md web/src/core/components/message.tsx`
-- **The protocol stays backward-compatible. Features don't have to.** Read [docs/protocol-compatibility.md](docs/protocol-compatibility.md) before touching `packages/protocol`. The short version:
-  - **Protocol contract (always):** an old client parses messages from a new daemon, and a new daemon parses messages from an old client. New fields are optional; never narrow, never remove, never require. Wire schemas stay pure — no `.transform()`, `.catch()`, or `.preprocess()`.
-  - **Feature contract (per-feature):** gate the capability once on `server_info.features.*`, then run the feature or tell the user to update the host. No fallback paths, no defensive branches.
-  - **Every shim is tagged.** `// COMPAT(name): added in vX, remove after <date>` at the site that has to be deleted. `rg "COMPAT\("` is the cleanup backlog; untagged back-compat is permanent by accident.
+- **No version compatibility. App and daemon ship together.** Read [docs/protocol-compatibility.md](docs/protocol-compatibility.md) before touching `packages/protocol`. The short version:
+  - Change both sides in the same commit. Removing fields, narrowing types, and requiring fields are all allowed. No COMPAT shims, no legacy wire names, no feature gates for old hosts.
+  - Wire schemas stay pure — no `.transform()`, `.catch()`, or `.preprocess()`. `server_info.features` carries runtime state (webPush keys, service-install support, tunnel opt-in) and catalogs (`agentRoleNames`), never version detection.
   - **New RPCs use dotted namespaces with direction suffixes.** Follow [docs/rpc-namespacing.md](docs/rpc-namespacing.md): `domain.provider.operation.request` pairs with `domain.provider.operation.response`. Existing flat RPC names will migrate over time; don't add new ones.
 
 ## Platform gating

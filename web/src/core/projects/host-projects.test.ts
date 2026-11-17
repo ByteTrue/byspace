@@ -69,13 +69,7 @@ describe("host project lookups", () => {
   });
 
   test("checks workspace creation against the selected host placement", () => {
-    expect(
-      canCreateWorkspaceForHostProject({
-        project: project(),
-        serverId: "host-b",
-        allowAllProjects: false,
-      }),
-    ).toBe(true);
+    expect(canCreateWorkspaceForHostProject({ project: project(), serverId: "host-b" })).toBe(true);
   });
 
   test("checks worktree capability against the selected host placement", () => {

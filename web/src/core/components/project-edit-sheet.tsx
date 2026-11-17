@@ -31,8 +31,6 @@ export interface ProjectEditSheetProps {
   projectId: string;
   projectViewKey: string;
   client: DaemonClient;
-  /** False on hosts that predate custom project icons — the icon field is hidden. */
-  supportsCustomIcon: boolean;
   snapshot: ProjectEditFormSnapshot;
 }
 
@@ -43,7 +41,6 @@ export function ProjectEditSheet({
   projectId,
   projectViewKey,
   client,
-  supportsCustomIcon,
   snapshot,
 }: ProjectEditSheetProps) {
   const { t } = useTranslation();
@@ -144,56 +141,54 @@ export function ProjectEditSheet({
         <FieldError>{state.error?.scope === "name" ? state.error.message : null}</FieldError>
       </Field>
 
-      {supportsCustomIcon ? (
-        <Field data-invalid={Boolean(state.error?.scope === "icon" ? state.error.message : null)}>
-          <FieldLabel>{t("settings.project.edit.icon")}</FieldLabel>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-row flex-wrap items-center gap-2">
-              <ProjectIconView
-                iconDataUri={state.previewDataUri}
-                initial={projectInitial(snapshot.projectName)}
-                projectViewKey={projectViewKey}
-                size={40}
-                textStyle={PREVIEW_TEXT}
-              />
+      <Field data-invalid={Boolean(state.error?.scope === "icon" ? state.error.message : null)}>
+        <FieldLabel>{t("settings.project.edit.icon")}</FieldLabel>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-row flex-wrap items-center gap-2">
+            <ProjectIconView
+              iconDataUri={state.previewDataUri}
+              initial={projectInitial(snapshot.projectName)}
+              projectViewKey={projectViewKey}
+              size={40}
+              textStyle={PREVIEW_TEXT}
+            />
+            <Button
+              variant="outline"
+              onClick={handleChooseImage}
+              data-testid="project-edit-choose-image"
+              disabled={isSaving}
+            >
+              {t("settings.project.edit.chooseImage")}
+            </Button>
+            {state.canUseAutomatic ? (
               <Button
-                variant="outline"
-                onClick={handleChooseImage}
-                data-testid="project-edit-choose-image"
+                variant="ghost"
+                onClick={form.useAutomaticIcon}
+                data-testid="project-edit-use-automatic"
                 disabled={isSaving}
               >
-                {t("settings.project.edit.chooseImage")}
+                {t("settings.project.edit.useAutomatic")}
               </Button>
-              {state.canUseAutomatic ? (
-                <Button
-                  variant="ghost"
-                  onClick={form.useAutomaticIcon}
-                  data-testid="project-edit-use-automatic"
-                  disabled={isSaving}
-                >
-                  {t("settings.project.edit.useAutomatic")}
-                </Button>
-              ) : null}
-            </div>
-            <Input
-              data-testid="project-edit-image-url"
-              aria-label={t("settings.project.edit.imageUrl")}
-              defaultValue=""
-              key={state.urlResetKey}
-              onChange={handleImageUrlInput}
-              placeholder={t("settings.project.edit.imageUrl")}
-              readOnly={isSaving}
-              autoCapitalize="none"
-              autoCorrect="off"
-              inputMode="url"
-            />
+            ) : null}
           </div>
-          {(state.pickedFileName ?? undefined) ? (
-            <FieldDescription>{state.pickedFileName ?? undefined}</FieldDescription>
-          ) : null}
-          <FieldError>{state.error?.scope === "icon" ? state.error.message : null}</FieldError>
-        </Field>
-      ) : null}
+          <Input
+            data-testid="project-edit-image-url"
+            aria-label={t("settings.project.edit.imageUrl")}
+            defaultValue=""
+            key={state.urlResetKey}
+            onChange={handleImageUrlInput}
+            placeholder={t("settings.project.edit.imageUrl")}
+            readOnly={isSaving}
+            autoCapitalize="none"
+            autoCorrect="off"
+            inputMode="url"
+          />
+        </div>
+        {(state.pickedFileName ?? undefined) ? (
+          <FieldDescription>{state.pickedFileName ?? undefined}</FieldDescription>
+        ) : null}
+        <FieldError>{state.error?.scope === "icon" ? state.error.message : null}</FieldError>
+      </Field>
     </AdaptiveModalSheet>
   );
 }

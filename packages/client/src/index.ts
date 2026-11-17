@@ -1,4 +1,3 @@
-import type { DaemonClientConfig } from "./daemon-client.js";
 import type { AgentPermissionResponse } from "@bytetrue/protocol/agent-types";
 import type {
   AgentSnapshotPayload,
@@ -17,7 +16,6 @@ import type {
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
   ProviderDiagnosticResponseMessage,
-  ProviderUsageListResponseMessage,
   ProjectPlacementPayload,
   WorkspaceProjectDescriptorPayload,
   RefreshProvidersSnapshotResponseMessage,
@@ -43,7 +41,6 @@ export type {
   BySpaceTerminalCaptureResult,
   BySpaceWorkspaceTerminalActions,
 } from "./terminals/index.js";
-import type { PluginTimelineItem } from "@bytetrue/protocol/agent-types";
 import type {
   FetchAgentsEntry,
   FetchAgentsOptions,
@@ -76,7 +73,6 @@ export interface BySpaceLogger {
 }
 
 export interface BySpaceClientConfig {
-  capabilities?: DaemonClientConfig["capabilities"];
   url: string;
   clientId?: string;
   appVersion?: string;
@@ -232,7 +228,6 @@ export interface BySpaceAgentCreateOptions {
   outputSchema?: Record<string, unknown>;
   images?: CreateAgentRequestMessage["images"];
   attachments?: CreateAgentRequestMessage["attachments"];
-  git?: CreateAgentRequestMessage["git"];
   worktree?: CreateAgentRequestMessage["worktree"];
   autoArchive?: CreateAgentRequestMessage["autoArchive"];
   requestId?: string;
@@ -300,7 +295,6 @@ export type BySpaceAgentTimelineEvent =
 export type BySpaceAgentTimelineSubscription = ReturnType<DaemonClient["subscribeAgentTimeline"]>;
 
 export interface BySpaceAgentTimelineHandle {
-  append(item: Omit<PluginTimelineItem, "pluginId">): Promise<{ seq: number; epoch: string }>;
   /**
    * Fetches a fresh timeline page through the existing daemon RPC. If the daemon
    * includes an agent snapshot in the response, the parent handle is updated to
@@ -389,10 +383,6 @@ export type BySpaceProviderSnapshotUpdate = Extract<
 >["payload"];
 export type BySpaceProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
 export type BySpaceProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
-export type BySpaceProviderUsageResult = ProviderUsageListResponseMessage["payload"];
-export interface BySpaceProviderUsageOptions {
-  requestId?: string;
-}
 
 export interface BySpaceProviderListOptions {
   cwd?: string;
@@ -431,7 +421,6 @@ export interface BySpaceProviderActions {
     provider: BySpaceAgentProvider,
     options?: { requestId?: string },
   ): Promise<BySpaceProviderDiagnosticResult>;
-  listUsage(options?: BySpaceProviderUsageOptions): Promise<BySpaceProviderUsageResult>;
   subscribe(handler: (update: BySpaceProviderSnapshotUpdate) => void): () => void;
 }
 
@@ -570,7 +559,6 @@ export function createBySpaceApi(daemonClient: DaemonClient): BySpaceApi {
       waitForReady: (options) => waitForProvidersReady(daemonClient, options),
       refresh: (options) => daemonClient.refreshProvidersSnapshot(options),
       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
-      listUsage: (options) => listProviderUsage(daemonClient, options),
       subscribe: (handler) =>
         daemonClient.on("providers_snapshot_update", (message) => {
           handler(message.payload);
@@ -683,7 +671,6 @@ function createAgentHandleFactory(daemonClient: DaemonClient): AgentHandleFactor
     const handle: BySpaceAgentHandle = {
       id,
       timeline: {
-        append: (item) => daemonClient.appendAgentTimelineItem(id, item),
         refetch: async (options) => {
           const result = await daemonClient.fetchAgentTimeline(id, options);
           if (result.agent) {
@@ -835,26 +822,10 @@ function parseProviderModel(selection: string): { provider: string; model: strin
   };
 }
 
-function listProviderUsage(
-  daemonClient: DaemonClient,
-  options?: BySpaceProviderUsageOptions,
-): Promise<BySpaceProviderUsageResult> {
-  // COMPAT(providerUsageList): added in v0.1.98, remove after 2027-02-28 once daemon floor >= v0.1.98.
-  if (daemonClient.getLastServerInfoMessage()?.features?.providerUsageList !== true) {
-    return Promise.reject(new Error("Update the host to list provider usage."));
-  }
-  return daemonClient.listProviderUsage(options);
-}
-
 function waitForProvidersReady(
   daemonClient: DaemonClient,
   options: BySpaceProviderWaitOptions = {},
 ): Promise<BySpaceProviderSnapshotResult> {
-  // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
-  if (daemonClient.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
-    return Promise.reject(new Error("Update the host to wait for provider discovery."));
-  }
-
   const { timeoutMs = 60_000, ...snapshotOptions } = options;
 
   return new Promise((resolve, reject) => {

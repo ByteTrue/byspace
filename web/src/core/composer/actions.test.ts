@@ -594,7 +594,7 @@ describe("dispatchComposerAgentMessage", () => {
       text: "send attachments",
       attachments: [
         { kind: "image", metadata: image },
-        { kind: "github_pr", item: prItem },
+        { kind: "forge_change_request", item: prItem },
       ],
       encodeImages: passthroughEncodeImages,
       submission: stream,
@@ -630,34 +630,6 @@ describe("dispatchComposerAgentMessage", () => {
     expect(userMessage.id).toBe(call.options.messageId);
     expect(userMessage.clientMessageId).toBe(call.options.messageId);
     expect(userMessage.messageId).toBeUndefined();
-  });
-
-  it("can send legacy GitHub attachment payloads for old daemons", async () => {
-    const client = createFakeSendClient();
-    const stream = createFakeStream();
-
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "agent",
-      text: "send old attachment",
-      attachments: [{ kind: "forge_change_request", item: prItem }],
-      attachmentSubmitFormat: "legacy-github",
-      encodeImages: passthroughEncodeImages,
-      submission: stream,
-    });
-
-    expect(client.calls[0].options.attachments).toEqual([
-      {
-        type: "github_pr",
-        mimeType: "application/github-pr",
-        number: 202,
-        title: "Refactor composer attachments",
-        url: "https://github.com/acme/byspace/pull/202",
-        body: "PR body",
-        baseRefName: "main",
-        headRefName: "composer-attachments",
-      },
-    ]);
   });
 
   it("appends to the existing head when one is present", async () => {
@@ -906,13 +878,13 @@ describe("removeComposerAttachmentAtIndex", () => {
     const persister = createFakePersister();
     const next = removeComposerAttachmentAtIndex({
       attachments: [
-        { kind: "github_issue", item: issueItem },
-        { kind: "github_pr", item: prItem },
+        { kind: "forge_issue", item: issueItem },
+        { kind: "forge_change_request", item: prItem },
       ] satisfies UserComposerAttachment[],
       index: 0,
       deleteAttachments: persister.deleteAttachments,
     });
-    expect(next).toEqual([{ kind: "github_pr", item: prItem }]);
+    expect(next).toEqual([{ kind: "forge_change_request", item: prItem }]);
     expect(persister.deletedBatches).toEqual([]);
   });
 });
@@ -958,7 +930,7 @@ describe("openComposerAttachment", () => {
   it("opens GitHub item URLs through the external url opener", () => {
     const externalUrlCalls: string[] = [];
     openComposerAttachment({
-      attachment: { kind: "github_issue", item: issueItem },
+      attachment: { kind: "forge_issue", item: issueItem },
       setLightboxMetadata: () => {
         throw new Error("unexpected lightbox call");
       },
@@ -983,20 +955,20 @@ describe("toggleForgeAttachment", () => {
   });
 
   it("removes an existing GitHub item with the same kind+number", () => {
-    const next = toggleForgeAttachment([{ kind: "github_issue", item: issueItem }], issueItem);
+    const next = toggleForgeAttachment([{ kind: "forge_issue", item: issueItem }], issueItem);
     expect(next).toEqual([]);
   });
 
   it("does not affect other items with different kind or number", () => {
     const start: UserComposerAttachment[] = [
-      { kind: "github_issue", item: issueItem },
-      { kind: "github_pr", item: prItem },
+      { kind: "forge_issue", item: issueItem },
+      { kind: "forge_change_request", item: prItem },
     ];
     const otherIssue: ForgeSearchItem = { ...issueItem, number: 999 };
     const next = toggleForgeAttachment(start, otherIssue);
     expect(next).toEqual([
-      { kind: "github_issue", item: issueItem },
-      { kind: "github_pr", item: prItem },
+      { kind: "forge_issue", item: issueItem },
+      { kind: "forge_change_request", item: prItem },
       { kind: "forge_issue", item: otherIssue },
     ]);
   });
@@ -1005,7 +977,7 @@ describe("toggleForgeAttachment", () => {
 describe("toggleForgeAttachmentFromPicker", () => {
   it("marks an existing GitHub item as removed when picker toggle removes it", () => {
     const markForgeAttachmentRemoved = vi.fn();
-    const attachment: UserComposerAttachment = { kind: "github_pr", item: prItem };
+    const attachment: UserComposerAttachment = { kind: "forge_change_request", item: prItem };
 
     const next = toggleForgeAttachmentFromPicker({
       current: [attachment],
@@ -1042,7 +1014,7 @@ describe("findForgeItemByOption / isAttachmentSelectedForForgeItem", () => {
   it("recognizes when an attachment list already contains a matching GitHub item", () => {
     const attachments: ComposerAttachment[] = [
       { kind: "image", metadata: imageWithId("img-x") },
-      { kind: "github_issue", item: issueItem },
+      { kind: "forge_issue", item: issueItem },
       reviewWorkspaceAttachment("ignored"),
     ];
     expect(isAttachmentSelectedForForgeItem(attachments, issueItem)).toBe(true);

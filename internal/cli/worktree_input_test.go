@@ -61,8 +61,12 @@ func TestBuildWorktreeCreateCheckoutPR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request["githubPrNumber"] != 42 {
+	if request["checkoutSource"] == nil {
 		t.Fatalf("request = %+v", request)
+	}
+	source, ok := request["checkoutSource"].(map[string]any)
+	if !ok || source["kind"] != "change_request" || source["number"] != 42 {
+		t.Fatalf("checkoutSource = %+v", request["checkoutSource"])
 	}
 
 	for _, raw := range []string{"", "abc", "0", "-3"} {
@@ -79,7 +83,8 @@ func TestWorktreePRNumberAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request["githubPrNumber"] != 7 {
-		t.Fatalf("request = %+v", request)
+	source, ok := request["checkoutSource"].(map[string]any)
+	if !ok || source["number"] != 7 {
+		t.Fatalf("checkoutSource = %+v", request["checkoutSource"])
 	}
 }

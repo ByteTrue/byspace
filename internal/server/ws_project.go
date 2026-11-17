@@ -7,13 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ByteTrue/byspace/internal/workspace/projecticon"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-
-	"github.com/ByteTrue/byspace/internal/proc"
 	"strings"
 	"time"
 
@@ -350,23 +346,6 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			"icon":      icon,
 			"error":     nil,
 		})
-	case "project_icon_request":
-		// The pre-custom-icon lookup by directory: only the icon the directory ships, as in Node.
-		var req struct {
-			RequestID string `json:"requestId"`
-			Cwd       string `json:"cwd"`
-		}
-		_ = json.Unmarshal(raw, &req)
-		var icon any
-		if found := projecticon.Get(req.Cwd); found != nil {
-			icon = found
-		}
-		_ = sendSessionMsg(ctx, sink, "project_icon_response", map[string]any{
-			"requestId": req.RequestID,
-			"cwd":       req.Cwd,
-			"icon":      icon,
-			"error":     nil,
-		})
 	}
 }
 
@@ -496,10 +475,9 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if msgType == "byspace_worktree_archive_request" {
 		var req struct {
-			RequestID              string `json:"requestId"`
-			WorktreePath           string `json:"worktreePath"`
-			Scope                  string `json:"scope"`
-			DeleteWorktreeFromDisk bool   `json:"deleteWorktreeFromDisk"`
+			RequestID    string `json:"requestId"`
+			WorktreePath string `json:"worktreePath"`
+			Scope        string `json:"scope"`
 			// RepoRoot and BranchName disambiguate when the caller identifies a worktree by its
 			// branch rather than a path — the sidebar knows the branch, and the path may have
 			// moved. Without them a stale path archives nothing and the response still says ok.
@@ -1048,8 +1026,7 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 	}
 
 	switch msgType {
-	// COMPAT(workspaceScriptStartFlat): the flat name predates `workspace.script.start.request`. It is routed
-	// here so an old client still works; the implementation below is the same one, and the response type is
+	// The flat name is what the client's startWorkspaceScript method sends; the response type is
 	// chosen by the request's own type so each caller gets the shape it asked for.
 	case "start_workspace_script_request":
 		script, err := s.startWorkspaceScript(ctx, req.WorkspaceID, req.ScriptName)
@@ -1106,61 +1083,6 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 		})
 		s.broadcastScriptStatus(req.WorkspaceID)
 	}
-}
-
-func (s *Server) handleEditors(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
-	var req struct {
-		RequestID string `json:"requestId"`
-		EditorID  string `json:"editorId"`
-		Path      string `json:"path"`
-		// `mode: "reveal"` opens the file and scrolls to it; "open" just opens the target.
-		Mode string `json:"mode"`
-		Cwd  string `json:"cwd"`
-	}
-	_ = json.Unmarshal(raw, &req)
-	if msgType == "list_available_editors_request" {
-		editors := make([]map[string]any, 0)
-		// Same allow-list as open_in_editor, so the picker never offers something the open
-		// path would refuse.
-		for _, cand := range []struct{ id, label string }{
-			{"cursor", "Cursor"},
-			{"code", "VS Code"},
-			{"zed", "Zed"},
-			{"windsurf", "Windsurf"},
-			{"idea", "IntelliJ IDEA"},
-			{"subl", "Sublime Text"},
-			{"nvim", "Neovim"},
-		} {
-			if _, err := exec.LookPath(knownEditors[cand.id]); err == nil {
-				editors = append(editors, map[string]any{"id": cand.id, "label": cand.label})
-			}
-		}
-		_ = sendSessionMsg(ctx, sink, "list_available_editors_response", map[string]any{
-			"requestId": req.RequestID,
-			"editors":   editors,
-			"error":     nil,
-		})
-		return
-	}
-	// `editorId` comes from the client and used to be executed verbatim, so any string was a
-	// command. Only launch an editor this build actually detected.
-	if target, ok := resolveEditorCommand(req.EditorID); ok && req.Path != "" {
-		args := []string{}
-		if req.Mode == "reveal" {
-			args = append(args, "--goto", req.Path)
-		} else {
-			args = append(args, req.Path)
-		}
-		cmd := proc.Command(target, args...)
-		if strings.TrimSpace(req.Cwd) != "" {
-			cmd.Dir = req.Cwd
-		}
-		_ = cmd.Start()
-	}
-	_ = sendSessionMsg(ctx, sink, "open_in_editor_response", map[string]any{
-		"requestId": req.RequestID,
-		"error":     nil,
-	})
 }
 
 func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
@@ -1445,31 +1367,6 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		s.broadcastAgentUpdate(rec)
 	}
 	_ = ctx
-}
-
-// knownEditors is the allow-list of editor launchers. `open_in_editor_request` carries an
-// editorId from the client; executing it directly would run any string as a command.
-var knownEditors = map[string]string{
-	"cursor":   "cursor",
-	"code":     "code",
-	"zed":      "zed",
-	"windsurf": "windsurf",
-	"nvim":     "nvim",
-	"vim":      "vim",
-	"idea":     "idea",
-	"subl":     "subl",
-}
-
-// resolveEditorCommand maps an editor id to a binary that exists on this machine.
-func resolveEditorCommand(editorID string) (string, bool) {
-	binary, ok := knownEditors[strings.ToLower(strings.TrimSpace(editorID))]
-	if !ok {
-		return "", false
-	}
-	if _, err := exec.LookPath(binary); err != nil {
-		return "", false
-	}
-	return binary, true
 }
 
 // ValidateProjectDirectoryName applies the node rules for a new directory name.
@@ -1778,14 +1675,12 @@ type sourceCheckoutSource struct {
 func worktreeSourceIntentInput(
 	action, refName, baseBranch, branchName, worktreeSlug string,
 	checkoutSource *sourceCheckoutSource,
-	githubPRNumber *int,
 ) workspace.WorktreeIntentInput {
 	input := workspace.WorktreeIntentInput{
-		WorktreeSlug:   strings.TrimSpace(worktreeSlug),
-		BranchName:     strings.TrimSpace(branchName),
-		RefName:        strings.TrimSpace(refName),
-		Action:         strings.TrimSpace(action),
-		GithubPRNumber: githubPRNumber,
+		WorktreeSlug: strings.TrimSpace(worktreeSlug),
+		BranchName:   strings.TrimSpace(branchName),
+		RefName:      strings.TrimSpace(refName),
+		Action:       strings.TrimSpace(action),
 	}
 	// A branch-off with no explicit ref starts from the base the client resolved; without this the
 	// resolver would ask git for the default branch and ignore a base the user had already pinned.

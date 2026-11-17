@@ -115,13 +115,7 @@ function openKey(props: ScheduleFormSheetProps): string {
 function selectScheduleHosts(
   hosts: readonly { serverId: string; label: string }[],
 ): (state: ReturnType<typeof useSessionStore.getState>) => ScheduleFormHost[] {
-  return (state) =>
-    hosts.map((host) => ({
-      serverId: host.serverId,
-      label: host.label,
-      supportsWorkspaceMultiplicity:
-        state.sessions[host.serverId]?.serverInfo?.features?.workspaceMultiplicity === true,
-    }));
+  return (_state) => hosts.map((host) => ({ serverId: host.serverId, label: host.label }));
 }
 
 function buildSnapshot(input: {

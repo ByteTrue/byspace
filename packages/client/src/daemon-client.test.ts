@@ -6,7 +6,6 @@ import {
   type DaemonTransport,
   type Logger,
 } from "./daemon-client";
-import { CLIENT_CAPS } from "@bytetrue/protocol/client-capabilities";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import {
   decodeFileTransferFrame,
@@ -234,38 +233,11 @@ test("traces WebSocket frames, message types, and JSON parse duration", async ()
   ]);
 });
 
-test("does not infer capabilities from the Electron runtime", async () => {
-  vi.stubGlobal("navigator", {
-    userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) BySpace/0.1.89 Chrome/146 Electron/41.2.0 Safari/537.36",
-  });
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "electron_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.selectiveAgentTimeline]).toBe(true);
-});
-
-test("retry-safe creation rejects older hosts before sending any request", async () => {
+test("sets the complete viewed timeline subscription", async () => {
   const transport = createMockTransport();
   const client = new DaemonClient({
     url: "ws://test",
-    clientId: "receipt-gate",
+    clientId: "timeline_subscription",
     transportFactory: () => transport.transport,
     reconnect: { enabled: false },
   });
@@ -273,63 +245,11 @@ test("retry-safe creation rejects older hosts before sending any request", async
   const connecting = client.connect();
   transport.triggerOpen();
   await connecting;
-  await expect(
-    client.createAgent({ provider: "codex", cwd: "/project", idempotencyKey: "creation" }),
-  ).rejects.toThrow("Update the host to use retry-safe agent creation.");
-  expect(transport.sent).toEqual([]);
-});
 
-test("Hub management requires daemon support before dispatching requests", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "hub_feature_gate_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  mock.triggerOpen();
-  await connecting;
-
-  await expect(client.getHubStatus()).rejects.toThrow(
-    "Update the host to use Hub relationship management.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
-test("sets the complete viewed timeline subscription only when the daemon supports it", async () => {
-  const supportedTransport = createMockTransport();
-  const supportedClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_supported",
-    transportFactory: () => supportedTransport.transport,
-    reconnect: { enabled: false },
-  });
-  const legacyTransport = createMockTransport();
-  const legacyClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_legacy",
-    transportFactory: () => legacyTransport.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(supportedClient, legacyClient);
-
-  const supportedConnect = supportedClient.connect();
-  supportedTransport.triggerOpen({ features: { selectiveAgentTimeline: true } });
-  await supportedConnect;
-  const legacyConnect = legacyClient.connect();
-  legacyTransport.triggerOpen();
-  await legacyConnect;
-
-  expect(supportedClient.getLastServerInfoMessage()?.features).toEqual({
-    selectiveAgentTimeline: true,
-  });
-
-  const setPromise = supportedClient.setAgentTimelineSubscription(["agent-b", "agent-a"]);
+  const setPromise = client.setAgentTimelineSubscription(["agent-b", "agent-a"]);
   await Promise.resolve();
-  const request = parseSentFrame(supportedTransport.sent[0]);
-  supportedTransport.triggerMessage(
+  const request = parseSentFrame(transport.sent[0]);
+  transport.triggerMessage(
     wrapSessionMessage({
       type: "agent.timeline.set_subscription.response",
       payload: {
@@ -339,23 +259,19 @@ test("sets the complete viewed timeline subscription only when the daemon suppor
     }),
   );
   await setPromise;
-  await legacyClient.setAgentTimelineSubscription(["agent-a"]);
 
-  expect({ request, legacyFrames: legacyTransport.sent }).toEqual({
-    request: {
-      type: "agent.timeline.set_subscription.request",
-      requestId: expect.any(String),
-      agentIds: ["agent-a", "agent-b"],
-    },
-    legacyFrames: [],
+  expect(request).toEqual({
+    type: "agent.timeline.set_subscription.request",
+    requestId: expect.any(String),
+    agentIds: ["agent-a", "agent-b"],
   });
 });
 
-test("normalizes legacy and dedicated agent attention notifications", async () => {
+test("delivers dedicated agent attention notifications", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
     url: "ws://test",
-    clientId: "attention_normalization",
+    clientId: "attention_notification",
     transportFactory: () => mock.transport,
     reconnect: { enabled: false },
   });
@@ -372,19 +288,32 @@ test("normalizes legacy and dedicated agent attention notifications", async () =
     shouldNotify: true,
   } as const;
 
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "agent_stream",
-      payload: {
-        agentId: payload.agentId,
-        timestamp: payload.timestamp,
-        event: { type: "attention_required", provider: "codex", ...payload },
-      },
-    }),
-  );
   mock.triggerMessage(wrapSessionMessage({ type: "agent_attention_required", payload }));
 
-  expect(notifications).toEqual([payload, payload]);
+  expect(notifications).toEqual([payload]);
+});
+
+test("sends hello with the client identity", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "hello_unit_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ preserveSent: true });
+  await connectPromise;
+
+  expect(mock.sent).toHaveLength(1);
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "hello",
+    clientId: "hello_unit_test",
+    clientType: "cli",
+    protocolVersion: 1,
+  });
 });
 
 const noopLogger: Logger = {
@@ -742,78 +671,6 @@ test("proves a relay password inside the channel instead of the subprotocol", as
   vi.resetModules();
 });
 
-test("advertises client capabilities in hello", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      [CLIENT_CAPS.projectUpdates]: true,
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  expect(mock.sent).toHaveLength(1);
-  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
-    type: "hello",
-    clientId: "clsk_unit_test",
-    clientType: "cli",
-    protocolVersion: 1,
-    capabilities: {
-      all_providers: true,
-      selective_agent_timeline: true,
-      timeline_replacement_invalidation: true,
-      provider_snapshot_references: true,
-      explicit_event_subscriptions: true,
-      compact_provider_snapshots: true,
-      custom_mode_icons: true,
-      project_updates: true,
-      provider_subagents: true,
-      reasoning_merge_enum: true,
-      terminal_reflowable_snapshot: true,
-      timeline_notifications: true,
-      custom_timeline_messages: true,
-      plugin_timeline_items: true,
-      workspace_setup_blocked: true,
-    },
-  });
-});
-
-test("allows callers to disable default client capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_capability_override_test",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      [CLIENT_CAPS.projectUpdates]: false,
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.projectUpdates]).toBe(false);
-});
-
 test("sends new-agent run options when creating schedules", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -1059,7 +916,7 @@ test("waits for the daemon to acknowledge push token revocation", async () => {
   });
   clients.push(client);
   const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pushTokenRevocation: true } });
+  mock.triggerOpen();
   await connectPromise;
 
   const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
@@ -1089,7 +946,7 @@ test("bounds the wait for push token revocation", async () => {
   });
   clients.push(client);
   const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pushTokenRevocation: true } });
+  mock.triggerOpen();
   await connectPromise;
 
   const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
@@ -1242,46 +1099,6 @@ test("honors explicit fetchAgent timeout below the session RPC default", async (
 
   await vi.advanceTimersByTimeAsync(1);
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (5000ms)");
-});
-
-test("preserves legacy fetchAgent id overload", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.fetchAgent("agent-1", "req-agent-legacy");
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_request",
-    requestId: "req-agent-legacy",
-    agentId: "agent-1",
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "fetch_agent_response",
-      payload: {
-        requestId: "req-agent-legacy",
-        agent: null,
-        project: null,
-        error: "legacy fetch sentinel",
-      },
-    }),
-  );
-
-  await expect(responsePromise).rejects.toThrow("legacy fetch sentinel");
 });
 
 test("honors explicit fetchAgentTimeline timeout below the session RPC default", async () => {
@@ -1568,26 +1385,6 @@ test("honors explicit getDaemonPairingOffer timeout below the session RPC defaul
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
 });
 
-test("gates config reload on the daemon capability", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  await expect(client.reloadDaemonConfig("reload-old-host")).rejects.toThrow(
-    "Update the host to reload daemon configuration.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
 test("sends and parses daemon config reload", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
@@ -1599,7 +1396,7 @@ test("sends and parses daemon config reload", async () => {
   });
   clients.push(client);
   const connectPromise = client.connect();
-  mock.triggerOpen({ features: { daemonConfigReload: true } });
+  mock.triggerOpen();
   await connectPromise;
 
   const response = client.reloadDaemonConfig("reload-new-host");
@@ -1625,51 +1422,6 @@ test("sends and parses daemon config reload", async () => {
     restartRequiredPaths: ["daemon.listen"],
     overrideControlledPaths: [],
   });
-});
-
-test("gets a structured plugin log snapshot", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pluginLogs: true } });
-  await connectPromise;
-
-  const response = client.getPluginLogs("example");
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request).toMatchObject({ type: "plugin.logs.get.request", pluginId: "example" });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.logs.get.response",
-      payload: {
-        requestId: request.requestId,
-        pluginId: "example",
-        entries: [
-          {
-            sequence: 3,
-            timestamp: "2026-08-16T12:00:00.000Z",
-            stream: "stdout",
-            message: "ready",
-          },
-        ],
-      },
-    }),
-  );
-
-  await expect(response).resolves.toEqual([
-    {
-      sequence: 3,
-      timestamp: "2026-08-16T12:00:00.000Z",
-      stream: "stdout",
-      message: "ready",
-    },
-  ]);
 });
 
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
@@ -2141,49 +1893,6 @@ test("file context action RPCs correlate success and error responses", async () 
   });
 });
 
-test("serializes plugin source suffixes through the legacy path field", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_plugin_source",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const installPromise = client.installPluginSource({
-    source: "owner/repository:plugins/review",
-  });
-  const request = parseSentFrame(mock.sent.at(-1));
-  expect(request).toEqual({
-    type: "plugin.source.install.request",
-    requestId: expect.any(String),
-    source: "owner/repository",
-    pluginPath: "plugins/review",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.source.install.response",
-      payload: {
-        requestId: request.requestId,
-        plugin: {
-          id: "review",
-          path: "/plugins/review",
-          enabled: true,
-          status: "running",
-        },
-      },
-    }),
-  );
-
-  await expect(installPromise).resolves.toMatchObject({ id: "review", status: "running" });
-});
-
 test("a connection loss rejects an in-flight file context action", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
@@ -2408,61 +2117,6 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(new TextDecoder().decode(result.bytes)).toBe("hello");
 });
 
-test("readFile drops an old daemon's over-budget binary chunks and reports the refusal", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_file_budget_compat",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.readFile("/tmp/project", "large.txt", "req-budget", 10);
-  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
-    type: "session",
-    message: {
-      type: "file_explorer_request",
-      cwd: "/tmp/project",
-      path: "large.txt",
-      mode: "file",
-      acceptBinary: true,
-      maxBytes: 10,
-      requestId: "req-budget",
-    },
-  });
-
-  mock.triggerMessage(
-    encodeFileTransferFrame({
-      opcode: FileTransferOpcode.FileBegin,
-      requestId: "req-budget",
-      metadata: {
-        mime: "text/plain",
-        size: 100,
-        encoding: "utf-8",
-        modifiedAt: "2026-05-02T00:00:00.000Z",
-      },
-    }),
-  );
-  mock.triggerMessage(
-    encodeFileTransferFrame({
-      opcode: FileTransferOpcode.FileChunk,
-      requestId: "req-budget",
-      payload: new Uint8Array(100),
-    }),
-  );
-  mock.triggerMessage(
-    encodeFileTransferFrame({ opcode: FileTransferOpcode.FileEnd, requestId: "req-budget" }),
-  );
-
-  await expect(responsePromise).rejects.toThrow("File is too large to display");
-});
-
 test("uploadFile sends metadata request and file bytes as binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -2657,7 +2311,7 @@ test("sends create_agent_request with workspace and caller identity", async () =
   clients.push(client);
 
   const connectPromise = client.connect();
-  mock.triggerOpen({ features: { agentRequestReceipts: true } });
+  mock.triggerOpen();
   await connectPromise;
 
   const createPromise = client.createAgent({
@@ -2774,8 +2428,9 @@ test("sends structured attachments with create_agent_request", async () => {
     initialPrompt: "Review this PR",
     attachments: [
       {
-        type: "github_pr",
-        mimeType: "application/github-pr",
+        type: "forge_change_request",
+        mimeType: "application/byspace-forge-change-request",
+        forge: "github",
         number: 123,
         title: "Fix race in worktree setup",
         url: "https://github.com/bytetrue/byspace/pull/123",
@@ -2789,8 +2444,9 @@ test("sends structured attachments with create_agent_request", async () => {
   const request = parseSentFrame(mock.sent[0]);
   expect(request.attachments).toEqual([
     {
-      type: "github_pr",
-      mimeType: "application/github-pr",
+      type: "forge_change_request",
+      mimeType: "application/byspace-forge-change-request",
+      forge: "github",
       number: 123,
       title: "Fix race in worktree setup",
       url: "https://github.com/bytetrue/byspace/pull/123",
@@ -2811,120 +2467,6 @@ test("sends structured attachments with create_agent_request", async () => {
   );
 
   await expect(createPromise).rejects.toThrow("attachment test sentinel");
-});
-
-test("sends worktree base-ref fields in create_agent_request git options", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const createPromise = client.createAgent({
-    provider: "codex",
-    cwd: "/tmp/project",
-    requestId: "req-agent-ref",
-    git: {
-      createWorktree: true,
-      worktreeSlug: "review-pr-123",
-      refName: "feature/worktree-base-ref",
-      action: "checkout",
-      githubPrNumber: 123,
-    },
-  });
-
-  expect(mock.sent).toHaveLength(1);
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request.git).toEqual({
-    createWorktree: true,
-    worktreeSlug: "review-pr-123",
-    refName: "feature/worktree-base-ref",
-    action: "checkout",
-    githubPrNumber: 123,
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "status",
-      payload: {
-        status: "agent_create_failed",
-        requestId: request.requestId,
-        error: "git ref fields sentinel",
-      },
-    }),
-  );
-
-  await expect(createPromise).rejects.toThrow("git ref fields sentinel");
-});
-
-test("omitting create_agent_request worktree base-ref fields preserves legacy wire shape", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const createPromise = client.createAgent({
-    provider: "codex",
-    cwd: "/tmp/project",
-    requestId: "req-agent-legacy",
-    git: {
-      createWorktree: true,
-      worktreeSlug: "feature-a",
-    },
-  });
-
-  expect(assertStr(mock.sent[0])).toBe(
-    JSON.stringify({
-      type: "session",
-      message: {
-        type: "create_agent_request",
-        config: {
-          provider: "codex",
-          cwd: "/tmp/project",
-        },
-        git: {
-          createWorktree: true,
-          worktreeSlug: "feature-a",
-        },
-        labels: {},
-        requestId: "req-agent-legacy",
-      },
-    }),
-  );
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "status",
-      payload: {
-        status: "agent_create_failed",
-        requestId: "req-agent-legacy",
-        error: "legacy git shape sentinel",
-      },
-    }),
-  );
-
-  await expect(createPromise).rejects.toThrow("legacy git shape sentinel");
 });
 
 test("sends structured first-agent context attachments with create_byspace_worktree_request", async () => {
@@ -2950,8 +2492,9 @@ test("sends structured first-agent context attachments with create_byspace_workt
     firstAgentContext: {
       attachments: [
         {
-          type: "github_pr",
-          mimeType: "application/github-pr",
+          type: "forge_change_request",
+          mimeType: "application/byspace-forge-change-request",
+          forge: "github",
           number: 123,
           title: "Fix race in worktree setup",
           url: "https://github.com/bytetrue/byspace/pull/123",
@@ -2967,8 +2510,9 @@ test("sends structured first-agent context attachments with create_byspace_workt
     .parse(request.firstAgentContext);
   expect(firstAgentContext.attachments).toEqual([
     {
-      type: "github_pr",
-      mimeType: "application/github-pr",
+      type: "forge_change_request",
+      mimeType: "application/byspace-forge-change-request",
+      forge: "github",
       number: 123,
       title: "Fix race in worktree setup",
       url: "https://github.com/bytetrue/byspace/pull/123",
@@ -3352,7 +2896,7 @@ test("sends worktree base-ref fields in create_byspace_worktree_request", async 
       worktreeSlug: "review-pr-123",
       refName: "feature/worktree-base-ref",
       action: "checkout",
-      githubPrNumber: 123,
+      checkoutSource: { kind: "change_request", number: 123 },
     },
     "req-worktree-ref",
   );
@@ -3366,7 +2910,7 @@ test("sends worktree base-ref fields in create_byspace_worktree_request", async 
     worktreeSlug: "review-pr-123",
     refName: "feature/worktree-base-ref",
     action: "checkout",
-    githubPrNumber: 123,
+    checkoutSource: { kind: "change_request", number: 123 },
     requestId: "req-worktree-ref",
   });
 
@@ -4058,7 +3602,7 @@ test("requests checkout merge from base via RPC", async () => {
   });
 });
 
-test("requests GitHub auto-merge enable via namespaced RPC", async () => {
+test("requests forge auto-merge enable via namespaced RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -4075,7 +3619,7 @@ test("requests GitHub auto-merge enable via namespaced RPC", async () => {
   mock.triggerOpen();
   await connectPromise;
 
-  const promise = client.checkoutGithubSetAutoMerge(
+  const promise = client.checkoutForgeSetAutoMerge(
     "/tmp/project",
     { enabled: true, method: "squash" },
     "req-enable-auto-merge",
@@ -4083,7 +3627,7 @@ test("requests GitHub auto-merge enable via namespaced RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout.github.set_auto_merge.request");
+  expect(request.type).toBe("checkout.forge.set_auto_merge.request");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.enabled).toBe(true);
   expect(request.mergeMethod).toBe("squash");
@@ -4093,7 +3637,7 @@ test("requests GitHub auto-merge enable via namespaced RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout.github.set_auto_merge.response",
+        type: "checkout.forge.set_auto_merge.response",
         payload: {
           cwd: "/tmp/project",
           enabled: true,
@@ -4114,7 +3658,7 @@ test("requests GitHub auto-merge enable via namespaced RPC", async () => {
   });
 });
 
-test("requests GitHub auto-merge disable via namespaced RPC", async () => {
+test("requests forge auto-merge disable via namespaced RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -4131,7 +3675,7 @@ test("requests GitHub auto-merge disable via namespaced RPC", async () => {
   mock.triggerOpen();
   await connectPromise;
 
-  const promise = client.checkoutGithubSetAutoMerge(
+  const promise = client.checkoutForgeSetAutoMerge(
     "/tmp/project",
     { enabled: false },
     "req-disable-auto-merge",
@@ -4139,7 +3683,7 @@ test("requests GitHub auto-merge disable via namespaced RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout.github.set_auto_merge.request");
+  expect(request.type).toBe("checkout.forge.set_auto_merge.request");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.enabled).toBe(false);
   expect(request.mergeMethod).toBeUndefined();
@@ -4149,7 +3693,7 @@ test("requests GitHub auto-merge disable via namespaced RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout.github.set_auto_merge.response",
+        type: "checkout.forge.set_auto_merge.response",
         payload: {
           cwd: "/tmp/project",
           enabled: false,
@@ -4170,7 +3714,7 @@ test("requests GitHub auto-merge disable via namespaced RPC", async () => {
   });
 });
 
-test("requests GitHub check details via namespaced RPC", async () => {
+test("requests forge check details via namespaced RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -4187,7 +3731,7 @@ test("requests GitHub check details via namespaced RPC", async () => {
   mock.triggerOpen();
   await connectPromise;
 
-  const promise = client.checkoutGithubGetCheckDetails(
+  const promise = client.checkoutForgeGetCheckDetails(
     {
       cwd: "/tmp/project",
       repoOwner: "bytetrue",
@@ -4201,7 +3745,7 @@ test("requests GitHub check details via namespaced RPC", async () => {
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
-    type: "checkout.github.get_check_details.request",
+    type: "checkout.forge.get_check_details.request",
     cwd: "/tmp/project",
     repoOwner: "bytetrue",
     repoName: "byspace",
@@ -4214,7 +3758,7 @@ test("requests GitHub check details via namespaced RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout.github.get_check_details.response",
+        type: "checkout.forge.get_check_details.response",
         payload: {
           cwd: "/tmp/project",
           requestId: "req-check-details",
@@ -5135,112 +4679,6 @@ test("lists commands with explicit requestId via RPC", async () => {
   });
 });
 
-test("preserves legacy listCommands id overload", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.listCommands("agent-1", "req-commands-legacy");
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "list_commands_request",
-    requestId: "req-commands-legacy",
-    agentId: "agent-1",
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "list_commands_response",
-      payload: {
-        agentId: "agent-1",
-        commands: [],
-        error: null,
-        requestId: "req-commands-legacy",
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    agentId: "agent-1",
-    commands: [],
-    error: null,
-    requestId: "req-commands-legacy",
-  });
-});
-
-test("preserves legacy listCommands options overload", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const promise = client.listCommands("__new_agent__", {
-    requestId: "req-commands-draft-legacy",
-    draftConfig: {
-      provider: "codex",
-      cwd: "/tmp/project",
-      modeId: "bypassPermissions",
-      model: "gpt-5",
-      thinkingOptionId: "off",
-    },
-  });
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "list_commands_request",
-    requestId: "req-commands-draft-legacy",
-    agentId: "__new_agent__",
-    draftConfig: {
-      provider: "codex",
-      cwd: "/tmp/project",
-      modeId: "bypassPermissions",
-      model: "gpt-5",
-      thinkingOptionId: "off",
-    },
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "list_commands_response",
-      payload: {
-        agentId: "__new_agent__",
-        commands: [{ name: "help", description: "Show help", argumentHint: "" }],
-        error: null,
-        requestId: "req-commands-draft-legacy",
-      },
-    }),
-  );
-
-  await expect(promise).resolves.toEqual({
-    agentId: "__new_agent__",
-    commands: [{ name: "help", description: "Show help", argumentHint: "" }],
-    error: null,
-    requestId: "req-commands-draft-legacy",
-  });
-});
-
 test("emits output events for the active terminal stream", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -5980,81 +5418,6 @@ test("dispatches terminals_changed events to typed listeners", async () => {
   ]);
 });
 
-test("sends provider.usage.list.request and resolves provider.usage.list.response", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const usagePromise = client.listProviderUsage({ requestId: "usage-1" });
-
-  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
-    type: "session",
-    message: {
-      type: "provider.usage.list.request",
-      requestId: "usage-1",
-    },
-  });
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "provider.usage.list.response",
-      payload: {
-        requestId: "usage-1",
-        fetchedAt: "2026-06-19T00:00:00.000Z",
-        providers: [
-          {
-            providerId: "glm",
-            displayName: "GLM coding plan",
-            status: "available",
-            planLabel: "GLM coding plan",
-            windows: [
-              {
-                id: "biweekly",
-                label: "Biweekly",
-                usedPct: 23,
-                remainingPct: 77,
-              },
-            ],
-          },
-        ],
-      },
-    }),
-  );
-
-  await expect(usagePromise).resolves.toEqual({
-    requestId: "usage-1",
-    fetchedAt: "2026-06-19T00:00:00.000Z",
-    providers: [
-      {
-        providerId: "glm",
-        displayName: "GLM coding plan",
-        status: "available",
-        planLabel: "GLM coding plan",
-        windows: [
-          {
-            id: "biweekly",
-            label: "Biweekly",
-            usedPct: 23,
-            remainingPct: 77,
-          },
-        ],
-      },
-    ],
-  });
-});
-
 test("sends close_items_request and resolves close_items_response", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -6187,9 +5550,6 @@ test("wire snapshot callers own expansion and receive hash references unchanged"
   const connected = client.connect();
   transport.triggerOpen({ preserveSent: true });
   await connected;
-  expect(JSON.parse(assertStr(transport.sent[0])).capabilities.provider_snapshot_references).toBe(
-    true,
-  );
   const received: unknown[] = [];
   client.on("providers_snapshot_update", (message) => received.push(message.payload));
   const payload = {

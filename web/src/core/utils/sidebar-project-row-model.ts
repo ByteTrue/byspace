@@ -20,7 +20,6 @@ export interface SidebarProjectSectionRowModel {
 
 export type SidebarProjectRowModel = SidebarProjectSectionRowModel;
 
-const EMPTY_MULTIPLICITY_MAP: ReadonlyMap<string, boolean> = new Map();
 function hostTarget(input: {
   serverId: string;
   projectId: string;
@@ -75,22 +74,13 @@ export function resolveSidebarProjectLocalPath(
   return project.hosts.find((host) => host.serverId === localServerId)?.iconWorkingDir.trim() ?? "";
 }
 
-// A project can host a brand-new workspace on a host when that host can create a
-// git worktree (git projects) OR the host supports running multiple independent
-// workspaces per directory (`workspaceMultiplicity`), which is what lets non-git
-// directories add a second workspace. Mirrors the gate used by the global "New
-// workspace" affordances (use-global-new-workspace-action.ts and left-sidebar's
-// SidebarNewWorkspaceHeaderRow): `canCreateWorktree || supportsMultiplicity`.
+// Every host runs multiple independent workspaces per directory, so any host
+// carrying the project can host a brand-new workspace.
 function resolveNewWorkspaceTarget(
   project: SidebarProjectEntry,
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
   preferredServerIds: readonly string[],
 ): SidebarProjectHostTarget | null {
-  const eligibleHosts = project.hosts.filter(
-    (host) =>
-      host.worktreeSupport !== "unsupported" ||
-      supportsMultiplicityByServerId.get(host.serverId) === true,
-  );
+  const eligibleHosts = project.hosts;
   // The trailing action's host becomes the new-workspace route's serverId, and the
   // screen's resolver honors a known route serverId unconditionally — so the 062
   // default-host preference (project pin, then the local daemon host) has to be
@@ -109,14 +99,9 @@ function resolveNewWorkspaceTarget(
 
 function projectTrailingAction(
   project: SidebarProjectEntry,
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
   preferredServerIds: readonly string[],
 ): SidebarProjectTrailingAction {
-  const target = resolveNewWorkspaceTarget(
-    project,
-    supportsMultiplicityByServerId,
-    preferredServerIds,
-  );
+  const target = resolveNewWorkspaceTarget(project, preferredServerIds);
   return target ? { kind: "new_workspace", target } : { kind: "none" };
 }
 
@@ -171,16 +156,11 @@ export function isSamePreferredServerIds(
 
 export function buildSidebarProjectRowModel(input: {
   project: SidebarProjectEntry;
-  supportsMultiplicityByServerId?: ReadonlyMap<string, boolean>;
   /** Hosts tried before project.hosts order: the project's pinned host, then the local daemon host. Callers drop offline ones (issue 062 stale-pin rule). */
   preferredServerIds?: readonly string[];
 }): SidebarProjectRowModel {
   return {
     kind: "project_section",
-    trailingAction: projectTrailingAction(
-      input.project,
-      input.supportsMultiplicityByServerId ?? EMPTY_MULTIPLICITY_MAP,
-      input.preferredServerIds ?? [],
-    ),
+    trailingAction: projectTrailingAction(input.project, input.preferredServerIds ?? []),
   };
 }

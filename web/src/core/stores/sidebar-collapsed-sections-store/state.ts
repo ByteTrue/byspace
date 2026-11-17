@@ -7,15 +7,12 @@ export interface CollapsedProjectsState {
 
 export interface PersistedCollapsedProjects {
   collapsedWorkspaceGroupKeys?: string[];
-  collapsedStatusGroupKeys?: string[];
   collapsedPinned?: boolean;
 }
 
 export const PersistedCollapsedProjectsSchema: z.ZodType<PersistedCollapsedProjects> =
   z.strictObject({
     collapsedWorkspaceGroupKeys: z.array(z.string()).optional(),
-    // COMPAT(sidebarWorkspaceGroupCollapse): added in v0.4.0, remove after 2027-02-14.
-    collapsedStatusGroupKeys: z.array(z.string()).optional(),
     collapsedPinned: z.boolean().optional(),
   });
 
@@ -56,9 +53,7 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
   }
   const persisted = result.data;
   const restoredWorkspaceGroups = deserializeCollapsedKeys(
-    persisted.collapsedWorkspaceGroupKeys ??
-      persisted.collapsedStatusGroupKeys ??
-      Array.from(current.collapsedWorkspaceGroupKeys),
+    persisted.collapsedWorkspaceGroupKeys ?? Array.from(current.collapsedWorkspaceGroupKeys),
   );
   const restoredPinned = persisted.collapsedPinned ?? current.collapsedPinned;
   if (

@@ -94,7 +94,6 @@ function buildXtermThemeKey(theme: ITheme): string {
 interface TerminalEmulatorProps {
   ref: Ref<TerminalEmulatorHandle>;
   streamKey: string;
-  supportsTerminalInputModeReplay: boolean;
   testId?: string;
   xtermTheme?: ITheme;
   scrollbackLines: number;

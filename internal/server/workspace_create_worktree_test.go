@@ -13,7 +13,7 @@ import (
 func TestWorktreeSourceIntentInputKeepsPickedRef(t *testing.T) {
 	intent, err := workspace.ResolveWorktreeIntent(
 		context.Background(),
-		worktreeSourceIntentInput("branch-off", "dev", "", "", "feat-x", nil, nil),
+		worktreeSourceIntentInput("branch-off", "dev", "", "", "feat-x", nil),
 		"",
 		workspace.WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultBranchRef},
 	)
@@ -36,7 +36,7 @@ func TestWorktreeSourceIntentInputKeepsPickedRef(t *testing.T) {
 func TestWorktreeSourceIntentInputFallsBackToResolvedBase(t *testing.T) {
 	intent, err := workspace.ResolveWorktreeIntent(
 		context.Background(),
-		worktreeSourceIntentInput("branch-off", "", "origin/main", "", "feat-x", nil, nil),
+		worktreeSourceIntentInput("branch-off", "", "origin/main", "", "feat-x", nil),
 		"",
 		// A default branch that would be wrong if the base were ignored.
 		workspace.WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultBranchRef},
@@ -53,7 +53,7 @@ func TestWorktreeSourceIntentInputFallsBackToResolvedBase(t *testing.T) {
 func TestWorktreeSourceIntentInputCheckoutBranch(t *testing.T) {
 	intent, err := workspace.ResolveWorktreeIntent(
 		context.Background(),
-		worktreeSourceIntentInput("checkout", "release", "", "", "wt-1", nil, nil),
+		worktreeSourceIntentInput("checkout", "release", "", "", "wt-1", nil),
 		"",
 		workspace.WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultBranchRef},
 	)
@@ -68,31 +68,6 @@ func TestWorktreeSourceIntentInputCheckoutBranch(t *testing.T) {
 	}
 }
 
-// The legacy githubPrNumber still resolves to a change-request checkout; dropping it would silently
-// create a branch off the default instead of checking out the PR head.
-func TestWorktreeSourceIntentInputLegacyPrNumber(t *testing.T) {
-	number := 42
-	intent, err := workspace.ResolveWorktreeIntent(
-		context.Background(),
-		worktreeSourceIntentInput("checkout", "pr-head", "", "", "wt-pr", nil, &number),
-		"",
-		workspace.WorktreeIntentDeps{
-			Forge:               "github",
-			DefaultBranch:       defaultBranchRef,
-			ChangeRequestTarget: stubChangeRequestTarget{head: "pr-head", base: "main"}.resolve,
-		},
-	)
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	if intent.Kind != workspace.IntentCheckoutChangeRequest {
-		t.Fatalf("kind = %q, want checkout-change-request", intent.Kind)
-	}
-	if intent.ChangeRequestNumber != 42 || intent.Forge != "github" {
-		t.Fatalf("intent = %+v, want PR 42 on github", intent)
-	}
-}
-
 // checkoutSource takes precedence over a bare refName for change-request checkouts.
 //
 // The head ref comes from a stub: the real resolver shells out to `gh`, which CI does not have.
@@ -100,7 +75,7 @@ func TestWorktreeSourceIntentInputLegacyPrNumber(t *testing.T) {
 func TestWorktreeSourceIntentInputCheckoutSource(t *testing.T) {
 	intent, err := workspace.ResolveWorktreeIntent(
 		context.Background(),
-		worktreeSourceIntentInput("checkout", "", "", "", "wt-pr", &sourceCheckoutSource{Number: 7, Forge: "github"}, nil),
+		worktreeSourceIntentInput("checkout", "", "", "", "wt-pr", &sourceCheckoutSource{Number: 7, Forge: "github"}),
 		"",
 		workspace.WorktreeIntentDeps{
 			Forge:               "github",

@@ -252,9 +252,8 @@ func TestServerOverRelayE2EEHandshake(t *testing.T) {
 
 	// Send e2ee_hello
 	e2eeHello, _ := json.Marshal(e2ee.HelloMessage{
-		Type:         "e2ee_hello",
-		Key:          e2ee.ExportKey(clientKP.PublicKey),
-		Capabilities: &e2ee.Capabilities{BinaryCiphertext: true},
+		Type: "e2ee_hello",
+		Key:  e2ee.ExportKey(clientKP.PublicKey),
 	})
 	if err := cliWS.Write(ctx, websocket.MessageText, e2eeHello); err != nil {
 		t.Fatal(err)

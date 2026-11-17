@@ -110,8 +110,6 @@ export interface WorkspaceCommandCenterSource {
   capabilities: {
     canSplitPanes: boolean;
     isGit: boolean;
-    /** Host supports the `workspacePinning` feature. */
-    canPin: boolean;
     /** The workspace has setup commands or a setup error — same gate as the header menu. */
     canShowSetup: boolean;
   };
@@ -577,7 +575,7 @@ export function buildWorkspaceCommandCenterContributions(
     contributions.push(buildGitContribution(source, action, 100 + index, "query"));
   }
 
-  if (source.capabilities.canPin && !source.isHome) {
+  if (!source.isHome) {
     contributions.push(
       buildWorkspaceAction({
         source,

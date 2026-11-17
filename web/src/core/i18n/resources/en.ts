@@ -365,7 +365,6 @@ export const en = {
     },
     status: {
       connectHost: "Connect to a host to import sessions",
-      updateHost: "Update the host to import sessions.",
       noProviders: "No importable providers are enabled.",
       loading: "Loading recent sessions...",
       failedProvider: "Could not load {{provider}} sessions",
@@ -407,7 +406,6 @@ export const en = {
       hostOffline: "{{hostName}} is offline",
       cannotReachHost: "Cannot reach {{hostName}}",
       hostStatus: "Host status: {{status}}",
-      needsHostUpgrade: "Update your host to restore this workspace",
       manageHost: "Manage host",
       recovery: {
         archivedTitle: "Workspace archived",
@@ -533,7 +531,6 @@ export const en = {
     },
     terminal: {
       hostDisconnected: "Host is not connected",
-      updateHost: "Update the host to use the native terminal renderer.",
       unableToSubscribe: "Unable to subscribe to terminal",
       clipboardImageTooLarge: "Clipboard image is too large (max 50 MiB)",
       clipboardReadFailed: "Could not read clipboard image",
@@ -981,7 +978,6 @@ export const en = {
     createConfirm: "Create",
     creating: "Creating…",
     name: "Label name",
-    updateHostUse: "Update this host to use labels.",
     errors: { update: "Unable to update label", load: "Unable to load labels" },
     colors: {
       violet: "Violet",
@@ -1013,7 +1009,6 @@ export const en = {
       deleteMessage_one: "This removes the label from {{count}} workspace on this host.",
       deleteMessage_other: "This removes the label from {{count}} workspaces on this host.",
       offline: "This host is offline.",
-      updateHost: "Update this host to manage labels.",
     },
   },
   changelog: {
@@ -1142,7 +1137,6 @@ export const en = {
       toasts: {
         hostDisconnected: "Host is not connected",
         removeFailed: "Failed to remove some workspaces",
-        updateHostToRemove: "Update the host to remove projects.",
       },
       empty: {
         title: "No projects yet",
@@ -1649,7 +1643,6 @@ export const en = {
       notNow: "Not now",
       directConnectionHint:
         "Without relay, connect directly over TCP, Tailscale, or another VPN. No QR code is created.",
-      updateRequired: "Update the host to enable relay from BySpace.",
       unavailable: "Pairing offer unavailable.",
       hint: "Scan this QR code with BySpace on your phone, or copy the link below.",
       securityWarning:
@@ -1774,7 +1767,6 @@ export const en = {
       directoryMissing: "Workspace directory not found.",
       empty: "No changes",
       loadError: "Failed to load diff",
-      capabilityMissing: "Update the host to view commit diffs.",
     },
   },
   toolCallDetails: {
@@ -1909,7 +1901,6 @@ export const en = {
       projects: "Projects",
       connections: "Connections",
       agents: "Agents",
-      usage: "Usage",
       host: "Overview",
     },
     metadataGeneration: {
@@ -2214,7 +2205,6 @@ export const en = {
         docs: "Skills",
         openDocs: "Open skills documentation",
         unavailable: "Connect to this host to manage orchestration skills",
-        unsupported: "Update this host to manage orchestration skills",
         statusFailed: "Unable to check orchestration skills status.",
         updateFailed: "Unable to update orchestration skills.",
         uninstallFailed: "Unable to uninstall orchestration skills.",
@@ -2324,7 +2314,6 @@ export const en = {
       agentProfiles: {
         sectionTitle: "Agent profiles",
         unavailable: "Connect to this host to manage agent profiles",
-        unsupported: "This host runs a daemon that does not support agent profiles yet",
         emptyState: "No profiles yet. Add one to start agents from a saved provider and model.",
         addProfileTitle: "Add agent profile",
         newProfile: "New profile",
@@ -2448,8 +2437,6 @@ export const en = {
           dialogFailedMessage: "Unable to open the restart confirmation dialog.",
         },
         update: {
-          desktopManagedHint:
-            "This daemon is managed by BySpace Desktop. Update BySpace Desktop on the host.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2607,7 +2594,6 @@ export const en = {
           "Let an agent inspect this repository and recommend worktree setup, services, and common commands",
         configure: "Configure with agent",
         review: "Review with agent",
-        updateHost: "Update the host to use agent-assisted project setup",
         prompt:
           "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.",
       },

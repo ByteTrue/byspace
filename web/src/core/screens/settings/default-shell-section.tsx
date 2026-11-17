@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { SelectField } from "@/components/ui/select-field";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { DetectedShell } from "@bytetrue/protocol/messages";
 import { ItemGroup } from "~/components/ui/item";
@@ -25,7 +24,6 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const client = useHostRuntimeClient(serverId);
-  const isSupported = useHostFeature(serverId, "terminalShellConfig");
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [detected, setDetected] = useState<DetectedShell[]>([]);
   const [resolvedDefault, setResolvedDefault] = useState<string | null>(null);
@@ -36,7 +34,7 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
   const configured = config?.terminalDefaultShell ?? null;
 
   useEffect(() => {
-    if (!isConnected || !isSupported || !client) {
+    if (!isConnected || !client) {
       return;
     }
     let cancelled = false;
@@ -57,7 +55,7 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [client, isConnected, isSupported]);
+  }, [client, isConnected]);
 
   const options = useMemo(
     () => [
@@ -117,10 +115,6 @@ export function DefaultShellSection({ serverId }: DefaultShellSectionProps) {
   const getValueKey = useCallback((value: ShellSelectValue) => value.path ?? AUTO_SHELL_VALUE, []);
 
   if (!isConnected) {
-    return null;
-  }
-
-  if (!isSupported) {
     return null;
   }
 

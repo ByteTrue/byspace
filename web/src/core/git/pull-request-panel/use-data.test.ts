@@ -18,24 +18,6 @@ type CheckoutPrStatus = NonNullable<CheckoutPrStatusResponse["payload"]["status"
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
 type PullRequestTimelineInput = Parameters<PrPaneTimelineClient["pullRequestTimeline"]>[0];
 
-const githubStatus: CheckoutPrStatus["github"] = {
-  mergeStateStatus: null,
-  autoMergeRequest: null,
-  viewerCanEnableAutoMerge: false,
-  viewerCanDisableAutoMerge: false,
-  viewerCanMergeAsAdmin: false,
-  viewerCanUpdateBranch: false,
-  repository: {
-    autoMergeAllowed: false,
-    mergeCommitAllowed: false,
-    squashMergeAllowed: false,
-    rebaseMergeAllowed: false,
-    viewerDefaultMergeMethod: null,
-  },
-  isMergeQueueEnabled: false,
-  isInMergeQueue: false,
-};
-
 function prStatus(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
   return {
     forge: "github",
@@ -52,7 +34,6 @@ function prStatus(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
     reviewDecision: null,
     repoOwner: "bytetrue",
     repoName: "byspace",
-    github: githubStatus,
     ...overrides,
   };
 }
@@ -67,7 +48,6 @@ function timelinePayload(
     truncated: false,
     error: null,
     requestId: "timeline-1",
-    githubFeaturesEnabled: true,
     ...overrides,
   };
 }
@@ -396,7 +376,6 @@ describe("selectPrPaneState", () => {
       forge: "gitlab",
       status: prStatus({
         forge: "gitlab",
-        github: undefined,
         forgeSpecific: gitlabFacts,
       }),
       timelinePayload: timelinePayload(),

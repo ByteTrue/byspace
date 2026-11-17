@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { SessionProvider } from "@/contexts/session-context";
 import { useToast } from "@/contexts/toast-context";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "@/push-notifications/internal/types";
-import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
-import { useSessionStore } from "@/stores/session-store";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
@@ -109,27 +107,10 @@ function OfferLinkListener({ onOfferLink }: { onOfferLink: (url: string) => void
   return null;
 }
 
-function LegacyFavoriteProfileMigration({ serverId }: { serverId: string }) {
-  const client = useHostRuntimeClient(serverId);
-  const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
-  const isConnected = useHostRuntimeIsConnected(serverId);
-  useEffect(() => {
-    if (!client || !serverInfo || !isConnected) return;
-    void legacyFavoriteProfileMigration.migrateHost(serverId, client).catch((error: unknown) => {
-      console.warn("[AgentProfiles] Failed to migrate legacy favourites", error);
-    });
-  }, [client, isConnected, serverId, serverInfo]);
-  return null;
-}
-
 function HostSession({ host }: { host: HostProfile }) {
   const client = useHostRuntimeClient(host.serverId);
   if (!client) return null;
-  return (
-    <SessionProvider key={host.serverId} serverId={host.serverId} client={client}>
-      <LegacyFavoriteProfileMigration serverId={host.serverId} />
-    </SessionProvider>
-  );
+  return <SessionProvider key={host.serverId} serverId={host.serverId} client={client} />;
 }
 
 /** One session per registered host keeps its agents and workspaces in the session store. */

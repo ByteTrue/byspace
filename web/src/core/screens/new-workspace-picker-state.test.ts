@@ -25,8 +25,8 @@ function makePrItem(number: number, title: string, headRefName = "feature/x"): F
 function prAttachment(
   item: ForgeSearchItem,
   owner?: "new-workspace-picker",
-): Extract<UserComposerAttachment, { kind: "github_pr" }> {
-  return { kind: "github_pr", item, ...(owner ? { owner } : {}) };
+): Extract<UserComposerAttachment, { kind: "forge_change_request" }> {
+  return { kind: "forge_change_request", item, ...(owner ? { owner } : {}) };
 }
 
 function forgePrAttachment(
@@ -48,7 +48,7 @@ function makeIssueItem(number: number): ForgeSearchItem {
 }
 
 function issueAttachment(number: number): UserComposerAttachment {
-  return { kind: "github_issue", item: makeIssueItem(number) };
+  return { kind: "forge_issue", item: makeIssueItem(number) };
 }
 
 describe("syncPickerPrAttachment", () => {
@@ -109,7 +109,7 @@ describe("syncPickerPrAttachment", () => {
     expect(result).toEqual([prAttachment(pr)]);
   });
 
-  it("does not duplicate a generalized PR attachment", () => {
+  it("does not duplicate a PR attached without picker ownership", () => {
     const pr = makePrItem(202, "Refactor picker");
     const result = syncPickerPrAttachment({
       attachments: [forgePrAttachment(pr)],

@@ -44,7 +44,7 @@ function CommitsSectionContent({
   now,
   onCommitPress,
 }: {
-  query: Exclude<CheckoutCommitsQueryResult, { status: "unsupported" }>;
+  query: CheckoutCommitsQueryResult;
   now: Date;
   onCommitPress: (sha: string) => void;
 }) {
@@ -121,9 +121,6 @@ export function CommitsSection({
     return () => clearInterval(interval);
   }, [collapsed, isPanelActive]);
 
-  if (query.status === "unsupported") {
-    return null;
-  }
   const commitCount =
     query.status === "loaded"
       ? query.data.commits.filter((commit) => !commit.isOnBase).length

@@ -72,7 +72,6 @@ function prStatus(overrides: Partial<CheckoutPrStatusPayload> = {}): CheckoutPrS
       checksStatus: "success",
       reviewDecision: null,
     },
-    githubFeaturesEnabled: true,
     authState: "authenticated",
     forge: "github",
     error: null,
@@ -217,11 +216,9 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(queryClient.getQueryData(checkoutPrStatusQueryKey(serverId, otherCwd))).toBeUndefined();
   });
 
-  it("normalizes legacy PR auth state at the pushed-cache boundary", () => {
+  it("normalizes an absent PR auth state at the pushed-cache boundary", () => {
     const queryClient = createQueryClient();
-    const { authState: _authState, ...legacyPrStatus } = prStatus({
-      githubFeaturesEnabled: false,
-    });
+    const { authState: _authState, ...legacyPrStatus } = prStatus();
 
     applyCheckoutStatusUpdateFromEvent({
       queryClient,

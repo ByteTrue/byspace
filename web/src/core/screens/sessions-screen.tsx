@@ -143,7 +143,6 @@ function SessionsScreenContent() {
     isInitialLoad,
     isLoadingMore,
     isError,
-    isSearchSupported,
     isSearchTruncated,
     searchMatchesByAgentKey,
     hostErrors,
@@ -153,7 +152,7 @@ function SessionsScreenContent() {
     serverId: historyServerId,
     search,
   });
-  const isSearching = isSearchSupported && search.length > 0;
+  const isSearching = search.length > 0;
 
   useEffect(() => {
     if (
@@ -178,7 +177,6 @@ function SessionsScreenContent() {
     isAllHosts: selectedHost === ALL_HOSTS_OPTION_ID,
   });
   const showHostFilter = hosts.length > 1;
-  const showFilterRow = showHostFilter || isSearchSupported;
   const showLoadError = isError && agents.length === 0;
 
   const handleBack = useCallback(() => {
@@ -214,26 +212,22 @@ function SessionsScreenContent() {
   return (
     <div className={CONTAINER}>
       <MenuHeader title={t("sessions.title")} />
-      {showFilterRow ? (
-        <div className="flex flex-row items-center gap-2 px-3 pt-4 md:px-6">
-          {isSearchSupported ? (
-            <SessionsSearch
-              value={searchInput}
-              onChange={handleSearchInput}
-              onClear={handleClearSearch}
-            />
-          ) : null}
-          {showHostFilter ? (
-            <HostFilter
-              hosts={hosts}
-              selectedHost={selectedHost}
-              onSelectHost={setSelectedHost}
-              triggerTestID="sessions-host-filter-trigger"
-              hostOptionTestID={sessionsHostOptionTestID}
-            />
-          ) : null}
-        </div>
-      ) : null}
+      <div className="flex flex-row items-center gap-2 px-3 pt-4 md:px-6">
+        <SessionsSearch
+          value={searchInput}
+          onChange={handleSearchInput}
+          onClear={handleClearSearch}
+        />
+        {showHostFilter ? (
+          <HostFilter
+            hosts={hosts}
+            selectedHost={selectedHost}
+            onSelectHost={setSelectedHost}
+            triggerTestID="sessions-host-filter-trigger"
+            hostOptionTestID={sessionsHostOptionTestID}
+          />
+        ) : null}
+      </div>
       {hostErrors.length > 0 ? <SessionHostErrorsBanner errors={hostErrors} t={t} /> : null}
       {isInitialLoad ? (
         <div className="flex flex-1 items-center justify-center text-muted-foreground">

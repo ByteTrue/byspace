@@ -36,7 +36,6 @@ import type {
 import type {
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
-  ServerCapabilities,
   WorkspaceDescriptorPayload,
   WorkspaceProjectDescriptorPayload,
 } from "@bytetrue/protocol/messages";
@@ -145,7 +144,7 @@ export function normalizeWorkspaceDescriptor(
     projectRootPath: payload.projectRootPath,
     // Canonicalize the workspace directory once, at the store boundary, so every
     // consumer can read workspace.workspaceDirectory directly. Empty means "no
-    // usable directory" (older daemons may omit it; the wire field is optional).
+    // usable directory" (the wire field is optional).
     workspaceDirectory: normalizeWorkspacePath(payload.workspaceDirectory) ?? "",
     worktreeSlug: payload.worktreeSlug,
     projectKind: payload.projectKind,
@@ -153,7 +152,7 @@ export function normalizeWorkspaceDescriptor(
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
-    // COMPAT(workspaceLabels): old daemons omit assignments.
+    // The daemon omits the key when a workspace has no label assignments.
     labels: payload.labels ?? [],
     status: payload.status,
     statusEnteredAt,
@@ -280,8 +279,6 @@ export interface DaemonServerInfo {
   serverId: string;
   hostname: string | null;
   version: string | null;
-  desktopManaged?: boolean;
-  capabilities?: ServerCapabilities;
   features?: ServerInfoStatusPayload["features"];
 }
 
@@ -656,13 +653,6 @@ function createInitialSessionState(
   };
 }
 
-function areServerCapabilitiesEqual(
-  current: ServerCapabilities | undefined,
-  next: ServerCapabilities | undefined,
-): boolean {
-  return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
-}
-
 function areServerInfoFeaturesEqual(
   current: ServerInfoStatusPayload["features"] | undefined,
   next: ServerInfoStatusPayload["features"] | undefined,
@@ -674,27 +664,16 @@ function isSessionServerInfoUnchanged(input: {
   currentServerInfo: SessionState["serverInfo"] | undefined;
   nextHostname: string | null;
   nextVersion: string | null;
-  nextDesktopManaged: boolean | undefined;
-  nextCapabilities: ServerCapabilities | undefined;
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
   nextServerId: string;
 }): boolean {
-  const {
-    currentServerInfo,
-    nextHostname,
-    nextVersion,
-    nextDesktopManaged,
-    nextCapabilities,
-    nextFeatures,
-  } = input;
+  const { currentServerInfo, nextHostname, nextVersion, nextFeatures } = input;
   const prevHostname = currentServerInfo?.hostname?.trim() || null;
   const prevVersion = currentServerInfo?.version?.trim() || null;
   return (
     currentServerInfo?.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
-    currentServerInfo?.desktopManaged === nextDesktopManaged &&
-    areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
   );
 }
@@ -830,8 +809,6 @@ export const useSessionStore = create<SessionStore>()(
 
           const nextHostname = info.hostname?.trim() || null;
           const nextVersion = info.version?.trim() || null;
-          const nextDesktopManaged = info.desktopManaged;
-          const nextCapabilities = info.capabilities;
           const nextFeatures = info.features;
 
           if (
@@ -839,8 +816,6 @@ export const useSessionStore = create<SessionStore>()(
               currentServerInfo: session.serverInfo,
               nextHostname,
               nextVersion,
-              nextDesktopManaged,
-              nextCapabilities,
               nextFeatures,
               nextServerId: info.serverId,
             })
@@ -858,10 +833,6 @@ export const useSessionStore = create<SessionStore>()(
                   serverId: info.serverId,
                   hostname: nextHostname,
                   version: nextVersion,
-                  ...(nextDesktopManaged !== undefined
-                    ? { desktopManaged: nextDesktopManaged }
-                    : {}),
-                  ...(nextCapabilities ? { capabilities: nextCapabilities } : {}),
                   ...(nextFeatures ? { features: nextFeatures } : {}),
                 },
               },

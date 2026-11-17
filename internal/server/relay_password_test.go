@@ -43,9 +43,8 @@ func relaySession(t *testing.T, srv *Server) (*websocket.Conn, e2ee.SharedKey, f
 	shared, _ := e2ee.DeriveSharedKey(clientKP.SecretKey, daemonPub)
 
 	hello, _ := json.Marshal(e2ee.HelloMessage{
-		Type:         "e2ee_hello",
-		Key:          e2ee.ExportKey(clientKP.PublicKey),
-		Capabilities: &e2ee.Capabilities{BinaryCiphertext: true},
+		Type: "e2ee_hello",
+		Key:  e2ee.ExportKey(clientKP.PublicKey),
 	})
 	if err := conn.Write(dialCtx, websocket.MessageText, hello); err != nil {
 		t.Fatal(err)

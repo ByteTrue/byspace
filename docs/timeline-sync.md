@@ -177,16 +177,14 @@ Timeline render batching does not delay lifecycle application. Directory status 
 submission. Overlapping sends settle independently rather than collapsing to one newest pending
 message.
 
-Daemons advertising `server_info.features.canonicalSubmittedPrompts` guarantee that every accepted
-prompt carrying a client message id is recorded and streamed as a canonical `user_message` with that
-same id. This includes daemon-handled commands that do not allocate a foreground turn; their submitted
-row is recorded before handler output. The app tracks submission transactions only for hosts with this
-capability. Older hosts keep the shipped untracked optimistic-row behavior and roll that row back on RPC
-rejection.
+Every accepted prompt carrying a client message id is recorded and streamed as a canonical
+`user_message` with that same id. This includes daemon-handled commands that do not allocate a
+foreground turn; their submitted row is recorded before handler output. The app tracks submission
+transactions for every host.
 
 Turn activity has one client-side replica. Lifecycle events can attach `turnId`, and agent snapshots can
 expose `activeTurn: { turnId, startedAt } | null`. An identified terminal cannot close a different
-identified turn; an unnamed legacy terminal can close the current turn. Snapshots, stream events,
+identified turn; a terminal without a turnId (providers that do not emit one) can close the current turn. Snapshots, stream events,
 cancellation requests, and every visible surface update the same per-agent record. The snapshot covers
 both user-started foreground turns and autonomous provider turns;
 foreground control ownership remains a separate daemon concern. Cancellation request identity is stored

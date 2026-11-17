@@ -1,10 +1,4 @@
-import type {
-  AgentProvider,
-  AgentTimelineItem,
-  JsonValue,
-  ToolCallDetail,
-} from "@bytetrue/protocol/agent-types";
-import { timelineItemIdentity } from "@bytetrue/protocol/timeline-identity";
+import type { AgentProvider, JsonValue, ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@bytetrue/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
@@ -86,8 +80,7 @@ export type StreamItem =
   | TodoListItem
   | NotificationItem
   | CustomMessageItem
-  | CompactionItem
-  | PluginTimelineStreamItem;
+  | CompactionItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -182,35 +175,14 @@ export function removeSubmittedUserMessage(input: {
   return { tail: remove(input.tail), head: remove(input.head) };
 }
 
-// COMPAT(userMessageClientId): added in v0.2.0, remove after 2027-01-20 once the
-// supported daemon floor emits clientMessageId on submitted user messages. Until then a
-// locally submitted row (clientMessageId, no messageId) and its canonical twin from an
-// old daemon (messageId, no clientMessageId) share no identifier, so canonical ingestion
-// may match an explicit local candidate by the id supplied over the wire or by text.
-function matchesLegacyCanonicalUserMessage(
-  submitted: UserMessageItem,
-  canonical: UserMessageItem,
-): boolean {
-  if (submitted.clientMessageId === undefined || submitted.messageId !== undefined) return false;
-  if (canonical.messageId === undefined) return false;
-  return canonical.messageId === submitted.clientMessageId || canonical.text === submitted.text;
-}
-
-type UserMessageMatchPolicy = "canonical-incoming" | "handoff";
-
-function matchesUserMessage(
-  existing: UserMessageItem,
-  incoming: UserMessageItem,
-  policy: UserMessageMatchPolicy,
-): boolean {
+function matchesUserMessage(existing: UserMessageItem, incoming: UserMessageItem): boolean {
   if (existing.clientMessageId && incoming.clientMessageId) {
     return existing.clientMessageId === incoming.clientMessageId;
   }
   if (existing.messageId && incoming.messageId) {
     return existing.messageId === incoming.messageId;
   }
-  if (matchesLegacyCanonicalUserMessage(existing, incoming)) return true;
-  return policy === "handoff" && matchesLegacyCanonicalUserMessage(incoming, existing);
+  return false;
 }
 
 export function upsertUserMessage(
@@ -235,10 +207,9 @@ function produceUserMessage(
   incoming: UserMessageItem,
   insertAt: number | null,
   presentationPolicy: UserMessagePresentationPolicy,
-  matchPolicy: UserMessageMatchPolicy = "canonical-incoming",
 ): UserMessageProductionResult {
   const index = items.findIndex(
-    (item) => item.kind === "user_message" && matchesUserMessage(item, incoming, matchPolicy),
+    (item) => item.kind === "user_message" && matchesUserMessage(item, incoming),
   );
   if (index < 0) {
     if (insertAt === null) {
@@ -286,7 +257,6 @@ export interface UserMessageStreamUpsertInput {
   message: UserMessageItem;
   insert: "tail" | "head" | "prepend-tail" | "none";
   presentation: UserMessagePresentationPolicy;
-  matchPolicy?: UserMessageMatchPolicy;
 }
 
 export interface UserMessageStreamUpsertResult extends ApplyStreamEventResult {
@@ -301,13 +271,7 @@ export interface UserMessageStreamUpsertResult extends ApplyStreamEventResult {
 export function upsertUserMessageAcrossStream(
   input: UserMessageStreamUpsertInput,
 ): UserMessageStreamUpsertResult {
-  const tailResult = produceUserMessage(
-    input.tail,
-    input.message,
-    null,
-    input.presentation,
-    input.matchPolicy,
-  );
+  const tailResult = produceUserMessage(input.tail, input.message, null, input.presentation);
   if (tailResult.matched) {
     return {
       tail: tailResult.items,
@@ -322,13 +286,7 @@ export function upsertUserMessageAcrossStream(
       },
     };
   }
-  const headResult = produceUserMessage(
-    input.head,
-    input.message,
-    null,
-    input.presentation,
-    input.matchPolicy,
-  );
+  const headResult = produceUserMessage(input.head, input.message, null, input.presentation);
   if (headResult.matched) {
     return {
       tail: input.tail,
@@ -358,7 +316,6 @@ export function upsertUserMessageAcrossStream(
       input.message,
       input.head.length,
       input.presentation,
-      input.matchPolicy,
     );
     return {
       tail: input.tail,
@@ -378,7 +335,6 @@ export function upsertUserMessageAcrossStream(
     input.message,
     input.insert === "prepend-tail" ? 0 : input.tail.length,
     input.presentation,
-    input.matchPolicy,
   );
   return {
     tail: inserted.items,
@@ -443,9 +399,6 @@ function removeUserMessageAt(items: UserMessageItem[], index: number): UserMessa
 }
 
 function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): StreamItem[] | null {
-  if (retained.kind === "plugin") {
-    return replaceTimelineIdentityItem(tail, retained);
-  }
   if (!retained.timelineCursor) {
     return null;
   }
@@ -502,20 +455,6 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
     return next;
   }
   return null;
-}
-
-function replaceTimelineIdentityItem(
-  items: StreamItem[],
-  retained: PluginTimelineStreamItem,
-): StreamItem[] | null {
-  const identity = streamTimelineItemIdentity(retained);
-  if (identity === null) return null;
-  const index = findExistingTimelineIdentityIndex(items, identity);
-  const existing = items[index];
-  if (index < 0 || !existing || existing.kind !== "plugin") return null;
-  const next = [...items];
-  next[index] = retained;
-  return next;
 }
 
 function reconcileReplacementHeadAgainstTail(
@@ -829,19 +768,6 @@ export interface CompactionItem {
   preTokens?: number;
 }
 
-export interface PluginTimelineStreamItem {
-  kind: "plugin";
-  id: string;
-  timelineCursor?: TimelinePosition;
-  turnId?: string;
-  timestamp: Date;
-  pluginId: string;
-  pluginItemId: string;
-  itemKind: string;
-  version: number;
-  data: JsonValue;
-}
-
 export interface TodoEntry {
   text: string;
   completed: boolean;
@@ -911,7 +837,6 @@ export function handoffCreatedAgentUserMessageToStream(params: {
     ...params,
     insert: "tail",
     presentation: "incoming",
-    matchPolicy: "handoff",
   });
 }
 
@@ -1073,7 +998,6 @@ export function streamTimelineItemIdentity(item: StreamItem): string | null {
       turnId: item.turnId,
     });
   }
-  if (item.kind === "plugin") return `${item.pluginId}/${item.pluginItemId}`;
   return null;
 }
 
@@ -1301,34 +1225,6 @@ function appendByIdentity(
     return next;
   }
   return [...state, entry];
-}
-
-function appendPluginTimelineItem(
-  state: StreamItem[],
-  item: Extract<AgentTimelineItem, { type: "plugin" }>,
-  timestamp: Date,
-  timelineCursor?: TimelinePosition,
-): StreamItem[] {
-  const identity = timelineItemIdentity(item);
-  if (identity === null) return state;
-  const nextItem: PluginTimelineStreamItem = {
-    kind: "plugin",
-    id: identity,
-    pluginId: item.pluginId,
-    pluginItemId: item.id,
-    itemKind: item.kind,
-    version: item.version,
-    data: item.data,
-    timestamp,
-    ...(timelineCursor ? { timelineCursor } : {}),
-  };
-  const existingIndex = findExistingTimelineIdentityIndex(state, identity);
-  if (existingIndex < 0) return [...state, nextItem];
-  const existing = state[existingIndex];
-  if (!existing || existing.kind !== "plugin") return state;
-  const next = [...state];
-  next[existingIndex] = { ...nextItem, id: existing.id };
-  return next;
 }
 
 function appendTodoList(
@@ -1649,10 +1545,6 @@ function reduceTimelineEvent(
       return finalizeActiveThoughts(
         reduceTimelineCompaction(state, item, timestamp, timelineCursor),
       );
-    case "plugin":
-      return finalizeActiveThoughts(
-        appendPluginTimelineItem(state, item, timestamp, timelineCursor),
-      );
     default:
       return state;
   }
@@ -1688,7 +1580,6 @@ export function reduceStreamUpdate(
     case "turn_canceled":
     case "permission_requested":
     case "permission_resolved":
-    case "attention_required":
       return finalizeActiveThoughts(state);
     default:
       return state;
@@ -1809,8 +1700,6 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "notification";
     case "custom_message":
       return "custom_message";
-    case "plugin":
-      return "plugin";
     default:
       return null;
   }

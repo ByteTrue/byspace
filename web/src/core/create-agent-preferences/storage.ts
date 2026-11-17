@@ -1,10 +1,6 @@
 import localStorageAsync from "~/lib/local-storage-async";
 import { readValidatedJson } from "@/storage/validated-storage";
-import {
-  FormPreferencesSchema,
-  StoredFormPreferencesSchema,
-  type FormPreferences,
-} from "./preferences";
+import { FormPreferencesSchema, type FormPreferences } from "./preferences";
 
 export const CREATE_AGENT_PREFERENCES_STORAGE_KEY = "@byspace:create-agent-preferences";
 
@@ -18,7 +14,7 @@ export class LocalStorageCreateAgentPreferenceStorage implements CreateAgentPref
     return readValidatedJson(
       localStorageAsync,
       CREATE_AGENT_PREFERENCES_STORAGE_KEY,
-      StoredFormPreferencesSchema,
+      FormPreferencesSchema,
     );
   }
 

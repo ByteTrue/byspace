@@ -47,7 +47,7 @@ export function useCheckoutPrStatusQuery({
 
   return {
     status: query.data?.status ?? null,
-    githubFeaturesEnabled: query.data?.githubFeaturesEnabled ?? true,
+    githubFeaturesEnabled: query.data?.authState === "authenticated",
     authState: query.data?.authState,
     forge: normalizeForge(query.data?.forge),
     // Null until a response arrives, so callers that can infer the forge from

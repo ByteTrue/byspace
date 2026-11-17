@@ -23,8 +23,8 @@ import { timelineItemIdentity } from "@bytetrue/protocol/timeline-identity";
 
 type CanonicalToolStatus = "running" | "completed" | "failed" | "canceled";
 
-describe("plugin timeline rows", () => {
-  it("uses the protocol identity format for stream tool and plugin rows", () => {
+describe("stream timeline identity", () => {
+  it("uses the protocol identity format for stream tool rows", () => {
     const tool = {
       kind: "tool_call",
       id: "tool-row",
@@ -41,74 +41,10 @@ describe("plugin timeline rows", () => {
         },
       },
     } satisfies StreamItem;
-    const plugin = {
-      kind: "plugin",
-      id: "review/row-1",
-      pluginId: "review",
-      pluginItemId: "row-1",
-      itemKind: "review",
-      version: 1,
-      data: {},
-      timestamp: new Date(1),
-    } satisfies StreamItem;
 
     expect(streamTimelineItemIdentity(tool)).toBe(
       timelineItemIdentity({ type: "tool_call", ...tool.payload.data }),
     );
-    expect(streamTimelineItemIdentity(plugin)).toBe(
-      timelineItemIdentity({
-        type: "plugin",
-        id: plugin.pluginItemId,
-        pluginId: plugin.pluginId,
-        kind: plugin.itemKind,
-        version: plugin.version,
-        data: plugin.data,
-      }),
-    );
-  });
-
-  it("replaces a live row when the plugin-scoped identity repeats", () => {
-    const first = reduceStreamUpdate(
-      [],
-      {
-        type: "timeline",
-        provider: "codex",
-        item: {
-          type: "plugin",
-          id: "review-1",
-          pluginId: "review",
-          kind: "review",
-          version: 1,
-          data: { status: "running" },
-        },
-      },
-      new Date(1),
-    );
-    const second = reduceStreamUpdate(
-      first,
-      {
-        type: "timeline",
-        provider: "codex",
-        item: {
-          type: "plugin",
-          id: "review-1",
-          pluginId: "review",
-          kind: "review",
-          version: 1,
-          data: { status: "complete" },
-        },
-      },
-      new Date(2),
-    );
-
-    expect(second).toHaveLength(1);
-    expect(second[0]).toMatchObject({
-      kind: "plugin",
-      id: "review/review-1",
-      pluginId: "review",
-      pluginItemId: "review-1",
-      data: { status: "complete" },
-    });
   });
 });
 
@@ -250,39 +186,6 @@ describe("user message identity", () => {
     const result = upsertUserMessage([local], canonicalWithoutProviderIdentity);
 
     expect(result).toEqual([local]);
-  });
-
-  it("matches a submitted message against a legacy canonical row that has no client identity", () => {
-    // Daemons before v0.2.0 do not echo clientMessageId. During agent creation the
-    // legacy canonical row can land before the local submission is handed off, so the
-    // submitted row arrives as `incoming` and must still match by text.
-    const timestamp = new Date("2026-07-27T11:00:00.000Z");
-    const legacyCanonical = createUserMessage({
-      id: "provider-1",
-      messageId: "provider-1",
-      text: "review this",
-      timestamp,
-    });
-    const submitted = createUserMessage({
-      clientMessageId: "client-1",
-      text: "review this",
-      timestamp: new Date("2026-07-27T11:00:01.000Z"),
-      attachments: [{ type: "text", mimeType: "text/plain", text: "attachment" }],
-    });
-
-    const result = handoffCreatedAgentUserMessageToStream({
-      tail: [legacyCanonical],
-      head: [],
-      message: submitted,
-    });
-
-    expect(result.tail).toEqual([
-      {
-        ...submitted,
-        id: "client-1",
-        messageId: "provider-1",
-      },
-    ]);
   });
 });
 
@@ -1755,6 +1658,7 @@ describe("turn lifecycle events", () => {
           type: "user_message",
           text: "typed plain text",
           messageId: "msg_opencode_provider_owned",
+          clientMessageId: "msg_submitted",
         },
       },
       serverTimestamp,
@@ -1966,6 +1870,7 @@ describe("turn lifecycle events", () => {
           type: "user_message",
           text: "plain text in head",
           messageId: "provider-owned-head",
+          clientMessageId: "msg_head_submitted",
         },
       },
       timestamp: new Date("2025-01-01T15:03:03Z"),

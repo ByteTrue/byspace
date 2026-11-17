@@ -189,7 +189,6 @@ import {
   WorkspaceHeaderMenuDesktop,
   WorkspaceHeaderMenuMobile,
 } from "@/screens/workspace/workspace-header-menu";
-import { PluginHeaderButtons } from "@/plugins";
 import {
   createWorkspaceFileTabTarget,
   normalizeWorkspaceFileLocation,
@@ -1522,9 +1521,6 @@ function WorkspaceScreenContent({
 
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
-  const supportsProvidersSnapshot = useSessionStore(
-    (state) => state.sessions[normalizedServerId]?.serverInfo?.features?.providersSnapshot === true,
-  );
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
@@ -1537,24 +1533,11 @@ function WorkspaceScreenContent({
   }, []);
 
   useEffect(() => {
-    if (
-      !isRouteFocused ||
-      !isConnected ||
-      !client ||
-      !workspaceDirectory ||
-      !supportsProvidersSnapshot
-    ) {
+    if (!isRouteFocused || !isConnected || !client || !workspaceDirectory) {
       return;
     }
     prefetchProvidersSnapshot(normalizedServerId, client, { cwd: workspaceDirectory });
-  }, [
-    client,
-    isConnected,
-    isRouteFocused,
-    normalizedServerId,
-    supportsProvidersSnapshot,
-    workspaceDirectory,
-  ]);
+  }, [client, isConnected, isRouteFocused, normalizedServerId, workspaceDirectory]);
 
   const persistenceKey = useMemo(
     () =>
@@ -3635,7 +3618,6 @@ function WorkspaceScreenContent({
     () => (
       <div className="flex items-center gap-1">
         {/* Header actions are 28px (shadcn's sm / icon-sm) inside a 36px bar. */}
-        <PluginHeaderButtons serverId={normalizedServerId} workspaceId={normalizedWorkspaceId} />
         {!isMobile && workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
           <WorkspaceScriptsButton
             serverId={normalizedServerId}

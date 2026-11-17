@@ -11,20 +11,14 @@ describe("resolveAgentRoleNames", () => {
     ]);
   });
 
-  it("falls back to the chief-only registry a v0.20.0 daemon advertised", () => {
-    // That daemon sent only the boolean, and chief was its whole registry.
-    expect(resolveAgentRoleNames({ agentRoles: true })).toEqual(["chief"]);
-  });
-
   it("reports no roles for a host without the feature", () => {
     expect(resolveAgentRoleNames(undefined)).toBeNull();
     expect(resolveAgentRoleNames({})).toBeNull();
-    expect(resolveAgentRoleNames({ agentRoles: false })).toBeNull();
   });
 
-  it("prefers an empty catalog over the legacy fallback", () => {
-    // A newer daemon that deliberately ships no roles must not resurrect chief.
-    expect(resolveAgentRoleNames({ agentRoleNames: [], agentRoles: true })).toEqual([]);
+  it("keeps an empty catalog empty", () => {
+    // A daemon that deliberately ships no roles must not resurrect chief.
+    expect(resolveAgentRoleNames({ agentRoleNames: [] })).toEqual([]);
   });
 });
 

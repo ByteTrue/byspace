@@ -97,9 +97,6 @@
         "autoArchiveAfterMerge": {
           "type": "boolean"
         },
-        "enableTerminalAgentHooks": {
-          "type": "boolean"
-        },
         "terminalAgentHooks": {
           "type": "object",
           "propertyNames": {

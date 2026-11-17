@@ -464,10 +464,10 @@ describe("reconcileProjectSelection", () => {
       ...project("shared", "host-b"),
       hosts: [
         {
-          serverId: "host-b",
+          serverId: "host-c",
           projectId: "shared",
           iconWorkingDir: "/work/shared",
-          worktreeSupport: "unsupported" as const,
+          worktreeSupport: "supported" as const,
         },
       ],
     };
@@ -481,7 +481,6 @@ describe("reconcileProjectSelection", () => {
     const selectableProjects = filterWorkspaceProjectsForHost({
       projects: [unselectableEquivalent, fallback],
       serverId: "host-b",
-      allowAllProjects: false,
     });
     const selectableContext = context({
       selectedServerId: "host-b",
@@ -510,15 +509,7 @@ describe("reconcileProjectSelection", () => {
       workspaceKeys: ["host-a:ws_home"],
     };
 
-    // `allowAllProjects` says the host can host several workspaces per directory, which would
-    // otherwise make this project eligible; the Chief project is still out of reach on purpose.
-    expect(
-      filterWorkspaceProjectsForHost({
-        projects: [chief],
-        serverId: "host-a",
-        allowAllProjects: true,
-      }),
-    ).toEqual([]);
+    expect(filterWorkspaceProjectsForHost({ projects: [chief], serverId: "host-a" })).toEqual([]);
   });
 
   it("does not equate projects without a persisted project key", () => {
@@ -559,7 +550,7 @@ describe("reconcileProjectSelection", () => {
     expect(reconcileProjectSelection(current, currentContext)).toEqual(current);
   });
 
-  it("resets fallback selection when host project capability changes", () => {
+  it("resets fallback selection when the route project context changes", () => {
     const fallback = project("git-fallback");
     const remembered = project("remembered-directory");
     const current = createProjectSelection(
@@ -567,24 +558,22 @@ describe("reconcileProjectSelection", () => {
         contextKey: createProjectSelectionContextKey({
           selectedServerId: "host",
           routeProjectViewKey: null,
-          allowAllProjects: false,
         }),
         initialProject: fallback,
         projects: [fallback, remembered],
       }),
     );
-    const afterCapabilityHydration = context({
+    const afterRouteChange = context({
       contextKey: createProjectSelectionContextKey({
         selectedServerId: "host",
-        routeProjectViewKey: null,
-        allowAllProjects: true,
+        routeProjectViewKey: "view:host:route",
       }),
       initialProject: remembered,
       projects: [fallback, remembered],
     });
 
-    expect(reconcileProjectSelection(current, afterCapabilityHydration)).toEqual({
-      contextKey: "host:all-projects:",
+    expect(reconcileProjectSelection(current, afterRouteChange)).toEqual({
+      contextKey: "host:all-projects:view:host:route",
       project: remembered,
       source: "initial",
     });
@@ -606,7 +595,6 @@ describe("reconcileProjectSelection", () => {
       contextKey: createProjectSelectionContextKey({
         selectedServerId: "host",
         routeProjectViewKey: null,
-        allowAllProjects: true,
       }),
       manualContextKey: createManualProjectSelectionContextKey({
         routeProjectViewKey: null,

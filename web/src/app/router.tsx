@@ -2,8 +2,6 @@ import { createBrowserRouter, Navigate } from "react-router";
 // The Expo route modules that are pure redirects or resolvers run unchanged.
 import HostAgentRoute from "@/app/h/[serverId]/agent/[agentId]";
 import HostIndexRoute from "@/app/h/[serverId]/index";
-import HostOpenProjectRoute from "@/app/h/[serverId]/open-project";
-import HostSessionsRoute from "@/app/h/[serverId]/sessions";
 import NewWorkspaceRoute from "@/app/new";
 import OpenProjectRoute from "@/app/open-project";
 import SchedulesRoute from "@/app/schedules";
@@ -11,7 +9,6 @@ import TunnelsRoute from "@/app/tunnels";
 import PairScanRoute from "@/app/pair-scan";
 import SessionsRoute from "@/app/sessions";
 import WelcomeRoute from "@/app/welcome";
-import LegacyHostSettingsRoute from "@/app/h/[serverId]/settings";
 import StartupIndexRoute from "@/app/index";
 import SettingsHostIndexRoute from "@/app/settings/hosts/[serverId]/index";
 import SettingsSectionRoute from "@/app/settings/[section]";
@@ -60,9 +57,6 @@ export const router = createBrowserRouter([
           // Rendered by the shell's WorkspaceLayer, which keeps it mounted under pushed screens.
           WORKSPACE_ROUTE,
           { path: "agent/:agentId", element: <HostAgentRoute /> },
-          { path: "sessions", element: <HostSessionsRoute /> },
-          { path: "open-project", element: <HostOpenProjectRoute /> },
-          { path: "settings", element: <LegacyHostSettingsRoute /> },
         ],
       },
       { path: "*", element: <Navigate to="/" replace /> },

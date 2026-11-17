@@ -445,14 +445,6 @@ export function FileExplorerPane({
     workspaceRoot: normalizedWorkspaceRoot,
   });
   const toast = useToast();
-  // COMPAT(fsEntryOps): added in v0.3.0, remove gate after 2027-02-08.
-  const fsEntryOpsEnabled = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryOps === true,
-  );
-  // COMPAT(fsEntryDuplicate): added in v0.3.0, remove gate after 2027-02-09.
-  const fsEntryDuplicateEnabled = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
-  );
   const [pendingEdit, setPendingEdit] = useState<ExplorerPendingEdit | null>(null);
   const downloadFile = useFileDownload({
     serverId,
@@ -944,18 +936,16 @@ export function FileExplorerPane({
           onDownloadEntry={handleDownloadEntry}
           onAddToChat={onAddToChat}
           onOpenFileToSide={onOpenFileToSide}
-          onNewEntry={fsEntryOpsEnabled ? handleNewEntry : undefined}
+          onNewEntry={handleNewEntry}
           onCollapseDirectory={handleCollapseDirectory}
-          onRenameEntry={fsEntryOpsEnabled ? handleRenameEntry : undefined}
-          onDuplicateEntry={fsEntryDuplicateEnabled ? handleDuplicateEntry : undefined}
-          onDeleteEntry={fsEntryOpsEnabled ? handleDeleteEntry : undefined}
+          onRenameEntry={handleRenameEntry}
+          onDuplicateEntry={handleDuplicateEntry}
+          onDeleteEntry={handleDeleteEntry}
         />
       );
     },
     [
       expandedPaths,
-      fsEntryDuplicateEnabled,
-      fsEntryOpsEnabled,
       handleCollapseDirectory,
       handleCopyPath,
       handleCopyRelativePath,
@@ -1014,7 +1004,7 @@ export function FileExplorerPane({
         showInitialLoading={showInitialLoading}
         showBackFromError={showBackFromError}
         listRows={listRows}
-        onNewEntryAtRoot={fsEntryOpsEnabled ? handleNewEntry : undefined}
+        onNewEntryAtRoot={handleNewEntry}
         currentSortLabel={currentSortLabel}
         isRefreshFetching={isRefreshFetching}
         treeListRef={treeListRef}

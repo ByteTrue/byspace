@@ -102,9 +102,7 @@ Client heartbeats include the focused terminal id. When a visible client focuses
 
 ### Agent hook installation
 
-Installing hooks edits the user's real agent config files, so each provider is opt-in. The daemon stores switches under `daemon.terminalAgentHooks`; an absent key is disabled. Hosts advertising provider-scoped hooks show one switch per agent, in the **Terminal** tab of that provider's detail sheet (**Host → Agents → provider**); older hosts keep the global switch. Toggling one provider installs or removes only that provider's BySpace-owned hook. The switch is independent of whether the provider is enabled for BySpace agent sessions — see [bywork/memory/settings-taxonomy.md](../bywork/memory/settings-taxonomy.md).
-
-When the provider map is absent, the legacy `daemon.enableTerminalAgentHooks` switch applies only to the providers it originally controlled: Claude Code, Codex, and OpenCode. Pi stays disabled until the user explicitly enables it, so upgrading a host cannot install a new Pi extension from an old persisted `true`. The first provider edit materializes that effective map and updates the legacy aggregate to `true` when any provider is enabled. A later legacy-switch edit from an old app updates only Claude Code, Codex, and OpenCode; explicit Pi or future-provider settings remain unchanged.
+Installing hooks edits the user's real agent config files, so each provider is opt-in. The daemon stores switches under `daemon.terminalAgentHooks`; an absent key is disabled. The **Terminal** tab of each provider's detail sheet (**Host → Agents → provider**) shows one switch per agent. Toggling one provider installs or removes only that provider's BySpace-owned hook. The switch is independent of whether the provider is enabled for BySpace agent sessions — see [bywork/memory/settings-taxonomy.md](../bywork/memory/settings-taxonomy.md).
 
 BySpace installs providers as follows:
 

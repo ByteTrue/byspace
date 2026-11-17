@@ -213,11 +213,6 @@ export function WorkspaceLabelManagerModal({
               {t("workspaceLabels.manage.offline")}
             </span>
           ) : null}
-          {state.host?.status === "unsupported" ? (
-            <span className="text-xs leading-[normal] text-muted-foreground">
-              {t("workspaceLabels.manage.updateHost")}
-            </span>
-          ) : null}
           {(state.error ?? state.host?.error) ? (
             <span
               className="text-xs leading-[normal] text-destructive"

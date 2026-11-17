@@ -59,18 +59,6 @@ const (
 	wsHelloTimeout           = 15 * time.Second
 )
 
-var ownerPermissions = []string{
-	"daemon.read",
-	"daemon.manage",
-	"tunnel.manage",
-	"access.manage",
-	"workspace.read",
-	"workspace.write",
-	"workspace.manage",
-	"automation.manage",
-	"hub.execute",
-}
-
 // Options configures the Go BySpace daemon server.
 type Options struct {
 	HomeDir      string
@@ -237,11 +225,9 @@ type Server struct {
 	workspaceStatusBuckets map[string]string
 	clients                map[frameSink]bool
 	// timelineViews holds each socket's viewed-agent set from
-	// agent.timeline.set_subscription.request, and selectiveTimeline records which sockets
-	// declared selective_agent_timeline. Together they scope agent_stream to the chats a
-	// client is actually showing; without them every socket receives every agent's tokens.
-	timelineViews     map[frameSink]map[string]bool
-	selectiveTimeline map[frameSink]bool
+	// agent.timeline.set_subscription.request. It scopes agent_stream to the chats a
+	// client is actually showing; without it every socket receives every agent's tokens.
+	timelineViews map[frameSink]map[string]bool
 	// directorySyncSinks records which sockets sent a directory cursor. Those sockets understand
 	// per-row sequences, so live updates for them carry `generation` and `seq`; a socket that never
 	// sent one does not, and stamping it anyway would claim a cursor position it does not hold.
@@ -433,7 +419,6 @@ func New(opts Options) (*Server, error) {
 		diffSubs:              make(map[string]diffSubscription),
 		clients:               make(map[frameSink]bool),
 		timelineViews:         make(map[frameSink]map[string]bool),
-		selectiveTimeline:     make(map[frameSink]bool),
 		clientPresence:        make(map[frameSink]attention.ClientPresence),
 		directorySyncSinks:    make(map[frameSink]bool),
 		pollStop:              make(chan struct{}),
@@ -990,7 +975,6 @@ func (s *Server) serveSessionOnSinkGreeted(
 		s.mu.Lock()
 		delete(s.clients, sink)
 		delete(s.timelineViews, sink)
-		delete(s.selectiveTimeline, sink)
 		delete(s.clientPresence, sink)
 		delete(s.terminalDelivered, sink)
 		// Permissions outlive nothing: a socket that proved the password and then dropped must not
@@ -1180,7 +1164,6 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		ClientID        string          `json:"clientId"`
 		ProtocolVersion int             `json:"protocolVersion"`
 		AppVersion      string          `json:"appVersion"`
-		Capabilities    json.RawMessage `json:"capabilities"`
 		Message         json.RawMessage `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
@@ -1210,9 +1193,6 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		}
 		s.mu.Lock()
 		s.clients[sink] = true
-		// An empty capabilities object is how a client says "I speak the current protocol";
-		// only an absent selective_agent_timeline means "send me every agent's timeline".
-		s.selectiveTimeline[sink] = helloDeclaresSelectiveTimeline(envelope.Capabilities)
 		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "status", s.buildServerInfoPayload())
 	case "session":
@@ -1289,22 +1269,6 @@ func sessionMessageNeedsOrder(raw json.RawMessage) bool {
 	return false
 }
 
-// helloDeclaresSelectiveTimeline reports whether the client asked for view-scoped agent_stream
-// delivery. A missing capabilities object means a client predating the flag, which keeps the
-// unconditional firehose.
-func helloDeclaresSelectiveTimeline(raw json.RawMessage) bool {
-	if len(raw) == 0 {
-		return false
-	}
-	var caps struct {
-		SelectiveAgentTimeline bool `json:"selective_agent_timeline"`
-	}
-	if err := json.Unmarshal(raw, &caps); err != nil {
-		return false
-	}
-	return caps.SelectiveAgentTimeline
-}
-
 func (s *Server) buildServerInfoPayload() map[string]any {
 	hostname, _ := os.Hostname()
 	return map[string]any{
@@ -1312,116 +1276,16 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 		"serverId":         s.serverID,
 		"hostname":         hostname,
 		"version":          s.version,
-		"permissions":      ownerPermissions,
-		"desktopManaged":   false,
 		"webPushPublicKey": s.vapidKeys.PublicKey,
+		// Runtime-state gates and catalogs only. App and daemon ship together,
+		// so every always-on capability is unconditional — no version gates.
 		"features": map[string]any{
-			"webPush":              s.vapidKeys.PublicKey != "",
-			"skillInstallTargets":  true,
-			"agentRoles":           true,
-			"agentRoleNames":       []string{"chief"},
-			"agentRequestReceipts": true,
-			// Hub was removed by decision (issue 025, commit 446bc38a3d). The wire messages still parse.
-			"hubAgentRpc": false,
-			// Hub was removed by decision (issue 025).
-			"hubRelationship": false,
-			// Implemented: internal/directorysync gives projects, workspaces and agents their own
-			// sequences and remembers removals as tombstones, so a client can advance a cursor and
-			// learn that a row was deleted instead of refetching the whole table.
-			"directorySync":                   true,
-			"workspaceLabels":                 true,
-			"workspaceSetupRun":               true,
-			"providersSnapshot":               true,
-			"providersSnapshotCwd":            true,
-			"checkoutForgeSetAutoMerge":       true,
-			"checkoutGithubSetAutoMerge":      true,
-			"githubCheckDetails":              true,
-			"forgeCheckDetails":               true,
-			"forgeSearch":                     true,
-			"forgeProviders":                  true,
-			"projectGithubClone":              true,
-			"workspaceGithubRepositorySearch": true,
-			"daemonStatusRpc":                 true,
-			"daemonConfigReload":              true,
-			"relayConfig":                     true,
-			"pushTokenRevocation":             true,
-			// The plugin system was retired by decision (issue 025, commit a5c6bb6588). Wire parsing stays.
-			"plugins": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginManagement": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginGitManagement": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginLogs": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginThemes": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginSettings": false,
-			// Plugin system retired by decision (issue 025).
-			"pluginTimelineItems": false,
-			"skillManagement":     true,
-			// Tunnel is a delivered feature (issue 062) that the Go port has not picked up yet; the RPCs
-			// Implemented: registry, relay client, target-side forwarding. The experimental gate
-			// (issue 063) still starts closed, so the UI shows the entry point and the feature is
-			// off until the operator opts in — which is the published behaviour.
-			"daemonTunnels": true,
-			// COMPAT(daemonTunnelRemoteHost): added in v0.26.0, remove after 2027-11-15.
-			// A forward can name a destination host on the peer's network instead of its loopback.
-			// The client hides the host field without this flag, because a daemon that ignores the
-			// field would persist a rule that silently forwards to the wrong machine.
-			"daemonTunnelRemoteHost":     true,
-			"projectSetupSkill":          true,
-			"terminalAgentHookProviders": true,
-			"terminalShellConfig":        true,
-			"terminal-restore-modes":     true,
-			"terminal-input-mode-replay": true,
-			"terminal-size-ownership":    true,
-			"workspaceTerminals":         true,
-			"rewind":                     true,
-			"agentTimelinePromptIndex":   true,
-			"agentHistorySearch":         true,
-			"checkoutRefresh":            true,
-			"workspaceAgentRename":       true,
-			"workspaceMultiplicity":      true,
-			"projectRemove":              true,
-			"projectAdd":                 true,
-			"projectList":                true,
-			"worktreeRestore":            true,
-			"workspaceRecovery":          true,
-			"workspaceFileEditing":       true,
-			"providerUsageList":          true,
-			"agentDetach":                true,
-			"agentThinkingUpdate":        true,
-			"daemonDiagnostics":          true,
-			// Implemented: downloads the release for this platform and replaces the binary.
-			"daemonSelfUpdate":             true,
-			"agentForkContext":             true,
-			"agentForkContextCursor":       true,
-			"providerSubagents":            true,
-			"providerSubagentNesting":      true,
-			"workspacePinning":             true,
-			"workspaceMarkUnread":          true,
-			"projectCreateDirectory":       true,
-			"commitsList":                  true,
-			"commitBaseClassification":     true,
-			"providerRemoval":              true,
-			"importSessionWorkspaceTarget": true,
-			"importSessionSearch":          true,
-			"selectiveAgentTimeline":       true,
-			"explicitEventSubscriptions":   true,
-			"canonicalSubmittedPrompts":    true,
-			"stableProjectIdentity":        true,
-			"workspaceScriptManagement":    true,
-			"projectCustomIcon":            true,
-			"fsEntryOps":                   true,
-			"fsEntryDuplicate":             true,
-			"checkoutDiscardChanges":       true,
-			"agentProfiles":                true,
-			"agentConfigApply":             true,
-			"daemonNetworkConfig":          true,
-			"hostSync":                     true,
-			"relayPassword":                true,
-			"daemonServiceInstall":         supportsDaemonServiceInstall(),
+			"webPush":        s.vapidKeys.PublicKey != "",
+			"agentRoleNames": []string{"chief"},
+			// The daemon owns the tunnel registry and the tunnel.* RPCs; the
+			// operator opts in via config, so the UI shows the entry point.
+			"daemonTunnels":        true,
+			"daemonServiceInstall": supportsDaemonServiceInstall(),
 		},
 	}
 }
@@ -1976,7 +1840,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "project.remove.request":
 		s.handleProjectRemove(ctx, sink, raw)
 
-	case "project.icon.set.request", "project.icon.get.request", "project_icon_request":
+	case "project.icon.set.request", "project.icon.get.request":
 		s.handleProjectIcon(ctx, sink, base.Type, raw)
 
 	case "open_project_request":
@@ -2007,38 +1871,20 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "workspace.setup.run.request", "workspace_setup_status_request":
 		s.handleWorkspaceSetupProject(ctx, sink, base.Type, raw)
 
-	case "plugin.list.request",
-		"plugin.catalog.get.request",
-		"plugin.logs.get.request",
-		"plugin.source.status.request",
-		"plugin.source.update.request",
-		"plugin.directory.inspect.request",
-		"plugin.directory.install.request",
-		"plugin.source.install.request",
-		"plugin.reload.request",
-		"plugin.enable.request",
-		"plugin.disable.request",
-		"plugin.remove.request",
-		"plugin.rpc.invoke.request":
-		s.handlePluginRPC(ctx, sink, base.Type, raw)
-
 	case "workspace.recovery.inspect.request", "workspace.recovery.restore.request":
 		s.handleWorkspaceRecovery(ctx, sink, base.Type, raw)
 
 	case "read_project_config_request", "write_project_config_request":
 		s.handleProjectConfig(ctx, sink, base.Type, raw)
 
-	// COMPAT(workspaceScriptStartFlat): added before v0.21, remove after 2027-06-01. The flat name is
-	// `start_workspace_script_request`; the protocol still declares it, so the daemon must keep parsing it —
-	// but it must not run a second, different implementation. Both names reach the same handler.
+	// The flat name `start_workspace_script_request` is still sent by the client's startWorkspaceScript
+	// method (the response carries terminalId); the dotted names are the status-bearing variants.
+	// All reach the same handler.
 	case "start_workspace_script_request",
 		"workspace.script.list.request",
 		"workspace.script.start.request",
 		"workspace.script.stop.request":
 		s.handleWorkspaceScripts(ctx, sink, base.Type, raw)
-
-	case "list_available_editors_request", "open_in_editor_request":
-		s.handleEditors(ctx, sink, base.Type, raw)
 
 	case "fs.entry.duplicate.request", "file_download_token_request", "file.upload.request":
 		s.handleFileExtraOps(ctx, sink, base.Type, raw)
@@ -2069,17 +1915,14 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"checkout_pr_merge_request",
 		"pull_request_timeline_request",
 		"checkout.forge.set_auto_merge.request",
-		"checkout.github.set_auto_merge.request",
 		"checkout.forge.get_check_details.request",
-		"checkout.github.get_check_details.request",
 		"forge.search.request",
-		"github_search_request",
 		"workspace.github.search_repositories.request",
 		"project.github.clone.request":
 		s.handleForgeParityOps(ctx, sink, base.Type, raw)
 		switch base.Type {
 		case "checkout_pr_create_request", "checkout_pr_merge_request",
-			"checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
+			"checkout.forge.set_auto_merge.request":
 			s.notePRStatusCheckoutChanged(requestCwd(raw))
 		}
 
@@ -2102,7 +1945,6 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"agent.rewind.request",
 		"agent.fork_context.request",
 		"agent.timeline.list_prompts.request",
-		"agent.timeline.append.request",
 		"set_agent_feature_request",
 		"abort_request":
 		s.handleAgentParityOps(ctx, sink, base.Type, raw)
@@ -2111,8 +1953,6 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"agent.skills.reconcile.request",
 		"agent.skills.uninstall.request",
 		"agent.skills.save_selection.request",
-		"agent.skills.import_legacy_selection.request",
-		"provider.usage.list.request",
 		"provider_diagnostic_request",
 		"set_daemon_config_request",
 		"daemon.config.reload.request",
@@ -2129,17 +1969,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"hub.management.daemon.connect.request",
 		"hub.management.daemon.get_status.request",
 		"hub.management.daemon.disconnect.request",
-		"hub.management.daemon.permissions.update.request",
-		"hub.execution.agent.validate.request",
-		"hub.execution.agent.create.request",
-		"hub.execution.control.request",
-		"set_voice_mode",
-		"dictation_stream_start",
-		"dictation_stream_chunk",
-		"dictation_stream_finish",
-		"dictation_stream_cancel",
-		"voice_audio_chunk",
-		"audio_played":
+		"hub.management.daemon.permissions.update.request":
 		s.handleSystemParityOps(ctx, sink, base.Type, raw)
 	}
 }
@@ -2296,10 +2126,8 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 			// `branch-off`, or the branch to check out for `checkout`. Dropping it sent every worktree
 			// creation to the default branch, so picking "dev" produced a worktree off "main".
 			RefName string `json:"refName"`
-			// CheckoutSource names a change request to check out; GithubPrNumber is the legacy field
-			// the protocol still accepts for the same thing.
+			// CheckoutSource names a change request to check out.
 			CheckoutSource *sourceCheckoutSource `json:"checkoutSource"`
-			GithubPRNumber *int                  `json:"githubPrNumber"`
 		} `json:"source"`
 	}
 	_ = json.Unmarshal(raw, &req)
@@ -2323,7 +2151,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		}
 		s.handleWorkspaceCreateFromWorktree(ctx, sink, req.RequestID, projectRoot, req.Title, worktreeSourceIntentInput(req.Source.Action, req.Source.RefName,
 			req.Source.BaseBranch, req.Source.BranchName, req.Source.WorktreeSlug,
-			req.Source.CheckoutSource, req.Source.GithubPRNumber), req.FirstAgentContext)
+			req.Source.CheckoutSource), req.FirstAgentContext)
 		return
 	}
 
@@ -2613,10 +2441,6 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		} `json:"worktree"`
 		OutputSchema any `json:"outputSchema"`
 		AutoArchive  any `json:"autoArchive"`
-		// Git is retained so an older client's create request still parses; the structured `worktree`
-		// intent replaced it and nothing reads this copy. COMPAT(createGit): keep parsing until the
-		// supported client floor predates the field (it shipped before v0.24); then delete.
-		Git any `json:"git"`
 		// Env is the per-agent environment. It rides on top of the daemon's own, with the BySpace
 		// identity variables applied last so an agent cannot rename itself.
 		Env    map[string]string `json:"env"`
@@ -3959,7 +3783,7 @@ func (s *Server) broadcastSessionMsg(msgType string, payload any) {
 		if !handshaked {
 			continue
 		}
-		if agentID != "" && s.selectiveTimeline[sink] && !s.timelineViews[sink][agentID] {
+		if agentID != "" && !s.timelineViews[sink][agentID] {
 			continue
 		}
 		sinks = append(sinks, sink)
@@ -5270,21 +5094,14 @@ func featureValuesOf(rec store.AgentRecord) map[string]any {
 
 // renderAttachment turns one composer attachment into the text the model reads.
 //
-// The switch mirrors renderPromptAttachmentAsText. Legacy `github_pr` / `github_issue` kinds are still
-// accepted: a client at the compat floor sends them, and they mean the same as the forge-neutral
-// forms with the forge pinned to github.
+// The switch mirrors renderPromptAttachmentAsText.
 func renderAttachment(att promptAttachment, fallbackName string) string {
 	switch att.Type {
 	case "forge_change_request":
 		return attachment.ChangeRequest(att.Forge, att.Number, att.Title, att.URL, att.Body,
 			att.ProjectPath, att.BaseRefName, att.HeadRefName)
-	case "github_pr":
-		return attachment.ChangeRequest("github", att.Number, att.Title, att.URL, att.Body,
-			att.ProjectPath, att.BaseRefName, att.HeadRefName)
 	case "forge_issue":
 		return attachment.Issue(att.Forge, att.Number, att.Title, att.URL, att.Body, att.ProjectPath)
-	case "github_issue":
-		return attachment.Issue("github", att.Number, att.Title, att.URL, att.Body, "")
 	case "review":
 		comments := make([]attachment.ReviewComment, 0, len(att.Comments))
 		for _, comment := range att.Comments {

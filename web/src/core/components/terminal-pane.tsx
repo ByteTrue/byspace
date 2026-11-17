@@ -234,16 +234,6 @@ export function TerminalPane({
   const connectionEpoch = useHostRuntimeConnectionEpoch(serverId);
   const isTerminalPresented = retainedPanelActive && isWorkspaceFocused;
   const isTerminalStreamActive = isWorkspaceFocused && retainedPanelActive;
-  const supportsTerminalRestoreModes = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
-  );
-  const supportsTerminalInputModeReplay = useSessionStore(
-    (state) =>
-      state.sessions[serverId]?.serverInfo?.features?.["terminal-input-mode-replay"] === true,
-  );
-  const supportsTerminalSizeOwnership = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-size-ownership"] === true,
-  );
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
@@ -535,7 +525,6 @@ export function TerminalPane({
       lastSentTerminalSizeRef.current = restoreSize;
     }
     return resolveTerminalRestoreOptions({
-      supportsTerminalRestoreModes,
       canResume:
         anchor !== null &&
         anchor.emulator === emulatorRef.current &&
@@ -773,17 +762,11 @@ export function TerminalPane({
   );
 
   const sendTerminalResize = useStableEvent(
-    (input: {
-      size: { rows: number; cols: number };
-      shouldClaim: boolean;
-      forceClaim?: boolean;
-    }) => {
+    (input: { size: { rows: number; cols: number }; shouldClaim: boolean }) => {
       const claim = resolveTerminalResizeClaim({
         size: input.size,
         previousSentSize: lastSentTerminalSizeRef.current,
         shouldClaim: input.shouldClaim,
-        forceClaim: input.forceClaim ?? false,
-        supportsTerminalSizeOwnership,
         hasClaimedSize: hasTerminalSizeClaim(),
         readiness: {
           isWorkspaceFocused: isTerminalPresented,
@@ -811,7 +794,7 @@ export function TerminalPane({
           key: requestedKey,
           sent,
         });
-        if (sent && supportsTerminalSizeOwnership && requestedKey === focusClaimIdentity) {
+        if (sent && requestedKey === focusClaimIdentity) {
           workspaceTerminalSession.sizeClaims.set({
             terminalId,
             claimIdentity: requestedKey,
@@ -831,7 +814,7 @@ export function TerminalPane({
       measuredTerminalSizeRef.current = nextSize;
       if (input.shouldClaim && canClaimTerminalSizeRef.current) {
         clearPassiveResizeTimer();
-        sendTerminalResize({ size: nextSize, shouldClaim: true, forceClaim: input.forceClaim });
+        sendTerminalResize({ size: nextSize, shouldClaim: true });
         return;
       }
       clearPassiveResizeTimer();
@@ -1115,7 +1098,6 @@ export function TerminalPane({
           <TerminalEmulator
             ref={emulatorRef}
             streamKey={terminalStreamKey}
-            supportsTerminalInputModeReplay={supportsTerminalInputModeReplay}
             testId="terminal-surface"
             xtermTheme={xtermTheme}
             scrollbackLines={settings.terminalScrollbackLines}

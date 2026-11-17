@@ -1,6 +1,6 @@
 import localStorageAsync from "~/lib/local-storage-async";
 import { create } from "zustand";
-import { persist, type StateStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
 import { z } from "zod";
 import { workspaceLabelKey } from "@bytetrue/protocol/workspace-labels";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
@@ -8,8 +8,7 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 export type SidebarGroupMode = "project" | "status";
 
 const SIDEBAR_VIEW_STORAGE_KEY = "sidebar-view";
-const LEGACY_SIDEBAR_GROUP_MODE_STORAGE_KEY = "sidebar-group-mode";
-const SIDEBAR_VIEW_STORE_VERSION = 6;
+const SIDEBAR_VIEW_STORE_VERSION = 7;
 
 /**
  * The key standing for "this workspace carries no labels at all".
@@ -79,44 +78,15 @@ interface SidebarViewPersistedState {
   labelFilter: SidebarLabelFilter;
 }
 
-const PersistedSidebarGroupModeSchema = z.enum(["project", "status", "label"]);
 const SidebarLabelFilterSchema = z.object({
   labels: z.array(z.string()),
 });
 const SidebarViewPersistedStateSchema = z.strictObject({
-  groupMode: PersistedSidebarGroupModeSchema.optional(),
+  groupMode: z.enum(["project", "status"]).optional(),
   hostFilters: z.array(z.string()).optional(),
-  hostFilter: z.string().nullable().optional(),
   projectFilters: z.array(z.string()).optional(),
-  groupModeByServerId: z.record(z.string(), PersistedSidebarGroupModeSchema).optional(),
   labelFilter: SidebarLabelFilterSchema.optional(),
 });
-
-type SidebarViewStorageState = z.infer<typeof SidebarViewPersistedStateSchema>;
-
-function readLegacyGroupMode(persistedState: SidebarViewStorageState): SidebarGroupMode | null {
-  const groupModeByServerId = persistedState.groupModeByServerId;
-  if (!groupModeByServerId) {
-    return null;
-  }
-
-  const modes = Object.values(groupModeByServerId);
-  if (modes.length === 0) return null;
-  return modes.includes("status") ? "status" : "project";
-}
-
-// Reads the host filter from any persisted shape: the current `hostFilters` array, or the
-// pre-v2 single `hostFilter` string (null/absent meant "all hosts").
-function readHostFilters(persistedState: SidebarViewStorageState): string[] {
-  const hostFilters = persistedState.hostFilters;
-  if (hostFilters) {
-    return hostFilters;
-  }
-  // COMPAT(sidebarHostFilters): added in v0.1.102, remove after 2026-12-30 once pre-v2 persisted
-  // sidebar state (a single `hostFilter` string) has aged out.
-  const legacyHostFilter = persistedState.hostFilter;
-  return legacyHostFilter ? [legacyHostFilter] : [];
-}
 
 export function migrateSidebarViewState(persistedState: unknown): SidebarViewPersistedState {
   const result = SidebarViewPersistedStateSchema.safeParse(persistedState);
@@ -129,20 +99,9 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
     };
   }
   const state = result.data;
-
-  const legacyGroupMode = readLegacyGroupMode(state);
-  if (legacyGroupMode) {
-    return {
-      groupMode: legacyGroupMode,
-      hostFilters: [],
-      projectFilters: [],
-      labelFilter: emptyLabelFilter(),
-    };
-  }
-
   return {
     groupMode: state.groupMode === "status" ? "status" : "project",
-    hostFilters: readHostFilters(state),
+    hostFilters: state.hostFilters ?? [],
     projectFilters: state.projectFilters ?? [],
     labelFilter: state.labelFilter
       ? normalizeSidebarLabelFilter(state.labelFilter)
@@ -151,28 +110,12 @@ export function migrateSidebarViewState(persistedState: unknown): SidebarViewPer
 }
 
 /**
- * Re-keys a persisted filter through `workspaceLabelKey`, so the invariant on `labels` holds for
- * state that was written by an older build of this page rather than by the current one.
+ * Re-keys a persisted filter through `workspaceLabelKey` so the normalized-identity invariant
+ * holds even if a stored label was written before trimming was applied.
  */
 function normalizeSidebarLabelFilter(filter: SidebarLabelFilter): SidebarLabelFilter {
   const labels = new Set(filter.labels.map(workspaceLabelKey));
   return { labels: [...labels] };
-}
-
-export function createSidebarViewStorage(
-  backingStorage: StateStorage = localStorageAsync,
-): StateStorage {
-  return {
-    getItem: async (name) => {
-      const value = await backingStorage.getItem(name);
-      if (value !== null || name !== SIDEBAR_VIEW_STORAGE_KEY) {
-        return value;
-      }
-      return backingStorage.getItem(LEGACY_SIDEBAR_GROUP_MODE_STORAGE_KEY);
-    },
-    setItem: (name, value) => backingStorage.setItem(name, value),
-    removeItem: (name) => backingStorage.removeItem(name),
-  };
 }
 
 export const useSidebarViewStore = create<SidebarViewStoreState>()(
@@ -223,10 +166,7 @@ export const useSidebarViewStore = create<SidebarViewStoreState>()(
     {
       name: SIDEBAR_VIEW_STORAGE_KEY,
       version: SIDEBAR_VIEW_STORE_VERSION,
-      storage: createValidatedPersistStorage(
-        createSidebarViewStorage(),
-        SidebarViewPersistedStateSchema,
-      ),
+      storage: createValidatedPersistStorage(localStorageAsync, SidebarViewPersistedStateSchema),
       partialize: (state) => ({
         groupMode: state.groupMode,
         hostFilters: state.hostFilters,

@@ -22,17 +22,12 @@ type NewWorkspaceDaemonClient = Pick<
   | "fetchWorkspaces"
   | "getBySpaceWorktreeList"
   | "getDaemonConfig"
-  | "installDirectoryPlugin"
-  | "disablePlugin"
-  | "enablePlugin"
   | "inspectWorkspaceRecovery"
   | "listProjects"
   | "listTerminals"
   | "on"
   | "patchDaemonConfig"
   | "removeProject"
-  | "removePlugin"
-  | "reloadPlugin"
   | "setWorkspaceTitle"
 >;
 

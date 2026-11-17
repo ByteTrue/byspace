@@ -880,19 +880,15 @@ func SearchIssuesAndPullRequests(ctx context.Context, cwd, query string, limit i
 	return items, nil
 }
 
-// normalizeForgeSearchKinds maps the legacy GitHub kind aliases onto the neutral pair.
-//
-// COMPAT(githubSearchKind): the aliases shipped with the legacy github_search_request RPC; remove
-// together with it after 2027-01-17.
 func normalizeForgeSearchKinds(kinds []string) (issues, changeRequests bool) {
 	if len(kinds) == 0 {
 		return true, true
 	}
 	for _, kind := range kinds {
 		switch strings.ToLower(strings.TrimSpace(kind)) {
-		case "issue", "github-issue":
+		case "issue":
 			issues = true
-		case "change_request", "github-pr", "pr", "pull_request":
+		case "change_request":
 			changeRequests = true
 		}
 	}

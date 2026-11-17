@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { z } from "zod";
 import {
   CheckoutPrStatusResponseSchema,
   PullRequestTimelineRequestSchema,
@@ -92,7 +91,6 @@ describe("pull request timeline message schemas", () => {
         truncated: false,
         error: null,
         requestId: "",
-        githubFeaturesEnabled: true,
       },
     });
   });
@@ -225,96 +223,10 @@ describe("pull request timeline message schemas", () => {
         truncated: true,
         error: { kind: "unknown", message: "rate limited" },
         requestId: "request-1",
-        githubFeaturesEnabled: true,
       },
     });
 
     expect(parsed.type).toBe("pull_request_timeline_response");
-  });
-
-  test("an old client timeline schema parses new daemon avatar and inline location fields", () => {
-    const oldClientPullRequestTimelineResponseSchema = z.object({
-      type: z.literal("pull_request_timeline_response"),
-      payload: z.object({
-        cwd: z.string(),
-        prNumber: z.number().nullable(),
-        items: z.array(
-          z.discriminatedUnion("kind", [
-            z.object({
-              id: z.string(),
-              kind: z.literal("review"),
-              author: z.string(),
-              body: z.string(),
-              createdAt: z.number(),
-              url: z.string(),
-              reviewState: z.enum(["approved", "changes_requested", "commented"]),
-            }),
-            z.object({
-              id: z.string(),
-              kind: z.literal("comment"),
-              author: z.string(),
-              body: z.string(),
-              createdAt: z.number(),
-              url: z.string(),
-            }),
-          ]),
-        ),
-        truncated: z.boolean(),
-        error: z.unknown().nullable(),
-        requestId: z.string(),
-        githubFeaturesEnabled: z.boolean(),
-      }),
-    });
-    const newDaemonPayload = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
-      payload: {
-        cwd: "/tmp/repo",
-        prNumber: 42,
-        items: [
-          {
-            id: "comment-1",
-            kind: "comment",
-            author: "octocat",
-            authorUrl: "https://github.com/octocat",
-            avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4",
-            body: "Inline note",
-            createdAt: 1710000000000,
-            url: "https://github.com/bytetrue/byspace/pull/42#discussion_r1",
-            location: {
-              path: "src/file.ts",
-              line: 12,
-              threadId: "PRRT_1",
-            },
-          },
-        ],
-        truncated: false,
-        error: null,
-        requestId: "request-compat",
-        githubFeaturesEnabled: true,
-      },
-    });
-
-    expect(oldClientPullRequestTimelineResponseSchema.parse(newDaemonPayload)).toEqual({
-      type: "pull_request_timeline_response",
-      payload: {
-        cwd: "/tmp/repo",
-        prNumber: 42,
-        items: [
-          {
-            id: "comment-1",
-            kind: "comment",
-            author: "octocat",
-            body: "Inline note",
-            createdAt: 1710000000000,
-            url: "https://github.com/bytetrue/byspace/pull/42#discussion_r1",
-          },
-        ],
-        truncated: false,
-        error: null,
-        requestId: "request-compat",
-        githubFeaturesEnabled: true,
-      },
-    });
   });
 
   test("normalizes future error kinds to unknown", () => {
@@ -343,40 +255,9 @@ describe("pull request timeline message schemas", () => {
   );
 });
 
-describe("checkout PR status compatibility", () => {
-  test("an old client schema parses a new daemon checkout PR status response", () => {
-    const oldClientCheckoutPrStatusResponseSchema = z.object({
-      type: z.literal("checkout_pr_status_response"),
-      payload: z.object({
-        cwd: z.string(),
-        status: z
-          .object({
-            url: z.string(),
-            title: z.string(),
-            state: z.string(),
-            baseRefName: z.string(),
-            headRefName: z.string(),
-            isMerged: z.boolean(),
-            checks: z
-              .array(
-                z.object({
-                  name: z.string(),
-                  status: z.string(),
-                  url: z.string().nullable(),
-                }),
-              )
-              .optional()
-              .default([]),
-            checksStatus: z.string().optional(),
-            reviewDecision: z.string().nullable().optional(),
-          })
-          .nullable(),
-        githubFeaturesEnabled: z.boolean(),
-        error: z.unknown().nullable(),
-        requestId: z.string(),
-      }),
-    });
-    const newDaemonPayload = CheckoutPrStatusResponseSchema.parse({
+describe("checkout PR status message schema", () => {
+  test("parses a checkout PR status response with provider-specific facts", () => {
+    const parsed = CheckoutPrStatusResponseSchema.parse({
       type: "checkout_pr_status_response",
       payload: {
         cwd: "/tmp/repo",
@@ -401,37 +282,15 @@ describe("checkout PR status compatibility", () => {
           checksStatus: "success",
           reviewDecision: "APPROVED",
         },
-        githubFeaturesEnabled: true,
+        authState: "authenticated",
         error: null,
-        requestId: "request-compat",
+        requestId: "request-1",
       },
     });
 
-    expect(oldClientCheckoutPrStatusResponseSchema.parse(newDaemonPayload)).toEqual({
-      type: "checkout_pr_status_response",
-      payload: {
-        cwd: "/tmp/repo",
-        status: {
-          url: "https://github.com/bytetrue/byspace/pull/42",
-          title: "Wire real PR pane data",
-          state: "OPEN",
-          baseRefName: "main",
-          headRefName: "feature/pr-pane",
-          isMerged: false,
-          checks: [
-            {
-              name: "server-tests",
-              status: "success",
-              url: "https://github.com/bytetrue/byspace/actions/runs/123",
-            },
-          ],
-          checksStatus: "success",
-          reviewDecision: "APPROVED",
-        },
-        githubFeaturesEnabled: true,
-        error: null,
-        requestId: "request-compat",
-      },
-    });
+    expect(parsed.payload.status?.number).toBe(42);
+    expect(parsed.payload.authState).toBe("authenticated");
+    // Permanent default: the Gitea family omits the top-level brand.
+    expect(parsed.payload.forge).toBe("github");
   });
 });

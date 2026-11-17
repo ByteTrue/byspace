@@ -318,8 +318,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
 
   // --- Archive workspace ---
   {
-    // COMPAT(workspaceArchiveShortcutOverride): added in v0.1.106; remove after
-    // 2027-01-11 with a stored-override migration. Keeps existing custom chords.
     id: "worktree-archive-cmd-shift-backspace-mac",
     action: "workspace.archive",
     combo: "Cmd+Shift+Backspace",
@@ -331,8 +329,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
-    // COMPAT(workspaceArchiveShortcutOverride): added in v0.1.106; remove after
-    // 2027-01-11 with a stored-override migration. Keeps existing custom chords.
     id: "worktree-archive-ctrl-shift-backspace-non-mac",
     action: "workspace.archive",
     combo: "Ctrl+Shift+Backspace",

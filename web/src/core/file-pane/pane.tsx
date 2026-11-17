@@ -226,10 +226,6 @@ export function FilePane({
   const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
 
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
-  // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
-  const supportsEditing = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
-  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const normalizedFilePath = useMemo(() => trimNonEmpty(location.path), [location.path]);
   const readTarget = useMemo(
@@ -258,7 +254,7 @@ export function FilePane({
     cwd: readTarget?.cwd ?? null,
     path: readTarget?.path ?? null,
     enabled,
-    liveUpdates: supportsEditing,
+    liveUpdates: true,
   });
 
   const targetKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
@@ -272,10 +268,7 @@ export function FilePane({
   const { file: preview, imageAttachment } = resolveFilePreviewLifecycle(previewLifecycle);
   const imagePreviewUri = useAttachmentPreviewUrl(imageAttachment);
   const isRenderable = isRenderablePreview(preview, location.path);
-  const editable = isEditableTextFile({
-    preview,
-    supportsEditing,
-  });
+  const editable = isEditableTextFile(preview);
   const canTogglePreviewMode = isRenderable && !location.lineStart;
   const lineCount =
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
@@ -315,13 +308,8 @@ function isRenderablePreview(preview: ExplorerFile | null, path: string): boolea
   return preview?.kind === "text" && filePreviewRenderKind(path) !== null;
 }
 
-function isEditableTextFile(input: {
-  preview: ExplorerFile | null;
-  supportsEditing: boolean;
-}): boolean {
-  return Boolean(
-    input.supportsEditing && input.preview?.kind === "text" && input.preview.size <= 1024 * 1024,
-  );
+function isEditableTextFile(preview: ExplorerFile | null): boolean {
+  return Boolean(preview?.kind === "text" && preview.size <= 1024 * 1024);
 }
 
 function FilePanePresentation({

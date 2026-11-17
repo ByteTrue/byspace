@@ -13,10 +13,7 @@ import {
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import {
-  getCurrentProjectRemoveReadiness,
-  removeProjectFromHosts,
-} from "@/projects/project-remove";
+import { removeProjectFromHosts } from "@/projects/project-remove";
 import { ProjectRemoveModal } from "@/projects/project-remove-modal";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
@@ -315,8 +312,6 @@ export interface ProjectBlockProps {
   autoHostLabelProjectKeys: ReadonlySet<string>;
   hostLabelByServerId: ReadonlyMap<string, string>;
   projectNameCueByViewKey: ReadonlyMap<string, string>;
-  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
-  supportsPinningByServerId: ReadonlyMap<string, boolean>;
   preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onWorkspacePress?: () => void;
@@ -339,8 +334,6 @@ export const ProjectBlock = memo(function ProjectBlock({
   autoHostLabelProjectKeys,
   hostLabelByServerId,
   projectNameCueByViewKey,
-  supportsMultiplicityByServerId,
-  supportsPinningByServerId,
   preferredServerIdsByProjectViewKey,
   onToggleWorkspacePin,
   onWorkspacePress,
@@ -357,10 +350,9 @@ export const ProjectBlock = memo(function ProjectBlock({
     () =>
       buildSidebarProjectRowModel({
         project,
-        supportsMultiplicityByServerId,
         preferredServerIds: preferredServerIdsByProjectViewKey.get(project.viewKey),
       }),
-    [project, supportsMultiplicityByServerId, preferredServerIdsByProjectViewKey],
+    [project, preferredServerIdsByProjectViewKey],
   );
   const isFixedActionRow = isHomeProjectViewKey(project.viewKey);
   const isProjectActive =
@@ -374,6 +366,10 @@ export const ProjectBlock = memo(function ProjectBlock({
   const [removeModalOpen, setRemoveModalOpen] = useState(false);
   const closeRemoveModal = useCallback(() => setRemoveModalOpen(false), []);
 
+  const removeTargets = project.hosts.map((host) => ({
+    serverId: host.serverId,
+    projectId: host.projectId,
+  }));
   const removeProject = useCallback(() => {
     if (isRemoving) return;
     if (project.hosts.length > 1) {
@@ -392,17 +388,9 @@ export const ProjectBlock = memo(function ProjectBlock({
       });
       if (!confirmed) return;
       setIsRemoving(true);
-      const readiness = getCurrentProjectRemoveReadiness({
-        hosts: project.hosts,
-      });
-      if (readiness.kind === "needs_host_update") {
-        toast.error(t("sidebar.project.toasts.updateHostToRemove"));
-        setIsRemoving(false);
-        return;
-      }
       try {
         const outcome = await removeProjectFromHosts({
-          targets: readiness.targets,
+          targets: removeTargets,
           getClient: (serverId) => getHostRuntimeStore().getClient(serverId),
         });
         if (outcome.kind === "host_disconnected")
@@ -416,7 +404,7 @@ export const ProjectBlock = memo(function ProjectBlock({
         setIsRemoving(false);
       }
     })();
-  }, [displayName, isRemoving, project.hosts, t, toast]);
+  }, [displayName, isRemoving, project.hosts, removeTargets, t, toast]);
 
   const renderWorkspace = useCallback(
     (item: SidebarWorkspacePlacement, rowSortable?: SortableItemProps) => {
@@ -439,7 +427,7 @@ export const ProjectBlock = memo(function ProjectBlock({
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
           canCopyBranchName={project.projectKind === "git"}
-          canPin={supportsPinningByServerId.get(item.serverId) === true}
+          canPin
           onToggleWorkspacePin={onToggleWorkspacePin}
           onWorkspacePress={onWorkspacePress}
           sortable={rowSortable}
@@ -456,7 +444,6 @@ export const ProjectBlock = memo(function ProjectBlock({
       selectionEnabled,
       shortcutIndexByWorkspaceKey,
       showShortcutBadges,
-      supportsPinningByServerId,
       workspaceEntriesByKey,
     ],
   );

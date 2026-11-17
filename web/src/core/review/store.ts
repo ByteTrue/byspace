@@ -8,7 +8,6 @@ import {
   addCommentToState,
   clearReviewInState,
   deleteCommentFromState,
-  normalizePersistedState,
   type ReviewDraftComment,
   type ReviewDraftMode,
   type ReviewDraftSide,
@@ -24,8 +23,7 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 
 export type { ReviewDraftComment, ReviewDraftMode, ReviewDraftSide } from "@/review/state";
 
-// v2 dropped the legacy persisted activeModesByScope field.
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const CONTEXT_RADIUS = 3;
 const EMPTY_REVIEW_DRAFT_COMMENTS: ReviewDraftComment[] = [];
 
@@ -154,7 +152,6 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
       version: STORE_VERSION,
       storage: createValidatedPersistStorage(localStorageAsync, SerializedReviewDraftStateSchema),
       partialize: (state) => serializeReviewDraftState(state),
-      migrate: async (state) => normalizePersistedState(state),
     },
   ),
 );

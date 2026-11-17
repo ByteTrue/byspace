@@ -10,7 +10,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useHostFeature } from "@/runtime/host-features";
 import {
   createTerminalAgentHookPatch,
   isTerminalAgentHookProviderEnabled,
@@ -48,14 +47,9 @@ export function ProviderTerminalIntegration({
 }: ProviderTerminalIntegrationProps) {
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
-  const supportsHookSettings = useHostFeature(serverId, "terminalAgentHookProviders");
   const [isEditing, setIsEditing] = useState(false);
 
-  const hookEnabled = isTerminalAgentHookProviderEnabled(
-    config?.terminalAgentHooks,
-    config?.enableTerminalAgentHooks === true,
-    provider,
-  );
+  const hookEnabled = isTerminalAgentHookProviderEnabled(config?.terminalAgentHooks, provider);
 
   const handleHookChange = useCallback(
     (next: boolean) => {
@@ -110,35 +104,31 @@ export function ProviderTerminalIntegration({
 
   return (
     <div className="flex flex-col gap-4" data-testid="provider-terminal-integration">
-      {supportsHookSettings ? (
-        <div className="flex flex-col gap-2">
-          <div className="ml-1 flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
-              {t("settings.host.terminalAgentHooks.sectionTitle")}
-            </span>
-            <span className="text-xs leading-[normal] text-muted-foreground">
-              {t("settings.host.terminalAgentHooks.sectionHint")}
-            </span>
-          </div>
-          <ItemGroup data-testid="provider-terminal-hooks-card">
-            <Item variant="outline">
-              <ItemContent>
-                <ItemTitle>{t("settings.host.terminalAgentHooks.reportTitle")}</ItemTitle>
-                <ItemDescription>
-                  {t("settings.host.terminalAgentHooks.reportHint")}
-                </ItemDescription>
-              </ItemContent>
-              <Switch
-                checked={hookEnabled}
-                disabled={!config}
-                onCheckedChange={handleHookChange}
-                aria-label={t("settings.host.terminalAgentHooks.reportTitle")}
-                data-testid={`provider-terminal-hooks-${provider}-switch`}
-              />
-            </Item>
-          </ItemGroup>
+      <div className="flex flex-col gap-2">
+        <div className="ml-1 flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {t("settings.host.terminalAgentHooks.sectionTitle")}
+          </span>
+          <span className="text-xs leading-[normal] text-muted-foreground">
+            {t("settings.host.terminalAgentHooks.sectionHint")}
+          </span>
         </div>
-      ) : null}
+        <ItemGroup data-testid="provider-terminal-hooks-card">
+          <Item variant="outline">
+            <ItemContent>
+              <ItemTitle>{t("settings.host.terminalAgentHooks.reportTitle")}</ItemTitle>
+              <ItemDescription>{t("settings.host.terminalAgentHooks.reportHint")}</ItemDescription>
+            </ItemContent>
+            <Switch
+              checked={hookEnabled}
+              disabled={!config}
+              onCheckedChange={handleHookChange}
+              aria-label={t("settings.host.terminalAgentHooks.reportTitle")}
+              data-testid={`provider-terminal-hooks-${provider}-switch`}
+            />
+          </Item>
+        </ItemGroup>
+      </div>
 
       <div className="flex flex-col gap-2">
         <div className="ml-1 flex flex-col gap-1">

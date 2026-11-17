@@ -37,7 +37,6 @@ export interface ScheduleFormDisplay {
 export interface ScheduleFormHost {
   serverId: string;
   label: string;
-  supportsWorkspaceMultiplicity?: boolean;
 }
 
 export interface ScheduleFormSnapshot {
@@ -474,18 +473,7 @@ function resolveCanUseWorktreeIsolation(input: {
     serverId: input.state.selectedServerId,
     cwd: input.state.workingDir,
   });
-  const host = input.hosts.find((entry) => entry.serverId === input.state.selectedServerId);
-  return Boolean(target?.isGit && host?.supportsWorkspaceMultiplicity);
-}
-
-function selectedHostSupportsWorkspaceMultiplicity(input: {
-  hosts: readonly ScheduleFormHost[];
-  selectedServerId: string | null;
-}): boolean {
-  return (
-    input.hosts.find((entry) => entry.serverId === input.selectedServerId)
-      ?.supportsWorkspaceMultiplicity === true
-  );
+  return Boolean(target?.isGit);
 }
 
 function resolveEffectiveIsolation(input: {
@@ -533,12 +521,7 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
       showModelField && hasSelectedModel && state.availableThinkingOptions.length > 0,
     showModeField: showModelField && hasSelectedProvider && state.modeOptions.length > 0,
     showIsolationField: hasProject && state.canUseWorktreeIsolation,
-    showArchiveOnFinishField:
-      hasProject &&
-      selectedHostSupportsWorkspaceMultiplicity({
-        hosts: state.hosts,
-        selectedServerId: state.selectedServerId,
-      }),
+    showArchiveOnFinishField: hasProject,
   };
 }
 
@@ -581,10 +564,6 @@ function updateDerivedState(input: {
     hosts: input.hosts,
     targets: input.targets,
   });
-  const canSubmitWorkspaceLifecycleOptions = selectedHostSupportsWorkspaceMultiplicity({
-    hosts: input.hosts,
-    selectedServerId: input.state.selectedServerId,
-  });
   const effectiveIsolation = resolveEffectiveIsolation({
     isolation: input.state.isolation,
     canUseWorktreeIsolation,
@@ -620,10 +599,8 @@ function updateDerivedState(input: {
     availableThinkingOptions,
     canUseWorktreeIsolation,
     effectiveIsolation,
-    submitArchiveOnFinish: canSubmitWorkspaceLifecycleOptions
-      ? input.state.archiveOnFinish
-      : undefined,
-    submitIsolation: canSubmitWorkspaceLifecycleOptions ? effectiveIsolation : undefined,
+    submitArchiveOnFinish: input.state.archiveOnFinish,
+    submitIsolation: effectiveIsolation,
   };
   const disclosure = resolveDisclosure(nextState);
   return { ...nextState, disclosure, canSubmit: resolveCanSubmit({ ...nextState, disclosure }) };

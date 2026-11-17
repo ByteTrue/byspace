@@ -12,8 +12,8 @@ import { openScheduleForm, type ScheduleFormSnapshot } from "./schedule-form-mod
 type TestSchedule = ScheduleSummary & { serverId: string; serverName: string };
 
 const HOSTS = [
-  { serverId: "host-a", label: "Host A", supportsWorkspaceMultiplicity: true },
-  { serverId: "host-b", label: "Host B", supportsWorkspaceMultiplicity: true },
+  { serverId: "host-a", label: "Host A" },
+  { serverId: "host-b", label: "Host B" },
 ] as const;
 
 const MOCK_MODES: AgentMode[] = [{ id: "load-test", label: "Load test" }];
@@ -175,10 +175,6 @@ function open(snapshot: Omit<ScheduleFormSnapshot, "hosts">) {
     ...snapshot,
     hosts: HOSTS,
   });
-}
-
-function openWithHosts(snapshot: ScheduleFormSnapshot) {
-  return openScheduleForm(snapshot);
 }
 
 function applyPreferences(form: ReturnType<typeof open>, preferences: FormPreferences) {
@@ -401,39 +397,6 @@ describe("schedule form model", () => {
       showIsolationField: false,
       showArchiveOnFinishField: true,
     });
-
-    const gitTarget = target({
-      serverId: "host-a",
-      projectKey: "git-project",
-      projectName: "Git Project",
-      cwd: "/tmp/git",
-      isGit: true,
-    });
-    const unsupportedHost = openWithHosts({
-      mode: "create",
-      hosts: [{ serverId: "host-a", label: "Host A" }],
-      defaults: { serverId: "host-a", projectTargets: [gitTarget], preferences: {} },
-    });
-
-    unsupportedHost.setProject(gitTarget.optionId, { label: "Git Project" });
-
-    expect(unsupportedHost.getState().disclosure).toMatchObject({
-      showIsolationField: false,
-      showArchiveOnFinishField: false,
-    });
-    expect(
-      Object.prototype.hasOwnProperty.call(unsupportedHost.getState(), "submitIsolation"),
-    ).toBe(true);
-    expect(
-      Object.prototype.hasOwnProperty.call(unsupportedHost.getState(), "submitArchiveOnFinish"),
-    ).toBe(true);
-    expect(
-      (unsupportedHost.getState() as unknown as { submitIsolation?: string }).submitIsolation,
-    ).toBeUndefined();
-    expect(
-      (unsupportedHost.getState() as unknown as { submitArchiveOnFinish?: boolean })
-        .submitArchiveOnFinish,
-    ).toBeUndefined();
   });
 
   it("shows modes for providers without selectable models", () => {

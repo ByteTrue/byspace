@@ -212,12 +212,8 @@ func TestSequencedWorkspaceReadRejectsAFilter(t *testing.T) {
 }
 
 // The service the server uses is the one whose generation the responses carry.
-func TestServerInfoAdvertisesDirectorySync(t *testing.T) {
+func TestServerHasDirectoryService(t *testing.T) {
 	srv := newTestServer(t, t.TempDir())
-	features, _ := srv.buildServerInfoPayload()["features"].(map[string]any)
-	if features["directorySync"] != true {
-		t.Fatalf("directorySync = %v, want true: the implementation exists", features["directorySync"])
-	}
 	if srv.directory == nil {
 		t.Fatal("the server has no directory service")
 	}

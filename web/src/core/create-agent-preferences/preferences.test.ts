@@ -182,33 +182,7 @@ describe("create agent preferences", () => {
     expect(parseFormPreferences({ providerPreferences: { codex: { mode: 42 } } })).toEqual({});
   });
 
-  it("strips the explicitly supported legacy location fields", () => {
-    expect(
-      parseFormPreferences({
-        workingDir: "/old/workspace",
-        provider: "codex",
-        providerPreferences: {
-          codex: {
-            model: "gpt-5.4-mini",
-            mode: "full-access",
-            thinkingOptionId: "high",
-          },
-        },
-        serverId: "old-host",
-      }),
-    ).toEqual({
-      provider: "codex",
-      providerPreferences: {
-        codex: {
-          model: "gpt-5.4-mini",
-          mode: "full-access",
-          thinkingByModel: { "gpt-5.4-mini": "high" },
-        },
-      },
-    });
-  });
-
-  it("rejects unknown persisted fields outside the explicit legacy shape", () => {
+  it("rejects unknown persisted fields", () => {
     expect(parseFormPreferences({ provider: "codex", surprise: true })).toEqual({});
   });
 
@@ -225,19 +199,6 @@ describe("create agent preferences", () => {
     expect(await new CreateAgentPreferencesService(storage).load()).toEqual({
       isolation: "worktree",
     });
-  });
-
-  it("preserves legacy favourites across preference writes until host migration", async () => {
-    const favoriteModels = [{ provider: "claude", modelId: "opus" }];
-    const storage = new FakeCreateAgentPreferenceStorage({ stored: { favoriteModels } });
-    const preferences = new CreateAgentPreferencesService(storage);
-
-    const save = preferences.update({ isolation: "worktree" });
-    await storage.nextWrite();
-    storage.finishOldestWrite();
-    await save;
-
-    expect(storage.savedPreferences()).toEqual({ favoriteModels, isolation: "worktree" });
   });
 
   it("treats stored preferences without an isolation choice as undefined", () => {

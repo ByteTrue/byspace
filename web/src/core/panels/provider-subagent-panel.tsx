@@ -23,7 +23,6 @@ import {
   refreshProviderSubagents,
   useProviderSubagentStore,
 } from "@/subagents/provider-store";
-import { useTranslation } from "react-i18next";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem } from "@/types/stream";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -107,7 +106,6 @@ function useProviderSubagentDescriptor(
 }
 
 function ProviderSubagentPanel() {
-  const { t } = useTranslation();
   const { serverId, target, openFileInWorkspace, openTab } = usePaneContext();
   invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");
   const key = providerSubagentKey(serverId, target.parentAgentId, target.subagentId);
@@ -125,9 +123,6 @@ function ProviderSubagentPanel() {
       null,
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
-  const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
-  // COMPAT(providerSubagents): added in v0.2.11, remove after 2027-01-12.
-  const supported = serverInfo?.features?.providerSubagents === true;
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const isCompact = useIsCompactFormFactor();
   const childRows = useSubagentsForParent({
@@ -144,12 +139,12 @@ function ProviderSubagentPanel() {
   );
 
   useEffect(() => {
-    if (!client || !supported) return;
+    if (!client) return;
     void refreshProviderSubagents(client, serverId, target.parentAgentId).catch(() => undefined);
-  }, [client, serverId, supported, target.parentAgentId]);
+  }, [client, serverId, target.parentAgentId]);
 
   useEffect(() => {
-    if (!client || !supported) return;
+    if (!client) return;
     void client
       .fetchProviderSubagentTimeline(target.parentAgentId, target.subagentId, {
         direction: "tail",
@@ -160,10 +155,10 @@ function ProviderSubagentPanel() {
         return undefined;
       })
       .catch(() => undefined);
-  }, [client, serverId, supported, target.parentAgentId, target.subagentId]);
+  }, [client, serverId, target.parentAgentId, target.subagentId]);
 
   const loadOlder = useCallback((): boolean => {
-    if (!client || !supported || isLoadingOlder || !timeline?.hasOlder || !timeline.epoch) {
+    if (!client || isLoadingOlder || !timeline?.hasOlder || !timeline.epoch) {
       return false;
     }
     const firstSeq = timeline.rows.size ? Math.min(...timeline.rows.keys()) : null;
@@ -182,15 +177,7 @@ function ProviderSubagentPanel() {
       .catch(() => undefined)
       .finally(() => setIsLoadingOlder(false));
     return true;
-  }, [
-    client,
-    isLoadingOlder,
-    serverId,
-    supported,
-    target.parentAgentId,
-    target.subagentId,
-    timeline,
-  ]);
+  }, [client, isLoadingOlder, serverId, target.parentAgentId, target.subagentId, timeline]);
   const firstTimelineSeq = timeline?.rows.size ? Math.min(...timeline.rows.keys()) : null;
   const progressKey =
     timeline?.epoch && firstTimelineSeq !== null ? `${timeline.epoch}:${firstTimelineSeq}` : null;
@@ -226,19 +213,6 @@ function ProviderSubagentPanel() {
     }),
     [descriptor?.status],
   );
-
-  if (serverInfo && !supported) {
-    return (
-      <div
-        className="flex flex-1 flex-col items-center justify-center p-6"
-        data-testid="provider-subagent-panel-unsupported"
-      >
-        <span className="text-center text-sm text-muted-foreground">
-          {t("message.actions.forkUnavailable")}
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-testid="provider-subagent-panel">

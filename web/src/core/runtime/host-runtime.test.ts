@@ -135,6 +135,25 @@ class FakeDaemonClient {
     changes?: Array<{ kind: string; id: string; delete?: boolean; data?: Record<string, unknown> }>;
   }): Promise<{ records: Array<Record<string, unknown>> }> {
     this.hostSyncExchanges.push(input);
+    // Merge the pushed edits into the stored replica and echo it back, the way a
+    // real daemon does. Returning a static list would drop the edits this frontend
+    // just pushed, which the hostSync gate used to hide for featureless daemons.
+    const byKey = new Map<string, Record<string, unknown>>();
+    for (const record of [...this.hostSyncRecords, ...(input.records ?? [])]) {
+      byKey.set(`${String(record.kind)}:${String(record.id)}`, record);
+    }
+    for (const change of input.changes ?? []) {
+      const key = `${change.kind}:${change.id}`;
+      const prev = byKey.get(key);
+      const version = typeof prev?.version === "number" ? prev.version + 1 : 1;
+      byKey.set(
+        key,
+        change.delete
+          ? { kind: change.kind, id: change.id, version, author: "fake", deleted: true }
+          : { kind: change.kind, id: change.id, version, author: "fake", data: change.data },
+      );
+    }
+    this.hostSyncRecords = [...byKey.values()];
     return { records: this.hostSyncRecords };
   }
 
@@ -394,15 +413,6 @@ function makeOffer(input?: Partial<ConnectionOffer>): ConnectionOffer {
       useTls: input?.relay?.useTls ?? false,
     },
   };
-}
-
-function encodeOfferUrl(payload: unknown): string {
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-  return `https://app.byspace.cc.cd/#offer=${encoded}`;
 }
 
 function makeDeps(
@@ -1959,7 +1969,6 @@ describe("HostRuntimeStore", () => {
       serverId: host.serverId,
       hostname: null,
       version: "test",
-      features: { workspaceMultiplicity: false },
     });
     store.syncHosts([host]);
     await waitForHostOnline(store, host.serverId);
@@ -1972,9 +1981,11 @@ describe("HostRuntimeStore", () => {
 
     expect(fakeClient.fetchAgentsCalls).toHaveLength(1);
     expect(fakeClient.fetchAgentsCalls[0]).toEqual({
+      scope: "active",
       sort: [{ key: "updated_at", direction: "desc" }],
       subscribe: {},
       page: { limit: 200 },
+      sync: {},
     });
 
     const snapshot = store.getSnapshot(host.serverId);
@@ -1988,8 +1999,10 @@ describe("HostRuntimeStore", () => {
 
     await store.refreshAgentDirectory({ serverId: host.serverId });
     expect(fakeClient.fetchAgentsCalls[2]).toEqual({
+      scope: "active",
       sort: [{ key: "updated_at", direction: "desc" }],
       page: { limit: 200 },
+      sync: {},
     });
 
     releaseDemand();
@@ -2041,203 +2054,11 @@ describe("HostRuntimeStore", () => {
       sort: [{ key: "updated_at", direction: "desc" }],
       subscribe: { subscriptionId: "app:srv_no_session" },
       page: { limit: 200 },
+      sync: {},
     });
 
     store.syncHosts([]);
     expect(useSessionStore.getState().sessions[host.serverId]).toBeUndefined();
-  });
-
-  it("bootstraps legacy daemons from unscoped agents and creates path-backed workspaces", async () => {
-    const host = makeHost({
-      serverId: "srv_legacy_workspace_daemon",
-      connections: [
-        {
-          id: "direct:lan:6767",
-          type: "directTcp",
-          endpoint: "lan:6767",
-        },
-      ],
-    });
-    const fakeClient = new FakeDaemonClient();
-    fakeClient.setConnectionState({ status: "connected" });
-    fakeClient.fetchAgentsResponses.push(
-      makeFetchAgentsPayload({
-        entries: [
-          makeFetchAgentsEntry({
-            id: "agent-legacy",
-            cwd: "/repo/legacy-app",
-            updatedAt: "2026-06-18T12:00:00.000Z",
-            title: "Legacy daemon agent",
-          }),
-        ],
-        subscriptionId: "app:srv_legacy_workspace_daemon",
-      }),
-    );
-    const store = new HostRuntimeStore({
-      deps: {
-        createClient: () => fakeClient as unknown as DaemonClient,
-        connectToDaemon: async ({ host: hostProfile }) => ({
-          client: fakeClient as unknown as DaemonClient,
-          serverId: hostProfile.serverId,
-          hostname: hostProfile.label ?? null,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-    });
-
-    const sessionStore = useSessionStore.getState();
-    sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
-    sessionStore.updateSessionServerInfo(host.serverId, {
-      serverId: host.serverId,
-      hostname: null,
-      version: "0.1.96",
-    });
-    store.syncHosts([host]);
-    await waitForHostOnline(store, host.serverId);
-    const load = store.refreshAgentDirectory({
-      serverId: host.serverId,
-      subscribe: { subscriptionId: "app:srv_legacy_workspace_daemon" },
-      page: { limit: 200 },
-    });
-    await fakeClient.waitForFetches(1);
-    await load;
-
-    expect(fakeClient.fetchAgentsCalls).toEqual([
-      {
-        sort: [{ key: "updated_at", direction: "desc" }],
-        subscribe: { subscriptionId: "app:srv_legacy_workspace_daemon" },
-        page: { limit: 200 },
-      },
-    ]);
-    const session = useSessionStore.getState().sessions[host.serverId];
-    expect(session?.agents.get("agent-legacy")?.workspaceId).toBe("/repo/legacy-app");
-    expect(Array.from(session?.workspaces.values() ?? [])).toEqual([
-      expect.objectContaining({
-        id: "/repo/legacy-app",
-        workspaceDirectory: "/repo/legacy-app",
-        name: "legacy-app",
-      }),
-    ]);
-
-    store.syncHosts([]);
-    useSessionStore.getState().clearSession(host.serverId);
-  });
-
-  it("drains legacy snapshot and buffered running transitions exactly once", async () => {
-    const host = makeHost({
-      serverId: "srv_legacy_transitions",
-      connections: [{ id: "direct:lan:6767", type: "directTcp", endpoint: "lan:6767" }],
-    });
-    const fakeClient = new FakeDaemonClient();
-    fakeClient.setConnectionState({ status: "connected" });
-    const pageTwo = new Deferred<Awaited<ReturnType<DaemonClient["fetchAgents"]>>>();
-    const snapshotAgent = makeFetchAgentsEntry({
-      id: "legacy-snapshot",
-      cwd: "/legacy/repo",
-      updatedAt: "2026-07-12T10:00:00.000Z",
-    });
-    const bufferedAgent = makeFetchAgentsEntry({
-      id: "legacy-buffered",
-      cwd: "/legacy/repo",
-      updatedAt: "2026-07-12T10:00:00.000Z",
-    });
-    fakeClient.fetchAgentsResponses.push(
-      makeFetchAgentsPayload({
-        entries: [
-          { ...snapshotAgent, agent: { ...snapshotAgent.agent, status: "idle" } },
-          { ...bufferedAgent, agent: { ...bufferedAgent.agent, status: "running" } },
-        ],
-        hasMore: true,
-        nextCursor: "legacy-page-two",
-      }),
-      pageTwo.promise,
-    );
-    const store = new HostRuntimeStore({
-      deps: {
-        createClient: () => fakeClient as unknown as DaemonClient,
-        connectToDaemon: async () => ({
-          client: fakeClient as unknown as DaemonClient,
-          serverId: host.serverId,
-          hostname: null,
-        }),
-        getClientId: async () => "cid_legacy_transitions",
-      },
-    });
-    const sessionStore = useSessionStore.getState();
-    sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
-    sessionStore.updateSessionServerInfo(host.serverId, {
-      serverId: host.serverId,
-      hostname: null,
-      version: "0.1.96",
-    });
-    sessionStore.setAgents(
-      host.serverId,
-      new Map([
-        [
-          "legacy-snapshot",
-          {
-            ...replicaAgent(snapshotAgent.agent, host.serverId),
-            turn: {
-              phase: "open",
-              turnId: null,
-              startedAt: null,
-              cancellationRequestId: null,
-            },
-          },
-        ],
-        [
-          "legacy-buffered",
-          {
-            ...replicaAgent(bufferedAgent.agent, host.serverId),
-            turn: {
-              phase: "open",
-              turnId: null,
-              startedAt: null,
-              cancellationRequestId: null,
-            },
-          },
-        ],
-      ]),
-    );
-    sessionStore.setQueuedMessages(
-      host.serverId,
-      new Map([
-        ["legacy-snapshot", [{ id: "legacy-snapshot-message", text: "snapshot", attachments: [] }]],
-        ["legacy-buffered", [{ id: "legacy-buffered-message", text: "buffered", attachments: [] }]],
-      ]),
-    );
-    store.syncHosts([host]);
-    await waitForHostOnline(store, host.serverId);
-    const load = store.refreshAgentDirectory({
-      serverId: host.serverId,
-      subscribe: { subscriptionId: `app:${host.serverId}` },
-      page: { limit: 200 },
-    });
-    await fakeClient.waitForFetches(2);
-    fakeClient.agentUpdate({
-      kind: "upsert",
-      agent: { ...bufferedAgent.agent, status: "idle" },
-      project: bufferedAgent.project,
-    });
-    pageTwo.resolve(makeFetchAgentsPayload({ entries: [] }));
-    await load;
-    await fakeClient.waitForSentMessages(2);
-
-    expect(fakeClient.sentAgentMessages.map(([agentId, text]) => [agentId, text])).toEqual([
-      ["legacy-snapshot", "snapshot"],
-      ["legacy-buffered", "buffered"],
-    ]);
-    expect(
-      Array.from(useSessionStore.getState().sessions[host.serverId]?.agents.values() ?? []).map(
-        ({ id, status, workspaceId }) => [id, status, workspaceId],
-      ),
-    ).toEqual([
-      ["legacy-snapshot", "idle", "/legacy/repo"],
-      ["legacy-buffered", "idle", "/legacy/repo"],
-    ]);
-
-    store.syncHosts([]);
-    useSessionStore.getState().clearSession(host.serverId);
   });
 
   it("fetches all pages during bootstrap within the active agent scope", async () => {
@@ -2312,6 +2133,7 @@ describe("HostRuntimeStore", () => {
       sort: [{ key: "updated_at", direction: "desc" }],
       subscribe: { subscriptionId: "app:srv_paged" },
       page: { limit: 200 },
+      sync: {},
     });
     expect(fakeClient.fetchAgentsCalls[1]).toEqual({
       scope: "active",
@@ -2814,7 +2636,6 @@ describe("HostRuntimeStore", () => {
       serverId: host.serverId,
       hostname: null,
       version: null,
-      features: { canonicalSubmittedPrompts: true },
     });
     sessionStore.setQueuedMessages(
       host.serverId,
@@ -2940,7 +2761,7 @@ describe("HostRuntimeStore", () => {
     useSessionStore.getState().clearSession(host.serverId);
   });
 
-  it("uses legacy GitHub attachments when draining a queue for an old daemon", async () => {
+  it("serializes forge change-request attachments when draining a queue", async () => {
     const host = makeHost({ serverId: "srv_legacy_queue_attachment" });
     const fakeClient = new FakeDaemonClient();
     const store = new HostRuntimeStore({
@@ -2960,7 +2781,6 @@ describe("HostRuntimeStore", () => {
       serverId: host.serverId,
       hostname: null,
       version: "0.1.105",
-      features: { forgeSearch: false },
     });
     sessionStore.setQueuedMessages(
       host.serverId,
@@ -2973,7 +2793,7 @@ describe("HostRuntimeStore", () => {
               text: "review this",
               attachments: [
                 {
-                  kind: "github_pr" as const,
+                  kind: "forge_change_request" as const,
                   item: {
                     kind: "change_request" as const,
                     number: 42,
@@ -2998,8 +2818,9 @@ describe("HostRuntimeStore", () => {
 
     expect(fakeClient.sentAgentMessages[0]?.[2]?.attachments).toEqual([
       {
-        type: "github_pr",
-        mimeType: "application/github-pr",
+        type: "forge_change_request",
+        mimeType: "application/byspace-forge-change-request",
+        forge: "github",
         number: 42,
         title: "Compatibility fix",
         url: "https://github.com/acme/repo/pull/42",
@@ -3181,12 +3002,14 @@ describe("HostRuntimeStore", () => {
         sort: [{ key: "updated_at", direction: "desc" }],
         subscribe: { subscriptionId: "app:srv_resubscribe" },
         page: { limit: 200 },
+        sync: {},
       },
       {
         scope: "active",
         sort: [{ key: "updated_at", direction: "desc" }],
         subscribe: { subscriptionId: "app:srv_resubscribe" },
         page: { limit: 200 },
+        sync: {},
       },
     ]);
 
@@ -3603,41 +3426,6 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
-  it("uses TLS for old pairing URLs that omit relay TLS on port 443", async () => {
-    const store = new HostRuntimeStore({
-      deps: {
-        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
-        connectToDaemon: async ({ host }) => ({
-          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
-          serverId: host.serverId,
-          hostname: host.label ?? null,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-    });
-    const oldPairingUrl = encodeOfferUrl({
-      v: 2,
-      serverId: "srv_offer",
-      daemonPublicKeyB64: "pk_test_offer",
-      relay: { endpoint: "relay.byspace.cc.cd:443" },
-    });
-
-    await store.upsertConnectionFromOfferUrl(oldPairingUrl, "old relay");
-
-    const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
-    expect(pairedHost?.connections).toEqual([
-      {
-        id: "relay:wss:relay.byspace.cc.cd:443",
-        type: "relay",
-        relayEndpoint: "relay.byspace.cc.cd:443",
-        useTls: true,
-        daemonPublicKeyB64: "pk_test_offer",
-      },
-    ]);
-
-    store.syncHosts([]);
-  });
-
   it("preserves the existing host label when re-pairing an existing relay host", async () => {
     const store = new HostRuntimeStore({
       deps: {
@@ -3887,7 +3675,7 @@ describe("HostRuntimeStore host sync", () => {
   // The browser is the chain's transport: it is the only participant that reaches every daemon.
   // Before this, the exchange was gated on a loopback direct connection, so a frontend that only
   // ever reached daemons over the relay never carried anything between them.
-  it("exchanges replicas with a daemon that advertises hostSync, whatever the connection type", async () => {
+  it("exchanges replicas with a daemon whatever the connection type", async () => {
     const host = makeHost({
       connections: [
         {
@@ -3899,7 +3687,6 @@ describe("HostRuntimeStore host sync", () => {
       ],
     });
     const fakeClient = new FakeDaemonClient();
-    fakeClient.serverInfo = { features: { hostSync: true } };
     fakeClient.hostSyncRecords = [
       {
         kind: "host",
@@ -3941,41 +3728,6 @@ describe("HostRuntimeStore host sync", () => {
     // And the daemon's replica is adopted, so this frontend now knows the other host.
     await vi.waitFor(() => expect(store.getSnapshot("srv_remote")).toBeDefined());
 
-    store.syncHosts([]);
-  });
-
-  it("stays out of sync with a daemon that does not advertise it", async () => {
-    const host = makeHost({
-      connections: [
-        {
-          id: "relay:srv_old",
-          type: "relay",
-          relayEndpoint: "relay.example:443",
-          daemonPublicKeyB64: "pk_old",
-        },
-      ],
-    });
-    const fakeClient = new FakeDaemonClient();
-    fakeClient.serverInfo = { features: {} };
-    fakeClient.setConnectionState({ status: "connected" });
-    const store = new HostRuntimeStore({
-      storage: createMemoryHostRuntimeStorage(),
-      deps: {
-        createClient: () => fakeClient as unknown as DaemonClient,
-        connectToDaemon: async ({ host: hostProfile }) => ({
-          client: fakeClient as unknown as DaemonClient,
-          serverId: hostProfile.serverId,
-          hostname: hostProfile.label ?? null,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-    });
-
-    store.syncHosts([host]);
-    await waitForHostOnline(store, host.serverId);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(fakeClient.hostSyncExchanges).toEqual([]);
     store.syncHosts([]);
   });
 });

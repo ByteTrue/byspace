@@ -136,10 +136,6 @@ function useDiscardChangesAction({
   const { t } = useTranslation();
   const toast = useToast();
   const discardChanges = useCheckoutGitActionsStore((state) => state.discardChanges);
-  // COMPAT(checkoutDiscardChanges): added in v0.3.0, remove gate after 2027-02-08.
-  const discardSupported = useSessionStore(
-    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutDiscardChanges === true,
-  );
   const discardPath = useCallback(
     async (path: string, oldPath?: string) => {
       const confirmed = await confirmDialog({
@@ -172,7 +168,7 @@ function useDiscardChangesAction({
     },
     [discardPath],
   );
-  return discardSupported && diffMode === "uncommitted" ? handleDiscardPath : undefined;
+  return diffMode === "uncommitted" ? handleDiscardPath : undefined;
 }
 
 interface ChangesSurfaceProps {
@@ -351,7 +347,6 @@ function buildChangesToolbarMode(input: {
   compact: boolean;
   hasChanges: boolean;
   canUseSplitLayout: boolean;
-  refreshSupported: boolean;
   isRefreshing: boolean;
   layout: "unified" | "split";
   hideWhitespace: boolean;
@@ -368,9 +363,7 @@ function buildChangesToolbarMode(input: {
   onToggleWrapLines: () => void;
   onToggleTree: () => void;
 }): ChangesToolbarMode {
-  const refresh = input.refreshSupported
-    ? { isRefreshing: input.isRefreshing, onRefresh: input.onRefresh }
-    : null;
+  const refresh = { isRefreshing: input.isRefreshing, onRefresh: input.onRefresh };
   if (input.presentation === "tree") {
     return {
       kind: "tree",
@@ -1101,18 +1094,11 @@ type ForgeSetupAction = "install_cli" | "sign_in" | null;
 
 // Drive the onboarding callout from the forge's auth state so the message names
 // the exact next step (install the CLI vs sign in) for whichever forge backs the
-// workspace — GitHub included. GitLab additionally requires the host to advertise
-// GitLab support, matching the rest of the GitLab UI.
+// workspace — GitHub included.
 function computeForgeSetupAction(input: {
   forge: Forge;
-  forgeProvidersSupported: boolean;
   authState: ForgeAuthState | undefined;
 }): ForgeSetupAction {
-  // A daemon without pluggable forge support can't operate any non-GitHub forge,
-  // so don't offer a setup action for one it can't drive.
-  if (input.forge !== "github" && !input.forgeProvidersSupported) {
-    return null;
-  }
   switch (input.authState) {
     case "cli_missing":
       return "install_cli";
@@ -1520,14 +1506,7 @@ export function ChangesSurface({
     isMobile,
     pullRequestOpenLocation: appSettings.pullRequestOpenLocation,
   });
-  const refreshSupported = useSessionStore(
-    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
-  );
   const client = useSessionStore((state) => state.sessions[serverId]?.client);
-  // COMPAT(fsEntryDuplicate): added in v0.3.0, remove gate after 2027-02-09.
-  const fsEntryDuplicateEnabled = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
-  );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
     useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
@@ -1584,14 +1563,7 @@ export function ChangesSurface({
     cwd,
     enabled: isGit,
   });
-  const forgeProvidersSupported = useSessionStore(
-    (s) => s.sessions[serverId]?.serverInfo?.features?.forgeProviders === true,
-  );
-  const forgeSetupAction = computeForgeSetupAction({
-    forge,
-    forgeProvidersSupported,
-    authState,
-  });
+  const forgeSetupAction = computeForgeSetupAction({ forge, authState });
   const forgeSetupMessage = useMemo(
     () =>
       buildForgeSetupMessage({
@@ -1694,7 +1666,7 @@ export function ChangesSurface({
       onCopyPath: handleCopyPath,
       onCopyRelativePath: handleCopyRelativePath,
       onDownload: handleDownloadPath,
-      onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
+      onDuplicate: handleDuplicatePath,
       onRevert: onRevertPath,
     }),
     [
@@ -1710,7 +1682,6 @@ export function ChangesSurface({
       handleCopyRelativePath,
       handleDownloadPath,
       handleDuplicatePath,
-      fsEntryDuplicateEnabled,
       onRevertPath,
     ],
   );
@@ -1801,7 +1772,6 @@ export function ChangesSurface({
         compact: isMobile,
         hasChanges,
         canUseSplitLayout,
-        refreshSupported,
         isRefreshing,
         layout: preferences.layout,
         hideWhitespace: preferences.hideWhitespace,
@@ -1840,7 +1810,6 @@ export function ChangesSurface({
       isMobile,
       isRefreshing,
       presentation,
-      refreshSupported,
       wrapLines,
     ],
   );

@@ -67,7 +67,7 @@ export function useAgentProfilePicker(
 ): AgentProfilePicker | null {
   const { serverId, availableProviders, target } = input;
   const { t } = useTranslation();
-  const { profiles, isSupported } = useAgentProfiles(serverId);
+  const { profiles } = useAgentProfiles(serverId);
   // Profiles are host config, so their labels read from the host-wide catalog
   // rather than a workspace's. That is also the key the settings section uses,
   // so every composer on a host shares one query instead of adding its own.
@@ -77,12 +77,12 @@ export function useAgentProfilePicker(
   const toast = useToast();
 
   const applicableProfiles = useMemo(() => {
-    if (!isSupported || !profiles) {
+    if (!profiles) {
       return [];
     }
     const available = new Set(availableProviders);
     return profiles.filter((profile) => available.has(profile.provider));
-  }, [availableProviders, isSupported, profiles]);
+  }, [availableProviders, profiles]);
 
   const formatFeatureCount = useCallback(
     (count: number) =>
@@ -161,7 +161,7 @@ export function useAgentProfilePicker(
   );
 
   return useMemo(
-    () => (isSupported && profiles !== null ? { rows, applyProfile } : null),
-    [applyProfile, isSupported, profiles, rows],
+    () => (profiles !== null ? { rows, applyProfile } : null),
+    [applyProfile, profiles, rows],
   );
 }

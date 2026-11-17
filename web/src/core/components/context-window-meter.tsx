@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/components/context-window-meter.tsx: a ring for how full the context
 // window is (grey, amber past 70%, red past 90%), a track-only ring while usage is pending, and a
-// tooltip with tokens, session cost and the provider's usage.
-import { useCallback, useState } from "react";
+// tooltip with tokens and session cost.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatTokenCount } from "@/components/context-window-meter.utils";
 import {
@@ -9,8 +9,6 @@ import {
   InfoHoverCardContent,
   InfoHoverCardTrigger,
 } from "~/components/info-hover-card";
-import { ProviderUsageTooltipSection } from "@/provider-usage/tooltip-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { cn } from "cn";
 
 const SVG_SIZE = 14;
@@ -65,8 +63,6 @@ export function ContextWindowMeter({
   usedTokens,
   totalCostUsd,
   showPercentage = false,
-  serverId,
-  provider,
   pending = false,
   glyphSize,
 }: {
@@ -74,9 +70,6 @@ export function ContextWindowMeter({
   usedTokens: number | null;
   totalCostUsd?: number | null;
   showPercentage?: boolean;
-  serverId?: string;
-  /** The BySpace provider key, e.g. "claude", "gemini", "codex" */
-  provider?: string | null;
   /** Reserve the meter footprint and show a loading ring while usage is pending. */
   pending?: boolean;
   /** Optional glyph envelope for icon-toolbar alignment. */
@@ -84,21 +77,8 @@ export function ContextWindowMeter({
 }) {
   const { t } = useTranslation();
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(
-    serverId ?? null,
-    {
-      enabled: isTooltipOpen,
-    },
-  );
   const percentage =
     maxTokens !== null && usedTokens !== null ? getUsagePercentage(maxTokens, usedTokens) : null;
-  const handleTooltipOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      setIsTooltipOpen(nextOpen);
-      if (nextOpen) void refreshProviderUsage().catch(() => {});
-    },
-    [refreshProviderUsage],
-  );
   const { svgSize, radius, strokeWidth, circumference } = getMeterGeometry(
     showPercentage,
     glyphSize,
@@ -143,7 +123,7 @@ export function ContextWindowMeter({
   const formattedSessionCost =
     typeof totalCostUsd === "number" ? formatSessionCost(totalCostUsd) : null;
   return (
-    <InfoHoverCard open={isTooltipOpen} onOpenChange={handleTooltipOpenChange}>
+    <InfoHoverCard open={isTooltipOpen} onOpenChange={setIsTooltipOpen}>
       <InfoHoverCardTrigger>
         <button
           type="button"
@@ -195,7 +175,6 @@ export function ContextWindowMeter({
               {t("contextWindow.sessionCost", { cost: formattedSessionCost })}
             </span>
           ) : null}
-          <ProviderUsageTooltipSection view={providerUsageView} activeProviderId={provider} />
         </div>
       </InfoHoverCardContent>
     </InfoHoverCard>

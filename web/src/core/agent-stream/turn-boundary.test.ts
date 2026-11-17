@@ -40,7 +40,6 @@ describe("resolveAssistantTurnForkBoundary", () => {
       resolveAssistantTurnForkBoundary({
         items: [userMessage("user-1", 1), failedTurn],
         startIndex: 1,
-        supportsTimelineCursor: true,
       }),
     ).toEqual({
       boundaryCursor: { epoch: "timeline-1", seq: 42 },
@@ -57,7 +56,6 @@ describe("resolveAssistantTurnForkBoundary", () => {
       resolveAssistantTurnForkBoundary({
         items: [selected],
         startIndex: 0,
-        supportsTimelineCursor: true,
       }),
     ).toEqual({
       boundaryCursor: { epoch: "timeline-1", seq: 42 },
@@ -65,17 +63,13 @@ describe("resolveAssistantTurnForkBoundary", () => {
     });
   });
 
-  it("falls back to the provider message id when timeline cursors are unsupported", () => {
-    const selected = {
-      ...assistantMessage("assistant-1", 2, "msg-assistant-1"),
-      timelineCursor: { epoch: "timeline-1", seq: 42 },
-    };
+  it("falls back to the provider message id when the item has no timeline cursor", () => {
+    const selected = assistantMessage("assistant-1", 2, "msg-assistant-1");
 
     expect(
       resolveAssistantTurnForkBoundary({
         items: [selected],
         startIndex: 0,
-        supportsTimelineCursor: false,
       }),
     ).toEqual({ boundaryMessageId: "msg-assistant-1" });
   });
@@ -88,7 +82,6 @@ describe("resolveAssistantTurnForkBoundary", () => {
       resolveAssistantTurnForkBoundary({
         items: [userMessage("user-1", 1), first, selected],
         startIndex: 2,
-        supportsTimelineCursor: false,
       }),
     ).toBeUndefined();
   });
@@ -98,7 +91,6 @@ describe("resolveAssistantTurnForkBoundary", () => {
       resolveAssistantTurnForkBoundary({
         items: [userMessage("user-1", 1), assistantMessage("assistant-1", 2, "msg-assistant-1")],
         startIndex: 0,
-        supportsTimelineCursor: false,
       }),
     ).toBeUndefined();
   });
@@ -108,7 +100,6 @@ describe("resolveAssistantTurnForkBoundary", () => {
       resolveAssistantTurnForkBoundary({
         items: [assistantMessage("assistant-1", 2)],
         startIndex: 0,
-        supportsTimelineCursor: false,
       }),
     ).toBeUndefined();
   });

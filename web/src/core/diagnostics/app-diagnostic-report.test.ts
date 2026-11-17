@@ -47,16 +47,19 @@ function makeHost(): HostProfile {
 }
 
 describe("app diagnostics report", () => {
-  test("reports whether the connected daemon is managed by BySpace Desktop", () => {
+  test("reports the connected daemon identity and features", () => {
     const report = formatServerInfoSection({
       status: "server_info",
       serverId: "srv-desktop-managed",
       hostname: "desktop-host.local",
       version: "0.1.108",
-      desktopManaged: true,
+      features: { webPush: true },
     });
 
-    expect(report).toContain("Desktop managed: yes");
+    expect(report).toContain("Server ID: srv-desktop-managed");
+    expect(report).toContain("Hostname: desktop-host.local");
+    expect(report).toContain("Version: 0.1.108");
+    expect(report).toContain("Features: webPush");
   });
 
   test("formats connection rows without raw connection details", () => {

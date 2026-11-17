@@ -18,7 +18,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/gui/autostart"
 	"github.com/ByteTrue/byspace/internal/naming"
-	"github.com/ByteTrue/byspace/internal/quota"
+
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -395,11 +395,8 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_status_response", map[string]any{
 			"cwd":    base.Cwd,
 			"status": prStatus,
-			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
-			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
-			"githubFeaturesEnabled": prAuthState == workspace.ForgeAuthAuthenticated,
-			"authState":             string(prAuthState),
-			"forge":                 forge,
+			"authState": string(prAuthState),
+			"forge":     forge,
 			"error":                 nil,
 			"requestId":             base.RequestID,
 		})
@@ -550,13 +547,10 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			"truncated": truncated,
 			"error":     timelineErrObj,
 			"requestId": base.RequestID,
-			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
-			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
-			"githubFeaturesEnabled": prAuthState == workspace.ForgeAuthAuthenticated,
-			"authState":             string(prAuthState),
+			"authState": string(prAuthState),
 		})
 
-	case "checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
+	case "checkout.forge.set_auto_merge.request":
 		// `mergeMethod` is optional in the protocol; without it a squash-only repo rejects
 		// the merge because this defaulted to --merge.
 		var autoMergeReq struct {
@@ -577,7 +571,7 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			"requestId": base.RequestID,
 		})
 
-	case "checkout.forge.get_check_details.request", "checkout.github.get_check_details.request":
+	case "checkout.forge.get_check_details.request":
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		var checkReq struct {
 			CheckRunID int `json:"checkRunId"`
@@ -602,7 +596,7 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			"requestId": base.RequestID,
 		})
 
-	case "forge.search.request", "github_search_request":
+	case "forge.search.request":
 		var forgeSearchReq struct {
 			RequestID string   `json:"requestId"`
 			Cwd       string   `json:"cwd"`
@@ -625,21 +619,12 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			items = []workspace.ForgeSearchItem{}
 		}
 		searchAuthState := workspace.ProbeForgeAuth(forgeSearchReq.Cwd, workspace.DetectForge(ctx, forgeSearchReq.Cwd))
-		searchPayload := map[string]any{
-			"items": items,
-			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
-			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
-			"githubFeaturesEnabled": searchAuthState == workspace.ForgeAuthAuthenticated,
-			"authState":             string(searchAuthState),
-			"error":                 searchErrText,
-			"requestId":             base.RequestID,
-		}
-		// 两个响应类型分别出现，而不是用 respType 变量派生：静态对账工具要看得见。
-		if msgType == "github_search_request" {
-			_ = sendSessionMsg(ctx, sink, "github_search_response", searchPayload)
-		} else {
-			_ = sendSessionMsg(ctx, sink, "forge.search.response", searchPayload)
-		}
+		_ = sendSessionMsg(ctx, sink, "forge.search.response", map[string]any{
+			"items":     items,
+			"authState": string(searchAuthState),
+			"error":     searchErrText,
+			"requestId": base.RequestID,
+		})
 
 	case "workspace.github.search_repositories.request":
 		var req struct {
@@ -1225,28 +1210,6 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			"error":     nil,
 		})
 
-	case "agent.timeline.append.request":
-		// The only thing this message can carry is `item.type: "plugin"` — the plugin system was
-		// retired by decision (issue 025, a5c6bb6588), so there is nothing to append. The fields
-		// are parsed anyway: an old client sending this must get a well-formed answer rather than
-		// a dropped message, and seq 0 with the current epoch says plainly that nothing was added.
-		var appendReq struct {
-			RequestID string          `json:"requestId"`
-			AgentID   string          `json:"agentId"`
-			Item      json.RawMessage `json:"item"`
-		}
-		_ = json.Unmarshal(raw, &appendReq)
-		epoch := s.currentTimelineEpoch()
-		seq := 0
-		if record := s.findAgentRecord(appendReq.AgentID); record != nil {
-			seq = s.timelineHeadSeq(appendReq.AgentID)
-		}
-		_ = sendSessionMsg(ctx, sink, "agent.timeline.append.response", map[string]any{
-			"requestId": appendReq.RequestID,
-			"seq":       seq,
-			"epoch":     epoch,
-		})
-
 	case "set_agent_feature_request":
 		var featReq struct {
 			RequestID string `json:"requestId"`
@@ -1445,37 +1408,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"targets":              status.Targets,
 			"selectionSaved":       true,
 			"confirmationRequired": nil,
-		})
-
-	case "agent.skills.import_legacy_selection.request":
-		var req struct {
-			RequestID string         `json:"requestId"`
-			Selection map[string]any `json:"selection"`
-			// Targets absent means "keep the current ones", so an app that predates target selection cannot
-			// silently narrow an install. Present means the user changed where copies go.
-			Targets           *[]string `json:"targets"`
-			ConfirmedRemovals []string  `json:"confirmedRemovals"`
-		}
-		_ = json.Unmarshal(raw, &req)
-		sel := req.Selection
-		if sel == nil {
-			sel = defaultSkillSelection()
-		}
-		_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
-		_ = sendSessionMsg(ctx, sink, "agent.skills.import_legacy_selection.response", map[string]any{
-			"requestId": req.RequestID,
-			"imported":  true,
-			"selection": sel,
-		})
-
-	case "provider.usage.list.request":
-		// An empty array made the Usage page look like "you have no quotas"; a provider that
-		// cannot be read reports "unavailable" so the two cases stay distinguishable.
-		providers := quota.FetchAll(ctx)
-		_ = sendSessionMsg(ctx, sink, "provider.usage.list.response", map[string]any{
-			"requestId": base.RequestID,
-			"fetchedAt": time.Now().UTC().Format(time.RFC3339Nano),
-			"providers": providers,
 		})
 
 	case "provider_diagnostic_request":
@@ -1738,82 +1670,6 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				"lastError":   nil,
 			},
 		})
-
-	case "hub.execution.agent.validate.request":
-		var hubValidateReq struct {
-			RequestID       string         `json:"requestId"`
-			ProviderOptions map[string]any `json:"providerOptions"`
-		}
-		_ = json.Unmarshal(raw, &hubValidateReq)
-		_ = sendSessionMsg(ctx, sink, "hub.execution.agent.validate.response", map[string]any{
-			"requestId": base.RequestID,
-			"valid":     true,
-			"issues":    []any{},
-			"error":     nil,
-		})
-
-	case "hub.execution.agent.create.request":
-		var hubCreateReq struct {
-			RequestID       string            `json:"requestId"`
-			ExecutionID     string            `json:"executionId"`
-			FeatureValues   map[string]any    `json:"featureValues"`
-			ProviderOptions map[string]any    `json:"providerOptions"`
-			ToolPolicy      map[string]any    `json:"toolPolicy"`
-			McpServers      []any             `json:"mcpServers"`
-			Env             map[string]string `json:"env"`
-		}
-		_ = json.Unmarshal(raw, &hubCreateReq)
-		_ = sendSessionMsg(ctx, sink, "hub.execution.agent.create.response", map[string]any{
-			"requestId":   base.RequestID,
-			"executionId": "exec_1",
-			"agentId":     nil,
-			"agent":       nil,
-			"success":     false,
-			"error": map[string]any{
-				"code":    "unavailable",
-				"message": "Hub execution is disabled",
-			},
-		})
-
-	case "hub.execution.control.request":
-		_ = sendSessionMsg(ctx, sink, "hub.execution.control.response", map[string]any{
-			"requestId":   base.RequestID,
-			"executionId": "exec_1",
-			"action":      "cancel",
-			"success":     true,
-			"error":       nil,
-		})
-
-	case "set_voice_mode":
-		_ = sendSessionMsg(ctx, sink, "set_voice_mode_response", map[string]any{
-			"requestId": base.RequestID,
-			"enabled":   false,
-			"agentId":   nil,
-			"accepted":  false,
-			// The client distinguishes "this build has no voice" from "retry might work" and
-			// lists which models are missing, so the refusal has to carry all three.
-			"reasonCode":      "voice_unsupported",
-			"retryable":       false,
-			"missingModelIds": []string{},
-			"error":           "Voice mode is not enabled",
-		})
-
-	case "dictation_stream_start",
-		"dictation_stream_chunk",
-		"dictation_stream_finish",
-		"dictation_stream_cancel",
-		"voice_audio_chunk",
-		"audio_played":
-		// The client reports that it finished playing a spoken reply. Voice was removed by
-		// decision (issue 025, 8d96875115), so nothing is recorded — but the id is logged, which
-		// is the only honest use of it: it confirms the client and daemon agree on the protocol
-		// version, and it is where a future voice feature would pick up.
-		var audioReq struct {
-			ID string `json:"id"`
-		}
-		_ = json.Unmarshal(raw, &audioReq)
-		fmt.Fprintf(os.Stderr, "audio_played id=%s (voice is not implemented in this build)\n", audioReq.ID)
-		return
 	}
 }
 

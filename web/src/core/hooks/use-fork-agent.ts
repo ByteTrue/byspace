@@ -9,7 +9,6 @@ import type { AssistantForkTarget } from "@/components/assistant-fork-menu";
 import type { ToastApi } from "@/components/toast-host";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { useHostFeature } from "@/runtime/host-features";
 import { generateDraftId } from "@/stores/draft-keys";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useSessionStore } from "@/stores/session-store";
@@ -130,11 +129,10 @@ export function useForkAgent(
   const { t } = useTranslation();
   const router = useRouter();
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
-  const supportsAgentForkContext = useHostFeature(serverId, "agentForkContext") && !readOnly;
 
   return useStableEvent(async ({ agentId, agent, workspaceId, target, boundary }) => {
     try {
-      if (!supportsAgentForkContext) {
+      if (readOnly) {
         toast?.error(t("message.actions.forkUnavailable"));
         return;
       }

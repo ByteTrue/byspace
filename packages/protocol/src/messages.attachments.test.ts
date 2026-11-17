@@ -172,8 +172,8 @@ describe("shared messages attachments", () => {
           ],
         },
         {
-          type: "github_issue",
-          mimeType: "application/github-issue",
+          type: "forge_issue",
+          mimeType: "application/byspace-forge-issue",
           number: 55,
           title: "Improve startup error details",
           url: "https://github.com/bytetrue/byspace/issues/55",
@@ -183,8 +183,9 @@ describe("shared messages attachments", () => {
 
     expect(parsed.attachments).toEqual([
       {
-        type: "github_issue",
-        mimeType: "application/github-issue",
+        type: "forge_issue",
+        mimeType: "application/byspace-forge-issue",
+        forge: "github",
         number: 55,
         title: "Improve startup error details",
         url: "https://github.com/bytetrue/byspace/issues/55",
@@ -203,8 +204,8 @@ describe("shared messages attachments", () => {
       initialPrompt: "Review this PR",
       attachments: [
         {
-          type: "github_pr",
-          mimeType: "application/github-pr",
+          type: "forge_change_request",
+          mimeType: "application/byspace-forge-change-request",
           number: 123,
           title: "Fix race in worktree setup",
           url: "https://github.com/bytetrue/byspace/pull/123",
@@ -222,8 +223,9 @@ describe("shared messages attachments", () => {
 
     expect(parsed.attachments).toEqual([
       {
-        type: "github_pr",
-        mimeType: "application/github-pr",
+        type: "forge_change_request",
+        mimeType: "application/byspace-forge-change-request",
+        forge: "github",
         number: 123,
         title: "Fix race in worktree setup",
         url: "https://github.com/bytetrue/byspace/pull/123",
@@ -242,8 +244,8 @@ describe("shared messages attachments", () => {
       text: "Review",
       attachments: [
         {
-          type: "github_issue",
-          mimeType: "application/github-issue",
+          type: "forge_issue",
+          mimeType: "application/byspace-forge-issue",
           number: 55,
           title: "Improve startup error details",
           url: "https://github.com/bytetrue/byspace/issues/55",
@@ -259,8 +261,9 @@ describe("shared messages attachments", () => {
 
     expect(parsed.attachments).toEqual([
       {
-        type: "github_issue",
-        mimeType: "application/github-issue",
+        type: "forge_issue",
+        mimeType: "application/byspace-forge-issue",
+        forge: "github",
         number: 55,
         title: "Improve startup error details",
         url: "https://github.com/bytetrue/byspace/issues/55",
@@ -363,8 +366,8 @@ describe("shared messages attachments", () => {
         prompt: "Investigate flaky test",
         attachments: [
           {
-            type: "github_pr",
-            mimeType: "application/github-pr",
+            type: "forge_change_request",
+            mimeType: "application/byspace-forge-change-request",
             number: 99,
             title: "Fork-safe PR checkout",
             url: "https://github.com/bytetrue/byspace/pull/99",
@@ -380,8 +383,9 @@ describe("shared messages attachments", () => {
 
     expect(parsed.firstAgentContext?.attachments).toEqual([
       {
-        type: "github_pr",
-        mimeType: "application/github-pr",
+        type: "forge_change_request",
+        mimeType: "application/byspace-forge-change-request",
+        forge: "github",
         number: 99,
         title: "Fork-safe PR checkout",
         url: "https://github.com/bytetrue/byspace/pull/99",
@@ -411,7 +415,7 @@ describe("shared messages attachments", () => {
       cwd: "/tmp/repo",
       action: "checkout",
       refName: "feature/ref-picker",
-      githubPrNumber: 42,
+      checkoutSource: { kind: "change_request", number: 42 },
       futureField: "ignored",
     });
 
@@ -421,7 +425,7 @@ describe("shared messages attachments", () => {
       cwd: "/tmp/repo",
       action: "checkout",
       refName: "feature/ref-picker",
-      githubPrNumber: 42,
+      checkoutSource: { kind: "change_request", number: 42 },
     });
   });
 
@@ -439,7 +443,7 @@ describe("shared messages attachments", () => {
         worktreeSlug: "review-42",
         action: "checkout",
         refName: "head-ref",
-        githubPrNumber: 42,
+        checkoutSource: { kind: "change_request", number: 42 },
         futureGitField: "ignored",
       },
     });
@@ -449,7 +453,7 @@ describe("shared messages attachments", () => {
       worktreeSlug: "review-42",
       action: "checkout",
       refName: "head-ref",
-      githubPrNumber: 42,
+      checkoutSource: { kind: "change_request", number: 42 },
     });
   });
 });

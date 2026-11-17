@@ -2,8 +2,9 @@
 
 ## 结论
 
-- Host 设置按三层收敛：一级 = 用户任务（Overview / Projects / Connections / Agents / Usage）；二级 = 同一任务内的视角切换（页内小节或 tab）；三级 = 逐个对象（provider 详情弹层）。
-- 归类靠「是不是同一个任务」，不靠「是不是同一个名词」。Providers 与 Agent 编排是同一任务（本机有哪些 agent 客户端、BySpace 怎么和它们集成），折叠进 Agents 页。Usage 是只读报表不是设置，保持独立。
+- Host 设置按三层收敛：一级 = 用户任务（Overview / Projects / Connections / Agents）；二级 = 同一任务内的视角切换（页内小节或 tab）；三级 = 逐个对象（provider 详情弹层）。
+- 归类靠「是不是同一个任务」，不靠「是不是同一个名词」。Providers 与 Agent 编排是同一任务（本机有哪些 agent 客户端、BySpace 怎么和它们集成），折叠进 Agents 页。
+- Usage 独立层已删除（2026-11-18 瘦身批次一，owner 拍板「完全用不到」）：provider 余额/用量报表整链砍掉（internal/quota、provider.usage.list RPC、Usage 设置页）。context-window-meter 的占用环本体保留，只摘掉余额 tooltip 段。
 - 逐 provider 的终端集成（activity hooks、该 provider 的启动命令）放 provider 详情弹层的 Terminal tab，不做页面级大 tab。页面级 tab 会要求 tab 可 URL 寻址，且强迫用户在 per-provider 配置间横跳。
 - terminal activity hooks 与 `providers[x].enabled` 永不联动。enabled 的语义是「在 BySpace 里可不可选」，不是「装没装」；关掉某 provider 仍要它的终端上报是合法用法。
 

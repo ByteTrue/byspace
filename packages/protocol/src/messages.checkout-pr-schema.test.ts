@@ -1,15 +1,13 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  CheckoutGithubGetCheckDetailsRequestSchema,
-  CheckoutGithubGetCheckDetailsResponseSchema,
-  CheckoutGithubSetAutoMergeRequestSchema,
-  CheckoutGithubSetAutoMergeResponseSchema,
+  CheckoutForgeGetCheckDetailsRequestSchema,
+  CheckoutForgeGetCheckDetailsResponseSchema,
+  CheckoutForgeSetAutoMergeRequestSchema,
+  CheckoutForgeSetAutoMergeResponseSchema,
   CheckoutPrMergeRequestSchema,
   CheckoutPrStatusSchema,
   ForgeSearchResponseSchema,
-  GitHubSearchResponseSchema,
-  ServerInfoStatusPayloadSchema,
 } from "./messages.js";
 
 describe("checkout PR schemas", () => {
@@ -84,7 +82,7 @@ describe("checkout PR schemas", () => {
     });
   });
 
-  test("keeps missing provider-specific GitHub PR facts absent for old daemons", () => {
+  test("keeps provider-specific facts absent when the status carries none", () => {
     const parsed = CheckoutPrStatusSchema.parse({
       number: 42,
       url: "https://github.com/bytetrue/byspace/pull/42",
@@ -96,7 +94,7 @@ describe("checkout PR schemas", () => {
       mergeable: "MERGEABLE",
     });
 
-    expect(parsed.github).toBeUndefined();
+    expect(parsed.forgeSpecific).toBeUndefined();
   });
 
   test("parses provider-specific GitHub PR status facts", () => {
@@ -112,7 +110,8 @@ describe("checkout PR schemas", () => {
         mergeable: "MERGEABLE",
         checks: [{ name: "server tests", status: "pending", url: null }],
         checksStatus: "pending",
-        github: {
+        forgeSpecific: {
+          forge: "github",
           mergeStateStatus: "BLOCKED",
           autoMergeRequest: null,
           viewerCanEnableAutoMerge: true,
@@ -133,7 +132,8 @@ describe("checkout PR schemas", () => {
     ).toMatchObject({
       mergeable: "MERGEABLE",
       checksStatus: "pending",
-      github: {
+      forgeSpecific: {
+        forge: "github",
         mergeStateStatus: "BLOCKED",
         viewerCanEnableAutoMerge: true,
         repository: {
@@ -145,31 +145,6 @@ describe("checkout PR schemas", () => {
     });
   });
 
-  test("keeps forgeSpecific absent for old daemons that only send github facts", () => {
-    const parsed = CheckoutPrStatusSchema.parse({
-      number: 42,
-      url: "https://github.com/bytetrue/byspace/pull/42",
-      title: "Ship it",
-      state: "open",
-      baseRefName: "main",
-      headRefName: "feature/ship-it",
-      isMerged: false,
-      github: {
-        mergeStateStatus: "CLEAN",
-        autoMergeRequest: null,
-        repository: {
-          autoMergeAllowed: false,
-          mergeCommitAllowed: true,
-          squashMergeAllowed: true,
-          rebaseMergeAllowed: false,
-          viewerDefaultMergeMethod: "MERGE",
-        },
-      },
-    });
-    expect(parsed.github?.mergeStateStatus).toBe("CLEAN");
-    expect(parsed.forgeSpecific).toBeUndefined();
-  });
-
   test("preserves a github forgeSpecific envelope", () => {
     const parsed = CheckoutPrStatusSchema.parse({
       number: 7,
@@ -179,17 +154,6 @@ describe("checkout PR schemas", () => {
       baseRefName: "main",
       headRefName: "feature/ship-it",
       isMerged: false,
-      github: {
-        mergeStateStatus: "CLEAN",
-        autoMergeRequest: null,
-        repository: {
-          autoMergeAllowed: false,
-          mergeCommitAllowed: true,
-          squashMergeAllowed: true,
-          rebaseMergeAllowed: false,
-          viewerDefaultMergeMethod: "MERGE",
-        },
-      },
       forgeSpecific: {
         forge: "github",
         mergeStateStatus: "CLEAN",
@@ -368,23 +332,6 @@ describe("checkout PR schemas", () => {
       error: null,
       requestId: "search-2",
     });
-
-    expect(
-      GitHubSearchResponseSchema.parse({
-        type: "github_search_response",
-        payload: {
-          items: [],
-          githubFeaturesEnabled: false,
-          error: null,
-          requestId: "search-legacy",
-        },
-      }).payload,
-    ).toEqual({
-      items: [],
-      githubFeaturesEnabled: false,
-      error: null,
-      requestId: "search-legacy",
-    });
   });
 
   test("parses optional GitHub check identifiers on PR checks", () => {
@@ -457,8 +404,8 @@ describe("checkout PR schemas", () => {
     "accepts %s as a GitHub set-auto-merge enable method",
     (mergeMethod) => {
       expect(
-        CheckoutGithubSetAutoMergeRequestSchema.parse({
-          type: "checkout.github.set_auto_merge.request",
+        CheckoutForgeSetAutoMergeRequestSchema.parse({
+          type: "checkout.forge.set_auto_merge.request",
           cwd: "/tmp/repo",
           enabled: true,
           mergeMethod,
@@ -470,8 +417,8 @@ describe("checkout PR schemas", () => {
 
   test("rejects unknown GitHub set-auto-merge enable methods", () => {
     expect(() =>
-      CheckoutGithubSetAutoMergeRequestSchema.parse({
-        type: "checkout.github.set_auto_merge.request",
+      CheckoutForgeSetAutoMergeRequestSchema.parse({
+        type: "checkout.forge.set_auto_merge.request",
         cwd: "/tmp/repo",
         enabled: true,
         mergeMethod: "auto",
@@ -482,8 +429,8 @@ describe("checkout PR schemas", () => {
 
   test("accepts GitHub set-auto-merge disable requests", () => {
     expect(
-      CheckoutGithubSetAutoMergeRequestSchema.parse({
-        type: "checkout.github.set_auto_merge.request",
+      CheckoutForgeSetAutoMergeRequestSchema.parse({
+        type: "checkout.forge.set_auto_merge.request",
         cwd: "/tmp/repo",
         enabled: false,
         requestId: "request-disable-auto-merge",
@@ -505,8 +452,8 @@ describe("checkout PR schemas", () => {
     };
 
     expect(
-      CheckoutGithubSetAutoMergeResponseSchema.parse({
-        type: "checkout.github.set_auto_merge.response",
+      CheckoutForgeSetAutoMergeResponseSchema.parse({
+        type: "checkout.forge.set_auto_merge.response",
         payload,
       }).payload,
     ).toEqual(payload);
@@ -514,8 +461,8 @@ describe("checkout PR schemas", () => {
 
   test("accepts GitHub check details requests and responses", () => {
     expect(
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({
-        type: "checkout.github.get_check_details.request",
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({
+        type: "checkout.forge.get_check_details.request",
         cwd: "/tmp/repo",
         repoOwner: "bytetrue",
         repoName: "byspace",
@@ -524,7 +471,7 @@ describe("checkout PR schemas", () => {
         requestId: "request-check-details",
       }),
     ).toEqual({
-      type: "checkout.github.get_check_details.request",
+      type: "checkout.forge.get_check_details.request",
       cwd: "/tmp/repo",
       repoOwner: "bytetrue",
       repoName: "byspace",
@@ -534,8 +481,8 @@ describe("checkout PR schemas", () => {
     });
 
     expect(
-      CheckoutGithubGetCheckDetailsResponseSchema.parse({
-        type: "checkout.github.get_check_details.response",
+      CheckoutForgeGetCheckDetailsResponseSchema.parse({
+        type: "checkout.forge.get_check_details.response",
         payload: {
           cwd: "/tmp/repo",
           success: true,
@@ -587,21 +534,21 @@ describe("checkout PR schemas", () => {
 
   test("accepts a GitLab pipeline through the existing check-details response", () => {
     expect(
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({
-        type: "checkout.github.get_check_details.request",
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({
+        type: "checkout.forge.get_check_details.request",
         cwd: "/tmp/repo",
         checkRunId: 306,
         requestId: "request-pipeline",
       }),
     ).toEqual({
-      type: "checkout.github.get_check_details.request",
+      type: "checkout.forge.get_check_details.request",
       cwd: "/tmp/repo",
       checkRunId: 306,
       requestId: "request-pipeline",
     });
 
-    const details = CheckoutGithubGetCheckDetailsResponseSchema.parse({
-      type: "checkout.github.get_check_details.response",
+    const details = CheckoutForgeGetCheckDetailsResponseSchema.parse({
+      type: "checkout.forge.get_check_details.response",
       payload: {
         cwd: "/tmp/repo",
         success: true,
@@ -644,49 +591,9 @@ describe("checkout PR schemas", () => {
     });
   });
 
-  // COMPAT(pipelineRawStatus): released peers <= v0.2.0-rc.1 require rawStatus,
-  // so daemons keep emitting it; this proves newer clients accept its absence
-  // once emission stops.
-  test("parses pipeline details without the compat rawStatus field", () => {
-    const details = CheckoutGithubGetCheckDetailsResponseSchema.parse({
-      type: "checkout.github.get_check_details.response",
-      payload: {
-        cwd: "/tmp/repo",
-        success: true,
-        details: {
-          checkRunId: 307,
-          name: "Pipeline (feat/y)",
-          annotations: [],
-          failedJobs: [],
-          truncated: false,
-          pipeline: {
-            id: 307,
-            status: "running",
-            stages: [
-              {
-                name: "test",
-                status: "running",
-                jobs: [{ id: 930, name: "unit", stage: "test", status: "running" }],
-              },
-            ],
-          },
-        },
-        error: null,
-        requestId: "request-pipeline-no-raw",
-      },
-    }).payload.details;
-
-    expect(details?.pipeline).toMatchObject({
-      id: 307,
-      status: "running",
-      stages: [{ jobs: [{ id: 930, status: "running" }] }],
-    });
-    expect(details?.pipeline?.rawStatus).toBeUndefined();
-  });
-
-  test("keeps pipeline absent for legacy and GitHub check-details responses", () => {
-    const details = CheckoutGithubGetCheckDetailsResponseSchema.parse({
-      type: "checkout.github.get_check_details.response",
+  test("keeps pipeline absent for GitHub check-details responses", () => {
+    const details = CheckoutForgeGetCheckDetailsResponseSchema.parse({
+      type: "checkout.forge.get_check_details.response",
       payload: {
         cwd: "/tmp/repo",
         success: true,
@@ -704,7 +611,7 @@ describe("checkout PR schemas", () => {
 
   test("rejects invalid GitHub check details request identities", () => {
     const request = {
-      type: "checkout.github.get_check_details.request",
+      type: "checkout.forge.get_check_details.request",
       cwd: "/tmp/repo",
       repoOwner: "bytetrue",
       repoName: "byspace",
@@ -713,102 +620,16 @@ describe("checkout PR schemas", () => {
     };
 
     expect(() =>
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({ ...request, repoOwner: "../owner" }),
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({ ...request, repoOwner: "../owner" }),
     ).toThrow();
     expect(() =>
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({ ...request, repoName: "" }),
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({ ...request, repoName: "" }),
     ).toThrow();
     expect(() =>
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({ ...request, checkRunId: 0 }),
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({ ...request, checkRunId: 0 }),
     ).toThrow();
     expect(() =>
-      CheckoutGithubGetCheckDetailsRequestSchema.parse({ ...request, workflowRunId: 1.5 }),
+      CheckoutForgeGetCheckDetailsRequestSchema.parse({ ...request, workflowRunId: 1.5 }),
     ).toThrow();
-  });
-
-  test("accepts the GitHub auto-merge server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          providersSnapshot: true,
-          checkoutGithubSetAutoMerge: true,
-        },
-      }).features,
-    ).toEqual({
-      providersSnapshot: true,
-      checkoutGithubSetAutoMerge: true,
-    });
-  });
-
-  test("accepts the GitHub check details server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          githubCheckDetails: true,
-        },
-      }).features,
-    ).toEqual({
-      githubCheckDetails: true,
-    });
-  });
-
-  test("accepts the forgeProviders server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          forgeProviders: true,
-        },
-      }).features,
-    ).toEqual({
-      forgeProviders: true,
-    });
-  });
-
-  test("accepts the project removal server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          projectRemove: true,
-        },
-      }).features,
-    ).toEqual({
-      projectRemove: true,
-    });
-  });
-
-  test("accepts the project add server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          projectAdd: true,
-        },
-      }).features,
-    ).toEqual({
-      projectAdd: true,
-    });
-  });
-
-  test("accepts the provider removal server_info feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          providerRemoval: true,
-        },
-      }).features,
-    ).toEqual({
-      providerRemoval: true,
-    });
   });
 });

@@ -35,7 +35,6 @@ export const TurnFooter = memo(function TurnFooter({
   inFlightTurnStartedAt,
   host,
   strategy,
-  supportsTimelineCursor,
   onForkAssistantTurn,
   onForkInFlightTurn,
 }: {
@@ -43,7 +42,6 @@ export const TurnFooter = memo(function TurnFooter({
   inFlightTurnStartedAt: Date | null;
   host: TurnFooterHost | null;
   strategy: TurnContentStrategy;
-  supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
   onForkInFlightTurn?: InFlightTurnForkHandler;
 }) {
@@ -69,7 +67,6 @@ export const TurnFooter = memo(function TurnFooter({
       items={host.items}
       timing={host.timing}
       startIndex={host.startIndex}
-      supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
   );
@@ -80,21 +77,19 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items,
   timing,
   startIndex,
-  supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
   strategy: TurnContentStrategy;
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
-  supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
   const getContent = useCallback(
     () => strategy.collectAssistantResponseContent(items, startIndex),
     [strategy, items, startIndex],
   );
-  const boundary = resolveAssistantTurnForkBoundary({ items, startIndex, supportsTimelineCursor });
+  const boundary = resolveAssistantTurnForkBoundary({ items, startIndex });
   const handleFork = useCallback(
     (target: AssistantForkTarget) => {
       if (!boundary) return;

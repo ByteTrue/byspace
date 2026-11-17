@@ -96,11 +96,37 @@ func TestStreamFramesAreCoalesced(t *testing.T) {
 			"type":            "create_agent_request",
 			"requestId":       "fr_create",
 			"clientMessageId": "client-msg-frame-rate",
-			"initialPrompt":   "stream tokens",
 			"config":          map[string]any{"provider": "pi", "cwd": workDir},
 		},
 	})
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
+		t.Fatal(err)
+	}
+
+	// The agent exists but no turn has started yet; subscribe while it is idle so the
+	// viewed-agent set is in place before the first delta's leading flush goes out.
+	agentID := readUntilSessionType(t, ctx, ws, "status", "agent_created")["agentId"].(string)
+	sub, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "agent.timeline.set_subscription.request",
+			"requestId": "fr_sub",
+			"agentIds":  []string{agentID},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, sub); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "agent.timeline.set_subscription.response", "")
+
+	promptReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "send_agent_message_request", "requestId": "fr_prompt", "agentId": agentID,
+			"text": "stream tokens", "messageId": "client-msg-frame-rate",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, promptReq); err != nil {
 		t.Fatal(err)
 	}
 

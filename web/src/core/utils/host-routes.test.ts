@@ -43,13 +43,7 @@ describe("workspace route parsing", () => {
 
   it("encodes non-URL-safe workspace IDs as base64url", () => {
     expect(encodeWorkspaceIdForPathSegment("/tmp/repo")).toBe("b64_L3RtcC9yZXBv");
-    expect(decodeWorkspaceIdFromPathSegment("L3RtcC9yZXBv")).toBe("/tmp/repo");
-  });
-
-  it("decodes non-canonical base64url workspace IDs used by older links", () => {
-    expect(decodeWorkspaceIdFromPathSegment("L2hvbWUvdXNlci9kZXYvYnlzcGFjZQ")).toBe(
-      "/home/user/dev/byspace",
-    );
+    expect(decodeWorkspaceIdFromPathSegment("b64_L3RtcC9yZXBv")).toBe("/tmp/repo");
   });
 
   it("encodes file paths as base64url (no padding)", () => {
@@ -65,8 +59,8 @@ describe("workspace route parsing", () => {
     });
   });
 
-  it("parses workspace route with legacy base64 path", () => {
-    expect(parseHostWorkspaceRouteFromPathname("/h/local/workspace/L3RtcC9yZXBv")).toEqual({
+  it("parses workspace route with a base64 path id", () => {
+    expect(parseHostWorkspaceRouteFromPathname("/h/local/workspace/b64_L3RtcC9yZXBv")).toEqual({
       serverId: "local",
       workspaceId: "/tmp/repo",
     });
@@ -74,7 +68,7 @@ describe("workspace route parsing", () => {
 
   it("does not treat /tab routes as valid workspace routes", () => {
     expect(
-      parseHostWorkspaceRouteFromPathname("/h/local/workspace/L3RtcC9yZXBv/tab/draft_abc123"),
+      parseHostWorkspaceRouteFromPathname("/h/local/workspace/b64_L3RtcC9yZXBv/tab/draft_abc123"),
     ).toBeNull();
   });
 
@@ -82,7 +76,7 @@ describe("workspace route parsing", () => {
     expect(buildHostWorkspaceRoute("local", "164")).toBe("/h/local/workspace/164");
   });
 
-  it("builds base64url workspace routes for legacy paths", () => {
+  it("builds base64url workspace routes for path-shaped ids", () => {
     expect(buildHostWorkspaceRoute("local", "/tmp/repo")).toBe(
       "/h/local/workspace/b64_L3RtcC9yZXBv",
     );
@@ -111,7 +105,7 @@ describe("workspace route parsing", () => {
       kind: "file",
       path: "src/index.ts",
     });
-    expect(parseWorkspaceOpenIntent("setup:L3RtcC9yZXBv")).toEqual({
+    expect(parseWorkspaceOpenIntent("setup:b64_L3RtcC9yZXBv")).toEqual({
       kind: "setup",
       workspaceId: "/tmp/repo",
     });
@@ -248,7 +242,6 @@ describe("host settings section slugs", () => {
     expect(normalizeHostSectionSlug("connections")).toBe("connections");
     expect(normalizeHostSectionSlug("agents")).toBe("agents");
     expect(normalizeHostSectionSlug("projects")).toBe("projects");
-    expect(normalizeHostSectionSlug("usage")).toBe("usage");
     expect(normalizeHostSectionSlug("host")).toBe("host");
   });
 
@@ -260,12 +253,13 @@ describe("host settings section slugs", () => {
     expect(normalizeHostSectionSlug("terminals")).toBeNull();
   });
 
-  it("maps retired host settings sections to their consolidation targets", () => {
-    expect(normalizeHostSectionSlug("orchestration")).toBe("agents");
-    expect(normalizeHostSectionSlug("daemon")).toBe("host");
-    expect(normalizeHostSectionSlug("pair-device")).toBe("connections");
-    expect(normalizeHostSectionSlug("metadata")).toBe("agents");
-    expect(normalizeHostSectionSlug("workspaces")).toBe("host");
+  it("rejects retired host settings sections outright", () => {
+    expect(normalizeHostSectionSlug("orchestration")).toBeNull();
+    expect(normalizeHostSectionSlug("daemon")).toBeNull();
+    expect(normalizeHostSectionSlug("pair-device")).toBeNull();
+    expect(normalizeHostSectionSlug("metadata")).toBeNull();
+    expect(normalizeHostSectionSlug("workspaces")).toBeNull();
+    expect(normalizeHostSectionSlug("plugins")).toBeNull();
   });
 });
 

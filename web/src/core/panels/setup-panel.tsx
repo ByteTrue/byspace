@@ -26,7 +26,6 @@ import {
   type WorkspaceSetupSnapshot,
 } from "@/stores/workspace-setup-store";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { useHostFeature } from "@/runtime/host-features";
 
 function useSetupPanelDescriptor(
   target: { kind: "setup"; workspaceId: string },
@@ -134,7 +133,6 @@ function BlockedSetupNotice({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const supportsSetupRun = useHostFeature(serverId, "workspaceSetupRun");
   const [runError, setRunError] = useState<string | null>(null);
   const [isRunningSetup, setIsRunningSetup] = useState(false);
   const runSetup = useCallback(async () => {
@@ -162,12 +160,10 @@ function BlockedSetupNotice({
           })}
         </AlertDescription>
         <AlertAction>
-          {supportsSetupRun ? (
-            <Button variant="secondary" onClick={runSetup} size="sm" disabled={isRunningSetup}>
-              {isRunningSetup ? <Spinner data-icon="inline-start" /> : null}
-              {t("workspace.setup.blocked.run")}
-            </Button>
-          ) : null}
+          <Button variant="secondary" onClick={runSetup} size="sm" disabled={isRunningSetup}>
+            {isRunningSetup ? <Spinner data-icon="inline-start" /> : null}
+            {t("workspace.setup.blocked.run")}
+          </Button>
         </AlertAction>
       </Alert>
       {runError ? (

@@ -58,10 +58,7 @@ func runDaemonReload(args []string, stdout io.Writer) error {
 //
 // The ask goes over the RPC instead of a signal because the process serving the daemon is not always
 // a `serve` process: in the desktop app the daemon runs inside `byspace tray`, and only that process
-// can bring the daemon back. No ack means an older build or no daemon, so the caller signals instead.
-//
-// COMPAT(daemonControlRPC): daemons before v0.25 never ack this ask; remove the signal fallback at
-// the call sites after 2027-06-01.
+// can bring the daemon back. No ack means the daemon is unreachable, so the caller signals instead.
 func daemonControl(addr, reason string, restart bool) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

@@ -14,7 +14,6 @@ type SupportedRecoverableWorkspace = Omit<AuthoritativeRecoverableWorkspace, "ac
 export type WorkspaceRecoveryModel =
   | { kind: "idle" }
   | { kind: "checking" }
-  | { kind: "needsHostUpgrade" }
   | {
       kind: "recoverable";
       recovery: SupportedRecoverableWorkspace;
@@ -80,7 +79,6 @@ export function resolveWorkspaceRecoveryModel(input: {
   connected: boolean;
   hasClient: boolean;
   hasServerInfo: boolean;
-  supportsRecovery: boolean;
   inspection: {
     pending: boolean;
     error: string | null;
@@ -102,9 +100,6 @@ export function resolveWorkspaceRecoveryModel(input: {
   }
   if (!input.hasServerInfo) {
     return { kind: "checking" };
-  }
-  if (!input.supportsRecovery) {
-    return { kind: "needsHostUpgrade" };
   }
   if (input.inspection.pending) {
     return { kind: "checking" };

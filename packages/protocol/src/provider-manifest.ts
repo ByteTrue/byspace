@@ -3,8 +3,7 @@ import type { AgentMode } from "./agent-types.js";
 
 export type AgentModeColorTier = "safe" | "moderate" | "dangerous" | "planning" | `#${string}`;
 // Open string by design: the client looks icons up in a registry and falls back
-// to a default for unknown values. Daemon downgrades unknown icons for clients
-// that pre-date the open-string contract (see CLIENT_CAPS.customModeIcons).
+// to a default for unknown values.
 export type AgentModeIcon = string;
 
 export interface AgentModeVisuals {

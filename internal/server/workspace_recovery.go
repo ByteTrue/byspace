@@ -78,9 +78,8 @@ func (s *Server) resolveWorkspaceRecovery(workspaceID string) (map[string]any, *
 			return nil, unavailable("worktree_branch_missing",
 				"The archived worktree has no branch recorded, so it cannot be restored.")
 		}
-		// COMPAT(worktreeRestoreMissingMainRepoRoot): records written before the main repository
-		// root was persisted fall back to the project root, which is correct for every checkout
-		// that is not itself the worktree.
+		// Records without a persisted main repository root fall back to the project root, which is
+		// correct for every checkout that is not itself the worktree.
 		sourceRepoRoot := ""
 		if rec.MainRepoRoot != nil {
 			sourceRepoRoot = strings.TrimSpace(*rec.MainRepoRoot)

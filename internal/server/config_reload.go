@@ -28,7 +28,6 @@ var reloadablePaths = []string{
 	"daemon.git.maxProcessesPerSecond",
 	"daemon.git.maxProcessConcurrency",
 	"daemon.autoArchiveAfterMerge",
-	"daemon.enableTerminalAgentHooks",
 	"daemon.terminalAgentHooks",
 	"daemon.appendSystemPrompt",
 	"daemon.terminalProfiles",

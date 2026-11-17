@@ -76,30 +76,12 @@ func (s *Server) broadcastAgentAttention(rec store.AgentRecord, reason, timestam
 	ctx := context.Background()
 	for i, sink := range sinks {
 		shouldNotify := i == plan.InAppRecipient
-		s.mu.Lock()
-		selective := s.selectiveTimeline[sink]
-		s.mu.Unlock()
-		if selective {
-			_ = sendSessionMsg(ctx, sink, "agent_attention_required", map[string]any{
-				"agentId":      rec.ID,
-				"reason":       reason,
-				"timestamp":    timestamp,
-				"shouldNotify": shouldNotify,
-				"notification": notification,
-			})
-			continue
-		}
-		_ = sendSessionMsg(ctx, sink, "agent_stream", map[string]any{
-			"agentId": rec.ID,
-			"event": map[string]any{
-				"type":         "attention_required",
-				"provider":     rec.Provider,
-				"reason":       reason,
-				"timestamp":    timestamp,
-				"shouldNotify": shouldNotify,
-				"notification": notification,
-			},
-			"timestamp": timestamp,
+		_ = sendSessionMsg(ctx, sink, "agent_attention_required", map[string]any{
+			"agentId":      rec.ID,
+			"reason":       reason,
+			"timestamp":    timestamp,
+			"shouldNotify": shouldNotify,
+			"notification": notification,
 		})
 	}
 }

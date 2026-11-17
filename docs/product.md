@@ -39,7 +39,7 @@ A workspace is a flexible canvas:
 
 ### The daemon
 
-BySpace is a client-server system. The daemon (Node.js) runs on your machine, manages agent processes, and streams output in real time over WebSocket. Clients connect to the daemon — locally or remotely.
+BySpace is a client-server system. The daemon (a single Go binary) runs on your machine, manages agent processes, and streams output in real time over WebSocket. Clients connect to the daemon — locally or remotely.
 
 This architecture means:
 
@@ -69,13 +69,13 @@ Anyone who builds software:
 3. **The daemon as infrastructure.** Server/client architecture enables deployment anywhere.
 4. **Open source outlasts funding.** Open source communities are resilient. Contributors become advocates.
 
-## Current state (May 2026)
+## Current state (November 2026)
 
-- Desktop (Electron), mobile (iOS/Android), web, CLI
+- Desktop (Wails v3), Android (Wails v3 sideload), web (browser + PWA), CLI
 - Built-in providers: Claude Code (Agent SDK), Codex (app-server), GitHub Copilot (ACP), OpenCode, Pi, OMP
 - One-click ACP provider catalog: CodeWhale, Cursor, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
 - Agents drive the daemon themselves through the bundled `byspace` skill and CLI (workspaces, agents, schedules, heartbeats, terminals, workspace renaming)
 - Scheduled agents (cron-style triggers) via app and CLI
 - Frequent releases (multiple per week)
 - Community contributions across packaging, providers, and bug fixes
-- Key UX: split panes, keybinding customization, workspace model, in-app browser
+- Key UX: split panes, keybinding customization, workspace model

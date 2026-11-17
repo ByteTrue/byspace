@@ -151,7 +151,6 @@ export async function buildClientConfig(
   connection: HostConnection,
   serverId?: string,
   options?: {
-    capabilities?: DaemonClientConfig["capabilities"];
     trace?: DaemonClientConfig["trace"];
     browserContext?: DaemonConnectionBrowserContext;
   },
@@ -168,7 +167,6 @@ export async function buildClientConfig(
     appVersion: deps.resolveAppVersion() ?? undefined,
     suppressSendErrors: true,
     reconnect: { enabled: false },
-    ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options?.trace ? { trace: options.trace } : {}),
   };
 
@@ -278,7 +276,6 @@ export function connectAndProbe(
 interface ProbeOptions {
   serverId?: string;
   timeoutMs?: number;
-  capabilities?: DaemonClientConfig["capabilities"];
   trace?: DaemonClientConfig["trace"];
   browserContext?: DaemonConnectionBrowserContext;
 }

@@ -42,16 +42,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /**
  * 该字段由尚未实现的子系统承载，Go 侧没有语义可填。
  *
- * 明确列出来，而不是用 `_ = x` 假装成功：Plugin 运行时与 Hub 远控都还没做，
- * `toolPolicyApplied` 只有在真的把 tool policy 应用到远端 agent 时才有意义。
  * 每次新增豁免都必须在这里写理由，否则「豁免清单」会变成掩盖缺口的垃圾桶。
  */
-const DEFERRED_FIELDS = new Map([
-  [
-    "hub.execution.agent.create.response",
-    new Set(["toolPolicyApplied"]), // Hub 远控未实现，没有策略可应用
-  ],
-]);
+const DEFERRED_FIELDS = new Map([]);
 
 /**
  * 合法的「按条件省略」字段。
@@ -93,36 +86,17 @@ const CLIENT_ONLY = new Set(["pong", "terminal_output"]);
  */
 const DEFERRED_TYPES = new Map([
   ...[
-    "hub.execution.agent.update",
-    "hub.execution.agent.stream",
     "hub.management.daemon.connect.response",
     "hub.management.daemon.get_status.response",
     "hub.management.daemon.disconnect.response",
     "hub.management.daemon.permissions.update.response",
   ].map((t) => [t, "Hub 远程托管未实现（agent 只在本地跑）"]),
-  ...[
-    "plugin.directory.install.response",
-    "plugin.source.install.response",
-    "plugin.remove.response",
-  ].map((t) => [t, "plugin 运行时未实现（只读端返回空目录）"]),
-  ...[
-    "audio_output",
-    "transcription_result",
-    "voice_input_state",
-    "dictation_stream_ack",
-    "dictation_stream_finish_accepted",
-    "dictation_stream_partial",
-    "dictation_stream_final",
-    "dictation_stream_error",
-  ].map((t) => [t, "语音/听写是原生客户端能力，web 构建没有对应 UI"]),
   ["assistant_chunk", "流式文本走 agent_stream.timeline，该类型是旧协议残留"],
   ["artifact", "artifact 产出跟踪未实现"],
   ["agent_status", "状态变更统一走 agent_update"],
-  ["agent_attention_required", "通知走 agent_update + web push，未单独发此消息"],
   ["terminal_attention_required", "终端注意提醒未实现"],
   ["activity_log", "唯一消费者是语音中止失败的 toast，语音功能本身未实现"],
   ["terminal_stream_exit", "PTY 退出走二进制帧 OpcodeExit，未额外发文本消息"],
-  ["agent.timeline.replacement", "epoch 变化时客户端在重连时全量拉取，未单独广播（见 Issue）"],
 ]);
 
 function walk(dir, ext, out = []) {

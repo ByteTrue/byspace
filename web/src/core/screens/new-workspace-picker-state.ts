@@ -40,18 +40,19 @@ export function reducePickerSelection(
 
 function isPrAttachment(
   attachment: UserComposerAttachment,
-): attachment is Extract<UserComposerAttachment, { kind: "forge_change_request" | "github_pr" }> {
-  return attachment.kind === "forge_change_request" || attachment.kind === "github_pr";
+): attachment is Extract<UserComposerAttachment, { kind: "forge_change_request" }> {
+  return attachment.kind === "forge_change_request";
 }
 
 function isPickerOwnedPrAttachment(attachment: UserComposerAttachment): attachment is Extract<
   UserComposerAttachment,
-  { kind: "github_pr" }
+  { kind: "forge_change_request" }
 > & {
   owner: typeof NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER;
 } {
   return (
-    attachment.kind === "github_pr" && attachment.owner === NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER
+    attachment.kind === "forge_change_request" &&
+    attachment.owner === NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER
   );
 }
 
@@ -74,7 +75,7 @@ export function syncPickerPrAttachment(input: {
       return [
         ...nextAttachments,
         {
-          kind: "github_pr",
+          kind: "forge_change_request",
           item: selectedPr,
           owner: NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER,
         },

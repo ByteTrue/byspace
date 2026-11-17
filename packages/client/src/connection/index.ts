@@ -1,26 +1,4 @@
 import type { SessionEventSubscription } from "@bytetrue/protocol/messages";
-import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/protocol/client-capabilities";
-
-// Protocol support belongs to the installed client. Only browser hosting needs
-// a resource supplied by the caller. Keep this exhaustive as the protocol evolves.
-export const DEFAULT_CLIENT_CAPABILITIES = {
-  [CLIENT_CAPS.allProviders]: true,
-  [CLIENT_CAPS.selectiveAgentTimeline]: true,
-  [CLIENT_CAPS.reasoningMergeEnum]: true,
-  [CLIENT_CAPS.customModeIcons]: true,
-  [CLIENT_CAPS.terminalReflowableSnapshot]: true,
-  [CLIENT_CAPS.providerSubagents]: true,
-  [CLIENT_CAPS.projectUpdates]: true,
-  [CLIENT_CAPS.compactProviderSnapshots]: true,
-  [CLIENT_CAPS.providerSnapshotReferences]: true,
-  [CLIENT_CAPS.timelineReplacementInvalidation]: true,
-  [CLIENT_CAPS.timelineNotifications]: true,
-  // BySpace addition: custom_message timeline items (v0.13.x).
-  [CLIENT_CAPS.customTimelineMessages]: true,
-  [CLIENT_CAPS.pluginTimelineItems]: true,
-  [CLIENT_CAPS.workspaceSetupBlocked]: true,
-  [CLIENT_CAPS.explicitEventSubscriptions]: true,
-} satisfies Record<Exclude<ClientCapability, typeof CLIENT_CAPS.browserHost>, true>;
 
 /** Calling releases demand; ready acknowledges the initial daemon membership. */
 export type TimelineSubscription = (() => void) & { readonly ready: Promise<void> };

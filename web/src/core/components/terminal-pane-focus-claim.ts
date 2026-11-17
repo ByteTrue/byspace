@@ -26,8 +26,6 @@ export function resolveTerminalResizeClaim(input: {
   size: TerminalSize;
   previousSentSize: TerminalSize | null;
   shouldClaim: boolean;
-  forceClaim: boolean;
-  supportsTerminalSizeOwnership: boolean;
   hasClaimedSize: boolean;
   readiness: FocusClaimReadiness;
 }): { shouldSend: boolean; intent: "claim" | "update" } {
@@ -36,24 +34,10 @@ export function resolveTerminalResizeClaim(input: {
     if (!canRequestFocusClaim(input.readiness)) {
       return { shouldSend: false, intent };
     }
-    if (input.supportsTerminalSizeOwnership) {
-      return { shouldSend: true, intent };
-    }
-    return {
-      shouldSend:
-        input.forceClaim ||
-        input.previousSentSize === null ||
-        input.previousSentSize.rows !== input.size.rows ||
-        input.previousSentSize.cols !== input.size.cols,
-      intent,
-    };
+    return { shouldSend: true, intent };
   }
 
-  if (
-    !input.supportsTerminalSizeOwnership ||
-    !input.hasClaimedSize ||
-    !canRequestOwnedSizeUpdate(input.readiness)
-  ) {
+  if (!input.hasClaimedSize || !canRequestOwnedSizeUpdate(input.readiness)) {
     return { shouldSend: false, intent };
   }
 

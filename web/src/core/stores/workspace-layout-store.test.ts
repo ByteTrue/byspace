@@ -168,9 +168,9 @@ describe("workspace-layout-store helpers", () => {
         state: {
           layoutByWorkspace: { workspace: persisted },
           splitSizesByWorkspace: {},
-          explorerPaneIdByWorkspace: { workspace: "explorer" },
+          explorerSidebarPaneIdByWorkspace: { workspace: "explorer" },
         },
-        version: 1,
+        version: 3,
       }),
     );
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
@@ -281,235 +281,6 @@ describe("workspace-layout-store helpers", () => {
     expect(collectAllTabs(root).map((tab) => tab.tabId)).toEqual(["tab-a"]);
     expect(collectAllPanes(root)).toEqual([]);
     expect(getFocusedBrowserId({ root, focusedPaneId: "hidden" })).toBeNull();
-  });
-});
-
-describe("workspace-layout-store version 2 migration", () => {
-  const workspaceKey = "workspace";
-  const preservedFileState = { treeVisible: true, treeWidth: 333 };
-
-  function createVersionOneLayout(includeExplorerDefaults: boolean) {
-    const explorerTabIds = [
-      ...(includeExplorerDefaults ? ["files", "changes_tree"] : []),
-      "legacy-file",
-      "legacy-agent",
-    ];
-    return {
-      root: {
-        kind: "group" as const,
-        group: {
-          id: "workspace-root",
-          direction: "horizontal" as const,
-          sizes: [0.61, 0.39],
-          children: [
-            createPane({
-              id: "main",
-              tabIds: ["main-draft"],
-              targetsByTabId: {
-                "main-draft": { kind: "draft", draftId: "main-draft" },
-              },
-            }),
-            createPane({
-              id: "explorer",
-              tabIds: explorerTabIds,
-              focusedTabId: "legacy-file",
-              hidden: true,
-              targetsByTabId: {
-                files: { kind: "files" },
-                changes_tree: { kind: "changes_tree" },
-                "legacy-file": { kind: "file", path: "/repo/preserved.ts" },
-                "legacy-agent": { kind: "agent", agentId: "preserved-agent" },
-              },
-              stateByTabId: { "legacy-file": preservedFileState },
-            }),
-          ],
-        },
-      },
-      focusedPaneId: "main",
-    };
-  }
-
-  async function persistVersionOneLayout(
-    source: "v0.5" | "v0.6",
-    options: { withSidePane?: boolean } = {},
-  ) {
-    const layout = createVersionOneLayout(source === "v0.6");
-    const persistedLayout = options.withSidePane
-      ? {
-          ...layout,
-          root: {
-            kind: "group" as const,
-            group: {
-              id: "side-root",
-              direction: "horizontal" as const,
-              sizes: [0.7, 0.3],
-              children: [
-                layout.root,
-                createPane({
-                  id: "existing-side",
-                  tabIds: ["existing-side-file"],
-                  targetsByTabId: {
-                    "existing-side-file": { kind: "file", path: "/repo/already-beside.ts" },
-                  },
-                }),
-              ],
-            },
-          },
-        }
-      : layout;
-    await localStorageAsync.removeItem("workspace-layout-state");
-    await localStorageAsync.setItem(
-      "workspace-layout-state",
-      JSON.stringify({
-        state: {
-          layoutByWorkspace: {
-            [workspaceKey]: persistedLayout,
-          },
-          splitSizesByWorkspace: {},
-          explorerPaneIdByWorkspace: { [workspaceKey]: "explorer" },
-          ...(source === "v0.6"
-            ? {
-                explorerSidebarWidthByWorkspace: {},
-                sidePaneIdByWorkspace: options.withSidePane
-                  ? { [workspaceKey]: "existing-side" }
-                  : {},
-              }
-            : {}),
-        },
-        version: 1,
-      }),
-    );
-  }
-
-  function expectMigratedLayout(
-    store: {
-      getState: () => {
-        layoutByWorkspace: Record<string, { root: SplitNode }>;
-        explorerSidebarPaneIdByWorkspace: Record<string, string | null>;
-        sidePaneIdByWorkspace: Record<string, string | null>;
-      };
-    },
-    expected: {
-      sidePaneId?: string;
-      sideTabIds?: string[];
-    } = {},
-  ) {
-    const state = store.getState();
-    const layout = state.layoutByWorkspace[workspaceKey];
-    const explorerPaneId = state.explorerSidebarPaneIdByWorkspace[workspaceKey];
-    const sidePaneId = state.sidePaneIdByWorkspace[workspaceKey];
-    expect(explorerPaneId).toBe("explorer");
-    expect(sidePaneId).toBeTruthy();
-    expect(sidePaneId).not.toBe(explorerPaneId);
-
-    const tabsById = new Map(collectAllTabs(layout.root).map((tab) => [tab.tabId, tab]));
-    const explorerPane = findPaneById(layout.root, explorerPaneId);
-    expect(explorerPane?.tabIds.map((tabId) => tabsById.get(tabId)?.target)).toEqual([
-      { kind: "files" },
-      { kind: "changes_tree" },
-    ]);
-
-    const sidePane = findPaneById(layout.root, sidePaneId);
-    expect(sidePane?.hidden).not.toBe(true);
-    expect(sidePane?.tabIds).toEqual(expected.sideTabIds ?? ["legacy-file", "legacy-agent"]);
-    expect(tabsById.get("legacy-file")).toMatchObject({
-      target: { kind: "file", path: "/repo/preserved.ts" },
-      state: preservedFileState,
-    });
-    expect(sidePaneId).toBe(expected.sidePaneId ?? sidePaneId);
-    expect(collectAllPanes(layout.root).map((pane) => pane.id)).toEqual(["main", sidePaneId]);
-  }
-
-  it.each(["v0.5", "v0.6"] as const)(
-    "replaces Explorer once and preserves persisted side content when upgrading from %s",
-    async (source) => {
-      await persistVersionOneLayout(source);
-      const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-
-      await restored.persist.rehydrate();
-
-      expectMigratedLayout(restored);
-      await vi.waitFor(async () => {
-        const persisted = JSON.parse(
-          (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
-        );
-        expect(persisted.version).toBe(2);
-      });
-    },
-  );
-
-  it("reuses an ordinary side pane already created by v0.6", async () => {
-    await persistVersionOneLayout("v0.6", { withSidePane: true });
-    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-
-    await restored.persist.rehydrate();
-
-    expectMigratedLayout(restored, {
-      sidePaneId: "existing-side",
-      sideTabIds: ["existing-side-file", "legacy-file", "legacy-agent"],
-    });
-  });
-
-  it("writes version 2 with the persisted Explorer key accepted by released v0.6", async () => {
-    await persistVersionOneLayout("v0.6");
-    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-
-    await restored.persist.rehydrate();
-
-    await vi.waitFor(async () => {
-      const persisted = JSON.parse(
-        (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
-      );
-      expect(persisted.version).toBe(2);
-      expect(Object.keys(persisted.state).sort()).toEqual([
-        "explorerPaneIdByWorkspace",
-        "explorerSidebarWidthByWorkspace",
-        "layoutByWorkspace",
-        "sidePaneIdByWorkspace",
-        "splitSizesByWorkspace",
-      ]);
-      expect(persisted.state.explorerPaneIdByWorkspace).toEqual({
-        [workspaceKey]: "explorer",
-      });
-    });
-  });
-
-  it("does not replace Explorer again when the migrated version 2 layout reloads", async () => {
-    await persistVersionOneLayout("v0.6");
-    const migrated = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-    await migrated.persist.rehydrate();
-    expectMigratedLayout(migrated);
-    const explorerPaneId = migrated.getState().explorerSidebarPaneIdByWorkspace[workspaceKey];
-    if (!explorerPaneId) {
-      throw new Error("Migrated Explorer pane is missing");
-    }
-    const addedTabId = migrated.getState().openTab({
-      workspaceKey,
-      target: { kind: "agent", agentId: "added-after-migration" },
-      intent: "new",
-      placement: { mode: "pane", paneId: explorerPaneId },
-    });
-    expect(addedTabId).toBeTruthy();
-
-    await vi.waitFor(async () => {
-      const persisted = JSON.parse(
-        (await localStorageAsync.getItem("workspace-layout-state")) ?? "{}",
-      );
-      expect(persisted.version).toBe(2);
-    });
-    const reloaded = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-    await reloaded.persist.rehydrate();
-
-    const reloadedState = reloaded.getState();
-    const reloadedLayout = reloadedState.layoutByWorkspace[workspaceKey];
-    const reloadedExplorer = findPaneById(
-      reloadedLayout.root,
-      reloadedState.explorerSidebarPaneIdByWorkspace[workspaceKey],
-    );
-    expect(reloadedExplorer?.tabIds).toContain(addedTabId);
-    expect(findPaneContainingTab(reloadedLayout.root, addedTabId as string)?.id).toBe(
-      reloadedExplorer?.id,
-    );
   });
 });
 
@@ -1088,13 +859,13 @@ describe("workspace-layout-store actions", () => {
     expect(workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey]).toBe(before);
   });
 
-  it("migrates legacy layouts to include the hidden registered explorer pane", async () => {
+  it("ensures a hidden registered explorer pane when restoring a layout without one", async () => {
     const legacyLayout = createDefaultLayout();
     await localStorageAsync.setItem(
       "workspace-layout-state",
       JSON.stringify({
         state: { layoutByWorkspace: { legacy: legacyLayout } },
-        version: 1,
+        version: 3,
       }),
     );
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
@@ -1115,28 +886,6 @@ describe("workspace-layout-store actions", () => {
     ]);
     expect(restored.getState().splitSizesByWorkspace).toEqual({});
     await expect(localStorageAsync.getItem("workspace-layout-state")).resolves.not.toBeNull();
-  });
-
-  it("restores a layout saved before the Side panel rename, PR bookkeeping and all", async () => {
-    const savedLayout = createWorkspaceLayoutWithExplorerSidebar();
-    await localStorageAsync.setItem(
-      "workspace-layout-state",
-      JSON.stringify({
-        state: {
-          layoutByWorkspace: { renamed: savedLayout },
-          explorerPaneIdByWorkspace: { renamed: "explorer" },
-          acknowledgedPullRequestByWorkspace: { renamed: "url:https://example.test/pulls/1" },
-        },
-        version: 1,
-      }),
-    );
-    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
-
-    await restored.persist.rehydrate();
-
-    const state = restored.getState();
-    expect(state.layoutByWorkspace.renamed).toBeTruthy();
-    expect(state.explorerSidebarPaneIdByWorkspace.renamed).toBe("explorer");
   });
 
   it("persists first-class pane targets, visibility, and focus", async () => {
@@ -1754,7 +1503,7 @@ describe("workspace-layout-store actions", () => {
           },
           splitSizesByWorkspace: {},
         },
-        version: 1,
+        version: 3,
       }),
     );
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
@@ -2949,7 +2698,7 @@ describe("workspace-layout-store actions", () => {
       layoutByWorkspace: { [workspaceKey]: layout },
       splitSizesByWorkspace: currentState.splitSizesByWorkspace,
       explorerSidebarWidthByWorkspace: currentState.explorerSidebarWidthByWorkspace,
-      explorerPaneIdByWorkspace: {},
+      explorerSidebarPaneIdByWorkspace: {},
       sidePaneIdByWorkspace: currentState.sidePaneIdByWorkspace,
     });
     expect(layout && collectAllTabs(layout.root).map((tab) => tab.target)).toEqual([
@@ -3172,7 +2921,7 @@ describe("workspace-layout-store actions", () => {
       layoutByWorkspace: {},
       splitSizesByWorkspace: {},
       explorerSidebarWidthByWorkspace: {},
-      explorerPaneIdByWorkspace: {},
+      explorerSidebarPaneIdByWorkspace: {},
       sidePaneIdByWorkspace: {},
     });
   });

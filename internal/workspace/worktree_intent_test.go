@@ -12,7 +12,6 @@ func defaultMain(context.Context, string) (string, error) { return "main", nil }
 // different meaning, and reading only refName collapses them all into "branch off refName".
 func TestResolveWorktreeIntent(t *testing.T) {
 	deps := WorktreeIntentDeps{Forge: "github", DefaultBranch: defaultMain}
-	five := 5
 
 	cases := []struct {
 		name  string
@@ -40,15 +39,7 @@ func TestResolveWorktreeIntent(t *testing.T) {
 			want:  WorktreeIntent{Kind: IntentCheckoutBranch, BranchName: "existing"},
 		},
 		{
-			name:  "legacy githubPrNumber still resolves",
-			input: WorktreeIntentInput{GithubPRNumber: &five, RefName: "pr-head"},
-			want: WorktreeIntent{
-				Kind: IntentCheckoutChangeRequest, Forge: "github", ChangeRequestNumber: 5,
-				HeadRef: "pr-head", BaseRefName: "main",
-			},
-		},
-		{
-			name: "structured checkoutSource wins over the legacy field",
+			name: "structured checkoutSource resolves a change-request checkout",
 			input: WorktreeIntentInput{
 				CheckoutSource: &CheckoutSource{Kind: "change_request", Number: 9},
 				RefName:        "pr-head",

@@ -87,10 +87,6 @@ describe("resolveWorkspaceRouteState", () => {
       kind: "missing",
       hostName: "Laptop",
     });
-    expect(resolve({ recovery: { kind: "needsHostUpgrade" } })).toEqual({
-      kind: "needsHostUpgrade",
-      hostName: "Laptop",
-    });
   });
 
   it("renders the authoritative archived-workspace state through ready, restoring, and failed phases", () => {
@@ -118,10 +114,6 @@ describe("resolveWorkspaceRouteState", () => {
   });
 
   it("distinguishes unsupported and authoritatively unavailable workspaces", () => {
-    expect(resolve({ recovery: { kind: "needsHostUpgrade" } })).toEqual({
-      kind: "needsHostUpgrade",
-      hostName: "Laptop",
-    });
     expect(
       resolve({
         recovery: {

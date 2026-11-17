@@ -394,7 +394,7 @@ func TestMockStressShapes(t *testing.T) {
 }
 
 // The stress prompt is plural: "emit 1 ... update" is not a stress request and falls through to the
-// cycle stream, which is how provider-usage-tooltip starts a long turn.
+// cycle stream, which is how the long-turn browser specs start a long turn.
 func TestMockStressPatternIsPluralOnly(t *testing.T) {
 	directives := ParseMockDirectives("emit 1 coalesced agent stream update for provider usage tooltip.")
 	if directives.StreamUpdates != 0 {

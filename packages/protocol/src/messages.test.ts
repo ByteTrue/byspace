@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   FileExplorerRequestSchema,
   BySpaceWorktreeArchiveRequestSchema,
-  parseServerInfoStatusPayload,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
   WorkspaceProjectDescriptorPayloadSchema,
@@ -169,93 +168,6 @@ describe("workspace descriptor message compatibility", () => {
   });
 });
 
-describe("provider usage list message contract", () => {
-  test("accepts the usage list request as a namespaced correlated RPC", () => {
-    const parsed = SessionInboundMessageSchema.parse({
-      type: "provider.usage.list.request",
-      requestId: "usage-1",
-    });
-
-    expect(parsed).toEqual({
-      type: "provider.usage.list.request",
-      requestId: "usage-1",
-    });
-  });
-
-  test("accepts new providers and new usage windows as normalized data", () => {
-    const parsed = SessionOutboundMessageSchema.parse({
-      type: "provider.usage.list.response",
-      payload: {
-        requestId: "usage-2",
-        fetchedAt: "2026-06-19T00:00:00.000Z",
-        providers: [
-          {
-            providerId: "glm",
-            displayName: "GLM coding plan",
-            status: "available",
-            planLabel: "GLM coding plan",
-            fetchedAt: "2026-06-19T00:00:00.000Z",
-            windows: [
-              {
-                id: "biweekly",
-                label: "Biweekly",
-                usedPct: 23,
-                remainingPct: 77,
-                resetsAt: "2026-07-03T00:00:00.000Z",
-                tone: "ok",
-              },
-            ],
-            balances: [
-              {
-                id: "credits",
-                label: "Credits",
-                remaining: 120,
-                unit: "credits",
-              },
-            ],
-            details: [{ id: "region", label: "Region", value: "US" }],
-            error: null,
-          },
-        ],
-      },
-    });
-
-    expect(parsed.type).toBe("provider.usage.list.response");
-    if (parsed.type !== "provider.usage.list.response") {
-      throw new Error("Expected provider.usage.list.response");
-    }
-    expect(parsed.payload.providers[0]?.providerId).toBe("glm");
-    expect(parsed.payload.providers[0]?.windows[0]?.label).toBe("Biweekly");
-  });
-
-  test("keeps protocol numbers strict after API boundary normalization", () => {
-    const parsed = SessionOutboundMessageSchema.safeParse({
-      type: "provider.usage.list.response",
-      payload: {
-        requestId: "usage-3",
-        fetchedAt: "2026-06-19T00:00:00.000Z",
-        providers: [
-          {
-            providerId: "claude",
-            displayName: "Claude",
-            status: "available",
-            planLabel: "Max 20x",
-            windows: [
-              {
-                id: "session",
-                label: "Session",
-                usedPct: "7",
-              },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(parsed.success).toBe(false);
-  });
-});
-
 describe("diagnostics message contract", () => {
   test("accepts the diagnostics request as a simple namespaced RPC", () => {
     const parsed = SessionInboundMessageSchema.parse({
@@ -315,53 +227,6 @@ describe("agent detach RPC", () => {
     expect(parsed.type).toBe("agent.detach.response");
   });
 
-  test("parses the agentDetach server feature gate", () => {
-    const parsed = parseServerInfoStatusPayload({
-      status: "server_info",
-      serverId: "srv-test",
-      features: {
-        agentDetach: true,
-      },
-    });
-
-    if (!parsed) {
-      throw new Error("Expected server info payload to parse");
-    }
-    expect(parsed.features?.agentDetach).toBe(true);
-  });
-
-  test("parses the workspace-targeted session import feature gate", () => {
-    const parsed = parseServerInfoStatusPayload({
-      status: "server_info",
-      serverId: "srv-test",
-      features: {
-        importSessionWorkspaceTarget: true,
-      },
-    });
-
-    if (!parsed) {
-      throw new Error("Expected server info payload to parse");
-    }
-    expect(parsed.features?.importSessionWorkspaceTarget).toBe(true);
-  });
-
-  test("parses the session import search feature gate", () => {
-    const parsed = parseServerInfoStatusPayload({
-      status: "server_info",
-      serverId: "srv-test",
-      features: {
-        importSessionSearch: true,
-      },
-    });
-
-    if (!parsed) {
-      throw new Error("Expected server info payload to parse");
-    }
-    expect(parsed.features?.importSessionSearch).toBe(true);
-  });
-});
-
-describe("agent setting action responses", () => {
   test("parses optional provider notices on mode and thinking responses", () => {
     const mode = SessionOutboundMessageSchema.parse({
       type: "set_agent_mode_response",

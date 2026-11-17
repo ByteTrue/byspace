@@ -240,11 +240,6 @@ export function WorkspaceLabelsSubmenu({
             {snapshot.error}
           </p>
         ) : null}
-        {host?.status === "unsupported" ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            {t("workspaceLabels.updateHostUse")}
-          </p>
-        ) : null}
       </kit.SubContent>
     </kit.Sub>
   );

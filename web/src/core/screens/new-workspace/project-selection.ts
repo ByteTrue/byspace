@@ -38,10 +38,8 @@ export interface ProjectSelectionContext {
 export function createProjectSelectionContextKey(input: {
   selectedServerId: string;
   routeProjectViewKey: string | null;
-  allowAllProjects: boolean;
 }): string {
-  const projectScope = input.allowAllProjects ? "all-projects" : "worktree-projects";
-  return `${input.selectedServerId}:${projectScope}:${input.routeProjectViewKey ?? ""}`;
+  return `${input.selectedServerId}:all-projects:${input.routeProjectViewKey ?? ""}`;
 }
 
 export function createManualProjectSelectionContextKey(input: {

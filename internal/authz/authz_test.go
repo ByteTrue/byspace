@@ -6,7 +6,7 @@ import "testing"
 // does rather than by where its name starts.
 func TestSemanticPermissions(t *testing.T) {
 	hubOnly := New([]string{"hub.execute"})
-	if !hubOnly.AllowsInbound("hub.execution.agent.create.request") {
+	if !hubOnly.AllowsInbound("fetch_agents_request") {
 		t.Fatal("hub.execute should allow hub operations")
 	}
 	if !hubOnly.AllowsInbound("get_providers_snapshot_request") {

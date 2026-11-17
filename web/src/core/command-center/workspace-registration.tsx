@@ -32,7 +32,6 @@ import { useToast } from "@/contexts/toast-context";
 import { type ShortcutOverrides } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { isHomeWorkspace } from "@/chief/home-workspace";
-import { useHostFeature } from "@/runtime/host-features";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-store-hooks";
 import {
@@ -196,7 +195,6 @@ export function useWorkspaceCommandCenterActions(): void {
   const currentBranch = fields?.currentBranch ?? null;
   const isPinned = fields?.pinnedAt != null;
   const isCompact = useIsCompactFormFactor();
-  const canPin = useHostFeature(serverId, "workspacePinning");
   const persistenceKey =
     serverId && fields
       ? buildWorkspaceTabPersistenceKey({ serverId, workspaceId: fields.id })
@@ -287,7 +285,6 @@ export function useWorkspaceCommandCenterActions(): void {
         capabilities: {
           canSplitPanes: supportsDesktopPaneSplits() && !isCompact,
           isGit,
-          canPin,
           canShowSetup,
         },
         activeTabKind,
@@ -309,7 +306,6 @@ export function useWorkspaceCommandCenterActions(): void {
     [
       activeTabIndex,
       activeTabKind,
-      canPin,
       canShowSetup,
       copyBranchName,
       copyPath,

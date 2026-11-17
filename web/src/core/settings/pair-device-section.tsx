@@ -50,9 +50,6 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
     runtimeSnapshot?.connectionStatus === "error";
   const { patchConfig } = useDaemonConfig(serverId);
   const [copied, setCopied] = useState(false);
-  const serverFeatures = client?.getLastServerInfoMessage()?.features;
-  const supportsPairingRpc = serverFeatures?.daemonStatusRpc === true;
-  const canConfigureRelay = supportsPairingRpc && serverFeatures?.relayConfig === true;
 
   const pairingQuery = useFetchQuery({
     queryKey: daemonPairingOfferQueryKey(serverId),
@@ -60,7 +57,7 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
       if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
       return client.getDaemonPairingOffer();
     },
-    enabled: supportsPairingRpc && Boolean(client && isConnected),
+    enabled: Boolean(client && isConnected),
     dataShape: "value",
     staleTimeMs: 5 * 60 * 1000,
     retry: 1,
@@ -68,9 +65,6 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
 
   const enableRelay = useMutation({
     mutationFn: async () => {
-      if (client?.getLastServerInfoMessage()?.features?.relayConfig !== true) {
-        throw new Error(t("pairing.device.updateRequired"));
-      }
       const config = await patchConfig({ relay: { enabled: true } });
       if (!config) throw new Error(t("workspace.terminal.hostDisconnected"));
       return pairingQuery.refetch();
@@ -112,11 +106,10 @@ export function PairDeviceSection({ serverId, onClose }: PairDeviceSectionProps)
   return (
     <div data-testid="pair-device-content">
       <PairDeviceBody
-        isPending={supportsPairingRpc && pairingQuery.isPending}
+        isPending={pairingQuery.isPending}
         isDisconnected={isDisconnected}
         error={pairingQuery.error}
         offer={pairingQuery.data}
-        canConfigureRelay={canConfigureRelay}
         enablePending={enableRelay.isPending}
         enableError={enableRelay.error}
         qrSvg={qrSvg}
@@ -136,7 +129,6 @@ interface PairDeviceBodyProps {
   isDisconnected: boolean;
   error: Error | null;
   offer: { relayEnabled: boolean; url: string } | undefined;
-  canConfigureRelay: boolean;
   enablePending: boolean;
   enableError: Error | null;
   qrSvg: string | null;
@@ -230,27 +222,19 @@ function RelayConsent(props: PairDeviceBodyProps) {
           <AlertDescription>{props.enableError.message}</AlertDescription>
         </Alert>
       ) : null}
-      {!props.canConfigureRelay ? (
-        <Alert>
-          <TriangleAlert />
-          <AlertDescription>{t("pairing.device.updateRequired")}</AlertDescription>
-        </Alert>
-      ) : null}
       <div className="flex flex-row gap-3">
         <Button variant="secondary" className="flex-1" onClick={props.onClose}>
           {t("pairing.device.notNow")}
         </Button>
-        {props.canConfigureRelay ? (
-          <Button
-            variant="default"
-            className="flex-1"
-            onClick={props.onEnableRelay}
-            disabled={props.enablePending}
-          >
-            {props.enablePending ? <Spinner data-icon="inline-start" /> : null}
-            {enableButtonLabel}
-          </Button>
-        ) : null}
+        <Button
+          variant="default"
+          className="flex-1"
+          onClick={props.onEnableRelay}
+          disabled={props.enablePending}
+        >
+          {props.enablePending ? <Spinner data-icon="inline-start" /> : null}
+          {enableButtonLabel}
+        </Button>
       </div>
       <div className="flex flex-row items-start gap-2 border-t pt-4">
         {/* mt-px: seats the glyph on the hint's first text line */}

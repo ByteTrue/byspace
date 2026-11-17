@@ -31,10 +31,6 @@ function statuses(
   return new Map(Object.entries(entries));
 }
 
-function multiplicity(entries: Record<string, boolean> = {}): ReadonlyMap<string, boolean> {
-  return new Map(Object.entries(entries));
-}
-
 describe("resolveNewWorkspaceInitialServerId", () => {
   it("prefers explicit route host context over online-host fallback", () => {
     expect(
@@ -44,7 +40,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: null,
         projects: [projectFor("online")],
         hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("offline");
   });
@@ -61,7 +56,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           remote: "online",
           pinned: "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         pinnedServerId: "pinned",
         localServerId: "local",
       }),
@@ -76,7 +70,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: projectFor("remote"),
         projects: [projectFor("remote"), projectFor("local")],
         hostConnectionStatusByServerId: statuses({ local: "online", remote: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
         localServerId: "local",
       }),
     ).toBe("local");
@@ -90,7 +83,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: projectFor("remote"),
         projects: [projectFor("remote"), projectFor("local")],
         hostConnectionStatusByServerId: statuses({ local: "offline", remote: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
         localServerId: "local",
       }),
     ).toBe("remote");
@@ -104,7 +96,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: projectFor("offline"),
         projects: [projectFor("offline")],
         hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("online");
 
@@ -115,7 +106,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: null,
         projects: [projectFor("online")],
         hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("online");
   });
@@ -128,7 +118,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
         lastActiveProject: projectFor("offline"),
         projects: [projectFor("offline")],
         hostConnectionStatusByServerId: statuses({ offline: "offline", other: "offline" }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("offline");
   });
@@ -144,7 +133,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           offline: "offline",
           connecting: "connecting",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("connecting");
   });
@@ -160,7 +148,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           "host-a": "online",
           "host-b": "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("host-b");
   });
@@ -177,7 +164,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           online: "online",
           "offline-b": "offline",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("online");
   });
@@ -194,7 +180,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           "online-a": "online",
           "online-b": "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("online-a");
   });
@@ -211,7 +196,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           "project-online-a": "online",
           "project-online-b": "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("project-online-a");
   });
@@ -227,7 +211,6 @@ describe("resolveNewWorkspaceInitialServerId", () => {
           offline: "offline",
           connected: "connecting",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
       }),
     ).toBe("connected");
   });
@@ -242,7 +225,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
         lastActiveProject: null,
         projects: [projectFor("host-a"), projectFor("host-b")],
         hostConnectionStatusByServerId: statuses({ "host-a": "online", "host-b": "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "host-a",
         nextServerId: "host-b",
       }),
@@ -260,7 +242,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
           "host-a": "online",
           "host-b": "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "host-a",
         nextServerId: "host-b",
       }),
@@ -275,7 +256,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
         lastActiveProject: null,
         projects: [projectFor("offline")],
         hostConnectionStatusByServerId: statuses({ offline: "offline", online: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "offline",
         nextServerId: "online",
       }),
@@ -293,7 +273,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
           offline: "offline",
           connecting: "connecting",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "offline",
         nextServerId: "connecting",
       }),
@@ -311,7 +290,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
           empty: "connecting",
           "with-project": "connecting",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "empty",
         nextServerId: "with-project",
       }),
@@ -328,7 +306,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
         lastActiveProject: projectFor("remote"),
         projects: [projectFor("remote"), projectFor("pinned")],
         hostConnectionStatusByServerId: statuses({ remote: "online", pinned: "online" }),
-        workspaceMultiplicityByServerId: multiplicity(),
         pinnedServerId: "pinned",
         currentServerId: "remote",
         nextServerId: "pinned",
@@ -350,7 +327,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
           pinned: "offline",
           remote: "online",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         pinnedServerId: "pinned",
         localServerId: "local",
         currentServerId: "remote",
@@ -370,7 +346,6 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
           "online-empty": "online",
           "offline-project": "offline",
         }),
-        workspaceMultiplicityByServerId: multiplicity(),
         currentServerId: "online-empty",
         nextServerId: "offline-project",
       }),

@@ -93,15 +93,6 @@ export interface AgentSelectOption {
   metadata?: AgentMetadata;
 }
 
-export function normalizeAgentModelDefinition(model: AgentModelDefinition): AgentModelDefinition {
-  const defaultThinkingOptionId =
-    model.defaultThinkingOptionId ?? model.thinkingOptions?.find((option) => option.isDefault)?.id;
-  if (!defaultThinkingOptionId || defaultThinkingOptionId === model.defaultThinkingOptionId) {
-    return model;
-  }
-  return { ...model, defaultThinkingOptionId };
-}
-
 export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
@@ -340,15 +331,6 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
-export interface PluginTimelineItem {
-  type: "plugin";
-  id: string;
-  pluginId: string;
-  kind: string;
-  version: number;
-  data: JsonValue;
-}
-
 export interface AgentTaskItem {
   text: string;
   completed: boolean;
@@ -379,8 +361,7 @@ export type AgentTimelineItem =
       message: string;
     }
   | CustomMessageTimelineItem
-  | CompactionTimelineItem
-  | PluginTimelineItem;
+  | CompactionTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

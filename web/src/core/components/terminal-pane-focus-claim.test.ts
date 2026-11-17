@@ -34,8 +34,6 @@ describe("terminal pane focus claim", () => {
         size,
         previousSentSize: null,
         shouldClaim: true,
-        forceClaim: false,
-        supportsTerminalSizeOwnership: true,
         hasClaimedSize: false,
         readiness: { ...readiness, isPaneFocused: false },
       }),
@@ -43,8 +41,6 @@ describe("terminal pane focus claim", () => {
         size,
         previousSentSize: null,
         shouldClaim: true,
-        forceClaim: false,
-        supportsTerminalSizeOwnership: true,
         hasClaimedSize: false,
         readiness: { ...readiness, isPaneFocused: true },
       }),
@@ -62,8 +58,6 @@ describe("terminal pane focus claim", () => {
       size,
       previousSentSize: size,
       shouldClaim: false,
-      forceClaim: false,
-      supportsTerminalSizeOwnership: true,
       hasClaimedSize: true,
       readiness,
     });
@@ -71,8 +65,6 @@ describe("terminal pane focus claim", () => {
       size,
       previousSentSize: size,
       shouldClaim: true,
-      forceClaim: false,
-      supportsTerminalSizeOwnership: true,
       hasClaimedSize: true,
       readiness,
     });
@@ -94,8 +86,6 @@ describe("terminal pane focus claim", () => {
       size: { rows: 20, cols: 100 },
       previousSentSize: { rows: 40, cols: 100 },
       shouldClaim: false,
-      forceClaim: false,
-      supportsTerminalSizeOwnership: true,
       hasClaimedSize: blurred.claimedKey === key,
       readiness: {
         isWorkspaceFocused: true,
@@ -138,8 +128,6 @@ describe("terminal pane focus claim", () => {
       size: { rows: 20, cols: 100 },
       previousSentSize: null,
       shouldClaim: false,
-      forceClaim: false,
-      supportsTerminalSizeOwnership: true,
       hasClaimedSize: blurred.claimedKey === key,
       readiness: {
         isWorkspaceFocused: true,
@@ -153,27 +141,6 @@ describe("terminal pane focus claim", () => {
 
     expect(blurred).toEqual(EMPTY_FOCUS_CLAIM_STATE);
     expect(passiveResize).toEqual({ shouldSend: false, intent: "update" });
-  });
-
-  it("keeps passive refits local against legacy daemons", () => {
-    expect(
-      resolveTerminalResizeClaim({
-        size: { rows: 20, cols: 100 },
-        previousSentSize: { rows: 40, cols: 100 },
-        shouldClaim: false,
-        forceClaim: false,
-        supportsTerminalSizeOwnership: false,
-        hasClaimedSize: true,
-        readiness: {
-          isWorkspaceFocused: true,
-          isPaneFocused: true,
-          isAppActivelyVisible: true,
-          isClientReady: true,
-          isConnected: true,
-          isRendererReady: true,
-        },
-      }),
-    ).toEqual({ shouldSend: false, intent: "update" });
   });
 
   it("waits for both the client and renderer before requesting a claim", () => {

@@ -37,8 +37,9 @@ describe("getWorkspaceNamingAttachments", () => {
       text: "Long prior conversation",
     } satisfies AgentAttachment;
     const prContext = {
-      type: "github_pr",
-      mimeType: "application/github-pr",
+      type: "forge_change_request",
+      mimeType: "application/byspace-forge-change-request",
+      forge: "github",
       number: 1788,
       title: "Fork assistant turns into new drafts",
       url: "https://github.com/bytetrue/byspace/pull/1788",

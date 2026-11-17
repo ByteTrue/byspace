@@ -244,9 +244,9 @@ New session RPCs use dotted names with `.request` and `.response` suffixes, such
 - `agent_deleted`, `agent_archived`, `agent_status`, `agent_list`
 - `checkout_status_update`, `checkout_diff_update`, and the full `checkout_*` request/response set for git operations
 
-Agent snapshots optionally carry the daemon-owned active turn identity, and turn lifecycle stream events
-optionally carry the same `turnId`. New clients use these fields when present and normalize an old daemon's
-status once at the directory boundary rather than maintaining a second activity model.
+Agent snapshots carry the daemon-owned active turn identity, and turn lifecycle
+stream events carry the same `turnId`. The client normalizes status once at the
+directory boundary rather than maintaining a second activity model.
 
 - Terminal subscribe/input/capture commands
 - Request/response pairs for fetch, list, create, etc., correlated by `requestId`; failures use `rpc_error`

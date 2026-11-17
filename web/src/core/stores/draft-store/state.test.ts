@@ -141,7 +141,7 @@ describe("draft-store normalization", () => {
 
   it("preserves New Workspace picker ownership when hydrating a draft", () => {
     const pickerAttachment = {
-      kind: "github_pr" as const,
+      kind: "forge_change_request" as const,
       owner: "new-workspace-picker" as const,
       item: {
         kind: "change_request" as const,

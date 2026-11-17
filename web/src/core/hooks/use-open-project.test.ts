@@ -75,7 +75,6 @@ describe("openProjectDirectly", () => {
       serverId: SERVER_ID,
       projectPath: PROJECT_PATH,
       isConnected: true,
-      canAddProject: true,
       client: {
         addProject: async () => ({
           requestId: "request-1",
@@ -105,33 +104,6 @@ describe("openProjectDirectly", () => {
     expect(session.hydrated).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
   });
 
-  it("fails before sending when the host does not support adding projects without workspaces", async () => {
-    const session = createFakeSession();
-    const result = await openProjectDirectly({
-      serverId: SERVER_ID,
-      projectPath: PROJECT_PATH,
-      isConnected: true,
-      canAddProject: false,
-      client: {
-        addProject: async () => ({
-          requestId: "request-unsupported",
-          error: null,
-          project: buildProjectPayload(),
-        }),
-      },
-      upsertProject: session.upsertProject,
-      setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      errorCode: null,
-      error: "Update the host to add projects without creating a workspace.",
-    });
-    expect(session.projects).toEqual([]);
-    expect(session.hydrated).toEqual([]);
-  });
-
   it("does not add a project when addProject fails", async () => {
     const session = createFakeSession();
 
@@ -139,7 +111,6 @@ describe("openProjectDirectly", () => {
       serverId: SERVER_ID,
       projectPath: PROJECT_PATH,
       isConnected: true,
-      canAddProject: true,
       client: {
         addProject: async () => ({
           requestId: "request-2",

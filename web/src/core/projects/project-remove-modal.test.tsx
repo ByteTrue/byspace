@@ -79,11 +79,8 @@ vi.mock("@/contexts/toast-context", () => ({
 }));
 
 const mockRemoveProjectFromHosts = vi.fn();
-const mockGetCurrentProjectRemoveReadinessForTargets = vi.fn();
 
 vi.mock("@/projects/project-remove", () => ({
-  getCurrentProjectRemoveReadinessForTargets: (targets: unknown) =>
-    mockGetCurrentProjectRemoveReadinessForTargets(targets),
   removeProjectFromHosts: (input: unknown) => mockRemoveProjectFromHosts(input),
 }));
 
@@ -113,7 +110,6 @@ describe("ProjectRemoveModal", () => {
     mockToast.error.mockReset();
     mockToast.success.mockReset();
     mockRemoveProjectFromHosts.mockReset();
-    mockGetCurrentProjectRemoveReadinessForTargets.mockReset();
   });
 
   afterEach(() => {
@@ -126,10 +122,6 @@ describe("ProjectRemoveModal", () => {
   });
 
   it("renders buttons for each host and removes single host target on click", async () => {
-    mockGetCurrentProjectRemoveReadinessForTargets.mockReturnValue({
-      kind: "ready",
-      targets: [{ serverId: "host-1", projectId: "prj-1" }],
-    });
     mockRemoveProjectFromHosts.mockResolvedValue({
       kind: "removed",
       serverIds: ["host-1"],
@@ -161,21 +153,13 @@ describe("ProjectRemoveModal", () => {
       host1Btn.click();
     });
 
-    expect(mockGetCurrentProjectRemoveReadinessForTargets).toHaveBeenCalledWith([
-      { serverId: "host-1", projectId: "prj-1" },
-    ]);
-    expect(mockRemoveProjectFromHosts).toHaveBeenCalled();
+    expect(mockRemoveProjectFromHosts).toHaveBeenCalledWith(
+      expect.objectContaining({ targets: [{ serverId: "host-1", projectId: "prj-1" }] }),
+    );
     expect(onClose).toHaveBeenCalled();
   });
 
   it("removes all hosts when clicking all hosts button", async () => {
-    mockGetCurrentProjectRemoveReadinessForTargets.mockReturnValue({
-      kind: "ready",
-      targets: [
-        { serverId: "host-1", projectId: "prj-1" },
-        { serverId: "host-2", projectId: "prj-2" },
-      ],
-    });
     mockRemoveProjectFromHosts.mockResolvedValue({
       kind: "removed",
       serverIds: ["host-1", "host-2"],
@@ -207,11 +191,14 @@ describe("ProjectRemoveModal", () => {
       allBtn.click();
     });
 
-    expect(mockGetCurrentProjectRemoveReadinessForTargets).toHaveBeenCalledWith([
-      { serverId: "host-1", projectId: "prj-1" },
-      { serverId: "host-2", projectId: "prj-2" },
-    ]);
-    expect(mockRemoveProjectFromHosts).toHaveBeenCalled();
+    expect(mockRemoveProjectFromHosts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targets: [
+          { serverId: "host-1", projectId: "prj-1" },
+          { serverId: "host-2", projectId: "prj-2" },
+        ],
+      }),
+    );
     expect(onClose).toHaveBeenCalled();
   });
 });

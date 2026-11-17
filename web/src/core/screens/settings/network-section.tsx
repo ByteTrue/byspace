@@ -10,7 +10,6 @@ import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
-import { useSessionStore } from "@/stores/session-store";
 import type { MutableDaemonConfigPatch } from "@bytetrue/protocol/messages";
 import {
   useHostRuntimeClient,
@@ -33,18 +32,12 @@ const ThemedEye = withTheme(Eye);
 const ThemedEyeOff = withTheme(EyeOff);
 
 /**
- * Daemon network settings: access password and LAN exposure. Backed by the
- * daemonNetworkConfig feature gate; the server enforces the password-before-LAN
- * invariant, applies both changes on restart.
+ * Daemon network settings: access password and LAN exposure. The server enforces the
+ * password-before-LAN invariant and applies both changes on restart.
  */
 export function NetworkSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  // COMPAT(daemonNetworkConfig): old daemons silently drop the network/auth
-  // patches, so the section must hide instead of letting a save appear to work.
-  const supportsNetworkSettings = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.daemonNetworkConfig === true,
-  );
   const { config, patchConfig } = useDaemonConfig(serverId);
   const daemonClient = useHostRuntimeClient(serverId);
   const hosts = useHosts();
@@ -153,11 +146,6 @@ export function NetworkSection({ serverId }: { serverId: string }) {
     lanHint = t("settings.host.daemon.network.allowLan.hint", { port: tcpPort });
   } else {
     lanHint = t("settings.host.daemon.network.allowLan.noPassword");
-  }
-
-  if (!supportsNetworkSettings) {
-    // Old daemon: patches would be dropped silently. Hide the section.
-    return null;
   }
 
   if (!isConnected) {

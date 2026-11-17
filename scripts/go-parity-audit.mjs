@@ -22,32 +22,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GO_SERVER_DIR = path.join(ROOT, "internal/server");
 const GO_PI_DIR = path.join(ROOT, "internal/agent/pi");
 
-/** 明确不打算实现的入站消息（语音/口述）。新增排除项必须在这里写明理由。 */
+/** 明确不打算实现的入站消息。新增排除项必须在这里写明理由。 */
 const INTENTIONALLY_UNSUPPORTED = new Map([
-  // hub 与 plugin 是被决策移除的子系统（issue 025，446bc38a3d / a5c6bb6588），不是待办。
-  // 它们的字段永远不会被解析，所以放进这里并写明出处，而不是留在基线里假装是「还没做」。
-  ["hub.execution.agent.create.request", "hub was removed by decision (issue 025, 446bc38a3d)"],
-  ["hub.execution.agent.validate.request", "hub was removed by decision (issue 025)"],
+  // hub 远程托管是被决策移除的子系统（issue 025，446bc38a3d），只保留 management 连接 stub。
   ["hub.management.daemon.connect.request", "hub was removed by decision (issue 025)"],
-  ["plugin.rpc.invoke.request", "plugin runtime was removed by decision (issue 025, a5c6bb6588)"],
-  [
-    "audio_played",
-    "voice was removed by decision (issue 025, 8d96875115); the message is logged and nothing is recorded",
-  ],
-  [
-    "voice_audio_chunk",
-    "voice mode is disabled; daemon replies set_voice_mode with accepted:false",
-  ],
-  ["dictation_stream_start", "dictation is a native-client feature; web build has no dictation UI"],
-  ["dictation_stream_chunk", "dictation is a native-client feature; web build has no dictation UI"],
-  [
-    "dictation_stream_finish",
-    "dictation is a native-client feature; web build has no dictation UI",
-  ],
-  [
-    "dictation_stream_cancel",
-    "dictation is a native-client feature; web build has no dictation UI",
-  ],
   ["recording_state", "held by the client-side recorder only; daemon has no recorder state"],
   [
     "client_heartbeat",

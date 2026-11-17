@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildGitHubAttachmentFromSearchItem,
-  buildLegacyGitHubAttachmentFromSearchItem,
-} from "./review-attachments";
+import { buildForgeAttachmentFromSearchItem } from "./review-attachments";
 
-describe("buildGitHubAttachmentFromSearchItem", () => {
+describe("buildForgeAttachmentFromSearchItem", () => {
   it("builds a forge change request attachment for pull requests", () => {
-    const attachment = buildGitHubAttachmentFromSearchItem({
+    const attachment = buildForgeAttachmentFromSearchItem({
       kind: "change_request",
       number: 123,
       title: "Fix race in worktree setup",
@@ -33,7 +30,7 @@ describe("buildGitHubAttachmentFromSearchItem", () => {
   });
 
   it("builds a forge issue attachment for issues", () => {
-    const attachment = buildGitHubAttachmentFromSearchItem({
+    const attachment = buildForgeAttachmentFromSearchItem({
       kind: "issue",
       number: 55,
       title: "Improve startup error details",
@@ -55,33 +52,6 @@ describe("buildGitHubAttachmentFromSearchItem", () => {
   });
 
   it("returns null when no item is selected", () => {
-    expect(buildGitHubAttachmentFromSearchItem(null)).toBeNull();
-  });
-});
-
-describe("buildLegacyGitHubAttachmentFromSearchItem", () => {
-  it("builds a legacy GitHub PR attachment for old daemons", () => {
-    const attachment = buildLegacyGitHubAttachmentFromSearchItem({
-      kind: "change_request",
-      number: 123,
-      title: "Fix race in worktree setup",
-      url: "https://github.com/bytetrue/byspace/pull/123",
-      state: "OPEN",
-      body: "PR body",
-      labels: ["bug"],
-      baseRefName: "main",
-      headRefName: "fix/worktree-race",
-    });
-
-    expect(attachment).toEqual({
-      type: "github_pr",
-      mimeType: "application/github-pr",
-      number: 123,
-      title: "Fix race in worktree setup",
-      url: "https://github.com/bytetrue/byspace/pull/123",
-      body: "PR body",
-      baseRefName: "main",
-      headRefName: "fix/worktree-race",
-    });
+    expect(buildForgeAttachmentFromSearchItem(null)).toBeNull();
   });
 });

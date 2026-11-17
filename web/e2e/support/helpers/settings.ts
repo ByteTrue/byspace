@@ -27,7 +27,7 @@ const SECTION_LABELS = {
 
 export type SettingsSection = keyof typeof SECTION_LABELS;
 
-type HostSection = "projects" | "connections" | "agents" | "usage" | "host";
+type HostSection = "projects" | "connections" | "agents" | "host";
 
 export async function openSettingsSection(page: Page, section: SettingsSection): Promise<void> {
   const sidebar = page.getByTestId("settings-sidebar");
@@ -377,7 +377,7 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
   await expect(sidebar.getByTestId("settings-host-section-agents")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-providers")).toHaveCount(0);
   await expect(sidebar.getByTestId("settings-host-section-terminals")).toHaveCount(0);
-  await expect(sidebar.getByTestId("settings-host-section-usage")).toBeVisible();
+  await expect(sidebar.getByTestId("settings-host-section-usage")).toHaveCount(0);
   await expect(sidebar.getByTestId("settings-host-section-host")).toBeVisible();
 
   // The old per-host entry rows are replaced by the host picker.

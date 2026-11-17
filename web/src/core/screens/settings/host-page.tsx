@@ -1,4 +1,4 @@
-// Port of archive/expo-app:packages/app/src/screens/settings/host-page.tsx: a host's Host, Connections, Agents and Usage pages; DOM view.
+// Port of archive/expo-app:packages/app/src/screens/settings/host-page.tsx: a host's Host, Connections and Agents pages; DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/host-page.py; edit it directly.
 import {
   ArrowDown,
@@ -64,8 +64,6 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { ProvidersSection, AddProviderSection } from "@/screens/settings/providers-section";
-import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
 import { formatTimeAgo } from "@/utils/time";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -360,24 +358,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
   );
 }
 
-export function HostUsagePage({ serverId }: { serverId: string }) {
-  const host = useHostProfile(serverId);
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(serverId);
-  const handleRefresh = useCallback(() => {
-    void refreshProviderUsage();
-  }, [refreshProviderUsage]);
-
-  if (!host) {
-    return <HostNotFound />;
-  }
-
-  return (
-    <div className="flex flex-col">
-      <ProviderUsageSettingsSection view={providerUsageView} onRefresh={handleRefresh} />
-    </div>
-  );
-}
-
 export function HostSettingsPage({
   serverId,
   onHostRemoved,
@@ -485,20 +465,16 @@ function DevicesSection({ serverId }: { serverId: string }) {
   const client = useHostRuntimeClient(serverId);
   const hosts = useHosts();
   const [members, setMembers] = useState<HostSyncRecord[]>([]);
-  const [supported, setSupported] = useState(true);
 
   const refresh = useCallback(() => {
-    if (!client || client.getLastServerInfoMessage()?.features?.hostSync !== true) {
-      setSupported(false);
-      return;
-    }
+    if (!client) return;
     void client
       .exchangeHostSync({})
       .then((result) => {
         setMembers((result.records ?? []).filter((record) => record.kind === "member"));
         return undefined;
       })
-      .catch(() => setSupported(false));
+      .catch(() => undefined);
   }, [client]);
 
   useEffect(() => {
@@ -531,16 +507,6 @@ function DevicesSection({ serverId }: { serverId: string }) {
     },
     [client, hosts, refresh],
   );
-
-  if (!supported) {
-    return (
-      <SettingsSection title="Devices">
-        <span className="block px-4 py-2 text-sm text-muted-foreground">
-          Update this host to sync devices across your machines.
-        </span>
-      </SettingsSection>
-    );
-  }
 
   const joinable = hosts.filter(
     (host) => host.serverId !== serverId && !memberIds.has(host.serverId) && hostPublicKey(host),
@@ -911,13 +877,6 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
   const daemonVersion = useSessionStore(
     (state) => state.sessions[host.serverId]?.serverInfo?.version ?? null,
   );
-  const supportsSelfUpdate = useSessionStore(
-    (state) => state.sessions[host.serverId]?.serverInfo?.features?.daemonSelfUpdate === true,
-  );
-  const desktopManaged = useSessionStore(
-    (state) => state.sessions[host.serverId]?.serverInfo?.desktopManaged === true,
-  );
-
   const appVersion = resolveAppVersion();
   const hasVersionMismatch = isVersionMismatch(appVersion, daemonVersion);
 
@@ -1099,7 +1058,7 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
     [theme.iconSize.sm, theme.colors.foreground],
   );
 
-  const shouldShowUpdate = hasVersionMismatch && (supportsSelfUpdate || desktopManaged);
+  const shouldShowUpdate = hasVersionMismatch;
   if (!shouldShowUpdate) {
     return null;
   }
@@ -1112,18 +1071,14 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
       <Item variant="outline">
         <ItemContent>
           <ItemTitle>{t("settings.host.daemon.update.title")}</ItemTitle>
-          <ItemDescription>
-            {desktopManaged
-              ? t("settings.host.daemon.update.desktopManagedHint")
-              : t("settings.host.daemon.update.hint")}
-          </ItemDescription>
+          <ItemDescription>{t("settings.host.daemon.update.hint")}</ItemDescription>
         </ItemContent>
         <Button
           variant="outline"
           size="sm"
           onClick={handleUpdate}
           data-testid="host-page-update-button"
-          disabled={desktopManaged || isUpdating || !daemonClient || !isConnected}
+          disabled={isUpdating || !daemonClient || !isConnected}
         >
           {updateIcon}
           {buttonLabel}

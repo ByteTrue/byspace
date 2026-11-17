@@ -182,9 +182,7 @@ const WorkspaceDraftTabSetupStorageSchema = z.strictObject({
   modeId: z.string().nullable(),
   model: z.string().nullable(),
   thinkingOptionId: z.string().nullable(),
-  // COMPAT(draftTabRole): added in v0.20.1. Absent in trees persisted by earlier
-  // versions, and the whole setup object is validated strictly, so this must stay
-  // optional or those trees fail to load.
+  // Optional: fork and slash-command drafts seed from a view that carries no role.
   role: z.string().nullable().optional(),
   featureValues: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
 });
@@ -216,10 +214,6 @@ const WorkspaceTabTargetStorageSchema = z.discriminatedUnion("kind", [
     kind: z.literal("working_diff"),
     focusPath: z.string().optional(),
     focusRequestId: z.number().optional(),
-    // COMPAT(workingDiffTarget): accepted from pre-canonical tab ids; normalization removes them.
-    mode: z.enum(["uncommitted", "base"]).optional(),
-    baseRef: z.string().nullable().optional(),
-    ignoreWhitespace: z.boolean().optional(),
   }),
   z.strictObject({ kind: z.literal("setup"), workspaceId: z.string() }),
   z.strictObject({ kind: z.literal("commit_diff"), sha: z.string() }),
@@ -277,205 +271,11 @@ const WorkspaceLayoutPersistedStateSchema = z.strictObject({
   layoutByWorkspace: z.record(z.string(), WorkspaceLayoutStorageSchema),
   splitSizesByWorkspace: z.record(z.string(), z.record(z.string(), z.array(z.number()))).optional(),
   explorerSidebarWidthByWorkspace: z.record(z.string(), z.number()).optional(),
-  // COMPAT(explorerSidebarWidth): added in v0.6, remove after 2027-08-25.
-  explorerSidebarRatioByWorkspace: z.record(z.string(), z.number()).optional(),
-  // COMPAT(explorerSidebarNaming): accepted from builds that called this dock the Side panel.
-  sidePanelRatioByWorkspace: z.record(z.string(), z.number()).optional(),
-  // The persisted keys keep their pre-rename spelling: the schema is strict, so a
-  // rename here would fail every existing blob and wipe the layout it describes.
-  explorerPaneIdByWorkspace: z.record(z.string(), z.string().nullable()).optional(),
   explorerSidebarPaneIdByWorkspace: z.record(z.string(), z.string().nullable()).optional(),
   sidePaneIdByWorkspace: z.record(z.string(), z.string().nullable()).optional(),
-  // COMPAT(pullRequestAutoAdd): PR detection stopped opening a tab in v0.5; accepted
-  // and ignored so upgrading does not discard the layout. Remove after 2027-08-20.
-  acknowledgedPullRequestByWorkspace: z.record(z.string(), z.string()).optional(),
 });
 
-const LEGACY_EXPLORER_SIDEBAR_REFERENCE_WIDTH = 1440;
-const WORKSPACE_LAYOUT_PERSIST_VERSION = 2;
-
-function convertLegacyExplorerSidebarRatios(
-  ratiosByWorkspace: Record<string, number>,
-): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(ratiosByWorkspace).map(([workspaceKey, ratio]) => [
-      workspaceKey,
-      ratio * LEGACY_EXPLORER_SIDEBAR_REFERENCE_WIDTH,
-    ]),
-  );
-}
-
-function replacePaneInNode(node: SplitNode, paneId: string, replacement: SplitPane): SplitNode {
-  if (node.kind === "pane") {
-    return node.pane.id === paneId ? { kind: "pane", pane: replacement } : node;
-  }
-  return {
-    kind: "group",
-    group: {
-      ...node.group,
-      children: node.group.children.map((child) => replacePaneInNode(child, paneId, replacement)),
-    },
-  };
-}
-
-function visiblePane<TPane extends SplitPane>(pane: TPane): Omit<TPane, "hidden"> {
-  const { hidden: _hidden, ...visible } = pane;
-  return visible;
-}
-
-function createExplorerSidebarNode(): SplitNode {
-  const layout = createWorkspaceLayoutWithExplorerSidebar();
-  const pane = findPaneById(layout.root, EXPLORER_SIDEBAR_PANE_ID);
-  if (!pane) {
-    throw new Error("Default Explorer pane is missing");
-  }
-  return { kind: "pane", pane };
-}
-
-function preserveVersionOneSideTabs(input: {
-  layout: WorkspaceLayout;
-  legacyExplorerPane: SplitPane;
-  rememberedSidePane: SplitPane | null;
-  tabs: WorkspaceTab[];
-  ids: WorkspaceLayoutIdSource;
-}): { root: SplitNode; sidePaneId: string | null } {
-  const rootWithoutExplorer = removePaneFromTree(input.layout.root, input.legacyExplorerPane.id);
-  if (input.tabs.length === 0) {
-    return {
-      root: findPaneById(rootWithoutExplorer, input.legacyExplorerPane.id)
-        ? createDefaultLayout().root
-        : rootWithoutExplorer,
-      sidePaneId: input.rememberedSidePane?.id ?? null,
-    };
-  }
-
-  if (input.rememberedSidePane) {
-    const rememberedTabs = collectAllTabs(input.layout.root).filter((tab) =>
-      input.rememberedSidePane?.tabIds.includes(tab.tabId),
-    );
-    const nextSidePane = visiblePane({
-      ...input.rememberedSidePane,
-      tabIds: [...input.rememberedSidePane.tabIds, ...input.tabs.map((tab) => tab.tabId)],
-      tabs: [...rememberedTabs, ...input.tabs],
-      focusedTabId: input.rememberedSidePane.focusedTabId ?? input.tabs[0]?.tabId ?? null,
-    });
-    return {
-      root: replacePaneInNode(rootWithoutExplorer, input.rememberedSidePane.id, nextSidePane),
-      sidePaneId: input.rememberedSidePane.id,
-    };
-  }
-
-  const sidePaneId = input.ids.createNodeId("pane");
-  const sidePane = visiblePane({
-    ...input.legacyExplorerPane,
-    id: sidePaneId,
-    tabIds: input.tabs.map((tab) => tab.tabId),
-    tabs: input.tabs,
-    focusedTabId:
-      input.tabs.find((tab) => tab.tabId === input.legacyExplorerPane.focusedTabId)?.tabId ??
-      input.tabs[0]?.tabId ??
-      null,
-  });
-  return {
-    root: replacePaneInNode(input.layout.root, input.legacyExplorerPane.id, sidePane),
-    sidePaneId,
-  };
-}
-
-function migrateVersionOneWorkspaceLayout(input: {
-  layout: WorkspaceLayout;
-  legacyExplorerPaneId: string | null | undefined;
-  rememberedSidePaneId: string | null | undefined;
-  ids: WorkspaceLayoutIdSource;
-}): { layout: WorkspaceLayout; explorerPaneId: string; sidePaneId: string | null } {
-  const strippedLayout = stripEphemeralTabsFromLayout(input.layout);
-  const legacyExplorerPaneId = resolveExplorerSidebarPaneId(
-    strippedLayout,
-    input.legacyExplorerPaneId,
-  );
-  const legacyExplorerPane = findPaneById(strippedLayout.root, legacyExplorerPaneId);
-  if (!legacyExplorerPane) {
-    const ensured = ensurePersistedExplorerSidebarPane({
-      layout: strippedLayout,
-      registeredPaneId: null,
-      ids: input.ids,
-    });
-    return {
-      layout: ensured?.layout ?? strippedLayout,
-      explorerPaneId: ensured?.paneId ?? EXPLORER_SIDEBAR_PANE_ID,
-      sidePaneId: input.rememberedSidePaneId ?? null,
-    };
-  }
-
-  const preservedTabs = collectAllTabs(strippedLayout.root).filter(
-    (tab) =>
-      legacyExplorerPane.tabIds.includes(tab.tabId) &&
-      tab.target.kind !== "files" &&
-      tab.target.kind !== "changes_tree",
-  );
-  const preservedSide = preserveVersionOneSideTabs({
-    layout: strippedLayout,
-    legacyExplorerPane,
-    rememberedSidePane: findPaneById(strippedLayout.root, input.rememberedSidePaneId ?? null),
-    tabs: preservedTabs,
-    ids: input.ids,
-  });
-  const explorerNode = createExplorerSidebarNode();
-  const focusedPaneId =
-    strippedLayout.focusedPaneId === legacyExplorerPane.id
-      ? (preservedSide.sidePaneId ?? collectAllPanes(preservedSide.root)[0]?.id ?? DEFAULT_PANE_ID)
-      : strippedLayout.focusedPaneId;
-  return {
-    layout: normalizeLayout({
-      root: {
-        kind: "group",
-        group: {
-          id: input.ids.createNodeId("group"),
-          direction: "horizontal",
-          children: [preservedSide.root, explorerNode],
-          sizes: [0.78, 0.22],
-        },
-      },
-      focusedPaneId,
-      parentTabIdByTabId: strippedLayout.parentTabIdByTabId,
-    }),
-    explorerPaneId: EXPLORER_SIDEBAR_PANE_ID,
-    sidePaneId: preservedSide.sidePaneId,
-  };
-}
-
-function migrateWorkspaceLayoutPersistedState(
-  persistedState: unknown,
-  version: number,
-  ids: WorkspaceLayoutIdSource,
-): z.infer<typeof WorkspaceLayoutPersistedStateSchema> {
-  const result = WorkspaceLayoutPersistedStateSchema.safeParse(persistedState);
-  if (!result.success || version >= WORKSPACE_LAYOUT_PERSIST_VERSION) {
-    return result.success ? result.data : { layoutByWorkspace: {} };
-  }
-
-  const layoutByWorkspace: Record<string, WorkspaceLayout> = {};
-  const explorerPaneIdByWorkspace: Record<string, string | null> = {};
-  const sidePaneIdByWorkspace = { ...result.data.sidePaneIdByWorkspace };
-  for (const [workspaceKey, layout] of Object.entries(result.data.layoutByWorkspace)) {
-    const migrated = migrateVersionOneWorkspaceLayout({
-      layout,
-      legacyExplorerPaneId: result.data.explorerPaneIdByWorkspace?.[workspaceKey],
-      rememberedSidePaneId: result.data.sidePaneIdByWorkspace?.[workspaceKey],
-      ids,
-    });
-    layoutByWorkspace[workspaceKey] = migrated.layout;
-    explorerPaneIdByWorkspace[workspaceKey] = migrated.explorerPaneId;
-    sidePaneIdByWorkspace[workspaceKey] = migrated.sidePaneId;
-  }
-
-  return {
-    ...result.data,
-    layoutByWorkspace,
-    explorerPaneIdByWorkspace,
-    sidePaneIdByWorkspace,
-  };
-}
+const WORKSPACE_LAYOUT_PERSIST_VERSION = 3;
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -1811,8 +1611,6 @@ export function createWorkspaceLayoutStore(
           localStorageAsync,
           WorkspaceLayoutPersistedStateSchema,
         ),
-        migrate: (persistedState, version) =>
-          migrateWorkspaceLayoutPersistedState(persistedState, version, ids),
         partialize: (state) => {
           const layoutByWorkspace: Record<string, WorkspaceLayout> = {};
           for (const key in state.layoutByWorkspace) {
@@ -1826,7 +1624,7 @@ export function createWorkspaceLayoutStore(
             layoutByWorkspace,
             splitSizesByWorkspace: state.splitSizesByWorkspace,
             explorerSidebarWidthByWorkspace: state.explorerSidebarWidthByWorkspace,
-            explorerPaneIdByWorkspace: state.explorerSidebarPaneIdByWorkspace,
+            explorerSidebarPaneIdByWorkspace: state.explorerSidebarPaneIdByWorkspace,
             sidePaneIdByWorkspace: state.sidePaneIdByWorkspace,
           };
         },
@@ -1836,10 +1634,8 @@ export function createWorkspaceLayoutStore(
             return currentState;
           }
           const layoutByWorkspace: Record<string, WorkspaceLayout> = {};
-          const explorerSidebarPaneIdByWorkspace: Record<string, string | null> = {
-            ...(result.data.explorerSidebarPaneIdByWorkspace ??
-              result.data.explorerPaneIdByWorkspace),
-          };
+          const explorerSidebarPaneIdByWorkspace: Record<string, string | null> =
+            result.data.explorerSidebarPaneIdByWorkspace ?? {};
           for (const [workspaceKey, persistedLayout] of Object.entries(
             result.data.layoutByWorkspace,
           )) {
@@ -1863,13 +1659,7 @@ export function createWorkspaceLayoutStore(
             ...currentState,
             layoutByWorkspace,
             splitSizesByWorkspace: result.data.splitSizesByWorkspace ?? {},
-            explorerSidebarWidthByWorkspace:
-              result.data.explorerSidebarWidthByWorkspace ??
-              convertLegacyExplorerSidebarRatios(
-                result.data.explorerSidebarRatioByWorkspace ??
-                  result.data.sidePanelRatioByWorkspace ??
-                  {},
-              ),
+            explorerSidebarWidthByWorkspace: result.data.explorerSidebarWidthByWorkspace ?? {},
             explorerSidebarPaneIdByWorkspace,
             sidePaneIdByWorkspace: result.data.sidePaneIdByWorkspace ?? {},
           };

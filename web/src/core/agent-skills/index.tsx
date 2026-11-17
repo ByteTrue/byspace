@@ -9,7 +9,6 @@ import type { TFunction } from "i18next";
 import { Button } from "~/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useHostFeature } from "@/runtime/host-features";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -56,19 +55,15 @@ function hasSelectedSkill(status: AgentSkillsStatus | null): boolean {
 export function AgentSkillsSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  // Locations are a per-host capability: an older host keeps writing every home
-  // and the picker shows no location rows rather than a switch that does nothing.
-  const supportsTargets = useHostFeature(serverId, "skillInstallTargets");
   const skills = useAgentSkills(serverId);
   const refreshSkills = skills.refresh;
   const skillsConnected = skills.connected;
-  const skillsSupported = skills.supported;
   const [isChoosing, setIsChoosing] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      if (skillsConnected && skillsSupported) void refreshSkills();
+      if (skillsConnected) void refreshSkills();
       return undefined;
-    }, [refreshSkills, skillsConnected, skillsSupported]),
+    }, [refreshSkills, skillsConnected]),
   );
   const maintenanceOps = useMemo(
     () => skills.status?.ops.filter((op) => op.kind !== "delete") ?? [],
@@ -140,15 +135,13 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     [docsIcon, handleOpenDocs, t],
   );
 
-  if (!skills.connected || !skills.supported) {
+  if (!skills.connected) {
     return (
       <SettingsSection title={t("settings.host.skills.sectionTitle")} trailing={trailing}>
         <ItemGroup data-testid="host-agent-skills-unavailable">
           <div className="p-4">
             <span className="text-xs leading-[normal] text-muted-foreground">
-              {skills.connected
-                ? t("settings.host.skills.unsupported")
-                : t("settings.host.skills.unavailable")}
+              {t("settings.host.skills.unavailable")}
             </span>
           </div>
         </ItemGroup>
@@ -207,7 +200,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
           }
           available={skills.status.available}
           selection={skills.status.selection}
-          targets={supportsTargets ? (skills.status.targets ?? null) : null}
+          targets={skills.status.targets ?? null}
           isSaving={skills.isWorking}
           onSave={skills.saveSelection}
           onClose={handleClose}

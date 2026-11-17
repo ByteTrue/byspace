@@ -26,10 +26,6 @@ func attentionFrames(t *testing.T, sink *recordingSink) []map[string]any {
 		switch envelope.Message.Type {
 		case "agent_attention_required":
 			out = append(out, envelope.Message.Payload)
-		case "agent_stream":
-			if event, ok := envelope.Message.Payload["event"].(map[string]any); ok && event["type"] == "attention_required" {
-				out = append(out, event)
-			}
 		}
 	}
 	return out
@@ -41,7 +37,6 @@ func TestBroadcastAgentAttentionNotifiesTheMostRecentlyActiveClientOnly(t *testi
 	desktop, phone := &recordingSink{}, &recordingSink{}
 	srv.clients[desktop] = true
 	srv.clients[phone] = true
-	srv.selectiveTimeline[desktop] = true
 	now := time.Now()
 	other := "agt_other"
 	srv.recordClientPresence(desktop, true, &other, nil, now.Add(-10*time.Second).Format(time.RFC3339Nano))

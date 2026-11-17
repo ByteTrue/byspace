@@ -82,12 +82,7 @@ function parseSentFrame(
   return JSON.parse(data);
 }
 
-async function connectClient(
-  features: Record<string, boolean> = {
-    providerUsageList: true,
-    providersSnapshotCwd: true,
-  },
-): Promise<{ client: BySpaceClient; ws: FakeWebSocket }> {
+async function connectClient(): Promise<{ client: BySpaceClient; ws: FakeWebSocket }> {
   vi.stubGlobal("WebSocket", FakeWebSocket);
   const client = createBySpaceClient({
     url: "ws://daemon.test",
@@ -112,7 +107,6 @@ async function connectClient(
         serverId: "srv_sdk_test",
         hostname: null,
         version: null,
-        features,
       },
     }),
   );
@@ -829,27 +823,6 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   await timelinePromise;
   expect(agent.current()).toEqual(timelineAgent);
 
-  const appendPromise = agent.timeline.append({
-    type: "plugin",
-    id: "review-1",
-    kind: "review",
-    version: 1,
-    data: { status: "running" },
-  });
-  const appendRequest = parseSentSessionMessage(ws.sent.at(-1));
-  expect(appendRequest).toMatchObject({
-    type: "agent.timeline.append.request",
-    agentId: "agent_sdk",
-    item: { id: "review-1", kind: "review" },
-  });
-  ws.message(
-    sessionMessage({
-      type: "agent.timeline.append.response",
-      payload: { requestId: appendRequest.requestId, seq: 8, epoch: "epoch-sdk" },
-    }),
-  );
-  await expect(appendPromise).resolves.toEqual({ seq: 8, epoch: "epoch-sdk" });
-
   const archivePromise = agent.archive();
   const archiveRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(archiveRequest).toMatchObject({
@@ -1260,63 +1233,6 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     provider: "codex",
     diagnostic: "Codex is ready.",
   });
-  const usagePromise = client.providers.listUsage({
-    requestId: "provider-usage-request",
-  });
-  expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "provider.usage.list.request",
-    requestId: "provider-usage-request",
-  });
-  ws.message(
-    sessionMessage({
-      type: "provider.usage.list.response",
-      payload: {
-        requestId: "provider-usage-request",
-        fetchedAt: "2026-05-16T00:10:00.000Z",
-        providers: [
-          {
-            providerId: "codex",
-            displayName: "Codex",
-            status: "available",
-            planLabel: "pro",
-            windows: [
-              {
-                id: "weekly",
-                label: "Weekly limit",
-                usedPct: 25,
-                remainingPct: 75,
-                resetsAt: "2026-05-20T00:00:00.000Z",
-                tone: "ok",
-              },
-            ],
-          },
-        ],
-      },
-    }),
-  );
-  await expect(usagePromise).resolves.toEqual({
-    requestId: "provider-usage-request",
-    fetchedAt: "2026-05-16T00:10:00.000Z",
-    providers: [
-      {
-        providerId: "codex",
-        displayName: "Codex",
-        status: "available",
-        planLabel: "pro",
-        windows: [
-          {
-            id: "weekly",
-            label: "Weekly limit",
-            usedPct: 25,
-            remainingPct: 75,
-            resetsAt: "2026-05-20T00:00:00.000Z",
-            tone: "ok",
-          },
-        ],
-      },
-    ],
-  });
-
   const snapshotUpdates: string[] = [];
   const snapshotModelDefaults: Array<string | undefined> = [];
   const unsubscribe = client.providers.subscribe((update) => {
@@ -1338,6 +1254,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
                 provider: "codex",
                 id: "gpt-5.5",
                 label: "GPT-5.5",
+                defaultThinkingOptionId: "high",
                 thinkingOptions: [{ id: "high", label: "High", isDefault: true }],
               },
             ],
@@ -1354,27 +1271,28 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   await client.close();
 });
 
-test("waitForReady requires canonical provider snapshot identity from the host", async () => {
-  const { client, ws } = await connectClient({});
-  const sentBeforeWait = ws.sent.length;
+test("waitForReady scopes provider discovery to the requested cwd", async () => {
+  const { client, ws } = await connectClient();
 
-  await expect(client.providers.waitForReady({ cwd: "/repo/./sdk" })).rejects.toThrow(
-    "Update the host to wait for provider discovery.",
+  const waitPromise = client.providers.waitForReady({ cwd: "/repo/./sdk" });
+  expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
+    type: "get_providers_snapshot_request",
+    cwd: "/repo/./sdk",
+  });
+  const request = parseSentSessionMessage(ws.sent.at(-1));
+  ws.message(
+    sessionMessage({
+      type: "get_providers_snapshot_response",
+      payload: {
+        requestId: request.requestId,
+        cwd: "/repo/./sdk",
+        entries: [{ provider: "codex", status: "ready", enabled: true, models: [] }],
+        generatedAt: "2026-05-16T01:00:00.000Z",
+      },
+    }),
   );
-  expect(ws.sent).toHaveLength(sentBeforeWait);
 
-  await client.close();
-});
-
-test("provider usage requires the advertised host capability", async () => {
-  const { client, ws } = await connectClient({});
-  const sentBeforeUsage = ws.sent.length;
-
-  await expect(client.providers.listUsage()).rejects.toThrow(
-    "Update the host to list provider usage.",
-  );
-  expect(ws.sent).toHaveLength(sentBeforeUsage);
-
+  await expect(waitPromise).resolves.toMatchObject({ cwd: "/repo/./sdk" });
   await client.close();
 });
 
@@ -1392,7 +1310,6 @@ test("config actions delegate to existing daemon config RPCs", async () => {
       payload: {
         requestId: "config-get-request",
         config: {
-          mcp: { injectIntoAgents: true },
           providers: {},
           autoArchiveAfterMerge: false,
         },
@@ -1402,11 +1319,9 @@ test("config actions delegate to existing daemon config RPCs", async () => {
   await expect(getPromise).resolves.toEqual({
     requestId: "config-get-request",
     config: {
-      mcp: { injectIntoAgents: true },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
-      enableTerminalAgentHooks: false,
       appendSystemPrompt: "",
     },
   });
@@ -1438,7 +1353,6 @@ test("config actions delegate to existing daemon config RPCs", async () => {
       payload: {
         requestId: "config-patch-request",
         config: {
-          mcp: { injectIntoAgents: true },
           providers: {
             codex: {
               enabled: false,
@@ -1452,7 +1366,6 @@ test("config actions delegate to existing daemon config RPCs", async () => {
   await expect(patchPromise).resolves.toEqual({
     requestId: "config-patch-request",
     config: {
-      mcp: { injectIntoAgents: true },
       providers: {
         codex: {
           enabled: false,
@@ -1460,7 +1373,6 @@ test("config actions delegate to existing daemon config RPCs", async () => {
       },
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
-      enableTerminalAgentHooks: false,
       appendSystemPrompt: "",
     },
   });

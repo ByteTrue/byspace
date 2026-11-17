@@ -48,7 +48,6 @@ class TimelineWorld {
       this.cacheRequestWaiters.shift()?.(agentId);
       await this.cacheGate?.promise;
     },
-    initialDeliveryMode: "selective",
     setSubscription: async (agentIds) => {
       const result = deferred<void>();
       this.memberships.push({
@@ -868,77 +867,4 @@ test("disconnect clears hidden hot agents before reconnecting the visible set", 
   const reopenedCatchUp = await world.nextFetch("agent-a");
   reopenedCatchUp.respond({ hasNewer: false });
   expect(reopened.agentIds).toEqual(["agent-a", "agent-b"]);
-});
-
-test("legacy delivery skips subscription RPCs while retaining visibility catch-up and gap recovery", async () => {
-  const world = new TimelineWorld();
-  world.sync.setDeliveryMode("legacy");
-  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
-  world.sync.setConnected(true);
-
-  world.expectNoPendingMembership();
-  const initial = await world.nextFetch("agent-a");
-  initial.respond({ hasNewer: false });
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
-
-  world.sync.recoverGap("agent-a", { epoch: "epoch-agent-a", endSeq: 10 });
-  const recovery = await world.nextFetch("agent-a");
-  recovery.respond({ hasNewer: false });
-
-  expect(recovery.request).toEqual({
-    direction: "after",
-    cursor: { epoch: "epoch-agent-a", seq: 10 },
-    limit: 40,
-    projection: "projected",
-  });
-});
-
-test("legacy delivery catches up after returning to a view or foreground", async () => {
-  const world = new TimelineWorld();
-  world.sync.setDeliveryMode("legacy");
-  world.sync.setConnected(true);
-  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
-  const firstAgentA = await world.nextFetch("agent-a");
-  firstAgentA.respond({ hasNewer: false });
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
-
-  world.sync.replaceVisibleAgentIds("workspace", ["agent-b"]);
-  const agentB = await world.nextFetch("agent-b");
-  agentB.respond({ hasNewer: false });
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-b")).toBe("ready"));
-
-  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
-  const secondAgentA = await world.nextFetch("agent-a");
-  secondAgentA.respond({ hasNewer: false });
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
-
-  world.sync.setActive(false);
-  world.sync.setActive(true);
-  const foregroundAgentA = await world.nextFetch("agent-a");
-  foregroundAgentA.respond({ hasNewer: false });
-
-  world.expectNoPendingMembership();
-});
-
-test("switching from legacy to selective delivery publishes membership and catches up once", async () => {
-  const world = new TimelineWorld();
-  world.sync.setDeliveryMode("legacy");
-  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
-  world.sync.setConnected(true);
-  const legacyCatchUp = await world.nextFetch("agent-a");
-  legacyCatchUp.respond({ hasNewer: false });
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
-
-  world.sync.setDeliveryMode("selective");
-  expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("pending");
-  const membership = await world.nextMembership();
-  membership.succeed();
-  const catchUp = await world.nextFetch("agent-a");
-  catchUp.respond({ hasNewer: false });
-
-  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
-
-  expect(membership.agentIds).toEqual(["agent-a"]);
-  world.expectNoPendingMembership();
-  world.expectNoPendingFetch();
 });

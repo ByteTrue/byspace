@@ -19,10 +19,9 @@ type ClientSession struct {
 	transport Transport
 	keyPair   KeyPair
 
-	mu               sync.Mutex
-	sharedKey        SharedKey
-	handshaked       bool
-	binaryCiphertext bool
+	mu         sync.Mutex
+	sharedKey  SharedKey
+	handshaked bool
 }
 
 // NewClientSession builds the initiator. `daemonKeyPair` is the local key; the peer's public key
@@ -53,9 +52,8 @@ func (s *ClientSession) Begin(peerPublicKey [KeySize]byte) error {
 	s.mu.Unlock()
 
 	hello := HelloMessage{
-		Type:         "e2ee_hello",
-		Key:          ExportKey(s.keyPair.PublicKey),
-		Capabilities: &Capabilities{BinaryCiphertext: true},
+		Type: "e2ee_hello",
+		Key:  ExportKey(s.keyPair.PublicKey),
 	}
 	payload, err := json.Marshal(hello)
 	if err != nil {
@@ -80,7 +78,6 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 		if err := json.Unmarshal(raw.Data, &ready); err != nil || ready.Type != "e2ee_ready" {
 			return nil, fmt.Errorf("invalid ready message: %s", string(raw.Data))
 		}
-		s.binaryCiphertext = ready.Capabilities != nil && ready.Capabilities.BinaryCiphertext
 		s.handshaked = true
 		if ready.Challenge != "" {
 			// Answer inside the channel. The daemon drops every frame until it sees this nonce, which a
@@ -112,30 +109,16 @@ func (s *ClientSession) Receive(raw Frame) (*Frame, error) {
 		}
 	}
 
+	// Binary frames carry raw binary ciphertext; text frames carry base64 ciphertext.
 	var ciphertext []byte
-	if s.binaryCiphertext {
-		if raw.IsBinary {
-			ciphertext = raw.Data
-		} else {
-			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
-			if err != nil {
-				return nil, fmt.Errorf("invalid base64 ciphertext: %w", err)
-			}
-			ciphertext = decoded
-		}
+	if raw.IsBinary {
+		ciphertext = raw.Data
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw.Data)))
 		if err != nil {
-			// COMPAT(binaryCiphertext): added in v0.2.3, remove base64-only receive mode after
-			// 2027-01-27. Peers that never negotiated the capability may send raw binary ciphertext.
-			if raw.IsBinary {
-				ciphertext = raw.Data
-			} else {
-				return nil, fmt.Errorf("invalid legacy base64 ciphertext: %w", err)
-			}
-		} else {
-			ciphertext = decoded
+			return nil, fmt.Errorf("invalid base64 ciphertext: %w", err)
 		}
+		ciphertext = decoded
 	}
 	plaintext, err := Decrypt(s.sharedKey, ciphertext)
 	if err != nil {
@@ -152,13 +135,12 @@ func (s *ClientSession) Send(plain Frame) error {
 		return errors.New("e2ee session not ready")
 	}
 	key := s.sharedKey
-	binaryCiphertext := s.binaryCiphertext
 
 	sealed, err := Encrypt(key, plain.Data)
 	if err != nil {
 		return err
 	}
-	if binaryCiphertext && plain.IsBinary {
+	if plain.IsBinary {
 		return s.transport.SendBinary(sealed)
 	}
 	return s.transport.SendText(base64.StdEncoding.EncodeToString(sealed))

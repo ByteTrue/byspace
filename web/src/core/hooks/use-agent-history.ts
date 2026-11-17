@@ -9,7 +9,6 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { buildAgentDirectoryState } from "@/utils/agent-directory-sync";
 import { agentHistoryQueryKey, allAgentHistoryQueryKey } from "./agent-history-query-key";
 
@@ -27,8 +26,6 @@ export interface AgentHistoryResult {
   isError: boolean;
   hasMore: boolean;
   isLoadingMore: boolean;
-  /** False when any target host predates search; the screen hides the field. */
-  isSearchSupported: boolean;
   /** More sessions matched than the ranked page holds. Narrow the query. */
   isSearchTruncated: boolean;
   /** Where the query matched each row, keyed by `serverId:agentId`. */
@@ -335,23 +332,7 @@ export function useAgentHistory(options: {
     return { targetHosts: hosts, unreachableHosts: unreachable };
   }, [daemons, runtime, runtimeVersion, serverId]);
   const targetServerIds = useMemo(() => targetHosts.map((host) => host.serverId), [targetHosts]);
-  // One gate, checked before the field is offered: a fleet where any host
-  // predates search has no search, rather than a list that silently omits that
-  // host's sessions.
-  const isSearchSupported = useSessionStore(
-    useCallback(
-      (state) =>
-        targetServerIds.length > 0 &&
-        targetServerIds.every(
-          (id) => state.sessions[id]?.serverInfo?.features?.agentHistorySearch === true,
-        ),
-      [targetServerIds],
-    ),
-  );
-  const search = useMemo(() => {
-    const trimmed = options.search?.trim() ?? "";
-    return isSearchSupported ? trimmed : "";
-  }, [isSearchSupported, options.search]);
+  const search = useMemo(() => options.search?.trim() ?? "", [options.search]);
   const queryKey = useMemo(
     () => [
       ...(serverId ? agentHistoryQueryKey(serverId) : allAgentHistoryQueryKey(targetServerIds)),
@@ -457,7 +438,6 @@ export function useAgentHistory(options: {
     // list is complete as far as it goes and "Load more" would be a lie.
     hasMore: search ? false : hasNextPage,
     isLoadingMore: isFetchingNextPage,
-    isSearchSupported,
     isSearchTruncated,
     searchMatchesByAgentKey,
     hostErrors,

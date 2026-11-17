@@ -21,24 +21,6 @@ import {
 type CheckoutPrStatus = NonNullable<CheckoutPrStatusResponse["payload"]["status"]>;
 type PullRequestTimeline = PullRequestTimelineResponse["payload"];
 
-const githubStatus: CheckoutPrStatus["github"] = {
-  mergeStateStatus: null,
-  autoMergeRequest: null,
-  viewerCanEnableAutoMerge: false,
-  viewerCanDisableAutoMerge: false,
-  viewerCanMergeAsAdmin: false,
-  viewerCanUpdateBranch: false,
-  repository: {
-    autoMergeAllowed: false,
-    mergeCommitAllowed: false,
-    squashMergeAllowed: false,
-    rebaseMergeAllowed: false,
-    viewerDefaultMergeMethod: null,
-  },
-  isMergeQueueEnabled: false,
-  isInMergeQueue: false,
-};
-
 const baseStatus: CheckoutPrStatus = {
   forge: "github",
   number: 42,
@@ -52,7 +34,6 @@ const baseStatus: CheckoutPrStatus = {
   mergeable: "UNKNOWN",
   checks: [],
   reviewDecision: null,
-  github: githubStatus,
 };
 
 const baseTimeline: PullRequestTimeline = {
@@ -62,7 +43,6 @@ const baseTimeline: PullRequestTimeline = {
   truncated: false,
   error: null,
   requestId: "timeline-1",
-  githubFeaturesEnabled: true,
 };
 
 function status(overrides: Partial<CheckoutPrStatus> = {}): CheckoutPrStatus {
@@ -579,7 +559,6 @@ describe("mapPrPaneData", () => {
     const data = mapPrPaneData(
       status({
         url: "https://gitlab.com/group/repo/-/merge_requests/7",
-        github: undefined,
         forgeSpecific: gitlabFacts,
       }),
       baseTimeline,
@@ -608,7 +587,6 @@ describe("mapPrPaneData", () => {
       status({
         forge: "gitea",
         url: "https://gitea.com/group/repo/pulls/7",
-        github: undefined,
         forgeSpecific: {
           forge: "gitea",
           mergeable: true,
@@ -636,7 +614,6 @@ describe("mapPrPaneData", () => {
       status({
         forge: "forgejo",
         url: "https://forgejo.example.com/group/repo/pulls/7",
-        github: undefined,
         forgeSpecific: {
           forge: "gitea",
           mergeable: true,
@@ -664,7 +641,6 @@ describe("mapPrPaneData", () => {
     const data = mapPrPaneData(
       status({
         url: "https://gitlab.com/group/repo/-/merge_requests/7",
-        github: undefined,
         forgeSpecific: {
           forge: "gitlab",
           detailedMergeStatus: "mergeable",
@@ -722,7 +698,6 @@ describe("mapPipelineStatus", () => {
       name: `job-${id}`,
       stage: "test",
       status: jobStatus,
-      rawStatus: jobStatus,
       url: null,
       allowFailure,
       durationSeconds: null,

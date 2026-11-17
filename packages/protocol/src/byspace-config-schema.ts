@@ -66,8 +66,8 @@ export const BySpaceMetadataGenerationSchema = z
     commitMessage: BySpaceMetadataGenerationEntrySchema.optional(),
     pullRequest: BySpaceMetadataGenerationEntrySchema.optional(),
   })
-  // COMPAT(projectMetadataAgentTitle): `agentTitle` project metadata prompts were removed
-  // in v0.1.96; keep older byspace.json files parseable until 2026-12-16.
+  // Unknown metadata-generation keys pass through so a byspace.json with extra prompts still
+  // parses; only the known entries above are read.
   .passthrough()
   .catch({});
 

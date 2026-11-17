@@ -9,10 +9,7 @@ import {
   isWorkspaceAttachment,
   userAttachmentsOnly,
 } from "@/attachments/workspace-attachment-utils";
-import {
-  splitComposerAttachmentsForSubmit,
-  type ComposerAttachmentSubmitFormat,
-} from "@/composer/attachments/submit";
+import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
 import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
@@ -174,7 +171,6 @@ export interface DispatchComposerAgentMessageInput {
   agentId: string;
   text: string;
   attachments: ComposerAttachment[];
-  attachmentSubmitFormat?: ComposerAttachmentSubmitFormat;
   encodeImages: (
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
@@ -186,9 +182,7 @@ export interface DispatchComposerAgentMessageInput {
 export async function dispatchComposerAgentMessage(
   input: DispatchComposerAgentMessageInput,
 ): Promise<void> {
-  const wirePayload = splitComposerAttachmentsForSubmit(input.attachments, {
-    format: input.attachmentSubmitFormat,
-  });
+  const wirePayload = splitComposerAttachmentsForSubmit(input.attachments);
   const clientMessageId = generateMessageId();
   const userMessage = createUserMessage({
     clientMessageId,
@@ -357,19 +351,8 @@ export function buildForgeAttachment(item: ForgeSearchItem): UserComposerAttachm
 
 function isForgeAttachment(
   attachment: UserComposerAttachment,
-): attachment is Extract<
-  UserComposerAttachment,
-  { kind: "forge_issue" | "forge_change_request" | "github_issue" | "github_pr" }
-> {
-  return (
-    attachment.kind === "forge_issue" ||
-    attachment.kind === "forge_change_request" ||
-    // COMPAT(githubAttachmentKinds): accept legacy persisted attachment kinds
-    // until 2027-01-17, when supported floors are >= v0.2.0 and old drafts no
-    // longer require them.
-    attachment.kind === "github_issue" ||
-    attachment.kind === "github_pr"
-  );
+): attachment is Extract<UserComposerAttachment, { kind: "forge_issue" | "forge_change_request" }> {
+  return attachment.kind === "forge_issue" || attachment.kind === "forge_change_request";
 }
 
 export function toggleForgeAttachment(

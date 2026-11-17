@@ -11,7 +11,6 @@ import (
 	"github.com/ByteTrue/byspace/internal/proc"
 	"net"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -262,92 +261,6 @@ func (s *Server) setupSnapshotPayload(snap *setupSnapshot) map[string]any {
 	return map[string]any{"workspaceId": snap.WorkspaceID, "snapshot": snapshot}
 }
 
-// handlePluginProject serves the plugin.* RPCs. The Go daemon has no plugin runtime yet, so the
-// read-only endpoints honestly report an empty catalog instead of fabricating plugins, and the
-// mutating endpoints refuse rather than pretend success. Tracked by the plugin parity Issue.
-func (s *Server) handlePluginRPC(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
-	var req struct {
-		RequestID  string `json:"requestId"`
-		PluginID   string `json:"pluginId"`
-		Path       string `json:"path"`
-		Source     string `json:"source"`
-		Ref        string `json:"ref"`
-		PluginPath string `json:"pluginPath"`
-	}
-	_ = json.Unmarshal(raw, &req)
-
-	switch msgType {
-	case "plugin.list.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.list.response", map[string]any{
-			"requestId": req.RequestID,
-			"plugins":   []any{},
-		})
-	case "plugin.catalog.get.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.catalog.get.response", map[string]any{
-			"requestId": req.RequestID,
-			"plugins":   []any{},
-		})
-	case "plugin.logs.get.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.logs.get.response", map[string]any{
-			"requestId": req.RequestID,
-			"pluginId":  req.PluginID,
-			"entries":   []any{},
-		})
-	case "plugin.source.status.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.source.status.response", map[string]any{
-			"requestId": req.RequestID,
-			"plugins":   []any{},
-		})
-	case "plugin.source.update.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.source.update.response", map[string]any{
-			"requestId": req.RequestID,
-			"plugins":   []any{},
-		})
-	case "plugin.directory.inspect.request":
-		manifest := filepath.Join(req.Path, "plugin.json")
-		if _, err := os.Stat(manifest); err != nil {
-			_ = sendSessionMsg(ctx, sink, "plugin.directory.inspect.response", map[string]any{
-				"requestId": req.RequestID,
-				"id":        "",
-				"error":     "plugin.json not found at " + req.Path,
-			})
-			return
-		}
-		_ = sendSessionMsg(ctx, sink, "plugin.directory.inspect.response", map[string]any{
-			"requestId": req.RequestID,
-			"id":        filepath.Base(req.Path),
-		})
-	case "plugin.rpc.invoke.request":
-		_ = sendSessionMsg(ctx, sink, "plugin.rpc.invoke.response", map[string]any{
-			"requestId": req.RequestID,
-			"output":    nil,
-			"error":     "plugin runtime is not available on this daemon build",
-		})
-	default:
-		// install / enable / disable / reload / remove all need a plugin runtime.
-		respType := strings.TrimSuffix(msgType, ".request") + ".response"
-		if strings.HasSuffix(msgType, ".request") && strings.Contains(msgType, "remove") {
-			_ = sendSessionMsg(ctx, sink, respType, map[string]any{"requestId": req.RequestID})
-			return
-		}
-		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
-			"requestId": req.RequestID,
-			"plugin": map[string]any{
-				"id":      req.PluginID,
-				"name":    req.PluginID,
-				"version": "0.0.0",
-				"status":  "failed",
-				"enabled": false,
-				"error":   "plugin runtime is not available on this daemon build",
-			},
-		})
-	}
-}
-
-// broadcastSetupProgress emits the per-step progress message the setup banner renders.
-//
-// `workspace_setup_update` and `workspace_setup_progress` are different channels: the former
-// drives the workspace list row, the latter the inline log the user watches while it runs.
 func (s *Server) broadcastSetupProgress(snap *setupSnapshot) {
 	snap.mu.Lock()
 	logText := snap.Log.String()

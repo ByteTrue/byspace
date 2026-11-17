@@ -56,7 +56,7 @@ A phone-sized browser viewport (or device-mode in dev tools) covers the compact 
 
 For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../AGENTS.md). The recurring traps have their own docs: [hover.md](hover.md), [menus.md](menus.md), [routing.md](routing.md).
 
-App and daemon versions also drift, in both directions. That has its own contract: [protocol-compatibility.md](protocol-compatibility.md).
+App and daemon ship together from this repo — no version drift. The wire rules for changing both sides at once: [protocol-compatibility.md](protocol-compatibility.md).
 
 ## Automated coverage that means something
 

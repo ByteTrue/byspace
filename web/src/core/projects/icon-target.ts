@@ -8,6 +8,7 @@ export interface ProjectIconPlacement {
 
 export interface ProjectIconTarget extends ProjectIconPlacement {
   projectViewKey: string;
+  iconRevision: string;
 }
 
 export function createProjectIconTarget(input: {
@@ -15,7 +16,15 @@ export function createProjectIconTarget(input: {
   placement: ProjectIconPlacement;
 }): ProjectIconTarget | null {
   const iconWorkingDir = input.placement.iconWorkingDir.trim();
-  if (!input.placement.serverId || !input.placement.projectId || !iconWorkingDir) return null;
+  // The effective icon revision only exists once the host sent a project descriptor; a
+  // route-only context has none, and there is no icon lookup to cache without it.
+  if (
+    !input.placement.serverId ||
+    !input.placement.projectId ||
+    !iconWorkingDir ||
+    !input.placement.iconRevision
+  )
+    return null;
   return {
     projectViewKey: input.projectViewKey,
     serverId: input.placement.serverId,

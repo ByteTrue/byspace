@@ -67,7 +67,7 @@ function project(overrides: ProjectOverrides = {}): SidebarProjectEntry {
 }
 
 describe("buildSidebarProjectRowModel", () => {
-  it("renders a non-git single-workspace project section with no new workspace action", () => {
+  it("renders a non-git single-workspace project section with the new workspace action", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "directory",
@@ -77,7 +77,10 @@ describe("buildSidebarProjectRowModel", () => {
 
     expect(result).toEqual({
       kind: "project_section",
-      trailingAction: { kind: "none" },
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+      },
     });
   });
 
@@ -98,10 +101,9 @@ describe("buildSidebarProjectRowModel", () => {
     });
   });
 
-  it("shows the new workspace action for a non-git project when the host supports workspace multiplicity", () => {
+  it("shows the new workspace action for a non-git project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "directory", workspaces: [] }),
-      supportsMultiplicityByServerId: new Map([["srv", true]]),
     });
 
     expect(result.trailingAction).toEqual({
@@ -110,19 +112,9 @@ describe("buildSidebarProjectRowModel", () => {
     });
   });
 
-  it("hides the new workspace action for a non-git project when the host lacks workspace multiplicity", () => {
-    const result = buildSidebarProjectRowModel({
-      project: project({ projectKind: "directory", workspaces: [] }),
-      supportsMultiplicityByServerId: new Map([["srv", false]]),
-    });
-
-    expect(result.trailingAction).toEqual({ kind: "none" });
-  });
-
-  it("still shows the new workspace action for a git project regardless of multiplicity", () => {
+  it("shows the new workspace action for a git project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "git" }),
-      supportsMultiplicityByServerId: new Map([["srv", false]]),
     });
 
     expect(result.trailingAction).toEqual({
@@ -131,7 +123,7 @@ describe("buildSidebarProjectRowModel", () => {
     });
   });
 
-  it("targets the project host, not route state, for new workspace actions", () => {
+  it("targets the first project host, not route state, for new workspace actions", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         hosts: [
@@ -148,12 +140,12 @@ describe("buildSidebarProjectRowModel", () => {
     expect(result).toMatchObject({
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
       },
     });
   });
 
-  it("targets the first multiplicity-capable host for a non-git project", () => {
+  it("targets the first project host for a non-git project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "directory",
@@ -170,13 +162,12 @@ describe("buildSidebarProjectRowModel", () => {
           },
         ],
       }),
-      supportsMultiplicityByServerId: new Map([["host-b", true]]),
     });
 
     expect(result).toMatchObject({
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
       },
     });
   });
@@ -337,7 +328,7 @@ describe("buildSidebarProjectRowModel", () => {
     });
   });
 
-  it("skips a preferred host that cannot host a new workspace", () => {
+  it("honors the first preferred host that carries the project", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "directory",
@@ -354,14 +345,13 @@ describe("buildSidebarProjectRowModel", () => {
           },
         ],
       }),
-      supportsMultiplicityByServerId: new Map([["host-b", true]]),
       preferredServerIds: ["host-a", "host-b"],
     });
 
     expect(result).toMatchObject({
       trailingAction: {
         kind: "new_workspace",
-        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
       },
     });
   });

@@ -7,7 +7,6 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useHostFeature } from "@/runtime/host-features";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
@@ -309,7 +308,6 @@ export interface ProvidersSectionProps {
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
   const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
@@ -428,7 +426,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
                 enabled={entry.enabled ?? true}
                 isToggling={pendingProviderId === def.id}
                 isRemoving={removingProviderId === def.id}
-                canRemove={supportsProviderRemoval && entry.source === "custom"}
+                canRemove={entry.source === "custom"}
                 onPress={handleOpenProviderSettings}
                 onToggleEnabled={handleToggleEnabled}
                 onRemove={handleRemoveProvider}

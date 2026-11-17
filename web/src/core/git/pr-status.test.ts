@@ -8,7 +8,6 @@ function payload(
   return {
     cwd: "/repo",
     status: null,
-    githubFeaturesEnabled: true,
     forge: "github",
     error: null,
     requestId: "pr-status-1",
@@ -23,18 +22,16 @@ describe("normalizeCheckoutPrStatusPayload", () => {
     );
   });
 
-  it("derives auth from the legacy feature flag when authState is absent", () => {
-    expect(normalizeCheckoutPrStatusPayload(payload()).authState).toBe("authenticated");
+  it("defaults to unauthenticated when authState is absent", () => {
+    expect(normalizeCheckoutPrStatusPayload(payload()).authState).toBe("unauthenticated");
     expect(
-      normalizeCheckoutPrStatusPayload(payload({ githubFeaturesEnabled: false })).authState,
-    ).toBe("unauthenticated");
+      normalizeCheckoutPrStatusPayload(payload({ authState: "authenticated" })).authState,
+    ).toBe("authenticated");
   });
 
   it("does not expose an unknown wire auth state to feature code", () => {
     expect(
-      normalizeCheckoutPrStatusPayload(
-        payload({ authState: "future_auth_state", githubFeaturesEnabled: false }),
-      ).authState,
+      normalizeCheckoutPrStatusPayload(payload({ authState: "future_auth_state" })).authState,
     ).toBe("unauthenticated");
   });
 });

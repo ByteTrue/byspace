@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type {
-  SidebarProjectEntry,
-  SidebarWorkspaceEntry,
-} from "@/hooks/use-sidebar-workspaces-list";
-import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
+import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 
 import {
-  buildSidebarShortcutModel,
-  buildStatusSidebarShortcutModel,
+  buildSidebarShortcutSections,
   getRelativeSidebarShortcutTarget,
 } from "./sidebar-shortcuts";
 
@@ -45,59 +40,43 @@ function workspace(input: {
   };
 }
 
-function project(projectKey: string, workspaces: SidebarWorkspaceEntry[]): SidebarProjectEntry {
-  return {
-    viewKey: projectKey,
-    projectName: projectKey,
-    projectKind: "git",
-    iconWorkingDir: workspaces[0]?.workspaceDirectory ?? "",
-    hosts: [
-      {
-        serverId: workspaces[0]?.serverId ?? "s1",
-        projectId: projectKey,
-        iconWorkingDir: workspaces[0]?.workspaceDirectory ?? "",
-        worktreeSupport: "supported" as const,
-      },
-    ],
-    workspaces,
-  };
-}
-
-describe("buildSidebarShortcutModel", () => {
-  it("builds shortcut targets in visual order across every project", () => {
-    const projects = [
-      project("p1", [
-        workspace({
-          serverId: "s1",
-          workspaceId: "ws-main",
-          workspaceDirectory: "/repo/main",
-          name: "main",
-        }),
-        workspace({
-          serverId: "s1",
-          workspaceId: "ws-feat-a",
-          workspaceDirectory: "/repo/feat-a",
-          name: "feat-a",
-        }),
-      ]),
-      project("p2", [
-        workspace({
-          serverId: "s1",
-          workspaceId: "ws-repo2-main",
-          workspaceDirectory: "/repo2/main",
-          name: "main",
-        }),
-        workspace({
-          serverId: "s1",
-          workspaceId: "ws-repo2-feat-a",
-          workspaceDirectory: "/repo2/feat-a",
-          name: "feat-a",
-        }),
-      ]),
-    ];
-
-    const model = buildSidebarShortcutModel({
-      projects,
+describe("buildSidebarShortcutSections", () => {
+  it("builds shortcut targets in visual order across every section", () => {
+    const model = buildSidebarShortcutSections({
+      sections: [
+        {
+          workspaces: [
+            workspace({
+              serverId: "s1",
+              workspaceId: "ws-main",
+              workspaceDirectory: "/repo/main",
+              name: "main",
+            }),
+            workspace({
+              serverId: "s1",
+              workspaceId: "ws-feat-a",
+              workspaceDirectory: "/repo/feat-a",
+              name: "feat-a",
+            }),
+          ],
+        },
+        {
+          workspaces: [
+            workspace({
+              serverId: "s1",
+              workspaceId: "ws-repo2-main",
+              workspaceDirectory: "/repo2/main",
+              name: "main",
+            }),
+            workspace({
+              serverId: "s1",
+              workspaceId: "ws-repo2-feat-a",
+              workspaceDirectory: "/repo2/feat-a",
+              name: "feat-a",
+            }),
+          ],
+        },
+      ],
     });
 
     expect(model.shortcutTargets).toEqual([
@@ -121,137 +100,41 @@ describe("buildSidebarShortcutModel", () => {
         name: `w${index + 1}`,
       }),
     );
-    const projects = [project("p", workspaces)];
 
-    const model = buildSidebarShortcutModel({
-      projects,
-    });
+    const model = buildSidebarShortcutSections({ sections: [{ workspaces }] });
 
     expect(model.shortcutTargets).toHaveLength(9);
     expect(model.shortcutTargets[0]).toEqual({ serverId: "s", workspaceId: "ws-1" });
     expect(model.shortcutTargets[8]).toEqual({ serverId: "s", workspaceId: "ws-9" });
   });
 
-  it("keeps a directory project's workspaces in the shortcut order", () => {
-    const gitProject = project("p1", [
-      workspace({
-        serverId: "s1",
-        workspaceId: "ws-main",
-        workspaceDirectory: "/repo/main",
-        name: "main",
-      }),
-    ]);
-    const directoryProject = project("p2", [
-      workspace({
-        serverId: "s1",
-        workspaceId: "ws-script",
-        workspaceDirectory: "/scripts",
-        name: "scripts",
-      }),
-    ]);
-    directoryProject.projectKind = "directory";
-    directoryProject.hosts = directoryProject.hosts.map((host) => ({
-      ...host,
-      worktreeSupport: "unsupported" as const,
-    }));
-
-    const model = buildSidebarShortcutModel({
-      projects: [gitProject, directoryProject],
-    });
-
-    expect(model.shortcutTargets).toEqual([
-      { serverId: "s1", workspaceId: "ws-main" },
-      { serverId: "s1", workspaceId: "ws-script" },
-    ]);
-  });
-});
-
-describe("buildStatusSidebarShortcutModel", () => {
-  it("builds shortcut targets in status visual order", () => {
-    const workspaces = [
-      workspace({
-        serverId: "s1",
-        workspaceId: "done-old",
-        workspaceDirectory: "/repo/done-old",
-        name: "done old",
-        projectKey: "p1",
-        statusBucket: "done",
-        statusEnteredAt: new Date("2026-01-01T00:00:00.000Z"),
-      }),
-      workspace({
-        serverId: "s1",
-        workspaceId: "running-new",
-        workspaceDirectory: "/repo/running-new",
-        name: "running new",
-        projectKey: "p2",
-        statusBucket: "running",
-        statusEnteredAt: new Date("2026-03-01T00:00:00.000Z"),
-      }),
-      workspace({
-        serverId: "s1",
-        workspaceId: "needs-input",
-        workspaceDirectory: "/repo/needs-input",
-        name: "needs input",
-        projectKey: "p1",
-        statusBucket: "needs_input",
-        statusEnteredAt: new Date("2026-02-01T00:00:00.000Z"),
-      }),
-      workspace({
-        serverId: "s1",
-        workspaceId: "running-old",
-        workspaceDirectory: "/repo/running-old",
-        name: "running old",
-        projectKey: "p2",
-        statusBucket: "running",
-        statusEnteredAt: new Date("2026-01-15T00:00:00.000Z"),
-      }),
-    ];
-
-    const model = buildStatusSidebarShortcutModel({
-      groups: buildStatusGroups(
-        workspaces,
-        new Map([
-          ["p1", "Project 1"],
-          ["p2", "Project 2"],
-        ]),
-      ),
-    });
-
-    expect(model.shortcutTargets).toEqual([
-      { serverId: "s1", workspaceId: "needs-input" },
-      { serverId: "s1", workspaceId: "running-new" },
-      { serverId: "s1", workspaceId: "running-old" },
-      { serverId: "s1", workspaceId: "done-old" },
-    ]);
-    expect(model.shortcutIndexByWorkspaceKey.get("s1:needs-input")).toBe(1);
-    expect(model.shortcutIndexByWorkspaceKey.get("s1:running-new")).toBe(2);
-    expect(model.shortcutIndexByWorkspaceKey.get("s1:running-old")).toBe(3);
-    expect(model.shortcutIndexByWorkspaceKey.get("s1:done-old")).toBe(4);
-  });
-
-  it("excludes collapsed status groups from shortcut targets", () => {
-    const workspaces = [
-      workspace({
-        serverId: "s1",
-        workspaceId: "needs-input",
-        workspaceDirectory: "/repo/needs-input",
-        name: "needs input",
-        projectKey: "p1",
-        statusBucket: "needs_input",
-      }),
-      workspace({
-        serverId: "s1",
-        workspaceId: "running",
-        workspaceDirectory: "/repo/running",
-        name: "running",
-        projectKey: "p1",
-        statusBucket: "running",
-      }),
-    ];
-
-    const model = buildStatusSidebarShortcutModel({
-      groups: buildStatusGroups(workspaces, new Map([["p1", "Project 1"]])),
-      collapsedStatusGroupKeys: new Set(["needs_input"]),
+  it("excludes collapsed sections from shortcut targets", () => {
+    const model = buildSidebarShortcutSections({
+      sections: [
+        {
+          workspaces: [
+            workspace({
+              serverId: "s1",
+              workspaceId: "needs-input",
+              workspaceDirectory: "/repo/needs-input",
+              name: "needs input",
+              statusBucket: "needs_input",
+            }),
+          ],
+          collapsed: true,
+        },
+        {
+          workspaces: [
+            workspace({
+              serverId: "s1",
+              workspaceId: "running",
+              workspaceDirectory: "/repo/running",
+              name: "running",
+              statusBucket: "running",
+            }),
+          ],
+        },
+      ],
     });
 
     expect(model.shortcutTargets).toEqual([{ serverId: "s1", workspaceId: "running" }]);
