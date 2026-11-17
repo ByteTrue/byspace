@@ -22,7 +22,14 @@ var tunnelDialTimeout = 10 * time.Second
 // peer that vanishes without a Close, or a client that forgets an open connection, otherwise holds
 // a dialled socket forever. Captured into an instance field at construction so sweeper goroutines
 // never read the mutable global (tests shorten it).
-var tunnelIdleTimeout = 15 * time.Minute
+//
+// Two hours, not minutes: TCP keepalives do not cross the tunnel as data, so a pooled database
+// connection, an SSE subscription without a heartbeat, or a debugger parked at a breakpoint looks
+// exactly like a leak to this sweep. The bound only has to reclaim sockets whose owner is gone.
+var tunnelIdleTimeout = 2 * time.Hour
+
+// idleCloseReason labels a sweep so the manager can tell hygiene from a real failure.
+const idleCloseReason = "idle timeout"
 
 // Target serves a peer's open requests: it dials the requested destination and pumps bytes back
 // over the tunnel.
@@ -184,7 +191,7 @@ func (t *Target) sweepIdle() {
 		}
 		t.mu.Unlock()
 		for _, s := range stale {
-			s.closeReason.Store("idle timeout")
+			s.closeReason.Store(idleCloseReason)
 			t.closeStream(s)
 		}
 	}

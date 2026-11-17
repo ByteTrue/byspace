@@ -33,6 +33,11 @@ func TestTargetDialRespectsTimeout(t *testing.T) {
 	if !strings.Contains(result.Reason, "Failed to connect") {
 		t.Fatalf("reason should name the failed dial, got %q", result.Reason)
 	}
+	// Require a timeout specifically. A network that answers ICMP unreachable fails the dial
+	// instantly, which would let this test pass with no dial timeout at all.
+	if !strings.Contains(result.Reason, "i/o timeout") {
+		t.Fatalf("dial failed for a reason other than the timeout, so this proves nothing: %q", result.Reason)
+	}
 	if target.ActiveStreams() != 0 {
 		t.Fatalf("a failed dial must leave no stream, got %d", target.ActiveStreams())
 	}
@@ -151,5 +156,65 @@ func TestTargetActivityKeepsStreamAlive(t *testing.T) {
 	}
 	if target.ActiveStreams() != 1 {
 		t.Fatalf("active stream was reclaimed despite traffic, got %d streams", target.ActiveStreams())
+	}
+}
+
+// Downstream bytes alone keep a stream alive. An SSE subscription or a log tail pushes for a long
+// time while the client sends nothing, so stamping only the upstream direction would sweep it.
+func TestTargetDownstreamOnlyActivityKeepsStreamAlive(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	// A service that only pushes: it never reads what the client sends.
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			if _, err := conn.Write([]byte("tick")); err != nil {
+				return
+			}
+			time.Sleep(60 * time.Millisecond)
+		}
+	}()
+
+	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
+	defer target.Close()
+	target.idleTimeout.Store(int64(300 * time.Millisecond))
+
+	downstream := make(chan Frame, 256)
+	send := func(frame Frame) error {
+		select {
+		case downstream <- frame:
+		default:
+		}
+		return nil
+	}
+	opened, err := target.Open("push-only", port, "", "", send)
+	if err != nil || !opened.Allowed {
+		t.Fatalf("open refused: %+v %v", opened, err)
+	}
+
+	// No upstream frames at all for twice the idle window; the pushes must keep it alive.
+	deadline := time.After(700 * time.Millisecond)
+	pushes := 0
+	for {
+		select {
+		case <-downstream:
+			pushes++
+		case <-deadline:
+			if pushes == 0 {
+				t.Fatal("service never pushed, so the assertion proves nothing")
+			}
+			if target.ActiveStreams() != 1 {
+				t.Fatalf("downstream-only stream was reclaimed after %d pushes, got %d streams", pushes, target.ActiveStreams())
+			}
+			return
+		}
 	}
 }

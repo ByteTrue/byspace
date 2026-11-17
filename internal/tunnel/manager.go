@@ -243,7 +243,7 @@ func (m *Manager) sweepIdle() {
 		}
 		m.mu.Unlock()
 		for _, s := range stale {
-			m.dropStream(s.owner, s, "idle timeout")
+			m.dropStream(s.owner, s, idleCloseReason)
 		}
 	}
 }
@@ -881,7 +881,10 @@ func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 		}
 	}
 	m.logf("tunnel %s stream %s closed: up=%d down=%d reason=%s", m.peerID, s.id, s.framesUp.Load(), s.framesDown.Load(), reason)
-	if reason != "peer closed" && reason != "upstream finished" && !s.upstreamDone.Load() {
+	// The idle sweep is hygiene, not a failure: a pooled database connection, a heartbeat-less SSE
+	// subscription, or a debugger parked at a breakpoint is silent while the forward is healthy. The
+	// listener stays up, so painting the forward red would report a fault the user cannot act on.
+	if reason != "peer closed" && reason != "upstream finished" && reason != idleCloseReason && !s.upstreamDone.Load() {
 		m.setError(f, reason)
 	}
 }
