@@ -42,6 +42,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.23.4"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Detect affected CI contracts
         id: filter
@@ -97,9 +99,14 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
+
+      - name: Check project npm isolation
+        run: node --test scripts/project-npm.test.mjs
 
       - name: Check formatting
         run: npm run format:check
@@ -128,6 +135,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - uses: actions/setup-go@v5
         with:
@@ -161,6 +170,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
@@ -190,6 +201,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - uses: actions/setup-go@v5
         with:
@@ -255,6 +268,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
@@ -283,6 +298,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
@@ -314,6 +331,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - uses: actions/setup-go@v5
         with:
@@ -370,6 +389,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies with retry
         run: node scripts/npm-retry.mjs ci
@@ -417,6 +438,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: "npm"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
