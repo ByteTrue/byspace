@@ -379,3 +379,28 @@ func TestRelayIdleSocketExpiresButProvenPeerDoesNot(t *testing.T) {
 		t.Fatalf("the proven peer was closed by the hello deadline: %s", reply)
 	}
 }
+
+// The exemption has to come from the handshake alone. A tunnel peer proves its key by echoing the
+// nonce, then says nothing until a local client connects — which is every tunnel the user is not
+// currently using. If the peer key were recorded only when an application frame is delivered, the
+// hello deadline would close that socket every wsHelloTimeout, the relay would answer the initiator
+// with 1012 "Server disconnected", and the tunnel would flap on a fixed timer.
+func TestRelayTunnelPeerSurvivesHelloDeadlineWithoutTraffic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits for the hello deadline")
+	}
+	srv := newTestServer(t, t.TempDir())
+	setDaemonPassword(t, srv, "correct")
+
+	// relaySession answers the challenge and then sends nothing: exactly an idle tunnel peer.
+	peer, peerShared, peerCleanup := relaySession(t, srv)
+	defer peerCleanup()
+
+	time.Sleep(wsHelloTimeout + 2*time.Second)
+
+	// Only a live socket can take the password and reply.
+	writeEncrypted(t, peer, peerShared, passwordFrame("correct"))
+	if reply := readEncrypted(t, peer, peerShared); !strings.Contains(reply, `"ok":true`) {
+		t.Fatalf("an idle tunnel peer was closed by the hello deadline: %s", reply)
+	}
+}

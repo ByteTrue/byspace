@@ -3,12 +3,15 @@ package tunnel
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/e2ee"
+	"github.com/coder/websocket"
 )
 
 // The initiator URL must carry the peer's serverId and the client role; the relay rejects a
@@ -195,4 +198,49 @@ func TestRelayPeerKeepaliveStopsOnClose(t *testing.T) {
 	}
 	// A second close must not panic; sync.Once guards it.
 	peer.finish(errors.New("again"))
+}
+
+// A tunnel that dies on a timer is not an outage. Every reconnect succeeds, so the delay must fall
+// back to the base after one: left doubled, a socket with a 15-second lifetime ends up down for 30
+// seconds of every 45, which reads as "constantly disconnecting" while the page still polls a
+// Connected row.
+func TestRunResetsBackoffAfterAProvenConnection(t *testing.T) {
+	var accepted atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		accepted.Add(1)
+		// Proven, then dropped immediately: a flap, not a failure to connect.
+		_ = conn.Close(websocket.StatusNormalClosure, "flap")
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	r := &TunnelReconnector{
+		RelayURL:     "ws" + strings.TrimPrefix(server.URL, "http"),
+		PeerServerID: "srv_flap",
+		BaseDelay:    10 * time.Millisecond,
+		// Without a reset this is the floor the delay would be pinned to: at most ~5 attempts
+		// in the window. With one, each attempt costs BaseDelay.
+		MaxDelay: 200 * time.Millisecond,
+		Logf:     t.Logf,
+	}
+	done := make(chan struct{})
+	go func() {
+		r.Run(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return when its context expired")
+	}
+	if got := accepted.Load(); got < 20 {
+		t.Fatalf("reconnected %d times in 1s, want at least 20 — backoff is not resetting", got)
+	}
 }
