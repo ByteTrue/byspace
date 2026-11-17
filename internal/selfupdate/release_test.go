@@ -188,6 +188,12 @@ func TestBuildRelaunchScriptUsesOpenMinusNRetriesAndExecFallback(t *testing.T) {
 
 func TestEnsureBundleCLISymlinkLinksAndRespectsStandaloneCopyUnlessForced(t *testing.T) {
 	tmp := t.TempDir()
+	// The link is created inside EnsureBundleCLISymlink, which swallows the error and returns
+	// ok=false, so probe the capability here: a Windows account without SeCreateSymbolicLinkPrivilege
+	// (developer mode off) cannot be told apart from a broken function any other way.
+	if err := os.Symlink(tmp, filepath.Join(tmp, "probe-link")); err != nil {
+		t.Skip("cannot create symlinks:", err)
+	}
 	bundle := filepath.Join(tmp, "BySpace.app")
 	macOSDir := filepath.Join(bundle, "Contents", "MacOS")
 	if err := os.MkdirAll(macOSDir, 0o755); err != nil {
