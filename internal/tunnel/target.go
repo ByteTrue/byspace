@@ -14,6 +14,16 @@ import (
 	"time"
 )
 
+// tunnelDialTimeout bounds the target's outbound dial. Without it a black-holed destination pins
+// the open (and the caller's stream) for the OS default, which is minutes.
+var tunnelDialTimeout = 10 * time.Second
+
+// tunnelIdleTimeout closes a stream that carried no bytes in either direction for this long. A
+// peer that vanishes without a Close, or a client that forgets an open connection, otherwise holds
+// a dialled socket forever. Captured into an instance field at construction so sweeper goroutines
+// never read the mutable global (tests shorten it).
+var tunnelIdleTimeout = 15 * time.Minute
+
 // Target serves a peer's open requests: it dials the requested destination and pumps bytes back
 // over the tunnel.
 //
@@ -40,6 +50,13 @@ type Target struct {
 	streams map[string]*targetStream
 	nextID  atomic.Uint64
 	closed  bool
+	// stop ends the idle sweeper. Closed once in Close.
+	stop chan struct{}
+	// dialTimeout bounds Open's dial; only the request path reads it. idleTimeout is atomic because
+	// the sweeper goroutine reads it concurrently with tests shortening it. Both are captured from
+	// the globals at construction.
+	dialTimeout time.Duration
+	idleTimeout atomic.Int64 // nanoseconds
 }
 
 // targetStream is one forwarded connection on the target side.
@@ -63,6 +80,54 @@ type targetStream struct {
 	downstream   replayBuffer
 	resuming     bool
 	resumable    bool
+	// pendingUp queues peer→local writes so the shared sink read loop never blocks on a slow
+	// dialled socket. That loop also carries terminal and file frames, so one stuck stream used to
+	// stall every other frame on the socket behind its conn.Write. The writer drains this in order;
+	// overflow resets just this stream.
+	pendingUp      []upItem
+	pendingUpBytes int
+	upCap          int
+	upNotify       chan struct{}
+	// lastActivity is the UnixNano of the last byte moved in either direction. The idle sweeper
+	// closes a stream that has carried nothing for idleTimeout.
+	lastActivity atomic.Int64
+}
+
+// upItem is one queued local write, or a terminal close marker. closeWrite signals upstream EOF
+// after every queued write drains; closeStream tears the stream down after they drain. Ordering
+// them behind the writes keeps a half-close from truncating the request the service is still reading.
+type upItem struct {
+	payload     []byte
+	closeWrite  bool
+	closeStream bool
+}
+
+// enqueueUp appends a local write under the byte budget. It returns false (and marks the stream
+// closed) when the budget is exceeded; the caller then closes just this stream.
+func (s *targetStream) enqueueUp(item upItem) bool {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.closed {
+		return false
+	}
+	// Streams built without Open (tests, resumed placeholders) still need a live queue.
+	if s.upNotify == nil {
+		s.upNotify = make(chan struct{}, 1)
+	}
+	if s.upCap == 0 {
+		s.upCap = 16 * 1024 * 1024
+	}
+	if s.pendingUpBytes+len(item.payload) > s.upCap {
+		s.closed = true
+		return false
+	}
+	s.pendingUp = append(s.pendingUp, item)
+	s.pendingUpBytes += len(item.payload)
+	select {
+	case s.upNotify <- struct{}{}:
+	default:
+	}
+	return true
 }
 
 // OpenResult reports the outcome of an open request.
@@ -74,11 +139,54 @@ type OpenResult struct {
 
 // NewTarget builds a target-side server.
 func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []Endpoint) *Target {
-	return &Target{
+	t := &Target{
 		Enabled:     enabled,
 		PasswordSet: passwordSet,
 		Allowed:     allowed,
 		streams:     make(map[string]*targetStream),
+		stop:        make(chan struct{}),
+		dialTimeout: tunnelDialTimeout,
+	}
+	t.idleTimeout.Store(int64(tunnelIdleTimeout))
+	go t.sweepIdle()
+	return t
+}
+
+// sweepIdle closes streams that carried no bytes in either direction for idleTimeout. A peer that
+// vanishes without a Close, or a client that forgets an open connection, otherwise holds a dialled
+// socket forever. One goroutine per target, stopped by Close.
+func (t *Target) sweepIdle() {
+	for {
+		// Re-read each pass so a shortened timeout takes effect within one capped poll, and so the
+		// sweeper never reads a plain field a test writes concurrently.
+		timeout := time.Duration(t.idleTimeout.Load())
+		interval := timeout / 2
+		if interval > 500*time.Millisecond {
+			interval = 500 * time.Millisecond
+		}
+		if interval < time.Millisecond {
+			interval = time.Millisecond
+		}
+		select {
+		case <-t.stop:
+			return
+		case <-time.After(interval):
+		}
+		cutoff := time.Now().Add(-timeout).UnixNano()
+		t.mu.Lock()
+		var stale []*targetStream
+		for _, s := range t.streams {
+			last := s.lastActivity.Load()
+			// A zero stamp is a hand-built placeholder with no dialled socket; nothing to reclaim.
+			if last != 0 && last < cutoff {
+				stale = append(stale, s)
+			}
+		}
+		t.mu.Unlock()
+		for _, s := range stale {
+			s.closeReason.Store("idle timeout")
+			t.closeStream(s)
+		}
 	}
 }
 
@@ -144,6 +252,7 @@ func (t *Target) Open(tunnelID string, remotePort int, remoteHost string, ownerK
 		existing.disconnected = false
 		existing.closed = false
 		existing.closeReason.Store("")
+		existing.lastActivity.Store(time.Now().UnixNano())
 		if existing.resume != nil {
 			close(existing.resume)
 			existing.resume = nil
@@ -151,16 +260,18 @@ func (t *Target) Open(tunnelID string, remotePort int, remoteHost string, ownerK
 		existing.writeMu.Unlock()
 		return OpenResult{TunnelID: id, Allowed: true}, nil
 	}
-	conn, err := net.Dial("tcp", dialed)
+	conn, err := net.DialTimeout("tcp", dialed, t.dialTimeout)
 	if err != nil {
 		t.mu.Unlock()
 		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s: %v", dialed, err)}, nil
 	}
-	stream := &targetStream{id: id, conn: conn, send: send, ownerKey: ownerKey}
+	stream := &targetStream{id: id, conn: conn, send: send, ownerKey: ownerKey, upCap: 16 * 1024 * 1024, upNotify: make(chan struct{}, 1)}
+	stream.lastActivity.Store(time.Now().UnixNano())
 	t.streams[id] = stream
 	t.mu.Unlock()
 
 	go t.pumpDownstream(stream)
+	go t.pumpUpstream(stream)
 	return OpenResult{TunnelID: id, Allowed: true}, nil
 }
 
@@ -199,8 +310,16 @@ func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send fu
 		}
 		result, err := t.Open(frame.TunnelID, port, remoteHost, peerKey, send)
 		if len(frame.Payload) >= 3 && frame.Payload[2]&OpenResumeRequested != 0 {
-			if stream := t.streams[frame.TunnelID]; stream != nil {
+			// The map read needs t.mu (closeStream deletes under it) and resumable needs writeMu
+			// (sendOrPause reads it under that lock). Open returns before either, so this lookup
+			// raced the stream's own teardown goroutines once a peer asked to resume.
+			t.mu.Lock()
+			stream := t.streams[frame.TunnelID]
+			t.mu.Unlock()
+			if stream != nil {
+				stream.writeMu.Lock()
 				stream.resumable = true
+				stream.writeMu.Unlock()
 			}
 		}
 		if err != nil {
@@ -307,20 +426,27 @@ func (t *Target) HandleFrame(frame Frame, peerKey string, operator bool, send fu
 	// exactly what the other one produced and no byte ever crossed.
 	case OpcodeDataUpstream:
 		stream.framesUp.Add(1)
-		if _, err := stream.conn.Write(frame.Payload); err != nil {
-			stream.closeReason.Store("upstream write failed: " + err.Error())
+		stream.lastActivity.Store(time.Now().UnixNano())
+		if !stream.enqueueUp(upItem{payload: frame.Payload}) {
+			stream.closeReason.Store("upstream buffer exceeded 16 MiB")
 			t.closeStream(stream)
 		}
 	case OpcodeClose:
 		if len(frame.Payload) > 0 && frame.Payload[0] == CloseWrite {
-			stream.upstreamDone.Store(true)
-			if tcp, ok := stream.conn.(*net.TCPConn); ok {
-				_ = tcp.CloseWrite()
+			// Queue the half-close behind pending writes so the service reads the whole request
+			// before it sees EOF. Closing the write side here would truncate the tail.
+			if !stream.enqueueUp(upItem{closeWrite: true}) {
+				stream.upstreamDone.Store(true)
+				if tcp, ok := stream.conn.(*net.TCPConn); ok {
+					_ = tcp.CloseWrite()
+				}
 			}
 			return
 		}
-		stream.closeReason.Store("peer closed")
-		t.closeStream(stream)
+		if !stream.enqueueUp(upItem{closeStream: true}) {
+			stream.closeReason.Store("peer closed")
+			t.closeStream(stream)
+		}
 	}
 }
 
@@ -350,6 +476,7 @@ func (t *Target) pumpDownstream(stream *targetStream) {
 		}
 		n, err := stream.conn.Read(buf)
 		if n > 0 {
+			stream.lastActivity.Store(time.Now().UnixNano())
 			chunk := append([]byte(nil), buf[:n]...)
 			frame := Frame{Opcode: OpcodeDataDownstream, TunnelID: stream.id, Payload: chunk}
 			if !t.sendOrPause(stream, frame) {
@@ -372,6 +499,51 @@ func (t *Target) pumpDownstream(stream *targetStream) {
 	}
 }
 
+// pumpUpstream writes queued peer→local bytes on a dedicated goroutine, so a slow dialled socket
+// blocks only this stream. The shared sink read loop enqueues under a byte budget; overflow closes
+// the stream instead of stalling every other frame on the socket behind one conn.Write. Terminal
+// close markers drain after the writes ahead of them.
+func (t *Target) pumpUpstream(stream *targetStream) {
+	for {
+		stream.writeMu.Lock()
+		if stream.closed {
+			stream.writeMu.Unlock()
+			return
+		}
+		if len(stream.pendingUp) == 0 {
+			stream.writeMu.Unlock()
+			select {
+			case <-stream.upNotify:
+			case <-time.After(250 * time.Millisecond):
+			}
+			continue
+		}
+		item := stream.pendingUp[0]
+		stream.pendingUp[0] = upItem{}
+		stream.pendingUp = stream.pendingUp[1:]
+		stream.pendingUpBytes -= len(item.payload)
+		stream.writeMu.Unlock()
+
+		if item.closeStream {
+			stream.closeReason.Store("peer closed")
+			t.closeStream(stream)
+			return
+		}
+		if item.closeWrite {
+			stream.upstreamDone.Store(true)
+			if tcp, ok := stream.conn.(*net.TCPConn); ok {
+				_ = tcp.CloseWrite()
+			}
+			continue
+		}
+		if _, err := stream.conn.Write(item.payload); err != nil {
+			stream.closeReason.Store("upstream write failed: " + err.Error())
+			t.closeStream(stream)
+			return
+		}
+	}
+}
+
 // sendOrPause holds a failed frame and stops further TCP reads until a replacement transport
 // arrives. This is the backpressure boundary: a lost socket must not become lost response bytes.
 // Ownership is the failing send itself — the socket that owns a stream is the one whose writes
@@ -386,6 +558,7 @@ func (t *Target) resumeStream(stream *targetStream, send func(Frame) error) {
 	stream.send = send
 	stream.resuming = true
 	stream.disconnected = false
+	stream.lastActivity.Store(time.Now().UnixNano())
 	if stream.resume != nil {
 		close(stream.resume)
 	}
@@ -490,6 +663,11 @@ func (t *Target) closeStream(stream *targetStream) {
 		close(stream.resume)
 	}
 	stream.writeMu.Unlock()
+	// Wake an upstream writer parked on an empty queue so it observes closed and exits.
+	select {
+	case stream.upNotify <- struct{}{}:
+	default:
+	}
 	_ = stream.conn.Close()
 	reason, _ := stream.closeReason.Load().(string)
 	slog.Info("tunnel target stream closed", "streamId", stream.id, "framesUp", stream.framesUp.Load(), "framesDown", stream.framesDown.Load(), "reason", reason)
@@ -498,7 +676,12 @@ func (t *Target) closeStream(stream *targetStream) {
 // Close tears down every forwarded connection.
 func (t *Target) Close() {
 	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
+	}
 	t.closed = true
+	close(t.stop)
 	streams := make([]*targetStream, 0, len(t.streams))
 	for _, s := range t.streams {
 		streams = append(streams, s)

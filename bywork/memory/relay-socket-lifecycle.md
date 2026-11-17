@@ -8,10 +8,11 @@
 - ws 协议 ping（`tunnelPingInterval = 20s`）只保护 initiator 自己那条 socket 不被 CF 的 ~60s 空闲回收，**到不了对端 socket**，所以它治不了上面那条。
 - 重连 backoff（`internal/tunnel/relaypeer.go:Run`）是「故障」用的，不是「抖动」用的：连上过就必须复位到 base，否则周期性地被 15s 杀掉的 socket 会把 delay 永久钉在 30s 上限 → 45s 里断 30s，而 UI 每 ~3s 轮询 `tunnel.list`，多数时候仍显示 Connected。
 - 定量指纹：断开周期 = `15s + backoff + 1~2s 握手`。看到 46–51s 的稳定周期、两条 tunnel 恒定错开几秒 = 定时器，不是网络。刚 create/edit tunnel 后头几轮会是 16,17,19,20,24,32,46（backoff ramp），跑几轮后进稳定期。
+- 0.26.4 现场验证（2026-11-17，Windows 目标机）：运行中 exe 的 SHA256 匹配 0.26.4 发布物；`127.0.0.1:34125 → zijies-MacBook-Pro.local:3425` 这条 tunnel 空闲观察 180s（15:36:20–15:39:20，不主动发流量）零断连——此前每 46–51s 一断，180s 覆盖约 3–4 个故障周期；空闲后请求该端口 HTTP 200 拿到目标服务 JSON。证据支持本修复消除了这条 tunnel 的周期性空闲断连；长时间运行、网络切换与另一条 tunnel 未验证。
 
 ## 依据
 
-- 类型：代码事实 + 一次实测复现。
+- 类型：代码事实 + 一次实测复现 + 0.26.4 现场验证。
 - 证据或复核方式：`go test ./internal/server/ -run TestRelayTunnelPeerSurvivesHelloDeadlineWithoutTraffic`（红的时候两边日志正好是 `4001 Timed out waiting for hello` 与 `1012 Server disconnected`）；`go test ./internal/tunnel/ -run TestRunResetsBackoffAfterAProvenConnection`（去掉复位 → 1s 内只重连 9 次）。真实事故日志在 `~/.byspace/daemon.log`，噪音是 `tunnel ... stream tXXXX.NN data received: sequence=`，按 `connection ended` 过滤。
 - 适用条件：对端 daemon 需要更新到含本修复的版本才停止被杀；本机侧只改 backoff 只能把不可用占比从 2/3 降到 ~3%，空闲 socket 仍会重建。
 

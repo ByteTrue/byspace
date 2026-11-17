@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/url"
 	"strings"
 	"sync"
@@ -72,6 +73,23 @@ var (
 	tunnelPingTimeout  = 10 * time.Second
 )
 
+// reconnectJitter and reconnectSleep are seams so a test can observe the backoff without waiting
+// out real seconds. reconnectJitter spreads a delay over [d/2, d] (equal jitter) so a fleet of
+// daemons that lost the same relay does not reconnect in lockstep.
+var (
+	reconnectJitter = func(d time.Duration) time.Duration {
+		return d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
+	}
+	reconnectSleep = func(ctx context.Context, d time.Duration) bool {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(d):
+			return true
+		}
+	}
+)
+
 // Run connects and reconnects until ctx is cancelled.
 func (r *TunnelReconnector) Run(ctx context.Context) {
 	if r.Logf == nil {
@@ -103,19 +121,18 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 			r.Logf("tunnel %s: connection ended: %v", r.PeerServerID, err)
 		}
 
-		// Linear-then-capped backoff, matching the node client: a relay restart comes back in
-		// seconds, and a longer outage should not hammer it.
-		//
 		// A connection that reached the peer resets it. Backoff is for an outage, not for a flap:
 		// a socket killed on a timer reconnects successfully every time, so without the reset the
 		// delay climbs to the cap and stays there — 30s down out of every 45s, forever.
 		if proved {
 			delay = base
 		}
-		select {
-		case <-ctx.Done():
+
+		// Exponential backoff to the cap, with equal jitter so daemons that dropped together do
+		// not all retry on the same tick. A relay restart comes back in seconds; a long outage
+		// should not be hammered.
+		if !reconnectSleep(ctx, reconnectJitter(delay)) {
 			return
-		case <-time.After(delay):
 		}
 		delay *= 2
 		if delay > maxDelay {
@@ -353,8 +370,12 @@ func (p *relayPeer) readLoop() {
 // A failed ping is fatal on purpose: a socket that cannot complete a round trip within the timeout
 // is not usable for a stream, and letting it linger hides the breakage until traffic hits it.
 func (p *relayPeer) startKeepalive() {
+	// Read the cadence in the calling goroutine, not the spawned one. These are test seams that a
+	// test mutates; reading them inside the goroutine races with that write, and the goroutine
+	// outlives connectOnce so joining the reconnect loop would not order the read.
+	interval, timeout := tunnelPingInterval, tunnelPingTimeout
 	go func() {
-		ticker := time.NewTicker(tunnelPingInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -364,7 +385,7 @@ func (p *relayPeer) startKeepalive() {
 				if p.ping == nil {
 					return
 				}
-				ctx, cancel := context.WithTimeout(p.pingContext(), tunnelPingTimeout)
+				ctx, cancel := context.WithTimeout(p.pingContext(), timeout)
 				err := p.ping(ctx)
 				cancel()
 				if err != nil {
