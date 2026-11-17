@@ -20,6 +20,22 @@ const (
 	CurrentVersion = "2"
 	// MaxBufferedFrames caps the frames held for a daemon that is not connected.
 	MaxBufferedFrames = 200
+	// MaxBufferedBytesPerConn caps the bytes held for one offline connection. The frame count cap
+	// alone does not bound memory: a frame can be up to the 64MiB read limit, so 200 of them is
+	// gigabytes. Frames are evicted oldest-first to stay under this, and a single frame larger than
+	// the whole budget is dropped (the offline buffer is best effort).
+	MaxBufferedBytesPerConn = 4 << 20
+	// MaxBufferedBytesTotal is the hard ceiling for one room's offline buffer. The hosted relay runs
+	// in a 128MiB Durable Object, so the buffer must leave room for sockets and heap; one client
+	// flooding bytes while its daemon is offline must not exhaust it.
+	MaxBufferedBytesTotal = 32 << 20
+	// MaxBufferedConns caps how many distinct connections a room buffers for. Without it a client
+	// could open endless connections, each holding a few bytes, and grow the map without bound.
+	MaxBufferedConns = 256
+	// MaxRoomConns caps live sockets one room holds on the self-hosted Go relay. Each socket is a
+	// read goroutine plus a write mutex, so an unbounded room is a resource-exhaustion vector. The
+	// hosted relay bounds this per Durable Object instead; this is the Go server's own ceiling.
+	MaxRoomConns = 512
 )
 
 // Router holds the transport-independent relay behaviour. It carries no state:
@@ -273,36 +289,90 @@ type rawFrame struct {
 type frameBuffer struct {
 	mu     sync.Mutex
 	frames map[string][]rawFrame
+	bytes  map[string]int
+	total  int
 }
 
 func newFrameBuffer() *frameBuffer {
-	return &frameBuffer{frames: make(map[string][]rawFrame)}
+	return &frameBuffer{
+		frames: make(map[string][]rawFrame),
+		bytes:  make(map[string]int),
+	}
 }
 
 func (b *frameBuffer) add(cid string, mt MessageType, data []byte) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	list := append(b.frames[cid], rawFrame{mt: mt, data: append([]byte(nil), data...)})
-	if len(list) > MaxBufferedFrames {
-		list = list[len(list)-MaxBufferedFrames:]
+
+	size := len(data)
+	if size > MaxBufferedBytesPerConn {
+		// One frame bigger than a whole connection's budget can never be held.
+		return
 	}
+	if _, ok := b.frames[cid]; !ok && len(b.frames) >= MaxBufferedConns {
+		// The map is full. Evict one connection to make room rather than grow without bound.
+		for victim := range b.frames {
+			b.dropLocked(victim)
+			break
+		}
+	}
+
+	// Append, then evict oldest-first until this connection fits its frame and byte budgets. The
+	// new frame alone is within budget, so at least it survives. Survivors are copied to a fresh
+	// slice: re-slicing the tail would keep the evicted frames alive in the backing array and the
+	// byte budget would not bound real memory.
+	list := append(b.frames[cid], rawFrame{mt: mt, data: append([]byte(nil), data...)})
+	connBytes := b.bytes[cid] + size
+	if len(list) > MaxBufferedFrames || connBytes > MaxBufferedBytesPerConn {
+		start := 0
+		for len(list)-start > MaxBufferedFrames || connBytes > MaxBufferedBytesPerConn {
+			connBytes -= len(list[start].data)
+			start++
+		}
+		kept := make([]rawFrame, len(list)-start)
+		copy(kept, list[start:])
+		list = kept
+	}
+	b.total += connBytes - b.bytes[cid]
 	b.frames[cid] = list
+	b.bytes[cid] = connBytes
+
+	// Room ceiling: drop whole connections until the total fits. Best effort — the buffer only
+	// smooths a brief daemon blip, so under memory pressure any connection may be dropped. A single
+	// connection never exceeds the ceiling (its budget is smaller), so this always terminates.
+	for b.total > MaxBufferedBytesTotal && len(b.frames) > 0 {
+		for victim := range b.frames {
+			b.dropLocked(victim)
+			break
+		}
+	}
 }
 
 func (b *frameBuffer) take(cid string) []rawFrame {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	frames := b.frames[cid]
-	delete(b.frames, cid)
+	b.dropLocked(cid)
 	return frames
 }
 
 func (b *frameBuffer) drop(cid string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.dropLocked(cid)
+}
+
+// dropLocked removes a connection's buffered frames. The caller holds b.mu.
+func (b *frameBuffer) dropLocked(cid string) {
+	b.total -= b.bytes[cid]
+	delete(b.bytes, cid)
 	delete(b.frames, cid)
 }
 
+// flushFrames hands a connection's buffered frames to the server socket that just attached.
+// Best-effort: take() removes the whole snapshot, so a Send failure re-buffers only the frame that
+// failed and the rest are lost. The socket is already dying at that point, and tunnel streams
+// recover across a reconnect through DataDownstreamSeq replay rather than through this buffer.
 func flushFrames(ctx context.Context, room Room, buf *frameBuffer, cid string, serverPeer Peer) {
 	for _, f := range buf.take(cid) {
 		if err := serverPeer.Send(ctx, f.mt, f.data); err != nil {

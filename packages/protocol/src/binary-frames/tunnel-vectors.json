@@ -1,0 +1,85 @@
+{
+  "_comment": "Shared tunnel frame vectors. Lock the wire layout [1B opcode][1B idLen][id utf8][payload] for the three opcodes both Go (internal/tunnel/frame.go) and TS (packages/protocol/src/binary-frames/tunnel.ts) decode: DataUpstream 0x20, DataDownstream 0x21, Close 0x22. Read by internal/tunnel/frame_vectors_test.go and packages/protocol/src/binary-frames/tunnel-vectors.test.ts. frameHex is computed from the layout, independent of either codec; change the layout here and both must follow. Go-only opcodes (Open/OpenAck/Resume/Seq/DataAck) are intentionally absent. Valid ids are ASCII; encodeReject pins the byte-length rule both encoders must enforce for multi-byte ids.",
+  "valid": [
+    {
+      "name": "upstream-empty",
+      "opcode": 32,
+      "tunnelId": "t1",
+      "payloadHex": "",
+      "frameHex": "20027431"
+    },
+    {
+      "name": "downstream-hello",
+      "opcode": 33,
+      "tunnelId": "t2",
+      "payloadHex": "68656c6c6f",
+      "frameHex": "2102743268656c6c6f"
+    },
+    {
+      "name": "close",
+      "opcode": 34,
+      "tunnelId": "t3",
+      "payloadHex": "",
+      "frameHex": "22027433"
+    },
+    {
+      "name": "upstream-single-byte",
+      "opcode": 32,
+      "tunnelId": "mux",
+      "payloadHex": "07",
+      "frameHex": "20036d757807"
+    },
+    {
+      "name": "downstream-binary",
+      "opcode": 33,
+      "tunnelId": "stream-abc-123",
+      "payloadHex": "00ff107f",
+      "frameHex": "210e73747265616d2d6162632d31323300ff107f"
+    },
+    {
+      "name": "close-single-char-id",
+      "opcode": 34,
+      "tunnelId": "a",
+      "payloadHex": "",
+      "frameHex": "220161"
+    },
+    {
+      "name": "upstream-max-id",
+      "opcode": 32,
+      "tunnelId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "payloadHex": "",
+      "frameHex": "20ff616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+    }
+  ],
+  "encodeReject": [
+    {
+      "name": "id-over-255-utf8-bytes",
+      "opcode": 32,
+      "tunnelId": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "payloadHex": "",
+      "why": "128 UTF-16 units but 256 UTF-8 bytes. The id length must be validated in bytes: a UTF-16 check passes, then the single length byte truncates 256 to 0 and both decoders read an empty id and treat the whole id as payload."
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty",
+      "frameHex": ""
+    },
+    {
+      "name": "opcode-only",
+      "frameHex": "20"
+    },
+    {
+      "name": "zero-id-len",
+      "frameHex": "20000102"
+    },
+    {
+      "name": "truncated-id",
+      "frameHex": "20040102"
+    },
+    {
+      "name": "unknown-opcode",
+      "frameHex": "7f0141"
+    }
+  ]
+}

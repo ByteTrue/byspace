@@ -63,6 +63,51 @@ type stream struct {
 	generation   uint64
 	downstream   receiveCursor
 	resumable    bool
+	// pendingDown queues peer→local writes so the shared read loop never blocks on a slow local
+	// socket. One stuck stream used to stall every other stream's data and acks behind its
+	// conn.Write. The writer goroutine drains this in order; overflow resets just this stream.
+	pendingDown      []downItem
+	pendingDownBytes int
+	downCap          int
+	downNotify       chan struct{}
+	// owner is the forward this stream belongs to, so the downstream writer can clear f.streams
+	// when a terminal Close drains. Set once at creation, never mutated.
+	owner *forward
+	// lastActivity is the UnixNano of the last byte moved in either direction. The idle sweeper
+	// closes a stream that has carried nothing for idleTimeout.
+	lastActivity atomic.Int64
+}
+
+// downItem is one queued local write plus the ack to send once it lands. ackSeq is the downstream
+// cursor at accept time, so the ack reflects bytes actually written, not bytes merely queued.
+// closeStream marks the terminal Close frame: the writer drains every queued write before it, so a
+// response that arrived just before Close still reaches the local socket.
+type downItem struct {
+	payload     []byte
+	ackSeq      uint64
+	ack         bool
+	closeStream bool
+}
+
+// enqueueDown appends a local write under the byte budget. It returns false (and marks the stream
+// closed) when the budget is exceeded; the caller then drops just this stream.
+func (s *stream) enqueueDown(item downItem) bool {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.closed {
+		return false
+	}
+	if s.pendingDownBytes+len(item.payload) > s.downCap {
+		s.closed = true
+		return false
+	}
+	s.pendingDown = append(s.pendingDown, item)
+	s.pendingDownBytes += len(item.payload)
+	select {
+	case s.downNotify <- struct{}{}:
+	default:
+	}
+	return true
 }
 
 func (s *stream) enqueue(frame Frame) bool {
@@ -141,7 +186,10 @@ type Manager struct {
 	closeCh chan struct{}
 	logf    func(format string, args ...any)
 	grace   time.Duration
-	streams map[*stream]struct{}
+	// idleTimeout is atomic because the sweeper goroutine reads it concurrently with tests
+	// shortening it. Captured from the global at construction.
+	idleTimeout atomic.Int64 // nanoseconds
+	streams     map[*stream]struct{}
 }
 
 // NewManager builds a manager for one peer.
@@ -149,7 +197,7 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &Manager{
+	m := &Manager{
 		peerID:   peerID,
 		peerHost: peerHost,
 		forwards: make(map[string]*forward),
@@ -158,6 +206,45 @@ func NewManager(peerID, peerHost string, logf func(string, ...any)) *Manager {
 		grace:    30 * time.Second,
 		streams:  make(map[*stream]struct{}),
 		idPrefix: strconv.FormatInt(time.Now().UnixNano()%0xffffffff, 36),
+	}
+	m.idleTimeout.Store(int64(tunnelIdleTimeout))
+	go m.sweepIdle()
+	return m
+}
+
+// sweepIdle closes streams that carried no bytes in either direction for idleTimeout. A peer that
+// vanishes without a Close, or a client that forgets an open connection, otherwise holds a local
+// socket and its goroutines forever. One goroutine per manager, stopped by Close.
+func (m *Manager) sweepIdle() {
+	for {
+		// Re-read each pass so a shortened timeout takes effect within one capped poll, and so the
+		// sweeper never reads a plain field a test writes concurrently.
+		timeout := time.Duration(m.idleTimeout.Load())
+		interval := timeout / 2
+		if interval > 500*time.Millisecond {
+			interval = 500 * time.Millisecond
+		}
+		if interval < time.Millisecond {
+			interval = time.Millisecond
+		}
+		select {
+		case <-m.closeCh:
+			return
+		case <-time.After(interval):
+		}
+		cutoff := time.Now().Add(-timeout).UnixNano()
+		m.mu.Lock()
+		var stale []*stream
+		for s := range m.streams {
+			last := s.lastActivity.Load()
+			if last != 0 && last < cutoff {
+				stale = append(stale, s)
+			}
+		}
+		m.mu.Unlock()
+		for _, s := range stale {
+			m.dropStream(s.owner, s, idleCloseReason)
+		}
 	}
 }
 
@@ -264,12 +351,17 @@ func (m *Manager) resumeStream(peer PeerConn, s *stream) {
 	s.writeMu.Lock()
 	s.connected = false
 	s.resumable = true
+	// The read loop advances this cursor in accept, so snapshot it here rather than reading the
+	// field while frames land. A stale value would only make the target replay from an older
+	// sequence, but the unsynchronized read is a real race.
+	next := s.downstream.next
 	s.writeMu.Unlock()
-	if err := peer.Send(Frame{Opcode: OpcodeResume, TunnelID: s.id, Payload: encodeSequence(s.downstream.next)}); err != nil {
+	s.lastActivity.Store(time.Now().UnixNano())
+	if err := peer.Send(Frame{Opcode: OpcodeResume, TunnelID: s.id, Payload: encodeSequence(next)}); err != nil {
 		m.logf("tunnel %s stream %s resume send failed: %v", m.peerID, s.id, err)
 		return
 	}
-	m.logf("tunnel %s stream %s resume requested: next=%d", m.peerID, s.id, s.downstream.next)
+	m.logf("tunnel %s stream %s resume requested: next=%d", m.peerID, s.id, next)
 	result, ok := m.awaitOpen(s)
 	m.mu.Lock()
 	current := m.peer == peer
@@ -403,12 +495,14 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	}
 
 	id := "t" + m.idPrefix + "." + strconv.FormatUint(m.nextStream.Add(1), 10)
-	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{})}
+	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{}), downCap: 16 * 1024 * 1024, downNotify: make(chan struct{}, 1), owner: f}
+	s.lastActivity.Store(time.Now().UnixNano())
 
 	m.mu.Lock()
 	f.streams[id] = s
 	m.streams[s] = struct{}{}
 	m.mu.Unlock()
+	go m.pumpDownstream(s)
 
 	// Ask the target for the stream before moving any bytes.
 	//
@@ -436,7 +530,8 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 		if reason == "" {
 			reason = "target refused the stream"
 		}
-		m.setError(f, reason)
+		// dropStream publishes the error state after it logs; setting it here first would let a
+		// waiter observe StateError and finish before the log line runs.
 		m.dropStream(f, s, reason)
 		return
 	}
@@ -449,7 +544,6 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 		// the stream is what releases it; dropping only the local side would leave the target's
 		// socket open until the peer socket dies.
 		_ = peer.Send(Frame{Opcode: OpcodeClose, TunnelID: s.id})
-		m.setError(f, reason)
 		m.dropStream(f, s, reason)
 		return
 	}
@@ -490,8 +584,19 @@ const openTimeout = 15 * time.Second
 func (m *Manager) pumpLocalToPeer(peer PeerConn, s *stream) {
 	s.writeMu.Lock()
 	generation := s.generation
+	done := s.writeDone
 	s.writeMu.Unlock()
-	defer close(s.writeDone)
+	defer func() {
+		// Clear the handle so resumeStream can tell "a pump is running" from "a pump exited".
+		// Leaving it closed but non-nil blocked every restart after a Send failure, so upstream
+		// stayed dead for the rest of the stream's life while downstream resumed normally.
+		s.writeMu.Lock()
+		if s.writeDone == done {
+			s.writeDone = nil
+		}
+		s.writeMu.Unlock()
+		close(done)
+	}()
 	for {
 		s.writeMu.Lock()
 		if s.generation != generation {
@@ -548,6 +653,7 @@ func (m *Manager) pumpLocalToPeer(peer PeerConn, s *stream) {
 		_ = s.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
 		n, err := s.conn.Read(buf)
 		if n > 0 {
+			s.lastActivity.Store(time.Now().UnixNano())
 			frame := Frame{Opcode: OpcodeDataUpstream, TunnelID: s.id, Payload: append([]byte(nil), buf[:n]...)}
 			if !s.enqueue(frame) {
 				m.dropStream(nil, s, "disconnected buffer exceeded 16 MiB")
@@ -669,42 +775,109 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 		}
 		target.settleOpen(openResult{allowed: ack.Allowed, hostCapable: ack.HostCapable, reason: ack.Reason})
 		if ack.Allowed {
-			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+			target.writeMu.Lock()
+			next := target.downstream.next
+			target.writeMu.Unlock()
+			// The accepted cursor, not the written one. The queue survives a peer replacement, so
+			// these bytes are still delivered; only a failed local write loses them, and that kills
+			// the stream. Reporting the written cursor would need the writer to track it.
+			_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(next)})
 		}
 	case OpcodeDataDownstream:
-		if target.resumable {
+		target.writeMu.Lock()
+		resumable := target.resumable
+		next := target.downstream.next
+		target.writeMu.Unlock()
+		if resumable {
 			return
 		}
 		target.framesDown.Add(1)
-		if _, err := target.conn.Write(frame.Payload); err != nil {
-			m.dropStream(owner, target, err.Error())
-			return
+		target.lastActivity.Store(time.Now().UnixNano())
+		if !target.enqueueDown(downItem{payload: frame.Payload, ack: true, ackSeq: next}) {
+			m.dropStream(owner, target, "downstream buffer exceeded 16 MiB")
 		}
-		_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
 	case OpcodeDataDownstreamSeq:
 		sequence, payload, ok := decodeSequencedPayload(frame.Payload)
 		if !ok {
 			m.logf("tunnel %s stream %s malformed sequence frame", m.peerID, target.id)
 			return
 		}
+		// resumeStream snapshots this cursor from another goroutine.
+		target.writeMu.Lock()
 		accepted, ok := target.downstream.accept(sequencedFrame{Sequence: sequence, Payload: payload})
+		want := target.downstream.next
+		target.writeMu.Unlock()
 		if !ok {
-			m.logf("tunnel %s stream %s sequence rejected: got=%d want=%d", m.peerID, target.id, sequence, target.downstream.next)
+			m.logf("tunnel %s stream %s sequence rejected: got=%d want=%d", m.peerID, target.id, sequence, want)
 			return
 		}
 		target.framesDown.Add(1)
+		target.lastActivity.Store(time.Now().UnixNano())
 		m.logf("tunnel %s stream %s data received: sequence=%d", m.peerID, target.id, sequence)
-		if _, err := target.conn.Write(accepted); err != nil {
-			m.dropStream(owner, target, err.Error())
-			return
-		}
-		if target.resumable {
-			_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+		// Always acknowledge a sequenced frame. The target sequences everything it sends on a
+		// fresh stream, so gating the ack on our own resumable flag — which only a reconnect sets —
+		// left its replay buffer filling until the response died at 16 MiB.
+		// accept advanced the cursor to sequence+1; ack that value once the write lands, so the
+		// target frees replay bytes only after they reach the local socket.
+		if !target.enqueueDown(downItem{payload: accepted, ack: true, ackSeq: sequence + 1}) {
+			m.dropStream(owner, target, "downstream buffer exceeded 16 MiB")
 		}
 	case OpcodeResume:
-		_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(target.downstream.next)})
+		target.writeMu.Lock()
+		next := target.downstream.next
+		target.writeMu.Unlock()
+		_ = peer.Send(Frame{Opcode: OpcodeResumeAck, TunnelID: target.id, Payload: encodeSequence(next)})
 	case OpcodeClose:
-		m.dropStream(owner, target, "")
+		// Queue Close behind any writes still pending, so a response that arrived just before the
+		// peer's Close reaches the local socket. Dropping here would close the socket early and
+		// truncate the tail the client is still reading.
+		if !target.enqueueDown(downItem{closeStream: true}) {
+			m.dropStream(owner, target, "")
+		}
+	}
+}
+
+// pumpDownstream writes queued peer→local bytes on a dedicated goroutine, so a slow local socket
+// blocks only this stream. The read loop enqueues under a byte budget; overflow drops the stream
+// instead of stalling every other stream's data and acks behind one conn.Write.
+func (m *Manager) pumpDownstream(s *stream) {
+	for {
+		s.writeMu.Lock()
+		if s.closed {
+			s.writeMu.Unlock()
+			return
+		}
+		if len(s.pendingDown) == 0 {
+			s.writeMu.Unlock()
+			select {
+			case <-s.downNotify:
+			case <-m.closeCh:
+				return
+			}
+			continue
+		}
+		item := s.pendingDown[0]
+		s.pendingDown[0] = downItem{}
+		s.pendingDown = s.pendingDown[1:]
+		s.pendingDownBytes -= len(item.payload)
+		s.writeMu.Unlock()
+
+		if item.closeStream {
+			m.dropStream(s.owner, s, "")
+			return
+		}
+		if _, err := s.conn.Write(item.payload); err != nil {
+			m.dropStream(s.owner, s, err.Error())
+			return
+		}
+		if item.ack {
+			m.mu.Lock()
+			peer := m.peer
+			m.mu.Unlock()
+			if peer != nil {
+				_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: s.id, Payload: encodeSequence(item.ackSeq)})
+			}
+		}
 	}
 }
 
@@ -725,6 +898,11 @@ func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 	s.writeMu.Lock()
 	s.closed = true
 	s.writeMu.Unlock()
+	// Wake a downstream writer parked on an empty queue so it observes closed and exits.
+	select {
+	case s.downNotify <- struct{}{}:
+	default:
+	}
 	if reason == "" {
 		reason = "peer closed"
 		if s.upstreamDone.Load() {
@@ -732,7 +910,13 @@ func (m *Manager) dropStream(f *forward, s *stream, reason string) {
 		}
 	}
 	m.logf("tunnel %s stream %s closed: up=%d down=%d reason=%s", m.peerID, s.id, s.framesUp.Load(), s.framesDown.Load(), reason)
-	if reason != "peer closed" && reason != "upstream finished" && !s.upstreamDone.Load() {
+	// Only a normal close is silent. The idle sweep is hygiene, not a failure: a pooled database
+	// connection, a heartbeat-less SSE subscription, or a debugger parked at a breakpoint is silent
+	// while the forward is healthy, and the listener stays up.
+	// A genuine failure must surface even when the client already finished sending: an HTTP request
+	// EOFs its upstream before the response arrives, so gating on upstreamDone hid every truncated
+	// response behind a healthy-looking forward.
+	if reason != "peer closed" && reason != "upstream finished" && reason != idleCloseReason {
 		m.setError(f, reason)
 	}
 }

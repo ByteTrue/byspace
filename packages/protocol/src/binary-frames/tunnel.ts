@@ -54,10 +54,12 @@ export function encodeTunnelFrame(input: {
   tunnelId: string;
   payload?: Uint8Array | ArrayBuffer | string;
 }): Uint8Array {
-  if (input.tunnelId.length === 0 || input.tunnelId.length > 255) {
+  const tunnelIdBytes = new TextEncoder().encode(input.tunnelId);
+  // Validate bytes, not UTF-16 units: the length lives in one byte, so a multi-byte id that passes a
+  // .length check truncates mod 256 here and both decoders then read the wrong id.
+  if (tunnelIdBytes.byteLength === 0 || tunnelIdBytes.byteLength > 255) {
     throw new RangeError("tunnelId must be 1..255 bytes");
   }
-  const tunnelIdBytes = new TextEncoder().encode(input.tunnelId);
   const payload = asUint8Array(input.payload ?? new Uint8Array()) ?? new Uint8Array();
   const bytes = new Uint8Array(2 + tunnelIdBytes.byteLength + payload.byteLength);
   bytes[0] = input.opcode;
