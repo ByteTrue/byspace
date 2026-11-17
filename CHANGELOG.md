@@ -5,6 +5,17 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.26.4 - 2026-11-17
+
+### Removed
+
+- Removed the seven app languages other than English and Simplified Chinese
+
+### Fixed
+
+- Fixed tunnels dropping about every 45 seconds while no traffic was flowing through them
+- Fixed a dropped tunnel waiting up to 30 seconds to retry the connection
+
 ## 0.26.3 - 2026-11-15
 
 ### Fixed
