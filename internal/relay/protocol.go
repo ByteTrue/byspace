@@ -369,6 +369,10 @@ func (b *frameBuffer) dropLocked(cid string) {
 	delete(b.frames, cid)
 }
 
+// flushFrames hands a connection's buffered frames to the server socket that just attached.
+// Best-effort: take() removes the whole snapshot, so a Send failure re-buffers only the frame that
+// failed and the rest are lost. The socket is already dying at that point, and tunnel streams
+// recover across a reconnect through DataDownstreamSeq replay rather than through this buffer.
 func flushFrames(ctx context.Context, room Room, buf *frameBuffer, cid string, serverPeer Peer) {
 	for _, f := range buf.take(cid) {
 		if err := serverPeer.Send(ctx, f.mt, f.data); err != nil {

@@ -103,6 +103,9 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 	if maxDelay <= 0 {
 		maxDelay = defaultReconnectMaxDelay
 	}
+	// Read the seams here, in the caller's goroutine, not inside the loop: a test that swaps one
+	// while another test's Run is still sleeping would otherwise race the write against this read.
+	jitter, sleep := reconnectJitter, reconnectSleep
 
 	delay := base
 	for {
@@ -131,7 +134,7 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 		// Exponential backoff to the cap, with equal jitter so daemons that dropped together do
 		// not all retry on the same tick. A relay restart comes back in seconds; a long outage
 		// should not be hammered.
-		if !reconnectSleep(ctx, reconnectJitter(delay)) {
+		if !sleep(ctx, jitter(delay)) {
 			return
 		}
 		delay *= 2

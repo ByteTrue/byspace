@@ -120,17 +120,16 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	room := s.acquireRoom(conn.RoomKey())
-	if room.full() {
+	peer := &peerConn{ws: ws, conn: conn}
+	router := Router{}
+
+	router.BeforeRegister(room, conn)
+	if !room.add(peer, conn.Tags()) {
 		// One room's socket count is bounded; a full room asks the client to back off instead of
 		// spawning another read goroutine. Close after Accept so the client sees a real close code.
 		_ = ws.Close(websocket.StatusCode(StatusTryAgainLater), "relay room full")
 		return
 	}
-	peer := &peerConn{ws: ws, conn: conn}
-	router := Router{}
-
-	router.BeforeRegister(room, conn)
-	room.add(peer, conn.Tags())
 	defer func() {
 		room.remove(peer)
 		router.Disconnected(context.Background(), room, room.frames, conn)
@@ -189,13 +188,20 @@ func newSessionRoom() *sessionRoom {
 	}
 }
 
-func (r *sessionRoom) add(p Peer, tags []string) {
+// add registers a peer unless the room is at its socket cap. The check and the increment share one
+// lock acquisition: checking first and adding later let concurrent handshakes all pass at conns-1
+// and overshoot the cap by the number in flight.
+func (r *sessionRoom) add(p Peer, tags []string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.conns >= MaxRoomConns {
+		return false
+	}
 	r.conns++
 	for _, tag := range tags {
 		r.tagged[tag] = append(r.tagged[tag], p)
 	}
+	return true
 }
 
 func (r *sessionRoom) remove(p Peer) {
@@ -224,13 +230,6 @@ func (r *sessionRoom) Peers(tag string) []Peer {
 	out := make([]Peer, len(src))
 	copy(out, src)
 	return out
-}
-
-// full reports whether the room already holds its maximum live sockets.
-func (r *sessionRoom) full() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.conns >= MaxRoomConns
 }
 
 func toWebsocketType(mt MessageType) websocket.MessageType {

@@ -37,7 +37,9 @@ func TestRelaySuperviseBackoffResetsAfterStableConnection(t *testing.T) {
 	defer cancel()
 
 	rt := newRelayRuntime(RelayConfig{Enabled: true, Endpoint: "wss://r"})
-	rt.stableAfter = 50 * time.Millisecond
+	// Wide margins: time.After is a lower bound, so a scheduling stall on a loaded runner must not
+	// turn a "short" connection into a "stable" one and silently reset the sequence under test.
+	rt.stableAfter = 500 * time.Millisecond
 	rt.jitter = func(d time.Duration) time.Duration { return d } // observe the raw policy delay
 	var mu sync.Mutex
 	var delays []time.Duration
@@ -52,11 +54,11 @@ func TestRelaySuperviseBackoffResetsAfterStableConnection(t *testing.T) {
 		return ctx.Err() == nil
 	}
 
-	// Short, short, stable, short. The stable connection (>= 50ms) must reset the delay to base.
+	// Short, short, stable, short. The stable connection (>= 500ms) must reset the delay to base.
 	lifetimes := make(chan time.Duration, 4)
 	lifetimes <- 10 * time.Millisecond
 	lifetimes <- 10 * time.Millisecond
-	lifetimes <- 80 * time.Millisecond
+	lifetimes <- 800 * time.Millisecond
 	lifetimes <- 10 * time.Millisecond
 	close(lifetimes)
 	connect := func(ctx context.Context, _ string) error {
@@ -75,7 +77,7 @@ func TestRelaySuperviseBackoffResetsAfterStableConnection(t *testing.T) {
 	go func() { rt.supervise(ctx, rt.config, connect); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("supervise did not stop after the fourth delay")
 	}
 
