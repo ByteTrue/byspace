@@ -55,4 +55,12 @@ proof_gap: ""
 
 ## 完成核对
 
-- （收尾时逐项核对）
+- 死包四目录删除：通过（make build + go test 全绿）。
+- quota 整链删除：通过（RPC/authz/client/web/e2e/docs 全清，浏览器探针确认 Usage 页消失、context 环保留）。
+- COMPAT 版本漂移层删除：通过（~310 处，源码仅剩 2 故意标签；Go 发送表/authz/审计豁免同步）。
+- 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing 更新）。custom-providers.md 段落堆积留待后续。
+- 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
+- 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
+- commit：c7a0e4e92（main，ahead 1，未 push——owner 未授权 push）。pre-commit hooks（lint/format/typecheck）全过。
+- 保留项确认未动：平台广度（安卓/Web/Windows/Mac）、changelog/What's New、schedules/heartbeat、git review UI、forge（GitHub+GitLab+Gitea）、Chief/roles。
+- 待另聊（owner m00196 提出，非本批执行项）：serviceproxy 详解、provider/ACP skill+模板方案、forge 插件化取舍。
