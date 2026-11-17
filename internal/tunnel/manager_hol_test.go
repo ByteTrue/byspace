@@ -122,8 +122,16 @@ func waitUpstreamDone(t *testing.T, m *Manager, id string) {
 	if s == nil {
 		return
 	}
+	// The pump clears writeDone as it exits, so snapshot the channel under the lock rather than
+	// reading the field while the pump writes it.
+	s.writeMu.Lock()
+	done := s.writeDone
+	s.writeMu.Unlock()
+	if done == nil {
+		return
+	}
 	select {
-	case <-s.writeDone:
+	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatalf("upstream pump for %s did not exit", id)
 	}
