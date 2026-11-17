@@ -20,7 +20,10 @@ func TestRelayRoomRejectsSocketsPastCap(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	wsBase := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Filling the room is 512 real handshakes. On a slow CI runner that alone takes ~10s, so the
+	// fill gets its own generous budget: sharing one deadline left the overflow read with nothing
+	// and it failed with "context deadline exceeded" instead of the close frame it must observe.
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	query := wsBase + "?serverId=srv_full&role=client&v=2&connectionId=conn_%d"
@@ -45,7 +48,11 @@ func TestRelayRoomRejectsSocketsPastCap(t *testing.T) {
 		t.Fatalf("overflow dial failed at handshake: %v", err)
 	}
 	defer overflow.CloseNow()
-	_, _, err = overflow.Read(ctx)
+	// The close frame is already queued by the time the handshake returned, so this read only needs
+	// to outlast a stalled scheduler, not the whole fill.
+	readCtx, readCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer readCancel()
+	_, _, err = overflow.Read(readCtx)
 	var ce websocket.CloseError
 	if !errors.As(err, &ce) {
 		t.Fatalf("overflow read err = %v, want a websocket.CloseError", err)
