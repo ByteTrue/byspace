@@ -91,7 +91,8 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		err := r.connectOnce(ctx)
+		var proved bool
+		err := r.connectOnce(ctx, func() { proved = true })
 		if ctx.Err() != nil {
 			return
 		}
@@ -104,6 +105,13 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 
 		// Linear-then-capped backoff, matching the node client: a relay restart comes back in
 		// seconds, and a longer outage should not hammer it.
+		//
+		// A connection that reached the peer resets it. Backoff is for an outage, not for a flap:
+		// a socket killed on a timer reconnects successfully every time, so without the reset the
+		// delay climbs to the cap and stays there — 30s down out of every 45s, forever.
+		if proved {
+			delay = base
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -116,8 +124,9 @@ func (r *TunnelReconnector) Run(ctx context.Context) {
 	}
 }
 
-// connectOnce runs one connection lifetime.
-func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
+// connectOnce runs one connection lifetime. onConnected fires the moment the peer is proven alive,
+// so Run can tell a flap from an outage and reset its backoff.
+func (r *TunnelReconnector) connectOnce(ctx context.Context, onConnected func()) error {
 	wsURL, err := r.clientURL()
 	if err != nil {
 		return err
@@ -191,6 +200,9 @@ func (r *TunnelReconnector) connectOnce(ctx context.Context) error {
 		}
 	}
 
+	if onConnected != nil {
+		onConnected()
+	}
 	if r.OnState != nil {
 		r.OnState(StateConnected)
 	}

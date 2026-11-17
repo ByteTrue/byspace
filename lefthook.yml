@@ -3,9 +3,17 @@ pre-commit:
   jobs:
     - name: format
       glob: "*.{css,js,json,jsonc,jsx,md,ts,tsx,yaml,yml}"
+      # Same as ignorePatterns in .oxfmtrc.json: oxfmt exits non-zero when every passed path is
+      # ignored, so staging a file under an ignored tree failed the hook instead of skipping it.
       exclude:
         - "package-lock.json"
         - "**/package-lock.json"
+        - "bywork/**"
+        - "design/references/**"
+        - "design/sheet-assets/**"
+        - "web/public/schemas/**"
+        - "**/*.gen.ts"
+        - "**/*.gen.tsx"
       run: npm run format:check:files -- {staged_files}
     - name: lint
       glob: "*.{js,jsx,ts,tsx}"

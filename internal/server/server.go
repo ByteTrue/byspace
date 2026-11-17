@@ -942,13 +942,16 @@ func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string)
 				_ = rawSink.Close(websocket.StatusInternalError, err.Error())
 				return e2ee.Frame{}, err
 			}
-			if plain != nil {
-				// The first frame delivered means the peer answered the nonce, so its key is proven.
-				if e2eeSess.ChallengeMet() {
-					if key, ok := e2eeSess.PeerPublicKey(); ok {
-						s.setRelayPeerKey(adapter, tunnel.PublicKeyOf(key[:]))
-					}
+			// The challenge echo is the proof, and it is never delivered as an application frame:
+			// DaemonSession.Receive swallows it. A tunnel peer that carries no traffic yet has still
+			// answered the nonce, so record the key here rather than at delivery — otherwise the hello
+			// deadline in serveSessionOnSinkGreeted closes an idle tunnel's socket every 15s.
+			if e2eeSess.ChallengeMet() {
+				if key, ok := e2eeSess.PeerPublicKey(); ok {
+					s.setRelayPeerKey(adapter, tunnel.PublicKeyOf(key[:]))
 				}
+			}
+			if plain != nil {
 				return *plain, nil
 			}
 		}

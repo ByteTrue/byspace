@@ -188,6 +188,15 @@ func TestBuildRelaunchScriptUsesOpenMinusNRetriesAndExecFallback(t *testing.T) {
 
 func TestEnsureBundleCLISymlinkLinksAndRespectsStandaloneCopyUnlessForced(t *testing.T) {
 	tmp := t.TempDir()
+	// The link is created inside EnsureBundleCLISymlink, which swallows the error and returns
+	// ok=false, so probe the capability here: a Windows account without SeCreateSymbolicLinkPrivilege
+	// (developer mode off) cannot be told apart from a broken function any other way. Not a skip —
+	// the cases that need no privilege still run on every host.
+	canLink := true
+	if err := os.Symlink(tmp, filepath.Join(tmp, "probe-link")); err != nil {
+		t.Logf("cannot create symlinks on this host, checking only the paths that need none: %v", err)
+		canLink = false
+	}
 	bundle := filepath.Join(tmp, "BySpace.app")
 	macOSDir := filepath.Join(bundle, "Contents", "MacOS")
 	if err := os.MkdirAll(macOSDir, 0o755); err != nil {
@@ -198,17 +207,24 @@ func TestEnsureBundleCLISymlinkLinksAndRespectsStandaloneCopyUnlessForced(t *tes
 		t.Fatal(err)
 	}
 	binDir := filepath.Join(tmp, "bin")
+	linkPath := filepath.Join(binDir, "byspace")
 
 	// 1. When ~/.local/bin/byspace is absent, creates symlink automatically.
-	linkPath, ok := EnsureBundleCLISymlink(bundle, binDir, false)
-	if !ok || linkPath == "" {
-		t.Fatalf("expected symlink creation to succeed, got ok=%v path=%q", ok, linkPath)
-	}
-	if dest, err := os.Readlink(linkPath); err != nil || dest != target {
-		t.Fatalf("readlink = %q (err=%v), want %q", dest, err, target)
+	if canLink {
+		got, ok := EnsureBundleCLISymlink(bundle, binDir, false)
+		if !ok || got == "" {
+			t.Fatalf("expected symlink creation to succeed, got ok=%v path=%q", ok, got)
+		}
+		if dest, err := os.Readlink(linkPath); err != nil || dest != target {
+			t.Fatalf("readlink = %q (err=%v), want %q", dest, err, target)
+		}
 	}
 
-	// 2. When a standalone regular file exists and force=false, leaves it untouched.
+	// 2. When a standalone regular file exists and force=false, leaves it untouched. This branch
+	// returns before any os.Symlink, so it is checked on every host.
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	_ = os.Remove(linkPath)
 	if err := os.WriteFile(linkPath, []byte("standalone-cli"), 0o755); err != nil {
 		t.Fatal(err)
@@ -216,8 +232,14 @@ func TestEnsureBundleCLISymlinkLinksAndRespectsStandaloneCopyUnlessForced(t *tes
 	if _, ok := EnsureBundleCLISymlink(bundle, binDir, false); ok {
 		t.Fatal("expected standalone CLI copy not to be overwritten when force=false")
 	}
+	if data, err := os.ReadFile(linkPath); err != nil || string(data) != "standalone-cli" {
+		t.Fatalf("force=false changed the standalone copy: %q (err=%v)", data, err)
+	}
 
 	// 3. With force=true, replaces standalone copy with symlink to the .app binary.
+	if !canLink {
+		return
+	}
 	if _, ok := EnsureBundleCLISymlink(bundle, binDir, true); !ok {
 		t.Fatal("expected force=true to replace standalone copy with symlink")
 	}
