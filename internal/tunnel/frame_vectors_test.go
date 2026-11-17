@@ -24,6 +24,13 @@ type tunnelVectors struct {
 		Name     string `json:"name"`
 		FrameHex string `json:"frameHex"`
 	} `json:"invalid"`
+	EncodeReject []struct {
+		Name       string `json:"name"`
+		Opcode     int    `json:"opcode"`
+		TunnelID   string `json:"tunnelId"`
+		PayloadHex string `json:"payloadHex"`
+		Why        string `json:"why"`
+	} `json:"encodeReject"`
 }
 
 func loadTunnelVectors(t *testing.T) tunnelVectors {
@@ -97,6 +104,23 @@ func TestTunnelFrameVectorsRejectInvalid(t *testing.T) {
 			}
 			if _, ok := DecodeFrame(frameBytes); ok {
 				t.Fatalf("DecodeFrame accepted invalid vector %s", v.Name)
+			}
+		})
+	}
+}
+
+// The id length lives in one byte, so it must be validated in UTF-8 bytes on both sides. A UTF-16
+// length check passes an id that then truncates mod 256 in the length byte, and both decoders read
+// the wrong id and treat the remainder as payload — corruption rather than a rejection.
+func TestTunnelFrameVectorsRejectEncode(t *testing.T) {
+	for _, v := range loadTunnelVectors(t).EncodeReject {
+		t.Run(v.Name, func(t *testing.T) {
+			payload, err := hex.DecodeString(v.PayloadHex)
+			if err != nil {
+				t.Fatalf("bad payloadHex: %v", err)
+			}
+			if got, err := EncodeFrame(byte(v.Opcode), v.TunnelID, payload); err == nil {
+				t.Fatalf("EncodeFrame accepted %s and emitted %x; %s", v.Name, got, v.Why)
 			}
 		})
 	}

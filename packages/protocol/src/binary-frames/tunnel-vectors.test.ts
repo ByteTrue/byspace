@@ -8,6 +8,13 @@ import { decodeTunnelFrame, encodeTunnelFrame, type TunnelDataFrame } from "./tu
 // follow fails on both sides. frameHex comes from the layout spec, not from either codec's output.
 interface Vectors {
   valid: { name: string; opcode: number; tunnelId: string; payloadHex: string; frameHex: string }[];
+  encodeReject: {
+    name: string;
+    opcode: number;
+    tunnelId: string;
+    payloadHex: string;
+    why: string;
+  }[];
   invalid: { name: string; frameHex: string }[];
 }
 
@@ -54,6 +61,18 @@ describe("tunnel shared frame vectors", () => {
         payload,
       });
       expect(toHex(bytes)).toBe(v.frameHex);
+    });
+  }
+
+  for (const v of vectors.encodeReject) {
+    it(`refuses to encode ${v.name}`, () => {
+      expect(() =>
+        encodeTunnelFrame({
+          opcode: v.opcode as 0x20 | 0x21 | 0x22,
+          tunnelId: v.tunnelId,
+          payload: fromHex(v.payloadHex),
+        }),
+      ).toThrow(RangeError);
     });
   }
 
