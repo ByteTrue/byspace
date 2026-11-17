@@ -583,8 +583,10 @@ func (t *Target) sendOrPause(stream *targetStream, frame Frame) bool {
 	if sequenced {
 		if !stream.downstream.append(frame.Payload) {
 			stream.closeReason.Store("unacknowledged downstream buffer exceeded 16 MiB")
-			t.closeStream(stream)
+			// closeStream takes this same lock. Holding it across the call parks this pump forever
+			// on a mutex it already owns, leaving the socket open and both pumps running.
 			stream.writeMu.Unlock()
+			t.closeStream(stream)
 			return false
 		}
 		frame = Frame{
@@ -677,6 +679,14 @@ func (t *Target) closeStream(stream *targetStream) {
 	}
 	_ = stream.conn.Close()
 	reason, _ := stream.closeReason.Load().(string)
+	// Tell the peer. Without this the manager keeps its local socket open and the client waits on a
+	// response that will never come, until the manager's own idle sweep hours later.
+	stream.writeMu.Lock()
+	send := stream.send
+	stream.writeMu.Unlock()
+	if send != nil {
+		_ = send(Frame{Opcode: OpcodeClose, TunnelID: stream.id})
+	}
 	slog.Info("tunnel target stream closed", "streamId", stream.id, "framesUp", stream.framesUp.Load(), "framesDown", stream.framesDown.Load(), "reason", reason)
 }
 
@@ -703,6 +713,11 @@ func (t *Target) Close() {
 			close(s.resume)
 		}
 		s.writeMu.Unlock()
+		// Wake a parked upstream writer so it exits now rather than on its next poll.
+		select {
+		case s.upNotify <- struct{}{}:
+		default:
+		}
 		_ = s.conn.Close()
 	}
 }
