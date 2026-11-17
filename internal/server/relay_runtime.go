@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"os"
@@ -44,10 +45,20 @@ type relayRuntime struct {
 	// override or a dial that silently fell back would otherwise be reported as the configured
 	// address.
 	connectedEndpoint string
+	// Backoff policy and seams, set once at construction. Instance fields, not globals, so a test
+	// can drive one runtime's supervise loop without racing the goroutines other tests leave up.
+	stableAfter time.Duration
+	jitter      func(time.Duration) time.Duration
+	sleep       func(context.Context, time.Duration) bool
 }
 
 func newRelayRuntime(cfg RelayConfig) *relayRuntime {
-	return &relayRuntime{config: cfg}
+	return &relayRuntime{
+		config:      cfg,
+		stableAfter: relayStableAfter,
+		jitter:      relayJitter,
+		sleep:       relaySleep,
+	}
 }
 
 // Config returns the current configuration.
@@ -99,6 +110,29 @@ func (r *relayRuntime) Apply(parent context.Context, cfg RelayConfig, connect fu
 	go r.supervise(ctx, cfg, connect)
 }
 
+// relayStableAfter is how long a connection must live before a later drop is treated as a fresh
+// fault. ConnectRelay blocks for the whole life of the connection and returns only when it dies,
+// so attempt counts lifetime reconnects, not consecutive failures; the elapsed time is the signal
+// that the relay was healthy. A connection that lived this long resets the backoff.
+const relayStableAfter = 30 * time.Second
+
+// relayJitter spreads a delay over [d/2, d] (equal jitter) so daemons that dropped together do not
+// reconnect in lockstep and hammer the relay as one fleet. relaySleep waits out a delay or stops
+// when ctx is cancelled. Both are relayRuntime fields so a test can observe the backoff on one
+// runtime without racing the supervise goroutines other tests leave running.
+func relayJitter(d time.Duration) time.Duration {
+	return d/2 + time.Duration(rand.Int64N(int64(d/2)+1))
+}
+
+func relaySleep(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
 // supervise keeps the relay connected, with linear backoff to 30s.
 //
 // Ported from relay-transport.ts. A fixed short retry hammers a relay that is down for a while
@@ -111,11 +145,16 @@ func (r *relayRuntime) supervise(ctx context.Context, cfg RelayConfig, connect f
 	attempt := 0
 	var lastErr string
 	for ctx.Err() == nil {
-		// connect reports success the moment the dial is established (see ConnectRelay), so this
-		// records the address that worked rather than the one that was configured.
+		start := time.Now()
 		err := connect(ctx, cfg.Endpoint)
 		if ctx.Err() != nil {
 			return
+		}
+		// connect blocks for the life of the connection, so a long-lived one that just dropped is
+		// a fresh fault, not the tail of an outage. Reset before counting this drop so the next
+		// retry uses the 1s base instead of the 30s cap a long-running daemon would have built up.
+		if time.Since(start) >= r.stableAfter {
+			attempt = 0
 		}
 		attempt++
 		if err != nil {
@@ -130,10 +169,8 @@ func (r *relayRuntime) supervise(ctx context.Context, cfg RelayConfig, connect f
 		if delay > 30*time.Second {
 			delay = 30 * time.Second
 		}
-		select {
-		case <-ctx.Done():
+		if !r.sleep(ctx, r.jitter(delay)) {
 			return
-		case <-time.After(delay):
 		}
 	}
 }

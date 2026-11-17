@@ -120,6 +120,12 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	room := s.acquireRoom(conn.RoomKey())
+	if room.full() {
+		// One room's socket count is bounded; a full room asks the client to back off instead of
+		// spawning another read goroutine. Close after Accept so the client sees a real close code.
+		_ = ws.Close(websocket.StatusCode(StatusTryAgainLater), "relay room full")
+		return
+	}
 	peer := &peerConn{ws: ws, conn: conn}
 	router := Router{}
 
@@ -173,6 +179,7 @@ type sessionRoom struct {
 	mu     sync.Mutex
 	tagged map[string][]Peer
 	frames *frameBuffer
+	conns  int
 }
 
 func newSessionRoom() *sessionRoom {
@@ -185,6 +192,7 @@ func newSessionRoom() *sessionRoom {
 func (r *sessionRoom) add(p Peer, tags []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.conns++
 	for _, tag := range tags {
 		r.tagged[tag] = append(r.tagged[tag], p)
 	}
@@ -193,6 +201,7 @@ func (r *sessionRoom) add(p Peer, tags []string) {
 func (r *sessionRoom) remove(p Peer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.conns--
 	for tag, list := range r.tagged {
 		next := list[:0]
 		for _, item := range list {
@@ -215,6 +224,13 @@ func (r *sessionRoom) Peers(tag string) []Peer {
 	out := make([]Peer, len(src))
 	copy(out, src)
 	return out
+}
+
+// full reports whether the room already holds its maximum live sockets.
+func (r *sessionRoom) full() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.conns >= MaxRoomConns
 }
 
 func toWebsocketType(mt MessageType) websocket.MessageType {
