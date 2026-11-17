@@ -70,6 +70,8 @@ jobs:
         with:
           node-version: "22.23.4"
           cache: npm
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
       - run: npm ci
       - run: make build-web
       - uses: actions/upload-artifact@v4

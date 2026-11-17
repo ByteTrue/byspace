@@ -10,8 +10,17 @@ Main pushes route through the same path filters as pull requests (`.github/ci-pa
 
 ## Prerequisites
 
-- Node.js (see `.github/workflows/ci.yml` `node-version` for exact version)
-- npm workspaces (comes with Node)
+- Node.js LTS. Local Node versions are not pinned; CI selects its own test runtime.
+- Corepack (install separately if your Node distribution omits it).
+
+The root `packageManager` field selects npm. Use `node scripts/project-npm.mjs install` and
+`node scripts/project-npm.mjs run <script>` for project commands. The launcher creates npm shims
+in ignored `.dev/corepack` and prepends them to its child processes' PATH, including nested npm
+scripts and version hooks. It does not change your global Node, npm, or shell PATH. Do not run
+`corepack enable npm` without `--install-directory`: that would replace global npm shims.
+
+CI uses the same launcher to add these shims to subsequent steps. Existing bare `npm` commands
+below are also valid inside that environment; outside it, use the launcher prefix.
 
 ## Running the dev server
 

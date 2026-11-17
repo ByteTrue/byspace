@@ -54,6 +54,8 @@ jobs:
           cache: "npm"
           registry-url: "https://npm.pkg.github.com"
           scope: "@boudra"
+      - name: Select project npm
+        run: node scripts/project-npm.mjs --setup-ci
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci

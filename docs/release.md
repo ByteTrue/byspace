@@ -1,6 +1,11 @@
 # Release
 
-Use Node 22.23.4 and npm 10.9.9. Run release commands from a clean `main` checkout.
+Run release commands from a clean `main` checkout through `node scripts/project-npm.mjs`.
+For example, `node scripts/project-npm.mjs run release:patch`. This selects the root
+`packageManager` npm for the entire command tree without changing global tools. Local Node is
+not pinned; use your installed Node LTS. See [project tool setup](development.md#prerequisites).
+The `npm` examples below assume this launcher prefix; do not substitute a global npm for release
+commands.
 
 ## Published targets
 

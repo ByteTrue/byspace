@@ -18,6 +18,7 @@ WORKDIR /tmp/byspace-src
 
 # Manifests first so the `npm ci` layer survives source-only changes (issue 027).
 COPY package.json package-lock.json ./
+COPY scripts/project-npm.mjs scripts/project-npm.mjs
 COPY packages/highlight/package.json packages/highlight/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/client/package.json packages/client/
@@ -26,7 +27,7 @@ COPY web/package.json web/
 
 RUN set -eux; \
     node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
-    npm ci
+    node scripts/project-npm.mjs ci
 
 COPY . .
 
@@ -38,7 +39,7 @@ RUN set -eux; \
     if [ -n "${BYSPACE_VERSION:-}" ]; then \
       test "$(node -p "require('./package.json').version")" = "${BYSPACE_VERSION}"; \
     fi; \
-    npm run build:daemon-web-ui; \
+    node scripts/project-npm.mjs run build:daemon-web-ui; \
     test -f internal/webui/dist/index.html; \
     test -f internal/webui/dist/schemas/byspace.config.v1.json; \
     test -f internal/webui/dist/docs/index.html; \
