@@ -40,7 +40,7 @@ import {
   selectBestConnection,
   type ConnectionCandidate,
   type ConnectionProbeState,
-} from "@/utils/connection-selection";
+} from "@/runtime/connection-selection";
 import {
   useSessionStore,
   type Agent,
@@ -58,7 +58,7 @@ import {
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
 import { ReplicaCache } from "@/runtime/replica-cache";
 import type { ReplicaRowStore } from "@/runtime/replica-cache/row-store";

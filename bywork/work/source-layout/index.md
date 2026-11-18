@@ -1,10 +1,10 @@
 ---
 kind: work
-status: in_progress
-current_unit: "批次 F：功能归位（utils/hooks/components/stores 平铺搬进功能目录）"
-next_action: "先按前缀枚举 core/utils 181 个平铺文件的归属（agent- 14、workspace- 13、sidebar- 11、project- 10、tool-call- 9…），生成 scope.md 逐文件对账，再分批 git mv"
+status: complete
+current_unit: "全部完成（A–F 六批）"
+next_action: "无。推分支后看 GitHub Actions 的真实结果；两个既有坏测与 raw-query 规则待用户决定是否单独修"
 must_hold: "不改既有测试断言；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
-proof_gap: "批次 F 未开工；shadcn 未用的 progress/scroll-area 按 docs/design.md:21 的 vendored 规则不删（npx shadcn add 会重装），与用户「一起清掉」的字面要求有偏差，已在对话说明；shortcut/text-input 同理不删（一个是 Kbd 薄封装、一个是 DOM-owned 编辑器），已改文档承认；两个既有坏测（file-explorer-context-actions.spec.ts:474、settings-navigation.spec.ts:74）基线已证明与本次无关，按既有测试只读不修；.oxlintrc.json 的 raw-query burn-down 规则早已丢失，补回会暴露 23 处既有违规，已置 off 并留 shortcut 注释"
+proof_gap: ""
 ---
 
 # 源码布局根治：一棵树、一个 alias、三种目录角色
@@ -74,15 +74,34 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 | 全仓只剩一个 alias | `node --test scripts/web-layout.test.mjs` | 留一个 `~/` specifier 见红；再查 vite/tsconfig/components.json | 报出残留；三处配置一致 | 红证 `.dev/baseline/web-alias-red.log`；components.json 红证 `.dev/baseline/web-shadcn-red.log`。specifier 覆盖率实测 4306 matched / 62 unmatched，62 全是给用户看的 home 路径与文件链接 fixture（`.dev/baseline/specifier-coverage.log`） | 通过 |
 | 合并后应用行为不变 | `npm run audit:browser -- --base http://127.0.0.1:6779` + 受影响 spec | 构建 → 重嵌 UI → make build → 起 dev daemon → 真浏览器 | 11/11 一致性检查通过 | `.dev/audit-browser-e2.log` **11/11**（含 sidebar 首屏、provider 目录、思考等级菜单、零协议校验错误）；e2e `.dev/e2e-e1.log` 6/6、`.dev/e2e-e2.log` 18/18、`.dev/e2e-e3.log` 29/30（唯一失败是既有坏测，见下）；单测 `.dev/unit-e1.log` 58/58（含 home 路径 fixture 未被误改） | 通过 |
 | 重复消除后 UI 不变 | `cd web && npm run test:e2e -- <受影响 spec>` | 跑覆盖 5 对重复消费者的 spec | 图标/状态点/文件图标/forge 图标/检查状态渲染与改前一致 | D 批 18/19 通过：`.dev/e2e-d1.log` 10/10（workspace-hover-card-agents / sidebar-help / command-center-file-search / sidebar-mobile-menu-sheets）、`.dev/e2e-d2.log` 8/9（explorer-sidebar / new-tab-startup / startup-loading 全绿）。唯一失败是既有坏测，见下 | 通过 |
-| 两套断点合一后 sidebar 行为不变 | `cd web && npm run test:e2e -- e2e/browser/sidebar-mobile-menu-sheets.spec.ts` | 窄视口下开 sidebar | 移动端 sheet 行为与改前一致 | `.dev/e2e-d1.log` 该 spec 全绿；`useIsMobile` 现在委托 `useIsCompactFormFactor`，两个阈值（<768 与 <=767.98）合成一个 | 通过 |
+| 两套断点合一后 sidebar 行为不变 | `cd web && npm run test:e2e -- e2e/browser/sidebar-mobile-menu-sheets.spec.ts` | 窄视口下开 sidebar | 移动端 sheet 行为与改前一致 | `.dev/e2e-d1.log` 该 spec 全绿；E 批进一步根治：断点实现搬进 `platform/use-compact-form-factor.ts`，`constants/layout.ts` 只 re-export，`hooks/use-mobile.ts` 删除，ui/ 因此零例外 | 通过 |
+| 平铺模块归位后应用行为不变 | `npm run audit:browser -- --base http://127.0.0.1:6779` + 受影响 spec | 277 个模块搬进功能目录后，构建 → 重嵌 → make build → 起 daemon → 真浏览器 | 11/11；既有测试原断言通过 | F 批：`audit:browser` **11/11**（`.dev/audit-browser-f.log`）；e2e `.dev/e2e-f1.log` 11/11、`.dev/e2e-f2.log` 27/28（唯一失败是 E 批已基线证明的既有坏测 settings-navigation.spec.ts:74）；单测 `.dev/unit-f1.log` **297/297**（32 文件，覆盖 sidebar/tool-calls/lib 与两个搬动的 composer 模块） | 通过 |
+| 搬运没有留下断链 | `npm run typecheck` + `npm run lint` + 四个契约守卫 | 277 文件 git mv + 320 文件 specifier 重写后全仓检查 | 0 error；burn-down 名单跟着改道 | typecheck exit=0（`.dev/tc-f4.log`）；lint `0 warnings and 0 errors`（2082 文件）；守卫 13/13。过程中 typecheck 抓到 14 处「指向留在原地的兄弟」的相对 import（与 `.dev/probe-f-links.mjs` 预测的 15 处一致），已按真实位置解析修复；`.oxlintrc.json` 的 9 条 burn-down 条目同步改道（否则 6 个 grandfathered 文件脱离豁免名单报错） | 通过 |
+| 归属计划不违反角色规则 | `node .dev/check-f-roles.mjs` | 执行前检查计划里落进 platform/ui 的模块是否依赖功能代码 | 0 违规 | 首版计划报 4 处：encode-images→attachments、os-notifications→notification-routing、rich-clipboard→assistant-markdown-parser。读过文件后改判：encode-images 归 attachments（它只是 encodeAttachmentsForSend 的 pass-through）、os-notifications 归 push-notifications、rich-clipboard 归 assistant-selection-copy。改判后 0 违规、0 路径碰撞 | 通过 |
 
 ## 完成核对
 
-- 行为门：A 批 6 行、B 批 3 行、C 批 3 行、D 批 2 行、E 批 3 行通过；F 未跑
-- 范围门：待生成 `scope.md`（F 批必须逐文件枚举）
-- 契约门：`audit:browser` 基线 11/11（`.dev/baseline/audit-browser2.log`），E 批复跑同样 **11/11**（`.dev/audit-browser-e2.log`）。CI 契约组 85/85（`.dev/ci-contracts-e.log`）
-- 完成门：未达成（F 未开工）
-- 需要用户看的推断或无法判定：两个既有坏测与 raw-query 规则丢失，见「本轮之外的发现」
+- 行为门：A 批 6 行、B 批 3 行、C 批 3 行、D 批 2 行、E 批 3 行、F 批 3 行通过，共 20 行
+- 范围门：`scope.md` 432 项——296「已覆盖」（277 首轮 + 19 补漏，搬进功能目录）、136「不适用」（跨域原语，留在 lib/platform/widgets 或原桶）
+- 契约门：`audit:browser` 基线 11/11（`.dev/baseline/audit-browser2.log`），E 批 11/11、F 批 11/11。CI 契约组 85/85（`.dev/ci-contracts-f.log`）
+- 完成门：达成
+- 需要用户看的推断或无法判定：两个既有坏测、raw-query 规则丢失、docs 里 20 处退役 Node 路径引用，见「本轮之外的发现」
+
+## 批次 F 的归属规则与剩余共享桶
+
+四个类型桶从 432 个平铺文件降到 136（utils 180→48、hooks 89→43、components 134→24、stores 29→21）。判据不是「消费者最多的是谁」——那会把 `device-timezone.ts`（3 行 Intl）判给 screens——而是**这个模块属于哪个领域**：
+
+- 一个明确的功能归属 → 搬进去，去掉与目录重复的前缀（`utils/sidebar-reorder.ts` → `sidebar/reorder.ts`）。
+- 浏览器/宿主 API 的替身 → `platform/`（12 个，如 external-links、ime-anchor、wails、web-focus）。
+- 与领域无关的通用助手 → `lib/`（time、path、color、exhaustive、latency、use-stable-event…）。
+- shadcn 之上的应用自建件 → `widgets/`（26 个，如 adaptive-modal-sheet、info-hover-card、shortcut、material-file-icon）。
+- 真正跨域、没有单一主人的（如 `utils/host-routes.ts` 被 14 个目录用、`stores/session-store.ts` 被 27 个用）→ 留在原桶，`scope.md` 记「不适用」并写明理由。**这不是遗漏**。
+
+机械核对：`.dev/probe-f-transitive.mjs` 出传递消费者 → `.dev/plan-f.mjs` 出计划（含碰撞检查）→ `.dev/check-f-roles.mjs` 出角色违规 → `.dev/migrate-f.mjs` 执行 → `.dev/fix-f-relatives.mjs` 修相对链。
+
+**补漏轮（自查抓到探针的盲区）**：首轮 277 个搬完后，`.dev/probe-f-leftover.mjs` 复核发现还有 **12 个模块有单一功能归属**——首轮探针把「只被另一个桶消费」当成了跨域，没有一路走到功能目录。补搬 19 个文件（含测试）：agent-stream 收 8 个模块（fork-menu、message-render-limit、compaction-label、notification-parser、plan-card、use-revealed-text、markdown-parser、message-height-estimate）、data/provider-icon-name、appearance/xterm-theme（消费者是 appearance/terminal-theme 与 panels/terminal-pane，领域是外观不是面板）、sidebar/{archive-navigation,archive-redirect}。补搬后复核 **single feature owner = 0**。
+- 验证：typecheck exit=0（两处相对链已修：e2e spec 的 `../../src/components/assistant-message-render-limit`、message-height-estimate.test.ts 的 `./assistant-image-metadata`）、lint 0/0、守卫 17/17、单测 `.dev/unit-f2.log` **240/240**（30 文件）、e2e `.dev/e2e-f3.log` **7/7**（assistant-fork-menu / assistant-message-render-limit / plan-card）与 `.dev/e2e-f4.log` **15/15**、`audit:browser` **11/11**（`.dev/audit-browser-f2.log`）。
+- 外部引用同步：docs/agent-stream-performance.md（首轮另有 AGENTS.md 与 7 篇 docs、internal/gui/notify.go、internal/pathutil/equivalence.go、web/public/sw.js、docs/forms.md）。
 
 ## 本轮之外的发现
 
@@ -93,4 +112,5 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
   - 该 spec 还打印 React Router 警告：`You rendered descendant <Routes> (or called useRoutes()) at "/" (under <Route path="/">) but the parent route path has no trailing "*"` —— 与「深层路由不再匹配」的症状一致，是这条失败的线索，但修它属独立一次改动。
 
 - **端口 6778 被别的 agent 占着（环境坑，不是缺陷）**：`audit:browser` 首跑 3/6（sidebar 快照 `text: Not found`），根因不是我的改动——`lsof -nP -iTCP:6778 -sTCP:LISTEN` 显示 PID 18224 是 `/Users/zijie/.local/share/opencode/worktree/1c1f53/kind-moon/bin/byspace serve`，另一个 worktree 的 dev daemon（17:51 启动，有未提交改动），serving 它自己的旧 UI。**没有动它**。改用 `BYSPACE_LISTEN=127.0.0.1:6779 npm run dev:daemon` 起自己的，再 `audit:browser -- --base http://127.0.0.1:6779` → 11/11。教训：`npm run cli -- daemon status` 报 stopped 不代表端口空闲，它只认自己 home 的 pid 文件。
+- **docs 里 20 处退役 Node 路径引用**：`grep -rn "packages/server/src" docs/*.md` 有 20 处（ad-hoc-daemon-testing、agent-lifecycle、architecture、archive-parity、data-model、development 等），指向已随 Node daemon 消失的文件。`docs/archive-parity.md` 已改为「在 tag v0.20.0 里读」，但其余篇仍写成工作树路径。属独立一次文档清理，本轮不动。
 - `web/public/schemas/byspace.config.v1.json` 的生成器随 Node daemon 一起消失了（CHANGELOG.md:670 说它「generated from the daemon's own config definition」，归档笔记 002 记的命令是 `npm run --workspace=@bytetrue/server generate:config-schema`）。C 批已定：Go 侧 `internal/store/store.go:1113 LoadDaemonConfig` 读的是无类型 map，没有可生成的定义源，所以它是手工维护的对外契约，用 daemon 自己的设置路径表守住。

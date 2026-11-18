@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { z } from "zod";
-import type { SidebarCalloutAction, SidebarCalloutVariant } from "@/components/sidebar-callout";
+import type { SidebarCalloutAction, SidebarCalloutVariant } from "@/contexts/sidebar-callout";
 
 export interface SidebarCalloutOptions {
   id: string;

@@ -6,7 +6,7 @@ import { useCallback, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react";
 import { BYSPACE_LOGO_PATH, BYSPACE_LOGO_VIEWBOX } from "@/components/icons/byspace-logo-path";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { Button } from "@/ui/button";
 

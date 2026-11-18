@@ -5,14 +5,14 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/ui/alert";
 import { CircleAlert, ExternalLink, Gift } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { Badge } from "@/ui/badge";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { resolveAppVersion } from "@/utils/app-version";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { useChangelog, type ChangelogState } from "@/changelog/internal/changelog-source";
 import { useRevealedReleases } from "@/changelog/internal/use-revealed-releases";
 import {

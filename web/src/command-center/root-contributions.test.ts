@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
+import type { SidebarGroupMode } from "@/sidebar/view-store";
 import type { CommandCenterIconProps } from "./contributions";
 import { buildGroupingContribution, type GroupingCommandCenterSource } from "./root-contributions";
 

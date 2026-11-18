@@ -1,4 +1,4 @@
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath } from "@/lib/path";
 
 function safeDecodeURIComponent(value: string): string {
   try {

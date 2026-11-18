@@ -21,7 +21,7 @@ import {
   normalizeDomTerminalKey,
   normalizeTerminalTransportKey,
   shouldInterceptDomTerminalKey,
-} from "@/utils/terminal-keys";
+} from "@/terminal/keys";
 import { renderTerminalSnapshotToAnsi } from "./terminal-snapshot";
 import {
   createTerminalLocalFileLinkProvider,

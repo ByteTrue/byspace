@@ -7,7 +7,7 @@ import { Terminal } from "lucide-react";
 import invariant from "tiny-invariant";
 import type { ListTerminalsResponse } from "@bytetrue/protocol/messages";
 import { deriveTerminalActivityStatusBucket } from "@bytetrue/protocol/terminal-activity";
-import { TerminalPane } from "@/components/terminal-pane";
+import { TerminalPane } from "@/panels/terminal-pane";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { queryClient } from "@/data/query-client";

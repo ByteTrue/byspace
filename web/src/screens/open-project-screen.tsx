@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "@/platform/navigation";
 import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
-import { CommunityLinks } from "@/components/community-links";
+import { CommunityLinks } from "@/screens/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";

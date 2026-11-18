@@ -7,8 +7,8 @@ import { useTranslation } from "react-i18next";
 import type {
   DraggableListDragHandleProps,
   DraggableRenderItemInfo,
-} from "@/components/draggable-list.types";
-import { SortableInlineList } from "@/components/sortable-inline-list";
+} from "@/widgets/draggable-list.types";
+import { SortableInlineList } from "@/widgets/sortable-inline-list";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import type { PanelIconProps } from "@/panels/panel-registry";
 import { panelSupportsHost } from "@/panels/panel-manifest";

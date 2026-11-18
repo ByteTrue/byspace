@@ -3,9 +3,9 @@
 // select-then-close handshake. Mode, thinking, role and select-type features are all this.
 import { useCallback, useRef, useState, type ReactElement } from "react";
 import type { AgentControlIcon } from "@/agent-controls/icons";
-import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import type { SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/widgets/combobox";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import type { ShortcutKey } from "@/utils/format-shortcut";

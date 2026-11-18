@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
-import { isWailsDesktopContainer } from "@/utils/wails";
+import { isWailsDesktopContainer } from "@/platform/wails";
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";

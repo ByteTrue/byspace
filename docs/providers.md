@@ -335,7 +335,7 @@ A new **built-in** provider needs a native adapter:
    thinking setters, commands, subagents, and the event subscription. Wire it into the `switch spec.Protocol`
    in `StartProviderSession`, or reuse an existing protocol (`acp`, `pi-rpc`, …).
 3. Add a provider icon under `web/src/components/icons/` and register it in
-   `web/src/components/provider-icons.ts`. Without one, the UI falls back to a generic `Bot` icon.
+   `web/src/widgets/provider-icons.ts`. Without one, the UI falls back to a generic `Bot` icon.
 4. Run `npm run typecheck` and `npm run audit` (the Go parity checks catch a field the daemon does not parse
    or does not send).
 

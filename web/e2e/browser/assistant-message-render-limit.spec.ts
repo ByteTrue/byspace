@@ -1,5 +1,5 @@
 import { expect, test } from "../support/fixtures";
-import { getUtf8ByteLength } from "../../src/components/assistant-message-render-limit";
+import { getUtf8ByteLength } from "../../src/agent-stream/message-render-limit";
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 test("caps a newline-heavy assistant message before rendering markdown", async ({ page }) => {

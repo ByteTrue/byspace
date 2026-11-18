@@ -2,7 +2,7 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-skills.py; edit it directly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { Switch } from "@/ui/switch";

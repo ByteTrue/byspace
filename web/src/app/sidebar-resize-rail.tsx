@@ -1,6 +1,6 @@
 import { useCallback, useRef, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
+import { resolveDesktopSidebarWidth } from "@/app/desktop-sidebar-layout";
 import { usePanelStore } from "@/stores/panel-store";
 import { SidebarRail, useSidebar } from "@/ui/sidebar";
 

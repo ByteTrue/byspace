@@ -2,7 +2,7 @@
 // button (28px, 32px on a phone) with a tooltip naming it and its shortcut.
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { Button } from "@/ui/button";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 

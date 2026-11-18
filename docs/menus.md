@@ -28,7 +28,7 @@ what makes a choice list audible as on/off things. A row whose submenu is open i
 
 An item whose request is still running stays in the menu with a `Spinner` and a pending label, and
 the menu stays open (`onSelect` calls `event.preventDefault()`) until the request settles. A
-trailing hint is `DropdownMenuShortcut`, or `Shortcut` (`web/src/components/shortcut.tsx`) for a
+trailing hint is `DropdownMenuShortcut`, or `Shortcut` (`web/src/widgets/shortcut.tsx`) for a
 key chord. `Shortcut` is shadcn's `Kbd` plus the app's two policies — hide the hint when a layer
 owns the keyboard, and normalize a stored chord for display — so it is not a hand-drawn key cap.
 

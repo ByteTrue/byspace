@@ -25,9 +25,9 @@ import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
-import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
+import { ArchivedAgentCallout } from "@/panels/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { Composer } from "@/composer";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import {
@@ -36,13 +36,13 @@ import {
 } from "@/composer/pill-styles";
 import { getActiveMessageSubmissions } from "@/composer/submission/model";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
-import { getProviderIcon } from "@/components/provider-icons";
-import { type ToastApi, useToastApi } from "@/components/toast-host";
+import { getProviderIcon } from "@/widgets/provider-icons";
+import { type ToastApi, useToastApi } from "@/widgets/toast-host";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
-import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
+import { useAgentAttentionClear } from "@/panels/use-agent-attention-clear";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
 import {
   type AgentScreenAgent,
@@ -59,7 +59,7 @@ import {
 } from "@/panels/reconnect-toast-state";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import {
   type HostRuntimeConnectionStatus,
@@ -96,7 +96,7 @@ import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents"
 import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
-import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { deriveSidebarStateBucket } from "@/sidebar/agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
 
 interface ChatAgentStateShape {

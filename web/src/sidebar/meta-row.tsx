@@ -29,14 +29,14 @@ import {
   type WorkspaceServiceSummary,
 } from "@/components/sidebar/workspace-meta-row/service-summary";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
-import { DiffStat } from "@/components/diff-stat";
+import { DiffStat } from "@/widgets/diff-stat";
 import type { PrHint } from "@/git/pr-hint";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { SidebarWorkspaceTrailing } from "@/hooks/use-settings";
 import { identityForeground, identityTint } from "@/styles/identity-colors";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { cn } from "cn";
 import { useResolvedColorScheme } from "@/app/color-scheme";
 

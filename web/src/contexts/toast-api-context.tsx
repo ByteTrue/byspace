@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { ToastApi } from "@/components/toast-host";
+import type { ToastApi } from "@/widgets/toast-host";
 
 const ToastContext = createContext<ToastApi | null>(null);
 

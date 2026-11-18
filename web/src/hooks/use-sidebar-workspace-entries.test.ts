@@ -5,7 +5,7 @@ import {
   areSidebarWorkspaceSessionsEqual,
   selectSidebarWorkspaceSessions,
   type SidebarWorkspaceSession,
-} from "./sidebar-workspaces-view-model";
+} from "../sidebar/workspaces-view-model";
 
 function workspaceMap(): Map<string, WorkspaceDescriptor> {
   return new Map();

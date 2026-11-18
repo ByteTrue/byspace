@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react";
-import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
+import { STATUS_BUCKET_LABELS } from "@/sidebar/status-view-model";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
-import { getProjectStatusBadgeContent } from "@/utils/project-status-badge-content";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
-import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
+import { getProjectStatusBadgeContent } from "@/sidebar/project-status-badge-content";
+import type { SidebarStateBucket } from "@/sidebar/agent-state";
+import { shouldRenderSyncedStatusLoader } from "@/sidebar/status-loader";
 import { cn } from "cn";
 import { Spinner } from "@/ui/spinner";
 

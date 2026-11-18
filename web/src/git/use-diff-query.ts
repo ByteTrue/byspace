@@ -1,6 +1,6 @@
 import { shareCheckoutDiff } from "./diff-sharing";
 import { useMemo } from "react";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { useReplicaQuery } from "@/data/query";
 import { checkoutDiffPushRoute } from "@/data/push-router";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";

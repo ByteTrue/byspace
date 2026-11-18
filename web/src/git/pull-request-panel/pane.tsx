@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";

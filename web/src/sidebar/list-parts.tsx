@@ -2,7 +2,7 @@ import { SidebarGroupLabel, SidebarMenuButton } from "@/ui/sidebar";
 import { useCallback } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Import, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarViewStore } from "@/sidebar/view-store";
 import { Button } from "@/ui/button";
 import { Skeleton } from "@/ui/skeleton";
 

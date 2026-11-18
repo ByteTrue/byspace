@@ -7,7 +7,7 @@ import { useCallback, useMemo, type ReactElement, type ChangeEvent } from "react
 import { useTranslation } from "react-i18next";
 import type { AgentFeature } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import {
   SelectField,
@@ -15,7 +15,7 @@ import {
   type SelectFieldOption,
 } from "@/widgets/select-field";
 import { Switch } from "@/ui/switch";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { AgentProfileAppearanceField } from "@/agent-profiles/settings/agent-profile-appearance-field";
 import type {
   AgentProfileFormModel,

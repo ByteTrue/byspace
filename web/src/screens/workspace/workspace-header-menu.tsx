@@ -9,7 +9,7 @@ import {
   getTerminalProfileIcon,
   resolveTerminalProfiles,
 } from "@bytetrue/protocol/terminal-profiles";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
+import { TerminalProfileIcon } from "@/terminal/profile-icon";
 import { Button } from "@/ui/button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";

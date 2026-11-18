@@ -5,7 +5,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileDiff, GitCommitHorizontal } from "lucide-react";
 import invariant from "tiny-invariant";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { PaneContentToolbar } from "@/widgets/pane-content-toolbar";
 import { DiffDocument } from "@/git/diff-document";
@@ -20,7 +20,7 @@ import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { defaultChangesState, changesStateSchema } from "@/panels/changes/state";
 import { usePanelState } from "@/panels/use-panel-state";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 
 function useDiffPanelPreferences() {
   const { settings } = useAppSettings();

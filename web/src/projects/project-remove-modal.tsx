@@ -3,10 +3,10 @@
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@/ui/item";
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import { useToast } from "@/contexts/toast-context";
 import { useHosts, getHostRuntimeStore } from "@/runtime/host-runtime";
 import { removeProjectFromHosts } from "@/projects/project-remove";

@@ -1,6 +1,6 @@
 import type { ParsedDiffFile } from "@bytetrue/protocol/messages";
 import type { InlineReviewActions } from "@/review";
-import type { ReviewableDiffTarget } from "@/utils/diff-layout";
+import type { ReviewableDiffTarget } from "@/git/diff-layout";
 
 interface DiffDocumentBaseProps {
   files: ParsedDiffFile[];

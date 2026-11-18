@@ -7,7 +7,7 @@ import { FilePane } from "@/file-pane/pane";
 import { usePaneContext } from "@/panels/pane-context";
 import { definePanel } from "@/panels/panel-registry";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-import { createMaterialFileIcon } from "@/components/material-file-icon";
+import { createMaterialFileIcon } from "@/widgets/material-file-icon";
 
 function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
   const fileName = target.path.split("/").findLast(Boolean) ?? target.path;

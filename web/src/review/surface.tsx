@@ -16,7 +16,7 @@ import {
   useReviewDraftStore,
   type ReviewDraftComment,
 } from "@/review/store";
-import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/utils/diff-layout";
+import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/git/diff-layout";
 import {
   INLINE_REVIEW_EDITOR_HEIGHT,
   INLINE_REVIEW_GAP,

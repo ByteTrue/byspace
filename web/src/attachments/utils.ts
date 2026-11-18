@@ -1,5 +1,5 @@
 import { generateMessageId } from "@/types/stream";
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath } from "@/lib/path";
 import { isRasterImageMimeType } from "./file-types";
 
 export function generateAttachmentId(): string {

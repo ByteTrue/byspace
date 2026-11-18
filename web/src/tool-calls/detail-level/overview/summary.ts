@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import { formatDuration } from "@/utils/time";
+import { formatDuration } from "@/lib/time";
 import type { OverviewSummary } from "./model";
 
 function joinSummaryParts(parts: string[], conjunction: string): string {

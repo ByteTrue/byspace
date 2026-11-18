@@ -8,9 +8,9 @@ import React, {
   useState,
 } from "react";
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { Spinner } from "@/ui/spinner";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useStableEvent } from "@/lib/use-stable-event";
 import {
   estimateStreamItemHeight,
   shouldAdjustScrollForVirtualRowResize,

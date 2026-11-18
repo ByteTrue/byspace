@@ -33,8 +33,8 @@ import {
 } from "@bytetrue/protocol/terminal-profiles";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { SettingsTextArea } from "@/components/settings-textarea";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
+import { SettingsTextArea } from "@/widgets/settings-textarea";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Badge } from "@/ui/badge";
@@ -65,18 +65,18 @@ import {
 } from "@/runtime/host-runtime";
 import { ProvidersSection, AddProviderSection } from "@/screens/settings/providers-section";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
-import { formatTimeAgo } from "@/utils/time";
+import { formatTimeAgo } from "@/lib/time";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { isVersionMismatch } from "@/utils/version-display";
+import { isVersionMismatch } from "@/lib/version-display";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
-import { formatLatency } from "@/utils/latency";
+import { formatLatency } from "@/lib/latency";
 import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import {
   hasDaemonReconnectedAfter,
   type DaemonConnectionMarker,

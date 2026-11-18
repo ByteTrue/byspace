@@ -18,14 +18,14 @@ import {
 } from "@/git/policy";
 import { deriveMergeCapability } from "@/git/merge-capability";
 import type { CheckoutPrMergeMethod } from "@bytetrue/protocol/messages";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { useToast } from "@/contexts/toast-context";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
   useActiveWorkspaceSelection,
   type ActiveWorkspaceSelection,
 } from "@/stores/navigation-active-workspace-store";
-import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
+import { redirectIfArchivingActiveWorkspace } from "@/sidebar/workspace-archive-redirect";
 import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warning";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";

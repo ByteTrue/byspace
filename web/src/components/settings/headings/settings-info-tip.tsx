@@ -7,7 +7,7 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { ICON_SIZE } from "@/styles/theme";
 import { Button } from "@/ui/button";
 

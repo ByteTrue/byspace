@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveKeyboardShift,
   shouldUseCompactExplorerKeyboardPadding,
-} from "./keyboard-shift-policy";
+} from "../app/keyboard-shift-policy";
 
 describe("resolveKeyboardShift", () => {
   it("keeps the existing open-keyboard offset behavior", () => {

@@ -13,7 +13,7 @@ import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit
 import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
-import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
+import type { PickedImageAttachmentInput } from "@/composer/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
 
 export interface QueuedComposerMessage {

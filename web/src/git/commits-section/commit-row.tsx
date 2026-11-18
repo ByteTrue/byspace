@@ -4,7 +4,7 @@ import { memo, useCallback } from "react";
 import { CommitGraphNode } from "@/git/commits-section/commit-graph-node";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import type { ClassifiedCheckoutCommit } from "@/git/use-commits-query";
-import { formatTimeAgo } from "@/utils/time";
+import { formatTimeAgo } from "@/lib/time";
 import { Item } from "@/ui/item";
 
 interface CommitRowProps {

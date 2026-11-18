@@ -17,7 +17,7 @@ import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useSettings } from "@/hooks/use-settings";
-import { useShowShortcutBadges } from "@/hooks/use-show-shortcut-badges";
+import { useShowShortcutBadges } from "@/sidebar/use-show-shortcut-badges";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -34,22 +34,22 @@ import { useProjectIcons } from "@/projects/icons";
 import { useHostRuntimeConnectionStatuses, useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
+import { useSidebarOrderStore } from "@/sidebar/order-store";
 import {
   hasActiveSidebarLabelFilter,
   useSidebarViewStore,
   type SidebarGroupMode,
-} from "@/stores/sidebar-view-store";
+} from "@/sidebar/view-store";
 import { parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
-import { buildProjectRowCues } from "@/utils/project-row-cue";
-import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
+import { buildProjectRowCues } from "@/sidebar/project-row-cue";
+import { hasVisibleOrderChanged, mergeWithRemainder } from "@/sidebar/reorder";
 import {
   buildPreferredServerIdsByProjectViewKey,
   isSamePreferredServerIds,
   type SidebarProjectIconTarget,
-} from "@/utils/sidebar-project-row-model";
-import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
-import { SortableList, type SortableItemProps } from "@/components/sortable-list";
+} from "@/sidebar/project-row-model";
+import type { StatusBucket } from "@/sidebar/status-view-model";
+import { SortableList, type SortableItemProps } from "@/widgets/sortable-list";
 import { SidebarMenu } from "@/ui/sidebar";
 import { isWorkspaceSelected, ProjectBlock } from "@/sidebar/project-block";
 import {

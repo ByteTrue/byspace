@@ -1,5 +1,5 @@
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
-import { pickAttentionAgent } from "@/utils/agent-attention";
+import { pickAttentionAgent } from "@/panels/agent-attention";
 import {
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,

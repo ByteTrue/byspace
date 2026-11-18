@@ -8,12 +8,12 @@ import { queryClient } from "@/data/query-client";
 import { I18nProvider } from "@/i18n/provider";
 import { KeyboardActionDispatcherProvider } from "@/keyboard/keyboard-action-dispatcher-context";
 import { AppChrome } from "@/app/app-chrome";
-import { DownloadToast } from "@/components/download-toast";
-import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
+import { DownloadToast } from "@/app/download-toast";
+import { AppDiagnosticHost } from "@/app/diagnostic-host";
 import { ChangelogHost } from "@/changelog";
-import { ProviderSettingsHost } from "@/components/provider-settings-host";
+import { ProviderSettingsHost } from "@/app/provider-settings-host";
 import { ConfirmDialogHost } from "@/app/confirm-dialog-host";
-import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+import { KeyboardShortcutsDialog } from "@/app/keyboard-shortcuts-dialog";
 import {
   AlertToastBridge,
   DraftFlushOnBackground,
@@ -22,7 +22,7 @@ import {
   OfferLinkHost,
   PushNotificationRouter,
 } from "@/app/global-listeners";
-import { AddProjectFlowHost } from "@/components/add-project-flow-host";
+import { AddProjectFlowHost } from "@/app/add-project-flow-host";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
 import { TooltipProvider } from "@/ui/tooltip";
 

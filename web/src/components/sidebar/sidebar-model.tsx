@@ -12,11 +12,11 @@ import {
   hasActiveSidebarLabelFilter,
   useSidebarViewStore,
   type SidebarGroupMode,
-} from "@/stores/sidebar-view-store";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
-import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
+} from "@/sidebar/view-store";
+import { useSidebarOrderStore } from "@/sidebar/order-store";
+import type { SidebarShortcutModel } from "@/sidebar/shortcuts";
 import { buildSidebarProjection } from "./sidebar-projection";
-import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
+import type { SidebarProjectIconTarget } from "@/sidebar/project-row-model";
 import { filterWorkspacesByLabels, type SidebarWorkspaceGroup } from "./sidebar-labels";
 import { filterWorkspacesByProjects, resolveActiveProjectFilters } from "./sidebar-project-filter";
 import {

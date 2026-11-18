@@ -1,6 +1,6 @@
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { WorkspaceTitleSource } from "@/hooks/use-settings";
-import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
+import { STATUS_BUCKET_LABELS } from "@/sidebar/status-view-model";
 
 export function resolveSidebarWorkspacePrimaryLabel(input: {
   workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch">;

@@ -29,12 +29,12 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { Spinner } from "@/ui/spinner";
 import { Switch } from "@/ui/switch";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { ProjectEditSheet } from "@/components/project-edit-sheet";
-import { SettingsTextArea } from "@/components/settings-textarea";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
+import { ProjectEditSheet } from "@/screens/project-edit-sheet";
+import { SettingsTextArea } from "@/widgets/settings-textarea";
 import { SelectField } from "@/widgets/select-field";
 import { SettingsGroup } from "@/components/settings/headings/settings-group";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -60,7 +60,7 @@ import {
   type MetadataPromptKey,
   type ProjectConfigDraft,
   type ProjectScriptDraft,
-} from "@/utils/project-config-form";
+} from "@/screens/project-config-form";
 import {
   getProjectHostEntry,
   getProjectSummaryForHostProject,

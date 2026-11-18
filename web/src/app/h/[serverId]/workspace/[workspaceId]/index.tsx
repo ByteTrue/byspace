@@ -2,8 +2,8 @@
 // intent handling and workspace deck, without React Navigation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { router, useGlobalSearchParams, useLocalSearchParams } from "@/platform/navigation";
-import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
-import { RetainedPanel } from "@/components/retained-panel";
+import { HostRouteBootstrapBoundary } from "@/app/host-route-bootstrap-boundary";
+import { RetainedPanel } from "@/widgets/retained-panel";
 import {
   type ActiveWorkspaceSelection,
   useActiveWorkspaceSelection,
@@ -29,9 +29,9 @@ import {
   parseWorkspaceOpenIntent,
   type WorkspaceOpenIntent,
 } from "@/utils/host-routes";
-import { stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit } from "@/utils/host-route-browser";
-import { prepareWorkspaceTab } from "@/utils/workspace-navigation";
-import { RenderProfile } from "@/utils/render-profiler";
+import { stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit } from "@/app/host-route-browser";
+import { prepareWorkspaceTab } from "@/app/workspace-navigation";
+import { RenderProfile } from "@/performance/render-profiler";
 
 function getParamValue(value: string | string[] | undefined): string {
   if (typeof value === "string") {

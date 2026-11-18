@@ -8,8 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { SidebarCallout, type SidebarCalloutProps } from "@/components/sidebar-callout";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { SidebarCallout, type SidebarCalloutProps } from "@/contexts/sidebar-callout";
+import { useStableEvent } from "@/lib/use-stable-event";
 import {
   clearSidebarCallouts,
   createSidebarCalloutState,

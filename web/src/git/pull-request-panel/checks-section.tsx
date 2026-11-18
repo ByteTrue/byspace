@@ -21,7 +21,7 @@ import { canAddPullRequestCheckLogsToChat } from "@/git/pull-request-panel/conte
 import type { PrPaneCheck } from "@/git/pull-request-panel/data";
 import { sectionKitClassNames } from "@/git/pull-request-panel/section-kit";
 import { ICON_SIZE } from "@/styles/theme";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { cn } from "cn";
 
 /**

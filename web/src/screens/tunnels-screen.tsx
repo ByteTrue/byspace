@@ -17,10 +17,14 @@ import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { Badge } from "@/ui/badge";
 import { Switch } from "@/ui/switch";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
-import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
+import {
+  useTunnels,
+  type AggregatedTunnelEntry,
+  type TunnelLoadState,
+} from "@/screens/use-tunnels";
 import {
   createTunnelFromSelection,
   grantTunnelDestination,

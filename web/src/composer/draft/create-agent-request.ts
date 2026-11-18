@@ -1,7 +1,7 @@
 import type { AgentSessionConfig } from "@bytetrue/protocol/agent-types";
 import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@bytetrue/protocol/messages";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { encodeImages } from "@/utils/encode-images";
+import { encodeImages } from "@/attachments/encode-images";
 import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import type { UserMessageImageAttachment } from "@/types/stream";
 

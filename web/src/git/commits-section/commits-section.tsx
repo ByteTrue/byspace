@@ -4,11 +4,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/ui/collapsible";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { CommitRow } from "@/git/commits-section/commit-row";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import { useCheckoutCommitsQuery, type CheckoutCommitsQueryResult } from "@/git/use-commits-query";
-import { normalizeBranchOptionName } from "@/utils/branch-suggestions";
+import { normalizeBranchOptionName } from "@/git/branch-suggestions";
 import { cn } from "cn";
 import { Skeleton } from "@/ui/skeleton";
 

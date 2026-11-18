@@ -14,9 +14,9 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { TreeRail } from "@/components/tree-rail";
-import { TreeRailToggle } from "@/components/tree-rail-toggle";
-import { DiffStat } from "@/components/diff-stat";
+import { TreeRail } from "@/git/tree-rail";
+import { TreeRailToggle } from "@/git/tree-rail-toggle";
+import { DiffStat } from "@/widgets/diff-stat";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   AlignJustify,
@@ -55,11 +55,11 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import * as Clipboard from "@/platform/clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
-import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
+import { buildAbsoluteExplorerPath } from "@/file-explorer/explorer-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import type { GitActions } from "@/git/policy";
-import { BranchSwitcher } from "@/components/branch-switcher";
+import { BranchSwitcher } from "@/git/branch-switcher";
 import { useGitActions } from "@/git/use-actions";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
@@ -86,7 +86,7 @@ import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-worki
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
 import {

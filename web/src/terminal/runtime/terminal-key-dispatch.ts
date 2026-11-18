@@ -3,7 +3,7 @@ import {
   type TerminalKeyInput,
 } from "@bytetrue/protocol/terminal-key-input";
 import type { TerminalInputModeState } from "@bytetrue/protocol/terminal-input-mode";
-import { normalizeTerminalTransportKey } from "@/utils/terminal-keys";
+import { normalizeTerminalTransportKey } from "@/terminal/keys";
 
 export interface TerminalKeyModifierState {
   ctrl: boolean;

@@ -10,7 +10,7 @@ Golden example files:
 - `web/src/schedules/use-schedule-form-model.ts` — model lifetime adapter
 - `web/src/schedules/use-schedule-form-provider-snapshot.ts` — async input adapter
 - `web/src/components/schedules/schedule-form-sheet.tsx` — render + intent dispatch
-- `web/src/schedules/aggregated-schedules.ts` / `hooks/use-schedules.ts` — load-state gating
+- `web/src/schedules/aggregated-schedules.ts` / `web/src/screens/use-schedules.ts` — load-state gating
 - `web/e2e/browser/schedules-*.spec.ts` — the behavioral contract
 
 ## The form model

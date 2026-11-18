@@ -33,8 +33,8 @@ import {
   CompactionMarker,
   MessageOuterSpacingProvider,
   type InlinePathTarget,
-} from "@/components/message";
-import { PlanCard } from "@/components/plan-card";
+} from "@/agent-stream/message";
+import { PlanCard } from "@/agent-stream/plan-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingMessageSubmission } from "@/composer/submission/model";
 import type { TurnPresentation } from "@/timeline/turn-liveness";
@@ -46,9 +46,9 @@ import type {
 } from "@bytetrue/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
-import { useRevealedText } from "@/hooks/use-revealed-text";
+import { useRevealedText } from "@/agent-stream/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
-import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
+import { useLoadOlderAgentHistory } from "@/agent-stream/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
 import {
   expandsThinking,
@@ -56,12 +56,12 @@ import {
   toToolCallDetailLevel,
   type TimelineDetailLevel,
 } from "@/hooks/use-settings/storage";
-import type { ToastApi } from "@/components/toast-host";
+import type { ToastApi } from "@/widgets/toast-host";
 import { returnToTimelineTail } from "@/agent-stream/timeline-tail-navigation";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { ToolCallDetailsContent } from "@/components/tool-call-details";
-import { QuestionFormCard } from "@/components/question-form-card";
-import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
+import { ToolCallDetailsContent } from "@/tool-calls/tool-call-details";
+import { QuestionFormCard } from "@/agent-stream/question-form-card";
+import { ToolCallSheetProvider } from "@/tool-calls/tool-call-sheet";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
@@ -71,11 +71,11 @@ import {
   projectNestedCodemodeCalls,
 } from "@/tool-calls/detail-level/nested-codemode";
 import { useProviderSubagentsByToolCallId } from "@/subagents/select";
-import type { ToolCallSubagentBinding } from "@/components/message";
+import type { ToolCallSubagentBinding } from "@/agent-stream/message";
 import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
-import { formatDuration } from "@/utils/time";
+import { formatDuration } from "@/lib/time";
 import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "@/agent-stream/model";
 import { createWebStreamStrategy } from "@/agent-stream/strategy-web";
@@ -111,11 +111,11 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { useStableEvent } from "@/hooks/use-stable-event";
-import { useForkAgent } from "@/hooks/use-fork-agent";
+import { useStableEvent } from "@/lib/use-stable-event";
+import { useForkAgent } from "@/agent-stream/use-fork-agent";
 import { cn } from "cn";
-import { recordRenderProfileReasons } from "@/utils/render-profiler";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { recordRenderProfileReasons } from "@/performance/render-profiler";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { useStreamHistoryWindow } from "@/agent-stream/use-stream-history-window";
 import { Button } from "@/ui/button";
 

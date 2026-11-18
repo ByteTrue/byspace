@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { AgentTimelinePromptIndexPayload } from "@bytetrue/client/internal/daemon-client";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useStableEvent } from "@/lib/use-stable-event";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelinePromptJump } from "@/timeline/timeline-sync-plan";
 import type { StreamItem } from "@/types/stream";

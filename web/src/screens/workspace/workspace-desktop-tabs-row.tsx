@@ -34,19 +34,19 @@ import { useTranslation } from "react-i18next";
 import type {
   DraggableListDragHandleProps,
   DraggableRenderItemInfo,
-} from "@/components/draggable-list.types";
-import { SortableInlineList } from "@/components/sortable-inline-list";
+} from "@/widgets/draggable-list.types";
+import { SortableInlineList } from "@/widgets/sortable-inline-list";
 import {
   paneContentToolbarTrailingPadding,
   ToolbarButton,
   ToolbarControls,
 } from "@/widgets/pane-content-toolbar";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
@@ -69,7 +69,7 @@ import {
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import { useSessionStore } from "@/stores/session-store";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
 import { cn } from "cn";
 import {
@@ -87,7 +87,7 @@ import {
 } from "@/ui/context-menu";
 import { ContextMenuTrigger } from "@/widgets/context-menu";
 import { keepFocusElsewhere } from "@/platform/menu-focus";
-import { WithTooltip } from "@/components/with-tooltip";
+import { WithTooltip } from "@/widgets/with-tooltip";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 

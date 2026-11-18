@@ -40,13 +40,13 @@ import {
   AgentRoleControl,
   type AgentRoleControlValue,
 } from "@/composer/agent-controls/role-control";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import type {
   AgentFeature,
   AgentMode,
@@ -63,7 +63,7 @@ import {
 } from "@/composer/agent-controls/utils";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import {
   useAgentControlCommandCenterActions,

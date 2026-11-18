@@ -14,14 +14,14 @@ import { Brain, Folder, GitBranch } from "lucide-react";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { ComboboxItem } from "@/widgets/combobox";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
 import { Switch } from "@/ui/switch";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
 import {
   SelectField,
@@ -36,7 +36,7 @@ import {
   useFormPreferences,
   type FormPreferences,
 } from "@/hooks/use-form-preferences";
-import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
+import { useScheduleMutations } from "@/screens/use-schedule-mutations";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
 import { useHosts } from "@/runtime/host-runtime";
@@ -51,9 +51,9 @@ import type {
   ScheduleFormSnapshot,
   ScheduleFormState,
 } from "@/schedules/schedule-form-model";
-import { validateCron } from "@/utils/schedule-format";
-import { toErrorMessage } from "@/utils/error-messages";
-import { getDeviceTimeZone } from "@/utils/device-timezone";
+import { validateCron } from "@/schedules/schedule-format";
+import { toErrorMessage } from "@/lib/error-messages";
+import { getDeviceTimeZone } from "@/lib/device-timezone";
 import { Input } from "@/ui/input";
 import { Field, FieldLabel } from "@/ui/field";
 import { Textarea } from "@/ui/textarea";

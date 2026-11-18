@@ -17,7 +17,7 @@ import type {
 } from "@bytetrue/client/internal/daemon-client";
 import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/widgets/combobox";
@@ -26,9 +26,9 @@ import {
   type SelectFieldDisplay,
   type SelectFieldOption,
 } from "@/widgets/select-field";
-import { getProviderIcon } from "@/components/provider-icons";
-import { formatTimeAgo } from "@/utils/time";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { getProviderIcon } from "@/widgets/provider-icons";
+import { formatTimeAgo } from "@/lib/time";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostProjects } from "@/projects/host-projects";
 import { useHosts } from "@/runtime/host-runtime";

@@ -3,7 +3,7 @@ import { useToast } from "@/contexts/toast-context";
 import { i18n } from "@/i18n/i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { requestDetachSubagent, type ResolveDetachSubagentDialogInput } from "./detach-subagent";
 

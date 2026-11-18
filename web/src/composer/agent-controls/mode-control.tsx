@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type ReactElement } from "react
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { ComboboxItem, type ComboboxOption } from "@/widgets/combobox";
 import { formatAgentModeLabel } from "@/agent-controls/labels";
 import { getAgentControlHintKey } from "@/composer/agent-controls/utils";
@@ -18,7 +18,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import type { AgentMode } from "@bytetrue/protocol/agent-types";
 import type { AgentProviderDefinition } from "@bytetrue/protocol/provider-manifest";

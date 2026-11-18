@@ -6,7 +6,7 @@ import { Button } from "@/ui/button";
 import { useCallback, useMemo } from "react";
 import { Check, ChevronDown, GitBranch, MoreVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import type { GitAction, GitActions } from "@/git/policy";
 import { useGitActionRunner } from "@/git/use-actions";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -21,7 +21,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
-import { keepOpen } from "@/components/menu-kit";
+import { keepOpen } from "@/widgets/menu-kit";
 import { keepFocusElsewhere } from "@/platform/menu-focus";
 
 interface GitActionsSplitButtonProps {

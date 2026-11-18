@@ -11,7 +11,7 @@ import {
   type RefObject,
 } from "react";
 import { Plus, Server, Settings } from "lucide-react";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import {
   ADD_HOST_OPTION_ID,
   ALL_HOSTS_OPTION_ID,

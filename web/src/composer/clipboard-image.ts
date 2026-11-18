@@ -1,4 +1,4 @@
-import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
+import type { PickedImageAttachmentInput } from "@/composer/image-attachment-picker";
 
 export interface ClipboardImageReader {
   readImageDataUrl: () => Promise<string | null>;

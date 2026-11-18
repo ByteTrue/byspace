@@ -13,7 +13,7 @@ import {
 } from "react";
 import type MarkdownIt from "markdown-it";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { HighlightedCodeBlock } from "@/widgets/highlighted-code-block";
 import { MarkdownFenceBlock } from "@/components/markdown/fence";
 import {
   splitHtmlishMarkdown,
@@ -25,8 +25,8 @@ import {
   type InlineImageDimensions,
 } from "@/components/markdown/inline-image-size";
 import { groupMarkdownParts, type MarkdownPartGroup } from "@/components/markdown/part-groups";
-import { createMarkdownParser } from "@/utils/markdown-parser";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { createMarkdownParser } from "@/markdown/parser";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { parseMarkdownAst } from "@/markdown/ast";
 import { MarkdownBody, type MarkdownRules } from "@/markdown/render";
 

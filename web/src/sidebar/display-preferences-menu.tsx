@@ -37,12 +37,12 @@ import {
   hasActiveSidebarLabelFilter,
   SIDEBAR_UNLABELLED_LABEL_KEY,
   type SidebarGroupMode,
-} from "@/stores/sidebar-view-store";
-import { resolveSidebarProjectIconTargets } from "@/utils/sidebar-project-row-model";
+} from "@/sidebar/view-store";
+import { resolveSidebarProjectIconTargets } from "@/sidebar/project-row-model";
 import { useProjectIcons } from "@/projects/icons";
 import { useWorkspaceLabelProjection } from "@/workspace-labels";
-import { keepOpen } from "@/components/menu-kit";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { keepOpen } from "@/widgets/menu-kit";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "@/platform/navigation";
-import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
+import { HostRouteBootstrapBoundary } from "@/app/host-route-bootstrap-boundary";
 import { NewWorkspaceScreen } from "@/screens/new-workspace-screen";
 
 export default function NewWorkspaceRoute() {

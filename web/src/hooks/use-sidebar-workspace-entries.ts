@@ -9,7 +9,7 @@ import {
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
   type SidebarWorkspaceSession,
-} from "./sidebar-workspaces-view-model";
+} from "../sidebar/workspaces-view-model";
 
 const EMPTY_ENTRIES = new Map<string, SidebarWorkspaceEntry>();
 const EMPTY_SESSIONS: SidebarWorkspaceSession[] = [];

@@ -5,7 +5,7 @@ import invariant from "tiny-invariant";
 import { getPanelManifest, type PanelManifest } from "@/panels/panel-manifest";
 export type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { SidebarStateBucket } from "@/sidebar/agent-state";
 
 export interface PanelIconProps {
   size: number;

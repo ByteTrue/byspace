@@ -4,7 +4,7 @@
 import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { Code, Maximize2, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { HighlightedCodeBlock } from "@/widgets/highlighted-code-block";
 import type { MarkdownPhase } from "@/components/markdown/fence/types";
 import { MermaidFullscreenViewer } from "@/components/markdown/fence/mermaid/fullscreen-viewer";
 import {

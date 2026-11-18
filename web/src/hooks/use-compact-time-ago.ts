@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { subscribeToRelativeTimeTick, type TickResolution } from "@/utils/relative-time-ticker";
-import { describeCompactTimeAgo } from "@/utils/time";
+import { subscribeToRelativeTimeTick, type TickResolution } from "@/lib/relative-time-ticker";
+import { describeCompactTimeAgo } from "@/lib/time";
 
 /**
  * A compact relative timestamp that keeps itself current.

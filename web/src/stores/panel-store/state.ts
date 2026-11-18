@@ -3,8 +3,8 @@ import {
   isExplorerTab,
   resolveExplorerTabForCheckout,
   type ExplorerTab,
-} from "../explorer-tab-memory";
-import { type ExplorerCheckoutContext } from "../explorer-checkout-context";
+} from "../../file-explorer/explorer-tab-memory";
+import { type ExplorerCheckoutContext } from "../../file-explorer/explorer-checkout-context";
 import { z } from "zod";
 
 export type MobilePanelView = "agent" | "agent-list" | "file-explorer";

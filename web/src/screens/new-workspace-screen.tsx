@@ -9,16 +9,16 @@ import { createNameId } from "mnemonic-id";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "lucide-react";
 import { Composer } from "@/composer";
-import { KeyboardTranslateView } from "@/components/keyboard-translate-view";
+import { KeyboardTranslateView } from "@/keyboard/translate-view";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { Combobox, ComboboxItem } from "@/widgets/combobox";
 import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/widgets/combobox";
 import { ComboboxTrigger } from "@/widgets/combobox-trigger";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
@@ -64,7 +64,7 @@ import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { generateMessageId } from "@/types/stream";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
   getHostProjectSourceDirectory,

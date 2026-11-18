@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-new-tab-menu.tsx.
 import { Fragment, useCallback, useMemo, type ComponentType, type ReactElement } from "react";
-import { Shortcut } from "@/components/shortcut";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
+import { Shortcut } from "@/widgets/shortcut";
+import { TerminalProfileIcon } from "@/terminal/profile-icon";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { PanelIconProps } from "@/panels/panel-registry";

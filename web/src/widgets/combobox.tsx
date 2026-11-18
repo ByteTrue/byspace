@@ -18,7 +18,7 @@ import {
 } from "react";
 import { ArrowLeft, File, Folder } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { SheetSearchField, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { SheetSearchField, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { buildVisibleComboboxOptions, type ComboboxOptionModel } from "@/widgets/combobox-options";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Button } from "@/ui/button";

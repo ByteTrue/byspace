@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { SIDEBAR_UNLABELLED_LABEL_KEY } from "@/stores/sidebar-view-store";
+import { SIDEBAR_UNLABELLED_LABEL_KEY } from "@/sidebar/view-store";
 import { filterWorkspacesByLabels } from "./sidebar-labels";
 
 function workspace(

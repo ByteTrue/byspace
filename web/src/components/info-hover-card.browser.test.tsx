@@ -4,7 +4,11 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cdp, page, userEvent } from "vitest/browser";
-import { InfoHoverCard, InfoHoverCardContent, InfoHoverCardTrigger } from "./info-hover-card";
+import {
+  InfoHoverCard,
+  InfoHoverCardContent,
+  InfoHoverCardTrigger,
+} from "../widgets/info-hover-card";
 import { ContextMenuTrigger } from "@/widgets/context-menu";
 import { ContextMenu } from "@/ui/context-menu";
 

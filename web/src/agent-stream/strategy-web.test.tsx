@@ -5,7 +5,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RetainedPanelActivity } from "@/components/retained-panel";
+import { RetainedPanelActivity } from "@/widgets/retained-panel";
 import type { StreamItem } from "@/types/stream";
 import type { StreamRenderInput, StreamSegmentRenderers, StreamViewportHandle } from "./strategy";
 import { createWebStreamStrategy } from "./strategy-web";

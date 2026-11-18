@@ -1,5 +1,5 @@
 import type { Theme } from "@/styles/theme";
-import { hexColorWithAlpha } from "@/utils/color";
+import { hexColorWithAlpha } from "@/lib/color";
 import type { DiffCell, DiffPalette } from "./types";
 
 export function createDiffPalette(theme: Theme): DiffPalette {

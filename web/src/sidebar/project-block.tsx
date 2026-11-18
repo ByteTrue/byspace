@@ -19,16 +19,16 @@ import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { buildNewWorkspaceRoute, buildProjectSettingsRoute } from "@/utils/host-routes";
-import { buildProjectRowPathLines } from "@/utils/project-row-cue";
+import { buildProjectRowPathLines } from "@/sidebar/project-row-cue";
 import {
   buildSidebarProjectRowModel,
   type SidebarProjectHostTarget,
-} from "@/utils/sidebar-project-row-model";
+} from "@/sidebar/project-row-model";
 import { router } from "@/platform/navigation";
 import { cn } from "cn";
-import { contextMenuKit, dropdownMenuKit, type MenuKit } from "@/components/menu-kit";
-import { Shortcut } from "@/components/shortcut";
-import { SortableList, type SortableItemProps } from "@/components/sortable-list";
+import { contextMenuKit, dropdownMenuKit, type MenuKit } from "@/widgets/menu-kit";
+import { Shortcut } from "@/widgets/shortcut";
+import { SortableList, type SortableItemProps } from "@/widgets/sortable-list";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/ui/context-menu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "@/ui/sidebar";
@@ -38,7 +38,7 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { ShowMoreRow } from "@/sidebar/list-parts";
 import { ProjectLeadingVisual } from "@/sidebar/status-visuals";
 import { WorkspaceRow } from "@/sidebar/workspace-row";

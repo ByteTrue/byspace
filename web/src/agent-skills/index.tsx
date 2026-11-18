@@ -11,7 +11,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { SkillSelectionSheet } from "@/agent-skills/selection-sheet";
 import { useAgentSkills } from "@/agent-skills/use-agent-skills";
 import { withTheme } from "@/app/theme-object";

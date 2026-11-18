@@ -2,11 +2,11 @@
 // Converted from the Expo file by archive/expo-app:web/scripts/port/schedules.py; edit it directly.
 import { useCallback, useState, type ReactElement } from "react";
 import { ScheduleRow, type ScheduleRowPending } from "@/components/schedules/schedule-row";
-import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
-import type { AggregatedSchedule } from "@/hooks/use-schedules";
+import { useScheduleMutations } from "@/screens/use-schedule-mutations";
+import type { AggregatedSchedule } from "@/screens/use-schedules";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { resolveScheduleTitle, scheduleProductName } from "@/utils/schedule-format";
+import { resolveScheduleTitle, scheduleProductName } from "@/schedules/schedule-format";
 import { ItemGroup } from "@/ui/item";
 
 /** A schedule plus the client-derived fields the row renders. */

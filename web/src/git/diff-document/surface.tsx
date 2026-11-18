@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
 import { InlineReviewAddButton, InlineReviewThread } from "@/review";
 import * as Clipboard from "@/platform/clipboard";
-import type { ReviewableDiffTarget } from "@/utils/diff-layout";
+import type { ReviewableDiffTarget } from "@/git/diff-layout";
 import { deviceCanvasPixels, fillCanvas, opaqueContext } from "@/git/diff-document/device-canvas";
 import { DocumentFileHeader } from "@/git/diff-document/document-file-header";
 import {

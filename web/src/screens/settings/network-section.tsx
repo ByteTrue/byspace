@@ -4,7 +4,7 @@ import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { useCallback, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Button } from "@/ui/button";
 import { Switch } from "@/ui/switch";

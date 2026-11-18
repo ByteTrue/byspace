@@ -121,7 +121,7 @@ vi.mock("@/components/settings/headings/settings-info-tip", () => ({
   SettingsInfoTip: () => null,
 }));
 
-vi.mock("@/components/provider-icons", () => ({
+vi.mock("@/widgets/provider-icons", () => ({
   getProviderIcon: (provider: string) => () =>
     React.createElement("span", { "data-icon": `provider-${provider}` }),
 }));
@@ -131,7 +131,7 @@ vi.mock("@/stores/provider-settings-store", () => ({
     selector({ open: openProviderSettingsMock }),
 }));
 
-vi.mock("@/components/provider-catalog-list", () => ({
+vi.mock("@/screens/provider-catalog-list", () => ({
   ProviderCatalogList: () => null,
 }));
 

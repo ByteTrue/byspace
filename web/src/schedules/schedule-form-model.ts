@@ -25,7 +25,7 @@ import {
   type UserModifiedFields,
 } from "@/provider-selection/resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import { shortenPath } from "@/utils/shorten-path";
+import { shortenPath } from "@/lib/shorten-path";
 import { normalizeScheduleFormCadence } from "./schedule-cadence-options";
 import { PROJECT_OPTION_PREFIX, type ScheduleProjectTarget } from "./schedule-project-targets";
 

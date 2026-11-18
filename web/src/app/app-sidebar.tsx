@@ -7,7 +7,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarViewStore } from "@/sidebar/view-store";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button } from "@/ui/button";
 import { SidebarContent, SidebarHeader } from "@/ui/sidebar";

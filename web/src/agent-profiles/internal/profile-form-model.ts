@@ -7,7 +7,7 @@ import type {
 } from "@bytetrue/protocol/agent-types";
 import type { AgentProfile } from "@bytetrue/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
-import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
+import { applyFeatureValues, pruneFeatureValues } from "@/agent-profiles/feature-preferences";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
 
 /**

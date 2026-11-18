@@ -14,9 +14,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Separator } from "@/ui/separator";
 import { keepFocusElsewhere } from "@/platform/menu-focus";
-import { StatusRing } from "@/components/status-ring";
+import { StatusRing } from "@/widgets/status-ring";
 import { Button } from "@/ui/button";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { SidebarStateBucket } from "@/sidebar/agent-state";
 import { cn } from "cn";
 
 export function ComposerTrackBar({ children }: { children: ReactNode }): ReactElement {

@@ -1,6 +1,6 @@
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import { isWorkspaceRootAgent } from "@/subagents/policies";
-import { deriveSidebarStateBucket } from "./sidebar-agent-state";
+import { deriveSidebarStateBucket } from "../sidebar/agent-state";
 
 export interface WorkspaceAgentActivity {
   agentId: string;

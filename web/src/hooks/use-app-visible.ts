@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
+import { getIsAppActivelyVisible, getIsAppVisible } from "@/platform/app-visibility";
 import { AppState } from "@/platform/app-state";
 
 let visible = getIsAppVisible();

@@ -35,8 +35,8 @@ The interface face is Geist, self-hosted from `web/public/fonts` with the platfo
 Weight is applied by role:
 
 - **Screen titles** — the title in app chrome — use `<ScreenTitle>` (`web/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at `fontWeight.medium`; the project beside it is plain `foregroundMuted` text, not a chip. The New workspace hero is the only larger product title; it uses `fontSize["2xl"]` (`web/src/screens/new-workspace-screen.tsx`).
-- **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`web/src/components/agent-list.tsx`, `web/src/components/keyboard-shortcuts-dialog.tsx`), form field labels above an input inside a modal (`web/src/components/add-host-modal.tsx`, `web/src/components/pair-link-modal.tsx`), the title at the top of a modal/sheet/dialog (`web/src/components/adaptive-modal-sheet.tsx`, `web/src/ui/combobox.tsx`, `web/src/components/welcome-screen.tsx`), inline data emphasis on dense metadata rows (`web/src/git/diff-pane.tsx`, `web/src/components/file-explorer-pane.tsx`), and, following shadcn/ui, control labels: `<Button>` and tab labels, `<Badge>` and key-cap text, tool-call row labels, and sidebar project titles. The selected sidebar row also turns `medium`; that weight shift is half of its selection signal (§12).
-- **Content** uses `fontWeight.normal`. This applies to settings rows (`web/src/styles/settings.ts`), idle sidebar workspace titles (`web/src/sidebar/workspace-row.tsx`, `web/src/components/agent-list.tsx`), menu items, field text, and `<SidebarCallout>` titles (`web/src/components/sidebar-callout.tsx`).
+- **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`web/src/screens/agent-list.tsx`, `web/src/app/keyboard-shortcuts-dialog.tsx`), form field labels above an input inside a modal (`web/src/components/add-host-modal.tsx`, `web/src/components/pair-link-modal.tsx`), the title at the top of a modal/sheet/dialog (`web/src/widgets/adaptive-modal-sheet.tsx`, `web/src/ui/combobox.tsx`, `web/src/app/welcome-screen.tsx`), inline data emphasis on dense metadata rows (`web/src/git/diff-pane.tsx`, `web/src/components/file-explorer-pane.tsx`), and, following shadcn/ui, control labels: `<Button>` and tab labels, `<Badge>` and key-cap text, tool-call row labels, and sidebar project titles. The selected sidebar row also turns `medium`; that weight shift is half of its selection signal (§12).
+- **Content** uses `fontWeight.normal`. This applies to settings rows (`web/src/styles/settings.ts`), idle sidebar workspace titles (`web/src/sidebar/workspace-row.tsx`, `web/src/screens/agent-list.tsx`), menu items, field text, and `<SidebarCallout>` titles (`web/src/contexts/sidebar-callout.tsx`).
 
 Control chrome is shadcn/ui's (nova style, `neutral` base colour) as installed.
 
@@ -78,9 +78,9 @@ An icon is a child of the button (`<Plus data-icon="inline-start" />`), and a ru
 
 Borders group, separate, or rarely emphasize.
 
-Related rows live together in a group: `SettingsCard` is shadcn's `ItemGroup` and each `SettingsRow` an outline `Item` (`web/src/components/settings/index.tsx`); the keyboard-shortcuts dialog uses the same parts (`web/src/components/keyboard-shortcuts-dialog.tsx`).
+Related rows live together in a group: `SettingsCard` is shadcn's `ItemGroup` and each `SettingsRow` an outline `Item` (`web/src/components/settings/index.tsx`); the keyboard-shortcuts dialog uses the same parts (`web/src/app/keyboard-shortcuts-dialog.tsx`).
 
-A list that is itself the page content — sidebar items in `web/src/sidebar/workspace-list.tsx`, the workspace list, the agent list (`web/src/components/agent-list.tsx`) — uses spacing and surface, not borders, to separate items. Rows-in-a-card is an interior pattern; lists-as-pages are not.
+A list that is itself the page content — sidebar items in `web/src/sidebar/workspace-list.tsx`, the workspace list, the agent list (`web/src/screens/agent-list.tsx`) — uses spacing and surface, not borders, to separate items. Rows-in-a-card is an interior pattern; lists-as-pages are not.
 
 Pane chrome — the workspace pane header, the file-explorer header, the diff pane header — uses a single bottom border to separate the header from the content (`web/src/git/diff-pane.tsx`). One border, no shadow.
 
@@ -96,7 +96,7 @@ Five primitives. The pick is determined by option count, the need to search, and
 
 `<Select>` is for one value from a short fixed list in a settings row: send behaviour, language.
 
-`<Combobox>` (`web/src/ui/combobox.tsx`, shadcn's Combobox with its search inside the popup; a phone gets the same popup across the screen) is for a large or searchable list. Options arrive filtered and ranked by `combobox-options.ts`, so the Combobox's own filter is off. Inside a Radix dialog the popup portals into the dialog, or the dialog's focus trap and outside-press handling make it unusable. The list prevents the default of every pointerdown to keep focus on its input, and Radix triggers ignore a prevented pointerdown, so a menu trigger inside a row opens on click (`workspace-tab-trailing-accessory.tsx`). Host switcher in the sidebar footer, model selector in the composer, branch switcher in the workspace header (`web/src/components/branch-switcher.tsx`). The user types to find the option, or the list is long enough to scroll. Its desktop popover is never narrower than its trigger and grows with its content up to `max(400px, trigger width)`; `desktopMinWidth` raises the floor and never caps the width. Changing that default means re-checking every combobox, since each one was laid out against it.
+`<Combobox>` (`web/src/ui/combobox.tsx`, shadcn's Combobox with its search inside the popup; a phone gets the same popup across the screen) is for a large or searchable list. Options arrive filtered and ranked by `combobox-options.ts`, so the Combobox's own filter is off. Inside a Radix dialog the popup portals into the dialog, or the dialog's focus trap and outside-press handling make it unusable. The list prevents the default of every pointerdown to keep focus on its input, and Radix triggers ignore a prevented pointerdown, so a menu trigger inside a row opens on click (`workspace-tab-trailing-accessory.tsx`). Host switcher in the sidebar footer, model selector in the composer, branch switcher in the workspace header (`web/src/git/branch-switcher.tsx`). The user types to find the option, or the list is long enough to scroll. Its desktop popover is never narrower than its trigger and grows with its content up to `max(400px, trigger width)`; `desktopMinWidth` raises the floor and never caps the width. Changing that default means re-checking every combobox, since each one was laid out against it.
 
 `<ContextMenu>` is for right-click and long-press on a target. The row is the trigger; there is no visible affordance. Used for incidental actions on workspace rows in the sidebar (`web/src/sidebar/workspace-row.tsx`).
 
@@ -120,7 +120,7 @@ Settings detail pages, the projects detail page, and any list+detail content sit
 
 Workspace and chat surfaces use the full width — these are working surfaces, not reading surfaces. The composer carries `MAX_CONTENT_WIDTH` from `web/src/constants/layout.ts` to keep lines readable while letting the workspace pane fill the rest.
 
-Sections sit apart. `<SettingsSection>` owns its own bottom margin; the next thing is wrapped in another `<SettingsSection>`. The agent-list `sectionHeading` carries the same `marginTop`/`marginBottom` rhythm (`web/src/components/agent-list.tsx`). Adding `marginBottom` to a section is wrong.
+Sections sit apart. `<SettingsSection>` owns its own bottom margin; the next thing is wrapped in another `<SettingsSection>`. The agent-list `sectionHeading` carries the same `marginTop`/`marginBottom` rhythm (`web/src/screens/agent-list.tsx`). Adding `marginBottom` to a section is wrong.
 
 A section or group explains itself through the `info` prop on `<SettingsSection>` or `<SettingsGroup>` — an info icon beside the header that opens a tooltip (`web/src/components/settings/headings/settings-info-tip.tsx`). A muted paragraph between the header and the card is wrong: it sits in the section's own gap, so it reads as a second heading rather than as prose belonging to the header. Explanatory copy that describes one row belongs to that row, as the row's `ItemDescription`.
 
@@ -161,7 +161,7 @@ The branching is one `useIsCompactFormFactor()` check at the top of the screen c
 
 The workspace screen (`web/src/screens/workspace/workspace-screen.tsx`) follows a different but parallel rule: tabs collapse on compact, panes split on desktop. The sidebar (`web/src/app/app-sidebar.tsx`) is overlaid on compact and pinned on desktop.
 
-On a narrow desktop route, app navigation yields to the rendered content when the remaining width cannot hold its center target (`web/src/components/desktop-sidebar-layout.ts`): the sidebar closes before Settings' list and detail or a workspace and its Explorer are squeezed. That is a topology decision at the app container, not a second compact breakpoint. The compact breakpoint is Tailwind's `md` (768px), where shadcn's sidebar becomes a sheet.
+On a narrow desktop route, app navigation yields to the rendered content when the remaining width cannot hold its center target (`web/src/app/desktop-sidebar-layout.ts`): the sidebar closes before Settings' list and detail or a workspace and its Explorer are squeezed. That is a topology decision at the app container, not a second compact breakpoint. The compact breakpoint is Tailwind's `md` (768px), where shadcn's sidebar becomes a sheet.
 
 The left sidebar's top-left corner and the Explorer dock's top-right corner each hold one control at a fixed position. The sidebar collapse toggle and the Explorer toggle render from two hosts apiece — the pinned sidebar or a content header, the Explorer dock's tab rail or a content header — and both hosts keep the toggle's own frame on the same pixel. That works because the row and the hairline under it add up to `HEADER_INNER_HEIGHT` in both hosts, leaving the same content box to center in, so expanding or collapsing a panel never moves the pointer target. Exactly one host renders each toggle; see `web/src/components/sidebar/sidebar-toggle-host.ts`, `web/src/contexts/desktop-sidebar-visibility-context.tsx`, and `resolveWorkspaceExplorerToggleOwner`.
 
@@ -203,7 +203,7 @@ Inline errors are a single sentence in `text-destructive`, under the field (`Fie
 
 Page-level alerts — informational notices, success confirmations, warnings, or recoverable errors that need a small visible block on the page — are shadcn's `<Alert>`: `variant="destructive"` for an error, a leading icon (`Info`, `TriangleAlert`, `CircleAlert`, `CircleCheck`), then `AlertTitle` and `AlertDescription`. Actions go in `AlertAction` as `<Button variant="outline" size="sm">` — recovery actions are low-frequency and outline keeps them quiet (`web/src/screens/project-settings-screen.tsx`). One `<Alert>` at a time per region.
 
-Sidebar callouts — cross-cutting alerts that apply across the whole app, like worktree setup — register through `useSidebarCallouts()` and render in the left sidebar via `<SidebarCallout>` (`web/src/components/sidebar-callout.tsx`). The chrome (top-border-only, full-width action buttons) is tuned for that ~280px column. Canonical source: `web/src/components/worktree-setup-callout-source.tsx`. Never import `<SidebarCallout>` into a page — that's what `<Alert>` is for.
+Sidebar callouts — cross-cutting alerts that apply across the whole app, like worktree setup — register through `useSidebarCallouts()` and render in the left sidebar via `<SidebarCallout>` (`web/src/contexts/sidebar-callout.tsx`). The chrome (top-border-only, full-width action buttons) is tuned for that ~280px column. Canonical source: `web/src/app/worktree-setup-callout-source.tsx`. Never import `<SidebarCallout>` into a page — that's what `<Alert>` is for.
 
 Imperative errors are `showAlert("Error", "Unable to ...")` (`@/platform/alert`, shown as an error toast; not this component) for failures that interrupt the flow and have no place on the page.
 
@@ -274,23 +274,23 @@ New status pills are `<Badge>`. Identity, shortcut, and interactive link badges 
 
 ## 15. Canonical surfaces by pattern
 
-| Pattern                                             | Reference                                                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| List+detail (compact stack, desktop sidebar+pane)   | `web/src/screens/settings-screen.tsx`, `web/src/screens/projects-screen.tsx`                                                                     |
-| Detail card+row                                     | `web/src/screens/settings/host-page.tsx`, `web/src/screens/settings/providers-section.tsx`                                                       |
-| Section grouping inside a card list                 | `web/src/components/settings/headings/settings-section.tsx`                                                                                      |
-| Form modal (label + input fields, primary + cancel) | `web/src/components/add-host-modal.tsx`, `web/src/components/pair-link-modal.tsx`                                                                |
-| Destructive confirmation                            | `confirmDialog` invoked from `web/src/screens/settings/host-page.tsx`                                                                            |
-| Centered hero / first-run                           | `web/src/components/welcome-screen.tsx`                                                                                                          |
-| Sidebar list (workspaces, hosts)                    | `web/src/sidebar/workspace-list.tsx`, `web/src/app/app-sidebar.tsx`                                                                              |
-| Live list of items with sections (agents)           | `web/src/components/agent-list.tsx`                                                                                                              |
-| Historical list (sessions)                          | `web/src/screens/sessions-screen.tsx`                                                                                                            |
-| Workspace pane (multi-tab, split)                   | `web/src/screens/workspace/workspace-screen.tsx`                                                                                                 |
-| Composer / message input                            | `web/src/composer/index.tsx`, `web/src/composer/input/input.tsx`                                                                                 |
-| Pane chrome with single bottom border               | `web/src/git/diff-pane.tsx`, `web/src/components/file-explorer-pane.tsx`, `web/src/components/terminal-pane.tsx`                                 |
-| Page-level alert (info / success / warning / error) | `web/src/ui/alert.tsx`, used in `web/src/screens/project-settings-screen.tsx`                                                                    |
-| Sidebar callout (cross-cutting alert)               | `web/src/components/sidebar-callout.tsx`, `web/src/contexts/sidebar-callout-context.tsx`, `web/src/components/worktree-setup-callout-source.tsx` |
-| Searchable picker                                   | `web/src/ui/combobox.tsx`, `web/src/components/branch-switcher.tsx`                                                                              |
-| Trigger-anchored menu                               | `web/src/ui/dropdown-menu.tsx`, used in `web/src/sidebar/workspace-row.tsx` and the theme picker                                                 |
-| Right-click / long-press menu                       | `web/src/ui/context-menu.tsx` (used in `web/src/sidebar/workspace-row.tsx`)                                                                      |
-| Headers (back, screen, menu)                        | `web/src/components/headers/back-header.tsx`, `screen-header.tsx`, `menu-header.tsx`                                                             |
+| Pattern                                             | Reference                                                                                                                               |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| List+detail (compact stack, desktop sidebar+pane)   | `web/src/screens/settings-screen.tsx`, `web/src/screens/projects-screen.tsx`                                                            |
+| Detail card+row                                     | `web/src/screens/settings/host-page.tsx`, `web/src/screens/settings/providers-section.tsx`                                              |
+| Section grouping inside a card list                 | `web/src/components/settings/headings/settings-section.tsx`                                                                             |
+| Form modal (label + input fields, primary + cancel) | `web/src/components/add-host-modal.tsx`, `web/src/components/pair-link-modal.tsx`                                                       |
+| Destructive confirmation                            | `confirmDialog` invoked from `web/src/screens/settings/host-page.tsx`                                                                   |
+| Centered hero / first-run                           | `web/src/app/welcome-screen.tsx`                                                                                                        |
+| Sidebar list (workspaces, hosts)                    | `web/src/sidebar/workspace-list.tsx`, `web/src/app/app-sidebar.tsx`                                                                     |
+| Live list of items with sections (agents)           | `web/src/screens/agent-list.tsx`                                                                                                        |
+| Historical list (sessions)                          | `web/src/screens/sessions-screen.tsx`                                                                                                   |
+| Workspace pane (multi-tab, split)                   | `web/src/screens/workspace/workspace-screen.tsx`                                                                                        |
+| Composer / message input                            | `web/src/composer/index.tsx`, `web/src/composer/input/input.tsx`                                                                        |
+| Pane chrome with single bottom border               | `web/src/git/diff-pane.tsx`, `web/src/components/file-explorer-pane.tsx`, `web/src/panels/terminal-pane.tsx`                            |
+| Page-level alert (info / success / warning / error) | `web/src/ui/alert.tsx`, used in `web/src/screens/project-settings-screen.tsx`                                                           |
+| Sidebar callout (cross-cutting alert)               | `web/src/contexts/sidebar-callout.tsx`, `web/src/contexts/sidebar-callout-context.tsx`, `web/src/app/worktree-setup-callout-source.tsx` |
+| Searchable picker                                   | `web/src/ui/combobox.tsx`, `web/src/git/branch-switcher.tsx`                                                                            |
+| Trigger-anchored menu                               | `web/src/ui/dropdown-menu.tsx`, used in `web/src/sidebar/workspace-row.tsx` and the theme picker                                        |
+| Right-click / long-press menu                       | `web/src/ui/context-menu.tsx` (used in `web/src/sidebar/workspace-row.tsx`)                                                             |
+| Headers (back, screen, menu)                        | `web/src/components/headers/back-header.tsx`, `screen-header.tsx`, `menu-header.tsx`                                                    |

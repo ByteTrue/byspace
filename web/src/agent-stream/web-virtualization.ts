@@ -1,5 +1,5 @@
 import type { StreamItem } from "@/types/stream";
-import { estimateAssistantMessageHeightFromCache } from "@/utils/assistant-message-height-estimate";
+import { estimateAssistantMessageHeightFromCache } from "@/agent-stream/message-height-estimate";
 import {
   DEFAULT_MOUNTED_RECENT_STREAM_ITEMS,
   findMountedWindowStart,

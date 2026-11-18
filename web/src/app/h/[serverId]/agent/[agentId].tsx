@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocalSearchParams, useRouter, type Href } from "@/platform/navigation";
-import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
+import { HostRouteBootstrapBoundary } from "@/app/host-route-bootstrap-boundary";
 import { useFetchQuery } from "@/data/query";
 import { resolveAgentRoute, type AgentRouteLookup } from "@/navigation/agent-route-resolution";
 import { AgentRouteResolutionView } from "@/navigation/agent-route-resolution-view";
 import { useSessionStore } from "@/stores/session-store";
 import { getHostRuntimeStore, useHostRuntimeSnapshot, useHosts } from "@/runtime/host-runtime";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 export default function HostAgentReadyRoute() {

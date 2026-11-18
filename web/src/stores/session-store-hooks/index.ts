@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
+import { useSidebarOrderStore } from "@/sidebar/order-store";
 import {
   composeWorkspaceStructure,
   createWorkspaceStructureProjectsSelector,

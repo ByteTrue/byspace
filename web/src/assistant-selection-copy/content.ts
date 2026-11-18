@@ -4,7 +4,7 @@ import {
   createCodeClipboardContent,
   createMarkdownClipboardContent,
   type MarkdownClipboardContent,
-} from "@/utils/rich-clipboard";
+} from "@/assistant-selection-copy/rich-clipboard";
 import {
   MARKDOWN_COPY_ALIGN_ATTRIBUTE,
   MARKDOWN_COPY_IGNORE_ATTRIBUTE,

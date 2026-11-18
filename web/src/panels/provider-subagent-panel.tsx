@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import invariant from "tiny-invariant";
 import { useShallow } from "zustand/react/shallow";
 import { AgentStreamView } from "@/agent-stream/view";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import {
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
@@ -25,7 +25,7 @@ import {
 } from "@/subagents/provider-store";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem } from "@/types/stream";
-import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { deriveSidebarStateBucket } from "@/sidebar/agent-state";
 import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 import type { TurnPresentation } from "@/timeline/turn-liveness";
 

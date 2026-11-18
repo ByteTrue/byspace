@@ -1,7 +1,7 @@
 // Port of archive/expo-app:packages/app/src/git/diff-document/index.tsx: unchanged but for `@/` imports.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/diff-document.py; edit it directly.
 import { useCallback, useMemo, useRef, useState } from "react";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { createDiffPalette, retainDiffPalette } from "@/git/diff-document/palette";
 import { DiffSurface } from "@/git/diff-document/surface";
 import type {

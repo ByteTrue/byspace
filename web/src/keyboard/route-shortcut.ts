@@ -4,7 +4,7 @@ import { buildSettingsRoute, parseHostWorkspaceRouteFromPathname } from "@/utils
 import {
   getRelativeSidebarShortcutTarget,
   type SidebarShortcutWorkspaceTarget,
-} from "@/utils/sidebar-shortcuts";
+} from "@/sidebar/shortcuts";
 
 export interface ShortcutRoutingContext {
   pathname: string;

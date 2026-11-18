@@ -24,9 +24,9 @@ import type {
   PrThreadEntry,
   PrTimelineEntry,
 } from "@/git/pull-request-panel/timeline";
-import { openExternalUrl } from "@/utils/open-external-url";
-import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
-import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
+import { openExternalUrl } from "@/platform/open-external-url";
+import { writeMarkdownToRichClipboard } from "@/assistant-selection-copy/rich-clipboard";
+import { getDefaultMarkdownClipboardEnvironment } from "@/assistant-selection-copy/rich-clipboard-default-environment";
 import { cn } from "cn";
 import {
   DropdownMenu,

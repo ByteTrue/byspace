@@ -1,12 +1,12 @@
-import { lineNumberGutterWidth } from "@/components/code-insets";
+import { lineNumberGutterWidth } from "@/git/code-insets";
 import { findClusterBreak } from "@marijn/find-cluster-break";
 import {
   buildSplitDiffRows,
   buildUnifiedDiffLines,
   type ReviewableDiffTarget,
   type SplitDiffDisplayLine,
-} from "@/utils/diff-layout";
-import { compactHighlightTokens } from "@/utils/diff-rendering";
+} from "@/git/diff-layout";
+import { compactHighlightTokens } from "@/git/diff-rendering";
 import { getInlineReviewThreadState, getSplitInlineReviewThreadState } from "@/review/geometry";
 import { advancesFor } from "./text-measurement";
 import type {

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
 import { useHostProjects } from "@/projects/host-projects";
 import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarOrderStore } from "@/sidebar/order-store";
+import { useSidebarViewStore } from "@/sidebar/view-store";
 import {
   buildSidebarWorkspacePlacementModel,
   computeSidebarOrderUpdates,
@@ -12,7 +12,7 @@ import {
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
-} from "./sidebar-workspaces-view-model";
+} from "../sidebar/workspaces-view-model";
 
 export {
   appendMissingOrderKeys,
@@ -35,7 +35,7 @@ export {
   type SidebarProjectEntry,
   type SidebarStateBucket,
   type SidebarWorkspaceEntry,
-} from "./sidebar-workspaces-view-model";
+} from "../sidebar/workspaces-view-model";
 
 const EMPTY_ORDER: string[] = [];
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];

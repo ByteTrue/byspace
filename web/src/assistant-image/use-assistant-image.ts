@@ -10,7 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { AttachmentMetadata } from "@/attachments/types";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useStableEvent } from "@/lib/use-stable-event";
 import { retainAttachmentForGarbageCollection } from "@/attachments/gc-retention";
 import {
   persistAttachmentFromBytes,

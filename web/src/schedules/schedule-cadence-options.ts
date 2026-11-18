@@ -1,5 +1,5 @@
 import type { ScheduleCadence } from "@bytetrue/protocol/schedule/types";
-import { everyMsToParts } from "@/utils/schedule-format";
+import { everyMsToParts } from "@/schedules/schedule-format";
 
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
