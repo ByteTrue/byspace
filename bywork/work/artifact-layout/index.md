@@ -1,10 +1,10 @@
 ---
 kind: work
-status: in_progress
-current_unit: "npm tarball 路径不变（唯一未验证行）"
-next_action: "改动提交后跑 `npm run release:pack:bytetrue` 复核 dist/npm/bytetrue-byspace-0.26.4.tgz；或用户确认该行按「脚本未改」结案"
+status: complete
+current_unit: "全部完成"
+next_action: "无。推分支后看 GitHub Actions 的真实结果"
 must_hold: "只收拢产物与过程垃圾，不动源码目录布局；dist/ 保持对外发布契约；不留旧路径兼容 shim；不重启 6777 生产 daemon；不改既有测试断言"
-proof_gap: "npm 打包入口要求 git 工作区干净，改动未提交前跑不了；CI（GitHub Actions）只做了静态核对"
+proof_gap: ""
 ---
 
 # 产物目录收拢到 .dev/ 与 dist/
@@ -51,7 +51,7 @@ proof_gap: "npm 打包入口要求 git 工作区干净，改动未提交前跑�
 | macOS 分发物落在 dist | `make dmg` | 打 app 与 dmg | `dist/` 只有 zip 与 dmg，中间 bundle 与 iconset 不在 `dist/` 也不在 `build/` | `env -u GOROOT make dmg` exit=0（日志 `.dev/baseline/after-make-dmg.log`）；`ls dist/` 只有 byspace-darwin-arm64.zip 12.7M 与 .dmg 13.5M；`.dev/build/` 只有 BySpace.app；`build/darwin/` 只剩 Info.plist，`git status build/` 只有 build.sh 的改动 | 通过 |
 | Android APK 不再产出两份 | `make build-android` | 打侧载 APK | 中间物在 gradle 自己的布局里，`dist/byspace-android-arm64.apk` 一份，根目录无 `bin/` | `env -u GOROOT -u ANDROID_SDK_ROOT make build-android` exit=0，`BUILD SUCCESSFUL in 13s`，`● Built Android APK: .../dist/byspace-android-arm64.apk ( 29M)`（日志 `.dev/baseline/after-make-android.log`）；`find . -name '*.apk'`（排除 node_modules 与 dev home）只有 gradle 的 `build/android/app/build/outputs/apk/release/app-release.apk` 与 `dist/byspace-android-arm64.apk` | 通过 |
 | 全平台 CLI 与 checksums | `make release-cli && make checksums` | 交叉编译并校验 | `dist/byspace-cli-*` 齐全，SHA256SUMS 覆盖它们 | exit=0（日志 `.dev/baseline/after-release-cli.log`），7 个平台全部编译；`dist/` 只有 7 个 CLI + apk + zip + dmg + SHA256SUMS；`cd dist && shasum -a 256 -c SHA256SUMS` 10 项全 OK | 通过 |
-| npm 打包路径不变 | `npm run release:pack:bytetrue` | 打 npm tarball | `dist/npm/bytetrue-byspace-<version>.tgz` 生成 | 未跑：`scripts/package-go-release.mjs:160-162` 要求 `git status --porcelain` 为空，本次改动未提交时该入口必然拒绝。脚本本次未改（`git status` 无该文件），且它只读 `internal/webui/dist`、写 `dist/npm`，两者都没动 | 无法判定 |
+| npm 打包路径不变 | `npm run release:pack:bytetrue` | 打 npm tarball 并解开自检 | `dist/npm/bytetrue-byspace-<version>.tgz` 生成，内部仍是 `bin/byspace` + `vendor/<platform>` | 提交后（7c97386ac，工作区干净）实跑 exit=0：`dist/npm/bytetrue-byspace-0.26.4.tgz` 71M，sha256 4492f2d4…，五平台二进制齐全（darwin-arm64 31583666 / darwin-x64 32433200 / linux-arm64 31129760 / linux-x64 32153760 / windows-x64.exe 33887232）。`tar -tzf` 确认 `package/bin/byspace` 与 `package/vendor/*` 未变——仓库删掉的 `bin/` 与 tarball 内部的 `bin/` 是两回事。日志 `.dev/npm-pack2.log`。**环境坑**：本机 npm 12.2.2 的 `npm pack --json` 返回按包名索引的对象，脚本按 npm 10 的数组解构，直接跑报 `TypeError: object is not iterable`（`.dev/npm-pack.log`）。仓库 `packageManager: npm@10.9.9`，用该版本跑即通过——不是脚本缺陷，不改脚本 | 通过 |
 | 开发桌面 bundle 落在 .dev | `node ./scripts/dev-desktop.mjs`（`byspace.json:16` 的 desktop 服务） | 启动开发版桌面窗口 | bundle 在 `.dev/build/BySpace Dev.app`，daemon 仍是 6778 + dev home，`dist/` 不新增文件 | `BYSPACE_SKIP_DEV_DESKTOP_BUILD=1 node ./scripts/dev-desktop.mjs` 打印 `Binary: .../.dev/build/BySpace Dev.app/Contents/MacOS/byspace-app`、`Daemon: 127.0.0.1:6778`、`Home: .../.dev/byspace-home`，窗口起来并 restored 5 terminal tabs；`npm run cli -- daemon status` 为 `running addr=127.0.0.1:6778`，kill 该进程后回到 stopped；期间 `dist/` 不存在。日志 `.dev/baseline/after-dev-desktop.log` | 通过 |
 | 过程证据落在 .dev | playwright（`web/playwright.config.ts`）与 vitest browser（`web/vitest.config.ts`） | 跑一个必然失败、会写截图的 spec | 失败截图/trace/附件落在 `.dev/` 下，`web/test-results`、`web/.vitest-screenshots`、`web/.vitest-attachments` 不出现 | playwright：临时探针 `web/e2e/browser/zz-artifact-layout-probe.spec.ts`（已删）失败后 `.dev/test-results/zz-.../{test-failed-1.png,trace.zip,probe.png,error-context.md}` 齐全，`web/test-results` 不存在；先用 `--output=./.tmp-artifact-layout-evidence` 跑同一探针，四类文件落在那里，证明落点由 outputDir 决定。日志 `.dev/baseline/{after,failure}-playwright.log`。vitest：临时探针 `web/src/core/lib/zz-artifact-layout-probe.browser.test.tsx`（已删）失败后截图在 `.dev/vitest/screenshots/src/core/lib/...`、附件在 `.dev/vitest/attachments/345eea...png`，`web/.vitest-*` 不存在，日志 `.dev/baseline/after-vitest-browser.log` | 通过 |
 | 清理入口覆盖全部产物 | `make clean` | 执行清理 | 产物清空，`internal/webui/dist/.keep` 保留，dev home 与 node_modules 不受影响 | exit=0：`.dev/{bin,build,test-results}` 与 `dist/` 全部消失，`.dev/` 只剩 baseline 与 byspace-home（daemon 日志、agents 等原样），`internal/webui/dist` 只剩 `.keep`，node_modules 409 项不变；随后 `npm run dev:daemon`（不带 SKIP）从零 `make build` 出 12444738 字节的 `.dev/bin/byspace` 并 listening on 127.0.0.1:6778，`npm run cli -- daemon stop` 返回 `stopped pid=23748`。日志 `.dev/baseline/after-clean-dev-daemon.log` | 通过 |
@@ -67,11 +67,11 @@ proof_gap: "npm 打包入口要求 git 工作区干净，改动未提交前跑�
 
 ## 完成核对
 
-- 行为门：12 行通过，1 行（npm tarball）无法判定——入口拒绝脏工作区。
+- 行为门：13 行全部通过。
 - 范围门：`scope.md` 逐条对账，27 项全部「已覆盖」或「不适用」，无「未处理」。
 - 契约门：`make build` 产物路径改动前存了基线（`.dev/baseline/make-build.log`、`cli-status.log`），改后同入口输出逐字相同；既有测试文件与断言未改（`git status` 无测试文件）。
-- 完成门：未达成，缺 npm 打包一行。
-- 需要用户看的推断或无法判定：npm tarball 一行；CI 只有静态核对，真实 Actions 结果要推分支才知道。
+- 完成门：达成（提交 7c97386ac）。
+- 需要用户看的推断或无法判定：CI 只有本地静态核对与本地实跑，真实 GitHub Actions 结果要推分支才知道。
 
 ## 本轮之外的发现
 
