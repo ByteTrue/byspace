@@ -10,6 +10,8 @@
 - 用 `git stash` 取基线时，Makefile 也被退回旧产物路径（`bin/byspace`），e2e 会全数失败在「binary not found」——那不是有效基线。用 `BYSPACE_E2E_DAEMON_BINARY=<仍在的二进制绝对路径>` 指过去再跑。stash/pop 会触发 AGENTS.md 的 system-update 通知来回翻转，那是副作用不是真实编辑。
 - 守卫自己也会烂，而且**静默**：`scripts/docs-links.test.mjs` 第二个 test 扫的是已退役的 `packages/app/src`，`if (!existsSync(dir)) return` 让它长期跳过，一直显示通过。同类：`.github/ci-paths.yml` 的死 glob 不报错、`docs-links` 只查 `](path)` 不查反引号里的代码路径。**守卫的绿灯要先问「它这次真的检查了什么」**——插一条已知错误的输入见红，才算它还在工作。
 - 文档里最难发现的腐烂不是路径错，是**机制描述整个失效**：`docs/permissions.md` 说权限表靠 TS 类型穷举（Go 是运行时 map），`docs/architecture.md` 说新事件要在三处注册（Go 只对 `agent_stream` 过滤，其余无条件）。路径守卫抓不到这类，只能逐条对代码复核。
+- **本地钩子与 CI 的覆盖面要对齐**：`lefthook.yml` 只跑 oxfmt/oxlint/typecheck，CI 的 format job 还跑 `gofmt -l main.go internal workers`。Go 改动因此能带着格式问题提交，到 CI 才红（d5519d14e 就这么红的）。加一种语言就要同时加它的本地钩子。
+- **「工具不可用」要区分是哪个入口**：记成 heartbeat 工具不可用，其实只是 MCP 侧没有 `create_heartbeat`；CLI 一直有 `byspace heartbeat <create|list|delete>`。断言某能力不存在前，先 `--help` 看一眼 CLI。
 
 ## 依据
 
