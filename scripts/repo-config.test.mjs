@@ -4,8 +4,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { load as loadYaml } from "js-yaml";
-import picomatch from "picomatch";
 
 // Repo configuration names paths: CI routing globs, formatter/linter ignores, hook excludes,
 // tsconfig extends. A path that no longer exists is silent — the glob simply never matches, so a
@@ -14,6 +12,10 @@ import picomatch from "picomatch";
 //
 // Only literal path prefixes are checked. A glob's fixed leading segments must exist; the wildcards
 // themselves are not resolved (`internal/**` checks `internal/`, `**/*.ts` checks nothing).
+//
+// Builtins only. The CI job that runs these contracts (`changes`) does not install dependencies —
+// it is the routing gate, and every other scripts/*.test.mjs there reads with node: alone. js-yaml
+// and picomatch passed locally and failed in CI with ERR_MODULE_NOT_FOUND.
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -29,6 +31,92 @@ function ignorePatterns(file) {
   return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
 }
 
+// The two YAML shapes this guard reads, and nothing more: ci-paths.yml is `contract:` followed by
+// `- "glob"` lines; lefthook.yml is a `jobs:` list of `- name:` blocks with scalar keys and an
+// `exclude:` list. Both are written by hand in exactly that shape, so a line reader is enough and
+// keeps the guard dependency-free.
+function contracts(file) {
+  const source = readFileSync(join(repoRoot, file), "utf8");
+  const result = {};
+  let current = null;
+  for (const line of source.split("\n")) {
+    const key = line.match(/^([a-z][\w-]*):\s*$/);
+    if (key) {
+      current = key[1];
+      result[current] = [];
+      continue;
+    }
+    const item = line.match(/^\s+-\s+"([^"]+)"\s*$/);
+    if (item && current) result[current].push(item[1]);
+  }
+  return result;
+}
+
+function hookJobs() {
+  const source = readFileSync(join(repoRoot, "lefthook.yml"), "utf8");
+  const jobs = {};
+  let job = null;
+  let list = null;
+  for (const line of source.split("\n")) {
+    const start = line.match(/^\s+- name:\s*(\S+)\s*$/);
+    if (start) {
+      job = { name: start[1], run: "" };
+      jobs[job.name] = job;
+      list = null;
+      continue;
+    }
+    if (!job) continue;
+    const scalar = line.match(/^\s+(glob|run):\s*(.*)$/);
+    if (scalar) {
+      list = null;
+      if (scalar[1] === "run") job.run = scalar[2];
+      else job[scalar[1]] = scalar[2].replace(/^"(.*)"$/, "$1");
+      continue;
+    }
+    // A block scalar (`run: |`) keeps its body lines; only the command text matters here.
+    if (/^\s{8,}\S/.test(line) && !/^\s+-\s/.test(line)) {
+      job.run += `\n${line.trim()}`;
+      continue;
+    }
+    if (/^\s+exclude:\s*$/.test(line)) {
+      job.exclude = [];
+      list = job.exclude;
+      continue;
+    }
+    const item = line.match(/^\s+-\s+"([^"]+)"\s*$/);
+    if (item && list) list.push(item[1]);
+  }
+  return jobs;
+}
+
+// Whether a hook pattern covers a path. Only the two forms these lists use: a `dir/**` tree prefix,
+// a `*.ext` / `*.{a,b}` basename suffix, or a literal path. `matchBase` semantics — a pattern with no
+// slash matches the basename — is what lefthook does (verified by staging internal/zz_gofmt_probe.go).
+function covers(pattern, path) {
+  if (!pattern.includes("*")) return pattern === path;
+  if (pattern.endsWith("/**")) return path.startsWith(`${pattern.slice(0, -2)}`);
+  // `**/*.gen.ts` matches that suffix at any depth, including the repo root.
+  if (pattern.startsWith("**/")) {
+    const rest = pattern.slice(3);
+    return (
+      covers(rest, path) ||
+      path.split("/").some((_, i) => covers(rest, path.split("/").slice(i).join("/")))
+    );
+  }
+  if (!pattern.includes("/")) {
+    const braces = pattern.match(/^\*\.\{([^}]+)\}$/);
+    const extensions = braces ? braces[1].split(",") : [pattern.replace(/^\*\./, "")];
+    const name = path.split("/").pop();
+    return extensions.some((extension) => name.endsWith(`.${extension}`));
+  }
+  // A directory-scoped wildcard like web/public/schemas/*.json.
+  const [dir, file] = [pattern.slice(0, pattern.lastIndexOf("/")), pattern.split("/").pop()];
+  if (!path.startsWith(`${dir}/`)) return false;
+  const name = path.slice(dir.length + 1);
+  if (name.includes("/")) return false;
+  return file.startsWith("*.") ? name.endsWith(file.slice(1)) : name === file;
+}
+
 // The path a pattern is anchored to: every leading segment without a wildcard. `internal/**` is
 // anchored to `internal`, `web/public/schemas/*.json` to `web/public/schemas`, a bare `main.go` to
 // itself. A pattern that opens with a wildcard is anchored to nothing and is not checked.
@@ -42,7 +130,7 @@ function anchor(pattern) {
 }
 
 test("ci-paths routing globs name trees that exist", () => {
-  const filters = loadYaml(readFileSync(join(repoRoot, ".github/ci-paths.yml"), "utf8"));
+  const filters = contracts(".github/ci-paths.yml");
   const missing = [];
   for (const [contract, patterns] of Object.entries(filters)) {
     for (const pattern of patterns) {
@@ -58,7 +146,7 @@ test("ci-paths routing globs name trees that exist", () => {
 });
 
 test("every ci-paths contract is consumed by the CI workflow", () => {
-  const filters = loadYaml(readFileSync(join(repoRoot, ".github/ci-paths.yml"), "utf8"));
+  const filters = contracts(".github/ci-paths.yml");
   const workflow = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
   // A contract is consumed either by a downstream job's gate or inside `changes` itself, where the
   // `full` output folds several contracts into one "run everything" signal.
@@ -73,7 +161,7 @@ test("every ci-paths contract is consumed by the CI workflow", () => {
 // The other direction is the silent one: a workflow reading a filter output no contract declares
 // gets an empty string, and `'' != 'false'` is true — so the gate it guards is permanently open.
 test("every filter output the CI workflow reads is declared", () => {
-  const filters = loadYaml(readFileSync(join(repoRoot, ".github/ci-paths.yml"), "utf8"));
+  const filters = contracts(".github/ci-paths.yml");
   const workflow = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
   const read = [
     ...new Set(
@@ -94,16 +182,15 @@ test("every filter output the CI workflow reads is declared", () => {
 test("lefthook excludes cover the formatter and linter ignores", () => {
   const format = ignorePatterns(".oxfmtrc.json");
   const lint = ignorePatterns(".oxlintrc.json");
-  const hook = loadYaml(readFileSync(join(repoRoot, "lefthook.yml"), "utf8"));
-  const jobs = Object.fromEntries(hook["pre-commit"].jobs.map((job) => [job.name, job]));
+  const jobs = hookJobs();
 
   const uncovered = (ignores, jobName) => {
     const excludes = jobs[jobName].exclude ?? [];
-    const matchers = excludes.map((pattern) => picomatch(pattern, { dot: true }));
+
     return ignores.filter((ignored) => {
       // An ignore is covered when some exclude matches a representative file inside it.
       const probe = ignored.replace(/\*\*/g, "probe").replace(/\*/g, "probe");
-      return !matchers.some((matches) => matches(probe));
+      return !excludes.some((pattern) => covers(pattern, probe));
     });
   };
 
@@ -127,8 +214,7 @@ const OXFMT_EXTENSIONS = "cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml"
 const OXLINT_EXTENSIONS = "cjs,js,jsx,mjs,ts,tsx".split(",");
 
 test("lefthook globs cover every extension the tools process", () => {
-  const hook = loadYaml(readFileSync(join(repoRoot, "lefthook.yml"), "utf8"));
-  const jobs = Object.fromEntries(hook["pre-commit"].jobs.map((job) => [job.name, job]));
+  const jobs = hookJobs();
 
   const missing = (extensions, jobName) => {
     const glob = jobs[jobName].glob.match(/\.\{([^}]+)\}$/);
@@ -153,9 +239,8 @@ test("lefthook globs cover every extension the tools process", () => {
 // main.go, internal and workers. A hook that only calls oxfmt lets Go changes commit unformatted —
 // d5519d14e reached main that way and CI went red on two files nobody had touched in that commit.
 test("lefthook checks Go formatting the way CI does", () => {
-  const hook = loadYaml(readFileSync(join(repoRoot, "lefthook.yml"), "utf8"));
-  const jobs = hook["pre-commit"].jobs;
-  const go = jobs.find((job) => /\bgofmt\b/.test(job.run ?? ""));
+  const jobs = hookJobs();
+  const go = Object.values(jobs).find((job) => /\bgofmt\b/.test(job.run ?? ""));
   assert.ok(go, "no pre-commit job runs gofmt, so Go formatting is only caught in CI");
   assert.match(go.glob ?? "", /\bgo\b/, "the gofmt job should be scoped to Go files");
 
@@ -169,10 +254,10 @@ test("lefthook checks Go formatting the way CI does", () => {
   assert.ok(ciRoots, "CI should run gofmt -l over named roots");
   // lefthook matches a slashless glob against the basename (verified: `*.go` picked up
   // internal/zz_gofmt_probe.go), so picomatch needs matchBase to model it.
-  const matches = picomatch(go.glob, { dot: true, matchBase: true });
+
   for (const root of ciRoots) {
     const probe = root.endsWith(".go") ? root : `${root}/probe.go`;
-    assert.ok(matches(probe), `the gofmt glob skips ${probe}, which CI checks`);
+    assert.ok(covers(go.glob, probe), `the gofmt glob skips ${probe}, which CI checks`);
   }
 });
 

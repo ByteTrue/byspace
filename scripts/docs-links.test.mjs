@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative as relativePath, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,6 +141,12 @@ const repoDirs = new Set(
     .map((e) => e.name),
 );
 
+// Build outputs the docs name deliberately (docs/protocol-validation.md says ws-outbound.aot.ts
+// "is generated runtime code and is gitignored") are absent from a fresh checkout. Existence on
+// disk is the wrong question for those; being ignored is the contract they actually claim.
+const ignored = (target) =>
+  spawnSync("git", ["check-ignore", "-q", "--", target], { cwd: repoRoot }).status === 0;
+
 test("code paths cited in prose exist", () => {
   const broken = [];
 
@@ -157,6 +164,7 @@ test("code paths cited in prose exist", () => {
         if (ILLUSTRATIVE.test(target)) continue;
         if (readsArchive && /^packages\/(server|cli)\//.test(target)) continue;
         if (existsSync(join(repoRoot, target))) continue;
+        if (ignored(target)) continue;
         broken.push(`${relative}: ${target}`);
       }
     }
