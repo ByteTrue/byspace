@@ -1,55 +1,44 @@
 # Custom Provider Configuration
 
-BySpace supports configuring custom agent providers through `config.json` (located at `$BYSPACE_HOME/config.json`, typically `~/.byspace/config.json`). You can extend built-in providers with different API backends, add ACP-compatible agents, set custom binaries, disable providers, and create multiple profiles for the same underlying provider.
-
-Provider definitions live under `agents.providers` in config.json:
+Everything beyond the four built-in providers (Claude Code, Codex, OpenCode, Pi) lives under
+`agents.providers` in `$BYSPACE_HOME/config.json` (typically `~/.byspace/config.json`). You can point
+a built-in provider at a different API backend, add ACP agents, override the launch binary, disable
+a provider, or run several profiles against the same underlying provider.
 
 ```json
 {
   "version": 1,
   "agents": {
     "providers": {
-      "provider-id": { ... }
+      "provider-id": {}
     }
   }
 }
 ```
 
-Provider IDs must be lowercase alphanumeric with hyphens (`/^[a-z][a-z0-9-]*$/`).
+Provider IDs must match `/^[a-z][a-z0-9-]*$/`. Every custom entry needs `extends` (a built-in
+provider ID or `"acp"`) and a `label`; an entry extending `"acp"` also needs `command`. Run
+`byspace reload` after editing — provider changes apply to future launches without restarting the
+daemon.
 
-Each provider catalog refresh waits up to 2 minutes. If a provider loads many plugins or a large
-agent catalog during startup, raise the limit in milliseconds:
-
-```json
-{
-  "agents": {
-    "catalogRefreshTimeoutMs": 180000
-  }
-}
-```
-
-The limit applies independently to every provider refresh and covers availability plus the entire
-catalog probe. `BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS` sets it when the config field is absent.
-
----
+For the contract a provider adapter must keep, see [providers.md](providers.md).
 
 ## Table of Contents
 
 - [Extending a built-in provider](#extending-a-built-in-provider)
-- [Z.AI (Zhipu) coding plan](#zai-zhipu-coding-plan)
-- [Alibaba Cloud (Qwen) coding plan](#alibaba-cloud-qwen-coding-plan)
+- [Third-party Anthropic-compatible endpoints](#third-party-anthropic-compatible-endpoints)
 - [Codex with a custom OpenAI-compatible endpoint](#codex-with-a-custom-openai-compatible-endpoint)
-- [Multiple profiles for the same provider](#multiple-profiles-for-the-same-provider)
-- [Custom binary for a provider](#custom-binary-for-a-provider)
+- [Multiple profiles](#multiple-profiles)
+- [Custom binary](#custom-binary)
 - [Disabling a provider](#disabling-a-provider)
 - [ACP providers](#acp-providers)
+- [Models and thinking options](#models-and-thinking-options)
 - [Provider override reference](#provider-override-reference)
-
----
 
 ## Extending a built-in provider
 
-Use `extends` to create a new provider entry that inherits from a built-in provider (claude, codex, opencode, pi). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
+`extends` creates a new entry that inherits a built-in provider's protocol and launch behavior,
+with its own label, environment, and models. Point `env` at a different backend:
 
 ```json
 {
@@ -69,24 +58,25 @@ Use `extends` to create a new provider entry that inherits from a built-in provi
 }
 ```
 
-Required fields for custom providers:
+The provider `env` is the baseline for the agent process; a per-agent env rides on top of it.
+Valid `extends` values: `claude`, `codex`, `opencode`, `pi`, and `acp`.
 
-- `extends` — which built-in provider to inherit from (or `"acp"`)
-- `label` — display name in the UI
+## Third-party Anthropic-compatible endpoints
 
-See [Codex with a custom OpenAI-compatible endpoint](#codex-with-a-custom-openai-compatible-endpoint) below for the dedicated Codex example.
+Several vendors expose their own models through an Anthropic-compatible API, so Claude Code can
+drive them by pointing `ANTHROPIC_BASE_URL` at the vendor and supplying the vendor's key. These are
+**not** Anthropic Claude models. They share one shape: `extends: "claude"`, the vendor endpoint and
+auth env, an explicit `models` list, and `disallowedTools: ["WebSearch"]`.
 
----
+| Vendor                                                                                                | `ANTHROPIC_BASE_URL`                                        | Auth env                                                      | Models                                             |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| [Z.AI (Zhipu)](https://z.ai)                                                                          | `https://api.z.ai/api/anthropic`                            | `ANTHROPIC_AUTH_TOKEN` (the Z.AI key)                         | `glm-5.1`, `glm-5-turbo`, `glm-4.7`, `glm-4.5-air` |
+| [Alibaba Qwen coding plan](https://www.alibabacloud.com/help/en/model-studio/claude-code-coding-plan) | `https://coding-intl.dashscope.aliyuncs.com/apps/anthropic` | `ANTHROPIC_AUTH_TOKEN` (plan key `sk-sp-…`, Singapore region) | `qwen3.5-plus`, `qwen3-coder-next`, `kimi-k2.5`    |
 
-## Z.AI (Zhipu) coding plan
+Qwen pay-as-you-go (no subscription) uses `https://dashscope-intl.aliyuncs.com/apps/anthropic` with
+`ANTHROPIC_API_KEY` (a standard `sk-…` Model Studio key) instead of `ANTHROPIC_AUTH_TOKEN`.
 
-[Z.AI](https://z.ai) is a Chinese AI company (Zhipu AI) that offers an Anthropic-compatible API endpoint. Their GLM Coding Plan provides flat-rate access to GLM models through Claude Code's Anthropic API protocol. These are **not** Anthropic Claude models — they are Zhipu's own GLM models exposed through an Anthropic-compatible API.
-
-### Setup
-
-1. Register at [z.ai](https://z.ai) and subscribe to a coding plan
-2. Create an API key from the Z.AI dashboard
-3. Add a provider entry in config.json:
+Worked example (Z.AI):
 
 ```json
 {
@@ -102,7 +92,6 @@ See [Codex with a custom OpenAI-compatible endpoint](#codex-with-a-custom-openai
         },
         "disallowedTools": ["WebSearch"],
         "models": [
-          { "id": "glm-4.5-air", "label": "GLM 4.5 Air" },
           { "id": "glm-5-turbo", "label": "GLM 5 Turbo", "isDefault": true },
           { "id": "glm-5.1", "label": "GLM 5.1" }
         ]
@@ -112,100 +101,20 @@ See [Codex with a custom OpenAI-compatible endpoint](#codex-with-a-custom-openai
 }
 ```
 
-### Available models
+`API_TIMEOUT_MS` extends the request timeout — these endpoints can be slower than direct Anthropic.
+If you get auth errors after switching, run `/logout` inside Claude Code first.
 
-| Model         | Tier                |
-| ------------- | ------------------- |
-| `glm-5.1`     | Advanced (flagship) |
-| `glm-5-turbo` | Advanced            |
-| `glm-4.7`     | Standard            |
-| `glm-4.5-air` | Lightweight         |
-
-### Notes
-
-- `ANTHROPIC_AUTH_TOKEN` is used instead of `ANTHROPIC_API_KEY` — this is the z.ai API key
-- The `API_TIMEOUT_MS` env var extends the request timeout (z.ai can be slower than direct Anthropic)
-- If you get auth errors, run `/logout` inside Claude Code before switching to the z.ai provider
-- Web search (`WebSearch` tool) is an Anthropic-only server-side feature — third-party endpoints don't support it. Add `"disallowedTools": ["WebSearch"]` to avoid errors.
-- Automated setup is also available: `npx @z_ai/coding-helper`
-- Official docs: [docs.z.ai/devpack/tool/claude](https://docs.z.ai/devpack/tool/claude)
-
----
-
-## Alibaba Cloud (Qwen) coding plan
-
-[Alibaba Cloud Model Studio](https://www.alibabacloud.com/en/campaign/ai-scene-coding) offers a coding plan that routes Claude Code requests to Qwen models through an Anthropic-compatible API. Like z.ai, these are **not** Anthropic Claude models.
-
-### Setup
-
-1. Go to the [Coding Plan page](https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=globalset#/efm/coding_plan) on Alibaba Cloud Model Studio (Singapore region)
-2. Subscribe to the Pro plan ($50/month)
-3. Obtain your plan-specific API key (format: `sk-sp-xxxxx`) — this is different from a standard Model Studio key
-4. Add a provider entry in config.json:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "qwen": {
-        "extends": "claude",
-        "label": "Qwen (Alibaba)",
-        "env": {
-          "ANTHROPIC_AUTH_TOKEN": "sk-sp-<your-coding-plan-key>",
-          "ANTHROPIC_BASE_URL": "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"
-        },
-        "disallowedTools": ["WebSearch"],
-        "models": [
-          { "id": "qwen3.5-plus", "label": "Qwen 3.5 Plus", "isDefault": true },
-          { "id": "qwen3-coder-next", "label": "Qwen 3 Coder Next" },
-          { "id": "kimi-k2.5", "label": "Kimi K2.5" }
-        ]
-      }
-    }
-  }
-}
-```
-
-### API endpoints
-
-| Mode                            | Base URL                                                    |
-| ------------------------------- | ----------------------------------------------------------- |
-| Coding plan (subscription)      | `https://coding-intl.dashscope.aliyuncs.com/apps/anthropic` |
-| Pay-as-you-go (no subscription) | `https://dashscope-intl.aliyuncs.com/apps/anthropic`        |
-
-For pay-as-you-go, use `ANTHROPIC_API_KEY` with a standard Model Studio key (`sk-xxxxx`) instead of `ANTHROPIC_AUTH_TOKEN`.
-
-### Available models
-
-**Recommended for coding plan:**
-
-| Model              | Notes                       |
-| ------------------ | --------------------------- |
-| `qwen3.5-plus`     | Vision capable, recommended |
-| `qwen3-coder-next` | Optimized for coding        |
-| `kimi-k2.5`        | Vision capable              |
-| `glm-5`            | Zhipu GLM                   |
-| `MiniMax-M3`       | MiniMax                     |
-
-**Additional models (pay-as-you-go):**
-`qwen3-max`, `qwen3.5-flash`, `qwen3-coder-plus`, `qwen3-coder-flash`, `qwen3-vl-plus`, `qwen3-vl-flash`
-
-### Notes
-
-- API keys must be created in the **Singapore region**
-- The coding plan is for personal use only in interactive coding tools
-- Web search (`WebSearch` tool) is an Anthropic-only server-side feature — third-party endpoints don't support it. Add `"disallowedTools": ["WebSearch"]` to avoid errors.
-- Official docs: [alibabacloud.com/help/en/model-studio/claude-code-coding-plan](https://www.alibabacloud.com/help/en/model-studio/claude-code-coding-plan)
-
----
+**Why `disallowedTools: ["WebSearch"]`.** `WebSearch` is an Anthropic-only server-side tool; a
+third-party endpoint rejects it. `disallowedTools` reaches Claude Code as `--disallowedTools` deny
+rules, which drop the named tools from the model's context. List any tool the endpoint does not
+support.
 
 ## Codex with a custom OpenAI-compatible endpoint
 
-Codex talks to OpenAI's Responses API by default. Custom providers that extend `"codex"` can point Codex at any OpenAI-compatible endpoint (OpenRouter, LiteLLM, vLLM, llama.cpp server, an internal gateway, etc.) by setting `OPENAI_BASE_URL` and `OPENAI_API_KEY` in the provider `env`.
-
-BySpace passes those variables through to the Codex app-server process **and** maps them into Codex's thread config under `model_provider` / `model_providers`, because Codex reads provider routing from config rather than from `OPENAI_BASE_URL` alone.
-
-### Setup
+Codex talks to OpenAI's Responses API. A provider extending `"codex"` can point it at any
+OpenAI-compatible endpoint (OpenRouter, LiteLLM, vLLM, an internal gateway) through `env`. BySpace
+passes those variables through to the Codex app-server process; it does not rewrite Codex's own
+config files.
 
 ```json
 {
@@ -214,7 +123,6 @@ BySpace passes those variables through to the Codex app-server process **and** m
       "my-codex": {
         "extends": "codex",
         "label": "My Codex",
-        "description": "Codex via custom OpenAI-compatible endpoint",
         "env": {
           "OPENAI_API_KEY": "sk-...",
           "OPENAI_BASE_URL": "https://custom-relay.example.com"
@@ -226,42 +134,17 @@ BySpace passes those variables through to the Codex app-server process **and** m
 }
 ```
 
-### What BySpace wires up
+- The endpoint must speak the OpenAI **Responses API**, not just chat completions.
+- Set `models` explicitly. BySpace does not discover a custom Codex endpoint's model IDs.
+- To run several endpoints side by side, define multiple entries extending `"codex"` with different
+  IDs, labels, and env.
+- To override only the binary (a nightly build) without changing the endpoint, omit
+  `OPENAI_BASE_URL` and use `command` — see [Custom binary](#custom-binary).
 
-Under the hood, for each custom Codex provider BySpace injects this into Codex's config:
+## Multiple profiles
 
-```toml
-model_provider = "my-codex"
-
-[model_providers.my-codex]
-name = "My Codex"
-base_url = "https://custom-relay.example.com/v1"
-wire_api = "responses"
-env_key = "OPENAI_API_KEY"
-requires_openai_auth = false
-```
-
-- `base_url` — taken from `OPENAI_BASE_URL`. If it does not already end in `/v1`, BySpace appends `/v1`. Trailing slashes are stripped.
-- `wire_api` — always `"responses"` (OpenAI Responses API protocol).
-- `env_key` — set to `"OPENAI_API_KEY"` when that env var is present and non-empty, so Codex reads the key from the same env var BySpace passes through.
-- `requires_openai_auth` — forced to `false` when `OPENAI_API_KEY` is provided, so Codex skips its built-in OpenAI login flow.
-
-### Notes
-
-- The endpoint must speak the OpenAI **Responses API**, not just chat completions. Many gateways (OpenRouter, LiteLLM) support both — pick the Responses-compatible route.
-- Set `models` explicitly. Custom endpoints expose their own model IDs (`anthropic/claude-opus-4-7`, `qwen/qwen3-coder`, `local/llama`, etc.), and BySpace does not discover them automatically for Codex.
-- To run multiple endpoints side-by-side, define multiple entries that each extend `"codex"` with different IDs, labels, and env. Each appears as its own provider in the app.
-- If you only want to override the binary (e.g. a nightly Codex build) without changing the endpoint, omit `OPENAI_BASE_URL` and use `command` instead — see [Custom binary for a provider](#custom-binary-for-a-provider).
-
----
-
-## Multiple profiles for the same provider
-
-You can create multiple entries that extend the same built-in provider. Each gets its own entry in the provider list with independent credentials, models, and environment.
-
-"Profile" here means a provider alias, and it is not an **Agent profile** — that is a named bundle of provider, model, mode, thinking option and features, stored under `daemon.agentProfiles`. See [glossary.md](glossary.md) for all four senses of the word.
-
-Example: two different Anthropic accounts as separate profiles:
+Create as many entries as you want against the same built-in provider. Each appears as a separate
+option in the app with its own credentials and models:
 
 ```json
 {
@@ -270,87 +153,32 @@ Example: two different Anthropic accounts as separate profiles:
       "claude-work": {
         "extends": "claude",
         "label": "Claude (Work)",
-        "description": "Work Anthropic account",
-        "env": {
-          "ANTHROPIC_API_KEY": "sk-ant-work-..."
-        }
+        "env": { "ANTHROPIC_API_KEY": "sk-ant-work-..." }
       },
       "claude-personal": {
         "extends": "claude",
         "label": "Claude (Personal)",
-        "description": "Personal Anthropic account",
-        "env": {
-          "ANTHROPIC_API_KEY": "sk-ant-personal-..."
-        }
+        "env": { "ANTHROPIC_API_KEY": "sk-ant-personal-..." }
       }
     }
   }
 }
 ```
 
-Each profile appears as a separate provider in the BySpace app. You can select which one to use when launching an agent.
+A "profile" here is a provider alias — not an **Agent profile** (a named bundle of provider, model,
+mode, thinking option, and features under `daemon.agentProfiles`). See [glossary.md](glossary.md)
+for the four senses of the word. Combine aliases with `models` to pin a model per profile.
 
-You can also combine profiles with model overrides to pin specific models per profile:
+## Custom binary
 
-```json
-{
-  "agents": {
-    "providers": {
-      "claude-fast": {
-        "extends": "claude",
-        "label": "Claude (Fast)",
-        "models": [{ "id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "isDefault": true }]
-      },
-      "claude-smart": {
-        "extends": "claude",
-        "label": "Claude (Smart)",
-        "models": [{ "id": "claude-opus-4-6", "label": "Opus 4.6", "isDefault": true }]
-      }
-    }
-  }
-}
-```
-
----
-
-## Custom binary for a provider
-
-Override the command used to launch any provider with the `command` field. This is an array where the first element is the binary and the rest are arguments.
-
-### Override a built-in provider's binary
+`command` is an array — first element is the binary, the rest are arguments. It fully replaces the
+default launch command for that provider, built-in or derived:
 
 ```json
 {
   "agents": {
     "providers": {
-      "claude": {
-        "command": ["/opt/claude-nightly/claude"]
-      }
-    }
-  }
-}
-```
-
-### Use a custom wrapper script
-
-```json
-{
-  "agents": {
-    "providers": {
-      "claude": {
-        "command": ["/usr/local/bin/my-claude-wrapper", "--verbose"]
-      }
-    }
-  }
-}
-```
-
-### Custom binary on a derived provider
-
-```json
-{
-  "agents": {
-    "providers": {
+      "claude": { "command": ["/opt/claude-nightly/claude"] },
       "my-codex": {
         "extends": "codex",
         "label": "Codex (Custom Build)",
@@ -361,11 +189,12 @@ Override the command used to launch any provider with the `command` field. This 
 }
 ```
 
-The `command` array completely replaces the default command for that provider. The binary must exist on the system — BySpace checks for its availability and will mark the provider as unavailable if not found.
+The binary must exist on the system; BySpace marks the provider unavailable if it cannot resolve it.
+A `<PROVIDER>_COMMAND` environment variable overrides the configured binary at launch.
 
 ### Pi-compatible forks
 
-For providers that keep Pi's `--mode rpc` API but write sessions somewhere else, extend `pi`, replace the command, and provide the JSONL session directory:
+A fork that keeps Pi's `--mode rpc` API extends `pi` and replaces the command:
 
 ```json
 {
@@ -374,51 +203,44 @@ For providers that keep Pi's `--mode rpc` API but write sessions somewhere else,
       "my-pi-fork": {
         "extends": "pi",
         "label": "My Pi Fork",
-        "command": ["my-pi-fork"],
-        "params": {
-          "sessionDir": "~/.my-pi-fork/sessions",
-          "rpcTimeoutMs": 60000
-        }
+        "command": ["my-pi-fork"]
       }
     }
   }
 }
 ```
 
-This session directory is also import-only. Launching and resuming still go through the configured command, so this example resumes with `my-pi-fork --mode rpc --session <session-file>`. `params.rpcTimeoutMs` overrides the 60-second Pi control-plane RPC deadline.
-
----
+Launching and resuming go through the configured command (`my-pi-fork --mode rpc --session <file>`).
+BySpace reads the fork's session list from the fork's own `settings.json` `sessionDir` (project-local
+`.pi/settings.json` first, then the global agent dir), falling back to the default sessions directory.
 
 ## Disabling a provider
 
-Set `enabled: false` to hide a provider from the provider list. The provider will not appear in the app or CLI.
+`enabled: false` hides a provider from the app and CLI. It works for built-in and custom entries;
+all built-in providers are enabled by default. Set `enabled: true` or remove the field to re-enable.
 
 ```json
 {
   "agents": {
     "providers": {
-      "codex": { "enabled": false },
-      "pi": { "enabled": false }
+      "codex": { "enabled": false }
     }
   }
 }
 ```
 
-This works for both built-in and custom providers. To re-enable, set `enabled: true` or remove the `enabled` field entirely. All built-in providers are enabled by default.
-
----
-
 ## ACP providers
 
-The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open standard for communication between editors and AI coding agents — think LSP but for AI agents. Any agent that supports ACP can be added to BySpace as a custom provider.
+The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open standard for editors
+talking to AI coding agents — think LSP for agents. Any agent that speaks ACP over JSON-RPC 2.0 on
+stdio can be added with `extends: "acp"`.
 
-ACP agents communicate over JSON-RPC 2.0 on stdio. BySpace spawns the agent process and talks to it through stdin/stdout.
-
-BySpace also ships an in-app ACP provider catalog for common agents, including CodeWhale, Cursor, DeepAgents, DimCode, Gemini CLI, Hermes, Qwen Code, and Kimi Code. Catalog entries create the same `extends: "acp"` provider config shown below.
+BySpace ships an in-app ACP catalog (Settings → Agents → Add provider) for common agents — Copilot,
+Cursor, Gemini CLI, Hermes, Kimi, Kiro, Qwen Code, and more. A catalog entry creates exactly the
+config below; use the catalog first and only hand-write an entry for an agent it does not list. The
+bundled `byspace-provider-adapter` skill walks an agent through connecting one.
 
 ### Adding a generic ACP provider
-
-Set `extends: "acp"` and provide a `command`:
 
 ```json
 {
@@ -428,29 +250,32 @@ Set `extends: "acp"` and provide a `command`:
         "extends": "acp",
         "label": "My Agent",
         "command": ["my-agent-binary", "--acp"],
-        "env": {
-          "MY_API_KEY": "..."
-        }
+        "env": { "MY_API_KEY": "..." }
       }
     }
   }
 }
 ```
 
-Required fields for ACP providers:
+The whole `command` argv matters: the first element is the launcher, the rest are passed verbatim.
+An ACP flag can be a flag (`gemini --acp`), a subcommand (`hermes acp`), or a package runner
+(`npx -y @google/gemini-cli --acp`).
 
-- `extends: "acp"`
-- `label`
-- `command` — the command to spawn the agent process (must support ACP over stdio)
+When you launch an ACP agent, BySpace spawns the process, sends an `initialize` JSON-RPC request,
+and the agent reports its capabilities, modes, and models at runtime. Prompts, streamed responses,
+tool calls, and permission requests flow over stdin/stdout. Permission requests surface in BySpace
+as confirm prompts for you to answer.
 
-BySpace tools do not reach an ACP agent. The daemon gives ACP sessions an empty `mcpServers`
+**BySpace tools do not reach an ACP agent.** The daemon gives ACP sessions an empty `mcpServers`
 array, and the bundled skill is only readable if the client reads `~/.agents/skills` or
 `~/.claude/skills`. Copy the skill into that client's own skill directory to give it the CLI, and
 accept that a client started this way has no `BYSPACE_AGENT_ID` of its own.
 
-ACP agents execute filesystem operations in their own environment by default,
-while terminal operations run through BySpace on the host. To customize which
-operations BySpace handles, configure client capabilities in provider params:
+### Client capabilities
+
+By default an ACP agent runs filesystem operations in its own environment while terminal operations
+run through BySpace on the host. `params.clientCapabilities` changes which operations BySpace
+handles:
 
 ```json
 {
@@ -462,10 +287,7 @@ operations BySpace handles, configure client capabilities in provider params:
         "command": ["container-agent", "acp"],
         "params": {
           "clientCapabilities": {
-            "fs": {
-              "readTextFile": false,
-              "writeTextFile": false
-            },
+            "fs": { "readTextFile": false, "writeTextFile": false },
             "terminal": false
           }
         }
@@ -475,27 +297,50 @@ operations BySpace handles, configure client capabilities in provider params:
 }
 ```
 
-When an agent runs in a container or remote environment that manages its own
-terminal, set `terminal: false` to keep command execution inside the agent
-container. When delegating filesystem operations to BySpace (`fs.readTextFile: true`
-or `fs.writeTextFile: true`), ensure the agent and BySpace share equivalent
-absolute workspace paths.
+Set `terminal: false` for an agent that manages its own terminal (a container or remote environment)
+so command execution stays inside it. When delegating filesystem operations to BySpace
+(`fs.readTextFile` / `fs.writeTextFile` true), the agent and BySpace must share equivalent absolute
+workspace paths. Overrides are partial — only the flags you name change.
 
-### Generic ACP diagnostics
+### Diagnostics
 
-BySpace diagnostics for `extends: "acp"` providers report the configured command, the resolved launcher binary, its `--version` output, PATH matches, and the daemon's PATH. They resolve the command the way launch does — a `<PROVIDER>_COMMAND` environment variable beats the configured binary — so a provider installed somewhere the daemon cannot see shows up as `Resolved path: not found`.
+`byspace provider diagnostic <id>` reports the configured command, the resolved launcher binary, its
+`--version` output, PATH matches, and the daemon's PATH. It resolves the command the way launch does
+(a `<PROVIDER>_COMMAND` env var beats the configured binary), so a provider installed where the
+daemon cannot see it shows `Resolved path: not found`. For a package-runner command the version
+probe keeps the package spec (`npx -y @google/gemini-cli --version`), diagnosing the agent package
+rather than just proving `npx` exists.
 
-For package-runner commands such as `npx -y @google/gemini-cli --acp`, the version probe keeps the package spec and runs `npx -y @google/gemini-cli --version`. This diagnoses the actual agent package instead of only proving that `npx` exists.
+The diagnostic does **not** start an ACP session — it proves the launcher resolves and reports a
+version, not that the agent answers `initialize`. To check the protocol end to end, create an agent
+on the provider (`byspace run --provider <id> "Say hello"`) and send a message.
 
-The diagnostic does not start an ACP session: it proves the launcher resolves and reports a version, not that the agent answers `initialize`. To check the protocol end to end, create an agent on the provider and send a message.
+### Examples
 
-### Example: Google Gemini CLI
+Gemini CLI (`--acp` flag) and Hermes (`acp` subcommand):
 
-[Gemini CLI](https://github.com/google-gemini/gemini-cli) supports ACP via the `--acp` flag.
+```json
+{
+  "agents": {
+    "providers": {
+      "gemini": { "extends": "acp", "label": "Google Gemini", "command": ["gemini", "--acp"] },
+      "hermes": { "extends": "acp", "label": "Hermes", "command": ["hermes", "acp"] }
+    }
+  }
+}
+```
 
-1. Install: `npm install -g @google/gemini-cli` or see [Gemini CLI docs](https://github.com/google-gemini/gemini-cli)
-2. Authenticate with Google (Gemini CLI handles its own auth)
-3. Add to config.json:
+Install Gemini CLI with `npm install -g @google/gemini-cli` (it handles its own Google auth). Install
+Hermes per its [docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp) and
+configure credentials in `~/.hermes/`.
+
+## Models and thinking options
+
+`models` replaces the model list outright — a fixed list works even when the provider is not
+installed. `additionalModels` merges on top of the runtime-discovered list (or on top of `models`
+when both are set): a new `id` is appended, an existing `id` is updated in place, and an addition
+marked `isDefault` demotes every other default. Use `additionalModels` to add or relabel a few
+entries without redeclaring the whole list:
 
 ```json
 {
@@ -504,92 +349,10 @@ The diagnostic does not start an ACP session: it proves the launcher resolves an
       "gemini": {
         "extends": "acp",
         "label": "Google Gemini",
-        "command": ["gemini", "--acp"]
-      }
-    }
-  }
-}
-```
-
-Ref: [Gemini CLI ACP mode docs](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/acp-mode.md)
-
-### Example: Hermes (Nous Research)
-
-[Hermes](https://github.com/NousResearch/hermes-agent) is an open-source coding agent by Nous Research with persistent memory and multi-provider LLM support. It supports ACP via the `acp` subcommand.
-
-1. Install: `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash`
-2. Install ACP support: `pip install -e '.[acp]'`
-3. Configure Hermes credentials in `~/.hermes/`
-4. Add to config.json:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "hermes": {
-        "extends": "acp",
-        "label": "Hermes",
-        "description": "Nous Research self-improving AI agent",
-        "command": ["hermes", "acp"]
-      }
-    }
-  }
-}
-```
-
-Ref: [Hermes ACP docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp)
-
-### How ACP providers work in BySpace
-
-When you launch an agent with an ACP provider:
-
-1. BySpace spawns the process using the configured `command`
-2. Sends an `initialize` JSON-RPC request over stdin
-3. The agent responds with its capabilities, available modes, and models
-4. BySpace creates a session and sends prompts through the ACP protocol
-5. The agent streams responses, tool calls, and permission requests back over stdout
-
-Every ACP provider exposes an **Auto Accept** toggle. Enable it per session to let BySpace approve
-ACP permission requests without surfacing each prompt. If the provider sends no allow option,
-BySpace leaves the request for you to answer. Unattended agents enable Auto Accept unless you
-explicitly disable it.
-
-Models and modes are discovered dynamically at runtime from the agent process. If you want to override the model list (e.g., to curate which models appear in the UI), use the `models` field:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "my-agent": {
-        "extends": "acp",
-        "label": "My Agent",
-        "command": ["my-agent", "--acp"],
-        "models": [
-          { "id": "fast-model", "label": "Fast", "isDefault": true },
-          { "id": "smart-model", "label": "Smart" }
-        ]
-      }
-    }
-  }
-}
-```
-
-Profile models (defined in config.json) completely replace runtime-discovered models when present.
-
-If you want to keep runtime-discovered models and add or relabel a few entries, use `additionalModels` instead.
-
-Example: add an experimental model while keeping every model the provider discovers at runtime:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "my-agent": {
-        "extends": "acp",
-        "label": "My Agent",
-        "command": ["my-agent", "--acp"],
+        "command": ["gemini", "--acp"],
         "additionalModels": [
-          { "id": "experimental-model", "label": "Experimental", "isDefault": true }
+          { "id": "experimental-model", "label": "Experimental", "isDefault": true },
+          { "id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (preferred)" }
         ]
       }
     }
@@ -597,48 +360,40 @@ Example: add an experimental model while keeping every model the provider discov
 }
 ```
 
-Example: relabel a discovered model without replacing the full list:
+### Claude settings.json model discovery
 
-```json
-{
-  "agents": {
-    "providers": {
-      "my-agent": {
-        "extends": "acp",
-        "label": "My Agent",
-        "command": ["my-agent", "--acp"],
-        "additionalModels": [{ "id": "provider/model-id", "label": "My Preferred Label" }]
-      }
-    }
-  }
-}
-```
+The built-in `claude` provider appends concrete model IDs from `~/.claude/settings.json` (or
+`$CLAUDE_CONFIG_DIR/settings.json`) to its first-party list, in picker order: `modelPicker.options`
+first, then the top-level `model`, then these `env` keys — `ANTHROPIC_MODEL`,
+`ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_FABLE_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`,
+`ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
 
-When an `additionalModels` entry has the same `id` as a discovered model, it updates that model in place.
-
----
+This lets a user who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another
+gateway select the exact model ID in BySpace. Explicit IDs pass through unchanged, even when the
+string is a compatibility alias for a built-in model. Setting `agents.providers.claude.models`
+**replaces** both the first-party list and any settings-discovered entries; use `additionalModels`
+to keep them and append curated entries.
 
 ## Provider override reference
 
 Every entry under `agents.providers` accepts these fields:
 
-| Field              | Type                      | Required          | Description                                                        |
-| ------------------ | ------------------------- | ----------------- | ------------------------------------------------------------------ |
-| `extends`          | `string`                  | Yes (custom only) | Built-in provider ID to inherit from, or `"acp"`                   |
-| `label`            | `string`                  | Yes (custom only) | Display name in the UI                                             |
-| `description`      | `string`                  | No                | Short description shown in the UI                                  |
-| `command`          | `string[]`                | Yes (ACP only)    | Command to spawn the agent process                                 |
-| `env`              | `Record<string, string>`  | No                | Environment variables to set for the agent process                 |
-| `params`           | `Record<string, unknown>` | No                | Provider-specific options such as `supportsMcpServers: false`      |
-| `models`           | `ProviderProfileModel[]`  | No                | Static model list (overrides runtime discovery)                    |
-| `additionalModels` | `ProviderProfileModel[]`  | No                | Static model additions (merged with runtime discovery or `models`) |
-| `disallowedTools`  | `string[]`                | No                | Tool names to disable for this provider (e.g. `["WebSearch"]`)     |
-| `enabled`          | `boolean`                 | No                | Set to `false` to hide the provider (default: `true`)              |
-| `order`            | `number`                  | No                | Sort order in the provider list                                    |
+| Field              | Type                      | Required     | Description                                                        |
+| ------------------ | ------------------------- | ------------ | ------------------------------------------------------------------ |
+| `extends`          | `string`                  | Yes (custom) | Built-in provider ID to inherit, or `"acp"`                        |
+| `label`            | `string`                  | Yes (custom) | Display name in the UI                                             |
+| `description`      | `string`                  | No           | Short description shown in the UI                                  |
+| `command`          | `string[]`                | Yes (ACP)    | Launcher argv; first element is the binary, rest passed verbatim   |
+| `env`              | `Record<string, string>`  | No           | Environment for the agent process (baseline beneath per-agent env) |
+| `params`           | `Record<string, unknown>` | No           | Provider-specific options; ACP reads `clientCapabilities`          |
+| `models`           | `ProviderProfileModel[]`  | No           | Static model list (replaces runtime discovery)                     |
+| `additionalModels` | `ProviderProfileModel[]`  | No           | Model additions merged with discovery or `models`                  |
+| `disallowedTools`  | `string[]`                | No           | Tool deny rules for Claude Code (e.g. `["WebSearch"]`)             |
+| `enabled`          | `boolean`                 | No           | `false` hides the provider (default `true`)                        |
 
 ### Model definition
 
-Each entry in the `models` array:
+Each entry in `models` / `additionalModels`:
 
 | Field             | Type               | Required | Description                           |
 | ----------------- | ------------------ | -------- | ------------------------------------- |
@@ -656,95 +411,3 @@ Each entry in the `models` array:
 | `label`       | `string`  | Yes      | Display name                        |
 | `description` | `string`  | No       | Short description                   |
 | `isDefault`   | `boolean` | No       | Mark as the default thinking option |
-
-### Claude settings.json model discovery
-
-The built-in `claude` provider appends concrete model IDs from `~/.claude/settings.json` to its first-party Claude model list. BySpace reads the top-level `model` field and these `env` keys: `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
-
-This lets users who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another Anthropic-compatible gateway select the exact model ID in BySpace. Explicit model IDs are passed unchanged to Claude Code, even when the same string is a compatibility alias for a built-in model. When `agents.providers.claude.models` is set it **replaces** both the hardcoded first-party Claude list and any settings.json-discovered entries; use `agents.providers.claude.additionalModels` to keep the first-party list and append curated entries on top.
-
-### Gotcha: `extends: "claude"` with third-party endpoints
-
-When a custom provider extends `"claude"` but points `ANTHROPIC_BASE_URL` at a non-Anthropic API (Z.AI, Alibaba/Qwen, proxies), the Claude Agent SDK may try to use Anthropic-only server-side tools like `WebSearch`. Third-party APIs don't support these tools, causing errors.
-
-Use `disallowedTools` to disable unsupported tools:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "my-proxy": {
-        "extends": "claude",
-        "label": "My Proxy",
-        "env": {
-          "ANTHROPIC_BASE_URL": "https://my-proxy.example.com/v1"
-        },
-        "disallowedTools": ["WebSearch"]
-      }
-    }
-  }
-}
-```
-
-### Valid `extends` values
-
-Built-in providers: `claude`, `codex`, `opencode`, `pi`
-
-Special value: `acp` — creates a generic ACP provider (requires `command`)
-
-### Full example
-
-A config.json with multiple custom providers:
-
-```json
-{
-  "version": 1,
-  "agents": {
-    "providers": {
-      "codex": { "enabled": false },
-
-      "zai": {
-        "extends": "claude",
-        "label": "ZAI",
-        "env": {
-          "ANTHROPIC_AUTH_TOKEN": "<zai-api-key>",
-          "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-          "API_TIMEOUT_MS": "3000000"
-        },
-        "disallowedTools": ["WebSearch"],
-        "models": [
-          { "id": "glm-4.5-air", "label": "GLM 4.5 Air" },
-          { "id": "glm-5-turbo", "label": "GLM 5 Turbo", "isDefault": true },
-          { "id": "glm-5.1", "label": "GLM 5.1" }
-        ]
-      },
-
-      "qwen": {
-        "extends": "claude",
-        "label": "Qwen (Alibaba)",
-        "env": {
-          "ANTHROPIC_AUTH_TOKEN": "sk-sp-<coding-plan-key>",
-          "ANTHROPIC_BASE_URL": "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"
-        },
-        "disallowedTools": ["WebSearch"],
-        "models": [
-          { "id": "qwen3.5-plus", "label": "Qwen 3.5 Plus", "isDefault": true },
-          { "id": "qwen3-coder-next", "label": "Qwen 3 Coder Next" }
-        ]
-      },
-
-      "gemini": {
-        "extends": "acp",
-        "label": "Google Gemini",
-        "command": ["gemini", "--acp"]
-      },
-
-      "hermes": {
-        "extends": "acp",
-        "label": "Hermes",
-        "command": ["hermes", "acp"]
-      }
-    }
-  }
-}
-```

@@ -112,6 +112,26 @@ func TestClaudeLaunchArgsCarrySystemPromptAndEffort(t *testing.T) {
 	}
 }
 
+// A third-party Anthropic-compatible endpoint does not support Anthropic's server-side tools. The
+// provider entry's disallowedTools must reach the CLI as deny rules, or the model keeps calling a
+// tool the endpoint rejects.
+func TestClaudeLaunchArgsCarryDisallowedTools(t *testing.T) {
+	args := claudeLaunchArgs(LaunchConfig{
+		Model:          "glm-5-turbo",
+		ProviderConfig: map[string]any{"disallowedTools": []any{"WebSearch", "WebFetch"}},
+	})
+	joined := strings.Join(args, "\x00")
+	if !strings.Contains(joined, "--disallowedTools\x00WebSearch\x00WebFetch") {
+		t.Fatalf("args %v missing the deny rules", args)
+	}
+	// Absent or empty must not emit a bare flag the CLI would read as a positional prompt.
+	for _, cfg := range []LaunchConfig{{Model: "opus"}, {Model: "opus", ProviderConfig: map[string]any{"disallowedTools": []any{}}}} {
+		if strings.Contains(strings.Join(claudeLaunchArgs(cfg), " "), "--disallowedTools") {
+			t.Fatalf("empty disallowedTools produced a flag: %v", claudeLaunchArgs(cfg))
+		}
+	}
+}
+
 // "off" and "default" are BySpace option ids, not Claude effort levels: passing them makes the CLI
 // reject the launch.
 func TestClaudeLaunchArgsSkipNonEffortThinking(t *testing.T) {

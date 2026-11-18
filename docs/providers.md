@@ -151,10 +151,10 @@ unless they are objects. BySpace sets no `exposure` or `toolExposure`, so a serv
 precedence over the registration. There is no `pi-mcp-adapter` probe: `supportsMcpServers` is a static
 Pi capability.
 
-Pi control-plane RPCs wait 60 seconds by default. Override `params.rpcTimeoutMs` when extension or MCP
-startup on a slow host needs more time. Timeout errors name the pending RPC phase and report both elapsed
-time and the configured deadline. This setting does not govern long-running Pi compaction or Pi extension
-UI results.
+BySpace waits up to 60 seconds for Pi to finish its startup sequence (`readyTimeout`,
+`internal/agent/pi/pi.go`); a cold start with several extensions loading takes a moment. This bound
+is fixed, not a per-RPC deadline, and does not govern long-running Pi compaction or extension UI
+results.
 
 Pi import discovery reads Pi's persisted JSONL session files because Pi RPC does not expose a
 recent-session listing command. Resume and full history hydration still go through `pi --mode rpc` using

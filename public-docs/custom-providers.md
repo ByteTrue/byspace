@@ -192,4 +192,4 @@ Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be a
 
 ## Full reference
 
-For the complete field reference (`extends`, `label`, `command`, `env`, `models`, `additionalModels`, `disallowedTools`, `enabled`, `order`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/ByteTrue/byspace/blob/main/docs/custom-providers.md) on GitHub. The `byspaceTools` field is retired: BySpace reaches agents through its bundled skill and CLI, so there is no tool catalog left to filter per provider.
+For the complete field reference (`extends`, `label`, `command`, `env`, `params`, `models`, `additionalModels`, `disallowedTools`, `enabled`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/ByteTrue/byspace/blob/main/docs/custom-providers.md) on GitHub.

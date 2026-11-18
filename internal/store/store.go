@@ -1213,7 +1213,7 @@ func daemonAuthView(raw any) map[string]any {
 // nothing.
 func nestedAgentSettingKey(flat string) (string, bool) {
 	switch flat {
-	case "providers", "metadataGeneration", "catalogRefreshTimeoutMs":
+	case "providers", "metadataGeneration":
 		return flat, true
 	case "skillsSelection":
 		return "selection", true
@@ -1252,9 +1252,6 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 		}
 		cfg[key] = value
 	}
-	if value, present := agents["catalogRefreshTimeoutMs"]; present {
-		cfg["catalogRefreshTimeoutMs"] = value
-	}
 	if skills, ok := agents["skills"].(map[string]any); ok {
 		if selection, present := skills["selection"]; present {
 			cfg["skillsSelection"] = selection
@@ -1267,13 +1264,13 @@ func liftAgentSettings(cfg map[string]any, agentsRaw any) {
 
 func daemonConfigDefaults() map[string]any {
 	return map[string]any{
-		"providers":                map[string]any{},
-		"metadataGeneration":       map[string]any{"providers": []any{}},
-		"autoArchiveAfterMerge":    false,
-		"terminalAgentHooks":       map[string]bool{},
-		"appendSystemPrompt":       "",
-		"agentProfiles":            []any{},
-		"cors":                     map[string]any{"allowedOrigins": []any{}},
+		"providers":             map[string]any{},
+		"metadataGeneration":    map[string]any{"providers": []any{}},
+		"autoArchiveAfterMerge": false,
+		"terminalAgentHooks":    map[string]bool{},
+		"appendSystemPrompt":    "",
+		"agentProfiles":         []any{},
+		"cors":                  map[string]any{"allowedOrigins": []any{}},
 		"auth": map[string]any{
 			"passwordSet": false,
 		},

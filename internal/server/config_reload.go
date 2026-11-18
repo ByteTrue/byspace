@@ -34,7 +34,6 @@ var reloadablePaths = []string{
 	"daemon.agentProfiles",
 	"app.baseUrl",
 	"agents.providers",
-	"agents.catalogRefreshTimeoutMs",
 	"agents.metadataGeneration",
 	"agents.skills.selection",
 	"agents.skills.targets",
@@ -191,7 +190,7 @@ func (s *Server) daemonConfigSnapshot() map[string]any {
 
 	for key, value := range cfg {
 		switch key {
-		case "providers", "metadataGeneration", "skills", "skillTargets", "catalogRefreshTimeoutMs":
+		case "providers", "metadataGeneration", "skills", "skillTargets":
 			agents[key] = value
 		case "pluginsEnabled":
 			snapshot[key] = value

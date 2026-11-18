@@ -278,10 +278,10 @@ older daemon.
 
 ### Agent provider BySpace tools (retired)
 
-`byspaceTools` on a provider entry and `daemon.mcp.*` in the daemon config are retired. BySpace
-reaches agents through the bundled `byspace` skill and CLI, so there is no per-provider tool
-catalog to filter and no server to inject. Both keys are still parsed so an older client can write
-a config the daemon accepts; nothing reads them.
+BySpace reaches agents through the bundled `byspace` skill and CLI, so there is no per-provider tool
+catalog to filter and no MCP server to inject. The `byspaceTools` provider field and `daemon.mcp.*`
+config are gone from the schema; a config file that still carries them loads normally and the keys
+are ignored.
 
 `agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 

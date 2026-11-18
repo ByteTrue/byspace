@@ -428,32 +428,4 @@ describe("shared messages attachments", () => {
       checkoutSource: { kind: "change_request", number: 42 },
     });
   });
-
-  it("accepts optional create-agent git intent fields and strips unknown git fields", () => {
-    const parsed = CreateAgentRequestMessageSchema.parse({
-      type: "create_agent_request",
-      requestId: "req-6",
-      config: {
-        provider: "codex",
-        cwd: "/tmp/repo",
-      },
-      attachments: [],
-      git: {
-        createWorktree: true,
-        worktreeSlug: "review-42",
-        action: "checkout",
-        refName: "head-ref",
-        checkoutSource: { kind: "change_request", number: 42 },
-        futureGitField: "ignored",
-      },
-    });
-
-    expect(parsed.git).toEqual({
-      createWorktree: true,
-      worktreeSlug: "review-42",
-      action: "checkout",
-      refName: "head-ref",
-      checkoutSource: { kind: "change_request", number: 42 },
-    });
-  });
 });

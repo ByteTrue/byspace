@@ -98,7 +98,27 @@ func claudeLaunchArgs(cfg LaunchConfig) []string {
 	if fast, _ := cfg.FeatureValues["fast_mode"].(bool); fast && ClaudeModelSupportsFastMode(cfg.Model) {
 		args = append(args, "--settings", `{"fastMode":true}`)
 	}
+	// disallowedTools reaches the CLI as deny rules. A third-party Anthropic-compatible endpoint
+	// (Z.AI, Qwen, a proxy) does not support Anthropic's server-side tools, so a provider entry
+	// lists them here (e.g. ["WebSearch"]) and the CLI drops them from the model's context.
+	if rules := providerDisallowedTools(cfg.ProviderConfig); len(rules) > 0 {
+		args = append(args, "--disallowedTools")
+		args = append(args, rules...)
+	}
 	return args
+}
+
+// providerDisallowedTools reads the deny rules from a provider config entry, tolerating the JSON
+// shapes a config file or a client patch can produce ([]any or []string).
+func providerDisallowedTools(providerConfig map[string]any) []string {
+	raw, _ := providerConfig["disallowedTools"].([]any)
+	rules := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if rule, ok := item.(string); ok && strings.TrimSpace(rule) != "" {
+			rules = append(rules, rule)
+		}
+	}
+	return rules
 }
 
 func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, error) {
