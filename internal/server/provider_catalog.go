@@ -185,10 +185,11 @@ func (s *Server) providerCatalogOrBuild(cwd string) *providerCatalog {
 	if catalog := s.cachedProviderCatalog(cwd); catalog != nil {
 		return catalog
 	}
-	// A workspace without its own catalog reads the host one rather than paying a probe: the two
-	// differ only when a refresh narrowed a scope, and the client keeps its per-cwd cache anyway.
+	// A workspace without its own catalog reads the host one without waiting for a probe. Build its
+	// own snapshot in the background because provider discovery can differ between checkouts.
 	if cwd != "" {
 		if catalog := s.cachedProviderCatalog(""); catalog != nil {
+			s.startProviderCatalogBuild(cwd)
 			return catalog
 		}
 	}

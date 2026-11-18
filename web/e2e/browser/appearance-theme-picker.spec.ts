@@ -89,7 +89,10 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
 
 test("applies the interface font size to settings text", async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("@byspace:app-settings", JSON.stringify({ uiBaseFontSize: 21 }));
+    localStorage.setItem(
+      "@byspace:app-settings",
+      JSON.stringify({ uiBaseFontSize: 21, contentFontSize: 21 }),
+    );
   });
   await page.goto("/settings");
   await expect(page.getByTestId("settings-sidebar")).toBeVisible();
