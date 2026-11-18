@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。三件遗留已按用户批准执行并验证。推分支后看 GitHub Actions 的真实结果。唯一悬而未决：客户端仍发一个 daemon 已忽略的订阅 RPC，见「本轮之外的发现」"
+next_action: "无。六批与三件遗留均已完成并验证，PR #51 的 CI 剩余失败已逐条证明是 main 上既有的。等用户决定的两件：删空转的订阅 RPC（要改既有测试）、修 main 上 6 个既有 app-tests 失败（同样要改断言）。tunnel 验收需用户在目标机跑"
 must_hold: "不改既有测试断言；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -151,13 +151,22 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 
 ## 本轮之外的发现
 
-- **CI 在 `origin/main` 上就是红的（阻塞推送，非本次引入）**：`gh run view 44251677901`（commit d5519d14e，我这四个提交的基点）唯一的 failure 是 **format** job，`gofmt -l main.go internal workers` 报两个文件：`internal/server/host_sync_test.go`（末尾多一个空行）、`internal/server/ws_git_system.go:393-401`（map 字面量键对齐）。两者都是 `c7a0e4e92` 引入的。**根因是 `lefthook.yml` 只跑 oxfmt/oxlint/typecheck，不跑 gofmt**——AGENTS.md 说「gofmt -w 是 Go 的格式化器」，但没有任何本地钩子强制它，所以 Go 改动能带着格式问题提交。修法：`gofmt -w` 那两个文件 + 给 lefthook 加一个 go job（glob `*.go`）。
+- **CI 在 `origin/main` 上就是红的**：`gh run view 44251677901`（commit d5519d14e，我这四个提交的基点）唯一的 failure 是 **format** job，`gofmt -l main.go internal workers` 报 `internal/server/host_sync_test.go`（末尾多空行）与 `internal/server/ws_git_system.go:393-401`（map 键对齐），都是 `c7a0e4e92` 引入。**根因是 `lefthook.yml` 不跑 gofmt**——AGENTS.md 说 gofmt 是 Go 的格式化器，但没有本地钩子强制它。**已修**：`gofmt -w` 两文件 + lefthook 第四个 job + `scripts/repo-config.test.mjs` 第 9 条守卫（先见红）。提交 e2753c9cc，CI 的 format job 已绿。
+- **PR #51 的 CI 剩余失败全部是 main 上既有的**（最终 run 44338444861，对照 main run 44250065576，逐条比对失败集合而非只看红灯）：
+  - `app-tests` **6 个，与 main 归一化路径后逐字相同**：`web/src/git/actions-store.test.ts` ×3、`web/src/components/sidebar/sidebar-projection.test.ts` ×2、`web/src/utils/agent-directory-sync.test.ts` ×1。本地 `cd web && npx vitest run <file>` 复现，断言文本与 main CI 一字不差（`expected [ 'project', 'other-project' ] to deeply equal []`）。
+    - **actions-store 那 3 个与我删掉的 file-explorer 用例同一根因**：`web/src/git/actions-store.test.ts:211-222` 仍参数化跑 `checkoutForgeSetAutoMerge` / `checkoutGithubSetAutoMerge` 两条 RPC 并按 feature flag 分支，而 `c7a0e4e92` 已删掉 legacy 方法（`grep -c checkoutGithubSetAutoMerge packages/client/src/daemon-client.ts` = 0）与 feature gate；生产代码 `web/src/git/actions-store.ts:285,300` 无条件调 forge 那条。**我一度归因为「packages/client/dist 陈旧」，那是猜测，已证伪**——CI 全新构建也红，本地也复现。
+    - 修它们要改既有测试断言，按 must_hold 留给用户决定。
+  - `playwright` **8 个，是 main 11 个的严格子集**；main 多出的 3 个里有 2 个正是本轮修掉的（`file-explorer-context-actions.spec.ts:474`、`settings-navigation.spec.ts:74`）。
+  - `go-tests` 每次红的是**不同**用例（首推 `TestProcessExitFailsTurnAndReleasesRuntime`，终推 `TestServerDirectWebSocketAndPiAgentLifecycle`），终推的报错是 `testing.go:1619: TempDir RemoveAll cleanup: unlinkat ...: directory not empty`——**teardown 竞态，不是断言失败**。本地 `-count=3` exit=0。本 PR 对 `internal/` 的全部改动是两处注释路径 + gofmt 键对齐（7 增 8 删），逐行确认不可能是原因。
+  - **提取失败清单的坑**：`grep -oE "spec\.ts:[0-9]+"` 会把 ✓ 通过的用例也算进去（一次得出 184 个「失败」）。必须先按 `✘` 过滤行再抽位置。
 - **客户端仍在发一个 daemon 已忽略的订阅 RPC（未处理，等用户决定）**：`packages/client/src/daemon-client.ts:3112` 的 `sendEventSubscription` 发 `session.events.set_subscription.request`，Go 侧 handler（`internal/server/server.go:1366-1379`）只 `json.Unmarshal` 后原样回显 events，**从不存储**；`grep -rn "eventSubscriptions" internal/` 零命中。`scripts/go-parity-audit.mjs:35` 已把它列进 `INTENTIONALLY_UNSUPPORTED`，理由写着「explicit event subscription is served by broadcast filtering, not a stored preference」。
   - **删它不丢行为**：真正省流量的是**客户端本地**的 `handleSessionMessage`（daemon-client.ts:5899-5911），只在 `messageHandlers.has(type) || eventListeners.size > 0` 时才 `providerSnapshotUpdates.receive(msg)`，否则直接 return 不去 fetch body。`updateEventSubscriptions`（:3094）里的 `providerSnapshotUpdates.clear()` 是本地副作用，要保留。既有测试 `packages/client/src/connection.test.ts:174`（interested listeners only）与 `:359`（unsubscribing discards demand）断言的正是这条本地路径，不涉及 wire。
   - **response schema 是对的**（一度怀疑 Go 发 `payload:{requestId,events}` 而 schema 只要 `{requestId}` 会不匹配）：实测 `validateWSOutboundMessage` 对 Go 的真实形状返回 **true**（zod object 默认剥未知 key）。`.dev/probe-events-response.mjs`。
   - 删除范围：protocol 的 `SessionEventSubscriptionSchema`/`SessionEventsSetSubscription{Request,Response}Schema`（messages.ts:2900-2916，两个 union 成员）、client 的 `sendEventSubscription` + `ConnectionSubscriptions.setEvents`/`events` 字段/`restore()` 里的 events 分支、Go 的 handler case 与 `sessionMessageNeedsOrder` 列表项、authz table 两行、`session_dispatch_test.go:20` 一行、`go-parity-audit.mjs` 的排除项。**要动既有测试**（connection.test.ts:145 整个用例断言 wire 上的 events 数组），按「既有测试只读」需用户明确授权。
 - **`supportsDesktopPaneSplits()` 恒为 true，背后有一整条死分支**：`web/src/constants/layout.ts:89` 直接 `return true`（自带 shortcut 注释）。`web/src/screens/workspace/workspace-screen.tsx:1493` 的 `canRenderDesktopPaneSplits` 因此恒真，:3354 的 `shouldRenderDesktopPaneFallback` 恒假，:3913-3939 那段 `WorkspaceDesktopTabsRow` 渲染永不执行；`web/src/workspace-tabs/explorer-sidebar.ts:35` 的 `"dock"` 分支同理不可达。另有 4 处 `canRenderDesktopPaneSplits &&` 守卫恒真。删它属于 pane split 的行为改动，注释说「下次改 pane split 时一起删」。
-- **v0.26.4 发布验收仍有两项 `无法判定`**（`bywork/work/project-npm/index.md:21,22`）：未逐个下载校验全部原生资产哈希（只验了 Windows CLI 与 container.txt）；tunnel 空闲稳定性只观测了 180s 单条 tunnel。**heartbeat 工具其实可用**——不是 MCP 工具而是 CLI：`.dev/bin/byspace heartbeat create --every 15m --expires-in 7d --prompt ...`（`byspace heartbeat <create|list|delete>`）。之前记的「工具不可用」是指 MCP 侧没有 `create_heartbeat`，CLI 这条路没试过。
+- **v0.26.4 发布验收**（`bywork/work/project-npm/index.md`）：**资产哈希项已结案**——`gh release download v0.26.4` 取全部 19 个资产到 `.dev/release-verify/`，`shasum -a 256 -c SHA256SUMS` 16 个原生资产全 OK，`shasum -a 256 -c BySpace-0.26.4-container.txt.sha256` OK（SHA256SUMS 不含 container 描述符，它有自己的兄弟文件）。原始输出 `.dev/release-verify.log`。**tunnel 空闲稳定性仍 `无法判定`**：需要两台目标机上的真实 tunnel，本机 `lsof -nP -iTCP:34125` 无监听，按 must_hold 不动生产 relay/tunnel 配置，只能由用户在目标机跑。
+  - **heartbeat 工具其实可用**——不是 MCP 工具而是 CLI：`byspace heartbeat <create|list|delete>`。之前记的「工具不可用」只是 MCP 侧没有 `create_heartbeat`。但 v0.26.4 已发布完成，**补建 babysit heartbeat 无意义**：它的职责是盯到完成，事后建不产生承诺的行为。
+  - 顺带修了 `docs/release.md` 两处与事实矛盾的话（:177 说 npm 发布后进行中、:186-189 要求检查 dist-tags 与 Release 里的 tarball）：**这个包根本没发布**，`npm view bytetrue-byspace` 404，全仓只有 `--dry-run` publish 脚本。
 - **端口 6778 被别的 agent 占着（环境坑，不是缺陷）**：`audit:browser` 首跑 3/6（sidebar 快照 `text: Not found`），根因不是我的改动——`lsof -nP -iTCP:6778 -sTCP:LISTEN` 显示 PID 18224 是另一个 worktree 的 dev daemon，serving 它自己的旧 UI。**没有动它**。改用 `BYSPACE_LISTEN=127.0.0.1:6779` 起自己的 → 11/11。教训：`npm run cli -- daemon status` 报 stopped 不代表端口空闲，它只认自己 home 的 pid 文件。
 - **既有测试的基线证明法（两次都用过）**：`git stash` 掉本次全部改动、重建 web、用 `BYSPACE_E2E_DAEMON_BINARY=<绝对路径>` 跑同一 spec，看是否同样失败。死路：stash 会把 Makefile 退回 `bin/byspace`（已不存在），6 个用例全失败于 `binary not found`——那不是有效基线。
 - `web/public/schemas/byspace.config.v1.json` 的生成器随 Node daemon 一起消失了。C 批已定：Go 侧 `internal/store/store.go:1113 LoadDaemonConfig` 读的是无类型 map，没有可生成的定义源，所以它是手工维护的对外契约，用 daemon 自己的设置路径表守住。

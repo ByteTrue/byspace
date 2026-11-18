@@ -15,7 +15,9 @@
 - **新守卫要在 CI 的运行条件下验证，不是本机**。CI 的 `changes` job 是路由门，**不装依赖**，那里的 `scripts/*.test.mjs` 只能用 `node:` 内建；本机有 node_modules 所以 import js-yaml/picomatch 全绿，CI 直接 `ERR_MODULE_NOT_FOUND`。要渲染/要 sharp 的守卫属于已 `npm ci` 的 job。验证法：`git ls-files | tar` 到临时目录（无 node_modules）+ `git init` 后跑一遍。
 - **守卫不能把 gitignore 的生成物当腐烂**。文档引用 `*.aot.ts` 这类构建产物是对的（文档自己写着 "is gitignored"），本机有文件所以绿、CI 全新 checkout 没有所以红。存在性之外要接受 `git check-ignore -q`。
 - **搬文件会改变相对路径深度，而 typecheck 抓不到指向仓库根的路径**（`../../../public/sw.js`、`../../../../../CHANGELOG.md` 不是模块解析）。搬完要专门 grep 读仓库根文件的调用点，按新深度重算。
-- **CI 红了先分清是谁红的**：把本次失败集合与 main 最近一次同 job 运行的失败集合逐条比对（用例名+行号），只修真正新增的。本轮 8 个 playwright 失败全是 main 11 个的子集，2 个 app-tests 失败才是自己的。
+- **CI 红了先分清是谁红的**：把本次失败集合与 main 最近一次同 job 运行的失败集合逐条比对（用例名+行号），只修真正新增的。本轮 8 个 playwright 失败全是 main 11 个的子集，2 个 app-tests 失败才是自己的。**从日志抽失败清单要先按 `✘` 过滤行**——直接 `grep -oE "spec\.ts:[0-9]+"` 会把 ✓ 通过的也算上，一次得出 184 个假「失败」。
+- **别把猜测写成归因**：说过「app-tests 那 6 个是 packages/client/dist 陈旧」，没验证就写进了 PR。CI 全新构建同样红、本地 `npx vitest run <file>` 也复现，真因是测试仍在驱动 `c7a0e4e92` 删掉的 legacy RPC。归因要么有复现，要么标明是猜测。
+- **Go 的 flake 要看报错性质**：`TempDir RemoveAll cleanup: ... directory not empty` 是 teardown 竞态，不是断言失败；每次 CI 红的用例还不一样。判断是不是自己引入的，看本次对该包的 diff 有没有语义改动（本轮只有注释与 gofmt 对齐）。
 
 ## 依据
 
