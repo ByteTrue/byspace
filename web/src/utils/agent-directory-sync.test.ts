@@ -237,42 +237,24 @@ describe("replaceFetchedAgentDirectory", () => {
     store.clearSession(serverId);
   });
 
-  it("keeps newer metadata while accepting usage-only updates and legacy workspace ownership", () => {
+  it("keeps newer metadata while accepting usage-only updates and prior workspace ownership", () => {
     const serverId = "server-usage";
     const agentId = "usage-agent";
     const store = useSessionStore.getState();
     store.initializeSession(serverId, null as unknown as DaemonClient);
-    store.setWorkspaces(
-      serverId,
-      new Map([
-        [
-          "legacy-workspace",
-          {
-            id: "legacy-workspace",
-            projectId: "project",
-            projectDisplayName: "Project",
-            projectRootPath: "/repo",
-            workspaceDirectory: "/repo",
-            projectKind: "git",
-            workspaceKind: "worktree",
-            name: "repo",
-            status: "done",
-            statusEnteredAt: null,
-            archivingAt: null,
-            diffStat: null,
-            scripts: [],
-          },
-        ],
-      ]),
-    );
-    const current = createAgentPayload({
-      id: agentId,
-      title: "current",
-      status: "running",
-      updatedAt: "2026-07-12T11:00:00.000Z",
-      lastUsage: { inputTokens: 10, outputTokens: 5 },
-      pendingPermissions: [permission("current-permission")],
-    });
+    // Ownership comes from the snapshot itself now; the cwd-based lookup was removed with the
+    // single-workspace-per-directory compat path. A stale delta that omits it must not clear it.
+    const current = {
+      ...createAgentPayload({
+        id: agentId,
+        title: "current",
+        status: "running",
+        updatedAt: "2026-07-12T11:00:00.000Z",
+        lastUsage: { inputTokens: 10, outputTokens: 5 },
+        pendingPermissions: [permission("current-permission")],
+      }),
+      workspaceId: "legacy-workspace",
+    };
     const projection = new AgentStoreProjection(serverId);
     projection.applyDelta({
       kind: "upsert",
@@ -286,6 +268,7 @@ describe("replaceFetchedAgentDirectory", () => {
       kind: "upsert",
       agent: {
         ...current,
+        workspaceId: undefined,
         title: "stale",
         status: "idle",
         updatedAt: "2026-07-12T10:00:00.000Z",
