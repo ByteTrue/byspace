@@ -12,6 +12,10 @@
 - 文档里最难发现的腐烂不是路径错，是**机制描述整个失效**：`docs/permissions.md` 说权限表靠 TS 类型穷举（Go 是运行时 map），`docs/architecture.md` 说新事件要在三处注册（Go 只对 `agent_stream` 过滤，其余无条件）。路径守卫抓不到这类，只能逐条对代码复核。
 - **本地钩子与 CI 的覆盖面要对齐**：`lefthook.yml` 只跑 oxfmt/oxlint/typecheck，CI 的 format job 还跑 `gofmt -l main.go internal workers`。Go 改动因此能带着格式问题提交，到 CI 才红（d5519d14e 就这么红的）。加一种语言就要同时加它的本地钩子。
 - **「工具不可用」要区分是哪个入口**：记成 heartbeat 工具不可用，其实只是 MCP 侧没有 `create_heartbeat`；CLI 一直有 `byspace heartbeat <create|list|delete>`。断言某能力不存在前，先 `--help` 看一眼 CLI。
+- **新守卫要在 CI 的运行条件下验证，不是本机**。CI 的 `changes` job 是路由门，**不装依赖**，那里的 `scripts/*.test.mjs` 只能用 `node:` 内建；本机有 node_modules 所以 import js-yaml/picomatch 全绿，CI 直接 `ERR_MODULE_NOT_FOUND`。要渲染/要 sharp 的守卫属于已 `npm ci` 的 job。验证法：`git ls-files | tar` 到临时目录（无 node_modules）+ `git init` 后跑一遍。
+- **守卫不能把 gitignore 的生成物当腐烂**。文档引用 `*.aot.ts` 这类构建产物是对的（文档自己写着 "is gitignored"），本机有文件所以绿、CI 全新 checkout 没有所以红。存在性之外要接受 `git check-ignore -q`。
+- **搬文件会改变相对路径深度，而 typecheck 抓不到指向仓库根的路径**（`../../../public/sw.js`、`../../../../../CHANGELOG.md` 不是模块解析）。搬完要专门 grep 读仓库根文件的调用点，按新深度重算。
+- **CI 红了先分清是谁红的**：把本次失败集合与 main 最近一次同 job 运行的失败集合逐条比对（用例名+行号），只修真正新增的。本轮 8 个 playwright 失败全是 main 11 个的子集，2 个 app-tests 失败才是自己的。
 
 ## 依据
 

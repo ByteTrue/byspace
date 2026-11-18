@@ -127,6 +127,28 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 
 实测推翻了先前的判断。burn-down 机制完好：名单内 `"off"` 就是豁免，移出一个立刻精确报错。只删掉那条误导性 `shortcut:` 注释。
 
+## 推分支后的真实 CI 结果（PR #51）
+
+第一次推送（run 44334220498）暴露了**三个我自己引入的缺陷**，本地全绿但 CI 红：
+
+- **守卫依赖了 `changes` job 没有的 npm 包**。`.github/workflows/ci.yml` 的 `changes` 是路由门，**故意不装依赖**（只有 checkout + setup-node + project-npm --setup-ci），其余 15 个 `scripts/*.test.mjs` 全部只用 `node:` 内建。我写的 `repo-config.test.mjs` import 了 `js-yaml` 与 `picomatch`，CI 报 `ERR_MODULE_NOT_FOUND`。修法：换成两个只读本文用到的 YAML 形状的行读取器（`contracts()` 读 ci-paths 的 `contract:` + `- "glob"`；`hookJobs()` 读 lefthook 的 `- name:` 块）与一个 `covers()` glob 判定（树前缀 `dir/**`、basename 后缀 `*.ext`/`*.{a,b}`、`**/` 任意深度、目录内通配）。
+  - `covers()` 第一版漏了 `**/*.gen.ts` 这种前导 `**/`，被自己的守卫抓出来（`lefthook format exclude misses ... ['**/*.gen.ts','**/*.gen.tsx']`），补上任意深度分支后 9/9。
+- **`generated-assets.test.mjs` 需要 sharp 与 python3**，同样跑在无依赖的 job 里，报 `Cannot find package 'sharp'`。它与其他守卫不同类：真的要渲染。修法：从 `changes` 移到 **typecheck** job（已 `npm ci`），加一步 `Check generated assets`。
+- **docs 守卫误报 gitignore 的生成物**。`docs/protocol-validation.md:22` 明写 `ws-outbound.aot.ts` "is generated runtime code and is gitignored"，本机有该文件所以我这里绿，CI 全新 checkout 没有 → 红。修法：`existsSync` 之外再接受 `git check-ignore -q`（被忽略本身就是它声称的契约）。
+  - **验证方式**：把 `git ls-files` 的全部文件 tar 到 `.dev/nodeps-check/`（无 node_modules）、`git init` + commit，删掉那个 .aot.ts 复现 CI 条件 → 3/3 通过；再插入一条假引用 `internal/server/definitely-missing.go` → 精确报错。证明既不误报也没失去防护。
+
+**F 批搬文件改变了目录深度，两个测试的相对路径断了**（CI 才暴露，本地 vitest 跑的是别的文件集）：
+- `web/src/push-notifications/service-worker.test.ts:11` 读 `../../../public/sw.js` → 少一层 `core/` 后应为 `../../public/sw.js`（CI 报 `ENOENT ... /home/runner/work/byspace/byspace/public/sw.js`，多跳了一层到仓库外）。
+- `web/src/changelog/internal/parse-changelog.test.ts:277` 读 `../../../../../CHANGELOG.md` → `../../../../CHANGELOG.md`。
+- 全仓复查：`web/src` 里只有这两处 + `utils/app-version.ts` 的 `../../../package.json`（深度未变，正确）读仓库根文件。修后 `npx vitest run` 这两个文件 **40/40**。
+
+**其余 CI 失败逐条基线证明为既有，非本次引入**（对照 main 的 run 44250065576）：
+- `app-tests`：main 6 个 FAIL，我 8 个 → 差的 2 个正是上面两条深度 bug，已修。其余 6 个同名同因（`client.checkoutForgeSetAutoMerge is not a function` 等，`packages/client/dist` 陈旧；我没动过 `packages/client/src`，`git diff --stat origin/main..HEAD -- packages/client/src/` 为空）。
+- `playwright`：我 8 个失败用例，main 11 个，**我的是 main 的真子集**——且 main 多的两条正是我这轮修掉的 `file-explorer-context-actions.spec.ts:474` 与 `settings-navigation.spec.ts:74`。
+- `go-tests`：`TestProcessExitFailsTurnAndReleasesRuntime`（`stream_conformance_test.go:617`）本地 `-count=3` 全过；我对 `internal/` 的全部改动只有两处注释路径 + gofmt 对齐（`git diff` 逐行确认），是 flake。main 另一次 run 的 go 失败是另一个用例 `TestSecondMessageAfterTurnCompleted`。
+
+**`format` job 已绿**——gofmt 修复生效。
+
 ## 本轮之外的发现
 
 - **CI 在 `origin/main` 上就是红的（阻塞推送，非本次引入）**：`gh run view 44251677901`（commit d5519d14e，我这四个提交的基点）唯一的 failure 是 **format** job，`gofmt -l main.go internal workers` 报两个文件：`internal/server/host_sync_test.go`（末尾多一个空行）、`internal/server/ws_git_system.go:393-401`（map 字面量键对齐）。两者都是 `c7a0e4e92` 引入的。**根因是 `lefthook.yml` 只跑 oxfmt/oxlint/typecheck，不跑 gofmt**——AGENTS.md 说「gofmt -w 是 Go 的格式化器」，但没有任何本地钩子强制它，所以 Go 改动能带着格式问题提交。修法：`gofmt -w` 那两个文件 + 给 lefthook 加一个 go job（glob `*.go`）。
