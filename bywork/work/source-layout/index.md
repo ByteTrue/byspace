@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批与三件遗留均已完成并验证，用户批准的两件（修 6 个既有坏测、删空转订阅 RPC）也已提交推送。PR #51 的 CI 剩余失败已逐条证明是 main 上既有的（playwright 8 个 + go-tests flake）。tunnel 验收需用户在目标机跑"
+next_action: "无。六批、三件遗留、用户批准的两件（修 6 个 app-tests、删空转订阅 RPC）、以及随之暴露的 sdk-tests 17 个失败均已完成并推送。PR #51 剩余失败已逐条证明是 main 上既有的（playwright 8 个 + go-tests flake）。tunnel 验收需用户在目标机跑"
 must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -143,7 +143,7 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 - 全仓复查：`web/src` 里只有这两处 + `utils/app-version.ts` 的 `../../../package.json`（深度未变，正确）读仓库根文件。修后 `npx vitest run` 这两个文件 **40/40**。
 
 **其余 CI 失败逐条基线证明为既有，非本次引入**（对照 main 的 run 44250065576）：
-- `app-tests`：main 6 个 FAIL，我 8 个 → 差的 2 个正是上面两条深度 bug，已修。其余 6 个同名同因（`client.checkoutForgeSetAutoMerge is not a function` 等，`packages/client/dist` 陈旧；我没动过 `packages/client/src`，`git diff --stat origin/main..HEAD -- packages/client/src/` 为空）。
+- `app-tests`：main 6 个 FAIL，我 8 个 → 差的 2 个正是上面两条深度 bug，已修。其余 6 个同名同因，逐条查明见下（当时猜的「packages/client/dist 陈旧」已证伪）。
 - `playwright`：我 8 个失败用例，main 11 个，**我的是 main 的真子集**——且 main 多的两条正是我这轮修掉的 `file-explorer-context-actions.spec.ts:474` 与 `settings-navigation.spec.ts:74`。
 - `go-tests`：`TestProcessExitFailsTurnAndReleasesRuntime`（`stream_conformance_test.go:617`）本地 `-count=3` 全过；我对 `internal/` 的全部改动只有两处注释路径 + gofmt 对齐（`git diff` 逐行确认），是 flake。main 另一次 run 的 go 失败是另一个用例 `TestSecondMessageAfterTurnCompleted`。
 
@@ -168,6 +168,11 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
   - **response schema 一直是对的**（一度怀疑 Go 发 `payload:{requestId,events}` 而 schema 只要 `{requestId}` 会不匹配）：实测 `validateWSOutboundMessage` 对 Go 的真实形状返回 **true**（zod object 默认剥未知 key）。`.dev/probe-events-response.mjs`。
   - 删除范围：protocol 三个 schema + 两个 union 成员、client 的 `sendEventSubscription` 与 `ConnectionSubscriptions.events`/`setEvents`/`restore()` events 分支、Go 的 handler case 与 `sessionMessageNeedsOrder` 列表项、authz table 两行、`session_dispatch_test.go` 一行、`go-parity-audit.mjs` 的 `INTENTIONALLY_UNSUPPORTED` 排除项（该排除项本身就是证据——理由写着「served by broadcast filtering, not a stored preference」）。connection.test.ts 断言 wire events 数组的那个用例随之删除（9 个其余用例未动）。
   - 验证：typecheck/lint 全 0、`connection.test.ts` 9 passed、`go build ./...` 与 `go test -run 'TestSessionDispatch|TestEveryWSRouteIsClassified'` ok、契约组 **98/98**、`npm run audit -- --no-browser` 四检查全过。
+- **`sdk-tests` 的 17 个失败：我的改动让一个从未运行过的 job 第一次运行**（commit 5ebd120cd 修复）。`sdk-tests` 只在 `packages/protocol` 变更时触发，而它在 main 与本分支此前每一次 run 都是 **skipped**（对照 run 44338444861、44250065576、44251677901）。删 RPC 动了 `messages.ts`，job 首次运行，17 个烂测试一次性暴露（`cd packages/protocol && npx vitest run` → 17 failed / 558 passed，9 个文件）。
+  - **与 main 逐 key 比对证实全部既有**：`commitsList / fsEntryOps / agentThinkingUpdate / terminalRestoreMode / terminalInputModeReplay / projectUpdate / agentSkillsTargetSelection` 在 `git show origin/main:packages/protocol/src/messages.ts` 与本分支里都是 0 次命中；根因仍是 `c7a0e4e92`（它在 protocol 删了 4819 行，含 `messages.plugins.test.ts` 整个文件，但漏改这批测试）。`ServerInfoStatusPayloadSchema.features` 现在只剩 `webPush / agentRoleNames / daemonTunnels / daemonServiceInstall` 四个 key，封闭 z.object 把其余全剥掉。
+  - **处置**：只断言已退役能力的用例删掉（server_info 旧 flag、hello `capabilities`、plugin 时间线条目、legacy `github_search_response` envelope）；仍有意义的断言保留——role catalog 仍可选、timeline replacement 仍不带行、未知 feature key 仍被剥、`collapsed: ["identity"]` 仍能解析。
+  - **删 notification 前查过生产路径**：`agent_stream` 的 `attention_required` 事件 schema 里的 `notification` 对象被该 commit 删了，但独立的 `agent_attention_required` 消息仍带它（`packages/protocol/src/messages.ts:4090-4106`），且 `web/src/contexts/session-context.tsx:113-127` 的 `resolveAgentAttentionNotification` 在 `input.notification` 为空时会用 `buildAgentAttentionNotificationPayload` 本地兜底 → 删测试不掩盖功能丢失。
+  - 结果 **563 passed / 62 文件**（原 575，净删 12 个用例），lint 0、typecheck 0、契约组 98/98。
 - **`supportsDesktopPaneSplits()` 恒为 true，背后有一整条死分支**：`web/src/constants/layout.ts:89` 直接 `return true`（自带 shortcut 注释）。`web/src/screens/workspace/workspace-screen.tsx:1493` 的 `canRenderDesktopPaneSplits` 因此恒真，:3354 的 `shouldRenderDesktopPaneFallback` 恒假，:3913-3939 那段 `WorkspaceDesktopTabsRow` 渲染永不执行；`web/src/workspace-tabs/explorer-sidebar.ts:35` 的 `"dock"` 分支同理不可达。另有 4 处 `canRenderDesktopPaneSplits &&` 守卫恒真。删它属于 pane split 的行为改动，注释说「下次改 pane split 时一起删」。
 - **v0.26.4 发布验收**（`bywork/work/project-npm/index.md`）：**资产哈希项已结案**——`gh release download v0.26.4` 取全部 19 个资产到 `.dev/release-verify/`，`shasum -a 256 -c SHA256SUMS` 16 个原生资产全 OK，`shasum -a 256 -c BySpace-0.26.4-container.txt.sha256` OK（SHA256SUMS 不含 container 描述符，它有自己的兄弟文件）。原始输出 `.dev/release-verify.log`。**tunnel 空闲稳定性仍 `无法判定`**：需要两台目标机上的真实 tunnel，本机 `lsof -nP -iTCP:34125` 无监听，按 must_hold 不动生产 relay/tunnel 配置，只能由用户在目标机跑。
   - **heartbeat 工具其实可用**——不是 MCP 工具而是 CLI：`byspace heartbeat <create|list|delete>`。之前记的「工具不可用」只是 MCP 侧没有 `create_heartbeat`。但 v0.26.4 已发布完成，**补建 babysit heartbeat 无意义**：它的职责是盯到完成，事后建不产生承诺的行为。
