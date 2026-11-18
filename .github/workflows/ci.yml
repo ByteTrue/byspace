@@ -90,6 +90,7 @@ jobs:
           scripts/generated-assets.test.mjs
           scripts/config-schema.test.mjs
           scripts/web-layout.test.mjs
+          scripts/web-routes.test.mjs
 
   format:
     name: format

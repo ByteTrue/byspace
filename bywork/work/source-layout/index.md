@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。推分支后看 GitHub Actions 的真实结果；两个既有坏测与 raw-query 规则待用户决定是否单独修"
+next_action: "无。三件遗留已按用户批准执行并验证。推分支后看 GitHub Actions 的真实结果。唯一悬而未决：客户端仍发一个 daemon 已忽略的订阅 RPC，见「本轮之外的发现」"
 must_hold: "不改既有测试断言；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -77,15 +77,17 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 | 两套断点合一后 sidebar 行为不变 | `cd web && npm run test:e2e -- e2e/browser/sidebar-mobile-menu-sheets.spec.ts` | 窄视口下开 sidebar | 移动端 sheet 行为与改前一致 | `.dev/e2e-d1.log` 该 spec 全绿；E 批进一步根治：断点实现搬进 `platform/use-compact-form-factor.ts`，`constants/layout.ts` 只 re-export，`hooks/use-mobile.ts` 删除，ui/ 因此零例外 | 通过 |
 | 平铺模块归位后应用行为不变 | `npm run audit:browser -- --base http://127.0.0.1:6779` + 受影响 spec | 277 个模块搬进功能目录后，构建 → 重嵌 → make build → 起 daemon → 真浏览器 | 11/11；既有测试原断言通过 | F 批：`audit:browser` **11/11**（`.dev/audit-browser-f.log`）；e2e `.dev/e2e-f1.log` 11/11、`.dev/e2e-f2.log` 27/28（唯一失败是 E 批已基线证明的既有坏测 settings-navigation.spec.ts:74）；单测 `.dev/unit-f1.log` **297/297**（32 文件，覆盖 sidebar/tool-calls/lib 与两个搬动的 composer 模块） | 通过 |
 | 搬运没有留下断链 | `npm run typecheck` + `npm run lint` + 四个契约守卫 | 277 文件 git mv + 320 文件 specifier 重写后全仓检查 | 0 error；burn-down 名单跟着改道 | typecheck exit=0（`.dev/tc-f4.log`）；lint `0 warnings and 0 errors`（2082 文件）；守卫 13/13。过程中 typecheck 抓到 14 处「指向留在原地的兄弟」的相对 import（与 `.dev/probe-f-links.mjs` 预测的 15 处一致），已按真实位置解析修复；`.oxlintrc.json` 的 9 条 burn-down 条目同步改道（否则 6 个 grandfathered 文件脱离豁免名单报错） | 通过 |
-| 归属计划不违反角色规则 | `node .dev/check-f-roles.mjs` | 执行前检查计划里落进 platform/ui 的模块是否依赖功能代码 | 0 违规 | 首版计划报 4 处：encode-images→attachments、os-notifications→notification-routing、rich-clipboard→assistant-markdown-parser。读过文件后改判：encode-images 归 attachments（它只是 encodeAttachmentsForSend 的 pass-through）、os-notifications 归 push-notifications、rich-clipboard 归 assistant-selection-copy。改判后 0 违规、0 路径碰撞 | 通过 |
+| legacy host URL 真能重定向 | `cd web && npm run test:e2e -- e2e/browser/settings-navigation.spec.ts e2e/browser/legacy-host-redirects.spec.ts` | 直接 goto `/h/<serverId>/{settings,open-project,sessions}` | 分别落到 `/settings/hosts/<id>/connections`、`/open-project`、`/sessions` | 补 3 个路由文件前：settings spec 那条失败（实到 `/open-project`），新 spec 2 failed（`.dev/e2e-routes-red.log`）。补后 **22/22 通过**（`.dev/e2e-leftover.log`，含 file-explorer 5 个）。守卫 `scripts/web-routes.test.mjs` 同步见红→绿 | 通过 |
+| 路由表漏文件会被挡住 | `node --test scripts/web-routes.test.mjs` | 从 router.tsx 删掉那 3 条 path | 精确报出缺失的 URL | 红证 `.dev/baseline/web-routes-red.log`：`/h/:serverId/{open-project,sessions,settings}` 三条。删行时正则要写自闭合 `<Name />`，第一版 removed 0 是假成功 | 通过 |
+| 文档引用的代码路径真实存在 | `node --test scripts/docs-links.test.mjs` | 先跑见红，修完后再插一条假路径复验 | 报出不存在的文件；修完全绿 | 红证 `.dev/baseline/docs-inline-red.log` **17 条**；修完 3/3 通过（`.dev/docs-guard-green.log`）；插入 `internal/server/does-not-exist.go` 精确报该条，还原后绿 | 通过 |
 
 ## 完成核对
 
-- 行为门：A 批 6 行、B 批 3 行、C 批 3 行、D 批 2 行、E 批 3 行、F 批 3 行通过，共 20 行
+- 行为门：A 批 6 行、B 批 3 行、C 批 3 行、D 批 2 行、E 批 3 行、F 批 3 行、三件遗留 3 行通过，共 23 行
 - 范围门：`scope.md` 432 项——296「已覆盖」（277 首轮 + 19 补漏，搬进功能目录）、136「不适用」（跨域原语，留在 lib/platform/widgets 或原桶）
-- 契约门：`audit:browser` 基线 11/11（`.dev/baseline/audit-browser2.log`），E 批 11/11、F 批 11/11。CI 契约组 85/85（`.dev/ci-contracts-f.log`）
-- 完成门：达成
-- 需要用户看的推断或无法判定：两个既有坏测、raw-query 规则丢失、docs 里 20 处退役 Node 路径引用，见「本轮之外的发现」
+- 契约门：`audit:browser` 基线 11/11（`.dev/baseline/audit-browser2.log`），E 批 11/11、F 批 11/11、遗留收尾 11/11（`.dev/audit-browser-leftover.log`）。CI 契约组 96/96（`.dev/ci-contracts-leftover.log`，比 F 批多的 2 个来自新守卫 web-routes 与扩过的 docs-links）。`npm run audit -- --no-browser` 四检查全过（`.dev/audit-leftover.log`）
+- 完成门：达成。typecheck/lint（2087 文件 0/0）/format 全 exit=0；e2e 22/22（`.dev/e2e-leftover.log`）
+- 需要用户看的推断或无法判定：无。两个既有坏测都已结案（一删一修），docs 死引用已修完并被守卫覆盖。剩下一个独立决定：客户端订阅 RPC 那半边要不要删
 
 ## 批次 F 的归属规则与剩余共享桶
 
@@ -103,14 +105,31 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 - 验证：typecheck exit=0（两处相对链已修：e2e spec 的 `../../src/components/assistant-message-render-limit`、message-height-estimate.test.ts 的 `./assistant-image-metadata`）、lint 0/0、守卫 17/17、单测 `.dev/unit-f2.log` **240/240**（30 文件）、e2e `.dev/e2e-f3.log` **7/7**（assistant-fork-menu / assistant-message-render-limit / plan-card）与 `.dev/e2e-f4.log` **15/15**、`audit:browser` **11/11**（`.dev/audit-browser-f2.log`）。
 - 外部引用同步：docs/agent-stream-performance.md（首轮另有 AGENTS.md 与 7 篇 docs、internal/gui/notify.go、internal/pathutil/equivalence.go、web/public/sw.js、docs/forms.md）。
 
+## 三件遗留（用户批准后已执行）
+
+### 1. file-explorer 坏测 → 删掉失效用例
+
+`c7a0e4e92` 把 feature gate 从 `file-explorer-pane.tsx` 删了却留下对应测试，是那次提交的遗漏。删掉 "hides unsupported file operations and revert actions" 用例、只被它调用的 `hideContextActionCapabilities` helper 和随之无用的 `openChangesPanel` import；500 行 → 443 行，其余 5 个用例原样保留，跑绿（`.dev/e2e-explorer-green.log`）。改断言等于把「永远显示」写成契约，那正是 no-version-drift 要消灭的东西。
+
+### 2. settings 路由 → 补 3 个文件 + 路由对账守卫
+
+`web/src/app/router.tsx` 的契约是「One entry per file in archive/expo-app:packages/app/src/app, same paths」，实测缺 3 个：`h/[serverId]/{settings,open-project,sessions}.tsx`，`/h/<id>/settings` 因此落到 `path: "*"` 再被送去 `/open-project`。三个都补成 `<Redirect>` 薄壳（`useHostRouteServerId` + `Redirect`，照 `h/[serverId]/index.tsx`）。settings 是永久入口；另两个保留原有的 `remove after 2026-12-11` 注释，到期一起删。
+
+根治在 `scripts/web-routes.test.mjs`：从 `git ls-tree archive/expo-app` 枚举路由文件（`_layout.tsx` 是布局组件不算），`[param]`→`:param`、去 `/index`，与 router.tsx + workspace-layer.tsx 的 path 表对账。没有它，下次移植漏文件仍然静默。
+
+### 3. docs 死引用 → 扩现有守卫，而不是手工扫一遍
+
+`scripts/docs-links.test.mjs` 原本只查 markdown 链接 `](path)`，反引号 inline 代码路径完全不查——这就是腐烂能积累的原因。加上 inline 检查后见红 17 条，逐条修：多数指向 Go 已有实现（改路径），两处**机制描述整个失效**（`docs/permissions.md` 的 TS 类型穷举 → 运行时 map + `TestEveryWSRouteIsClassified`；`docs/architecture.md` 的三处列表一致 → 广播只对 `agent_stream` 过滤，其余无条件），`docs/ad-hoc-daemon-testing.md` 从 214 行重写到 77 行（删掉死掉的 Node harness，换成 `newTestServer`）。另有 6 处死命令守卫看不见（不是路径），一并修在 `docs/development.md` 与 `docs/testing.md`。
+
+顺带修好同一守卫里的第二个 test：它扫的是已退役的 `packages/app/src`，`existsSync` 让它一直静默跳过；改指 `web/src` 后真正运行。
+
+### raw-query：不用做
+
+实测推翻了先前的判断。burn-down 机制完好：名单内 `"off"` 就是豁免，移出一个立刻精确报错。只删掉那条误导性 `shortcut:` 注释。
+
 ## 本轮之外的发现
 
-- **既有坏测（非本次引入，已用基线证明）**：`web/e2e/browser/file-explorer-context-actions.spec.ts:474` "hides unsupported file operations and revert actions" 失败于 `expect(page.getByTestId("files-new-file")).toHaveCount(0)`（实际 1）。根因：今天更早的 commit `c7a0e4e92`「refactor: remove dead packages, provider quota, and version-drift compat」删掉了 `packages/protocol/src/messages.ts` 里三个 COMPAT gate（`fsEntryOps`、`fsEntryDuplicate`、`checkoutDiscardChanges`），但该 spec 仍 mock 这三个 feature 为 false 并断言 UI 隐藏。`ServerInfoStatusPayloadSchema.features` 是封闭 `z.object`，未知 key 被剥掉，所以 mock 根本到不了应用；`web/src` 里也已无任何读取点（只剩 `actions-store.ts:352` 无条件调用）。**基线证明**：`git stash` 掉本次全部改动、重建 web、用 `BYSPACE_E2E_DAEMON_BINARY=.dev/bin/byspace` 跑同一 spec → 同样 1 failed 5 passed、同一断言同一行（`.dev/e2e-baseline-explorer2.log`）；改动恢复后同样结果（`.dev/e2e-d3.log`）。按「既有测试只读」不修，留给用户决定是删该用例还是改断言。
-  - 死路：第一次跑基线忘了 stash 会把 Makefile 也退回 `bin/byspace`，6 个用例全失败于 `Error: Go daemon binary not found at .../bin/byspace`（`.dev/e2e-baseline-explorer.log`）——那不是有效基线，必须用 `BYSPACE_E2E_DAEMON_BINARY` 指向仍在的 `.dev/bin/byspace` 重跑。
-
-- **既有坏测 2（非本次引入，已用基线证明）**：`web/e2e/browser/settings-navigation.spec.ts:74` "/h/[serverId]/settings redirects to the host connections section" 失败于 `expectAppRoute`（`web/e2e/support/helpers/route-assertions.ts:8`）：期望 `/settings/hosts/srv_e2e_worker_0/connections`，实到 `/open-project`，10s 超时。**基线证明**：`git stash push --include-untracked` 掉全部改动 → 重建 web → `BYSPACE_E2E_DAEMON_BINARY=.../.dev/bin/byspace` 跑同一 spec → **同样 1 failed 14 passed、同一用例**（`.dev/e2e-baseline-settings.log`）；改动恢复后同样结果（`.dev/e2e-settings-alone.log`）。按「既有测试只读」不修。
-  - 该 spec 还打印 React Router 警告：`You rendered descendant <Routes> (or called useRoutes()) at "/" (under <Route path="/">) but the parent route path has no trailing "*"` —— 与「深层路由不再匹配」的症状一致，是这条失败的线索，但修它属独立一次改动。
-
-- **端口 6778 被别的 agent 占着（环境坑，不是缺陷）**：`audit:browser` 首跑 3/6（sidebar 快照 `text: Not found`），根因不是我的改动——`lsof -nP -iTCP:6778 -sTCP:LISTEN` 显示 PID 18224 是 `/Users/zijie/.local/share/opencode/worktree/1c1f53/kind-moon/bin/byspace serve`，另一个 worktree 的 dev daemon（17:51 启动，有未提交改动），serving 它自己的旧 UI。**没有动它**。改用 `BYSPACE_LISTEN=127.0.0.1:6779 npm run dev:daemon` 起自己的，再 `audit:browser -- --base http://127.0.0.1:6779` → 11/11。教训：`npm run cli -- daemon status` 报 stopped 不代表端口空闲，它只认自己 home 的 pid 文件。
-- **docs 里 20 处退役 Node 路径引用**：`grep -rn "packages/server/src" docs/*.md` 有 20 处（ad-hoc-daemon-testing、agent-lifecycle、architecture、archive-parity、data-model、development 等），指向已随 Node daemon 消失的文件。`docs/archive-parity.md` 已改为「在 tag v0.20.0 里读」，但其余篇仍写成工作树路径。属独立一次文档清理，本轮不动。
+- **客户端仍在发一个 daemon 已忽略的订阅 RPC（未处理，等用户决定）**：`packages/client/src/daemon-client.ts:3112` 的 `sendEventSubscription` 发 `session.events.set_subscription.request`，而 Go 侧 handler（`internal/server/server.go:1366-1379`）只 `json.Unmarshal` 后原样回显 events，**从不存储**；`grep -rn "eventSubscriptions" internal/ --include=*.go` 零命中。三个调用点在 `updateEventSubscriptions`（:1495、:1498、:1529）。`SessionEventSubscriptionSchema` 在 `packages/protocol/src/messages.ts:2900`，5 个事件。删客户端那半边是一次独立的协议改动（要同时动 protocol 与 client），不属本轮布局范围。
+- **端口 6778 被别的 agent 占着（环境坑，不是缺陷）**：`audit:browser` 首跑 3/6（sidebar 快照 `text: Not found`），根因不是我的改动——`lsof -nP -iTCP:6778 -sTCP:LISTEN` 显示 PID 18224 是 `/Users/zijie/.local/share/opencode/worktree/1c1f53/kind-moon/bin/byspace serve`，另一个 worktree 的 dev daemon，serving 它自己的旧 UI。**没有动它**。改用 `BYSPACE_LISTEN=127.0.0.1:6779` 起自己的，再 `audit:browser -- --base http://127.0.0.1:6779` → 11/11。教训：`npm run cli -- daemon status` 报 stopped 不代表端口空闲，它只认自己 home 的 pid 文件。
+- **既有测试的基线证明法（两次都用过）**：`git stash` 掉本次全部改动、重建 web、用 `BYSPACE_E2E_DAEMON_BINARY=/Users/zijie/workspace/byspace/.dev/bin/byspace` 跑同一 spec，看是否同样失败。死路：stash 会把 Makefile 退回 `bin/byspace`（已不存在），6 个用例全失败于 `Error: Go daemon binary not found at .../bin/byspace`——那不是有效基线，必须显式指定仍在的二进制。
 - `web/public/schemas/byspace.config.v1.json` 的生成器随 Node daemon 一起消失了（CHANGELOG.md:670 说它「generated from the daemon's own config definition」，归档笔记 002 记的命令是 `npm run --workspace=@bytetrue/server generate:config-schema`）。C 批已定：Go 侧 `internal/store/store.go:1113 LoadDaemonConfig` 读的是无类型 map，没有可生成的定义源，所以它是手工维护的对外契约，用 daemon 自己的设置路径表守住。

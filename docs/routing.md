@@ -2,7 +2,7 @@
 
 The web app's routes are a React Router data router, `web/src/app/router.tsx`, with one entry per
 route module in `web/src/app/`. The URLs are the ones the Expo app used, so links, bookmarks,
-notification targets, and pairing URLs keep working. Code navigates through `web/src/app/navigation.tsx`
+notification targets, and pairing URLs keep working. Code navigates through `web/src/platform/navigation.tsx`
 (`router.push("/h/...")`, `useLocalSearchParams`, `<Redirect>`), which drives React Router: the
 router is a module-level object, so plain modules navigate too.
 
@@ -18,7 +18,7 @@ shows the same screen. `/`, `/open-project`, and `/welcome` replace it.
 
 A covered workspace is still running, so:
 
-- **It is not focused.** `useIsFocused()` (`web/src/app/route-focus.ts`) is false,
+- **It is not focused.** `useIsFocused()` (`web/src/platform/route-focus.ts`) is false,
   and nothing in it may navigate: a redirect from a covered host layout would take the screen on
   top away.
 - **It measures as zero.** Layout code that measures must measure again when it shows, as the tab

@@ -8,6 +8,8 @@
 - 汇总器只数失败标记（如 `--- FAIL:`）时，空输出 = 假全绿；先确认子进程有输出。
 - `npm run cli -- daemon status` 报 stopped **不代表 6778 空闲**——它只认自己 dev home 的 pid 文件。别的 worktree 的 dev daemon 可能正占着端口并 serve 它自己的旧 UI，此时 `audit:browser` 会失败在首屏快照（`text: Not found`），看着像自己改坏了。先 `lsof -nP -iTCP:6778 -sTCP:LISTEN` 看 PID 的真实 cmdline；不是自己的就别动，改用 `BYSPACE_LISTEN=127.0.0.1:6779 npm run dev:daemon` + `audit:browser -- --base http://127.0.0.1:6779`。
 - 用 `git stash` 取基线时，Makefile 也被退回旧产物路径（`bin/byspace`），e2e 会全数失败在「binary not found」——那不是有效基线。用 `BYSPACE_E2E_DAEMON_BINARY=<仍在的二进制绝对路径>` 指过去再跑。stash/pop 会触发 AGENTS.md 的 system-update 通知来回翻转，那是副作用不是真实编辑。
+- 守卫自己也会烂，而且**静默**：`scripts/docs-links.test.mjs` 第二个 test 扫的是已退役的 `packages/app/src`，`if (!existsSync(dir)) return` 让它长期跳过，一直显示通过。同类：`.github/ci-paths.yml` 的死 glob 不报错、`docs-links` 只查 `](path)` 不查反引号里的代码路径。**守卫的绿灯要先问「它这次真的检查了什么」**——插一条已知错误的输入见红，才算它还在工作。
+- 文档里最难发现的腐烂不是路径错，是**机制描述整个失效**：`docs/permissions.md` 说权限表靠 TS 类型穷举（Go 是运行时 map），`docs/architecture.md` 说新事件要在三处注册（Go 只对 `agent_stream` 过滤，其余无条件）。路径守卫抓不到这类，只能逐条对代码复核。
 
 ## 依据
 
