@@ -12,7 +12,7 @@
 
 - 类型：用户决定（2026-09-24 拍板，含 enabled 与 hooks 永不联动一条）。
 - 被否决的相关方案：「一级分类尽量少」单独作为规则（没有停止条件，会一路并到 2 个分类；三层规则是它的边界）；终端集成做页面级大 tab（URL 寻址成本 + 横跳）。
-- 证据或复核方式：`bywork/archive/v1/decisions/001-settings-taxonomy-and-integration-layers.md`；讨论 `bywork/archive/v1/talks/003-host-settings-consolidation.md`；代码侧体现 `web/src/core/components/provider-terminal-integration.tsx:33-39`（两个开关刻意独立）。
+- 证据或复核方式：`bywork/archive/v1/decisions/001-settings-taxonomy-and-integration-layers.md`；讨论 `bywork/archive/v1/talks/003-host-settings-consolidation.md`；代码侧体现 `web/src/components/provider-terminal-integration.tsx:33-39`（两个开关刻意独立）。
 - 适用条件：Host 设置页结构；provider 弹层内的开关语义。
 
 ## 重访条件
