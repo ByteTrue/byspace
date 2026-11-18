@@ -554,14 +554,25 @@ esac
 		"type": "session",
 		"message": map[string]any{
 			"type": "create_agent_request", "requestId": "ex1",
-			"initialPrompt": "will kill the provider",
-			"config":        map[string]any{"provider": "pi", "cwd": workDir},
+			"config": map[string]any{"provider": "pi", "cwd": workDir},
 		},
 	})
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
 	agentID, earlyFrames := subscribeTimelineOnly(t, ctx, ws)
+
+	// Subscribe before prompting so a fast provider exit cannot filter turn_failed.
+	sendReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "send_agent_message_request", "requestId": "ex1-send", "agentId": agentID,
+			"text": "will kill the provider", "messageId": "ex1-message",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, sendReq); err != nil {
+		t.Fatal(err)
+	}
 
 	var sawTurnFailed, sawTurnCompleted bool
 	for _, f := range earlyFrames {

@@ -172,7 +172,6 @@ export interface SeedDaemonClient {
     features?: {
       projectAdd?: boolean;
       workspaceRecovery?: boolean;
-      workspaceMarkUnread?: boolean;
     } | null;
   } | null;
   fetchAgentHistory(options?: {

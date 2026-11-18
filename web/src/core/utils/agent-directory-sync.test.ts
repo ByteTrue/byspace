@@ -20,6 +20,7 @@ function createAgentPayload(
     id: input.id,
     provider: input.provider ?? "codex",
     cwd: input.cwd ?? "/repo",
+    workspaceId: input.workspaceId,
     model: input.model ?? null,
     createdAt: input.createdAt ?? "2026-04-20T00:00:00.000Z",
     updatedAt: input.updatedAt ?? "2026-04-20T00:01:00.000Z",
@@ -237,7 +238,7 @@ describe("replaceFetchedAgentDirectory", () => {
     store.clearSession(serverId);
   });
 
-  it("keeps newer metadata while accepting usage-only updates and legacy workspace ownership", () => {
+  it("keeps newer metadata while accepting usage-only updates and workspace ownership", () => {
     const serverId = "server-usage";
     const agentId = "usage-agent";
     const store = useSessionStore.getState();
@@ -272,6 +273,7 @@ describe("replaceFetchedAgentDirectory", () => {
       updatedAt: "2026-07-12T11:00:00.000Z",
       lastUsage: { inputTokens: 10, outputTokens: 5 },
       pendingPermissions: [permission("current-permission")],
+      workspaceId: "legacy-workspace",
     });
     const projection = new AgentStoreProjection(serverId);
     projection.applyDelta({
