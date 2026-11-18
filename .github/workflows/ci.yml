@@ -90,6 +90,7 @@ jobs:
           scripts/config-schema.test.mjs
           scripts/web-layout.test.mjs
           scripts/web-routes.test.mjs
+          scripts/e2e-runnable.test.mjs
 
   format:
     name: format
