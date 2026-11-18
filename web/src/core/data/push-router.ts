@@ -217,6 +217,14 @@ export async function applyProvidersSnapshotUpdate(input: {
       });
     },
   });
+  if (cwd === null) {
+    // The daemon may not know a browser-only cwd scope. Refetch active project queries so a home
+    // refresh cannot leave their persisted catalogs stale after the settings sheet updates.
+    void input.queryClient.invalidateQueries({
+      queryKey: providersSnapshotQueryRoot(input.serverId),
+      predicate: (query) => query.queryKey[2] === "cwd",
+    });
+  }
   if (!snapshot.snapshotHash || previous?.snapshotHash !== snapshot.snapshotHash) {
     void input.queryClient.invalidateQueries({
       queryKey: agentCommandsQueryRoot(input.serverId),
