@@ -280,19 +280,9 @@ messages or transfers.
 
 ### Compatibility rules
 
-- WebSocket schemas are append-only. Add fields, do not remove fields, and never make optional fields required.
-- New wire enum values must be gated at serialization with `session.supports(CLIENT_CAPS.someCapability)`.
-- `Session` stores client capabilities from the `hello` handshake and rehydrates them on reconnect, so the wire boundary can ask one question: `session.supports(...)`.
-- A new daemon-pushed event type must be registered in three places, and each omission fails differently and silently. (1) `SessionEventSubscriptionSchema` (`packages/protocol/src/messages.ts`) makes it subscribable at all. (2) The hardcoded array in `DaemonClient.updateEventSubscriptions` (`packages/client/src/daemon-client.ts`) is what a client actually subscribes to; `on(type)` accepts any message type, but a type missing here is never requested, so `Session.wantsEvent` rejects it for every current client — the message simply never arrives. (3) The gated list in `Session.emit` (`packages/server/src/server/session.ts`) is what applies the subscription check; a type missing here skips that check and reaches `onMessage`, which broadcasts to every socket on the connection regardless of subscription. Nothing asserts the three lists agree.
+There are none to honor locally: app and daemon ship together, so a wire change lands on both sides in the same commit. [protocol-compatibility.md](protocol-compatibility.md) owns the rules and the reasoning.
 
-Example: adding a new enum value
-
-```ts
-// 1. Add CLIENT_CAPS.newThing = "new_thing"
-// 2. Let new clients advertise it in WS hello
-// 3. Keep the shared producer schema strict
-// 4. Gate the new emitted value: session.supports(CLIENT_CAPS.newThing) ? "new_value" : "old_value"
-```
+A daemon-pushed event reaches every handshaked socket. `broadcastSessionMsg` (`internal/server/server.go:3752`) filters only `agent_stream`, by the per-sink timeline view a client asked for; every other type is unconditional. `session.events.set_subscription.request` is answered but not stored, so the subscription list a client sends has no effect on delivery — do not add a gate there expecting it to be enforced.
 
 ## Agent lifecycle
 

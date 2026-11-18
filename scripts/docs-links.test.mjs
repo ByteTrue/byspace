@@ -100,7 +100,7 @@ test("in-repo documentation links resolve", () => {
 // The app deep-links into public-docs on GitHub, so deleting one of those pages
 // breaks a button inside the product rather than only a doc cross-reference.
 test("every public-docs file the app links to exists", () => {
-  const appSource = join(repoRoot, "packages", "app", "src");
+  const appSource = join(repoRoot, "web", "src");
   if (!existsSync(appSource)) return;
 
   const referenced = new Set();
@@ -121,4 +121,50 @@ test("every public-docs file the app links to exists", () => {
       `${path} is linked from the app but does not exist`,
     );
   }
+});
+
+// Prose cites code by path in backticks — `internal/server/server.go:3752` — far more often than it
+// links to it. Those citations rot the same way links do, and the link check above never saw them:
+// 17 had already gone stale, several pointing at the retired Node daemon. Only repo-anchored paths
+// are checked; a relative fragment like `provider/registry.ts` is illustrating a shape, not naming a
+// file.
+const CODE_PATH =
+  /`((?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|go|mjs|js|json|md|py|sh|css))(?::\d+(?:-\d+)?)?`/g;
+
+// Names the docs invent to show a pattern rather than point at a file.
+const ILLUSTRATIVE = /(^|\/)(acme|thing|your-script)[._-]/;
+
+const repoDirs = new Set(
+  readdirSync(repoRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .map((e) => e.name),
+);
+
+test("code paths cited in prose exist", () => {
+  const broken = [];
+
+  for (const root of SCANNED) {
+    for (const file of markdownFiles(root)) {
+      const relative = relativePath(repoRoot, file);
+      // archive-parity.md is a guide to reading the tagged Node tree; its paths are tag-relative
+      // on purpose and resolve with `git show v0.20.0:<path>`, not on disk.
+      const readsArchive = relative === "docs/archive-parity.md";
+      const text = readFileSync(file, "utf8");
+
+      for (const match of text.matchAll(CODE_PATH)) {
+        const target = match[1];
+        if (!repoDirs.has(target.split("/")[0])) continue;
+        if (ILLUSTRATIVE.test(target)) continue;
+        if (readsArchive && /^packages\/(server|cli)\//.test(target)) continue;
+        if (existsSync(join(repoRoot, target))) continue;
+        broken.push(`${relative}: ${target}`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    broken,
+    [],
+    `code paths cited in docs that no longer exist:\n${broken.join("\n")}`,
+  );
 });

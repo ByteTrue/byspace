@@ -58,7 +58,7 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 
 - Compose shadcn's `Field` (`FieldLabel`, `FieldDescription`, `FieldError`) around `Input`,
   `Textarea`, `InputGroup`, `Select`, `Switch` or `Tabs` from `web/src/ui/`, used as
-  shipped. `SelectField` (`web/src/ui/select-field.tsx`) is the picker for a value
+  shipped. `SelectField` (`web/src/widgets/select-field.tsx`) is the picker for a value
   that needs a search or a sheet. Screens never nudge a component's styles to align a row.
 - The composer's input is the one text field with an editing surface of its own
   (`EditingTextInput`, for IME composition and programmatic edits). Every other field is shadcn's

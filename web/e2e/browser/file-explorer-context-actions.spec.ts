@@ -3,7 +3,6 @@ import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test } from "../support/fixtures";
 import { openFileExplorer } from "../support/helpers/file-explorer";
-import { openChangesPanel } from "../support/helpers/workspace-tabs";
 import { gotoWorkspace } from "../support/helpers/launcher";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
@@ -42,37 +41,6 @@ async function failNextDeleteRequest(page: Page): Promise<void> {
       serverSocket.send(message);
     });
     serverSocket.onMessage((message) => browserSocket.send(message));
-  });
-}
-
-async function hideContextActionCapabilities(page: Page): Promise<void> {
-  await page.routeWebSocket(daemonWsRoutePattern(), (browserSocket) => {
-    const serverSocket = browserSocket.connectToServer();
-    browserSocket.onMessage((message) => serverSocket.send(message));
-    serverSocket.onMessage((message) => {
-      if (typeof message !== "string") {
-        browserSocket.send(message);
-        return;
-      }
-      const envelope = JSON.parse(message) as {
-        message?: {
-          type?: string;
-          payload?: { status?: string; features?: Record<string, unknown> };
-        };
-      };
-      if (
-        envelope.message?.type === "status" &&
-        envelope.message.payload?.status === "server_info"
-      ) {
-        envelope.message.payload.features = {
-          ...envelope.message.payload.features,
-          fsEntryOps: false,
-          fsEntryDuplicate: false,
-          checkoutDiscardChanges: false,
-        };
-      }
-      browserSocket.send(JSON.stringify(envelope));
-    });
   });
 }
 
@@ -469,31 +437,4 @@ test("keeps an entry visible when deletion fails", async ({ page }) => {
 
   await expect(page.getByText("Injected delete failure", { exact: true })).toBeVisible();
   await expect(readme).toBeVisible();
-});
-
-test("hides unsupported file operations and revert actions", async ({ page }) => {
-  await hideContextActionCapabilities(page);
-  await writeFile(path.join(workspace.repoPath, "README.md"), "# Changed while unsupported\n");
-  await gotoWorkspace(page, workspace.workspaceId);
-  await openFileExplorer(page);
-
-  await expect(page.getByTestId("files-new-file")).toHaveCount(0);
-  await expect(page.getByTestId("files-new-folder")).toHaveCount(0);
-  await page
-    .getByTestId("file-explorer-tree-scroll")
-    .getByText("README.md", { exact: true })
-    .click({ button: "right" });
-  const filesMenu = page.getByTestId(/file-explorer-row-\d+-context-menu$/);
-  await expect(filesMenu.getByText("Rename", { exact: true })).toHaveCount(0);
-  await expect(filesMenu.getByText("Duplicate", { exact: true })).toHaveCount(0);
-  await expect(filesMenu.getByText("Delete", { exact: true })).toHaveCount(0);
-  await page.keyboard.press("Escape");
-
-  await openChangesPanel(page);
-  await expect(page.getByTestId("diff-file-0")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("menu")).toHaveCount(0);
-
-  await page.getByTestId("diff-file-0-toggle").click({ button: "right" });
-  await expect(page.getByTestId("diff-file-0-duplicate")).toHaveCount(0);
-  await expect(page.getByTestId("diff-file-0-revert")).toHaveCount(0);
 });

@@ -7,6 +7,7 @@
 - Expo（RN Web）已退役：2026-11-03 切换完成，逻辑在 web/src，packages/app + Expo + RN 依赖已删；旧实现只存在于 git tag `archive/expo-app`（`git show archive/expo-app:packages/app/src/<path>` 可查）。
 - `web/src` 是一棵树、一个 `@/` alias、三种目录角色：`ui/` vendored shadcn（`npx shadcn add` 落点，永不 restyle）、`platform/` RN/Expo API 的网页替身、其余全是功能目录。`ui/` 与 `platform/` 只许 import npm 包与彼此，功能目录自由。规则由 `scripts/web-layout.test.mjs` 机械守住，不靠文档自觉。应用自建在 shadcn 之上的组件放 `widgets/`，不放 `ui/`。
 - 2026-11-18 之前是 `~/`→`web/src` + `@/`→`web/src/core` 双 alias，那是 Expo 合并的残留（当时只处理了一个重名文件），分界后来失效（core→shell 620 处、shell→core 240 处）。已合并，`core/` 这一层不存在了。
+- 路由表 `web/src/app/router.tsx` 的契约是「`archive/expo-app:packages/app/src/app` 里每个文件一条 path」，由 `scripts/web-routes.test.mjs` 从 `git ls-tree` 枚举后对账。2026-11-18 补回漏移植的三个 legacy 入口 `h/[serverId]/{settings,open-project,sessions}.tsx`——没有这个守卫，漏文件是静默的，`/h/<id>/settings` 会落到 `path: "*"` 再被启动逻辑送去 `/open-project`。`_layout.tsx` 是布局组件不是路由，枚举时排除。
 - 三个共享目录的分工：浏览器/宿主 API 替身 → `platform/`；与领域无关的通用助手 → `lib/`；shadcn 之上的应用自建件 → `widgets/`。其余一律进功能目录。`utils/`、`hooks/`、`components/`、`stores/` 只剩真正跨域的模块（如 host-routes 被 14 个目录用）。判断归属看**领域**不看消费者数量：`device-timezone.ts` 只有 screens 用，但它是通用助手；只被另一个桶消费也不等于跨域，要一路走到功能目录才算。
 
 ## 依据

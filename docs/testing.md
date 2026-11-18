@@ -148,20 +148,18 @@ The general rule: when a test fails, the first question is "what did this actual
 
 Vitest picks up tests by suffix. The suffix tells the runner which category it belongs to.
 
-| Suffix                | What it is                                                                                                    | Where it runs                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `*.test.ts(x)`        | Unit test — pure, fast, no daemon                                                                             | `npm run test:unit`                                                                  |
-| `*.posix.test.ts`     | Unit test that needs POSIX-only behavior                                                                      | unit, skipped on Windows                                                             |
-| `*.browser.test.ts`   | App test that needs a real browser (DOM)                                                                      | `npm run test:browser` (Vitest browser mode, Playwright provider, headless Chromium) |
-| `*.e2e.test.ts`       | End-to-end against a real daemon                                                                              | `npm run test:e2e`                                                                   |
-| `*.real.e2e.test.ts`  | E2E that hits a real provider (Claude/Codex/Copilot/OpenCode/Pi) — needs creds in `packages/server/.env.test` | `npm run test:integration:real` / `test:e2e:real`                                    |
-| `*.local.e2e.test.ts` | E2E that needs a local-only resource                                                                          | `npm run test:integration:local` / `test:e2e:local`                                  |
+| Suffix              | What it is                                | Where it runs                                                                        |
+| ------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| `*.test.ts(x)`      | Unit test — pure, fast, no daemon         | `vitest run <file>` from the package (`cd web` for app tests)                        |
+| `*.browser.test.ts` | App test that needs a real browser (DOM)  | `npm run test:browser` (Vitest browser mode, Playwright provider, headless Chromium) |
+| `*.spec.ts`         | Playwright spec against a real daemon     | `npm run test:e2e` from `web/`                                                       |
+| `*.real.spec.ts`    | Playwright spec that hits a real provider | `npm run test:e2e:real --workspace=@bytetrue/web`                                    |
 
-The suffix table is about files Vitest runs. Not every file named `*.test.ts` is one: `packages/cli/tests/*.test.ts` are standalone `npx tsx` scripts driven by `packages/cli/tests/run-all.ts` via `npm run test:local`. They run real `byspace` commands at module top level and have no `describe`/`it`, so a runner that merely imports them executes them. That is why the root `vitest.config.ts` excludes that directory — see [Running tests locally](#running-tests-locally). Because they spawn real daemons, `npm run test:local` is a local end-to-end suite, not a unit run: inside `packages/cli`, use `npm run test:unit` or name a single file under `src/`.
+Go tests are `*_test.go`, run by `go test ./...`. `scripts/*.test.mjs` are `node --test` contract checks, run by the CI contract step — not by Vitest, which excludes them because importing one executes its assertions. See [Running tests locally](#running-tests-locally).
 
 Browser Playwright specs live in `web/e2e/browser/`. Harness code the specs share lives in `web/e2e/support/`. App Playwright specs that hit real providers use `*.real.spec.ts` and run through `npm run test:e2e:real --workspace=@bytetrue/web`; the default browser project ignores that suffix so CI does not need provider credentials.
 
-Live provider smoke tests belong in `*.real.e2e.test.ts`, not `*.test.ts`, even when guarded by environment variables. Default unit suites must use deterministic provider adapters/fakes so missing credits, auth outages, and upstream model drift do not block normal CI.
+Live provider smoke tests belong in `*.real.spec.ts`, not `*.spec.ts`, even when guarded by environment variables. Default unit suites must use deterministic provider adapters/fakes so missing credits, auth outages, and upstream model drift do not block normal CI.
 
 Codex MultiAgentV2 real tests use local Codex authentication rather than the OpenRouter-compatible test provider. OpenRouter does not accept Codex collaboration-history items on the parent follow-up request, so it cannot verify a complete native sub-agent turn.
 
@@ -175,7 +173,7 @@ Match what an element is, and scope the match to where it lives.
 
 ### Test setup
 
-- Server: `packages/server/src/test-utils/vitest-setup.ts` loads `.env.test`, sets `BYSPACE_SUPERVISED=0`, and disables Git/SSH prompts. Add new global env shims here, not in individual tests.
+- Daemon: Go tests, `go test ./...` (or `npm run test:go`). There is no JS test setup for the daemon — it left with the Node server.
 - App: `web/vitest.config.ts` resolves modules the way the build does (`@/` to `web/src`) and swaps `@xterm/addon-ligatures` for a stub, since it reads Node's `diagnostics_channel` at import. `web/vitest.setup.ts` sets `__DEV__`, gives jsdom `matchMedia` and `requestAnimationFrame`, and records `@/platform/navigation` calls instead of mounting React Router. Stubbing there is for modules that have no meaningful Node behavior — not a license to mock app code. `*.browser.test.ts(x)` files run in Chromium (the `browser` project).
 
 ## Running tests locally
@@ -183,7 +181,7 @@ Match what an element is, and scope the match to where it lives.
 Test suites in this repo are heavy. Running them in bulk freezes the machine, especially with multiple agents in parallel.
 
 - Run only the file you changed: `npx vitest run <path> --bail=1`
-- **Never invoke Vitest from the repo root with no path filter.** The root `vitest.config.ts` is shared by the packages without their own config, so a bare `npx vitest` / `npx vitest list` collects the whole repo by default. `list` imports every collected module, and some trees run code on import: `packages/cli/tests/**` are `npx tsx` standalone scripts that drive a real daemon, whose `daemon restart` resolves the default listen address and can stop the developer's live daemon on 6777. The root config excludes those trees; the exclusion is asserted by `scripts/ci-workflow.test.mjs`. This is why the rule is "pass a path", not "don't run the full suite".
+- **Never invoke Vitest from the repo root with no path filter.** The root `vitest.config.ts` is shared by the packages without their own config, so a bare `npx vitest` / `npx vitest list` collects the whole repo by default. `list` imports every collected module, and some trees run code on import: `scripts/*.test.mjs` are `node --test` files whose assertions execute the moment they load. The root config excludes those and `web/` (which has its own config). This is why the rule is "pass a path", not "don't run the full suite".
 - Picking a package directory is not enough on its own — the root config excludes `web/`, so `npx vitest run web/src/foo.test.ts` from the root finds nothing. Work inside the package (`cd web`) and name the file you changed.
 - Never run `npm run test` for a whole workspace unless asked.
 - For a broad sweep, redirect to a file and read it after: `npx vitest run <path> --bail=1 > /tmp/test-output.txt 2>&1`. Redirect rather than pipe — `... | tail -40` exits with `tail`'s status, so a run with failures exits 0, and Playwright prints the pass count _after_ the failure count, so the last line of a red run reads `44 passed`. Read the summary lines, not the last one.
@@ -227,7 +225,7 @@ Agent providers handle their own auth. Do not add auth checks, environment varia
 
 ## Real providers live only in real-provider specs
 
-Plain UI/daemon specs never boot a real agent CLI: they seed agents through the daemon's built-in mock provider (`createMockIdleAgent`), which is instant and immune to upstream CLI churn. A real CLI process belongs only in `*.real.spec.ts` (app) and `*.real.e2e.test.ts` (server), which CI runs on machines that install the CLIs. Development machines install no agent CLIs; when a plain spec hits a missing provider it fails fast with "Provider 'opencode' is not available" — that is the designed boundary, not a bug. CI is the baseline for test results; if a suite cannot run locally (missing provider), skip it locally rather than installing global CLIs.
+Plain UI/daemon specs never boot a real agent CLI: they seed agents through the daemon's built-in mock provider (`createMockIdleAgent`), which is instant and immune to upstream CLI churn. A real CLI process belongs only in `*.real.spec.ts`, which CI runs on machines that install the CLIs. Development machines install no agent CLIs; when a plain spec hits a missing provider it fails fast with "Provider 'opencode' is not available" — that is the designed boundary, not a bug. CI is the baseline for test results; if a suite cannot run locally (missing provider), skip it locally rather than installing global CLIs.
 
 Two specs deliberately keep real seeding in the plain suite (`archive-tab`, `worktree-restore`): they verify the real end-to-end archive/restore semantics that mock agents do not reproduce, matching upstream intent.
 

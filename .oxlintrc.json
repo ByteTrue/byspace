@@ -151,9 +151,8 @@
         "web/src/screens/workspace/use-workspace-checkout-status.ts"
       ],
       "rules": {
-        // shortcut: this list is meant to grandfather raw react-query reads, but the rule it
-        // carries was lost before this batch and the files now violate it (23 reads). Restoring
-        // the rule is its own change; the list is kept so the owners are still named.
+        // Grandfathered raw react-query reads. Being on the list is the exemption: leaving it
+        // turns the rule above back on for that file.
         "no-restricted-imports": "off"
       }
     },

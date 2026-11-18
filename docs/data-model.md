@@ -171,7 +171,7 @@ Terminals are live daemon state, not persisted JSON records. A terminal carries 
 
 Terminal activity contributes to the workspace status bucket **per `workspaceId`**: a working terminal drives `running` onto the workspace it carries only. Same-`cwd` siblings are untouched; terminal visibility is likewise `workspaceId`-scoped.
 
-Tab **metadata** is persisted so daemon restarts (crash, auto-update, shutdown, a sleep that took the daemon down) can restore the tabs as fresh shells: `$BYSPACE_HOME/terminals/terminals.json` holds `{id, cwd, workspaceId, name, command?, args?}` per terminal, rewritten by `packages/server/src/terminal/terminal-persistence.ts` on every membership change. On boot the daemon recreates surviving entries with their original ids; running processes and scrollback are not preserved. Records whose cwd is gone or whose workspace is archived are dropped.
+Tab **metadata** is persisted so daemon restarts (crash, auto-update, shutdown, a sleep that took the daemon down) can restore the tabs as fresh shells: `$BYSPACE_HOME/terminal-sessions.json` holds `{id, cwd, workspaceId, name, command?, args?}` per terminal, rewritten by `internal/terminal/persist.go` on every membership change. On boot the daemon recreates surviving entries with their original ids; running processes and scrollback are not preserved. Records whose cwd is gone or whose workspace is archived are dropped.
 
 ---
 

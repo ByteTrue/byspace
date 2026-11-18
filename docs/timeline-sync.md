@@ -231,7 +231,7 @@ canonical assistant prefix, it stays in the head lane. No row may be returned in
 
 ## Relevant code
 
-- Server live stream forwarding: `packages/server/src/server/session.ts`
+- Server live stream forwarding: `broadcastSessionMsg` in `internal/server/server.go:3752`
 - App sync planning: `web/src/timeline/timeline-sync-plan.ts`
 - App viewed-agent synchronization: `web/src/timeline/viewed-timeline-sync.ts`
 - App stream/timeline reducer: `web/src/timeline/session-stream-reducers.ts`

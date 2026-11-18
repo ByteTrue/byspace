@@ -36,7 +36,7 @@ Weight is applied by role:
 
 - **Screen titles** — the title in app chrome — use `<ScreenTitle>` (`web/src/components/headers/screen-title.tsx`), which renders `fontSize.base` at `fontWeight.medium`; the project beside it is plain `foregroundMuted` text, not a chip. The New workspace hero is the only larger product title; it uses `fontSize["2xl"]` (`web/src/screens/new-workspace-screen.tsx`).
 - **Structural labels** use `fontWeight.medium`. This applies to section labels above a stack of rows (`web/src/screens/agent-list.tsx`, `web/src/app/keyboard-shortcuts-dialog.tsx`), form field labels above an input inside a modal (`web/src/components/add-host-modal.tsx`, `web/src/components/pair-link-modal.tsx`), the title at the top of a modal/sheet/dialog (`web/src/widgets/adaptive-modal-sheet.tsx`, `web/src/ui/combobox.tsx`, `web/src/app/welcome-screen.tsx`), inline data emphasis on dense metadata rows (`web/src/git/diff-pane.tsx`, `web/src/components/file-explorer-pane.tsx`), and, following shadcn/ui, control labels: `<Button>` and tab labels, `<Badge>` and key-cap text, tool-call row labels, and sidebar project titles. The selected sidebar row also turns `medium`; that weight shift is half of its selection signal (§12).
-- **Content** uses `fontWeight.normal`. This applies to settings rows (`web/src/styles/settings.ts`), idle sidebar workspace titles (`web/src/sidebar/workspace-row.tsx`, `web/src/screens/agent-list.tsx`), menu items, field text, and `<SidebarCallout>` titles (`web/src/contexts/sidebar-callout.tsx`).
+- **Content** uses `fontWeight.normal`. This applies to settings rows (`web/src/components/settings/index.tsx`), idle sidebar workspace titles (`web/src/sidebar/workspace-row.tsx`, `web/src/screens/agent-list.tsx`), menu items, field text, and `<SidebarCallout>` titles (`web/src/contexts/sidebar-callout.tsx`).
 
 Control chrome is shadcn/ui's (nova style, `neutral` base colour) as installed.
 
@@ -68,7 +68,7 @@ The button is shadcn's `<Button>` (`web/src/ui/button.tsx`). Each variant has on
 
 `link` is an inline link out of the app, such as a docs link in a settings row.
 
-Sizes are shadcn's: `xs`, `sm`, `default`, `lg`, and `icon-xs` through `icon-lg` for a button that is only an icon. Pane and toolbar icon buttons are `icon-xs` (`ToolbarButton` in `web/src/ui/pane-content-toolbar.tsx`). Never shrink a control's font or padding locally to fit a context; pick the size that fits.
+Sizes are shadcn's: `xs`, `sm`, `default`, `lg`, and `icon-xs` through `icon-lg` for a button that is only an icon. Pane and toolbar icon buttons are `icon-xs` (`ToolbarButton` in `web/src/widgets/pane-content-toolbar.tsx`). Never shrink a control's font or padding locally to fit a context; pick the size that fits.
 
 An icon is a child of the button (`<Plus data-icon="inline-start" />`), and a running request is a `<Spinner data-icon="inline-start" />` with the button disabled. A clickable element wrapping text is wrong.
 
@@ -108,7 +108,7 @@ The desktop card is shadcn's `Dialog` as shipped. Footer actions sit on the righ
 
 Tooltips are shadcn's `Tooltip`, inverted against the surface. Text inside one inherits its colour; `text-foreground` there disappears into the fill.
 
-`confirmDialog` is for destructive yes/no and imperative confirmation. Promise-based: `await confirmDialog({ destructive: true, ... })`. Anything where a wrong click loses work. It opens shadcn's `AlertDialog` in the page on every platform, the desktop and Android apps included; do not call a native dialog (`window.confirm`, `window.alert`, a Wails dialog) from the page, since it looks foreign and blocks the window. Errors that interrupt a flow go through `showAlert` (`web/src/lib/alert.ts`), which is a toast.
+`confirmDialog` is for destructive yes/no and imperative confirmation. Promise-based: `await confirmDialog({ destructive: true, ... })`. Anything where a wrong click loses work. It opens shadcn's `AlertDialog` in the page on every platform, the desktop and Android apps included; do not call a native dialog (`window.confirm`, `window.alert`, a Wails dialog) from the page, since it looks foreign and blocks the window. Errors that interrupt a flow go through `showAlert` (`web/src/platform/alert.ts`), which is a toast.
 
 Three themes is `DropdownMenu`. A row's value from a short list is `Select`. Thirty hosts is `Combobox`. A label and a value is `AdaptiveModalSheet`. "Are you sure?" is `confirmDialog`.
 

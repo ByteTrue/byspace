@@ -184,34 +184,35 @@ What the binary embeds after `make build-web` drops the large raw JS is about 7.
 
 Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
 
-`npm run dev:server` builds the server-side workspace packages once, then keeps `@bytetrue/protocol` and `@bytetrue/client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
+`npm run dev:daemon` builds the Go binary and the workspace packages it embeds, then runs the daemon. If you change protocol schemas or client code afterwards, rebuild the producer before trusting runtime behavior — the daemon does not watch them.
 
 Use the named root build targets instead of remembering workspace dependency chains:
 
 ```bash
-npm run build:client       # protocol -> client
-npm run build:server-deps  # highlight -> relay -> protocol -> client
-npm run build:server       # server-deps -> server -> cli
-npm run build:app-deps     # highlight -> protocol -> client
+npm run build:client    # protocol -> client
+npm run build:app-deps  # highlight -> protocol -> client
+npm run build:relay     # relay package declarations
+make build              # the Go binary (gofmt -w formats Go; npm run format does not)
 ```
 
-Use `npm run build:server` whenever you have changed any daemon/server-facing package and need clean cross-package types or runtime behavior.
+Rebuild the owning package whenever you have changed it and need clean cross-package types or runtime behavior.
 
 For tighter loops, you can rebuild a single workspace:
 
 - Changed `packages/protocol/src/*` or `packages/client/src/*`: `npm run build:client`.
-- Changed `packages/server/src/*`, `packages/cli/src/*`, `packages/relay/src/*`, or `packages/highlight/src/*`: `npm run build:server`.
+- Changed `packages/relay/src/*` or `packages/highlight/src/*`: `npm run build:relay` / `npm run build:highlight`.
+- Changed Go code: `make build` — the change is invisible to the CLI and the e2e suite until you rebuild.
 - Changed app build dependencies: `npm run build:app-deps`.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.mjs`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run this checkout's Go CLI (`.dev/bin/byspace`, built by `make build`). The script wraps the CLI with `scripts/dev-home.mjs`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
 
 The wrapper is also a target-selection trap: `dev-home.mjs` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
 
 ```bash
 BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \
-  npx tsx packages/cli/src/index.js <command>
+  byspace <command>
 ```
 
 Setting only `BYSPACE_HOME` is not enough — `BYSPACE_LISTEN` still pulls the connection back to 6778.
