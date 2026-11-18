@@ -149,6 +149,33 @@ test("lefthook globs cover every extension the tools process", () => {
   );
 });
 
+// oxfmt handles JS/TS/JSON/MD; Go has its own formatter, and CI's format job runs `gofmt -l` over
+// main.go, internal and workers. A hook that only calls oxfmt lets Go changes commit unformatted —
+// d5519d14e reached main that way and CI went red on two files nobody had touched in that commit.
+test("lefthook checks Go formatting the way CI does", () => {
+  const hook = loadYaml(readFileSync(join(repoRoot, "lefthook.yml"), "utf8"));
+  const jobs = hook["pre-commit"].jobs;
+  const go = jobs.find((job) => /\bgofmt\b/.test(job.run ?? ""));
+  assert.ok(go, "no pre-commit job runs gofmt, so Go formatting is only caught in CI");
+  assert.match(go.glob ?? "", /\bgo\b/, "the gofmt job should be scoped to Go files");
+
+  // CI checks these roots. The hook only sees staged files, so the contract is that its glob picks
+  // up a Go file anywhere CI looks — not that it repeats the root list.
+  const ci = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  const ciRoots = ci
+    .match(/gofmt -l ([^\n"`]+)/)?.[1]
+    .trim()
+    .split(/\s+/);
+  assert.ok(ciRoots, "CI should run gofmt -l over named roots");
+  // lefthook matches a slashless glob against the basename (verified: `*.go` picked up
+  // internal/zz_gofmt_probe.go), so picomatch needs matchBase to model it.
+  const matches = picomatch(go.glob, { dot: true, matchBase: true });
+  for (const root of ciRoots) {
+    const probe = root.endsWith(".go") ? root : `${root}/probe.go`;
+    assert.ok(matches(probe), `the gofmt glob skips ${probe}, which CI checks`);
+  }
+});
+
 test("formatter and linter ignores name trees that exist", () => {
   const patterns = [...ignorePatterns(".oxfmtrc.json"), ...ignorePatterns(".oxlintrc.json")];
   const missing = [];

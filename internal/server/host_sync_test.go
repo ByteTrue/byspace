@@ -180,4 +180,3 @@ func findHostRecord(t *testing.T, records []hostsync.Record, id string) hostsync
 	t.Fatalf("no host record for %s in %+v", id, records)
 	return hostsync.Record{}
 }
-

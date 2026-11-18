@@ -393,12 +393,12 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		forge := workspace.DetectForge(ctx, base.Cwd)
 		prAuthState := workspace.ProbeForgeAuth(base.Cwd, forge)
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_status_response", map[string]any{
-			"cwd":    base.Cwd,
-			"status": prStatus,
+			"cwd":       base.Cwd,
+			"status":    prStatus,
 			"authState": string(prAuthState),
 			"forge":     forge,
-			"error":                 nil,
-			"requestId":             base.RequestID,
+			"error":     nil,
+			"requestId": base.RequestID,
 		})
 
 	case "checkout_pr_create_request":
