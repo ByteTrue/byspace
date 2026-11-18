@@ -1,13 +1,4 @@
-export const BUILTIN_PROVIDER_ICON_NAMES = [
-  "claude",
-  "codex",
-  "copilot",
-  "kiro",
-  "minimax",
-  "omp",
-  "opencode",
-  "pi",
-];
+export const BUILTIN_PROVIDER_ICON_NAMES = ["claude", "codex", "kiro", "minimax", "opencode", "pi"];
 
 export const ACP_PROVIDER_ICON_NAMES = [
   "agoragentic-acp",
@@ -17,6 +8,7 @@ export const ACP_PROVIDER_ICON_NAMES = [
   "cline",
   "codebuddy-code",
   "codewhale",
+  "copilot",
   "cortex-code",
   "corust-agent",
   "crow-cli",

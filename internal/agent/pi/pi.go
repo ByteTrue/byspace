@@ -77,19 +77,6 @@ type LaunchOptions struct {
 	Session          string
 	NoSession        bool
 	ExtensionPaths   []string
-	ExtraArgs        []string
-	// AppendSystemPrompt is omp's `--append-system-prompt`. pi injects the prompt through the
-	// integration extension instead; the two providers do not offer the same mechanism.
-	AppendSystemPrompt string
-	// NoApprove suppresses the `--approve` flag for providers that do not have it. omp rejects
-	// unknown flags outright, so sending pi's flags made it exit immediately.
-	NoApprove bool
-	// ToolDetailBuilder builds a tool card. Nil uses the shared builder.
-	//
-	// A hook rather than a name check: pi and omp both have a tool called `read`, and they put the useful
-	// fields in different places — omp's are in the result, pi's in the arguments. Deciding by name would
-	// give one of them the other's shape.
-	ToolDetailBuilder func(toolName string, args any, result any) map[string]any
 }
 
 // BuildLaunchArgs constructs the command and argument slice matching buildPiLaunch in runtime.ts.
@@ -119,9 +106,6 @@ func BuildLaunchArgs(opts LaunchOptions) (string, []string) {
 	if !hasModeFlag(argv) {
 		argv = append(argv, "--mode", mode)
 	}
-	if len(opts.ExtraArgs) > 0 {
-		argv = append(argv, opts.ExtraArgs...)
-	}
 	if opts.Model != "" && opts.Model != "default" {
 		argv = append(argv, "--model", opts.Model)
 	}
@@ -138,10 +122,7 @@ func BuildLaunchArgs(opts LaunchOptions) (string, []string) {
 			argv = append(argv, "--extension", ext)
 		}
 	}
-	if prompt := strings.TrimSpace(opts.AppendSystemPrompt); prompt != "" {
-		argv = append(argv, "--append-system-prompt", prompt)
-	}
-	if !opts.NoApprove && !hasApproveFlag(argv) {
+	if !hasApproveFlag(argv) {
 		argv = append(argv, "--approve")
 	}
 	return cmd, argv
@@ -190,16 +171,14 @@ type Session struct {
 	toolIndexByID      map[string]int
 	toolArgsByID       map[string]any
 	pendingPermissions map[string]map[string]any
-	// toolDetailBuilder is the provider's card builder; nil means the shared one.
-	toolDetailBuilder func(toolName string, args any, result any) map[string]any
-	subagents         map[string]SubagentDescriptor
-	commandWaiters    map[string]chan commandResult
-	treeEntries       map[string]string
-	ready             bool
-	cleanup           func()
-	finishWaiters     []chan error
-	eventSubscribers  map[int]func(map[string]any)
-	nextSubID         int
+	subagents          map[string]SubagentDescriptor
+	commandWaiters     map[string]chan commandResult
+	treeEntries        map[string]string
+	ready              bool
+	cleanup            func()
+	finishWaiters      []chan error
+	eventSubscribers   map[int]func(map[string]any)
+	nextSubID          int
 	// frames holds streamed updates until they go out, merged as Node merged them; an update gets its
 	// seq when it goes out, so consecutive frames carry consecutive seqs (see sdk.StreamFrames).
 	frames *sdk.StreamFrames
@@ -233,7 +212,6 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		commandWaiters:     make(map[string]chan commandResult),
 		treeEntries:        make(map[string]string),
 		eventSubscribers:   make(map[int]func(map[string]any)),
-		toolDetailBuilder:  opts.ToolDetailBuilder,
 	}
 	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	proc.OnEvent(s.handleRawEvent)
@@ -457,14 +435,10 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			status = "failed"
 		}
 		args := s.toolArgsByID[callID]
-		// omp wraps some calls in `xdev` and names the real tool in the result. Resolving it before the
-		// detail is built is what makes the card show the command or file rather than a generic row.
-		resolvedName := resolveWrappedToolName(toolName, ev["result"])
-		detail := s.buildToolDetail(resolvedName, args, ev["result"])
+		detail := s.buildToolDetail(toolName, args, ev["result"])
 		if detail == nil {
-			// The provider says this tool produces no card — omp's `todo` is one, because its task list
-			// is rendered by the todo timeline item. The placeholder was never appended (see the start
-			// handler), so there is nothing to do here.
+			// The provider says this tool produces no card. The placeholder was never appended (see
+			// the start handler), so there is nothing to do here.
 			break
 		}
 		// A command's stdout is whatever it printed — a build log, a minified bundle, a `cat` of a
@@ -478,9 +452,6 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			visible = s.sentItemLocked(idx)
 			s.timeline[idx].Item.Status = status
 			s.timeline[idx].Item.Detail = detail
-			if resolvedName != "" && resolvedName != toolName {
-				s.timeline[idx].Item.Name = resolvedName
-			}
 			if isErr {
 				s.timeline[idx].Item.Error = limitedError
 			}
@@ -1368,30 +1339,10 @@ func limitToolCall(detail map[string]any, status string, result any, failed bool
 	return limitedDetail, errorText
 }
 
-// resolveWrappedToolName unwraps a tool whose real name arrives in its result.
+// buildToolDetail builds a tool card.
 //
-// omp's `xdev` does this: the outer call is generic and `details.xdev.tool` names what actually ran. A
-// resolver function is injected rather than imported to keep this package free of provider specifics; the
-// providers package sets it at init.
-var resolveWrappedToolName = func(toolName string, result any) string { return toolName }
-
-// SetWrappedToolNameResolver installs the provider-specific unwrapper.
-//
-// Called once during package setup. It is a variable rather than an interface so the hot path — one call
-// per tool result — does not pay for a dynamic dispatch.
-func SetWrappedToolNameResolver(resolver func(toolName string, result any) string) {
-	if resolver != nil {
-		resolveWrappedToolName = resolver
-	}
-}
-
-// buildToolDetail builds a tool card, using the provider's builder when one was supplied.
-//
-// A nil detail means "this tool produces no card" — omp's todo does, because the task list has its own
-// timeline item. The caller treats nil as "skip the card" rather than as an error.
+// A nil detail means "this tool produces no card". The caller treats nil as "skip the card" rather
+// than as an error.
 func (s *Session) buildToolDetail(toolName string, args, result any) map[string]any {
-	if s.toolDetailBuilder != nil {
-		return s.toolDetailBuilder(toolName, args, result)
-	}
 	return BuildToolCallDetail(toolName, args, result)
 }

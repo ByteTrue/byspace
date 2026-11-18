@@ -1,6 +1,70 @@
-# Adding a New Provider to BySpace
+# Providers
 
-This guide walks through adding a new agent provider end-to-end. There are two integration patterns, and this doc covers both.
+BySpace launches coding agents through a small set of built-in providers and a generic ACP host for
+everything else. This doc covers how providers are wired, what the daemon can send each one, and the
+contracts an adapter must keep. To configure your own provider, see [custom-providers.md](custom-providers.md).
+
+## Built-in providers and the ACP host
+
+Four providers are built in, each with a native adapter under `internal/agent/providers/`:
+
+| Provider   | Protocol        | Adapter              | Launch                                    |
+| ---------- | --------------- | -------------------- | ----------------------------------------- |
+| `claude`   | `claude-stream` | `claude.go`          | `claude -p --output-format stream-json …` |
+| `codex`    | `codex-rpc`     | `codex.go`           | `codex app-server`                        |
+| `opencode` | `opencode-http` | `opencode.go`        | `opencode serve`                          |
+| `pi`       | `pi-rpc`        | `internal/agent/pi/` | `pi --mode rpc --approve`                 |
+
+Every other agent — GitHub Copilot, Cursor, Kimi, Kiro, Trae, and any ACP-compatible binary — connects
+through the generic ACP host (`acp.go`), not a built-in adapter. There are two ways in:
+
+- **The in-app provider catalog** (`web/src/core/data/acp-provider-catalog.ts`). Each entry is a
+  one-click install that writes an `extends: "acp"` provider config with the right `command`.
+- **Manual config**: `extends: "acp"` plus a `command` in `config.json`. See
+  [custom-providers.md](custom-providers.md#adding-a-generic-acp-provider).
+
+`GetProviderSpec` (`internal/agent/providers/driver.go`) resolves a provider id: a built-in returns its
+`ProviderSpec`; anything else falls through to a generic ACP spec (`Protocol: "acp"`,
+`DefaultArgs: ["--acp"]`). A custom provider's `command` overrides the binary and args. The dev-only
+`mock` provider registers only when `BYSPACE_NODE_ENV=development`, so the end-to-end specs have
+something that streams deterministically without a model; a packaged install never lists it.
+
+The built-in list is mirrored in `packages/protocol/src/provider-manifest.ts`
+(`AGENT_PROVIDER_DEFINITIONS`) for UI scaffolding (labels, mode icons, color tiers). The runtime values
+the agent process reports are the source of truth; the manifest is not a capability gate.
+
+## What the daemon can send each provider
+
+Each provider has its own channel for the settings the app exposes, and a channel that does not exist
+fails silently: the record changes, the UI shows the new value, and the provider keeps its default.
+This table is the inventory. When adding a provider, fill a row; when adding a setting, fill a column.
+
+|          | Model                             | Mode                                          | Thinking                   | System prompt                                                                                | Output schema               | Fast                       |
+| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------- | --------------------------- | -------------------------- |
+| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt`                                                                     | refused                     | `--settings` fastMode      |
+| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | `collaborationMode` settings; `turn/start` `developerInstructions` when no mode is available | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
+| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension                                                                          | refused                     | —                          |
+| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                                                                                     | message `format`            | —                          |
+| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                                                                                     | refused                     | —                          |
+
+Usage: every provider reports token accounting, which feeds the composer's context ring. Claude's
+"used" is the whole prompt (fresh input plus both cache buckets), OpenCode's is the sum of every bucket
+in the step, Codex reports the last request directly, and ACP returns it once per turn on the prompt
+result.
+
+A per-agent `env` is handed to the provider process (Claude, Pi, Codex, ACP). OpenCode cannot take one:
+it drives a shared `opencode serve`, so the environment is the daemon's own — and that is also the one
+provider where `BYSPACE_AGENT_ID` is missing. The BySpace identity variables are applied last, so an
+agent cannot rename itself through `env`.
+
+"refused" means the daemon fails the request instead of running the turn without it: a caller that
+asked for a JSON object and got prose would parse garbage.
+
+A mode is a launch flag on the Claude CLI, so Claude cannot change mode mid-session; Codex, OpenCode
+and ACP apply it on the next turn. Claude and Pi read model and thinking once at launch: Pi has RPC
+setters and applies them, Claude refuses the change and says to restart the agent rather than recording
+a value the process does not use. Codex carries `plan_mode` and the system prompt the same way, in
+`collaborationMode.settings.developer_instructions`.
 
 ## Provider-native session options
 
@@ -35,551 +99,292 @@ This BySpace version accepts these keys:
 
 Each provider definition owns its option schema and exact MCP preapproval mapping.
 
-## Two Integration Patterns
-
-### ACP (Agent Client Protocol) -- recommended
-
-Extend `ACPAgentClient` from `packages/server/src/server/agent/providers/acp-agent.ts`. The base class handles process spawning, stdio transport, session lifecycle, streaming, permissions, and model discovery. You provide configuration (command, modes, capabilities) and optionally override `isAvailable()` for auth checks.
-
-The only built-in ACP provider today is `copilot` (`copilot-acp-agent.ts`). `GenericACPAgentClient` (`generic-acp-agent.ts`) is also ACP-based but is used for user-defined custom providers configured via `extends: "acp"` overrides — see [docs/custom-providers.md](custom-providers.md).
-
-Copilot custom agents are exposed through ACP session config, not the slash-command list. When custom agents are available, Copilot returns a select config option with `id: "agent"` and `category: "_agent"`; BySpace maps that to the `agent` provider feature. Copilot uses the agent display name as the option value, and the blank value means the default Copilot agent.
-
-ACP permission options are rendered as ordered actions and BySpace returns the selected option's exact `optionId`. Agents can therefore encode a single-choice question as multiple options of the same allow kind. Auto-accept does not resolve those chooser requests; they always wait for the user.
-
-### Direct
-
-Implement the `AgentClient` and `AgentSession` interfaces from `agent-sdk-types.ts` yourself. This gives full control but requires you to handle process management, streaming, permissions, and session persistence from scratch.
-
-Existing direct providers: `claude` (in `providers/claude/agent.ts`), `codex` (`codex-app-server-agent.ts`), `opencode` (`opencode-agent.ts`), `pi` (`providers/pi/agent.ts`), and `omp` (`providers/omp/agent.ts`).
-
-The dev-only `mock` provider (`internal/agent/providers/mock_provider.go`) is also direct. It registers only when `BYSPACE_NODE_ENV=development`, because 76 Playwright specs create agents with `provider: "mock"` and a shipped daemon has no use for synthetic traffic. A beta install that listed "Mock Load Test" beside Claude was that gate missing. `scripts/dev-daemon.mjs` and the e2e daemon helper set the variable; nothing in a packaged install does.
-
-Claude first-party model metadata lives in `internal/agent/providers/claudemodels.go`. When adding or updating a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature gates are derived from the manifest. Do not add model-specific Claude capability lists in feature code.
-
-Claude's catalog also includes every model named in the user's Claude Code `settings.json`: `modelPicker.options`, `model`, and `env.ANTHROPIC_*_MODEL`. That is how third-party gateways (Z.AI, a local router) are selected, and why the daemon must not ship only the Anthropic manifest.
-
-OpenCode has no reliable static catalog. The daemon asks `opencode models` in the workspace and offers what OpenCode reports, because its provider list depends on the user's own config and credentials; the spec list is only a fallback when the command is unavailable. The command prints ids only, so labels come from the id and thinking variants are not offered; use OpenCode's server model listing when those become required.
-
-Provider binaries are resolved from the daemon's `PATH` plus standard install locations, including Pi's managed `~/.pi/agent/bin` and `~/.pi/agents/bin`. A desktop app does not inherit the shell `PATH`, so a provider that works in a terminal can still be missing without the standard-location search.
-
-BySpace delivers its own tools through the bundled `byspace` skill and the CLI, not through a per-provider tool catalog. A provider needs exactly one thing to participate: an agent process whose shell can run `byspace`. The daemon supplies that in the launch environment (`internal/server/agentenv.go`): `BYSPACE_HOME`, `BYSPACE_HOST`, `BYSPACE_AGENT_ID`, and the daemon's own directory prepended to `PATH`. `BYSPACE_AGENT_ID` is what makes a created agent a subagent of its caller; the CLI sends it as `callerAgentId`.
-
-A provider whose process environment is not per-agent (a shared server, for example) still gets the CLI, but the agent id is whatever the shared process carries — it cannot name its caller. That is a placement limitation, not a security one: the CLI's authority is the host's own `cli-credential`, the same principal the user's shell uses.
-
-The skill comes from `internal/server/skills/byspace/SKILL.md` and installs into `~/.agents/skills` and `~/.claude/skills` when the user selects it; nothing is installed by default. A client that reads neither has no BySpace tools.
-
-### What the daemon can actually send each provider
-
-Each provider has its own channel for the settings the app exposes, and a channel that does not
-exist fails silently: the record changes, the UI shows the new value, and the provider keeps its
-default. This table is the inventory. When adding a provider, fill a row; when adding a setting,
-fill a column.
-
-|          | Model                             | Mode                                          | Thinking                   | System prompt                                                                                | Output schema               | Fast                       |
-| -------- | --------------------------------- | --------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------- | --------------------------- | -------------------------- |
-| Claude   | `--model`                         | `--permission-mode`                           | `--effort` (low..max only) | `--append-system-prompt`                                                                     | refused                     | `--settings` fastMode      |
-| Codex    | `thread/start` + `turn/start`     | `turn/start` `approvalPolicy`/`sandboxPolicy` | `turn/start` `effort`      | `collaborationMode` settings; `turn/start` `developerInstructions` when no mode is available | `turn/start` `outputSchema` | `turn/start` `serviceTier` |
-| Pi       | `--model`                         | — (no mode list)                              | `--thinking`               | generated extension                                                                          | refused                     | —                          |
-| OMP      | argv (pi transport)               | argv                                          | argv (pi transport)        | `--append-system-prompt`                                                                     | refused                     | —                          |
-| OpenCode | message `model`                   | message `agent`                               | message `variant`          | not sent                                                                                     | message `format`            | —                          |
-| ACP      | `session/set_config_option` model | `session/set_config_option` mode              | `thought_level`            | not sent                                                                                     | refused                     | —                          |
-
-Usage: every provider reports token accounting, which feeds the composer's context ring. Claude's "used" is the whole prompt (fresh input plus both cache buckets), OpenCode's is the sum of every bucket in the step, Codex reports the last request directly, and ACP returns it once per turn on the prompt result.
-
-A per-agent `env` is handed to the provider process (Claude, Pi, OMP, Codex, ACP). OpenCode cannot take one: it drives a shared `opencode serve`, so the environment is the daemon's own — and that is also the one provider where `BYSPACE_AGENT_ID` is missing. The BySpace identity variables are applied last, so an agent cannot rename itself through `env`.
-
-"refused" means the daemon fails the request instead of running the turn without it: a caller that
-asked for a JSON object and got prose would parse garbage.
-
-A mode is a launch flag on the Claude CLI, so Claude cannot change mode mid-session; Codex,
-OpenCode and ACP apply it on the next turn. Claude and Pi read model and thinking once at launch:
-Pi has RPC setters and applies them, Claude refuses the change and says to restart the agent rather
-than recording a value the process does not use. Codex carries `plan_mode` and the system prompt
-the same way, in `collaborationMode.settings.developer_instructions`.
-
-Pi is a process-backed provider. BySpace requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
-
-BySpace's per-agent and daemon-wide system prompts are appended by its generated Pi integration extension. BySpace deliberately does not pass `--append-system-prompt`, because that flag replaces Pi's automatic `APPEND_SYSTEM.md` discovery instead of composing with it.
-
-Pi model records expose input capabilities through `model.input`. Only send raw RPC `images` when the current model explicitly includes `"image"` in that list. Text-only Pi/OMP models reject image content and persist the rejected image in JSONL history, so image prompts for those models must be materialized to a local file and passed as a text path hint instead.
-
-Pi thinking options come from each RPC model's `thinkingLevelMap`, not from a provider-wide list. Match Pi's capability rules: `off` through `high` are available unless mapped to `null`, while `xhigh` and `max` are opt-in and appear only when explicitly mapped.
-
-Pi's MCP support is built in, so BySpace registers the user's own servers from its generated integration extension with `pi.registerMcpServer(name, config)` instead of writing an MCP file or passing `--mcp-config`. BySpace no longer registers a server of its own. Each registration gets its own `try`/`catch`: Pi throws on server names it does not allow, on names another extension already owns, and on two names that collide in the same tool namespace (`a-b` and `a_b`), and a rejected server must not take down the extension's entry-capture and tree bridges. Rejected registrations are reported as warning notifications on the agent, and so is a session where nothing connected the registered servers.
-
-Nothing forces Pi to connect them: an extension that claims the `mcp` command replaces the built-in MCP support, and the built-in extension can be disabled in `pi config`. In either case `registerMcpServer` still succeeds and Pi reports the registration as an extension error, so the BySpace extension also checks `getCommands()` for a command whose `sourceInfo.path` is `builtin:mcp` on `session_start` and warns when it is absent.
-
-Send only `{ command, args?, env? }` or `{ url, headers? }`; Pi's validator rejects `auth` and `oauth` unless they are objects. BySpace sets no `exposure` or `toolExposure`, so a server keeps Pi's default and `alwaysLoad` does nothing on Pi. An `<Pi agent dir>/mcp.json` entry of the same name still takes precedence over the registration. There is no `pi-mcp-adapter` probe: `supportsMcpServers` is a static Pi capability.
-
-Pi control-plane RPCs wait 60 seconds by default. Override `params.rpcTimeoutMs` when extension or MCP startup on a slow host needs more time. Timeout errors name the pending RPC phase and report both elapsed time and the configured deadline. This setting does not govern long-running Pi compaction or Pi extension UI results. See [OMP profiles and Pi-compatible forks](custom-providers.md#omp-profiles-and-pi-compatible-forks) for OMP startup and RPC deadlines.
-
-Pi import discovery reads Pi's persisted JSONL session files because Pi RPC does not expose a recent-session listing command. Resume and full history hydration still go through `pi --mode rpc` using the session file as `nativeHandle`.
-
-Pi subagents surface through the shared provider-subagents channel (`agent.provider_subagents.*`). The session collects them from its own event stream: a finished tool call whose name starts with `subagent` carries the descriptor (`ParseSubagentDetails`, `internal/agent/pi/pi.go`), and the child's read-only timeline is a tail of the session JSONL it names. There is no side channel: nothing POSTs snapshots to the daemon, so a subagent whose events never reached the stream is simply absent until replay rebuilds it from the transcript.
-
-OMP is a first-class built-in provider, disabled by default. Its launch contract, typed runtime, agent/session behavior, history, permissions, imports, and test fake live under `providers/omp/`; only the provider-neutral JSONL child-process transport is shared with Pi. It launches `omp --mode rpc-ui`, uses OMP's `get_available_commands` RPC for slash-command discovery, bridges OMP `rpc-ui` approval dialogs into BySpace permissions, and imports terminal-started sessions from `~/.omp/agent/sessions` when enabled.
-
-OMP's provider-managed task subagents are surfaced as BySpace subagents through `child_session` imports; the parent keeps the subagents track while the child runtime stays owned by OMP. Custom OMP profiles should extend `omp`; other Pi-compatible forks can still extend `pi`, override `command`, and set `params.sessionDir` to their JSONL session directory.
-
-Pi RPC extension UI dialog requests (`select`, `input`, `editor`, `confirm`) are bridged into BySpace question permissions and answered with `extension_ui_response`. Pi extensions such as `ask_user` may chain dialogs: for example, a `select` can be followed by an optional-comment `input`. When an `ask_user` tool call declares `allowComment: true`, BySpace presents the selection and optional comment as one question permission, answers Pi's initial `select` immediately, then auto-answers the follow-up optional `input` with the comment the user already supplied (or an empty string). Preserve placeholders and optional/skip semantics for standalone optional inputs so the app can still distinguish "skip this optional input" from "cancel the whole dialog." Fire-and-forget extension UI requests such as notifications become timeline notifications; the extension's `notifyType` maps to the timeline level and an unknown value falls back to `info`.
-
-OpenCode keeps the process environment outside the session boundary. The Go daemon starts or reuses one `opencode serve` and drives it over HTTP (`internal/agent/providers/opencodepool.go`); session configuration, including `mcpServers`, arrives per session, but the environment does not. An OpenCode agent therefore inherits the daemon's environment: `byspace` works only if the daemon's own `PATH` and `BYSPACE_HOME` reach it, and `BYSPACE_AGENT_ID` names no agent. Configure custom MCP with `mcp.add`; do not follow it with `mcp.connect`, which only toggles config-backed servers.
-
-OpenCode owns user message IDs. Do not pass BySpace-generated IDs to OpenCode prompt APIs; let OpenCode create `msg*` IDs and record the user timeline item from the `message.updated` event.
-
-`AgentManager` owns the one canonical timeline row for a foreground prompt carrying a BySpace `clientMessageId`. It records that row when `startTurn` accepts, with the wire `messageId` set to the same value. Provider adapters still emit their native user-message echo with the same `clientMessageId` when available; the manager records its provider identity on the internal row without changing or redispatching the wire item. If an adapter emits the echo before `startTurn` resolves, the manager records the provider identity with the row at acceptance. Provider adapters continue to own externally initiated user rows that have no BySpace client identity. Do not perform global transcript text dedupe.
-
-Active-turn steering is an optional `AgentSession.steerActiveTurn` operation. The manager owns admission against its exact foreground turn, canonical user-message creation, echo reconciliation, and falls back to the normal interrupt-and-replace path only when the adapter reports `unavailable`. An adapter error leaves the steer's fate ambiguous and must surface without an interrupt or retry. Codex calls `turn/steer` with the native expected turn and BySpace client user-message ID. Claude pushes an admitted steer into the exact active SDK query input; isolated control commands remain unavailable. OpenCode calls `session/prompt_async` with an OpenCode-generated message ID; the server queues the prompt while busy and the next LLM call in the same BySpace turn includes it. Pi sends its native `steer` RPC, which queues the message for delivery after the in-flight assistant turn's tool calls. Slash-command inputs report `unavailable` because pi rejects extension commands on the steer path, and echo identity is correlated by message text because pi's steer RPC takes no message ID. A missing session reports `unavailable` and uses the normal interrupt fallback.
-
-A steering adapter also owes its interrupt: stopping a turn must discard the steers the provider has not read yet, or one of them resumes the turn the user just stopped. Codex clears pending input when it aborts a turn; Claude does not, so its adapter cancels the SDK messages it queued before calling `query.interrupt()`. Pi requires `clear_queue` before `abort`; older binaries without that RPC retain their native queue behavior until the pi compatibility floor reaches 0.84.4.
-
-`SteerActiveTurnOptions.clearPendingPermissions` makes permission release part of the provider contract. A provider that accepts such a steer queues it first, denies permissions blocking its delivery, and stops once the steer is read. Steers without the flag leave permissions open. A denied plan remains in the timeline because the pending card was the only other copy of its text.
-
-Rewind accepts the canonical wire `messageId` and resolves it to the provider identity before calling the adapter. A submitted prompt cannot be rewound until its provider echo supplies that identity.
-
-Submitted user-message wire items carry the same BySpace ID in `messageId` and `clientMessageId`. Provider adapters attach `clientMessageId` only to the echo for that foreground submission; provider history and externally initiated user rows do not have a BySpace client ID.
-
-Provider adapters must terminalize every transient timeline row before emitting the turn's terminal event. Codex may omit the completed `contextCompaction` item when a turn ends during compaction, so its adapter closes any pending root compaction before forwarding `turn_completed`, `turn_failed`, or `turn_canceled`. A terminal turn must never leave the client showing an operation as still loading.
-
-Draft metadata lookups should avoid creating provider sessions when the upstream provider has top-level APIs for that metadata. Prefer `AgentClient.fetchCatalog`, `listCommands`, or `listFeatures` over creating a scratch `AgentSession`; scratch sessions can show up as empty native sessions in provider import/history UIs. `fetchCatalog` is the single discovery API for models and modes — provider implementations may use one process, separate upstream calls, or static data internally, but callers outside the provider do not get separate runtime model/mode probes. Draft command listing and scratch-session feature listing require an explicit draft model. Do not resolve a default model through catalog discovery. A client-level `listFeatures` implementation may return features from an incomplete, model-less draft and owns which features are valid in that state.
-
-Provider session import has its own contract. The picker calls `listImportableSessions` and receives rows only: provider handle, cwd, title, prompt previews, and last activity. Import calls `importSession({ providerHandleId, cwd })` for the selected row and must not call listing again. The provider returns the resumed session, storage config, persistence handle, and hydrated timeline for that one native session; `AgentManager.importProviderSession` seeds the daemon timeline and publishes the BySpace agent only after it is ready.
-
-## Provider Helper Processes
-
-Provider-owned helper processes that can outlive an individual agent session must be recorded in the daemon's managed-process registry. Store provider/kind metadata, the PID, launch command/args, and process identity captured from the platform process table. Remove the record on normal exit or shutdown.
-
-If a helper process has a readiness phase, the provider's lifecycle model must own the process immediately after `spawn`, before readiness succeeds. Startup timeout, startup exit, and daemon shutdown must all clean up through that owned generation. Do not keep a spawned helper only inside a readiness promise; that creates a live process outside the manager/reaper contract.
-
-Daemon bootstrap reconciles that ledger in the background, without blocking startup: dead PIDs are deleted, PID identity mismatches are deleted without killing anything, only positively matched BySpace-owned leftovers are terminated, and a record whose process cannot be inspected is left in place for the next reconcile rather than deleted. Do not add broad process-name sweepers for provider cleanup; cleanup starts from records BySpace previously wrote.
-
----
-
-## Provider Snapshot Refresh Contract
-
-Provider snapshots are views of the catalogues needed for a target. Before looking up cached
-results or discovery in flight, the manager calls optional `AgentClient.getCatalogCacheKey(options)`.
-The provider owns equivalence: equal keys must mean the same availability, models and modes,
-including the effective configuration and execution environment. `force` does not change identity.
-Omitting the method or returning `undefined` keeps target-specific caching. Codex and Claude's
-current host clients share across directories; configured provider identities remain isolated.
-
-The key chooses storage, never execution. Availability and catalogue discovery receive the actual
-`{ scope: "global", force }` or `{ scope: "workspace", cwd, force }` request, including when another
-target can share its result. Runtime-aware adapters must use that target for both probing and key
-resolution. An explicit home-directory workspace is distinct from a semantic global request.
-
-`ProviderSnapshotManager` owns one refresh deadline per provider. The deadline starts before the
-availability check and covers that check plus the complete catalog probe. Providers that make
-multiple catalog requests must not apply this deadline separately to each request. The manager
-aborts the shared refresh signal at the deadline. Providers name active catalog operations and
-finish subprocess, server, or session cleanup before rejecting. Timeout errors list the operations
-that were still active when the deadline expired.
-
-Catalogue results stay cached by identity until explicit refresh or a change to that provider's configuration.
-Keys are resolved on each read so project configuration can select a different cached catalogue.
-Selector opening may read a loading or stale query, but does not force provider probing.
-
-Saved provider/model choices are user intent. Catalogue failure must not erase them or substitute
-another model. Creation reads the caller's host and directory directly; an earlier global snapshot
-must not settle a project form's initial selection.
-
-The server's provider keys never cross the wire. Clients advertising `provider_snapshot_references`
-receive directory-to-hash announcements; an unknown hash uses the existing snapshot request.
-The manager detaches each fresh result once and publishes its content identity with the entry;
-readers share these values read-only. Each target keeps its published snapshot until membership,
-content or discovery freshness changes. All affected targets commit before subscribers run;
-subscriber failures are logged without changing discovery or configuration outcomes.
-The session compares both sides of a committed transition under the client's current visibility
-policy and sends only visible changes. It combines result identities with the client's encoding
-and icon policy, without traversing models. Reference hashes exclude freshness;
-legacy embedded hashes include it. Only responses that send a body compact the catalogue.
-Per-provider `fetchedAt` travels separately for reference clients and still means when discovery succeeded. `generatedAt`
-remains the time the response or announcement was generated. Refresh keeps settled entries visible
-until the next result, so unchanged discovery sends freshness without another model body.
-
-The app's snapshot cache owns compact expansion and stores one body per server/hash, with separate
-directory/hash/freshness records under the same byte budget. Missing bodies share a React Query
-request; directory queries cancel superseded pulls before accepting pushes. Default SDK clients
-keep expanded entries and full updates. Only callers that own materialization opt into wire snapshots.
-Keep the full encoding for older clients; compact-snapshot support alone does not imply reference support.
-
-Settings refresh invalidates requested providers across known targets and refreshes them in their
-actual execution context, so every connected client receives the refreshed view. Discovery shares
-work by provider key and admits at most four concurrent catalogue probes per configured provider, so a stalled provider does not block discovery for others. Configuration replacement invalidates
-only changed providers; unchanged entries, clients, and discovery in flight survive. Preparation
-leaves installed reads untouched until commit. Plugin replacement uses registration runtime
-identity, so unchanged registrations and builtins keep their results. Await the refresh or warmup
-promise for completion: equal results, including equal discovery timestamps, emit no transition.
-
----
-
-## ACP Provider Checklist
-
-### 1. Create the provider class
-
-Create `packages/server/src/server/agent/providers/{name}-agent.ts`.
-
-Define capabilities, modes, and a thin subclass of `ACPAgentClient`:
-
-```ts
-import type { Logger } from "pino";
-import type { AgentCapabilityFlags, AgentMode } from "../agent-sdk-types.js";
-import type { ProviderRuntimeSettings } from "../provider-launch-config.js";
-import { ACPAgentClient } from "./acp-agent.js";
-
-const MY_PROVIDER_CAPABILITIES: AgentCapabilityFlags = {
-  supportsStreaming: true,
-  supportsSessionPersistence: true,
-  supportsDynamicModes: true,
-  supportsMcpServers: true,
-  supportsReasoningStream: true,
-  supportsToolInvocations: true,
-};
-
-const MY_PROVIDER_MODES: AgentMode[] = [
-  {
-    id: "default",
-    label: "Default",
-    description: "Standard agent mode",
-  },
-  // Add more modes as needed
-];
-
-type MyProviderClientOptions = {
-  logger: Logger;
-  runtimeSettings?: ProviderRuntimeSettings;
-};
-
-export class MyProviderACPAgentClient extends ACPAgentClient {
-  constructor(options: MyProviderClientOptions) {
-    super({
-      provider: "my-provider", // Must match the ID used everywhere else
-      logger: options.logger,
-      runtimeSettings: options.runtimeSettings,
-      defaultCommand: ["my-agent-binary", "--acp"], // CLI command to spawn
-      defaultModes: MY_PROVIDER_MODES,
-      capabilities: MY_PROVIDER_CAPABILITIES,
-    });
-  }
-
-  // Override isAvailable() if the provider needs specific auth/env vars
-  override async isAvailable(): Promise<boolean> {
-    if (!(await super.isAvailable())) {
-      return false; // Binary not found
-    }
-    return Boolean(process.env["MY_PROVIDER_API_KEY"]);
-  }
-}
-```
-
-The `super.isAvailable()` call checks that the binary from `defaultCommand` is on `$PATH`. Override only to add credential checks on top.
-
-For reference, here is how Copilot does it -- no auth override needed because the CLI handles auth itself:
-
-```ts
-export class CopilotACPAgentClient extends ACPAgentClient {
-  constructor(options: CopilotACPAgentClientOptions) {
-    super({
-      provider: "copilot",
-      logger: options.logger,
-      runtimeSettings: options.runtimeSettings,
-      defaultCommand: ["copilot", "--acp"],
-      defaultModes: COPILOT_MODES,
-      capabilities: COPILOT_CAPABILITIES,
-    });
-  }
-
-  override async isAvailable(): Promise<boolean> {
-    return super.isAvailable();
-  }
-}
-```
-
-### 2. Add to the provider manifest
-
-In `packages/server/src/server/agent/provider-manifest.ts`, add mode definitions with UI metadata (icons, color tiers) and a provider definition entry.
-
-First, define the modes with visual metadata:
-
-```ts
-const MY_PROVIDER_MODES: AgentProviderModeDefinition[] = [
-  {
-    id: "default",
-    label: "Default",
-    description: "Standard agent mode",
-    icon: "ShieldCheck",
-    colorTier: "safe",
-  },
-  {
-    id: "autonomous",
-    label: "Autonomous",
-    description: "Runs without prompting",
-    icon: "ShieldOff",
-    colorTier: "dangerous",
-  },
-];
-```
-
-Available `colorTier` values: `"safe"`, `"moderate"`, `"dangerous"`, `"planning"`.
-Available `icon` values: `"ShieldCheck"`, `"ShieldAlert"`, `"ShieldOff"`.
-
-Then add to the `AGENT_PROVIDER_DEFINITIONS` array:
-
-```ts
-export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
-  // ... existing providers ...
-  {
-    id: "my-provider",
-    label: "My Provider",
-    description: "Short description of the provider",
-    defaultModeId: "default",
-    modes: MY_PROVIDER_MODES,
-  },
-];
-```
-
-### 3. Add the factory to the provider registry
-
-In `packages/server/src/server/agent/provider-registry.ts`, import your class and add a factory entry to `PROVIDER_CLIENT_FACTORIES`:
-
-```ts
-import { MyProviderACPAgentClient } from "./providers/my-provider-agent.js";
-
-const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
-  // ... existing factories ...
-  "my-provider": (logger, runtimeSettings) =>
-    new MyProviderACPAgentClient({
-      logger,
-      runtimeSettings,
-    }),
-};
-```
-
-The factory is invoked with `(logger, runtimeSettings, options)`; `options.workspaceGitService` is also available if you need it (see the `codex` factory for an example). The registry already passes the per-provider runtime settings slice through, so you don't index into the map yourself.
-
-### 4. Add a provider icon (app)
-
-Create `web/src/core/components/icons/my-provider-icon.tsx` following the pattern from existing icons (e.g., `claude-icon.tsx`):
-
-```tsx
-interface MyProviderIconProps {
-  size?: number;
-  color?: string;
-}
-
-export function MyProviderIcon({ size = 16, color = "currentColor" }: MyProviderIconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <path d="..." />
-    </svg>
-  );
-}
-```
-
-Then register it in `web/src/core/components/provider-icons.ts` by adding an entry to the existing `PROVIDER_ICONS` map (which already covers the built-in providers):
-
-```ts
-import { MyProviderIcon } from "@/components/icons/my-provider-icon";
-
-const PROVIDER_ICONS: Record<string, typeof Bot> = {
-  // ... existing entries ...
-  "my-provider": MyProviderIcon as unknown as typeof Bot,
-};
-```
-
-If no icon is registered, `getProviderIcon()` falls back to a generic `Bot` icon from lucide.
-
-### 5. Add E2E test config
-
-In `packages/server/src/server/daemon-e2e/agent-configs.ts`, add your provider:
-
-```ts
-export const agentConfigs = {
-  // ... existing configs ...
-  "my-provider": {
-    provider: "my-provider",
-    model: "default-model-id",
-    modes: {
-      full: "autonomous", // Mode with no permission prompts
-      ask: "default", // Mode that requires permission approval
-    },
-  },
-} as const satisfies Record<string, AgentTestConfig>;
-```
-
-Add an availability check in `isProviderAvailable()`. Note `isCommandAvailable` is async, so all branches `await` it:
-
-```ts
-case "my-provider":
-  return (
-    (await isCommandAvailable("my-agent-binary")) &&
-    Boolean(process.env.MY_PROVIDER_API_KEY)
-  );
-```
-
-Add to the `allProviders` array (current built-ins are `claude`, `codex`, `copilot`, `opencode`, `pi`, `omp`):
-
-```ts
-export const allProviders: AgentProvider[] = [
-  "claude",
-  "codex",
-  "copilot",
-  "opencode",
-  "pi",
-  "my-provider",
-];
-```
-
-### 6. Run typecheck
-
-```bash
-npm run typecheck
-```
-
-This is required after every change per project rules.
-
----
-
-## Direct Provider Checklist
-
-If your agent does not speak ACP, implement the interfaces from `agent-sdk-types.ts` directly.
-
-### Interfaces to implement
-
-The interfaces below are abridged signatures — read `agent-sdk-types.ts` for the full source of truth (option bag types, generics, etc.).
-
-**`AgentClient`** -- factory for sessions and model/mode listing:
-
-```ts
-interface AgentClient {
-  readonly provider: AgentProvider;
-  readonly capabilities: AgentCapabilityFlags;
-  createSession(
-    config: AgentSessionConfig,
-    launchContext?: AgentLaunchContext,
-    options?: AgentCreateSessionOptions,
-  ): Promise<AgentSession>;
-  resumeSession(
-    handle: AgentPersistenceHandle,
-    overrides?: Partial<AgentSessionConfig>,
-    launchContext?: AgentLaunchContext,
-  ): Promise<AgentSession>;
-  fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog>;
-  isAvailable(): Promise<boolean>;
-  // Optional:
-  listImportableSessions(
-    options?: ListImportableSessionsOptions,
-  ): Promise<ImportableProviderSession[]>;
-  importSession(
-    input: ImportProviderSessionInput,
-    context: ImportProviderSessionContext,
-  ): Promise<ImportedProviderSession>;
-  getDiagnostic?(): Promise<{ diagnostic: string }>;
-}
-```
-
-**`AgentSession`** -- a running agent conversation:
-
-```ts
-interface AgentSession {
-  readonly provider: AgentProvider;
-  readonly id: string | null;
-  readonly capabilities: AgentCapabilityFlags;
-  readonly features?: AgentFeature[];
-  run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult>;
-  startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<{ turnId: string }>;
-  steerActiveTurn?(prompt: AgentPromptInput, options: SteerActiveTurnOptions): Promise<SteerResult>;
-  subscribe(callback: (event: AgentStreamEvent) => void): () => void;
-  streamHistory(): AsyncGenerator<AgentStreamEvent>;
-  getRuntimeInfo(): Promise<AgentRuntimeInfo>;
-  getAvailableModes(): Promise<AgentMode[]>;
-  getCurrentMode(): Promise<string | null>;
-  setMode(modeId: string): Promise<void | AgentProviderNotice>;
-  getPendingPermissions(): AgentPermissionRequest[];
-  respondToPermission(
-    requestId: string,
-    response: AgentPermissionResponse,
-  ): Promise<AgentPermissionResult | void>;
-  describePersistence(): AgentPersistenceHandle | null;
-  interrupt(): Promise<void>;
-  close(): Promise<void>;
-  // Optional:
-  listCommands?(): Promise<AgentSlashCommand[]>;
-  setModel?(modelId: string | null): Promise<void>;
-  setThinkingOption?(thinkingOptionId: string | null): Promise<void | AgentProviderNotice>;
-  setFeature?(featureId: string, value: unknown): Promise<void>;
-  tryHandleOutOfBand?(prompt: AgentPromptInput): {
-    run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void>;
-  } | null;
-}
-```
-
-`setMode` and `setThinkingOption` may return an `AgentProviderNotice` when the provider knows the change needs user-facing context. For example, providers that stage changes until the next turn should return an `info` notice while a turn is already running. The app renders the notice generically as a toast; provider-specific lifecycle behavior stays in the provider implementation.
-
-### Steps
-
-1. Create `packages/server/src/server/agent/providers/{name}-agent.ts` implementing both interfaces
-2. Add to the provider manifest (same as ACP step 2 above)
-3. Add factory to the registry (same as ACP step 3 above)
-4. Add icon (same as ACP step 4 above)
-5. Add E2E config (same as ACP step 5 above)
-6. Run typecheck
-
----
-
-## Testing
-
-### Manual testing with the CLI
-
-Start the daemon if not already running, then:
-
-```bash
-# Launch an agent with your provider
-byspace run --provider my-provider
-
-# Launch with a specific model and mode
-byspace run --provider my-provider --model some-model --mode default
-
-# List running agents
-byspace ls -a -g
-
-# Check if the provider reports models
-byspace models --provider my-provider
-```
-
-### E2E test patterns
-
-The E2E configs in `agent-configs.ts` expose two helpers:
-
-- `getFullAccessConfig(provider)` -- returns config for a session with no permission prompts
-- `getAskModeConfig(provider)` -- returns config for a session that triggers permission requests
-
-Tests use `isProviderAvailable(provider)` to skip when the binary or credentials are missing, so CI will not fail for providers that are not installed.
-
----
+## Provider-specific notes
+
+### Claude
+
+First-party model metadata lives in `internal/agent/providers/claudemodels.go`. When adding or updating
+a Claude model, update that manifest only; the model picker thinking options and Claude-specific feature
+gates are derived from it. Do not add model-specific Claude capability lists in feature code.
+
+Claude's catalog also includes every model named in the user's Claude Code `settings.json`:
+`modelPicker.options`, `model`, and `env.ANTHROPIC_*_MODEL`. That is how third-party gateways (Z.AI, a
+local router) are selected, and why the daemon must not ship only the Anthropic manifest.
+
+### Pi
+
+Pi is process-backed: BySpace requires the `pi` binary and talks to it through `pi --mode rpc`; the
+daemon does not embed Pi's SDK/runtime packages.
+
+BySpace's per-agent and daemon-wide system prompts are appended by its generated Pi integration
+extension (`pi.WriteIntegrationExtension`). BySpace deliberately does not pass
+`--append-system-prompt`, because that flag replaces Pi's automatic `APPEND_SYSTEM.md` discovery
+instead of composing with it. The extension is also what makes rewind possible: pi exposes entry
+capture and tree navigation only through extensions.
+
+Pi model records expose input capabilities through `model.input`. Only send raw RPC `images` when the
+current model explicitly includes `"image"` in that list. Text-only Pi models reject image content and
+persist the rejected image in JSONL history, so image prompts for those models must be materialized to
+a local file and passed as a text path hint instead.
+
+Pi thinking options come from each RPC model's `thinkingLevelMap`, not from a provider-wide list. Match
+Pi's capability rules: `off` through `high` are available unless mapped to `null`, while `xhigh` and
+`max` are opt-in and appear only when explicitly mapped.
+
+Pi's MCP support is built in, so BySpace registers the user's own servers from its generated integration
+extension with `pi.registerMcpServer(name, config)` instead of writing an MCP file or passing
+`--mcp-config`. BySpace no longer registers a server of its own. Each registration gets its own
+`try`/`catch`: Pi throws on server names it does not allow, on names another extension already owns, and
+on two names that collide in the same tool namespace (`a-b` and `a_b`), and a rejected server must not
+take down the extension's entry-capture and tree bridges. Rejected registrations are reported as warning
+notifications on the agent, and so is a session where nothing connected the registered servers.
+
+Nothing forces Pi to connect them: an extension that claims the `mcp` command replaces the built-in MCP
+support, and the built-in extension can be disabled in `pi config`. In either case `registerMcpServer`
+still succeeds and Pi reports the registration as an extension error, so the BySpace extension also
+checks `getCommands()` for a command whose `sourceInfo.path` is `builtin:mcp` on `session_start` and
+warns when it is absent.
+
+Send only `{ command, args?, env? }` or `{ url, headers? }`; Pi's validator rejects `auth` and `oauth`
+unless they are objects. BySpace sets no `exposure` or `toolExposure`, so a server keeps Pi's default and
+`alwaysLoad` does nothing on Pi. An `<Pi agent dir>/mcp.json` entry of the same name still takes
+precedence over the registration. There is no `pi-mcp-adapter` probe: `supportsMcpServers` is a static
+Pi capability.
+
+Pi control-plane RPCs wait 60 seconds by default. Override `params.rpcTimeoutMs` when extension or MCP
+startup on a slow host needs more time. Timeout errors name the pending RPC phase and report both elapsed
+time and the configured deadline. This setting does not govern long-running Pi compaction or Pi extension
+UI results.
+
+Pi import discovery reads Pi's persisted JSONL session files because Pi RPC does not expose a
+recent-session listing command. Resume and full history hydration still go through `pi --mode rpc` using
+the session file as `nativeHandle`.
+
+Pi subagents surface through the shared provider-subagents channel (`agent.provider_subagents.*`). The
+session collects them from its own event stream: a finished tool call whose name starts with `subagent`
+carries the descriptor (`ParseSubagentDetails`, `internal/agent/pi/pi.go`), and the child's read-only
+timeline is a tail of the session JSONL it names. There is no side channel: nothing POSTs snapshots to the
+daemon, so a subagent whose events never reached the stream is simply absent until replay rebuilds it from
+the transcript.
+
+Pi RPC extension UI dialog requests (`select`, `input`, `editor`, `confirm`) are bridged into BySpace
+question permissions and answered with `extension_ui_response`. Pi extensions such as `ask_user` may chain
+dialogs: a `select` can be followed by an optional-comment `input`. When an `ask_user` tool call declares
+`allowComment: true`, BySpace presents the selection and optional comment as one question permission,
+answers Pi's initial `select` immediately, then auto-answers the follow-up optional `input` with the
+comment the user already supplied (or an empty string). Preserve placeholders and optional/skip semantics
+for standalone optional inputs so the app can still distinguish "skip this optional input" from "cancel
+the whole dialog." Fire-and-forget extension UI requests such as notifications become timeline
+notifications; the extension's `notifyType` maps to the timeline level and an unknown value falls back to
+`info`.
+
+### OpenCode
+
+OpenCode has no reliable static catalog. The daemon asks `opencode models` in the workspace and offers
+what OpenCode reports, because its provider list depends on the user's own config and credentials; the
+spec list is only a fallback when the command is unavailable. The command prints ids only, so labels come
+from the id and thinking variants are not offered; use OpenCode's server model listing when those become
+required.
+
+OpenCode keeps the process environment outside the session boundary. The Go daemon starts or reuses one
+`opencode serve` and drives it over HTTP (`internal/agent/providers/opencodepool.go`); session
+configuration, including `mcpServers`, arrives per session, but the environment does not. An OpenCode agent
+therefore inherits the daemon's environment: `byspace` works only if the daemon's own `PATH` and
+`BYSPACE_HOME` reach it, and `BYSPACE_AGENT_ID` names no agent. Configure custom MCP with `mcp.add`; do not
+follow it with `mcp.connect`, which only toggles config-backed servers.
+
+OpenCode owns user message IDs. Do not pass BySpace-generated IDs to OpenCode prompt APIs; let OpenCode
+create `msg*` IDs and record the user timeline item from the `message.updated` event.
+
+### ACP
+
+ACP agents communicate over JSON-RPC 2.0 on stdio. BySpace spawns the agent process and talks to it
+through stdin/stdout (`acp.go`). ACP permission options are rendered as ordered actions and BySpace
+returns the selected option's exact `optionId`. Agents can therefore encode a single-choice question as
+multiple options of the same allow kind. Auto-accept does not resolve those chooser requests; they always
+wait for the user.
+
+Some ACP agents expose custom agents through session config rather than the slash-command list: a select
+config option with `id: "agent"` and `category: "_agent"`. BySpace maps that to the `agent` provider
+feature, using the display name as the option value; the blank value means the agent's default.
+
+BySpace tools do not reach an ACP agent automatically. The daemon gives ACP sessions an empty
+`mcpServers` array, and the bundled skill is only readable if the client reads `~/.agents/skills` or
+`~/.claude/skills`. ACP agents execute filesystem operations in their own environment by default while
+terminal operations run through BySpace on the host; `params.clientCapabilities` tunes which operations
+BySpace handles (see [custom-providers.md](custom-providers.md#acp-providers)).
+
+## BySpace tools and the launch environment
+
+BySpace delivers its own tools through the bundled `byspace` skill and the CLI, not through a per-provider
+tool catalog. A provider needs exactly one thing to participate: an agent process whose shell can run
+`byspace`. The daemon supplies that in the launch environment (`internal/server/agentenv.go`):
+`BYSPACE_HOME`, `BYSPACE_HOST`, `BYSPACE_AGENT_ID`, and the daemon's own directory prepended to `PATH`.
+`BYSPACE_AGENT_ID` is what makes a created agent a subagent of its caller; the CLI sends it as
+`callerAgentId`.
+
+A provider whose process environment is not per-agent (a shared server, for example) still gets the CLI,
+but the agent id is whatever the shared process carries — it cannot name its caller. That is a placement
+limitation, not a security one: the CLI's authority is the host's own `cli-credential`, the same principal
+the user's shell uses.
+
+The skill comes from `internal/server/skills/byspace/SKILL.md` and installs into `~/.agents/skills` and
+`~/.claude/skills` when the user selects it; nothing is installed by default. A client that reads neither
+has no BySpace tools.
+
+Provider binaries are resolved from the daemon's `PATH` plus standard install locations, including Pi's
+managed `~/.pi/agent/bin` and `~/.pi/agents/bin`. A desktop app does not inherit the shell `PATH`, so a
+provider that works in a terminal can still be missing without the standard-location search.
+
+## Turn contracts
+
+The daemon owns the canonical timeline and the turn lifecycle; adapters own the provider's native events.
+These contracts hold for every adapter.
+
+The daemon owns the one canonical timeline row for a foreground prompt carrying a BySpace
+`clientMessageId`. It records that row when the turn is accepted, with the wire `messageId` set to the same
+value. Provider adapters still emit their native user-message echo with the same `clientMessageId` when
+available; the daemon records its provider identity on the internal row without changing or redispatching
+the wire item. Provider adapters continue to own externally initiated user rows that have no BySpace client
+identity. Do not perform global transcript text dedupe. Submitted user-message wire items carry the same
+BySpace ID in `messageId` and `clientMessageId`; provider history and externally initiated user rows do not
+have a BySpace client ID.
+
+Active-turn steering is optional. The daemon owns admission against its exact foreground turn, canonical
+user-message creation, and echo reconciliation, and falls back to the normal interrupt-and-replace path
+only when the adapter reports `unavailable`. An adapter error leaves the steer's fate ambiguous and must
+surface without an interrupt or retry. Codex calls `turn/steer` with the native expected turn and BySpace
+client user-message ID. Claude pushes an admitted steer into the exact active SDK query input; isolated
+control commands remain unavailable. OpenCode calls `session/prompt_async` with an OpenCode-generated
+message ID; the server queues the prompt while busy and the next LLM call in the same BySpace turn includes
+it. Pi sends its native `steer` RPC, which queues the message for delivery after the in-flight assistant
+turn's tool calls. Slash-command inputs report `unavailable` because pi rejects extension commands on the
+steer path, and echo identity is correlated by message text because pi's steer RPC takes no message ID. A
+missing session reports `unavailable` and uses the normal interrupt fallback.
+
+A steering adapter also owes its interrupt: stopping a turn must discard the steers the provider has not
+read yet, or one of them resumes the turn the user just stopped. Codex clears pending input when it aborts a
+turn; Claude does not, so its adapter cancels the SDK messages it queued before calling `query.interrupt()`.
+Pi requires `clear_queue` before `abort`.
+
+`clearPendingPermissions` makes permission release part of the provider contract. A provider that accepts
+such a steer queues it first, denies permissions blocking its delivery, and stops once the steer is read.
+Steers without the flag leave permissions open. A denied plan remains in the timeline because the pending
+card was the only other copy of its text.
+
+Rewind accepts the canonical wire `messageId` and resolves it to the provider identity before calling the
+adapter. A submitted prompt cannot be rewound until its provider echo supplies that identity.
+
+Provider adapters must terminalize every transient timeline row before emitting the turn's terminal event.
+Codex may omit the completed `contextCompaction` item when a turn ends during compaction, so its adapter
+closes any pending root compaction before forwarding `turn_completed`, `turn_failed`, or `turn_canceled`. A
+terminal turn must never leave the client showing an operation as still loading.
+
+Draft metadata lookups should avoid creating provider sessions when the upstream provider has top-level
+APIs for that metadata. Prefer catalog, command, and feature listing over creating a scratch session;
+scratch sessions can show up as empty native sessions in provider import/history UIs. Do not resolve a
+default model through catalog discovery.
+
+Provider session import has its own contract. The picker lists importable sessions and receives rows only:
+provider handle, cwd, title, prompt previews, and last activity. Import takes the selected row and must not
+list again. The provider returns the resumed session, storage config, persistence handle, and hydrated
+timeline for that one native session; the daemon seeds the timeline and publishes the BySpace agent only
+after it is ready.
+
+## Provider helper processes
+
+Provider-owned helper processes that can outlive an individual agent session must be recorded in the
+daemon's managed-process registry. Store provider/kind metadata, the PID, launch command/args, and process
+identity captured from the platform process table. Remove the record on normal exit or shutdown.
+
+If a helper process has a readiness phase, the provider's lifecycle model must own the process immediately
+after `spawn`, before readiness succeeds. Startup timeout, startup exit, and daemon shutdown must all clean
+up through that owned generation. Do not keep a spawned helper only inside a readiness promise; that creates
+a live process outside the manager/reaper contract.
+
+Daemon bootstrap reconciles that ledger in the background, without blocking startup: dead PIDs are deleted,
+PID identity mismatches are deleted without killing anything, only positively matched BySpace-owned
+leftovers are terminated, and a record whose process cannot be inspected is left in place for the next
+reconcile rather than deleted. Do not add broad process-name sweepers for provider cleanup; cleanup starts
+from records BySpace previously wrote.
+
+## Provider snapshot refresh
+
+Provider snapshots are views of the catalogs needed for a target. The daemon caches them by provider key
+and refreshes on demand (`internal/server/provider_catalog.go`). A refresh has one deadline per provider
+(30 seconds) covering availability plus the complete catalog probe; a stalled provider does not block
+discovery for others.
+
+The wire envelope carries `snapshotHash` (a fingerprint of the entries), `compactSnapshot` (the same catalog
+with thinking-option lists deduped), `fetchedAt` (per-provider discovery time), and `generatedAt`. A client
+sends `ifNoneMatch` with the last hash it holds; when it matches, the daemon replies `notModified` with the
+hash and freshness but no body, and the client reuses its cached catalog. The app's provider cache owns
+compact expansion and stores one body per hash.
+
+Saved provider/model choices are user intent. Catalogue failure must not erase them or substitute another
+model. Creation reads the caller's host and directory directly; an earlier global snapshot must not settle a
+project form's initial selection. Settings refresh invalidates requested providers across known targets and
+refreshes them in their actual execution context, so every connected client receives the refreshed view.
+Configuration replacement invalidates only changed providers; unchanged entries and discovery in flight
+survive.
+
+## Adding a provider
+
+Most agents need no Go code: add an `extends: "acp"` config (or a catalog entry) and the generic ACP host
+launches them. See [custom-providers.md](custom-providers.md).
+
+A new **built-in** provider needs a native adapter:
+
+1. Add a `ProviderSpec` to `BuiltinProviders` in `internal/agent/providers/driver.go` (id, label, binary,
+   default args, protocol, modes, features, models) and mirror it in
+   `packages/protocol/src/provider-manifest.ts` (`AGENT_PROVIDER_DEFINITIONS`).
+2. Implement the session. A session satisfies the `ManagedSession` interface
+   (`internal/agent/providers/driver.go`): status, timeline, prompt/steer/abort, permissions, model and
+   thinking setters, commands, subagents, and the event subscription. Wire it into the `switch spec.Protocol`
+   in `StartProviderSession`, or reuse an existing protocol (`acp`, `pi-rpc`, …).
+3. Add a provider icon under `web/src/core/components/icons/` and register it in
+   `web/src/core/components/provider-icons.ts`. Without one, the UI falls back to a generic `Bot` icon.
+4. Run `npm run typecheck` and `npm run audit` (the Go parity checks catch a field the daemon does not parse
+   or does not send).
 
 ## Gotchas
 
-**Mode IDs can be URIs.** ACP providers like Copilot use full URIs as mode IDs (e.g., `"https://agentclientprotocol.com/protocol/session-modes#agent"`). Never assume mode IDs are simple strings. The manifest `defaultModeId` must match exactly.
+**Mode IDs can be URIs.** ACP providers use full URIs as mode IDs (e.g.,
+`"https://agentclientprotocol.com/protocol/session-modes#agent"`). Never assume mode IDs are simple strings.
+The manifest `defaultModeId` must match exactly.
 
-**Models and modes are discovered dynamically.** ACP providers report available models and modes at runtime via the protocol. The static definitions in `provider-manifest.ts` are used for UI scaffolding (icons, color tiers) but the runtime values from the agent process are the source of truth.
+**Models and modes are discovered dynamically.** ACP providers report available models and modes at runtime
+via the protocol. The static definitions in `provider-manifest.ts` are UI scaffolding (icons, color tiers);
+the runtime values from the agent process are the source of truth.
 
-**`AgentProvider` is always `string`.** The type alias is `type AgentProvider = string`. Provider IDs are validated against the manifest at runtime, not at the type level.
+**Provider IDs are strings.** IDs are validated against the manifest at runtime, not at the type level.
 
-**Auth patterns vary.** Some providers need API keys in env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), some use OAuth tokens (`CLAUDE_CODE_OAUTH_TOKEN`), some use auth files (`~/.codex/auth.json`), and some handle auth entirely in their CLI binary (Copilot). Your `isAvailable()` method should check whatever is needed.
+**Auth patterns vary.** Some providers need API keys in env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`),
+some use OAuth tokens (`CLAUDE_CODE_OAUTH_TOKEN`), some use auth files (`~/.codex/auth.json`), and some handle
+auth entirely in their CLI binary (Copilot). Availability checks should test whatever is needed.
 
-**The manifest mode list and the agent class mode list are separate.** The manifest in `provider-manifest.ts` includes UI metadata (`icon`, `colorTier`). The agent class defines modes without UI metadata (just `id`, `label`, `description`). Keep them in sync.
+**The command is overridable.** Users can configure custom binary paths or environment variables per provider
+(`command`, `env` in config). The daemon launches the configured command, not the spec default.
 
-**`defaultCommand` is a tuple.** The first element is the binary name, the rest are default arguments. The base class uses this to find the executable and spawn the process.
+**Session-scoped cancellation needs a stop boundary inside the provider.** Some agents cancel the whole
+session rather than one turn — OpenCode's `session.abort` is the example. A cancel that is still in flight
+when the next run starts will kill that replacement run, which is what makes "stop, then immediately prompt
+again" (`replaceRunning`, `notifyOnFinish` wakes, schedules) flaky. Own this in the provider session, not in
+the daemon:
 
-**Runtime settings can override the command.** Users can configure custom binary paths or environment variables per provider via `ProviderRuntimeSettings`. Your factory in the registry should pass `runtimeSettings?.["your-provider"]` through to the constructor.
-
-**Session-scoped cancellation needs a stop boundary inside the provider.** Some agents cancel the whole session rather than one turn — OpenCode's `session.abort` is the example. A cancel that is still in flight when the next run starts will kill that replacement run, which is what makes "stop, then immediately prompt again" (`replaceRunning`, `notifyOnFinish` wakes, schedules) flaky. Own this in the provider session, not in `AgentManager`:
-
-- Model the stop as an explicit `stopping` turn-state variant carrying the canceled run's terminal and the cancellation the caller is still owed. Pressing Stop again retries the stop already in progress rather than opening a second one; never fire a detached retry, it will outlive its boundary.
-- **Scope the cancel settlement the way the provider scopes the cancel.** If cancellation is session-scoped, so is its settlement: track it on the session, accumulating every request issued, and let it outlive the stop that issued it. A request still in flight lands on the runner whenever the server gets to it — however many stops have come and gone since. Scoping it to the current stop looks right and quietly drops older requests from the gate. Only the newest may hold the gate closed, since recovering from a failed cancel is what pressing Stop again is for.
-- Gate the operations **the daemon issues** (prompt, slash command, summarize) on both the terminal and cancel settlement. Permission and question responses are not runner operations and must stay outside the gate, or an auto-approve deadlocks the stop. Runs the _provider_ starts on its own — plugin or autonomous wakes — are observed, not gated: the daemon does not choose when they begin, and holding their events back does not protect them from a cancel already in flight, it only hides a run that may already be dead.
-- Fail closed: if the cancel never succeeded you never proved the run stopped, so refuse new runs until the next Stop issues a fresh cancel. `AgentManager` already turns a rejected `interrupt()` into a refused cancel.
-- Suppress the canceled run's residue only until its authoritative terminal. Anything the provider publishes after that terminal is a new run by construction and must take the normal live path — buffering it and replaying it later is how autonomous/plugin wakes get lost.
+- Model the stop as an explicit `stopping` turn-state variant carrying the canceled run's terminal and the
+  cancellation the caller is still owed. Pressing Stop again retries the stop already in progress rather than
+  opening a second one; never fire a detached retry, it will outlive its boundary.
+- Scope the cancel settlement the way the provider scopes the cancel. If cancellation is session-scoped, so is
+  its settlement: track it on the session, accumulating every request issued, and let it outlive the stop that
+  issued it. A request still in flight lands on the runner whenever the server gets to it — however many stops
+  have come and gone since. Only the newest may hold the gate closed, since recovering from a failed cancel is
+  what pressing Stop again is for.
+- Gate the operations the daemon issues (prompt, slash command, summarize) on both the terminal and cancel
+  settlement. Permission and question responses are not runner operations and must stay outside the gate, or an
+  auto-approve deadlocks the stop. Runs the provider starts on its own — autonomous wakes — are observed, not
+  gated: the daemon does not choose when they begin.
+- Fail closed: if the cancel never succeeded you never proved the run stopped, so refuse new runs until the next
+  Stop issues a fresh cancel.
+- Suppress the canceled run's residue only until its authoritative terminal. Anything the provider publishes
+  after that terminal is a new run by construction and must take the normal live path.

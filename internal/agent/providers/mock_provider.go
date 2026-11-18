@@ -217,9 +217,9 @@ func ResolveMockModel(modelID string) MockModel {
 	return MockModelList()[0]
 }
 
-// TestProviders are addressable providers that are not part of the product's six built-ins.
+// TestProviders are addressable providers that are not part of the product's four built-ins.
 //
-// Keeping them out of BuiltinProviders preserves "the product ships six providers" while still
+// Keeping them out of BuiltinProviders preserves "the product ships four providers" while still
 // letting the end-to-end specs create agents with `provider: "mock"`.
 var TestProviders = []ProviderSpec{MockProvider}
 

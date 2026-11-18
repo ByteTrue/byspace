@@ -101,6 +101,15 @@ const CATALOG_DATA = [
     command: ["corust-agent-acp"],
   },
   {
+    id: "copilot",
+    title: "GitHub Copilot",
+    description: "GitHub's AI pair programmer, via the Copilot CLI's native ACP mode",
+    version: "manual",
+    iconId: "github-copilot-cli",
+    installLink: "https://github.com/features/copilot/cli/",
+    command: ["copilot", "--acp"],
+  },
+  {
     id: "crow-cli",
     title: "crow-cli",
     description: "Minimal ACP Native Coding Agent",

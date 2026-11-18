@@ -49,7 +49,7 @@ catalog probe. `BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS` sets it when the config fie
 
 ## Extending a built-in provider
 
-Use `extends` to create a new provider entry that inherits from a built-in provider (claude, codex, copilot, opencode, pi, omp). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
+Use `extends` to create a new provider entry that inherits from a built-in provider (claude, codex, opencode, pi). The new provider gets its own entry in the provider list, with its own label, environment, and model definitions.
 
 ```json
 {
@@ -363,50 +363,9 @@ Override the command used to launch any provider with the `command` field. This 
 
 The `command` array completely replaces the default command for that provider. The binary must exist on the system — BySpace checks for its availability and will mark the provider as unavailable if not found.
 
-### OMP profiles and Pi-compatible forks
+### Pi-compatible forks
 
-OMP ships as a first-class built-in provider option. It is disabled by default; enable it with:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "omp": { "enabled": true }
-    }
-  }
-}
-```
-
-Custom OMP profiles should extend `omp`. They inherit the OMP adapter's `rpc-ui` approvals, native BySpace host tools, provider-managed subagents, and import behavior:
-
-```json
-{
-  "agents": {
-    "providers": {
-      "omp-work": {
-        "extends": "omp",
-        "label": "Oh My Pi (Work)",
-        "command": ["omp"],
-        "env": {
-          "XDG_CONFIG_HOME": "~/.config/omp-work",
-          "XDG_STATE_HOME": "~/.local/state/omp-work"
-        },
-        "params": {
-          "sessionDir": "~/.local/state/omp-work/omp/agent/sessions",
-          "rpcTimeoutMs": 60000,
-          "smolModel": "openai/gpt-5-mini",
-          "slowModel": "anthropic/claude-opus-4-1",
-          "planModel": "openai/o3"
-        }
-      }
-    }
-  }
-}
-```
-
-`params.sessionDir` is used only for importing sessions that were started outside BySpace. If `command` or XDG env vars move OMP's state directory, set `params.sessionDir` to the resulting OMP JSONL session directory; launching and resuming still go through the configured command. OMP waits 20 seconds for its initial `ready` frame and 60 seconds for later control-plane RPCs by default. `params.rpcTimeoutMs` overrides both deadlines.
-
-For other providers that keep Pi's `--mode rpc` API but write sessions somewhere else, extend `pi`, replace the command, and provide the JSONL session directory:
+For providers that keep Pi's `--mode rpc` API but write sessions somewhere else, extend `pi`, replace the command, and provide the JSONL session directory:
 
 ```json
 {
@@ -438,14 +397,14 @@ Set `enabled: false` to hide a provider from the provider list. The provider wil
 {
   "agents": {
     "providers": {
-      "copilot": { "enabled": false },
-      "codex": { "enabled": false }
+      "codex": { "enabled": false },
+      "pi": { "enabled": false }
     }
   }
 }
 ```
 
-This works for both built-in and custom providers. To re-enable, set `enabled: true` or remove the `enabled` field entirely. Most providers are enabled by default; OMP is intentionally disabled by default and requires `enabled: true`.
+This works for both built-in and custom providers. To re-enable, set `enabled: true` or remove the `enabled` field entirely. All built-in providers are enabled by default.
 
 ---
 
@@ -729,7 +688,7 @@ Use `disallowedTools` to disable unsupported tools:
 
 ### Valid `extends` values
 
-Built-in providers: `claude`, `codex`, `copilot`, `opencode`, `pi`, `omp`
+Built-in providers: `claude`, `codex`, `opencode`, `pi`
 
 Special value: `acp` — creates a generic ACP provider (requires `command`)
 
@@ -742,7 +701,7 @@ A config.json with multiple custom providers:
   "version": 1,
   "agents": {
     "providers": {
-      "copilot": { "enabled": false },
+      "codex": { "enabled": false },
 
       "zai": {
         "extends": "claude",

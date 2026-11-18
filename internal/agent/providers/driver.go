@@ -13,7 +13,7 @@ import (
 )
 
 // ManagedSession is the unified runtime interface implemented by every agent provider host
-// (Pi, OMP, Claude Code, Codex app-server, ACP family: Copilot/Cursor/Kimi/Kiro/Trae/Generic, and OpenCode).
+// (Pi, Claude Code, Codex app-server, OpenCode, and any ACP agent).
 type ManagedSession interface {
 	Status() string
 	Timeline() []sdk.TimelineEntry
@@ -79,24 +79,7 @@ type ProviderSpec struct {
 	Modes         []ModeDefinition
 	Features      []FeatureDefinition
 	Models        []sdk.CatalogModel
-	// EnabledByDefault is the value the provider switch starts at on a home that has never
-	// configured it. Nil means true: only a provider the product wants off until opted into needs
-	// to say so, and the protocol manifest expresses the same default by omitting the field at all.
-	//
-	// A pointer rather than a bool so "unset" stays distinguishable from an explicit false.
-	EnabledByDefault *bool
 }
-
-// enabledByDefault resolves the field above, defaulting to true.
-func (spec ProviderSpec) enabledByDefault() bool {
-	if spec.EnabledByDefault == nil {
-		return true
-	}
-	return *spec.EnabledByDefault
-}
-
-// boolPtr is the pointer literal the manifest entries need.
-func boolPtr(value bool) *bool { return &value }
 
 var builtinThinkingOptions = []sdk.ThinkingOption{
 	{ID: "off", Label: "Off"},
@@ -105,10 +88,10 @@ var builtinThinkingOptions = []sdk.ThinkingOption{
 	{ID: "high", Label: "High"},
 }
 
-// BuiltinProviders lists the 6 core built-in agent providers matching AGENT_PROVIDER_DEFINITIONS
-// in @bytetrue/protocol/provider-manifest (Claude, Codex, Copilot, OpenCode, Pi, Oh My Pi).
-// Additional ACP or derived providers (Cursor, Kimi, Kiro, Trae, Z.AI, Qwen, etc.) are opt-in
-// via "+ Add provider" in config.json (extends: "acp" | <builtin>).
+// BuiltinProviders lists the 4 core built-in agent providers matching AGENT_PROVIDER_DEFINITIONS
+// in @bytetrue/protocol/provider-manifest (Claude, Codex, OpenCode, Pi). Every other agent —
+// Copilot, Oh My Pi, Cursor, Kimi, Kiro, Trae, Z.AI, Qwen, etc. — is opt-in via "+ Add provider"
+// in config.json (extends: "acp" | <builtin>), speaking ACP through the generic host.
 var BuiltinProviders = []ProviderSpec{
 	{
 		ID:            "claude",
@@ -158,25 +141,6 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
-		ID:            "copilot",
-		Label:         "Copilot",
-		Description:   "GitHub's AI pair programmer with agentic capabilities",
-		Binary:        "copilot",
-		DefaultArgs:   []string{"--acp"},
-		Protocol:      "acp",
-		DefaultModeID: "https://agentclientprotocol.com/protocol/session-modes#agent",
-		Modes: []ModeDefinition{
-			{ID: "https://agentclientprotocol.com/protocol/session-modes#agent", Label: "Agent", Description: "Default agent mode for conversational interactions", Icon: "Shield", ColorTier: "moderate"},
-			{ID: "https://agentclientprotocol.com/protocol/session-modes#plan", Label: "Plan", Description: "Plan mode for creating and executing multi-step plans", Icon: "ShieldEllipsis", ColorTier: "planning"},
-			{ID: "allow-all", Label: "Allow All", Description: "Automatically approves all Copilot tool, path, and URL requests.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
-		},
-		Features: []FeatureDefinition{},
-		Models: []sdk.CatalogModel{
-			{ID: "claude-sonnet-4.5", Label: "Claude Sonnet 4.5", Provider: "copilot", IsDefault: true, IsSelectable: true},
-			{ID: "gpt-5", Label: "GPT-5", Provider: "copilot", IsSelectable: true},
-		},
-	},
-	{
 		ID:            "opencode",
 		Label:         "OpenCode",
 		Description:   "Open-source coding assistant with multi-provider model support",
@@ -204,80 +168,9 @@ var BuiltinProviders = []ProviderSpec{
 		Features:    []FeatureDefinition{},
 		Models:      pi.DefaultFallbackModels(),
 	},
-	{
-		ID:          "omp",
-		Label:       "Oh My Pi",
-		Description: "Multi-provider coding agent with native approvals, host tools, and subagents",
-		Binary:      "omp",
-		// EnabledByDefault mirrors `enabledByDefault` in the protocol's provider manifest. Without it
-		// every built-in started enabled, and the app showed Oh My Pi in the picker on a fresh install
-		// although the manifest says it starts off.
-		EnabledByDefault: boolPtr(false),
-		DefaultArgs:      []string{"--mode", "rpc"},
-		Protocol:         "pi-rpc",
-		DefaultModeID:    "full",
-		Modes: []ModeDefinition{
-			{ID: "full", Label: "Full Access", Description: "Launches OMP with yolo approval mode so tools run without prompts.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
-			{ID: "write", Label: "Write Approval", Description: "Launches OMP with write approval mode — reads are free, writes require approval.", Icon: "ShieldAlert", ColorTier: "moderate"},
-			{ID: "ask", Label: "Always Ask", Description: "Launches OMP with always-ask approval mode for write and exec tools.", Icon: "Shield", ColorTier: "safe"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []sdk.CatalogModel{
-			{ID: "default", Label: "OMP Default", Provider: "omp", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-		},
-	},
 }
 
-// ACPPresets defines known ACP preset specifications when a user adds them via "+ Add provider"
-// or launches an agent with their provider ID.
-var ACPPresets = map[string]ProviderSpec{
-	"cursor": {
-		ID:          "cursor",
-		Label:       "Cursor",
-		Description: "Cursor ACP agent",
-		Binary:      "cursor-agent",
-		DefaultArgs: []string{"--acp"},
-		Protocol:    "acp",
-		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}, {ID: "plan", Label: "Plan"}},
-		Features:    []FeatureDefinition{{ID: "fast_mode", Label: "Fast", Kind: "toggle", DefaultValue: false}},
-		Models:      []sdk.CatalogModel{{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true}},
-	},
-	"kimi": {
-		ID:          "kimi",
-		Label:       "Kimi",
-		Description: "Kimi Code ACP agent",
-		Binary:      "kimi",
-		DefaultArgs: []string{"--acp"},
-		Protocol:    "acp",
-		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
-		Features:    []FeatureDefinition{},
-		Models:      []sdk.CatalogModel{{ID: "kimi-k2.5", Label: "Kimi K2.5", Provider: "kimi", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"}},
-	},
-	"kiro": {
-		ID:          "kiro",
-		Label:       "Kiro",
-		Description: "Kiro ACP agent",
-		Binary:      "kiro-cli",
-		DefaultArgs: []string{"chat", "--acp"},
-		Protocol:    "acp",
-		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
-		Features:    []FeatureDefinition{},
-		Models:      []sdk.CatalogModel{{ID: "default", Label: "Kiro Default", Provider: "kiro", IsDefault: true, IsSelectable: true}},
-	},
-	"trae": {
-		ID:          "trae",
-		Label:       "Trae",
-		Description: "Trae ACP agent",
-		Binary:      "trae-cli",
-		DefaultArgs: []string{"acp"},
-		Protocol:    "acp",
-		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
-		Features:    []FeatureDefinition{},
-		Models:      []sdk.CatalogModel{{ID: "default", Label: "Trae Default", Provider: "trae", IsDefault: true, IsSelectable: true}},
-	},
-}
-
-// GetProviderSpec returns the ProviderSpec for a given provider ID (built-in, known ACP preset, or generic ACP fallback).
+// GetProviderSpec returns the ProviderSpec for a given provider ID (built-in or generic ACP fallback).
 func GetProviderSpec(providerID string) ProviderSpec {
 	id := strings.TrimSpace(providerID)
 	if id == "" {
@@ -287,9 +180,6 @@ func GetProviderSpec(providerID string) ProviderSpec {
 		if p.ID == id {
 			return p
 		}
-	}
-	if preset, ok := ACPPresets[id]; ok {
-		return preset
 	}
 	// The scripted providers are addressable by id but are not part of the product's built-in list.
 	for _, spec := range registeredTestProviders() {
@@ -381,7 +271,7 @@ func ServedProviderIDs() map[string]bool {
 }
 
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
-// including the 6 built-in providers plus any custom/derived providers configured in config.json.
+// including the 4 built-in providers plus any custom/derived providers configured in config.json.
 //
 // discoverModels is called only for a built-in that is enabled and whose binary resolved, and may
 // be nil. It is where a provider's own runtime catalog wins over the static spec list: OpenCode's
@@ -399,7 +289,7 @@ func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogMo
 		// lists by it, so deriving it from availability hid every provider whose binary was not on
 		// PATH — the import sheet asked only the survivors and read the silence as "no history".
 		// Availability belongs in `status`, which is what the UI renders as "not installed".
-		enabled := spec.enabledByDefault()
+		enabled := true
 		if override, ok := customProviders[spec.ID].(map[string]any); ok {
 			if en, hasEn := override["enabled"].(bool); hasEn {
 				enabled = en
@@ -602,48 +492,6 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 
 	switch spec.Protocol {
 	case "pi-rpc":
-		// omp shares pi's JSONL RPC transport but not its flags: it has no --extension and no
-		// --approve, and rejects unknown flags outright, so reusing pi's argument list made it
-		// exit immediately. It takes the system prompt as --append-system-prompt instead of
-		// through an extension.
-		isOMP := spec.ID == "omp"
-		if isOMP {
-			if cmd == "" {
-				cmd = "omp"
-			}
-			// The mode is a launch argument, not a per-turn request: omp decides its approval posture
-			// at startup. Without this translation all three modes ran with omp's default behaviour,
-			// so "ask me before writing" silently became whatever that default is.
-			resolvedMode, modeArgs, modeErr := OmpModeArgs(cfg.ModeID)
-			if modeErr != nil {
-				return nil, modeErr
-			}
-			_ = resolvedMode
-			roleArgs := OmpModelRoleArgs(
-				stringOption(cfg.ProviderOptions, "smolModel"),
-				stringOption(cfg.ProviderOptions, "slowModel"),
-				stringOption(cfg.ProviderOptions, "planModel"),
-			)
-			sess, err := pi.StartSession(pi.LaunchOptions{
-				Command:            cmd,
-				Args:               providerArgs,
-				Cwd:                cfg.Cwd,
-				Env:                cfg.Env,
-				Model:              cfg.Model,
-				ThinkingOptionID:   cfg.ThinkingOptionID,
-				Session:            cfg.SessionHandle,
-				AppendSystemPrompt: cfg.SystemPrompt,
-				NoApprove:          true,
-				ExtraArgs:          append(modeArgs, roleArgs...),
-				// omp puts a tool's useful fields in the result, not the arguments, so the shared
-				// builder gives a card with no file and no diff.
-				ToolDetailBuilder: OmpToolDetail,
-			})
-			if err != nil {
-				return nil, err
-			}
-			return sess, nil
-		}
 		// The integration extension is what makes rewind possible: pi exposes entry capture and
 		// tree navigation only through extensions, so without it `agent.rewind` has no way to
 		// reach the provider.
@@ -847,7 +695,7 @@ func thinkingSetKey(options []pi.ThinkingOption, defaultID string) string {
 	return defaultID + "|" + string(b)
 }
 
-// IsKnownProvider reports whether id matches a built-in provider or an ACP preset.
+// IsKnownProvider reports whether id matches a built-in provider.
 //
 // Resuming a record whose provider this build does not register cannot work: the command it
 // names may not exist, and the resulting failure is an opaque exec error instead of a clear
@@ -862,9 +710,6 @@ func IsKnownProvider(id string) bool {
 			return true
 		}
 	}
-	if _, ok := ACPPresets[id]; ok {
-		return true
-	}
 	// A development build serves `mock`; its agents must resume after a restart like any other.
 	for _, spec := range registeredTestProviders() {
 		if spec.ID == id {
@@ -872,19 +717,4 @@ func IsKnownProvider(id string) bool {
 		}
 	}
 	return false
-}
-
-// stringOption reads a string out of a provider options map.
-//
-// Absent, non-string and blank values all read as "": an option the user did not set must not become an
-// argument, and omp rejects `--smol ""`.
-func stringOption(options map[string]any, key string) string {
-	if options == nil {
-		return ""
-	}
-	value, ok := options[key].(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(value)
 }

@@ -6,15 +6,8 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
-// A built-in that the manifest marks `enabledByDefault: false` must start off.
-//
-// The catalog hardcoded `enabled := true` for every built-in, so Oh My Pi appeared in the picker on
-// a fresh home even though packages/protocol/src/provider-manifest.ts declares it off until the user
-// opts in. The two had drifted because the manifest field has no Go counterpart.
-func TestEnabledByDefaultMatchesTheManifest(t *testing.T) {
-	// Only omp is off by default; everything else must stay on, or a fresh install loses providers.
-	wantOff := map[string]bool{"omp": true}
-
+// Every built-in starts enabled; the user switch, not the CLI's presence, decides the default.
+func TestBuiltinsStartEnabled(t *testing.T) {
 	entries := BuildSnapshotEntries(nil, "", nil)
 	byID := make(map[string]bool, len(entries))
 	for _, entry := range entries {
@@ -28,29 +21,26 @@ func TestEnabledByDefaultMatchesTheManifest(t *testing.T) {
 		if !present {
 			t.Fatalf("%s is missing from the catalog", spec.ID)
 		}
-		if wantOff[spec.ID] && enabled {
-			t.Fatalf("%s starts enabled; the manifest says enabledByDefault: false", spec.ID)
-		}
-		if !wantOff[spec.ID] && !enabled {
-			t.Fatalf("%s starts disabled; every provider except omp is on by default", spec.ID)
+		if !enabled {
+			t.Fatalf("%s starts disabled; every built-in is on by default", spec.ID)
 		}
 	}
 }
 
 // An explicit user switch still wins over the default.
-func TestExplicitEnableOverridesTheDefault(t *testing.T) {
-	overrides := map[string]any{"omp": map[string]any{"enabled": true}}
+func TestExplicitDisableOverridesTheDefault(t *testing.T) {
+	overrides := map[string]any{"pi": map[string]any{"enabled": false}}
 	entries := BuildSnapshotEntries(nil, "", overrides)
 	for _, entry := range entries {
-		if entry["provider"] != "omp" {
+		if entry["provider"] != "pi" {
 			continue
 		}
-		if entry["enabled"] != true {
-			t.Fatal("turning omp on in config did not enable it")
+		if entry["enabled"] != false {
+			t.Fatal("turning pi off in config did not disable it")
 		}
 		return
 	}
-	t.Fatal("omp is missing from the catalog")
+	t.Fatal("pi is missing from the catalog")
 }
 
 // A ready provider's runtime catalog replaces the static spec list; a disabled one is not probed
@@ -63,13 +53,13 @@ func TestSnapshotUsesDiscoveredModelsOnlyForReadyProviders(t *testing.T) {
 			return []sdk.CatalogModel{{ID: "probe/one", Label: "Probe One", Provider: "pi"}}
 		}
 		return nil
-	}, "fake-pi", nil)
+	}, "fake-pi", map[string]any{"codex": map[string]any{"enabled": false}})
 
 	if !probed["pi"] {
 		t.Fatal("pi was not probed although its override makes it available")
 	}
-	if probed["omp"] {
-		t.Fatal("omp was probed although it is disabled by default")
+	if probed["codex"] {
+		t.Fatal("codex was probed although the user switched it off")
 	}
 
 	for _, entry := range entries {

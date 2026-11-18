@@ -18,7 +18,7 @@
   </a>
 </p>
 
-<p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
+<p align="center">One interface for Claude Code, Codex, OpenCode, and Pi agents.</p>
 
 <p align="center">
   <img src="assets/hero-mockup.png" alt="BySpace app screenshot" width="100%">
@@ -31,7 +31,7 @@
 Run agents in parallel on your own machines. Ship from your phone or your desk.
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
-- **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
+- **Multi-provider:** Claude Code, Codex, OpenCode, and Pi through the same interface. Pick the right model for each job. Any ACP-compatible agent (e.g. GitHub Copilot) connects through the provider catalog.
 - **Cross-device:** web and CLI. Start work at your desk, check in from your phone, script it from the terminal.
 - **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
 
@@ -45,7 +45,6 @@ You need at least one agent CLI installed and configured with your credentials:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex](https://github.com/openai/codex)
-- [GitHub Copilot](https://github.com/features/copilot/cli/)
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
 

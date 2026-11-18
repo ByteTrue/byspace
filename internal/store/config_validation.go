@@ -106,7 +106,7 @@ func validateAgentProfiles(raw any) error {
 // launched; a built-in one already has its own and only ever appears here to carry overrides
 // (enabled, models, params).
 var builtinProviderIDs = map[string]bool{
-	"claude": true, "codex": true, "copilot": true, "opencode": true, "pi": true, "omp": true,
+	"claude": true, "codex": true, "opencode": true, "pi": true,
 }
 
 // canLaunchProvider reports whether a provider entry names a way to start it, or is one the daemon

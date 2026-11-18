@@ -76,7 +76,7 @@ func TestSaveDaemonConfigDoesNotAliasThePatch(t *testing.T) {
 // of command, extends or baseUrl", and the UI showed the switch snapping back — reported as "a
 // provider cannot be closed".
 func TestBuiltinProviderTogglePassesValidation(t *testing.T) {
-	for _, id := range []string{"claude", "codex", "copilot", "opencode", "pi", "omp"} {
+	for _, id := range []string{"claude", "codex", "opencode", "pi"} {
 		patch := map[string]any{"providers": map[string]any{id: map[string]any{"enabled": false}}}
 		if err := ValidateDaemonConfig(patch); err != nil {
 			t.Fatalf("toggling built-in %q was rejected: %v", id, err)
@@ -95,7 +95,7 @@ func TestCustomProviderStillNeedsALaunchMethod(t *testing.T) {
 // A scripted provider is as switchable as a built-in one.
 //
 // `mock` is registered only in a development build, and the settings page still renders a switch
-// for it. Validation that only knew the six built-ins rejected that toggle with "providers.mock:
+// for it. Validation that only knew the four built-ins rejected that toggle with "providers.mock:
 // needs one of command, extends or baseUrl" — a second provider the user could not turn off.
 func TestServedScriptedProviderTogglePassesValidation(t *testing.T) {
 	served := map[string]bool{"claude": true, "mock": true}

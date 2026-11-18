@@ -517,32 +517,18 @@ func TestAbortDuringRetryBackoffCompletes(t *testing.T) {
 	}
 }
 
-func TestBuildLaunchArgsSuppressesPiOnlyFlags(t *testing.T) {
+func TestBuildLaunchArgsAddsPiFlags(t *testing.T) {
 	_, argv := BuildLaunchArgs(LaunchOptions{
-		Command:            "omp",
-		ProtocolMode:       "rpc",
-		AppendSystemPrompt: "be brief",
-		NoApprove:          true,
-	})
-	joined := strings.Join(argv, " ")
-	for _, banned := range []string{"--extension", "--approve"} {
-		if strings.Contains(joined, banned) {
-			t.Fatalf("%s must not reach a provider without it: %s", banned, joined)
-		}
-	}
-	if !strings.Contains(joined, "--append-system-prompt") {
-		t.Fatalf("the system prompt must be passed as a flag: %s", joined)
-	}
-
-	// pi still gets both.
-	_, piArgs := BuildLaunchArgs(LaunchOptions{
 		Command:        "pi",
 		ProtocolMode:   "rpc",
 		ExtensionPaths: []string{"/tmp/ext.mjs"},
 	})
-	piJoined := strings.Join(piArgs, " ")
-	if !strings.Contains(piJoined, "--extension") || !strings.Contains(piJoined, "--approve") {
-		t.Fatalf("pi needs both flags: %s", piJoined)
+	joined := strings.Join(argv, " ")
+	if !strings.Contains(joined, "--extension") || !strings.Contains(joined, "--approve") {
+		t.Fatalf("pi needs both flags: %s", joined)
+	}
+	if !strings.Contains(joined, "--mode rpc") {
+		t.Fatalf("pi runs in rpc mode: %s", joined)
 	}
 }
 

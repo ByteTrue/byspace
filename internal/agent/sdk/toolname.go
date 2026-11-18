@@ -48,11 +48,9 @@ var claudeToolNames = map[string]string{
 	"grep":         "grep",
 	"glob":         "glob",
 	"ls":           "read",
-	// omp's spellings: `find` is a search, `execute` runs a command, and `xdev` is a wrapper whose real
-	// tool name arrives in the result (ResolveOmpToolCallName unwraps it).
+	// Generic spellings some agents use: `find` is a search, `execute` runs a command.
 	"find":      "grep",
 	"execute":   "bash",
-	"xdev":      "bash",
 	"webfetch":  "web_fetch",
 	"websearch": "web_search",
 	"task":      "subagent",

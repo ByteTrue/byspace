@@ -184,7 +184,7 @@ Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be a
 {
   "agents": {
     "providers": {
-      "copilot": { "enabled": false }
+      "codex": { "enabled": false }
     }
   }
 }

@@ -181,10 +181,9 @@ describe("guessTerminalProfileIcon", () => {
     ["claude", "claude"],
     ["codex", "codex"],
     ["opencode", "opencode"],
-    ["copilot", "copilot"],
     ["kiro", "kiro"],
-    ["omp", "omp"],
     ["pi", "pi"],
+    ["copilot", "copilot"],
     ["gemini", "gemini"],
     ["cursor", "cursor"],
     ["goose", "goose"],
@@ -201,7 +200,7 @@ describe("guessTerminalProfileIcon", () => {
     expect(guessTerminalProfileIcon(command)).toBe(expected);
   });
 
-  it.each([["zsh"], ["bash"], ["fish"], [""], ["/usr/bin/foo"], ["cursor-agent"]])(
+  it.each([["zsh"], ["bash"], ["fish"], [""], ["/usr/bin/foo"], ["cursor-agent"], ["omp"]])(
     "returns undefined for unknown command %s",
     (command) => {
       expect(guessTerminalProfileIcon(command)).toBeUndefined();

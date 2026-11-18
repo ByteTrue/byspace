@@ -1569,7 +1569,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		// A configured provider inherits its base's features, so resolve the spec through the config:
-		// `GetProviderSpec` only knows the six built-ins and would report an empty list, which makes
+		// `GetProviderSpec` only knows the four built-ins and would report an empty list, which makes
 		// the client drop every featureValue a profile carried.
 		// The saved entry supplies `extends`, which decides which base the features come from; the
 		// draft only names the selection on screen and must not erase it.
@@ -3344,7 +3344,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 
-		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
+		isPi := rec.Provider == "pi" || rec.Provider == ""
 
 		switch evType {
 		case "byspace_turn_started":

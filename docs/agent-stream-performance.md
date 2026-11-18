@@ -29,7 +29,7 @@ first Go port merged in the server, after the session had numbered every delta, 
 frame skipped seqs and every client refetched the timeline once per frame. `TestStreamFramesAreCoalesced`
 checks the frame budget and that the seqs are contiguous.
 
-Pi and OMP emit `text_delta`; Codex emits `agent_message_delta`; ACP agents, including Copilot and OpenCode's stdio fallback, emit `agent_message_chunk`. These sessions share `StreamFrames`. Claude currently emits message-level timeline updates, and OpenCode's default HTTP path posts a prompt and stores the final response, so neither has this per-token fan-out. A pending streamed row takes its seq when its frame is broadcast, not when it is appended; EOF, turn completion, and prompt insertion flush the preceding tail before later lifecycle events.
+Pi emits `text_delta`; Codex emits `agent_message_delta`; ACP agents, including Copilot and OpenCode's stdio fallback, emit `agent_message_chunk`. These sessions share `StreamFrames`. Claude currently emits message-level timeline updates, and OpenCode's default HTTP path posts a prompt and stores the final response, so neither has this per-token fan-out. A pending streamed row takes its seq when its frame is broadcast, not when it is appended; EOF, turn completion, and prompt insertion flush the preceding tail before later lifecycle events.
 
 ## Why the reveal is paced
 

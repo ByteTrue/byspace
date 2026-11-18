@@ -17,14 +17,14 @@ import (
 )
 
 func TestBuiltinProvidersCatalog(t *testing.T) {
-	if len(BuiltinProviders) != 6 {
-		t.Fatalf("expected 6 core built-in providers, got %d", len(BuiltinProviders))
+	if len(BuiltinProviders) != 4 {
+		t.Fatalf("expected 4 core built-in providers, got %d", len(BuiltinProviders))
 	}
 	snaps := BuildSnapshotEntries(nil, "/bin/sh", nil)
-	// The six product providers come first and in order; the scripted providers follow, matching node's
+	// The four product providers come first and in order; the scripted providers follow, matching node's
 	// registry which lists every registered provider. Asserting the product list by name rather than by a
-	// bare length keeps "the product ships six" true while allowing the test-only providers to exist.
-	wantOrder := []string{"claude", "codex", "copilot", "opencode", "pi", "omp"}
+	// bare length keeps "the product ships four" true while allowing the test-only providers to exist.
+	wantOrder := []string{"claude", "codex", "opencode", "pi"}
 	for index, want := range wantOrder {
 		if got, _ := snaps[index]["provider"].(string); got != want {
 			t.Fatalf("snapshot[%d] = %q, want %q", index, got, want)
@@ -60,8 +60,8 @@ func TestBuiltinProvidersCatalog(t *testing.T) {
 		t.Fatalf("the development build must list the scripted provider exactly once, got %d", scripted)
 	}
 	avail := BuildAvailableProviders("/bin/sh")
-	if len(avail) != 6 {
-		t.Fatalf("expected 6 available provider entries, got %d", len(avail))
+	if len(avail) != 4 {
+		t.Fatalf("expected 4 available provider entries, got %d", len(avail))
 	}
 }
 

@@ -21,6 +21,10 @@ func TestCanonicalToolName(t *testing.T) {
 		"bash":       "bash",
 		"web_search": "web_search",
 		"subagent":   "subagent",
+		// Generic spellings some agents use.
+		"ls":      "read",
+		"execute": "bash",
+		"find":    "grep",
 		// A task-list tool is not a file edit and stays under its own name.
 		"TodoWrite":  "TodoWrite",
 		"TaskCreate": "TaskCreate",

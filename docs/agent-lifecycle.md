@@ -80,9 +80,9 @@ A watched child that closes before its finish event also notifies the caller so 
 
 ## Provider-managed child agents
 
-Some providers can create their own child sessions inside one provider runtime. OMP's task tool reports these with `child_session` events; `AgentManager` imports the live provider handle, stamps `byspace.parent-agent-id`, and surfaces the result as a normal subagent in the parent's subagents track.
+Some providers run their own child sessions inside one provider runtime. Pi surfaces these through the shared provider-subagents channel (`agent.provider_subagents.*`): a finished tool call whose name starts with `subagent` carries the descriptor (`ParseSubagentDetails`, `internal/agent/pi/pi.go`), and a `subagent-exit` custom message folds the child's terminal status onto it. The child's read-only timeline is a tail of the session JSONL it names.
 
-The provider still owns the underlying runtime. BySpace keeps an agent record so the child can be opened, tracked, archived, and cascaded with the parent, but prompts and history hydration route through the provider adapter for that native child handle.
+The provider still owns the underlying runtime. BySpace tracks the child as a subagent in the parent's subagents track so it can be opened and watched, but prompts and history hydration route through the provider adapter for that native child handle. There is no side channel: a subagent whose events never reached the stream is absent until replay rebuilds it from the transcript.
 
 ## Archive
 

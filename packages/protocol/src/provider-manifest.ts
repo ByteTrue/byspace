@@ -94,31 +94,6 @@ const CODEX_MODES: AgentProviderModeDefinition[] = [
   },
 ];
 
-const COPILOT_MODES: AgentProviderModeDefinition[] = [
-  {
-    id: "https://agentclientprotocol.com/protocol/session-modes#agent",
-    label: "Agent",
-    description: "Default agent mode for conversational interactions",
-    icon: "Shield",
-    colorTier: "moderate",
-  },
-  {
-    id: "https://agentclientprotocol.com/protocol/session-modes#plan",
-    label: "Plan",
-    description: "Plan mode for creating and executing multi-step plans",
-    icon: "ShieldEllipsis",
-    colorTier: "planning",
-  },
-  {
-    id: "allow-all",
-    label: "Allow All",
-    description: "Automatically approves all Copilot tool, path, and URL requests.",
-    icon: "ShieldOff",
-    colorTier: "dangerous",
-    isUnattended: true,
-  },
-];
-
 const OPENCODE_MODES: AgentProviderModeDefinition[] = [
   {
     id: "build",
@@ -133,31 +108,6 @@ const OPENCODE_MODES: AgentProviderModeDefinition[] = [
     description: "Read-only planning mode that avoids file edits",
     icon: "ShieldEllipsis",
     colorTier: "planning",
-  },
-];
-
-export const OMP_MODES: AgentProviderModeDefinition[] = [
-  {
-    id: "full",
-    label: "Full Access",
-    description: "Launches OMP with yolo approval mode so tools run without prompts.",
-    icon: "ShieldOff",
-    colorTier: "dangerous",
-    isUnattended: true,
-  },
-  {
-    id: "write",
-    label: "Write Approval",
-    description: "Launches OMP with write approval mode — reads are free, writes require approval.",
-    icon: "ShieldAlert",
-    colorTier: "moderate",
-  },
-  {
-    id: "ask",
-    label: "Always Ask",
-    description: "Launches OMP with always-ask approval mode for write and exec tools.",
-    icon: "ShieldCheck",
-    colorTier: "safe",
   },
 ];
 
@@ -204,13 +154,6 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     modes: CODEX_MODES,
   },
   {
-    id: "copilot",
-    label: "Copilot",
-    description: "GitHub Copilot via Agent Client Protocol with dynamic modes and session support",
-    defaultModeId: "https://agentclientprotocol.com/protocol/session-modes#agent",
-    modes: COPILOT_MODES,
-  },
-  {
     id: "opencode",
     label: "OpenCode",
     description: "Open-source coding assistant with multi-provider model support",
@@ -226,14 +169,6 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     description: "Minimal terminal-based coding agent with multi-provider LLM support",
     defaultModeId: null,
     modes: [],
-  },
-  {
-    id: "omp",
-    label: "Oh My Pi",
-    description: "Multi-provider coding agent with native approvals, host tools, and subagents",
-    enabledByDefault: false,
-    defaultModeId: "full",
-    modes: OMP_MODES,
   },
 ];
 

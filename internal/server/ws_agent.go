@@ -502,19 +502,10 @@ func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw jso
 	_ = json.Unmarshal(raw, &req)
 
 	var cmds []pi.SlashCommand
-	provider := ""
 	if req.AgentID != "" {
-		if record, err := s.store.GetAgent(req.AgentID); err == nil && record != nil {
-			provider = record.Provider
-		}
 		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil && mp.session != nil {
 			cmds, _ = mp.session.GetCommands(ctx)
 		}
-	}
-	// omp's harness implements a handful of commands itself, so its RPC never reports them. Merging them
-	// here is the only place that knows which provider reported the list.
-	if provider == "omp" {
-		cmds = providers.MapOmpSlashCommands(cmds)
 	}
 	if cmds == nil {
 		cmds = []pi.SlashCommand{}
@@ -582,10 +573,10 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
 	intentInput := workspace.WorktreeIntentInput{
-		WorktreeSlug:   req.WorktreeSlug,
-		BranchName:     req.BranchName,
-		RefName:        req.RefName,
-		Action:         req.Action,
+		WorktreeSlug: req.WorktreeSlug,
+		BranchName:   req.BranchName,
+		RefName:      req.RefName,
+		Action:       req.Action,
 	}
 	if req.CheckoutSource != nil {
 		intentInput.CheckoutSource = &workspace.CheckoutSource{

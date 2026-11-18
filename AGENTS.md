@@ -2,7 +2,7 @@
 
 BySpace is a desktop, mobile, and web app for monitoring and controlling your local AI coding agents from anywhere. Your dev environment, in your pocket. Connects directly to your actual development environment — your code stays on your machine.
 
-**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, and Pi
+**Supported agents:** Claude Code, Codex, OpenCode, and Pi (built in); any ACP-compatible agent (e.g. GitHub Copilot) connects through the provider catalog.
 
 ## Repository map
 

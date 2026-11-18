@@ -399,27 +399,28 @@ try {
   await sleep(1500);
   snap = await observe();
 
-  const builtinProviders = ["Pi", "Claude", "Codex", "Copilot", "OpenCode", "Oh My Pi"];
+  const builtinProviders = ["Pi", "Claude", "Codex", "OpenCode"];
   const missingProviders = builtinProviders.filter((p) => !snap.includes(p));
   record(
-    "Six built-in providers are listed",
+    "Four built-in providers are listed",
     missingProviders.length === 0,
     `missing: ${missingProviders.join(", ")}`,
   );
 
-  // ACP 派生 provider 属于可选项，不该默认出现在目录里。
-  expectAbsent("ACP-derived providers stay opt-in", snap, ["Cursor", "Kimi", "Kiro", "Trae"]);
+  // 其余 provider（含 Copilot/Oh My Pi 与 ACP 派生）都不内置，不该默认出现在目录里。
+  expectAbsent("Non-builtin providers stay opt-in", snap, [
+    "Copilot",
+    "Oh My Pi",
+    "Cursor",
+    "Kimi",
+    "Kiro",
+    "Trae",
+  ]);
 
-  // Oh My Pi 默认不启用靠 daemon 的实际发布状态判定，而不是靠 DOM 文案——可访问性树
+  // Pi 默认启用靠 daemon 的实际发布状态判定，而不是靠 DOM 文案——可访问性树
   // 会折叠行内状态文本，按文案断言只会得到假阳性/假阴性。
   {
     const snapshot = queryProviderSnapshot();
-    const omp = snapshot.find((e) => e.provider === "omp");
-    record(
-      "Oh My Pi defaults to disabled while still being listed",
-      Boolean(omp) && omp.enabled === false,
-      `omp entry: ${JSON.stringify(omp)}`,
-    );
     const pi = snapshot.find((e) => e.provider === "pi");
     record(
       "Pi is enabled by default",

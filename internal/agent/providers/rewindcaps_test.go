@@ -21,8 +21,8 @@ func TestRewindCapabilitiesFor(t *testing.T) {
 		t.Fatalf("codex = %+v", codex)
 	}
 
-	// Everything else honestly reports nothing, including providers whose node implementation has rewind Go
-	// has not ported.
+	// Non-built-in providers (copilot/omp connect through ACP, cursor and unknown are custom)
+	// honestly report nothing, as does any provider whose node implementation Go has not ported.
 	// claude forks the transcript; files are not restored because the SDK's checkpoints are unreachable from Go.
 	if claude := RewindCapabilitiesFor("claude"); !claude.Conversation || claude.Files {
 		t.Fatalf("claude = %+v", claude)

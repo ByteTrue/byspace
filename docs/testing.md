@@ -169,7 +169,7 @@ Codex MultiAgentV2 real tests use local Codex authentication rather than the Ope
 
 Match what an element is, and scope the match to where it lives.
 
-- `getByRole("button", { name })` matches a **substring** of the accessible name unless you pass `exact: true`. `"Pi provider details"` also resolves `"Oh My Pi provider details"`, and Playwright fails with a strict-mode violation instead of picking one. An accessible-name match that is not the whole name needs `exact: true`.
+- `getByRole("button", { name })` matches a **substring** of the accessible name unless you pass `exact: true`. `"Pi provider details"` also resolves `"My Pi Fork provider details"`, and Playwright fails with a strict-mode violation instead of picking one. An accessible-name match that is not the whole name needs `exact: true`.
 - A page-wide text or role match that was unique stops being unique when a section moves onto a page that renders similar rows. Providers folding into the Agents page is the worked example: `getByText("Mock Load Test")` then matched both the provider row and the model picker's provider row. Reach for the row's own `testID` (`model-provider-mock`, `model-row-<provider>-<modelId>`) instead of the label, and after moving a section, re-check the page-level locators in every spec that opens the page it moved to.
 - A strict-mode violation naming two elements is a real ambiguity, not a flake. It is deterministic, so retries will not clear it.
 

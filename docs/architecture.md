@@ -354,20 +354,18 @@ One deliberate non-violation: `AgentFileExplorerState.directories`/`files` cache
 
 ## Agent providers
 
-Each provider implements the `AgentClient` interface in `agent/agent-sdk-types.ts`. Provider implementations live in `agent/providers/`.
+Each provider session implements the `ManagedSession` interface in `internal/agent/providers/driver.go`. Provider implementations live in `internal/agent/providers/` (Pi in `internal/agent/pi/`).
 
-The built-in, user-facing providers are Claude Code, Codex, Copilot, OpenCode, Pi, and OMP. Additional adapters exist in the same directory for ACP-compatible agents and internal use:
+The built-in, user-facing providers are Claude Code, Codex, OpenCode, and Pi. Every other agent connects through the generic ACP host (`acp.go`), not a built-in adapter:
 
-| Provider           | Wraps                                | Session format                                     |
-| ------------------ | ------------------------------------ | -------------------------------------------------- |
-| Claude (`claude/`) | Anthropic Agent SDK                  | `~/.claude/projects/{cwd}/{session-id}.jsonl`      |
-| Codex              | Codex AppServer (`codex-app-server`) | `~/.codex/sessions/{date}/rollout-{ts}-{id}.jsonl` |
-| Copilot            | GitHub Copilot via ACP               | Provider-managed                                   |
-| OpenCode           | OpenCode server / CLI                | Provider-managed                                   |
-| Cursor             | ACP wrapper (`acp-agent`)            | Provider-managed                                   |
-| Generic ACP        | ACP wrapper                          | Provider-managed                                   |
-| Pi                 | Local Pi RPC process                 | Provider-managed                                   |
-| Mock load test     | In-process fake                      | In-memory                                          |
+| Provider       | Wraps                                | Session format                                     |
+| -------------- | ------------------------------------ | -------------------------------------------------- |
+| Claude         | Anthropic Agent SDK                  | `~/.claude/projects/{cwd}/{session-id}.jsonl`      |
+| Codex          | Codex AppServer (`codex app-server`) | `~/.codex/sessions/{date}/rollout-{ts}-{id}.jsonl` |
+| OpenCode       | OpenCode server / CLI                | Provider-managed                                   |
+| Pi             | Local Pi RPC process                 | Provider-managed                                   |
+| Generic ACP    | ACP host (Copilot, Cursor, custom)   | Provider-managed                                   |
+| Mock load test | In-process fake (dev only)           | In-memory                                          |
 
 All providers:
 

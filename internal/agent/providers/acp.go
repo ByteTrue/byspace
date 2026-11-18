@@ -20,7 +20,7 @@ import (
 )
 
 // ACPSession hosts any Agent Client Protocol (ACP) JSON-RPC 2.0 agent
-// (GitHub Copilot, Cursor, Kimi, Kiro, Trae, or custom ACP binaries).
+// (Copilot, Cursor, Kimi, Kiro, Trae, or any custom ACP binary a user connects).
 type ACPSession struct {
 	provider string
 	cmd      *exec.Cmd

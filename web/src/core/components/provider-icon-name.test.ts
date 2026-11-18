@@ -11,7 +11,6 @@ describe("resolveProviderIconName", () => {
   it("returns the built-in identifier for known provider ids", () => {
     expect(resolveProviderIconName("kiro")).toEqual({ kind: "builtin", id: "kiro" });
     expect(resolveProviderIconName("claude")).toEqual({ kind: "builtin", id: "claude" });
-    expect(resolveProviderIconName("omp")).toEqual({ kind: "builtin", id: "omp" });
     expect(resolveProviderIconName("minimax")).toEqual({ kind: "builtin", id: "minimax" });
   });
 
@@ -20,10 +19,14 @@ describe("resolveProviderIconName", () => {
     expect(resolveProviderIconName("gemini")).toEqual({ kind: "catalog", id: "gemini" });
     expect(resolveProviderIconName("gjc")).toEqual({ kind: "catalog", id: "gjc" });
     expect(resolveProviderIconName("traecli")).toEqual({ kind: "catalog", id: "traecli" });
+    // Copilot is no longer built in; it connects through the ACP catalog.
+    expect(resolveProviderIconName("copilot")).toEqual({ kind: "catalog", id: "copilot" });
   });
 
   it("falls back to the bot icon for unknown custom providers", () => {
     expect(resolveProviderIconName("custom-claude-profile")).toEqual({ kind: "bot" });
+    // Oh My Pi is no longer built in and has no ACP catalog entry, so it gets the generic icon.
+    expect(resolveProviderIconName("omp")).toEqual({ kind: "bot" });
   });
 
   it("resolves a snapshot SVG for a custom provider", () => {

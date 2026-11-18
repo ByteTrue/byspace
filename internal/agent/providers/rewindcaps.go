@@ -6,8 +6,7 @@ package providers
 // appear for providers that cannot do it, and pressing it fails — which reads as the app being broken rather
 // than the feature being unavailable.
 //
-// These values describe what THIS daemon implements, not what the provider could do in principle. omp still reports
-// nothing: it rejects the `--extension` that Go's tree navigation lives in, so there is no way to move its leaf.
+// These values describe what THIS daemon implements, not what the provider could do in principle.
 type RewindCapabilities struct {
 	Conversation bool
 	// Files means the working tree is restored as well as the conversation.
