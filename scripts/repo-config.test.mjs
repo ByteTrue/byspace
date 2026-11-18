@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -321,4 +321,15 @@ test("gitignore does not name retired workspaces", () => {
     [],
     `.gitignore names paths under retired workspaces:\n${stale.join("\n")}`,
   );
+});
+
+// A guard nobody runs is worse than no guard: it reads as coverage in the file listing while
+// asserting nothing. `e2e-runnable.test.mjs` sat outside every CI job for its whole life.
+test("every repository guard runs in some CI job", () => {
+  const workflow = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  const unrun = readdirSync(join(repoRoot, "scripts"))
+    .filter((name) => name.endsWith(".test.mjs"))
+    .filter((name) => !workflow.includes(`scripts/${name}`))
+    .sort();
+  assert.deepEqual(unrun, [], `guards no CI job runs:\n${unrun.join("\n")}`);
 });
