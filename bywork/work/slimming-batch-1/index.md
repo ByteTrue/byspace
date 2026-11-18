@@ -1,6 +1,6 @@
 ---
 kind: work
-status: in_progress
+status: complete
 current_unit: "十批已 commit+push：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options+catalog脚本删/plugins扁平化+relay迁移桥删"
 next_action: "Chief 远期认真做；瘦身批次一全部闭环。唯一保留 COMPAT=xterm-ipad-ctrl-c，等 @xterm/xterm 7.0.0 发布后删"
 must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；git review-draft 链 owner 明确不做"
