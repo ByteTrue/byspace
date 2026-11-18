@@ -10,8 +10,8 @@ import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
 import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
-import { SidebarDisplayPreferencesMenu } from "~/sidebar/display-preferences-menu";
-import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
+import { SidebarDisplayPreferencesMenu } from "@/sidebar/display-preferences-menu";
+import { SidebarIconButton } from "@/sidebar/sidebar-icon-button";
 
 function SortProjectsButton() {
   const { t } = useTranslation();

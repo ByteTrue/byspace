@@ -2,25 +2,31 @@ pre-commit:
   parallel: true
   jobs:
     - name: format
-      glob: "*.{css,js,json,jsonc,jsx,md,ts,tsx,yaml,yml}"
+      glob: "*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
       # Same as ignorePatterns in .oxfmtrc.json: oxfmt exits non-zero when every passed path is
       # ignored, so staging a file under an ignored tree failed the hook instead of skipping it.
+      # scripts/repo-config.test.mjs checks this list covers that one.
       exclude:
-        - "package-lock.json"
-        - "**/package-lock.json"
+        - "*.lock"
+        - "**/*.gen.ts"
+        - "**/*.gen.tsx"
+        - "web/public/schemas/*.json"
         - "bywork/**"
         - "design/references/**"
         - "design/sheet-assets/**"
-        - "web/public/schemas/**"
-        - "**/*.gen.ts"
-        - "**/*.gen.tsx"
+        - "design/component-sheet.html"
+        - "web/src/ui/**"
+        - "web/src/styles/shadcn-tailwind.css"
       run: npm run format:check:files -- {staged_files}
     - name: lint
-      glob: "*.{js,jsx,ts,tsx}"
+      glob: "*.{cjs,js,jsx,mjs,ts,tsx}"
       # Same as ignorePatterns in .oxlintrc.json: oxlint exits non-zero when every passed path is ignored.
       exclude:
+        - ".dev/**"
+        - "bywork/archive/**"
         - "design/references/**"
-        - "web/src/components/ui/**"
+        - "web/src/ui/**"
+        - "web/src/styles/shadcn-tailwind.css"
       run: npm run lint -- {staged_files}
     - name: typecheck
       run: npm run typecheck

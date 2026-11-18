@@ -232,7 +232,7 @@ canonical assistant prefix, it stays in the head lane. No row may be returned in
 ## Relevant code
 
 - Server live stream forwarding: `packages/server/src/server/session.ts`
-- App sync planning: `web/src/core/timeline/timeline-sync-plan.ts`
-- App viewed-agent synchronization: `web/src/core/timeline/viewed-timeline-sync.ts`
-- App stream/timeline reducer: `web/src/core/timeline/session-stream-reducers.ts`
-- Session wiring: `web/src/core/contexts/session-context.tsx`
+- App sync planning: `web/src/timeline/timeline-sync-plan.ts`
+- App viewed-agent synchronization: `web/src/timeline/viewed-timeline-sync.ts`
+- App stream/timeline reducer: `web/src/timeline/session-stream-reducers.ts`
+- Session wiring: `web/src/contexts/session-context.tsx`

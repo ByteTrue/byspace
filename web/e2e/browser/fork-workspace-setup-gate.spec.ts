@@ -12,7 +12,7 @@ import {
 } from "../support/helpers/workspace-setup";
 import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 import { getServerId } from "../support/helpers/server-id";
-import { buildHostWorkspaceRoute } from "../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 
 const evidenceDir = "/tmp/fork-setup-gate";
 

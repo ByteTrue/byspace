@@ -23,6 +23,8 @@ Evidence is something someone else can look at:
 
 Redact what you need to, keep the technical details. If an agent did the work, submit its raw output. A summary drops the details someone else needs to check it.
 
+Keep hand-made screenshots and recordings under `.dev/`, not in a new root directory — [development.md](development.md#build-outputs) has the layout.
+
 ## Does it work well
 
 A feature that works but stutters, shifts the layout, or misaligns by two pixels is not done.

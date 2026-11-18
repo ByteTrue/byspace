@@ -2,14 +2,7 @@
 // Expo renderer put on its views (assistant-selection-copy/markup.ts), so selection copy turns a
 // rendered selection back into markdown the same way. Styles live in index.css under `.markdown`
 // and mirror archive/expo-app:packages/app/src/styles/markdown-styles.ts.
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/ui/table";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 import {
   MARKDOWN_COPY_ALIGN_ATTRIBUTE,

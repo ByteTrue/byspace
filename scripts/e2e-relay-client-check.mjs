@@ -8,12 +8,12 @@
 //   2. the relay binary-frame gate. A socket that answered the challenge but never proved the
 //      daemon password must not be able to spawn a terminal.
 //
-// Usage (from the repo root, with `bin/byspace`):
+// Usage (from the repo root, with `.dev/bin/byspace`):
 //
-//   BYSPACE_HOME=/tmp/e2e bin/byspace relay --addr 127.0.0.1:7001 &
-//   BYSPACE_HOME=/tmp/e2e bin/byspace serve --addr 127.0.0.1:6799 --home /tmp/e2e \
+//   BYSPACE_HOME=/tmp/e2e .dev/bin/byspace relay --addr 127.0.0.1:7001 &
+//   BYSPACE_HOME=/tmp/e2e .dev/bin/byspace serve --addr 127.0.0.1:6799 --home /tmp/e2e \
 //     --relay ws://127.0.0.1:7001/ws &
-//   printf 'e2e-pass\ne2e-pass\n' | bin/byspace daemon set-password --addr 127.0.0.1:6799
+//   printf 'e2e-pass\ne2e-pass\n' | .dev/bin/byspace daemon set-password --addr 127.0.0.1:6799
 //   npm run build:relay
 //   E2E_HOME=/tmp/e2e node scripts/e2e-relay-client-check.mjs
 //

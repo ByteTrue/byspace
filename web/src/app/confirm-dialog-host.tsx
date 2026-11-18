@@ -10,7 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
+} from "@/ui/alert-dialog";
 
 /** Renders the dialog behind confirmDialog() (core/utils/confirm-dialog.ts). */
 export function ConfirmDialogHost() {

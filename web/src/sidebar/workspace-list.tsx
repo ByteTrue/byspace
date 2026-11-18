@@ -1,4 +1,4 @@
-import { SidebarGroupLabel } from "~/components/ui/sidebar";
+import { SidebarGroupLabel } from "@/ui/sidebar";
 import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import {
   CircleAlert,
@@ -49,17 +49,17 @@ import {
   type SidebarProjectIconTarget,
 } from "@/utils/sidebar-project-row-model";
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
-import { SortableList, type SortableItemProps } from "~/components/sortable-list";
-import { SidebarMenu } from "~/components/ui/sidebar";
-import { isWorkspaceSelected, ProjectBlock } from "~/sidebar/project-block";
+import { SortableList, type SortableItemProps } from "@/components/sortable-list";
+import { SidebarMenu } from "@/ui/sidebar";
+import { isWorkspaceSelected, ProjectBlock } from "@/sidebar/project-block";
 import {
   PinnedSectionHeader,
   ShowMoreRow,
   SidebarFilterEmptyState,
   SidebarProjectEmptyState,
-} from "~/sidebar/list-parts";
-import { WorkspacesSectionHeader } from "~/sidebar/section-header";
-import { WorkspaceRow } from "~/sidebar/workspace-row";
+} from "@/sidebar/list-parts";
+import { WorkspacesSectionHeader } from "@/sidebar/section-header";
+import { WorkspaceRow } from "@/sidebar/workspace-row";
 
 /** Everything a row needs that is the same for every row in the list. */
 interface ListContext {

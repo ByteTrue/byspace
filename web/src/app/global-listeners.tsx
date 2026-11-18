@@ -15,9 +15,9 @@ import {
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
 import { PairLinkModal } from "@/components/pair-link-modal";
-import { router } from "~/app/navigation";
-import { AppState } from "~/lib/app-state";
-import { setAlertHandler } from "~/lib/alert";
+import { router } from "@/platform/navigation";
+import { AppState } from "@/platform/app-state";
+import { setAlertHandler } from "@/platform/alert";
 
 // The headless pieces of the Expo app's root layout, one component each, same behaviour.
 

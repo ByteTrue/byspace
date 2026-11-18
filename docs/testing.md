@@ -176,7 +176,7 @@ Match what an element is, and scope the match to where it lives.
 ### Test setup
 
 - Server: `packages/server/src/test-utils/vitest-setup.ts` loads `.env.test`, sets `BYSPACE_SUPERVISED=0`, and disables Git/SSH prompts. Add new global env shims here, not in individual tests.
-- App: `web/vitest.config.ts` resolves modules the way the build does (`@/` to `web/src/core`) and swaps `@xterm/addon-ligatures` for a stub, since it reads Node's `diagnostics_channel` at import. `web/vitest.setup.ts` sets `__DEV__`, gives jsdom `matchMedia` and `requestAnimationFrame`, and records `~/app/navigation` calls instead of mounting React Router. Stubbing there is for modules that have no meaningful Node behavior — not a license to mock app code. `*.browser.test.ts(x)` files run in Chromium (the `browser` project).
+- App: `web/vitest.config.ts` resolves modules the way the build does (`@/` to `web/src`) and swaps `@xterm/addon-ligatures` for a stub, since it reads Node's `diagnostics_channel` at import. `web/vitest.setup.ts` sets `__DEV__`, gives jsdom `matchMedia` and `requestAnimationFrame`, and records `@/platform/navigation` calls instead of mounting React Router. Stubbing there is for modules that have no meaningful Node behavior — not a license to mock app code. `*.browser.test.ts(x)` files run in Chromium (the `browser` project).
 
 ## Running tests locally
 
@@ -184,7 +184,7 @@ Test suites in this repo are heavy. Running them in bulk freezes the machine, es
 
 - Run only the file you changed: `npx vitest run <path> --bail=1`
 - **Never invoke Vitest from the repo root with no path filter.** The root `vitest.config.ts` is shared by the packages without their own config, so a bare `npx vitest` / `npx vitest list` collects the whole repo by default. `list` imports every collected module, and some trees run code on import: `packages/cli/tests/**` are `npx tsx` standalone scripts that drive a real daemon, whose `daemon restart` resolves the default listen address and can stop the developer's live daemon on 6777. The root config excludes those trees; the exclusion is asserted by `scripts/ci-workflow.test.mjs`. This is why the rule is "pass a path", not "don't run the full suite".
-- Picking a package directory is not enough on its own — the root config excludes `web/`, so `npx vitest run web/src/core/foo.test.ts` from the root finds nothing. Work inside the package (`cd web`) and name the file you changed.
+- Picking a package directory is not enough on its own — the root config excludes `web/`, so `npx vitest run web/src/foo.test.ts` from the root finds nothing. Work inside the package (`cd web`) and name the file you changed.
 - Never run `npm run test` for a whole workspace unless asked.
 - For a broad sweep, redirect to a file and read it after: `npx vitest run <path> --bail=1 > /tmp/test-output.txt 2>&1`. Redirect rather than pipe — `... | tail -40` exits with `tail`'s status, so a run with failures exits 0, and Playwright prints the pass count _after_ the failure count, so the last line of a red run reads `44 passed`. Read the summary lines, not the last one.
 - Never re-run a suite another agent already reported green.

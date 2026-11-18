@@ -24,33 +24,24 @@ import {
   buildSidebarProjectRowModel,
   type SidebarProjectHostTarget,
 } from "@/utils/sidebar-project-row-model";
-import { router } from "~/app/navigation";
+import { router } from "@/platform/navigation";
 import { cn } from "cn";
-import { contextMenuKit, dropdownMenuKit, type MenuKit } from "~/components/menu-kit";
-import { Shortcut } from "~/components/shortcut";
-import { SortableList, type SortableItemProps } from "~/components/sortable-list";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/ui/context-menu";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import {
-  SidebarMenu,
-  SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "~/components/ui/sidebar";
-import { Spinner } from "~/components/ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { contextMenuKit, dropdownMenuKit, type MenuKit } from "@/components/menu-kit";
+import { Shortcut } from "@/components/shortcut";
+import { SortableList, type SortableItemProps } from "@/components/sortable-list";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/ui/context-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/ui/dropdown-menu";
+import { SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "@/ui/sidebar";
+import { Spinner } from "@/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "~/components/info-hover-card";
-import { ShowMoreRow } from "~/sidebar/list-parts";
-import { ProjectLeadingVisual } from "~/sidebar/status-visuals";
-import { WorkspaceRow } from "~/sidebar/workspace-row";
+} from "@/components/info-hover-card";
+import { ShowMoreRow } from "@/sidebar/list-parts";
+import { ProjectLeadingVisual } from "@/sidebar/status-visuals";
+import { WorkspaceRow } from "@/sidebar/workspace-row";
 
 export function isWorkspaceSelected(input: {
   selection: ActiveWorkspaceSelection | null;

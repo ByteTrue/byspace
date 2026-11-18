@@ -112,7 +112,7 @@ func executablePath() string {
 }
 
 // notificationClickScript hands a clicked notification to the page, as a click on a web
-// Notification does (WEB_NOTIFICATION_CLICK_EVENT in web/src/core/utils/os-notifications.ts).
+// Notification does (WEB_NOTIFICATION_CLICK_EVENT in web/src/utils/os-notifications.ts).
 func notificationClickScript(data map[string]any) string {
 	detail, err := json.Marshal(map[string]any{"data": data})
 	if err != nil {

@@ -6,9 +6,9 @@ import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/lay
 import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { Shortcut } from "~/components/shortcut";
-import { Button } from "~/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { Shortcut } from "@/components/shortcut";
+import { Button } from "@/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 
 const MAC_TOGGLE_KEYS = ["mod", "B"];
 const OTHER_TOGGLE_KEYS = ["mod", "."];

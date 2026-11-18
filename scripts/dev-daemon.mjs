@@ -13,7 +13,12 @@ import { fileURLToPath } from "node:url";
 import { configureDevBySpaceHome, runDevChild } from "./dev-home.mjs";
 
 const rootDir = resolve(fileURLToPath(import.meta.url), "../..");
-const binary = resolve(rootDir, "bin", process.platform === "win32" ? "byspace.exe" : "byspace");
+const binary = resolve(
+  rootDir,
+  ".dev",
+  "bin",
+  process.platform === "win32" ? "byspace.exe" : "byspace",
+);
 
 if (process.env.BYSPACE_SERVICE_DAEMON_PORT && !process.env.BYSPACE_LISTEN) {
   process.env.BYSPACE_LISTEN = `0.0.0.0:${process.env.BYSPACE_SERVICE_DAEMON_PORT}`;

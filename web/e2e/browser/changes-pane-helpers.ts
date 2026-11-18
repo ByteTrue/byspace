@@ -8,10 +8,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
-import {
-  buildHostWorkspaceRoute,
-  buildSettingsSectionRoute,
-} from "../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { connectSeedClient } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";

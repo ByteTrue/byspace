@@ -1,4 +1,4 @@
-import { Input } from "~/components/ui/input";
+import { Input } from "@/ui/input";
 import {
   useCallback,
   useEffect,
@@ -23,8 +23,8 @@ import {
   type WorkspaceLabelPickerRow,
 } from "@/workspace-labels";
 import { WorkspaceLabelDot, WorkspaceLabelSwatchRow } from "@/workspace-labels/swatch";
-import { keepOpen, type MenuKit } from "~/components/menu-kit";
-import { Spinner } from "~/components/ui/spinner";
+import { keepOpen, type MenuKit } from "@/components/menu-kit";
+import { Spinner } from "@/ui/spinner";
 
 function stopMenuTypeahead(event: KeyboardEvent) {
   // Radix menus treat letters as typeahead; keep them for the text field.

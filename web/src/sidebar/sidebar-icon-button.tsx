@@ -1,8 +1,8 @@
 import { useState, type ComponentProps, type ReactNode } from "react";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-import { Button } from "~/components/ui/button";
-import { Shortcut } from "~/components/shortcut";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { Button } from "@/ui/button";
+import { Shortcut } from "@/components/shortcut";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 
 /** shadcn's ghost icon Button with a Tooltip naming it and its shortcut (sidebar header and footer). */
 export function SidebarIconButton({

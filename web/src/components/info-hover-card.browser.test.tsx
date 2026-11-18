@@ -5,8 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cdp, page, userEvent } from "vitest/browser";
 import { InfoHoverCard, InfoHoverCardContent, InfoHoverCardTrigger } from "./info-hover-card";
-import { ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ContextMenu } from "./ui/context-menu";
+import { ContextMenuTrigger } from "@/widgets/context-menu";
+import { ContextMenu } from "@/ui/context-menu";
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));

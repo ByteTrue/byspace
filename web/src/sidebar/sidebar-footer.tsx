@@ -7,10 +7,10 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { openHostOverview } from "@/navigation/settings-navigation";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
-import { router } from "~/app/navigation";
-import { SidebarFooter as SidebarFooterFrame } from "~/components/ui/sidebar";
-import { SidebarHelpMenu } from "~/sidebar/help-menu";
-import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
+import { router } from "@/platform/navigation";
+import { SidebarFooter as SidebarFooterFrame } from "@/ui/sidebar";
+import { SidebarHelpMenu } from "@/sidebar/help-menu";
+import { SidebarIconButton } from "@/sidebar/sidebar-icon-button";
 
 function sidebarHostOptionTestID(serverId: string): string {
   return `sidebar-host-row-${serverId}`;

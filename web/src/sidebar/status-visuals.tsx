@@ -8,7 +8,7 @@ import { getProjectStatusBadgeContent } from "@/utils/project-status-badge-conte
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { cn } from "cn";
-import { Spinner } from "~/components/ui/spinner";
+import { Spinner } from "@/ui/spinner";
 
 // Geometry from archive/expo-app:packages/app/src/components/status-ring/geometry.ts: a 6px dot inside a 1.5px
 // ring with a 1.5px gap, turning once every 900ms.

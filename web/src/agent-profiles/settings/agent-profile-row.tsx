@@ -1,0 +1,142 @@
+// Port of archive/expo-app:packages/app/src/agent-profiles/settings/agent-profile-row.tsx: one agent profile row; DOM view.
+// Converted from the Expo file by archive/expo-app:web/scripts/port/agent-profiles-section.py; edit it directly.
+import { useCallback, useMemo, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import { ArrowDown, ArrowUp, FileText, Pencil, Trash2 } from "lucide-react";
+import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
+import type { AgentProfile } from "@bytetrue/protocol/messages";
+import { Button } from "@/ui/button";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { AgentProfileGlyph } from "@/agent-profiles/internal/agent-profile-glyph";
+import { buildAgentProfileTags } from "@/agent-profiles/internal/profile-summary";
+import { withTheme } from "@/app/theme-object";
+import { Item, ItemContent, ItemTitle } from "@/ui/item";
+
+const ThemedArrowUp = withTheme(ArrowUp);
+const ThemedArrowDown = withTheme(ArrowDown);
+const ThemedPencil = withTheme(Pencil);
+const ThemedTrash2 = withTheme(Trash2);
+const ThemedFileText = withTheme(FileText);
+
+const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const editIcon = <ThemedPencil size={ICON_SIZE.sm} themeProps={mutedColorMapping} />;
+const removeIcon = <ThemedTrash2 size={ICON_SIZE.sm} themeProps={destructiveColorMapping} />;
+
+export interface AgentProfileRowProps {
+  profile: AgentProfile;
+  entries: readonly ProviderSnapshotEntry[] | undefined;
+  isFirst: boolean;
+  isLast: boolean;
+  onEdit: (id: string) => void;
+  onRemove: (id: string) => void;
+  onMoveUp: (id: string) => void;
+  onMoveDown: (id: string) => void;
+}
+
+export function AgentProfileRow({
+  profile,
+  entries,
+  isFirst,
+  isLast,
+  onEdit,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+}: AgentProfileRowProps): ReactElement {
+  const { t } = useTranslation();
+
+  const handleEdit = useCallback(() => onEdit(profile.id), [onEdit, profile.id]);
+  const handleRemove = useCallback(() => onRemove(profile.id), [onRemove, profile.id]);
+  const handleMoveUp = useCallback(() => onMoveUp(profile.id), [onMoveUp, profile.id]);
+  const handleMoveDown = useCallback(() => onMoveDown(profile.id), [onMoveDown, profile.id]);
+
+  const formatFeatureCount = useCallback(
+    (count: number) =>
+      count === 1
+        ? t("settings.host.agentProfiles.featureCountOne", { count })
+        : t("settings.host.agentProfiles.featureCount", { count }),
+    [t],
+  );
+  const tags = useMemo(
+    () => buildAgentProfileTags({ profile, entries, formatFeatureCount }),
+    [entries, formatFeatureCount, profile],
+  );
+  const summary = useMemo(() => tags.map((tag) => tag.label).join(" · "), [tags]);
+
+  return (
+    <Item
+      variant="outline"
+      className="min-h-14 items-center gap-2 py-3"
+      data-testid={`agent-profile-row-${profile.id}`}
+    >
+      <div className="flex flex-1 flex-row items-start gap-2">
+        <div className="mt-px flex w-4 items-center justify-center">
+          <AgentProfileGlyph icon={profile.icon} color={profile.color} size={ICON_SIZE.md} />
+        </div>
+        <ItemContent>
+          <div className="flex min-w-0 flex-row items-baseline gap-2">
+            <ItemTitle className="truncate">{profile.name}</ItemTitle>
+            <span className="shrink truncate text-xs leading-[normal] text-muted-foreground">
+              {summary}
+            </span>
+          </div>
+          {profile.notes ? (
+            <div className="mt-1 flex flex-row items-start gap-1">
+              <ThemedFileText size={ICON_SIZE.xs} themeProps={mutedColorMapping} />
+              <span
+                className="line-clamp-2 flex-1 text-xs leading-[normal] text-muted-foreground"
+                data-testid={`agent-profile-notes-${profile.id}`}
+              >
+                {profile.notes}
+              </span>
+            </div>
+          ) : null}
+        </ItemContent>
+      </div>
+      <div className="flex flex-row items-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleMoveUp}
+          aria-label={t("settings.host.agentProfiles.moveUp")}
+          data-testid={`agent-profile-move-up-${profile.id}`}
+          disabled={isFirst}
+        >
+          {moveUpIcon}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleMoveDown}
+          aria-label={t("settings.host.agentProfiles.moveDown")}
+          data-testid={`agent-profile-move-down-${profile.id}`}
+          disabled={isLast}
+        >
+          {moveDownIcon}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleEdit}
+          aria-label={t("settings.host.agentProfiles.editProfile")}
+          data-testid={`agent-profile-edit-${profile.id}`}
+        >
+          {editIcon}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRemove}
+          aria-label={t("settings.host.agentProfiles.remove")}
+          data-testid={`agent-profile-remove-${profile.id}`}
+        >
+          {removeIcon}
+        </Button>
+      </div>
+    </Item>
+  );
+}

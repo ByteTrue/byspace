@@ -34,18 +34,18 @@ import {
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
-import { AppSidebar } from "~/app/app-sidebar";
-import { SidebarResizeRail } from "~/app/sidebar-resize-rail";
-import { SidebarSlotProvider } from "~/app/sidebar-slot";
-import { WorkspaceLayer } from "~/app/workspace-layer";
-import { Sidebar, useSidebar } from "~/components/ui/sidebar";
+import { AppSidebar } from "@/app/app-sidebar";
+import { SidebarResizeRail } from "@/app/sidebar-resize-rail";
+import { SidebarSlotProvider } from "@/app/sidebar-slot";
+import { WorkspaceLayer } from "@/app/workspace-layer";
+import { Sidebar, useSidebar } from "@/ui/sidebar";
 import {
   DesktopWindowTitleBar,
   usesWindowsTitleBarShell,
   WindowsShellFrame,
   WindowsShellMain,
-} from "~/app/desktop-window-titlebar";
-import { useWindowDimensions } from "~/hooks/use-window-dimensions";
+} from "@/app/desktop-window-titlebar";
+import { useWindowDimensions } from "@/platform/use-window-dimensions";
 
 // Routes that stand alone without app chrome, as in the Expo app's root layout.
 const STANDALONE_ONBOARDING_ROUTES = new Set(["", "/", "/welcome", "/pair-scan"]);

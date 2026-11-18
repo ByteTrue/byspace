@@ -3,7 +3,7 @@
 #   make build-app             → 编译带 Wails v3 桌面 GUI 的单二进制（macOS / Windows / Linux）
 #   make app                   → 打包 macOS BySpace.app bundle 及 dist/byspace-darwin-<arch>.zip
 #   make dmg                   → 打包 macOS dist/byspace-darwin-<arch>.dmg 安装镜像
-#   make build-android         → 编译 libwails.so (android/arm64) 并打包侧载 APK (bin/byspace-android-arm64.apk)
+#   make build-android         → 编译 libwails.so (android/arm64) 并打包侧载 APK (dist/byspace-android-arm64.apk)
 #   make release-cli           → 交叉编译全平台 CLI 二进制 (dist/byspace-cli-<os>-<arch>)
 #   make release-windows       → 交叉编译 Windows Wails v3 桌面客户端 (dist/byspace-windows-<arch>.exe)
 #   make release-linux-desktop → 在 Linux 宿主上编译 Wails v3 桌面客户端 (dist/byspace-linux-<arch>)
@@ -12,8 +12,10 @@
 VERSION    ?= $(shell node -p "require('./package.json').version" 2>/dev/null || echo dev)
 GOARCH     ?= $(shell go env GOARCH)
 LDFLAGS    := -s -w -X main.version=$(VERSION) -X github.com/ByteTrue/byspace/internal/cli.DefaultVersion=$(VERSION)
-BINARY     := bin/byspace
-APP_BINARY := bin/byspace-app
+# 产物两个根：`.dev/` 装本地可再生的一切（开发二进制、中间 bundle、测试证据），`dist/` 只装对外发布物。
+BINARY     := .dev/bin/byspace
+APP_BINARY := .dev/bin/byspace-app
+BUILD_DIR  := .dev/build
 CLI_TARGETS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64 android/arm64
 
 ifeq ($(shell uname -s),Darwin)
@@ -25,8 +27,8 @@ ifeq ($(OS),Windows_NT)
   # Node's spawn goes through CreateProcess, which appends .exe to an extension-less name instead
   # of running the file as-is, so a headless binary without the suffix cannot be launched by
   # `npm run dev:daemon`, `npm run cli`, or the e2e restart spec.
-  BINARY := bin/byspace.exe
-  APP_BINARY := bin/byspace-app.exe
+  BINARY := .dev/bin/byspace.exe
+  APP_BINARY := .dev/bin/byspace-app.exe
 endif
 
 .PHONY: build build-app app dmg build-android release-cli release-windows release-linux-desktop checksums build-web build-full test vet clean
@@ -39,34 +41,33 @@ build:
 build-app:
 	CGO_ENABLED=1 GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(APP_BINARY) .
 
-## app: 构建 macOS dist/BySpace.app bundle 并打包 dist/byspace-darwin-$(GOARCH).zip
+## app: 构建 .dev/build/BySpace.app bundle 并打包 dist/byspace-darwin-$(GOARCH).zip
 app: build-app
-	@rm -rf dist/BySpace.app build/darwin/BySpace.iconset
-	@mkdir -p dist/BySpace.app/Contents/MacOS dist/BySpace.app/Contents/Resources build/darwin/BySpace.iconset
-	@cp $(APP_BINARY) dist/BySpace.app/Contents/MacOS/byspace
+	@rm -rf $(BUILD_DIR)/BySpace.app $(BUILD_DIR)/BySpace.iconset
+	@mkdir -p $(BUILD_DIR)/BySpace.app/Contents/MacOS $(BUILD_DIR)/BySpace.app/Contents/Resources $(BUILD_DIR)/BySpace.iconset dist
+	@cp $(APP_BINARY) $(BUILD_DIR)/BySpace.app/Contents/MacOS/byspace
 	@for s in 16 32 128 256 512; do \
-		sips -z $$s $$s internal/gui/icon.png --out build/darwin/BySpace.iconset/icon_$${s}x$${s}.png >/dev/null 2>&1; \
-		sips -z $$((s*2)) $$((s*2)) internal/gui/icon.png --out build/darwin/BySpace.iconset/icon_$${s}x$${s}@2x.png >/dev/null 2>&1; \
+		sips -z $$s $$s internal/gui/icon.png --out $(BUILD_DIR)/BySpace.iconset/icon_$${s}x$${s}.png >/dev/null 2>&1; \
+		sips -z $$((s*2)) $$((s*2)) internal/gui/icon.png --out $(BUILD_DIR)/BySpace.iconset/icon_$${s}x$${s}@2x.png >/dev/null 2>&1; \
 	done
-	@iconutil -c icns build/darwin/BySpace.iconset -o dist/BySpace.app/Contents/Resources/BySpace.icns && rm -rf build/darwin/BySpace.iconset
-	@sed 's/@VERSION@/$(VERSION)/g' build/darwin/Info.plist > dist/BySpace.app/Contents/Info.plist
-	@ditto -c -k --sequesterRsrc --keepParent dist/BySpace.app dist/byspace-darwin-$(GOARCH).zip
-	@echo "● Built dist/BySpace.app and dist/byspace-darwin-$(GOARCH).zip"
+	@iconutil -c icns $(BUILD_DIR)/BySpace.iconset -o $(BUILD_DIR)/BySpace.app/Contents/Resources/BySpace.icns && rm -rf $(BUILD_DIR)/BySpace.iconset
+	@sed 's/@VERSION@/$(VERSION)/g' build/darwin/Info.plist > $(BUILD_DIR)/BySpace.app/Contents/Info.plist
+	@ditto -c -k --sequesterRsrc --keepParent $(BUILD_DIR)/BySpace.app dist/byspace-darwin-$(GOARCH).zip
+	@echo "● Built dist/byspace-darwin-$(GOARCH).zip"
 
 ## dmg: 构建 macOS dist/byspace-darwin-$(GOARCH).dmg 安装镜像
 dmg: app
-	@rm -rf build/darwin/dmg dist/byspace-darwin-$(GOARCH).dmg
-	@mkdir -p build/darwin/dmg dist
-	@cp -R dist/BySpace.app build/darwin/dmg/
-	@ln -s /Applications build/darwin/dmg/Applications
-	@hdiutil create -volname BySpace -srcfolder build/darwin/dmg -ov -format UDZO dist/byspace-darwin-$(GOARCH).dmg >/dev/null
-	@rm -rf build/darwin/dmg
+	@rm -rf $(BUILD_DIR)/dmg dist/byspace-darwin-$(GOARCH).dmg
+	@mkdir -p $(BUILD_DIR)/dmg dist
+	@cp -R $(BUILD_DIR)/BySpace.app $(BUILD_DIR)/dmg/
+	@ln -s /Applications $(BUILD_DIR)/dmg/Applications
+	@hdiutil create -volname BySpace -srcfolder $(BUILD_DIR)/dmg -ov -format UDZO dist/byspace-darwin-$(GOARCH).dmg >/dev/null
+	@rm -rf $(BUILD_DIR)/dmg
 	@echo "● Built dist/byspace-darwin-$(GOARCH).dmg"
 
-## build-android: 编译 Wails v3 Android 侧载客户端 APK (bin/byspace-android-arm64.apk)
+## build-android: 编译 Wails v3 Android 侧载客户端 APK (dist/byspace-android-arm64.apk)
 build-android:
 	VERSION="$(VERSION)" bash ./build/android/build.sh
-	@mkdir -p dist && cp bin/byspace-android-arm64.apk dist/byspace-android-arm64.apk
 
 ## release-cli: 交叉编译全平台无头 CLI 二进制到 dist/
 release-cli:
@@ -117,8 +118,8 @@ test:
 vet:
 	go vet -tags nogui ./...
 
-## clean: 清掉构建产物
+## clean: 清掉构建产物（保留 .dev/byspace-home 等开发状态）
 clean:
-	rm -rf bin/byspace $(BINARY) $(APP_BINARY) bin/byspace-android-arm64.apk rsrc_windows_*.syso dist
+	rm -rf .dev/bin .dev/build .dev/test-results .dev/vitest rsrc_windows_*.syso dist
 	rm -rf internal/webui/dist/*
 	touch internal/webui/dist/.keep

@@ -6,7 +6,6 @@ import { defineConfig, type Plugin } from "vite";
 
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const webSrc = path.join(webRoot, "src");
-const coreDir = path.join(webSrc, "core");
 
 // A Node built-in name with no browser package installed (`buffer` without the `buffer` dependency)
 // builds into an empty module and the app crashes at runtime. Vite only warns, and a throw from the
@@ -25,10 +24,7 @@ const failOnBrowserExternalized: Plugin = {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), failOnBrowserExternalized],
   resolve: {
-    alias: [
-      { find: /^~\//, replacement: `${webSrc}/` },
-      { find: /^@\//, replacement: `${coreDir}/` },
-    ],
+    alias: [{ find: /^@\//, replacement: `${webSrc}/` }],
     dedupe: ["react", "react-dom", "zustand", "@tanstack/react-query", "i18next", "react-i18next"],
   },
   define: {

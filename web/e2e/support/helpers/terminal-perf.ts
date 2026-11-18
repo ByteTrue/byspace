@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { buildHostWorkspaceRoute } from "../../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute } from "../../../src/utils/host-routes";
 import { getServerId } from "./server-id";
 
 export function buildTerminalWorkspaceUrl(workspaceId: string, terminalId: string): string {

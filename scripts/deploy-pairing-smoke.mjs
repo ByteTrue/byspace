@@ -23,7 +23,7 @@ const origin = (process.env.DEPLOY_WEB_ORIGIN ?? "").trim().replace(/\/+$/, "");
 if (!origin) throw new Error("DEPLOY_WEB_ORIGIN is required");
 const relayHost = new URL(origin).host;
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const binary = path.join(repoRoot, "bin", "byspace");
+const binary = path.join(repoRoot, ".dev", "bin", "byspace");
 const keepHome = process.env.DEPLOY_SMOKE_KEEP_HOME === "1";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

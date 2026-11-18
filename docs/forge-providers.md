@@ -30,15 +30,15 @@ For forge `acme`, the expected end state is:
 3. **App modules** - a forge splits into a pure logic half and a view half so
    logic consumers (URL builders, merge-capability, native checks, and the
    Node-based e2e harness) never pull the client rendering stack:
-   - `web/src/core/git/forges/acme.ts` - logic: `id`, optional `urlGrammar`
+   - `web/src/git/forges/acme.ts` - logic: `id`, optional `urlGrammar`
      (source links and pasted issue/change-request reference paths), optional
      `facts` (schema, merge-capability, native-check fallbacks). No
      React/React-Native imports. Register in `CLIENT_FORGE_LOGIC_MODULES` in
-     `web/src/core/git/forges/index.ts`.
-   - `web/src/core/git/forges/acme.view.tsx` - view: `icon` (SVG component
-     under `web/src/core/components/icons/`), optional `brandColor`, optional
+     `web/src/git/forges/index.ts`.
+   - `web/src/git/forges/acme.view.tsx` - view: `icon` (SVG component
+     under `web/src/components/icons/`), optional `brandColor`, optional
      `paneContributions`. Register in `CLIENT_FORGE_VIEW_MODULES` in
-     `web/src/core/git/forges/view.ts`.
+     `web/src/git/forges/view.ts`.
 
 There should be no protocol typed-union arm, no central app icon/color/url/facts
 map, and no central server union of known forge facts.
@@ -123,7 +123,7 @@ rendering stack:
 - `brandColor` (`null` for neutral; GitHub intentionally uses `null`)
 - optional `paneContributions`
 
-Two registries live under `web/src/core/git/forges/`:
+Two registries live under `web/src/git/forges/`:
 `CLIENT_FORGE_LOGIC_MODULES` (`index.ts`) drives URL grammar, merge-capability
 derivation, and native fallback checks; `CLIENT_FORGE_VIEW_MODULES` (`view.ts`)
 drives icon/color lookup and PR-pane contributions. Logic consumers must import
@@ -149,8 +149,8 @@ To add `acme`:
 3. Add one branch to each Go dispatch switch (`CurrentPRStatus`,
    `SearchIssuesAndPullRequests`, `forgeBinaryName`/`ProbeForgeAuth`, timeline)
    and the forge's exact hosts to `forgeCloudHosts`.
-4. Add `web/src/core/git/forges/acme.ts` (logic) and
-   `web/src/core/git/forges/acme.view.tsx` (view).
+4. Add `web/src/git/forges/acme.ts` (logic) and
+   `web/src/git/forges/acme.view.tsx` (view).
 5. Add one `CLIENT_FORGE_LOGIC_MODULES` entry (`index.ts`) and one
    `CLIENT_FORGE_VIEW_MODULES` entry (`view.ts`).
 6. Add/update the icon component only if the client bundle should show a brand

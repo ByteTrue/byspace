@@ -41,8 +41,8 @@ import {
 import { resolveSidebarProjectIconTargets } from "@/utils/sidebar-project-row-model";
 import { useProjectIcons } from "@/projects/icons";
 import { useWorkspaceLabelProjection } from "@/workspace-labels";
-import { keepOpen } from "~/components/menu-kit";
-import { HostStatusDot } from "~/components/host-status-dot";
+import { keepOpen } from "@/components/menu-kit";
+import { HostStatusDot } from "@/components/host-status-dot";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -55,9 +55,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { ProjectIcon } from "~/sidebar/status-visuals";
-import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
+} from "@/ui/dropdown-menu";
+import { ProjectIcon } from "@/sidebar/status-visuals";
+import { SidebarIconButton } from "@/sidebar/sidebar-icon-button";
 import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
 import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 

@@ -33,7 +33,7 @@ if [ ! -x "$CC_ARM64" ]; then
 fi
 
 JNILIBS_ARM64="$ROOT_DIR/build/android/app/src/main/jniLibs/arm64-v8a"
-mkdir -p "$JNILIBS_ARM64" "$ROOT_DIR/bin"
+mkdir -p "$JNILIBS_ARM64" "$ROOT_DIR/dist"
 
 echo "● Building libwails.so (android/arm64, version=$VERSION)..."
 unset CGO_CFLAGS CGO_LDFLAGS
@@ -58,6 +58,6 @@ echo "● Assembling Android APK via Gradle..."
 )
 
 APK_SRC="$ROOT_DIR/build/android/app/build/outputs/apk/release/app-release.apk"
-APK_DST="$ROOT_DIR/bin/byspace-android-arm64.apk"
+APK_DST="$ROOT_DIR/dist/byspace-android-arm64.apk"
 cp "$APK_SRC" "$APK_DST"
 echo "● Built Android APK: $APK_DST ($(du -h "$APK_DST" | cut -f1))"

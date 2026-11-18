@@ -1,8 +1,9 @@
 # Reading the archived Node daemon
 
 The Go daemon in `internal/` is a port of the Node daemon that shipped before it. That daemon's
-source is kept, read-only and never built, under `archive/packages/` — `server/` for the daemon,
-`cli/` for the command line. Nothing in the build or the test suite loads it.
+source is no longer in the working tree: it lives in the git tag **`v0.20.0`**, the last release
+that shipped `packages/server/` (the daemon) and `packages/cli/` (the command line). Read it with
+`git show`, the same way [AGENTS.md](../AGENTS.md) reads the retired Expo app from `archive/expo-app`.
 
 It exists to answer one question, which comes up on almost every bug report: **did the port break
 this, or was it always like this?**
@@ -21,18 +22,18 @@ Read the archived source before you change Go behaviour, in these cases:
 
 The port kept file-for-file, function-for-function correspondence wherever it could. Find the Go
 call site first, then open the archived file with the same path: `internal/server/ws_git_system.go`
-came from `archive/packages/server/src/server/session.ts` (grep for the RPC name, not the filename —
-that file is one of the big ones), `internal/workspace/git.go` from
-`archive/packages/server/src/utils/checkout-git.ts`, `internal/cli/main.go` from
-`archive/packages/cli/src/cli.ts`.
+came from `packages/server/src/server/session.ts` (grep for the RPC name, not the filename — that
+file is one of the big ones), `internal/workspace/git.go` from
+`packages/server/src/utils/checkout-git.ts`, `internal/cli/main.go` from `packages/cli/src/cli.ts`.
 
 Comments in the Go source cite the archived file and line when the behaviour is non-obvious
-(`node daemon: checkout-git.ts:2727`). Grep the archived tree for the quoted constant or message
+(`node daemon: checkout-git.ts:2727`). Search the tagged tree for the quoted constant or message
 string; that lands faster than reading either file top to bottom.
 
 ```bash
-rg -n "Cannot rewind before the provider" archive/packages/
-rg -n "PORT_SCRIPT_TIMEOUT_MS" archive/packages/server/src
+git show v0.20.0:packages/server/src/server/persisted-config.ts
+git grep -n "Cannot rewind before the provider" v0.20.0 -- packages/
+git grep -n "PORT_SCRIPT_TIMEOUT_MS" v0.20.0 -- packages/server/src
 ```
 
 ## What the archive settles, and what it does not
@@ -47,13 +48,12 @@ Go port on purpose. When the two disagree, decide which behaviour you want and s
 next to the Go code — "node did X because Y; this does Z because Y no longer holds". A silent
 divergence is what the next reader cannot afford.
 
-**It is not a reference for anything else.** `archive/` is not a workspaces member, not typechecked,
-not linted, not formatted, not run by CI. Do not import from it, do not copy its tests into the Go
-suite, do not point `package.json` at it.
+**It is not a reference for anything else.** Do not check it out into the working tree to import
+from it, copy its tests into the Go suite, or point `package.json` at it.
 
 ## The parity guards
 
-Three scripts compare the archived surface against the Go one, so a name a client can type cannot
+Four scripts compare the Node surface against the Go one, so a name a client can type cannot
 disappear quietly:
 
 | Guard                         | Compares                                                    |
@@ -63,18 +63,17 @@ disappear quietly:
 | `scripts/go-emit-parity.mjs`  | every field a wire response declares, against what Go sends |
 | `scripts/go-parity-audit.mjs` | every inbound wire field, against what Go parses            |
 
-All four run in CI. They read the archived source, which is why the archive cannot be deleted while
-they exist — removing it means regenerating the expected surfaces into checked-in snapshots first.
+All four run in CI. They read the expected Node surface from `scripts/node-surface-snapshot.json`,
+which is checked in — that is what lets the archive leave the working tree. Each script still
+prefers a real `archive/packages/` checkout when one exists, so you can restore the tag locally to
+regenerate the snapshot; with no checkout they use the snapshot and nothing needs the tag to run.
 
 Adding a guard is worth it when a name crosses a boundary a user can see: a command, a tool, a
 route, an environment variable, a wire field. Adding one for an internal function is not.
 
-## Deleting the archive
+## Deleting the tag
 
-Two things hold it in place: the parity guards read it, and people read it while debugging. The
-second is the reason it is still here after the port finished.
-
-When the guards are migrated to snapshots and the daemon has run in production long enough that
-nobody asks "what did the old one do", delete `archive/` in one commit and say so in the changelog.
-Until then, leave it alone — an unbuilt tree that answers questions is cheaper than an investigation
-that reconstructs the answer from scratch.
+The guards no longer need it, so only debugging does. Keep `v0.20.0` reachable while anyone still
+asks "what did the old one do" — a tag costs nothing, and reconstructing the answer from scratch
+costs an afternoon. If you do drop it, drop the `archive/packages/` branches in the four scripts at
+the same time, so no reader is sent looking for a tree that cannot be restored.

@@ -2,7 +2,7 @@ import { useCallback, useRef, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { usePanelStore } from "@/stores/panel-store";
-import { SidebarRail, useSidebar } from "~/components/ui/sidebar";
+import { SidebarRail, useSidebar } from "@/ui/sidebar";
 
 // A press that moves less than this is a click, which collapses the sidebar as shadcn's rail does.
 const DRAG_THRESHOLD_PX = 3;

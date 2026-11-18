@@ -1,11 +1,11 @@
 import { Navigate, Outlet, useParams } from "react-router";
-import { useIsFocused } from "~/app/route-focus";
+import { useIsFocused } from "@/platform/route-focus";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { HostRouteProvider } from "@/navigation/host-route-context";
 import { resolveStartupRoute } from "@/navigation/host-runtime-bootstrap";
 import { useHostRegistryStatus, useHosts } from "@/runtime/host-runtime";
 import { buildSettingsSectionRoute } from "@/utils/host-routes";
-import { hrefToPath } from "~/app/navigation";
+import { hrefToPath } from "@/platform/navigation";
 import SettingsScreen from "@/screens/settings-screen";
 
 /** archive/expo-app:packages/app/src/app/h/[serverId]/_layout.tsx: an unknown host redirects, a known one scopes its leaves. */

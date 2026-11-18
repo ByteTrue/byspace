@@ -8,8 +8,7 @@
     "noEmit": true,
     "incremental": false,
     "paths": {
-      "~/*": ["./src/*"],
-      "@/*": ["./src/core/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

@@ -13,7 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/ui/hover-card";
 import { cn } from "cn";
 
 const InfoHoverCardCloseContext = createContext<() => void>(() => {});

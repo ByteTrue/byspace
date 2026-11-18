@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 
 /** Short control/tab labels only. Information worth a card belongs in `InfoHoverCard`. */
 export function WithTooltip({

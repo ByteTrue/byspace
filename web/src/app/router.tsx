@@ -15,9 +15,9 @@ import SettingsSectionRoute from "@/app/settings/[section]";
 import SettingsHostSectionRoute from "@/app/settings/hosts/[serverId]/[hostSection]";
 import SettingsHostProjectsRoute from "@/app/settings/hosts/[serverId]/projects/index";
 import SettingsHostProjectDetailRoute from "@/app/settings/hosts/[serverId]/projects/[projectId]";
-import { Root } from "~/app/root";
-import { HostLayout, SettingsIndexRoute } from "~/app/routes";
-import { WORKSPACE_ROUTE } from "~/app/workspace-layer";
+import { Root } from "@/app/root";
+import { HostLayout, SettingsIndexRoute } from "@/app/routes";
+import { WORKSPACE_ROUTE } from "@/app/workspace-layer";
 
 // One entry per file in archive/expo-app:packages/app/src/app, same paths, so links, bookmarks and pairing URLs
 // keep working.

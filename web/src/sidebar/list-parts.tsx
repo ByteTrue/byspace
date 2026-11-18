@@ -1,10 +1,10 @@
-import { SidebarGroupLabel, SidebarMenuButton } from "~/components/ui/sidebar";
+import { SidebarGroupLabel, SidebarMenuButton } from "@/ui/sidebar";
 import { useCallback } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Import, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
-import { Button } from "~/components/ui/button";
-import { Skeleton } from "~/components/ui/skeleton";
+import { Button } from "@/ui/button";
+import { Skeleton } from "@/ui/skeleton";
 
 /** "Show more / Show less" under a group longer than 20 rows. */
 export function ShowMoreRow({

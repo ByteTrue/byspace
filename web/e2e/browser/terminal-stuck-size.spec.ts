@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "../support/fixtures";
 import { TerminalE2EHarness, withTerminalInApp } from "../support/helpers/terminal-dsl";
 import { getTerminalBufferText } from "../support/helpers/terminal-perf";
-import { buildHostWorkspaceRoute } from "../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 import { getServerId } from "../support/helpers/server-id";
 
 /**

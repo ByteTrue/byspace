@@ -18,7 +18,7 @@ Four providers are built in, each with a native adapter under `internal/agent/pr
 Every other agent — GitHub Copilot, Cursor, Kimi, Kiro, Trae, and any ACP-compatible binary — connects
 through the generic ACP host (`acp.go`), not a built-in adapter. There are two ways in:
 
-- **The in-app provider catalog** (`web/src/core/data/acp-provider-catalog.ts`). Each entry is a
+- **The in-app provider catalog** (`web/src/data/acp-provider-catalog.ts`). Each entry is a
   one-click install that writes an `extends: "acp"` provider config with the right `command`.
 - **Manual config**: `extends: "acp"` plus a `command` in `config.json`. See
   [custom-providers.md](custom-providers.md#adding-a-generic-acp-provider).
@@ -334,8 +334,8 @@ A new **built-in** provider needs a native adapter:
    (`internal/agent/providers/driver.go`): status, timeline, prompt/steer/abort, permissions, model and
    thinking setters, commands, subagents, and the event subscription. Wire it into the `switch spec.Protocol`
    in `StartProviderSession`, or reuse an existing protocol (`acp`, `pi-rpc`, …).
-3. Add a provider icon under `web/src/core/components/icons/` and register it in
-   `web/src/core/components/provider-icons.ts`. Without one, the UI falls back to a generic `Bot` icon.
+3. Add a provider icon under `web/src/components/icons/` and register it in
+   `web/src/components/provider-icons.ts`. Without one, the UI falls back to a generic `Bot` icon.
 4. Run `npm run typecheck` and `npm run audit` (the Go parity checks catch a field the daemon does not parse
    or does not send).
 

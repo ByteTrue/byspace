@@ -26,7 +26,7 @@ jobs:
       pull-requests: read
       actions: read
     outputs:
-      full: ${{ steps.scope.outputs.release_fast != 'true' && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
+      full: ${{ steps.scope.outputs.release_fast != 'true' && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.workspace != 'false') }}
       format: ${{ steps.filter.outputs.format != 'false' }}
       quality: ${{ steps.filter.outputs.quality != 'false' }}
       go: ${{ steps.scope.outputs.release_fast != 'true' && steps.filter.outputs.go != 'false' }}
@@ -86,6 +86,10 @@ jobs:
           scripts/cli-surface.test.mjs
           scripts/parity-surface.test.mjs
           scripts/relay-worker.test.mjs
+          scripts/repo-config.test.mjs
+          scripts/generated-assets.test.mjs
+          scripts/config-schema.test.mjs
+          scripts/web-layout.test.mjs
 
   format:
     name: format
@@ -353,7 +357,7 @@ jobs:
         with:
           name: e2e-prebuilt
           path: |
-            bin/byspace
+            .dev/bin/byspace
             web/dist
             packages/highlight/dist
             packages/protocol/dist
@@ -402,7 +406,7 @@ jobs:
           path: .
 
       - name: Make prebuilt daemon binary executable
-        run: chmod +x bin/byspace
+        run: chmod +x .dev/bin/byspace
 
       - name: Install Playwright browsers
         timeout-minutes: 10
@@ -424,7 +428,7 @@ jobs:
         with:
           name: playwright-results-${{ env.PLAYWRIGHT_ARTIFACT }}
           path: |
-            web/test-results/
+            .dev/test-results/
 
   relay-tests:
     name: relay-tests

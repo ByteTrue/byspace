@@ -10,7 +10,7 @@ import {
 import { Copy, Minus, Square, X } from "lucide-react";
 import { isWailsDesktopContainer } from "@/utils/wails";
 import { onWindowsWindowMaximizedChange } from "@/utils/desktop-window-events";
-import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/ui/sidebar";
 import { cn } from "cn";
 
 const ignoreOpenChange = () => {};

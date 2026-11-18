@@ -41,31 +41,27 @@ import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-ar
 import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { cn } from "cn";
-import { contextMenuKit, dropdownMenuKit, type MenuKit } from "~/components/menu-kit";
-import type { SortableItemProps } from "~/components/sortable-list";
-import { Shortcut } from "~/components/shortcut";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "~/components/ui/context-menu";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+import { contextMenuKit, dropdownMenuKit, type MenuKit } from "@/components/menu-kit";
+import type { SortableItemProps } from "@/components/sortable-list";
+import { Shortcut } from "@/components/shortcut";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/ui/context-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/ui/dropdown-menu";
 import {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "~/components/ui/sidebar";
-import { Kbd } from "~/components/ui/kbd";
-import { Spinner } from "~/components/ui/spinner";
+} from "@/ui/sidebar";
+import { Kbd } from "@/ui/kbd";
+import { Spinner } from "@/ui/spinner";
 import {
   useWorkspaceMetaRowItems,
   WorkspaceMetaRow,
   WorkspaceTrailingContent,
-} from "~/sidebar/meta-row";
-import { ProjectStatusIndicator, WorkspaceStatusIndicator } from "~/sidebar/status-visuals";
-import { WorkspaceLabelsSubmenu } from "~/sidebar/workspace-labels-menu";
-import { WorkspaceHoverCard } from "~/sidebar/workspace-hover-card";
+} from "@/sidebar/meta-row";
+import { ProjectStatusIndicator, WorkspaceStatusIndicator } from "@/sidebar/status-visuals";
+import { WorkspaceLabelsSubmenu } from "@/sidebar/workspace-labels-menu";
+import { WorkspaceHoverCard } from "@/sidebar/workspace-hover-card";
 
 // shortcut: copied from archive/expo-app:packages/app/src/components/sidebar-workspace-list.tsx, whose module
 // renders React Native; the copy there goes away at the cutover.

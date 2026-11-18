@@ -16,7 +16,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const SERVER_ID = "outdated-host";
 
 // The daemon this fixture starts reports a version the app does not have, because the host page
-// renders the update card only when the two disagree. Copying `bin/byspace` cannot do that — it is
+// renders the update card only when the two disagree. Copying `.dev/bin/byspace` cannot do that — it is
 // built at the app's version — so the binary is built here with an older one.
 const OUTDATED_VERSION = "0.0.1-e2e-outdated";
 

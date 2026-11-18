@@ -1,6 +1,6 @@
 # Terminal performance
 
-How terminal output stays low-latency, what the invariants are, and how to measure before/after any change to the pipeline. Read this before touching anything under `packages/server/src/terminal/` or `web/src/core/terminal/runtime/`.
+How terminal output stays low-latency, what the invariants are, and how to measure before/after any change to the pipeline. Read this before touching anything under `packages/server/src/terminal/` or `web/src/terminal/runtime/`.
 
 ## The pipeline
 

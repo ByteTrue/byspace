@@ -10,6 +10,7 @@ import { configureDevBySpaceHome, runDevChild } from "./dev-home.mjs";
 const rootDir = resolve(fileURLToPath(import.meta.url), "../..");
 const binary = resolve(
   rootDir,
+  ".dev",
   "bin",
   process.platform === "win32" ? "byspace-app.exe" : "byspace-app",
 );
@@ -52,7 +53,7 @@ if (!existsSync(binary)) {
 // (internal/gui/notify.go) only serves bundled apps; outside one, notifications fall back to the
 // webview's. A dev bundle id keeps the dev app's notification permission apart from BySpace's.
 function devMacBundle() {
-  const bundle = resolve(rootDir, "bin", "BySpace Dev.app");
+  const bundle = resolve(rootDir, ".dev", "build", "BySpace Dev.app");
   const executable = resolve(bundle, "Contents", "MacOS", "byspace-app");
   mkdirSync(resolve(bundle, "Contents", "MacOS"), { recursive: true });
   copyFileSync(binary, executable);

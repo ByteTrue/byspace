@@ -10,7 +10,7 @@ import {
 } from "../support/helpers/workspace-setup";
 import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 import { getServerId } from "../support/helpers/server-id";
-import { buildHostWorkspaceRoute } from "../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 
 test("scripts menu resizes when a service row grows after launch", async ({ page }) => {
   const client = await connectWorkspaceSetupClient();

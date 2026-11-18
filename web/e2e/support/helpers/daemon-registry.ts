@@ -1,7 +1,7 @@
 import type {
   FormPreferences,
   ProviderPreferences,
-} from "../../../src/core/create-agent-preferences/preferences";
+} from "../../../src/create-agent-preferences/preferences";
 
 export const TEST_HOST_LABEL = "localhost";
 

@@ -1,7 +1,7 @@
 # Routing
 
 The web app's routes are a React Router data router, `web/src/app/router.tsx`, with one entry per
-route module in `web/src/core/app/`. The URLs are the ones the Expo app used, so links, bookmarks,
+route module in `web/src/app/`. The URLs are the ones the Expo app used, so links, bookmarks,
 notification targets, and pairing URLs keep working. Code navigates through `web/src/app/navigation.tsx`
 (`router.push("/h/...")`, `useLocalSearchParams`, `<Redirect>`), which drives React Router: the
 router is a module-level object, so plain modules navigate too.
@@ -22,7 +22,7 @@ A covered workspace is still running, so:
   and nothing in it may navigate: a redirect from a covered host layout would take the screen on
   top away.
 - **It measures as zero.** Layout code that measures must measure again when it shows, as the tab
-  row does with a `ResizeObserver` (`web/src/core/screens/workspace/workspace-desktop-tabs-row.tsx`).
+  row does with a `ResizeObserver` (`web/src/screens/workspace/workspace-desktop-tabs-row.tsx`).
   A tab opened from History while the workspace is covered otherwise never appears.
 - **It keeps its route params.** Active-workspace observers read the current pathname, not the
   params; otherwise the covered workspace overwrites the remembered one before Settings or History
@@ -42,12 +42,12 @@ offline. The workspace screen owns that offline and loading state.
 
 ## Going to a workspace
 
-Call `navigateToWorkspace()` (`web/src/core/stores/navigation-active-workspace-store`) from any
+Call `navigateToWorkspace()` (`web/src/stores/navigation-active-workspace-store`) from any
 route, without branching on where you are. Pass `serverId` and `workspaceId`; when the action
 names a tab, pass it as `target`, and that choice wins over attention-aware tab selection.
 
 A workspace never adds a history entry. It replaces the host-level entry, after popping the screens
-pushed above it (`web/src/core/navigation/workspace-route-navigation.ts`), so Back from a workspace
+pushed above it (`web/src/navigation/workspace-route-navigation.ts`), so Back from a workspace
 leaves the app the way Android's back button does, instead of walking through every workspace the
 user visited.
 

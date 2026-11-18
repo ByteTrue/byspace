@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:browser": "vitest run --project browser",
     "test:e2e": "playwright test --project=browser",
-    "build:mermaid-runtime": "node ./src/core/components/markdown/fence/mermaid/build-runtime.mjs",
+    "build:mermaid-runtime": "node ./src/components/markdown/fence/mermaid/build-runtime.mjs",
     "test:e2e:diff-performance": "cross-env BYSPACE_DIFF_PERF_E2E=1 playwright test --project=browser e2e/browser/diff-performance.spec.ts",
     "test:e2e:stream-smoothness": "cross-env BYSPACE_AGENT_STREAM_PERF_E2E=1 playwright test --project=browser e2e/browser/agent-stream-smoothness.spec.ts",
     "test:e2e:real": "cross-env E2E_FORK_BYSPACE_HOME_FROM=../.dev/byspace-home playwright test --project=real-provider",

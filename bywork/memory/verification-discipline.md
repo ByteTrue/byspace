@@ -6,6 +6,8 @@
 - 把无关前置条件与被测行为分开：audit 浏览器验证曾因环境问题从 10/10 掉到 2/4，修好前置后 7/8，掉的不是被测行为。
 - 发布门必须区分「必需 job 真的跑了」与「被 path filter 跳过但整体绿」：0.25.0 tag 建在 docs/scripts-only commit 上，CI 跳过 go/app/browser/relay job，release:push 把整体 success 当 verified；补跑全量 tag CI 后 setup-guide-pairing 与 sidebar-workspace-mark-unread 仍失败。
 - 汇总器只数失败标记（如 `--- FAIL:`）时，空输出 = 假全绿；先确认子进程有输出。
+- `npm run cli -- daemon status` 报 stopped **不代表 6778 空闲**——它只认自己 dev home 的 pid 文件。别的 worktree 的 dev daemon 可能正占着端口并 serve 它自己的旧 UI，此时 `audit:browser` 会失败在首屏快照（`text: Not found`），看着像自己改坏了。先 `lsof -nP -iTCP:6778 -sTCP:LISTEN` 看 PID 的真实 cmdline；不是自己的就别动，改用 `BYSPACE_LISTEN=127.0.0.1:6779 npm run dev:daemon` + `audit:browser -- --base http://127.0.0.1:6779`。
+- 用 `git stash` 取基线时，Makefile 也被退回旧产物路径（`bin/byspace`），e2e 会全数失败在「binary not found」——那不是有效基线。用 `BYSPACE_E2E_DAEMON_BINARY=<仍在的二进制绝对路径>` 指过去再跑。stash/pop 会触发 AGENTS.md 的 system-update 通知来回翻转，那是副作用不是真实编辑。
 
 ## 依据
 
