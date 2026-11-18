@@ -142,35 +142,6 @@ test("SDK subscribers receive timeline replacement instead of silently losing hi
   }
 });
 
-test("event listeners release demand and restore only remaining interests", async () => {
-  const h = connection();
-  try {
-    const ready = h.client.connect();
-    h.open();
-    await ready;
-    const projects = h.client.on("project.update", () => {});
-    const providers = h.client.on("providers_snapshot_update", () => {});
-    const subscriptions = () =>
-      h.sent
-        .filter((f) => f.message?.type === "session.events.set_subscription.request")
-        .map((f) => f.message?.events);
-    expect(subscriptions()).toEqual([
-      ["project.update"],
-      ["project.update", "providers_snapshot_update"],
-    ]);
-    projects();
-    h.disconnect();
-    const reconnect = h.client.connect();
-    h.open();
-    await reconnect;
-    expect(subscriptions().at(-1)).toEqual(["providers_snapshot_update"]);
-    providers();
-    expect(subscriptions().at(-1)).toEqual([]);
-  } finally {
-    await h.client.close();
-  }
-});
-
 test("provider references fetch a body only for interested SDK listeners", async () => {
   const h = connection();
   const received: unknown[] = [];

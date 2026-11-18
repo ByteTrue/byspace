@@ -1246,7 +1246,6 @@ func sessionMessageNeedsOrder(raw json.RawMessage) bool {
 		"subscribe_terminals_request",
 		"fs.file.subscribe.request",
 		"subscribe_checkout_diff_request",
-		"session.events.set_subscription.request",
 		"agent.timeline.set_subscription.request":
 		return true
 	}
@@ -1362,21 +1361,6 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			}
 		}
 		return
-
-	case "session.events.set_subscription.request":
-		var req struct {
-			RequestID string   `json:"requestId"`
-			Events    []string `json:"events"`
-		}
-		_ = json.Unmarshal(raw, &req)
-		events := req.Events
-		if events == nil {
-			events = []string{}
-		}
-		_ = sendSessionMsg(ctx, sink, "session.events.set_subscription.response", map[string]any{
-			"requestId": req.RequestID,
-			"events":    events,
-		})
 
 	case "agent.timeline.set_subscription.request":
 		var req struct {

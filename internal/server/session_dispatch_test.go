@@ -17,7 +17,6 @@ func TestSessionMessageNeedsOrderCoversStateRegistrations(t *testing.T) {
 		"subscribe_terminals_request",
 		"fs.file.subscribe.request",
 		"subscribe_checkout_diff_request",
-		"session.events.set_subscription.request",
 		"agent.timeline.set_subscription.request",
 	}
 	for _, msgType := range ordered {

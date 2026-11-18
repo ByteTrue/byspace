@@ -31,10 +31,6 @@ const INTENTIONALLY_UNSUPPORTED = new Map([
     "client_heartbeat",
     "presence telemetry from the app; daemon keeps no per-device presence store",
   ],
-  [
-    "session.events.set_subscription",
-    "explicit event subscription is served by broadcast filtering, not a stored preference",
-  ],
 ]);
 
 /** 解析 `SessionInboundMessageSchema = z.discriminatedUnion("type", [...])` 的成员，得到权威入站集合。 */

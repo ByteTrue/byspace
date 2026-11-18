@@ -2896,27 +2896,7 @@ export const CaptureTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
-// These connection event streams have no directory bootstrap or timeline membership.
-export const SessionEventSubscriptionSchema = z.enum([
-  "project.update",
-  "providers_snapshot_update",
-  "agent_attention_required",
-  "agent_permission_request",
-  "agent_permission_resolved",
-]);
-export type SessionEventSubscription = z.infer<typeof SessionEventSubscriptionSchema>;
-export const SessionEventsSetSubscriptionRequestSchema = z.object({
-  type: z.literal("session.events.set_subscription.request"),
-  requestId: z.string(),
-  events: z.array(SessionEventSubscriptionSchema),
-});
-export const SessionEventsSetSubscriptionResponseSchema = z.object({
-  type: z.literal("session.events.set_subscription.response"),
-  payload: z.object({ requestId: z.string() }),
-});
-
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
-  SessionEventsSetSubscriptionRequestSchema,
   AbortRequestMessageSchema,
   FetchAgentsRequestMessageSchema,
   FetchAgentHistoryRequestMessageSchema,
@@ -5639,7 +5619,6 @@ export const AgentSkillsSaveSelectionResponseSchema = z.object({
   payload: AgentSkillsSaveResultSchema.extend({ requestId: z.string() }),
 });
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
-  SessionEventsSetSubscriptionResponseSchema,
   AgentSkillsGetStatusResponseSchema,
   AgentSkillsReconcileResponseSchema,
   AgentSkillsUninstallResponseSchema,
