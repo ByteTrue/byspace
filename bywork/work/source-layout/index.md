@@ -2,8 +2,8 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批与三件遗留均已完成并验证，PR #51 的 CI 剩余失败已逐条证明是 main 上既有的。等用户决定的两件：删空转的订阅 RPC（要改既有测试）、修 main 上 6 个既有 app-tests 失败（同样要改断言）。tunnel 验收需用户在目标机跑"
-must_hold: "不改既有测试断言；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
+next_action: "无。六批与三件遗留均已完成并验证，用户批准的两件（修 6 个既有坏测、删空转订阅 RPC）也已提交推送。PR #51 的 CI 剩余失败已逐条证明是 main 上既有的（playwright 8 个 + go-tests flake）。tunnel 验收需用户在目标机跑"
+must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
 
@@ -87,7 +87,7 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 - 范围门：`scope.md` 432 项——296「已覆盖」（277 首轮 + 19 补漏，搬进功能目录）、136「不适用」（跨域原语，留在 lib/platform/widgets 或原桶）
 - 契约门：`audit:browser` 基线 11/11（`.dev/baseline/audit-browser2.log`），E 批 11/11、F 批 11/11、遗留收尾 11/11（`.dev/audit-browser-leftover.log`）。CI 契约组 96/96（`.dev/ci-contracts-leftover.log`，比 F 批多的 2 个来自新守卫 web-routes 与扩过的 docs-links）。`npm run audit -- --no-browser` 四检查全过（`.dev/audit-leftover.log`）
 - 完成门：达成。typecheck/lint（2087 文件 0/0）/format 全 exit=0；e2e 22/22（`.dev/e2e-leftover.log`）
-- 需要用户看的推断或无法判定：无。两个既有坏测都已结案（一删一修），docs 死引用已修完并被守卫覆盖。剩下一个独立决定：客户端订阅 RPC 那半边要不要删
+- 需要用户看的推断或无法判定：无。两个既有坏测都已结案（一删一修），docs 死引用已修完并被守卫覆盖。用户随后批准的另两件（6 个 app-tests、订阅 RPC）也已完成，见「本轮之外的发现」对应条目
 
 ## 批次 F 的归属规则与剩余共享桶
 
@@ -158,15 +158,16 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
     - **sidebar-projection ×2**：`c7a0e4e92` 给 `createProjectIconTarget` 加了第四个必需条件 `!input.placement.iconRevision`（`web/src/projects/icon-target.ts:21-27`，diff 实证），而测试夹具 `makeProject`（`web/src/components/sidebar/sidebar-projection.test.ts:45-64`）的 host 不带 `iconRevision` → `resolveSidebarProjectIconTargets` 返回 `[]` → `expected [ 'project', 'other-project' ] to deeply equal []`。**探针实证**：给夹具补 `iconRevision: "rev-1"` 后解析器返回 1 个 target、用例通过。生产侧确实供应该字段（`web/src/projects/workspace-structure.ts:200` 从 `project.projectIconRevision` 取），所以是夹具过时，不是产品 bug。
     - **agent-directory-sync ×1**：`c7a0e4e92` 从 `web/src/runtime/directory-sync/internal/agent-store.ts:76` 删掉了 `legacyWorkspaceId` 推断（原本在 `features.workspaceMultiplicity !== true` 时按 `workspace.workspaceDirectory === normalized.cwd` 认领），现在只剩 `normalized.workspaceId ?? previous?.workspaceId`。测试名就叫 "legacy workspace ownership"，断言 `workspaceId: "legacy-workspace"` 实得 `undefined`。
     - **我一度归因为「packages/client/dist 陈旧」，那是猜测，已证伪**——CI 全新构建也红，本地也复现。
-    - 修它们要改既有测试（补夹具字段 / 删 legacy 分支），按 must_hold 留给用户决定。
+    - **用户批准后已修（commit 810b7af2b）**：actions-store 删 legacy GitHub 分支与 feature-gate 用例，改按 `squash`/`merge` 参数化（12→10 用例）；sidebar-projection 夹具补 `iconRevision: \`rev-${viewKey}\``；agent-directory-sync 删掉 cwd 推断夹具，改断言 payload 自带的 workspaceId 与 stale delta 不清空（共享工厂 `createAgentPayload` 未动）。`npx vitest run` 三文件 15 passed + 6 passed。
   - `playwright` **8 个，是 main 11 个的严格子集**；main 多出的 3 个里有 2 个正是本轮修掉的（`file-explorer-context-actions.spec.ts:474`、`settings-navigation.spec.ts:74`）。
   - `go-tests` **已自证是 flake**：首推红 `TestProcessExitFailsTurnAndReleasesRuntime`，第三推红 `TestServerDirectWebSocketAndPiAgentLifecycle`（报错 `testing.go:1619: TempDir RemoveAll cleanup: unlinkat ...: directory not empty`——teardown 竞态，不是断言失败），**第四推（run 44340859384）go-tests 直接绿**，代码只多了一个 docs commit。本地 `-count=3` 一直 exit=0。本 PR 对 `internal/` 的全部改动是两处注释路径 + gofmt 键对齐（7 增 8 删）。
   - **run 44340859384 与 run 44338444861 的 app-tests / playwright 失败集合 `diff` 完全相同**，唯一变化是 go-tests 转绿——证明剩余红灯稳定且与本次改动无关。
   - **提取失败清单的坑**：`grep -oE "spec\.ts:[0-9]+"` 会把 ✓ 通过的用例也算进去（一次得出 184 个「失败」）。必须先按 `✘` 过滤行再抽位置。
-- **客户端仍在发一个 daemon 已忽略的订阅 RPC（未处理，等用户决定）**：`packages/client/src/daemon-client.ts:3112` 的 `sendEventSubscription` 发 `session.events.set_subscription.request`，Go 侧 handler（`internal/server/server.go:1366-1379`）只 `json.Unmarshal` 后原样回显 events，**从不存储**；`grep -rn "eventSubscriptions" internal/` 零命中。`scripts/go-parity-audit.mjs:35` 已把它列进 `INTENTIONALLY_UNSUPPORTED`，理由写着「explicit event subscription is served by broadcast filtering, not a stored preference」。
-  - **删它不丢行为**：真正省流量的是**客户端本地**的 `handleSessionMessage`（daemon-client.ts:5899-5911），只在 `messageHandlers.has(type) || eventListeners.size > 0` 时才 `providerSnapshotUpdates.receive(msg)`，否则直接 return 不去 fetch body。`updateEventSubscriptions`（:3094）里的 `providerSnapshotUpdates.clear()` 是本地副作用，要保留。既有测试 `packages/client/src/connection.test.ts:174`（interested listeners only）与 `:359`（unsubscribing discards demand）断言的正是这条本地路径，不涉及 wire。
-  - **response schema 是对的**（一度怀疑 Go 发 `payload:{requestId,events}` 而 schema 只要 `{requestId}` 会不匹配）：实测 `validateWSOutboundMessage` 对 Go 的真实形状返回 **true**（zod object 默认剥未知 key）。`.dev/probe-events-response.mjs`。
-  - 删除范围：protocol 的 `SessionEventSubscriptionSchema`/`SessionEventsSetSubscription{Request,Response}Schema`（messages.ts:2900-2916，两个 union 成员）、client 的 `sendEventSubscription` + `ConnectionSubscriptions.setEvents`/`events` 字段/`restore()` 里的 events 分支、Go 的 handler case 与 `sessionMessageNeedsOrder` 列表项、authz table 两行、`session_dispatch_test.go:20` 一行、`go-parity-audit.mjs` 的排除项。**要动既有测试**（connection.test.ts:145 整个用例断言 wire 上的 events 数组），按「既有测试只读」需用户明确授权。
+- **订阅 RPC 已整条删除（commit e8cb64d27，用户批准后执行）**：原来是 `packages/client/src/daemon-client.ts:3112` 的 `sendEventSubscription` 发 `session.events.set_subscription.request`，Go 侧 handler（原 `internal/server/server.go:1366-1379`）只 `json.Unmarshal` 后原样回显 events，**从不存储**。
+  - **删它不丢行为**：真正省流量的是**客户端本地**的 `handleSessionMessage`（daemon-client.ts:5899-5911），只在 `messageHandlers.has(type) || eventListeners.size > 0` 时才 `providerSnapshotUpdates.receive(msg)`，否则直接 return 不去 fetch body。`updateEventSubscriptions` 保留本地副作用 `providerSnapshotUpdates.clear()`。既有测试 `packages/client/src/connection.test.ts:174`（interested listeners only）与 `:359`（unsubscribing discards demand）断言的正是这条本地路径，未改。
+  - **response schema 一直是对的**（一度怀疑 Go 发 `payload:{requestId,events}` 而 schema 只要 `{requestId}` 会不匹配）：实测 `validateWSOutboundMessage` 对 Go 的真实形状返回 **true**（zod object 默认剥未知 key）。`.dev/probe-events-response.mjs`。
+  - 删除范围：protocol 三个 schema + 两个 union 成员、client 的 `sendEventSubscription` 与 `ConnectionSubscriptions.events`/`setEvents`/`restore()` events 分支、Go 的 handler case 与 `sessionMessageNeedsOrder` 列表项、authz table 两行、`session_dispatch_test.go` 一行、`go-parity-audit.mjs` 的 `INTENTIONALLY_UNSUPPORTED` 排除项（该排除项本身就是证据——理由写着「served by broadcast filtering, not a stored preference」）。connection.test.ts 断言 wire events 数组的那个用例随之删除（9 个其余用例未动）。
+  - 验证：typecheck/lint 全 0、`connection.test.ts` 9 passed、`go build ./...` 与 `go test -run 'TestSessionDispatch|TestEveryWSRouteIsClassified'` ok、契约组 **98/98**、`npm run audit -- --no-browser` 四检查全过。
 - **`supportsDesktopPaneSplits()` 恒为 true，背后有一整条死分支**：`web/src/constants/layout.ts:89` 直接 `return true`（自带 shortcut 注释）。`web/src/screens/workspace/workspace-screen.tsx:1493` 的 `canRenderDesktopPaneSplits` 因此恒真，:3354 的 `shouldRenderDesktopPaneFallback` 恒假，:3913-3939 那段 `WorkspaceDesktopTabsRow` 渲染永不执行；`web/src/workspace-tabs/explorer-sidebar.ts:35` 的 `"dock"` 分支同理不可达。另有 4 处 `canRenderDesktopPaneSplits &&` 守卫恒真。删它属于 pane split 的行为改动，注释说「下次改 pane split 时一起删」。
 - **v0.26.4 发布验收**（`bywork/work/project-npm/index.md`）：**资产哈希项已结案**——`gh release download v0.26.4` 取全部 19 个资产到 `.dev/release-verify/`，`shasum -a 256 -c SHA256SUMS` 16 个原生资产全 OK，`shasum -a 256 -c BySpace-0.26.4-container.txt.sha256` OK（SHA256SUMS 不含 container 描述符，它有自己的兄弟文件）。原始输出 `.dev/release-verify.log`。**tunnel 空闲稳定性仍 `无法判定`**：需要两台目标机上的真实 tunnel，本机 `lsof -nP -iTCP:34125` 无监听，按 must_hold 不动生产 relay/tunnel 配置，只能由用户在目标机跑。
   - **heartbeat 工具其实可用**——不是 MCP 工具而是 CLI：`byspace heartbeat <create|list|delete>`。之前记的「工具不可用」只是 MCP 侧没有 `create_heartbeat`。但 v0.26.4 已发布完成，**补建 babysit heartbeat 无意义**：它的职责是盯到完成，事后建不产生承诺的行为。
