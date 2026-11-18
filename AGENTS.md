@@ -144,8 +144,8 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 - **Go code is built with `make build`.** It produces `./.dev/bin/byspace`, which the e2e suite and `npm run cli` both use, so a Go change is invisible until you rebuild. `gofmt -w` is the Go formatter — `npm run format` only handles JS/TS.
 - **Run `npm run format` before committing.** This repo uses Biome for formatting. Do not manually fix formatting — let the formatter handle it.
 - **Always use npm scripts for linting and formatting.** Do not run tools directly with `npx eslint`, `npx oxfmt`, `npx oxlint`, or package-local binaries. For targeted checks, pass file paths through the npm script:
-  - `npm run lint -- web/src/components/message.tsx`
-  - `npm run format:files -- AGENTS.md web/src/components/message.tsx`
+  - `npm run lint -- web/src/agent-stream/message.tsx`
+  - `npm run format:files -- AGENTS.md web/src/agent-stream/message.tsx`
 - **No version compatibility. App and daemon ship together.** Read [docs/protocol-compatibility.md](docs/protocol-compatibility.md) before touching `packages/protocol`. The short version:
   - Change both sides in the same commit. Removing fields, narrowing types, and requiring fields are all allowed. No COMPAT shims, no legacy wire names, no feature gates for old hosts.
   - Wire schemas stay pure — no `.transform()`, `.catch()`, or `.preprocess()`. `server_info.features` carries runtime state (webPush keys, service-install support, tunnel opt-in) and catalogs (`agentRoleNames`), never version detection.

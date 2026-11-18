@@ -1,5 +1,5 @@
-import { ensureOsNotificationPermission } from "@/utils/os-notifications";
-import { isWailsContainer } from "@/utils/wails";
+import { ensureOsNotificationPermission } from "@/push-notifications/os-notifications";
+import { isWailsContainer } from "@/platform/wails";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { RevokePushNotificationsInput, StartPushNotificationsInput } from "./types";
 

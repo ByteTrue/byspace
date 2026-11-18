@@ -17,7 +17,7 @@ import {
   updateCommentInState,
 } from "@/review/state";
 import { generateMessageId } from "@/types/stream";
-import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/utils/diff-layout";
+import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/git/diff-layout";
 import type { AgentAttachment } from "@bytetrue/protocol/messages";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
 

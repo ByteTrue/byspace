@@ -15,13 +15,13 @@ import { formatCheckPresentationCountsLabel } from "@/git/check-presentation-cop
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { buildForgeChecksUrl } from "@/git/forge-url";
 import type { PrHint } from "@/git/pr-hint";
-import { selectWorkspaceAgents } from "@/hooks/sidebar-workspaces-view-model";
+import { selectWorkspaceAgents } from "@/sidebar/workspaces-view-model";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore, type Agent } from "@/stores/session-store";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { cn } from "cn";
-import { AgentStatusDot } from "@/components/agent-status-dot";
+import { AgentStatusDot } from "@/widgets/agent-status-dot";
 import {
   CHECK_TONE_CLASS,
   CheckPresentationIcon,
@@ -32,7 +32,7 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { DiffStat, PullRequestStateIcon } from "@/sidebar/meta-row";
 
 // Geometry follows archive/expo-app:packages/app/src/components/workspace-hover-card.tsx: a 260px card, 12px

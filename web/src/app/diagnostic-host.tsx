@@ -1,0 +1,17 @@
+import { AppDiagnosticSheet } from "@/app/diagnostic-sheet";
+import { useAppDiagnosticStore } from "@/diagnostics/store";
+import { resolveAppVersion } from "@/utils/app-version";
+
+export function AppDiagnosticHost() {
+  const visible = useAppDiagnosticStore((state) => state.visible);
+  const close = useAppDiagnosticStore((state) => state.close);
+
+  return (
+    <AppDiagnosticSheet
+      visible={visible}
+      onClose={close}
+      appVersion={resolveAppVersion()}
+      isDesktopApp={false}
+    />
+  );
+}

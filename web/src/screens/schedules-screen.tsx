@@ -26,7 +26,7 @@ import {
   type AggregateLoadState,
   type AggregatedSchedule,
   type ScheduleHostError,
-} from "@/hooks/use-schedules";
+} from "@/screens/use-schedules";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import {
   resolveSchedule,

@@ -1,0 +1,419 @@
+import { describe, expect, it } from "vitest";
+import type {
+  SidebarProjectEntry,
+  SidebarWorkspaceEntry,
+} from "@/hooks/use-sidebar-workspaces-list";
+import {
+  buildPreferredServerIdsByProjectViewKey,
+  buildSidebarProjectRowModel,
+  isSamePreferredServerIds,
+  resolveSidebarProjectIconTarget,
+  resolveSidebarProjectIconTargets,
+  resolveSidebarProjectLocalPath,
+} from "./project-row-model";
+
+function workspace(overrides: Partial<SidebarWorkspaceEntry> = {}): SidebarWorkspaceEntry {
+  return {
+    workspaceKey: "srv:ws-root",
+    serverId: "srv",
+    workspaceId: "ws-root",
+    projectViewKey: "project-1",
+    projectName: "byspace",
+    workspaceDirectory: "/repo",
+    workspaceDirectoryLabel: "/repo",
+    projectKind: "git",
+    workspaceKind: "checkout",
+    name: "byspace",
+    title: null,
+    currentBranch: null,
+    statusBucket: "done",
+    diffStat: null,
+    prHint: null,
+    archiveHasUncommittedChanges: null,
+    archiveUnpushedCommitCount: null,
+    scripts: [],
+    hasRunningScripts: false,
+    statusEnteredAt: null,
+    ...overrides,
+    archivingAt: overrides.archivingAt ?? null,
+  };
+}
+
+type ProjectOverrides = Omit<Partial<SidebarProjectEntry>, "hosts"> & {
+  hosts?: Array<Omit<SidebarProjectEntry["hosts"][number], "projectId"> & { projectId?: string }>;
+};
+
+function project(overrides: ProjectOverrides = {}): SidebarProjectEntry {
+  const projectKind = overrides.projectKind ?? "git";
+  const hosts = Array.from(
+    overrides.hosts ?? [
+      {
+        serverId: "srv",
+        iconWorkingDir: "/repo",
+        worktreeSupport: projectKind === "git" ? "supported" : "unsupported",
+      },
+    ],
+    (host) => Object.assign({}, host, { projectId: host.projectId ?? `project-${host.serverId}` }),
+  );
+  return {
+    viewKey: "project-1",
+    projectName: "byspace",
+    projectKind,
+    iconWorkingDir: "/repo",
+    workspaces: [workspace()],
+    ...overrides,
+    hosts,
+  };
+}
+
+describe("buildSidebarProjectRowModel", () => {
+  it("renders a non-git single-workspace project section with the new workspace action", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "directory",
+        workspaces: [workspace({ workspaceId: "ws-non-git", workspaceKind: "checkout" })],
+      }),
+    });
+
+    expect(result).toEqual({
+      kind: "project_section",
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+      },
+    });
+  });
+
+  it("renders a single-workspace git project section with the new workspace action", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "git",
+        workspaces: [workspace({ workspaceId: "ws-main", workspaceKind: "checkout" })],
+      }),
+    });
+
+    expect(result).toEqual({
+      kind: "project_section",
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+      },
+    });
+  });
+
+  it("shows the new workspace action for a non-git project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({ projectKind: "directory", workspaces: [] }),
+    });
+
+    expect(result.trailingAction).toEqual({
+      kind: "new_workspace",
+      target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+    });
+  });
+
+  it("shows the new workspace action for a git project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({ projectKind: "git" }),
+    });
+
+    expect(result.trailingAction).toEqual({
+      kind: "new_workspace",
+      target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+    });
+  });
+
+  it("targets the first project host, not route state, for new workspace actions", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          {
+            serverId: "host-a",
+            iconWorkingDir: "/repo/a",
+            worktreeSupport: "unsupported" as const,
+          },
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
+      },
+    });
+  });
+
+  it("targets the first project host for a non-git project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "directory",
+        hosts: [
+          {
+            serverId: "host-a",
+            iconWorkingDir: "/repo/a",
+            worktreeSupport: "unsupported" as const,
+          },
+          {
+            serverId: "host-b",
+            iconWorkingDir: "/repo/b",
+            worktreeSupport: "unsupported" as const,
+          },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
+      },
+    });
+  });
+
+  it("renders a multi-workspace git project section with a new workspace action", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "git",
+        workspaces: [
+          workspace({ workspaceId: "ws-main", workspaceKind: "checkout" }),
+          workspace({ workspaceId: "ws-feature", workspaceKind: "worktree" }),
+        ],
+      }),
+    });
+
+    expect(result).toEqual({
+      kind: "project_section",
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+      },
+    });
+  });
+
+  it("resolves project icons from the project host, not the focused host", () => {
+    const iconTarget = resolveSidebarProjectIconTarget(
+      project({
+        hosts: [
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+          { serverId: "host-a", iconWorkingDir: "/repo/a", worktreeSupport: "supported" as const },
+        ],
+      }),
+    );
+
+    expect(iconTarget).toEqual({
+      serverId: "host-b",
+      projectId: "project-host-b",
+      iconWorkingDir: "/repo/b",
+    });
+  });
+
+  it("keys project icon results by the rendered project view", () => {
+    const [iconTarget] = resolveSidebarProjectIconTargets([
+      project({
+        viewKey: '["placement","host-b","project-b"]',
+        hosts: [
+          {
+            serverId: "host-b",
+            iconWorkingDir: "/repo/b",
+            worktreeSupport: "supported" as const,
+            iconRevision: "effective-revision",
+          },
+        ],
+      }),
+    ]);
+
+    expect(iconTarget).toEqual({
+      projectViewKey: '["placement","host-b","project-b"]',
+      serverId: "host-b",
+      projectId: "project-host-b",
+      iconWorkingDir: "/repo/b",
+      iconRevision: "effective-revision",
+    });
+  });
+
+  it("resolves desktop file actions from the local project placement", () => {
+    const groupedProject = project({
+      iconWorkingDir: "/remote/repo",
+      hosts: [
+        {
+          serverId: "remote",
+          iconWorkingDir: "/remote/repo",
+          worktreeSupport: "supported" as const,
+        },
+        { serverId: "local", iconWorkingDir: "/local/repo", worktreeSupport: "supported" as const },
+      ],
+    });
+
+    expect(resolveSidebarProjectLocalPath(groupedProject, "local")).toBe("/local/repo");
+    expect(resolveSidebarProjectLocalPath(groupedProject, "missing")).toBe("");
+  });
+
+  it("renders an empty project section with the new workspace action", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({ projectKind: "git", workspaces: [] }),
+    });
+
+    expect(result).toEqual({
+      kind: "project_section",
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
+      },
+    });
+  });
+
+  it("targets the preferred host over project.hosts order", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+          { serverId: "host-a", iconWorkingDir: "/repo/a", worktreeSupport: "supported" as const },
+        ],
+      }),
+      preferredServerIds: ["host-a", "host-b"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
+      },
+    });
+  });
+
+  it("ranks the project pin ahead of the local host when both are preferred", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          {
+            serverId: "local",
+            iconWorkingDir: "/repo/local",
+            worktreeSupport: "supported" as const,
+          },
+          {
+            serverId: "pinned",
+            iconWorkingDir: "/repo/pinned",
+            worktreeSupport: "supported" as const,
+          },
+        ],
+      }),
+      preferredServerIds: ["pinned", "local"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "pinned", iconWorkingDir: "/repo/pinned" },
+      },
+    });
+  });
+
+  it("ignores a preferred host that does not carry the project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+        ],
+      }),
+      preferredServerIds: ["host-missing"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+      },
+    });
+  });
+
+  it("honors the first preferred host that carries the project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "directory",
+        hosts: [
+          {
+            serverId: "host-a",
+            iconWorkingDir: "/repo/a",
+            worktreeSupport: "unsupported" as const,
+          },
+          {
+            serverId: "host-b",
+            iconWorkingDir: "/repo/b",
+            worktreeSupport: "unsupported" as const,
+          },
+        ],
+      }),
+      preferredServerIds: ["host-a", "host-b"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
+      },
+    });
+  });
+});
+
+describe("buildPreferredServerIdsByProjectViewKey", () => {
+  const statuses = (entries: Array<[string, string]>) => new Map(entries);
+
+  it("lists the pinned host first, then the local host when different and online", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }],
+      defaultHostByProject: { p1: "pin" },
+      hostConnectionStatusByServerId: statuses([
+        ["pin", "online"],
+        ["local", "online"],
+      ]),
+      localServerId: "local",
+    });
+    expect(map.get("p1")).toEqual(["pin", "local"]);
+  });
+
+  it("skips offline pins, keeps the local fallback, and skips the local host when it is the pin", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }, { viewKey: "p2" }],
+      defaultHostByProject: { p1: "pin", p2: "local" },
+      hostConnectionStatusByServerId: statuses([
+        ["pin", "offline"],
+        ["local", "online"],
+      ]),
+      localServerId: "local",
+    });
+    // The offline pin is dropped but the online local host still backs the "+" entry.
+    expect(map.get("p1")).toEqual(["local"]);
+    expect(map.get("p2")).toEqual(["local"]);
+  });
+
+  it("omits projects with no online preferred host", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }],
+      defaultHostByProject: {},
+      hostConnectionStatusByServerId: new Map(),
+      localServerId: null,
+    });
+    expect(map.size).toBe(0);
+  });
+});
+
+describe("isSamePreferredServerIds", () => {
+  it("compares size and per-key entries by content", () => {
+    const a = new Map([["p1", ["pin", "local"]]]);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["pin", "local"]]]))).toBe(true);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["local", "pin"]]]))).toBe(false);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["pin"]]]))).toBe(false);
+    expect(
+      isSamePreferredServerIds(
+        a,
+        new Map([
+          ["p1", ["pin", "local"]],
+          ["p2", ["x"]],
+        ]),
+      ),
+    ).toBe(false);
+    expect(isSamePreferredServerIds(a, new Map())).toBe(false);
+  });
+});

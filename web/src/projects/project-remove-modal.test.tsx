@@ -33,11 +33,11 @@ vi.mock("@/app/theme-object", async (importOriginal) => ({
   withTheme: (comp: unknown) => comp,
 }));
 
-vi.mock("@/components/host-status-dot", () => ({
+vi.mock("@/widgets/host-status-dot", () => ({
   HostStatusDot: () => React.createElement("div", { "data-testid": "host-status-dot" }),
 }));
 
-vi.mock("@/components/adaptive-modal-sheet", async () => {
+vi.mock("@/widgets/adaptive-modal-sheet", async () => {
   const ReactModule = await import("react");
   const AdaptiveModalSheet = ({
     visible,

@@ -1,7 +1,7 @@
 import { CodeBlock, CodeBlockContent } from "@/ui/code-block";
 import { Component, Fragment, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { formatCaughtValue } from "@/components/root-error-details";
+import { formatCaughtValue } from "@/app/root-error-details";
 import { Button } from "@/ui/button";
 
 interface RootErrorBoundaryState {

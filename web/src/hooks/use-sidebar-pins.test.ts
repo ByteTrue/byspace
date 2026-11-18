@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
-} from "@/hooks/sidebar-workspaces-view-model";
+} from "@/sidebar/workspaces-view-model";
 import { splitPinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 
 function placement(workspaceKey: string): SidebarWorkspacePlacement {

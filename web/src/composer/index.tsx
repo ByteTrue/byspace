@@ -40,9 +40,9 @@ import {
   DraftAgentControls,
   type DraftAgentControlsProps,
 } from "@/composer/agent-controls";
-import { ContextWindowMeter } from "@/components/context-window-meter";
-import { KeyboardTranslateView } from "@/components/keyboard-translate-view";
-import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
+import { ContextWindowMeter } from "@/composer/context-window-meter";
+import { KeyboardTranslateView } from "@/keyboard/translate-view";
+import { useImageAttachmentPicker } from "@/composer/use-image-attachment-picker";
 import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import { useFilePicker } from "@/hooks/use-file-picker";
 import { useFileDrop } from "@/components/file-drop/use-file-drop";
@@ -56,8 +56,8 @@ import {
 import type { ImageAttachment, MessagePayload, TextReplacement } from "@/composer/types";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
-import { encodeImages } from "@/utils/encode-images";
-import { focusWithRetries } from "@/utils/web-focus";
+import { encodeImages } from "@/attachments/encode-images";
+import { focusWithRetries } from "@/platform/web-focus";
 import {
   cancelComposerAgent,
   dispatchComposerAgentMessage,
@@ -77,11 +77,11 @@ import {
 } from "@/composer/actions";
 import { useToast } from "@/contexts/toast-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { AutocompletePopover } from "@/widgets/autocomplete-popover";
 import type { AutocompleteOption } from "@/widgets/autocomplete";
-import { useAgentAutocomplete } from "@/hooks/use-agent-autocomplete";
+import { useAgentAutocomplete } from "@/composer/use-agent-autocomplete";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import {
   deleteAttachments,
@@ -99,7 +99,7 @@ import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import type { ForgeSearchItem } from "@bytetrue/protocol/messages";
 import type {
@@ -127,7 +127,7 @@ import {
   AttachmentTrigger,
 } from "@/ui/attachment";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";

@@ -2,7 +2,7 @@
 // above the composer; pressing opens the Changes tab.
 import { memo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { DiffStat } from "@/components/diff-stat";
+import { DiffStat } from "@/widgets/diff-stat";
 import { useVisibleWorkspaceDiffStat } from "@/composer/workspace-diff-stat";
 import { Button } from "@/ui/button";
 

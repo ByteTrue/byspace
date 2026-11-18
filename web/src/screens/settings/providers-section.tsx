@@ -13,9 +13,9 @@ import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import {
   buildAcpProviderConfigPatch,
   type AcpProviderCatalogItem,
-} from "@/hooks/use-acp-provider-catalog";
-import { ProviderCatalogList } from "@/components/provider-catalog-list";
-import { getProviderIcon } from "@/components/provider-icons";
+} from "@/screens/use-acp-provider-catalog";
+import { ProviderCatalogList } from "@/screens/provider-catalog-list";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import { Spinner } from "@/ui/spinner";
 import { Switch } from "@/ui/switch";
 import { SettingsSection } from "@/components/settings/headings/settings-section";

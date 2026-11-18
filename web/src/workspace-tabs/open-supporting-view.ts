@@ -1,5 +1,5 @@
 import type { OpenInSidePanePreferences, PullRequestOpenLocation } from "@/hooks/use-settings";
-import type { ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
+import type { ExplorerCheckoutContext } from "@/file-explorer/explorer-checkout-context";
 import {
   isExplorerSidebarOpen,
   openExplorerSidebarView,

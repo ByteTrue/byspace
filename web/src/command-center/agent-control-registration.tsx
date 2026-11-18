@@ -13,7 +13,7 @@ import {
   PlanModeIcon,
   ThinkingIcon,
 } from "@/agent-controls/icons";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 import {
   buildAgentControlContributions,

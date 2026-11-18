@@ -9,7 +9,7 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import type { WorkspaceRouteState } from "@/screens/workspace/workspace-route-state";
 import { formatConnectionStatus } from "@/utils/daemons";
 import { Spinner } from "@/ui/spinner";

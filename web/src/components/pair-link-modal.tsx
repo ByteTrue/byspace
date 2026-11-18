@@ -6,7 +6,7 @@ import { Link } from "lucide-react";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { useThemeObject } from "@/app/theme-object";
 import { Input } from "@/ui/input";

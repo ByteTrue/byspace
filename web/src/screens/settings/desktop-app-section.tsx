@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/desktop-app-section.tsx: the Wails desktop app's General and About rows. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/desktop-app-section.py; edit it directly.
-import { isWailsDesktopContainer } from "@/utils/wails";
+import { isWailsDesktopContainer } from "@/platform/wails";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";

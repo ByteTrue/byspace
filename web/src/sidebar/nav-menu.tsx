@@ -3,7 +3,7 @@ import {
   SIDEBAR_NAV_TEST_IDS,
   useSidebarNavMenuEntries,
 } from "@/sidebar-nav/use-sidebar-nav-entries";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/ui/sidebar";
 
 type NavEntry = ReturnType<typeof useSidebarNavMenuEntries>[number];

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import React from "react";
-import type { ToastApi } from "@/components/toast-host";
+import type { ToastApi } from "@/widgets/toast-host";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 import type { InlinePathTarget } from "./parse";
 import type { AssistantFileLinkContext, GetDirectorySuggestions } from "./resolver";

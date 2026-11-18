@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SessionProvider } from "@/contexts/session-context";
 import { useToast } from "@/contexts/toast-context";
-import { useFaviconStatus } from "@/hooks/use-favicon-status";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useFaviconStatus } from "@/app/use-favicon-status";
+import { useStableEvent } from "@/lib/use-stable-event";
 import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "@/push-notifications/internal/types";
 import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import { buildNotificationRoute, resolveNotificationTarget } from "@/utils/notification-routing";
+import { buildNotificationRoute, resolveNotificationTarget } from "@/app/notification-routing";
 import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
-} from "@/utils/os-notifications";
+} from "@/push-notifications/os-notifications";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { router } from "@/platform/navigation";
 import { AppState } from "@/platform/app-state";

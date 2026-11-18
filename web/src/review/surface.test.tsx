@@ -5,7 +5,7 @@ import { act, fireEvent, render, renderHook, cleanup } from "@testing-library/re
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useReviewDraftStore, type ReviewDraftComment } from "./store";
-import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/utils/diff-layout";
+import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/git/diff-layout";
 import {
   getInlineReviewThreadState,
   getInlineReviewThreadViewportStyle,

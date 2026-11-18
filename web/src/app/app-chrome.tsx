@@ -1,4 +1,4 @@
-import { CompactExplorerSidebarHost } from "@/components/compact-explorer-sidebar-host";
+import { CompactExplorerSidebarHost } from "@/app/compact-explorer-sidebar-host";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useStoreReady } from "@/app/_layout";
@@ -12,18 +12,18 @@ import {
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
   resolveDesktopSidebarWidth,
-} from "@/components/desktop-sidebar-layout";
+} from "@/app/desktop-sidebar-layout";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
-import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut-handler";
-import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
-import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
-import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
+import { WorkspacePinShortcutHandler } from "@/app/workspace-pin-shortcut-handler";
+import { WorkspaceRenameHost } from "@/app/workspace-rename-host";
+import { WorkspaceShortcutTargetsSubscriber } from "@/app/workspace-shortcut-targets-subscriber";
+import { WorktreeSetupCalloutSource } from "@/app/worktree-setup-callout-source";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { DesktopSidebarVisibilityProvider } from "@/contexts/desktop-sidebar-visibility-context";
-import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
-import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
-import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useActiveWorktreeNewAction } from "@/app/use-active-worktree-new-action";
+import { useCompactWebViewportZoomLock } from "@/platform/use-compact-web-viewport-zoom-lock";
+import { useGlobalNewWorkspaceAction } from "@/app/use-global-new-workspace-action";
+import { useKeyboardShortcuts } from "@/app/use-keyboard-shortcuts";
 import { useImportSession } from "@/hooks/use-import-session";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";

@@ -5,7 +5,7 @@ import {
   workspaceAttachmentToSubmitAttachment,
 } from "@/attachments/workspace-attachment-utils";
 import type { AgentAttachment } from "@bytetrue/protocol/messages";
-import { buildForgeAttachmentFromSearchItem } from "@/utils/review-attachments";
+import { buildForgeAttachmentFromSearchItem } from "@/composer/review-attachments";
 import { workspaceFileAttachmentToAgentAttachment } from "@/attachments/workspace-file";
 
 export function splitComposerAttachmentsForSubmit(attachments: ComposerAttachment[]): {

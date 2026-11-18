@@ -6,7 +6,7 @@ import {
   resolveJoinedSubagentRow,
   type ToolCallProps,
   type ToolCallSubagentBinding,
-} from "./tool-call-subagent-row";
+} from "../tool-calls/tool-call-subagent-row";
 
 const NO_BINDING = undefined;
 

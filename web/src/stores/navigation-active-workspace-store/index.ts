@@ -16,7 +16,7 @@ import {
 } from "./navigation";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit } from "@/utils/host-route-browser";
+import { stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit } from "@/app/host-route-browser";
 import { navigateToHostWorkspaceRoute } from "@/navigation/workspace-route-navigation";
 
 export type { ActiveWorkspaceSelection } from "@/stores/last-workspace-selection";

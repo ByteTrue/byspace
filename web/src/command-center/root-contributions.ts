@@ -1,4 +1,4 @@
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
+import type { SidebarGroupMode } from "@/sidebar/view-store";
 import type { CommandCenterContribution, CommandCenterIcon } from "./contributions";
 
 export interface GroupingCommandCenterSource {

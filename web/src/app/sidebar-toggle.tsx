@@ -6,7 +6,7 @@ import { useIsCompactFormFactor, useMacTrafficLightInset } from "@/constants/lay
 import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { Button } from "@/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 

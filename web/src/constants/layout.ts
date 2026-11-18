@@ -1,6 +1,6 @@
 // Port of archive/expo-app:packages/app/src/constants/layout.ts. The compact breakpoint itself
 // lives in @/platform/use-compact-form-factor and is re-exported here for the app's callers.
-import { isWailsContainer } from "@/utils/wails";
+import { isWailsContainer } from "@/platform/wails";
 import { useEffect, useState } from "react";
 
 export const FOOTER_HEIGHT = 75;

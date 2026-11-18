@@ -6,8 +6,8 @@ import {
   coerceExplorerTabForCheckout,
   resolveExplorerTabForCheckout,
   type ExplorerTab,
-} from "../explorer-tab-memory";
-import { type ExplorerCheckoutContext } from "../explorer-checkout-context";
+} from "../../file-explorer/explorer-tab-memory";
+import { type ExplorerCheckoutContext } from "../../file-explorer/explorer-checkout-context";
 import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,
@@ -31,8 +31,8 @@ import {
   type SortOption,
 } from "./state";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
-export type { ExplorerTab } from "../explorer-tab-memory";
-export type { ExplorerCheckoutContext } from "../explorer-checkout-context";
+export type { ExplorerTab } from "../../file-explorer/explorer-tab-memory";
+export type { ExplorerCheckoutContext } from "../../file-explorer/explorer-checkout-context";
 export type {
   DesktopSidebarState,
   MobilePanelView,

@@ -21,17 +21,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
 import { Spinner } from "@/ui/spinner";
-import { focusWithRetries } from "@/utils/web-focus";
+import { focusWithRetries } from "@/platform/web-focus";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import * as Clipboard from "@/platform/clipboard";
 import { ChevronDown, Eye, EyeOff, FilePlus, FolderPlus, RotateCw } from "lucide-react";
-import { MaterialFileIcon } from "@/components/material-file-icon";
+import { MaterialFileIcon } from "@/widgets/material-file-icon";
 import {
   TreeChevron,
   treeRowPaddingLeft,
   workspaceTreeRowClassNames,
   WORKSPACE_TREE_ICON_SIZE,
-} from "@/components/tree-primitives";
+} from "@/widgets/tree-primitives";
 import {
   PaneContentToolbar,
   paneContentToolbarTrailingPadding,
@@ -49,7 +49,7 @@ import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
-import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
+import { buildAbsoluteExplorerPath } from "@/file-explorer/explorer-paths";
 import { isHiddenExplorerPath } from "@/file-explorer/visibility";
 import {
   flattenExplorerTree,

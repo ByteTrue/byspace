@@ -4,7 +4,7 @@
 import { useCallback, useMemo, type MouseEvent, type ReactElement } from "react";
 import { Archive, Unlink } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { useIsCompactFormFactor } from "@/constants/layout";

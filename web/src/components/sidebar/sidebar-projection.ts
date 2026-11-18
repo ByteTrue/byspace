@@ -1,4 +1,4 @@
-import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
+import { buildStatusGroups } from "@/sidebar/status-view-model";
 import {
   splitPinnedSidebarGroups,
   type PinnedSidebarGroups,
@@ -8,16 +8,16 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
+import type { SidebarGroupMode } from "@/sidebar/view-store";
 import {
   resolveSidebarProjectIconTargets,
   type SidebarProjectIconTarget,
-} from "@/utils/sidebar-project-row-model";
+} from "@/sidebar/project-row-model";
 import {
   buildSidebarShortcutSections,
   type SidebarShortcutModel,
   type SidebarShortcutSection,
-} from "@/utils/sidebar-shortcuts";
+} from "@/sidebar/shortcuts";
 import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
 
 export interface SidebarProjection {

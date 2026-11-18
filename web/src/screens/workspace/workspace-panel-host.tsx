@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { RetainedPanel } from "@/components/retained-panel";
+import { RetainedPanel } from "@/widgets/retained-panel";
 import { useModifiedPanelTabIds } from "@/panels/panel-instance-attributes";
 import {
   WorkspacePaneContent,
@@ -8,7 +8,7 @@ import {
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 
 interface WorkspacePanelHostProps {
   paneId: string;

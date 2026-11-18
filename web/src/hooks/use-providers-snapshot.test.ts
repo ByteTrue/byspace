@@ -9,7 +9,7 @@ import {
 } from "@bytetrue/protocol/provider-snapshot-codec";
 import type { CachedProviderSnapshot, ProviderSnapshotCache } from "@/data/provider-snapshot-cache";
 import { draftAgentCommandsQueryKey } from "@/hooks/agent-commands-query";
-import { resolveProviderIconName } from "@/components/provider-icon-name";
+import { resolveProviderIconName } from "@/data/provider-icon-name";
 import { applyProvidersSnapshotUpdate, type ProvidersSnapshotUpdate } from "@/data/push-router";
 import {
   fetchProvidersSnapshot,

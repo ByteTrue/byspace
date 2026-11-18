@@ -2,7 +2,7 @@
 // shadcn Tooltip naming it and its shortcut. A "menu" button is a shadcn DropdownMenuTrigger.
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { DropdownMenuTrigger } from "@/ui/dropdown-menu";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { Button } from "@/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import type { ShortcutKey } from "@/utils/format-shortcut";

@@ -5,7 +5,7 @@ import { queryClient } from "@/data/query-client";
 import type { Agent } from "@/stores/session-store";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";
 import { type AgentDirectoryDelta } from "@/utils/agent-directory-sync";
-import { reconcileAgentDirectory } from "@/utils/agent-directory-reconciliation";
+import { reconcileAgentDirectory } from "@/runtime/agent-directory-reconciliation";
 import type { DirectoryReplicaMutation } from "@/runtime/replica-cache";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
 import { AgentStoreProjection } from "./internal/agent-store";

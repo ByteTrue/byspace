@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "@/platform/navigation";
 import { ChevronDown, MessageCircle, SquareTerminal } from "lucide-react";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
+import { TerminalProfileIcon } from "@/terminal/profile-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
 import {

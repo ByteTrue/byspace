@@ -1,5 +1,5 @@
 import { resolveRasterImageMimeType } from "@/attachments/file-types";
-import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
+import type { PickedImageAttachmentInput } from "@/composer/image-attachment-picker";
 
 export interface NativePastedFile {
   fileName: string;

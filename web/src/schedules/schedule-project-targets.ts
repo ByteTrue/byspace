@@ -1,5 +1,5 @@
 import type { ProjectSummary } from "@/utils/projects";
-import { shortenPath } from "@/utils/shorten-path";
+import { shortenPath } from "@/lib/shorten-path";
 
 export const PROJECT_OPTION_PREFIX = "project:";
 

@@ -7,7 +7,7 @@ import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { copyTag } from "@/markdown/render";
 import { useAssistantFileLinkResolverContext } from "@/assistant-file-links/provider";
 import type { AssistantFileLinkSource } from "@/assistant-file-links/resolver";

@@ -1,6 +1,6 @@
 // Package pathutil compares filesystem paths.
 //
-// Ported from utils/path.ts. Two strings can name the same directory: one has a trailing
+// Ported from web/src/lib/path.ts. Two strings can name the same directory: one has a trailing
 // separator, one went through a symlink, one came from a shell with `~` expanded differently, and
 // on macOS `/tmp` is a symlink to `/private/tmp`. Comparing the raw strings treats them as two
 // workspaces, which shows up as a duplicate sidebar entry, an agent attached to "the other"

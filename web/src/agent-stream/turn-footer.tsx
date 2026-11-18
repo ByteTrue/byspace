@@ -9,10 +9,10 @@ import {
   type AssistantTurnForkBoundary,
 } from "@/agent-stream/turn-boundary";
 import type { TurnFooterHost } from "@/agent-stream/layout";
-import { AssistantTurnFooter, LiveElapsed, type AssistantForkTarget } from "@/components/message";
-import { AssistantForkMenu } from "@/components/assistant-fork-menu";
+import { AssistantTurnFooter, LiveElapsed, type AssistantForkTarget } from "@/agent-stream/message";
+import { AssistantForkMenu } from "@/agent-stream/fork-menu";
 import { Spinner } from "@/ui/spinner";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { SPACING } from "@/styles/theme";
 
 export const TURN_FOOTER_BOTTOM_SPACING = SPACING[8];

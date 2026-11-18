@@ -1,5 +1,5 @@
 import type { HostRuntimeConnectionStatus } from "@/runtime/host-runtime";
-import { assertUnreachable } from "./exhaustive";
+import { assertUnreachable } from "../lib/exhaustive";
 
 export function formatConnectionStatus(status: HostRuntimeConnectionStatus): string {
   switch (status) {

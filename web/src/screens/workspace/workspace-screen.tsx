@@ -33,8 +33,8 @@ import { useHostBadges } from "@/hosts/use-host-badges";
 import { useLocalDaemonServerId, useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { Combobox, type ComboboxOption } from "@/widgets/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-import { SplitContainer } from "@/components/split-container";
-import { RetainedPanel } from "@/components/retained-panel";
+import { SplitContainer } from "@/screens/split-container";
+import { RetainedPanel } from "@/widgets/retained-panel";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/workspace/open-in-editor/button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
@@ -43,7 +43,7 @@ import { useNavigateToImportedAgent } from "@/hooks/use-import-session";
 import { useToast } from "@/contexts/toast-context";
 import { getOrCreateClientId } from "@/utils/client-id";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
-import { toggleDesktopSidebarsWithCheckoutIntent } from "@/utils/desktop-sidebar-toggle";
+import { toggleDesktopSidebarsWithCheckoutIntent } from "@/screens/desktop-sidebar-toggle";
 import {
   isExplorerSidebarOpen,
   openExplorerSidebarView,
@@ -56,7 +56,7 @@ import {
   openWorkspaceTargetBeside,
 } from "@/workspace-tabs/open-beside";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
-import { type ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
+import { type ExplorerCheckoutContext } from "@/file-explorer/explorer-checkout-context";
 import { traceInstant } from "@/performance/native-trace";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
@@ -104,8 +104,8 @@ import {
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
-import { useStableEvent } from "@/hooks/use-stable-event";
-import { buildProviderCommand } from "@/utils/provider-command-templates";
+import { useStableEvent } from "@/lib/use-stable-event";
+import { buildProviderCommand } from "@/screens/provider-command-templates";
 import { generateDraftId } from "@/stores/draft-keys";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-identity";
 import { useOpenAgentTabLabels } from "@/subagents/use-open-agent-tab-labels";
@@ -179,7 +179,7 @@ import {
   getPanelInstanceAttributes,
   useModifiedPanelTabIds,
 } from "@/panels/panel-instance-attributes";
-import { findAdjacentPane } from "@/utils/split-navigation";
+import { findAdjacentPane } from "@/screens/split-navigation";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
@@ -195,7 +195,7 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { useHasPullRequest } from "@/panels/pull-request";
 import { blurActiveElement } from "@/platform/blur-active-element";

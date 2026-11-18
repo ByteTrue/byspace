@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "@/platform/navigation";
 import { useMemo } from "react";
-import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
+import { HostRouteBootstrapBoundary } from "@/app/host-route-bootstrap-boundary";
 import SettingsScreen from "@/screens/settings-screen";
 import { normalizeProjectSettingsRouteId } from "@/utils/host-routes";
 

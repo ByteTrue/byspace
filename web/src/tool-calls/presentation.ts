@@ -1,12 +1,12 @@
 import type { ComponentType } from "react";
 import type { ToolCallDetail } from "@bytetrue/protocol/agent-types";
-import type { ToolCallDisplayInput } from "@/utils/tool-call-display";
-import { buildToolCallDisplayModel } from "@/utils/tool-call-display";
-import { extractToolCallFilePath } from "@/utils/extract-tool-call-file-path";
+import type { ToolCallDisplayInput } from "@/tool-calls/tool-call-display";
+import { buildToolCallDisplayModel } from "@/tool-calls/tool-call-display";
+import { extractToolCallFilePath } from "@/tool-calls/extract-tool-call-file-path";
 import {
   hasMeaningfulToolCallDetail,
   isPendingToolCallDetail,
-} from "@/utils/tool-call-detail-state";
+} from "@/tool-calls/tool-call-detail-state";
 
 type ToolCallStatus = "executing" | "running" | "completed" | "failed" | "canceled";
 export type ToolCallPresentationIcon = ComponentType<{ size?: number; color?: string }>;

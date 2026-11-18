@@ -11,7 +11,7 @@ import {
   MARKDOWN_COPY_LIST_START_ATTRIBUTE,
   MARKDOWN_COPY_TAG_ATTRIBUTE,
 } from "@/assistant-selection-copy/markup";
-import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
+import { getMarkdownListMarker, getMarkdownListSpacing } from "@/markdown/list";
 import { cn } from "cn";
 import type { MarkdownAstNode } from "./ast";
 

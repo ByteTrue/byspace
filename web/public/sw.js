@@ -74,7 +74,7 @@ function notificationTag(data) {
 }
 
 /*
- * Route building lives in the app bundle (`utils/notification-routing.ts`), which a
+ * Route building lives in the app bundle (`app/notification-routing.ts`), which a
  * static worker cannot import. So an open window is handed the raw data and does
  * its own navigation; a cold start only opens the app root. Deep-linking from a
  * cold start would mean duplicating the workspace-id encoding here.

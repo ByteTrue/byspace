@@ -1,12 +1,12 @@
 import { useRef, ReactNode, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useClientActivity } from "@/hooks/use-client-activity";
+import { useClientActivity } from "@/contexts/use-client-activity";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { startPushNotifications } from "@/push-notifications";
 import {
   createSetAgentInitializing,
   refreshAgentInitializationTimeout,
-} from "@/hooks/use-agent-initialization";
+} from "@/contexts/use-agent-initialization";
 import type { StreamItem } from "@/types/stream";
 import { deriveAgentStreamTurnLiveness } from "@/timeline/session-stream-reducers";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
@@ -34,8 +34,8 @@ import {
   type SessionState,
 } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
-import { sendOsNotification } from "@/utils/os-notifications";
-import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
+import { sendOsNotification } from "@/push-notifications/os-notifications";
+import { getIsAppActivelyVisible, getIsAppVisible } from "@/platform/app-visibility";
 import {
   getInitKey,
   getInitDeferred,
@@ -44,7 +44,7 @@ import {
 } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
 import { useToast } from "@/contexts/toast-context";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { useProviderSubagentStore } from "@/subagents/provider-store";

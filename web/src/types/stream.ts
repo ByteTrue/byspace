@@ -1,8 +1,8 @@
 import type { AgentProvider, JsonValue, ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@bytetrue/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
-import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
-import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { extractTaskEntriesFromToolCall } from "../tool-calls/tool-call-parsers";
+import { splitMarkdownBlocks } from "@/panels/split-markdown-blocks";
 
 /**
  * Simple hash function for deterministic ID generation

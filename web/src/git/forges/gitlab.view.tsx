@@ -31,8 +31,8 @@ import {
   sectionKitClassNames,
 } from "@/git/pull-request-panel/section-kit";
 import { useGitLabPipeline } from "@/git/pull-request-panel/use-pipeline";
-import { openExternalUrl } from "@/utils/open-external-url";
-import { formatDuration } from "@/utils/time";
+import { openExternalUrl } from "@/platform/open-external-url";
+import { formatDuration } from "@/lib/time";
 import { cn } from "cn";
 
 function renderGitlabHeaderMeta(facts: GitlabMergeFacts): ReactNode {

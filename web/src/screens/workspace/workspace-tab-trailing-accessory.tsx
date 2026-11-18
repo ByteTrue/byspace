@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { keepFocusElsewhere } from "@/platform/menu-focus";
-import { WithTooltip } from "@/components/with-tooltip";
+import { WithTooltip } from "@/widgets/with-tooltip";
 
 const MENU_ICONS = {
   copy: Copy,

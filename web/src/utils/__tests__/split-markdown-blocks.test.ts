@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitMarkdownBlocks } from "../split-markdown-blocks";
+import { splitMarkdownBlocks } from "../../panels/split-markdown-blocks";
 
 describe("splitMarkdownBlocks", () => {
   it("returns a single block for a single paragraph", () => {

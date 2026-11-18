@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import {
   recoverWorkspaceSelection,
   resolveWorkspaceRecoveryModel,

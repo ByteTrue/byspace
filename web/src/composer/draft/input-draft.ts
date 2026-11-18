@@ -8,7 +8,7 @@ import {
   type CreateAgentInitialValues,
   type UseAgentFormStateResult,
 } from "@/hooks/use-agent-form-state";
-import { useDraftAgentFeatures } from "@/hooks/use-draft-agent-features";
+import { useDraftAgentFeatures } from "@/composer/use-draft-agent-features";
 import {
   buildDraftAgentControls,
   hasDraftContent,

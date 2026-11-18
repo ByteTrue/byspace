@@ -4,13 +4,13 @@ import { useMemo, type ComponentType, type ReactElement, type ReactNode } from "
 import { CircleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
-import { StatusRing } from "@/components/status-ring";
+import { StatusRing } from "@/widgets/status-ring";
 import { usePanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import { getPanelRegistration, type PanelIconProps } from "@/panels/panel-registry";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
-import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { SidebarStateBucket } from "@/sidebar/agent-state";
 import { cn } from "cn";
 
 export interface WorkspaceTabPresentation {

@@ -3,7 +3,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 import { requestArchiveSubagent, type ResolveArchiveSubagentDialogInput } from "./archive-subagent";
 
 export { resolveArchiveSubagentDialog, requestArchiveSubagent } from "./archive-subagent";

@@ -1,5 +1,5 @@
-import type { ReviewableDiffTarget } from "@/utils/diff-layout";
-import { buildReviewableDiffTargetKey } from "@/utils/diff-layout";
+import type { ReviewableDiffTarget } from "@/git/diff-layout";
+import { buildReviewableDiffTargetKey } from "@/git/diff-layout";
 import type { ReviewDraftComment } from "./store";
 
 export const INLINE_REVIEW_COMMENT_HEIGHT = 72;

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { HostProfile } from "@/types/host-connection";
 import { buildDaemonWebSocketUrl } from "@/utils/daemon-endpoints";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { i18n } from "@/i18n/i18next";
 
 interface DownloadProgress {

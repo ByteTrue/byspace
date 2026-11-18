@@ -5,12 +5,12 @@ import { openChangelog } from "@/changelog/open-changelog";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
-import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
+import { useKeyboardShortcutsStore } from "@/keyboard/shortcuts-store";
 import { useSessionStore } from "@/stores/session-store";
 import type { HostProfile } from "@/types/host-connection";
 import { resolveAppVersion } from "@/utils/app-version";
-import { formatVersionWithPrefix } from "@/utils/format-version";
-import { openExternalUrl } from "@/utils/open-external-url";
+import { formatVersionWithPrefix } from "@/lib/format-version";
+import { openExternalUrl } from "@/platform/open-external-url";
 import { DiscordIcon } from "@/components/icons/discord-icon";
 import { ForgeIcon } from "@/git/forge-icon";
 import {

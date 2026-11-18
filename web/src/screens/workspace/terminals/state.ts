@@ -1,5 +1,5 @@
 import type { CreateTerminalResponse, ListTerminalsResponse } from "@bytetrue/protocol/messages";
-import { upsertTerminalListEntry } from "@/utils/terminal-list";
+import { upsertTerminalListEntry } from "@/screens/terminal-list";
 
 export const TERMINALS_QUERY_STALE_TIME = 5_000;
 

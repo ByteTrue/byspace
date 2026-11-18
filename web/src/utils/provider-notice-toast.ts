@@ -1,5 +1,5 @@
 import type { AgentProviderNotice } from "@bytetrue/protocol/agent-types";
-import type { ToastApi } from "@/components/toast-host";
+import type { ToastApi } from "@/widgets/toast-host";
 
 export function showProviderNoticeToast(
   toast: ToastApi,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { darkTheme, lightTheme } from "@/styles/theme";
-import { hexColorWithAlpha } from "@/utils/color";
+import { hexColorWithAlpha } from "@/lib/color";
 import { codeLineNumberTone, codeTextColor, createDiffPalette, retainDiffPalette } from "./palette";
 import type { DiffCell, DiffPalette } from "./types";
 

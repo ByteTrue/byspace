@@ -1,4 +1,4 @@
-import { isAbsolutePath } from "@/utils/path";
+import { isAbsolutePath } from "@/lib/path";
 
 export interface FilePreviewReadTarget {
   cwd: string;

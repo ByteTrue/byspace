@@ -36,7 +36,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/components/adaptive-modal-sheet", async () => {
+vi.mock("@/widgets/adaptive-modal-sheet", async () => {
   const ReactModule = await import("react");
   const AdaptiveModalSheet = ({
     visible,

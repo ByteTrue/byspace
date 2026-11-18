@@ -5,7 +5,7 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import { applyStoredOrdering } from "@/hooks/sidebar-workspaces-view-model";
+import { applyStoredOrdering } from "@/sidebar/workspaces-view-model";
 import { useSessionStore } from "@/stores/session-store";
 
 export interface PinnedSidebarKeys {

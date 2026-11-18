@@ -16,7 +16,7 @@ import {
   type WorkspaceLabelColor,
   type WorkspaceLabelDefinition,
 } from "@bytetrue/protocol/workspace-labels";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";

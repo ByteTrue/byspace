@@ -62,7 +62,7 @@ Use the right surface for the content:
 
 - **Information worth a card** — a full path, branch details, usage, an explanation, or several
   fields — belongs in `InfoHoverCard`, composed with `InfoHoverCardTrigger` and
-  `InfoHoverCardContent` from `web/src/components/info-hover-card.tsx`.
+  `InfoHoverCardContent` from `web/src/widgets/info-hover-card.tsx`.
 - **A short name for a button, control, or tab** stays a normal shadcn `Tooltip`; use
   `WithTooltip` where that wrapper already fits. Do not turn every tooltip into a card.
 

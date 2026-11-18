@@ -12,20 +12,20 @@ import {
   type RefCallback,
 } from "react";
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
-import { DiffStat } from "@/components/diff-stat";
+import { DiffStat } from "@/widgets/diff-stat";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
-import { FileChangeIcon } from "@/components/file-change-icon";
-import { MaterialFileIcon } from "@/components/material-file-icon";
+import { FileChangeIcon } from "@/git/file-change-icon";
+import { MaterialFileIcon } from "@/widgets/material-file-icon";
 import {
   treeRowPaddingLeft,
   workspaceTreeRowClassNames,
   WORKSPACE_TREE_ICON_SIZE,
-} from "@/components/tree-primitives";
+} from "@/widgets/tree-primitives";
 import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "@/components/info-hover-card";
+} from "@/widgets/info-hover-card";
 import { useFileHeaderInteraction } from "@/git/file-header-interaction";
 import {
   diffFileChangeKind,

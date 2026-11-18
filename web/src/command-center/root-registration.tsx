@@ -24,9 +24,9 @@ import { useImportSession } from "@/hooks/use-import-session";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
-import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
+import { useKeyboardShortcutsStore } from "@/keyboard/shortcuts-store";
 import { usePanelStore } from "@/stores/panel-store";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useSidebarViewStore } from "@/sidebar/view-store";
 import { useTunnelsAvailable } from "@/tunnels/availability";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import {

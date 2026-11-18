@@ -17,7 +17,7 @@ import { useHostMutations, useHosts } from "@/runtime/host-runtime";
 import { Button } from "@/ui/button";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { normalizeSshTargetInput } from "@/utils/ssh-target-input";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { withTheme } from "@/app/theme-object";
 import { Input } from "@/ui/input";
 import { Field, FieldError, FieldLabel } from "@/ui/field";

@@ -6,7 +6,7 @@ import {
   type ExplorerDirectory,
 } from "@/stores/session-store";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
-import { parentExplorerPath } from "@/utils/explorer-paths";
+import { parentExplorerPath } from "@/file-explorer/explorer-paths";
 
 function createExplorerState(): AgentFileExplorerState {
   return {

@@ -1,6 +1,6 @@
 import { supportsDesktopPaneSplits } from "@/constants/layout";
 import { selectIsCompactFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
-import type { ExplorerCheckoutContext } from "@/stores/explorer-checkout-context";
+import type { ExplorerCheckoutContext } from "@/file-explorer/explorer-checkout-context";
 import {
   selectIsExplorerSidebarVisible,
   useWorkspaceLayoutStore,

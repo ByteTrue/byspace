@@ -4,10 +4,7 @@ import type { GetProvidersSnapshotResponseMessage } from "@bytetrue/protocol/mes
 import { compactProviderSnapshot } from "@bytetrue/protocol/provider-snapshot-codec";
 import { applyProvidersSnapshotUpdate } from "./push-router";
 import { createProviderSnapshotCache } from "./provider-snapshot-cache";
-import {
-  resolveProviderIconName,
-  replaceProviderSnapshotIcons,
-} from "@/components/provider-icon-name";
+import { resolveProviderIconName, replaceProviderSnapshotIcons } from "@/data/provider-icon-name";
 import { describe, expect, it } from "vitest";
 import {
   fetchProvidersSnapshot,

@@ -1,6 +1,6 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { ScheduleSummary } from "@bytetrue/protocol/schedule/types";
-import { toErrorMessage } from "@/utils/error-messages";
+import { toErrorMessage } from "@/lib/error-messages";
 
 export const schedulesQueryBaseKey = ["schedules"] as const;
 

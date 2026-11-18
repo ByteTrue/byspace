@@ -19,7 +19,7 @@ import {
 import { keepFocusElsewhere } from "@/platform/menu-focus";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
-import { keepOpen } from "@/components/menu-kit";
+import { keepOpen } from "@/widgets/menu-kit";
 
 export type { RewindMode };
 

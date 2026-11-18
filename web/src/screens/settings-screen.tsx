@@ -46,7 +46,7 @@ import {
   SidebarSeparator,
 } from "@/ui/sidebar";
 import { HostPicker as SharedHostPicker } from "@/components/hosts/host-picker";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -66,13 +66,13 @@ import {
 } from "@/types/host-connection";
 import { BackHeader } from "@/components/headers/back-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
-import { AddHostMethodModal } from "@/components/add-host-method-modal";
+import { AddHostMethodModal } from "@/screens/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { AddRemoteSshHostModal } from "@/components/add-remote-ssh-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { Button } from "@/ui/button";
 
-import { CommunityLinks } from "@/components/community-links";
+import { CommunityLinks } from "@/screens/community-links";
 import {
   DesktopAboutCardContent,
   DesktopGeneralRows,

@@ -21,7 +21,7 @@ import {
   serializeConnectionUriForStorage,
 } from "@/utils/daemon-endpoints";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { useThemeObject } from "@/app/theme-object";
 import { Input } from "@/ui/input";

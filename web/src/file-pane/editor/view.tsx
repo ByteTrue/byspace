@@ -3,7 +3,7 @@ import { Annotation, Compartment, EditorState, Transaction } from "@codemirror/s
 import { EditorView } from "@codemirror/view";
 import { getLanguageForFile } from "@bytetrue/highlight";
 import { getCM, vim } from "@replit/codemirror-vim";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { isRenderedMarkdownFile } from "@/file-pane/render-mode";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import type { FileEditorModel } from "./model";
 import { editorBaseExtensions, editorTheme, type EditorVisualTheme } from "./extensions";

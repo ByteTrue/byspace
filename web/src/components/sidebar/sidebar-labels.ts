@@ -1,7 +1,7 @@
 import { workspaceLabelKey } from "@bytetrue/protocol/workspace-labels";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { SIDEBAR_UNLABELLED_LABEL_KEY, type SidebarLabelFilter } from "@/stores/sidebar-view-store";
-import type { StatusBucket, StatusGroup } from "@/hooks/sidebar-status-view-model";
+import { SIDEBAR_UNLABELLED_LABEL_KEY, type SidebarLabelFilter } from "@/sidebar/view-store";
+import type { StatusBucket, StatusGroup } from "@/sidebar/status-view-model";
 
 export interface SidebarWorkspaceGroup {
   key: string;

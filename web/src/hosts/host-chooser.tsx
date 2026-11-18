@@ -8,7 +8,7 @@ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHosts } from "@/runtime/host-runtime";
 import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
 import { buildSettingsAddHostRoute } from "@/utils/host-routes";
-import { HostStatusDot } from "@/components/host-status-dot";
+import { HostStatusDot } from "@/widgets/host-status-dot";
 import {
   Command,
   CommandDialog,

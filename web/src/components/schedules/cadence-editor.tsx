@@ -16,8 +16,8 @@ import {
   resolveCronPresetDisplay,
   resolveCronPresetId,
 } from "@/schedules/schedule-cadence-options";
-import { getDeviceTimeZone } from "@/utils/device-timezone";
-import { describeCron, validateCron } from "@/utils/schedule-format";
+import { getDeviceTimeZone } from "@/lib/device-timezone";
+import { describeCron, validateCron } from "@/schedules/schedule-format";
 import { Input } from "@/ui/input";
 import { Field, FieldLabel } from "@/ui/field";
 

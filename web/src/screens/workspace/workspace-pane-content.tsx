@@ -6,11 +6,11 @@ import {
   PaneProvider,
   type PaneContextValue,
 } from "@/panels/pane-context";
-import { useStableEvent } from "@/hooks/use-stable-event";
+import { useStableEvent } from "@/lib/use-stable-event";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import type { OpenInSidePaneSource } from "@/workspace-tabs/open-beside";
 import type { PaneHost } from "@/panels/panel-manifest";

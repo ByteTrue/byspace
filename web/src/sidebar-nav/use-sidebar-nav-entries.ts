@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
+import { useKeyboardShortcutsStore } from "@/keyboard/shortcuts-store";
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,

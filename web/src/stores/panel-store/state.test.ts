@@ -3,7 +3,7 @@ import {
   buildExplorerCheckoutKey,
   resolveExplorerTabForCheckout,
   type ExplorerTab,
-} from "@/stores/explorer-tab-memory";
+} from "@/file-explorer/explorer-tab-memory";
 import {
   buildOpenFileExplorerPatch,
   buildToggleFileExplorerPatch,

@@ -2,8 +2,8 @@
 // its tab rail over a hairline, and the active panel below.
 import { Separator } from "@/ui/separator";
 import { useCallback, useMemo, type ReactNode } from "react";
-import { RetainedPanel } from "@/components/retained-panel";
-import type { TabDropPreview } from "@/components/split-container-tab-drop-preview";
+import { RetainedPanel } from "@/widgets/retained-panel";
+import type { TabDropPreview } from "@/screens/split-container-tab-drop-preview";
 import { ExplorerSidebarTabRail } from "@/screens/workspace/explorer-sidebar-tab-rail";
 import type { WorkspaceDesktopTabRowItem } from "@/screens/workspace/workspace-desktop-tabs-row";
 import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pane-content";

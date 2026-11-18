@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveTerminalTheme } from "./terminal-theme";
 import { darkClaudeTheme, darkTheme, lightTheme } from "@/styles/theme";
-import { toXtermTheme } from "@/utils/to-xterm-theme";
+import { toXtermTheme } from "@/appearance/xterm-theme";
 
 describe("resolveTerminalTheme", () => {
   it("matches the active theme by default", () => {

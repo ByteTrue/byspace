@@ -23,20 +23,20 @@ import { useToast } from "@/contexts/toast-context";
 import {
   collectImageFilesFromClipboardData,
   filesToImageAttachments,
-} from "@/utils/image-attachments-from-files";
+} from "@/composer/image-attachments-from-files";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload, TextReplacement } from "@/composer/types";
-import { focusWithRetries } from "@/utils/web-focus";
+import { focusWithRetries } from "@/platform/web-focus";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
-import { Shortcut } from "@/components/shortcut";
+import { Shortcut } from "@/widgets/shortcut";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
-import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
+import { isImeComposingKeyboardEvent } from "@/keyboard/ime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { RenderProfile } from "@/utils/render-profiler";
+import { RenderProfile } from "@/performance/render-profiler";
 import { useComposerHeight } from "@/composer/input/height";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import type { NativePastedFile } from "@/composer/native-pasted-image";

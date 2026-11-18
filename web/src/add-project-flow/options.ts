@@ -3,7 +3,7 @@ import {
   parseGitHubRemoteUrl,
   parseGitRemoteLocation,
 } from "@bytetrue/protocol/git-remote";
-import { shortenPath } from "@/utils/shorten-path";
+import { shortenPath } from "@/lib/shorten-path";
 import type { AddProjectHost, GithubRepositoryChoice } from "./model";
 
 export type AddProjectMethodId = "directory-search" | "github" | "new-directory";

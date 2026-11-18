@@ -4,7 +4,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { ExpandableBadge } from "@/components/message";
+import { ExpandableBadge } from "@/agent-stream/message";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type {
   OverviewSummary,

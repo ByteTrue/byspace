@@ -6,10 +6,10 @@ import {
   SIDEBAR_NAV_TEST_IDS,
   useSidebarHeaderNavEntries,
 } from "@/sidebar-nav/use-sidebar-nav-entries";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
-import { useSidebarViewStore } from "@/stores/sidebar-view-store";
-import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
-import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
+import { useSidebarOrderStore } from "@/sidebar/order-store";
+import { useSidebarViewStore } from "@/sidebar/view-store";
+import { hasVisibleOrderChanged, mergeWithRemainder } from "@/sidebar/reorder";
+import { sortProjectsByRules } from "@/sidebar/sort-projects";
 import { SidebarDisplayPreferencesMenu } from "@/sidebar/display-preferences-menu";
 import { SidebarIconButton } from "@/sidebar/sidebar-icon-button";
 

@@ -1,6 +1,6 @@
 # Agent stream performance
 
-How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `internal/agent/sdk/stream_frames.go`, the reducer queue in `web/src/timeline/session-stream-reducers.ts`, or the reveal in `web/src/hooks/use-revealed-text.ts`.
+How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `internal/agent/sdk/stream_frames.go`, the reducer queue in `web/src/timeline/session-stream-reducers.ts`, or the reveal in `web/src/agent-stream/use-revealed-text.ts`.
 
 For terminal output, which is a separate pipeline with separate budgets, see [terminal-performance.md](terminal-performance.md). The `BYSPACE_*` variables below are performance-test controls, not public daemon configuration.
 

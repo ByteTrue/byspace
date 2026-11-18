@@ -17,19 +17,16 @@ import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregate
 import { useProjects } from "@/hooks/use-projects";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useHosts } from "@/runtime/host-runtime";
-import {
-  useKeyboardShortcutsStore,
-  type CommandCenterScope,
-} from "@/stores/keyboard-shortcuts-store";
+import { useKeyboardShortcutsStore, type CommandCenterScope } from "@/keyboard/shortcuts-store";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import {
   clearCommandCenterFocusRestoreElement,
   takeCommandCenterFocusRestoreElement,
 } from "@/utils/command-center-focus-restore";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import { shortenPath } from "@/utils/shorten-path";
-import { formatTimeAgo } from "@/utils/time";
-import { focusWithRetries } from "@/utils/web-focus";
+import { shortenPath } from "@/lib/shorten-path";
+import { formatTimeAgo } from "@/lib/time";
+import { focusWithRetries } from "@/platform/web-focus";
 import { useCommandCenterContributions } from "@/command-center/provider";
 import {
   buildContributionSections,
@@ -49,9 +46,9 @@ import {
 } from "@/command-center/results";
 import { useWorkspaceFileSearch } from "@/command-center/workspace-file-search";
 import { filterAndRankWorkspaces } from "@/command-center/workspace-search";
-import { AgentStatusDot } from "@/components/agent-status-dot";
-import { MaterialFileIcon } from "@/components/material-file-icon";
-import { Shortcut } from "@/components/shortcut";
+import { AgentStatusDot } from "@/widgets/agent-status-dot";
+import { MaterialFileIcon } from "@/widgets/material-file-icon";
+import { Shortcut } from "@/widgets/shortcut";
 import {
   Command,
   CommandDialog,

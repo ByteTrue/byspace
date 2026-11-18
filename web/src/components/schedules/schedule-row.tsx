@@ -11,7 +11,7 @@ import {
 } from "react";
 import { cn } from "cn";
 import { Badge } from "@/ui/badge";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
 import {
@@ -19,8 +19,8 @@ import {
   formatNextRun,
   resolveScheduleTitle,
   scheduleProductName,
-} from "@/utils/schedule-format";
-import { formatTimeAgo } from "@/utils/time";
+} from "@/schedules/schedule-format";
+import { formatTimeAgo } from "@/lib/time";
 import type { ScheduleSummary } from "@bytetrue/protocol/schedule/types";
 import {
   DropdownMenu,

@@ -5,14 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React, { useCallback, useMemo, useState, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { ToastApi } from "@/components/toast-host";
+import type { ToastApi } from "@/widgets/toast-host";
 import type { InlinePathTarget } from "./parse";
 import { AssistantFileLinkResolverProvider } from "./provider";
 import type { DirectorySuggestionResult } from "./resolver";
 import { useFileLink } from "./use-file-link";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 
-vi.mock("@/utils/open-external-url", () => ({
+vi.mock("@/platform/open-external-url", () => ({
   openExternalUrl: vi.fn(async () => {}),
 }));
 

@@ -73,6 +73,7 @@ For testing rules, see [testing.md](testing.md).
 - Centralize policy. The same discriminator (`plan`, `provider`, `kind`, `status`) branched in 3+ files → policy table, not another `else if` per case.
 - New features get a home before implementation. A feature smeared across 5 shared files is the same slop as a flat-peer namespace.
 - Don't drop new files at the nearest root just because placement is unclear — say so and ask.
+- `web/src` has three shared homes and one rule for choosing: a browser/host API stand-in goes to `platform/`, a domain-free helper to `lib/`, an app component built on shadcn to `widgets/`. Everything else belongs to a feature directory. The leftover `utils/`, `hooks/`, `components/`, `stores/` hold only genuinely cross-domain modules — a module with one feature owner does not belong there, even when other buckets are its only direct importers.
 
 ## Refactoring is a bolt-on test
 

@@ -60,7 +60,7 @@ vi.mock("@/constants/layout", () => ({
   useIsCompactFormFactor: () => false,
 }));
 
-vi.mock("@/components/provider-icons", () => ({
+vi.mock("@/widgets/provider-icons", () => ({
   getProviderIcon: () => () => null,
 }));
 
@@ -134,7 +134,7 @@ function SheetSearchInput({ search }: { search: SheetSearchProps }) {
   );
 }
 
-vi.mock("@/components/adaptive-modal-sheet", () => ({
+vi.mock("@/widgets/adaptive-modal-sheet", () => ({
   AdaptiveModalSheet: ({
     visible,
     header,

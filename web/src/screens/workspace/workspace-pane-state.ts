@@ -10,7 +10,7 @@ import {
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
-import { findAdjacentPane } from "@/utils/split-navigation";
+import { findAdjacentPane } from "@/screens/split-navigation";
 
 export interface WorkspaceDerivedTab {
   descriptor: WorkspaceTabDescriptor;

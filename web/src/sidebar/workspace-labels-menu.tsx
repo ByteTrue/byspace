@@ -23,7 +23,7 @@ import {
   type WorkspaceLabelPickerRow,
 } from "@/workspace-labels";
 import { WorkspaceLabelDot, WorkspaceLabelSwatchRow } from "@/workspace-labels/swatch";
-import { keepOpen, type MenuKit } from "@/components/menu-kit";
+import { keepOpen, type MenuKit } from "@/widgets/menu-kit";
 import { Spinner } from "@/ui/spinner";
 
 function stopMenuTypeahead(event: KeyboardEvent) {

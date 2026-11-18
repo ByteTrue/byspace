@@ -24,10 +24,10 @@ import {
   type AgentProfilePickerRow as AgentProfilePickerRowModel,
   type AgentProfileSeed,
 } from "@/agent-profiles";
-import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import type { SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
-import { getProviderIcon } from "@/components/provider-icons";
+import { getProviderIcon } from "@/widgets/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   buildProviderQualifiedDescription,
