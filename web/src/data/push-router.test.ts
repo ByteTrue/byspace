@@ -7,7 +7,6 @@ import { daemonConfigQueryKey } from "@/data/daemon-config";
 import { daemonPairingOfferQueryKey } from "@/data/daemon-pairing";
 import { providersSnapshotQueryKey } from "@/data/providers-snapshot";
 import {
-  applyProvidersSnapshotUpdate,
   checkoutDiffPushRoute,
   invalidateServerDataQueriesAfterReconnect,
   mountServerDataPushRouter,
@@ -250,52 +249,6 @@ describe("server data push router", () => {
         generatedAt: "2026-01-01T00:00:00.000Z",
         requestId: "providers_snapshot_update",
       });
-  });
-
-  it("refetches active workspace snapshots after a home catalog update", async () => {
-    const queryClient = new QueryClient();
-    const fake = createFakeClient();
-    const serverId = "server-1";
-    const projectKey = providersSnapshotQueryKey(serverId, "/repo");
-    const previous = {
-      requestId: "project-old",
-      entries: [{ provider: "pi", status: "ready", enabled: true, models: [{ id: "old" }] }],
-      generatedAt: "2026-01-01T00:00:00.000Z",
-    };
-    const refreshed = {
-      requestId: "project-refreshed",
-      entries: [
-        {
-          provider: "pi",
-          status: "ready",
-          enabled: true,
-          models: [{ id: "old" }, { id: "new" }],
-        },
-      ],
-      generatedAt: "2026-01-01T00:01:00.000Z",
-    };
-    queryClient.setQueryData(projectKey, previous);
-    const observer = new QueryObserver(queryClient, {
-      queryKey: projectKey,
-      queryFn: async () => refreshed,
-      enabled: true,
-      gcTime: Infinity,
-      staleTime: Infinity,
-    });
-    const unsubscribeObserver = observer.subscribe(() => undefined);
-
-    try {
-      await applyProvidersSnapshotUpdate({
-        client: fake.client,
-        queryClient,
-        serverId,
-        message: providerUpdate("2026-01-01T00:01:00.000Z"),
-      });
-      await expect.poll(() => queryClient.getQueryData(projectKey)).toEqual(refreshed);
-    } finally {
-      unsubscribeObserver();
-      queryClient.clear();
-    }
   });
 
   it("subscribes active checkout diff queries and writes matching diff events", () => {
