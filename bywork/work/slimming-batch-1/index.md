@@ -1,8 +1,8 @@
 ---
 kind: work
 status: in_progress
-current_unit: "死包+quota+COMPAT+serviceproxy 四批全删并通过全部验证（typecheck/lint/format 三绿，audit 四步全过，浏览器 12/12）"
-next_action: "serviceproxy 批 commit（不 push）；把 provider/ACP skill+模板方案要点 + forge 插件化方案要点摆给 owner 看"
+current_unit: "死包+quota+COMPAT+serviceproxy+provider 五批全删；前四批已 commit，provider 批（内置 6→4）代码+docs+测试完成，typecheck/lint/format 三绿，audit 跑中"
+next_action: "provider 批 audit 全绿后 commit（不 push）；flag owner omp 弃用（无 ACP 桥）+ BYSPACE_SOURCE_CHECKOUT_PATH env doc-vs-code gap；forge 插件化取舍/skill 模板待 owner 定"
 must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；不 push 不开 PR"
 proof_gap: ""
 ---
@@ -44,6 +44,9 @@ proof_gap: ""
 | serviceproxy 删除后构建+测试 | make build + go test | 删 Host 路由代理层后 | 编译通过，脚本功能本体保留 | go build ./... EXIT=0；go test server/workspace/cli EXIT=0（go-test-3.txt）；servicePortAllocator/PORT env/isPortOpen 健康检查保留 | 通过 |
 | serviceproxy 删除后对账+浏览器 | npm run audit | 重建 embedded UI+重启 daemon 后 | 四步全过 | audit-4.txt：Go 82.3s ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12；scripts button 直连 http://localhost:port | 通过 |
 | serviceproxy 批类型/规范 | typecheck/lint/format | 批后跑 | 全绿 | typecheck-11.txt EXIT=0、lint-5.txt 0 警告 0 错误、format oxfmt 2488 文件；改动测试 vitest 绿（workspace-script-links 4 + scripts-button 等 5 文件 76） | 通过 |
+| provider 6→4 删除后构建+测试 | make build + go test | 删 copilot/omp 内置+ACPPresets+omp 文件后 | 编译通过，四内置+generic ACP host 保留 | go build ./... EXIT=0；go test providers/pi/sdk/store/server 全绿；build:client EXIT=0（AOT 重生成） | 通过 |
+| provider 6→4 类型/规范 | typecheck/lint/format | 批后跑 | 全绿 | typecheck-provider.txt EXIT=0（0 error）、lint-provider.txt 0 警告 0 错误（2091 文件）、format EXIT=0；protocol terminal-profiles 67 + web provider-icon-name/catalog/selection/model-browser/project-remove 57 pass | 通过 |
+| provider 6→4 对账+浏览器 | npm run audit | 重建 embedded UI+重启 daemon 后 | 四步全过 | audit-provider.txt AUDIT_EXIT=0：Go 84.8s ok、入站/出站缺口 0、重审账本 ✔、浏览器 11/11（原 omp disabled check 随 omp 删除，12→11）；browser-conformance builtinProviders 改四、expectAbsent 加 Copilot/Oh My Pi | 通过 |
 
 ## 证据与决定
 
@@ -56,6 +59,8 @@ proof_gap: ""
 - COMPAT 删除范围（~310 处/72 文件）：features 版本门（只留 webPush/daemonServiceInstall/daemonTunnels/agentRoleNames 四个 runtime-state/catalog 门）、legacy RPC/字段别名（github_pr/github_issue 附件→forge_*、github_search、checkout.github.*→checkout.forge.*、githubPrNumber→checkoutSource、githubFeaturesEnabled、PR-status github 镜像、pipeline rawStatus）、client caps 机制、retired 子系统 wire（chat/loop/browser-automation/plugin/voice/dictation/hub-execution/editor）、localStorage 迁移、model-normalize shim、binaryCiphertext 协商、create_agent_request.git 死字段。Go 发送表/authz/审计豁免同步。
 - 过时文档清理：git rm docs/refactors/session-decomposition-plan.md（Node 时代 god-file 拆分计划，packages/server 已不存在）；docs/forge-providers.md 删 GitHub compat shim 段；docs/product.md 改 Go 单二进制/Wails 平台/删 in-app browser；docs/data-model.md voice/dictation 段改 keys 已删；docs/timeline-sync.md 删 features 门；docs/protocol-compatibility.md 全文重写（无版本漂移政策）；AGENTS.md 规则改 "No version compatibility"。docs/custom-providers.md（791 行段落堆积）未动，留待后续。
 - serviceproxy 删除范围（owner m00196「已被 tunnel 完全替代，直接砍」）：git rm internal/serviceproxy/（930 行）+internal/server/service_proxy_wiring.go+test+docs/service-proxy.md+web/src/core/workspace-service-routes/。server.go 删 serviceProxyRoutes 字段+HTTP proxy dispatch；ws_plugin_setup.go workspaceScript 删 hostname/localProxyURL/publicProxyURL，payload 只发 scriptName/type/port/lifecycle/health/exitCode/terminalId；findWorkspaceRecord 迁到 workspace_auto_name.go 保留。protocol WorkspaceScriptPayloadSchema 删四 URL 字段；web workspace-script-links.ts 简化单 direct target、scripts-button 删路由选择 UI、replica-cache 删 URL 序列化；CLI script start 打印 http://localhost:port；i18n 删 routes.{public,byspace,direct}+chooseUrl。保留脚本本体：servicePortAllocator 稳定端口、PORT/WORKSPACE_SCRIPT_PORT/BYSPACE_PORT/BYSPACE_SERVICE_<NAME>_PORT env、isPortOpen 健康检查。公网层 Go 从未接线（BuildPublicURL 零调用者、BYSPACE_SERVICE_PROXY_* env 零消费者）。docs/development.md env 表删 _URL/BYSPACE_URL 死行（Go 只注入 PORT 系）、删"PORT 不默认注入"过时示例；architecture.md E2EE 句改恒 binary/raw+text/base64。35 files +76/-1918，11 deleted。
+- provider 6→4 删除范围（owner m09167「只留 Pi/Opencode/Claude/Codex 四内置，其他全不内置走 ACP 自助」）：BuiltinProviders 删 copilot+omp→4；ACPPresets map（cursor/kimi/kiro/trae）整删（generic ACP fallback driver.go GetProviderSpec 覆盖，web catalog 提供 command）；EnabledByDefault 机制整删（omp 唯一消费者，四内置全默认开，BuildSnapshotEntries enabled:=true）。git rm ompcommands/ompdetail/ompmode/omptoolname/ompwiring（+tests）、advisor/、systemnotice/（全 omp-only）、copilot-icon.tsx+omp-icon.tsx。pi.go 删 omp-only 钩子（ExtraArgs/AppendSystemPrompt/NoApprove/ToolDetailBuilder/resolveWrappedToolName）→pi 恒 --approve、buildToolDetail 直调 BuildToolCallDetail；history.go custom case 删 advisor+systemnotice 分支→纯 skip；ws_agent.go 删 MapOmpSlashCommands；toolname.go 删 xdev→bash（omp-only）。protocol provider-manifest 删 COPILOT_MODES/OMP_MODES+两内置条；provider-config BUILTIN_PROVIDER_IDS 4；provider-icon-names 删 copilot/omp builtin icon、ACP_PROVIDER_ICON_NAMES 加 copilot。web provider-icons 删两 icon、provider-command-templates 删 omp resume。**copilot 改走 ACP catalog 自助**：acp-provider-catalog.ts 加 copilot 条 command:["copilot","--acp"] iconId:"github-copilot-cli"（既有 SVG 资产）。**omp 无 ACP 桥→实际弃用**（extends:"pi" 因 omp 拒 pi flags 不可行），需 flag owner。docs：providers.md 全文重写（585→~300 行，去 Node 时代 checklist）、custom-providers.md 删 OMP profiles 节改 Pi-compatible forks、architecture/glossary/agent-lifecycle（child_session→Pi subagent 机制）/agent-stream-performance/testing/AGENTS/README/product/public-docs 同步四内置。53 files +485/-2313，16 deleted。
+- **待 flag owner**：①omp 弃用（无现成 ACP 桥，pi-acp 社区桥有并发 lifecycle bug；owner 接受"其他全部不内置"）②BYSPACE_SOURCE_CHECKOUT_PATH/BYSPACE_WORKTREE_PATH/BYSPACE_BRANCH_NAME 在 docs/development.md:91,:107+public-docs/worktrees.md:105,:113,:238+byspace-json.md:90 被文档化为 setup/teardown/scripts env，但 Go 从不注入（setup 只 CI=1+BYSPACE_WORKSPACE_SETUP=1 ws_plugin_setup.go:200；仅 script_ports.go:196-199 给 portScript 注入 BYSPACE_SCRIPTNAME/WORKSPACE_ID/BRANCH_NAME/WORKTREE_PATH）。git log -S 确认 Go 从未有过 SOURCE_CHECKOUT_PATH。
 
 ## 完成核对
 
@@ -63,6 +68,7 @@ proof_gap: ""
 - quota 整链删除：通过（RPC/authz/client/web/e2e/docs 全清，浏览器探针确认 Usage 页消失、context 环保留）。
 - COMPAT 版本漂移层删除：通过（~310 处，源码仅剩 2 故意标签；Go 发送表/authz/审计豁免同步）。
 - serviceproxy Host 路由代理层删除：通过（脚本本体保留，audit-4 四步全过+浏览器 12/12；记忆 product-scope 已增补）。
+- provider 内置 6→4（删 copilot+omp，copilot 改走 ACP catalog 自助，omp 弃用）：通过（typecheck/lint/format 三绿，go test 绿，audit-provider 四步全过+浏览器 11/11；记忆 product-scope 已增补）。
 - 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing/development 更新）。custom-providers.md 段落堆积留待后续。
 - 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
 - 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
