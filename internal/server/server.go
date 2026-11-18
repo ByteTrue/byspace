@@ -1544,9 +1544,13 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		s.mu.Unlock()
 		_ = s.probePiModelsInCwd(ctx, refreshReq.Cwd)
-		// A refresh means the user asked for a fresh probe, so drop the cached catalog rather than
-		// letting it answer the rebuild.
-		s.storeProviderCatalog(refreshReq.Cwd, nil)
+		// A settings refresh has no cwd, but workspace composers have their own cached snapshots.
+		// Drop every scope so those clients cannot reload the old project catalog after the host push.
+		if strings.TrimSpace(refreshReq.Cwd) == "" {
+			s.invalidateProviderCatalogs()
+		} else {
+			s.storeProviderCatalog(refreshReq.Cwd, nil)
+		}
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
 		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers, refreshReq.Cwd)
