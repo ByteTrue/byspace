@@ -56,6 +56,7 @@ function makeProject(
         serverId: "srv",
         projectId: viewKey,
         iconWorkingDir: `/repo/${viewKey}`,
+        iconRevision: `rev-${viewKey}`,
         worktreeSupport: "supported" as const,
       },
     ],
