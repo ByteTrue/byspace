@@ -1,14 +1,15 @@
 # Adding a Git Forge to BySpace
 
-BySpace's forge layer is a registry/manifest system. A forge is a runtime concern:
-shared protocol messages carry neutral/open facts, the server adapter owns
-behavior, and the app owns bundled presentation/runtime interpretation.
+BySpace's forge layer is a manifest plus string-dispatch adapters. A forge is a
+runtime concern: shared protocol messages carry neutral/open facts, the Go
+adapter owns behavior, and the app owns bundled presentation/runtime
+interpretation.
 
 The maintainer litmus test is the rule of thumb:
 
-> Adding a new forge means adding files in a new directory/module that implement
-> an interface, plus one entry in the centralized registry/manifest for that
-> package.
+> Adding a new forge means adding adapter files that implement the shared
+> entry-point signatures, one branch in each Go dispatch switch, and one entry
+> in the app registries.
 
 ## The Three Registrations
 
@@ -18,10 +19,13 @@ For forge `acme`, the expected end state is:
    shared manifest data. Add one `ForgeDefinition` to
    `packages/protocol/src/forge-manifest.ts`.
 
-2. **Server adapter** - add `packages/server/src/services/acme-service.ts`
-   implementing `ForgeService`, any adapter-owned fact types/guards/constants
-   beside it, and one `defaultForgeRegistry` entry in
-   `packages/server/src/services/forge-registry.ts`.
+2. **Go adapter** - add `internal/workspace/acme_pr_status.go` implementing
+   `currentAcmePullRequest(ctx, cwd, target PRLookupTarget) (map[string]any, error)`,
+   plus search/auth/timeline functions beside it. Wire one branch into each
+   dispatch switch: `CurrentPRStatus` (`pr_status_poll.go`),
+   `SearchIssuesAndPullRequests` (`forge.go`), `forgeBinaryName`/`ProbeForgeAuth`
+   (`forgeauth.go`), and the timeline dispatcher (`forge_timeline.go`). Add the
+   forge's exact public hosts to `forgeCloudHosts` (`forge.go`).
 
 3. **App modules** - a forge splits into a pure logic half and a view half so
    logic consumers (URL builders, merge-capability, native checks, and the
@@ -55,15 +59,14 @@ keeps the brand id (`"gitea"`, `"forgejo"`, `"codeberg"`).
 Protocol does not validate per-forge fact fields. Consumers that understand a
 facts family validate at runtime with their own schema/guard. Unknown or
 schema-mismatched facts render neutrally instead of failing the whole message
-parse. This is the version-skew win: an old client can receive facts from a
-newer forge and still show the PR/MR in a neutral state.
+parse: a client can receive facts from a forge it does not know and still show
+the PR/MR in a neutral state.
 
 Check results keep a stable normalized `status` for aggregation and an optional
 open `traits: string[]` for composable forge-neutral refinements such as
 `manual`, `action_required`, and `warning`. Consumers ignore unknown traits and
-fall back to `status`; `rawStatus` preserves provider-native detail. Do not add
-provider vocabulary to the normalized status union. Producers and the
-presentation layer share the trait constants in
+fall back to `status`. Do not add provider vocabulary to the normalized status
+union. Producers and the presentation layer share the trait constants in
 `packages/protocol/src/check-traits.ts` — use those instead of string literals
 so classification and emission cannot drift apart.
 
@@ -71,24 +74,16 @@ Every forge delivers its native merge facts through `status.forgeSpecific`.
 There is no GitHub mirror: app and daemon ship together, so a single shape
 serves every client.
 
-## Server
+## Server (Go)
 
-The server-wide status type only promises:
-
-```ts
-type ForgeSpecificStatusFacts = { forge: string } & Record<string, unknown>;
-```
-
-Adapter-owned files define the typed shapes and guards, for example
-`github-facts.ts`, `gitlab-facts.ts`, and `gitea-facts.ts`. The adapter can keep
-strong internal types for construction and command guards, but shared server
-code must not grow a central list of forge fact arms.
-
-Register the adapter in `defaultForgeRegistry` with:
-
-- `createService`
-- `matchesHost` from manifest `cloudHosts`
-- `probeHost` when self-hosted/Enterprise detection is supported
+The status payload is an open `map[string]any`. Each adapter builds its native
+facts under `forgeSpecific` and keeps strong internal types for construction and
+command guards, but shared code must not grow a central list of forge fact arms.
+`CurrentPRStatus` (`pr_status_poll.go`) dispatches on the detected forge string:
+`gitlab` → `currentGitLabMergeRequest`, `gitea` → `currentGiteaPullRequest`,
+default → `currentGitHubPullRequest`. Search, auth probe, and timeline dispatch
+the same way. There is no registry interface — the switch branch is the
+registration.
 
 Current change-request lookup uses two identities deliberately:
 
@@ -148,32 +143,32 @@ To add `acme`:
 
 1. Add `acme` to `FORGE_DEFINITIONS` if the shared manifest should know its
    label, nouns, icon kind, sign-in CLI, or cloud hosts.
-2. Add `acme-service.ts` implementing `ForgeService`.
-3. Add `acme-facts.ts` beside the adapter if it reports native facts.
-4. Add one `defaultForgeRegistry` entry.
-5. Add `web/src/core/git/forges/acme.ts` (logic) and
+2. Add `internal/workspace/acme_pr_status.go` implementing
+   `currentAcmePullRequest(ctx, cwd, target) (map[string]any, error)`, plus
+   search/auth/timeline functions.
+3. Add one branch to each Go dispatch switch (`CurrentPRStatus`,
+   `SearchIssuesAndPullRequests`, `forgeBinaryName`/`ProbeForgeAuth`, timeline)
+   and the forge's exact hosts to `forgeCloudHosts`.
+4. Add `web/src/core/git/forges/acme.ts` (logic) and
    `web/src/core/git/forges/acme.view.tsx` (view).
-6. Add one `CLIENT_FORGE_LOGIC_MODULES` entry (`index.ts`) and one
+5. Add one `CLIENT_FORGE_LOGIC_MODULES` entry (`index.ts`) and one
    `CLIENT_FORGE_VIEW_MODULES` entry (`view.ts`).
-7. Add/update the icon component only if the client bundle should show a brand
+6. Add/update the icon component only if the client bundle should show a brand
    mark.
-8. If the forge's CI/data model does not fit an existing required
-   `ForgeService` field, widen the shared interface (plus the protocol schema
-   and its guards) instead of faking a value — e.g. Gitea Actions runs carry no
-   check-run id, so `GetCheckDetailsOptions.checkRunId` became optional with
-   `workflowRunId` as the alternative address. Expect this step to touch
-   `forge-service.ts`, `messages.ts`, and the call-site guards of the other
-   adapters. Widening a shared field is not forge-local: it also affects the
-   already-shipped forges/GitHub call sites and the capability-gated RPC (e.g.
-   `forgeCheckDetails`), so verify every consumer rather than assuming the change
-   only reaches the new adapter.
-9. Run targeted tests: manifest/registry/resolver, the adapter test, protocol
-   checkout PR schema, app forge URL/presentation tests, app merge capability,
-   and any PR-pane native data tests touched.
+7. If the forge's CI/data model does not fit an existing shared field, widen the
+   protocol schema (plus its guards) instead of faking a value — e.g. Gitea
+   Actions runs carry no check-run id, so `checkRunId` became optional with
+   `workflowRunId` as the alternative address. Widening a shared field is not
+   forge-local: it also affects the already-shipped forges and the RPC call-site
+   guards, so verify every consumer rather than assuming the change only reaches
+   the new adapter.
+8. Run targeted tests: manifest/resolver, the adapter test, protocol checkout PR
+   schema, app forge URL/presentation tests, app merge capability, and any
+   PR-pane native data tests touched.
 
 Run `npm run typecheck` after each implementation slice. If protocol or client
-declarations are stale, run `npm run build:client`; if server/CLI declarations
-are stale, run `npm run build:server`.
+declarations are stale, run `npm run build:client`. Go changes need `make build`
+before the e2e suite or `npm run cli` sees them.
 
 ## Gotchas
 
