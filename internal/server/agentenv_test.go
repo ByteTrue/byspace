@@ -102,6 +102,44 @@ func TestAgentEnvAppliesUserVariablesWithoutLosingIdentity(t *testing.T) {
 	}
 }
 
+// The provider entry's env is the baseline an ACP agent needs to reach its backend; the per-agent
+// env rides on top of it, and the BySpace identity wins over both. Without the provider layer an
+// `extends: "acp"` provider's API key never reached the process and every request failed auth.
+func TestAgentEnvAppliesProviderEnvBeneathPerAgentEnv(t *testing.T) {
+	homeDir := filepath.Join(t.TempDir(), "home")
+	st := store.New(homeDir)
+	st.SaveDaemonConfig(map[string]any{
+		"providers": map[string]any{
+			"my-agent": map[string]any{
+				"extends": "acp",
+				"label":   "My Agent",
+				"command": []any{"my-agent", "--acp"},
+				"env": map[string]any{
+					"MY_API_KEY":         "provider-key",
+					"ANTHROPIC_BASE_URL": "https://provider.example",
+				},
+			},
+		},
+	})
+	s := &Server{homeDir: homeDir, listenAddr: "127.0.0.1:6778", store: st}
+	rec := store.AgentRecord{ID: "agt_1", Provider: "my-agent"}
+	rec.Config = &store.AgentConfig{Env: map[string]string{
+		"ANTHROPIC_BASE_URL": "https://per-agent.example",
+		"BYSPACE_AGENT_ID":   "agt_someone_else",
+	}}
+	env := s.agentEnv(rec)
+
+	if got := envValue(env, "MY_API_KEY"); got != "provider-key" {
+		t.Errorf("MY_API_KEY = %q, want the provider-config value", got)
+	}
+	if got := envValue(env, "ANTHROPIC_BASE_URL"); got != "https://per-agent.example" {
+		t.Errorf("ANTHROPIC_BASE_URL = %q, want the per-agent value to win", got)
+	}
+	if got := envValue(env, "BYSPACE_AGENT_ID"); got != "agt_1" {
+		t.Errorf("BYSPACE_AGENT_ID = %q, want the real id to win", got)
+	}
+}
+
 // Windows inherits variable names with the parent's spelling — Explorer hands the daemon `Path`.
 // Treating that as a different name left the real PATH untouched and added a second one holding
 // only our directory; the child resolved the later entry and lost node.

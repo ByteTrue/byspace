@@ -115,7 +115,7 @@ func (s *Server) removeArchivedWorktree(ctx context.Context, rec store.Workspace
 		return nil
 	}
 
-	if message := s.runWorktreeTeardownCommands(ctx, path); message != nil {
+	if message := s.runWorktreeTeardownCommands(ctx, path, rec.WorkspaceID); message != nil {
 		return message
 	}
 
@@ -157,8 +157,9 @@ func worktreeStillReferenced(records []store.WorkspaceRecord, path string) bool 
 //
 // The commands belong to the project, so a failure is reported rather than swallowed: the archive
 // itself already succeeded, and the client shows the two separately.
-func (s *Server) runWorktreeTeardownCommands(ctx context.Context, worktreePath string) *string {
+func (s *Server) runWorktreeTeardownCommands(ctx context.Context, worktreePath, workspaceID string) *string {
 	commands := workspace.ReadTeardownCommands(worktreePath)
+	identityEnv := s.worktreeIdentityEnv(ctx, workspaceID, worktreePath, "")
 	for _, command := range commands {
 		if ctx.Err() != nil {
 			message := "teardown cancelled"
@@ -169,7 +170,7 @@ func (s *Server) runWorktreeTeardownCommands(ctx context.Context, worktreePath s
 		cmd.Dir = worktreePath
 		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive bash
 		// source an arbitrary file before the project command runs.
-		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1"}))
+		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1"}, identityEnv))
 		if out, err := cmd.CombinedOutput(); err != nil {
 			message := "teardown command failed: " + command
 			if trimmed := strings.TrimSpace(string(out)); trimmed != "" {

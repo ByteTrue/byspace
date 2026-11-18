@@ -25,6 +25,22 @@ func (s *Server) agentEnv(rec store.AgentRecord) []string {
 	env := os.Environ()
 	set := func(key, value string) { env = setEnv(env, key, value) }
 
+	// The provider entry's env is the baseline an ACP agent needs to reach its backend
+	// (API keys, base URLs). The per-agent env rides on top of it, and the BySpace identity
+	// below is applied last so neither layer can rename the agent.
+	if s.store != nil {
+		if providerCfg := s.providerConfigFor(rec.Provider); providerCfg != nil {
+			if providerEnv, ok := providerCfg["env"].(map[string]any); ok {
+				for key, value := range providerEnv {
+					text, isString := value.(string)
+					if strings.TrimSpace(key) != "" && isString {
+						set(key, text)
+					}
+				}
+			}
+		}
+	}
+
 	if rec.Config != nil {
 		for key, value := range rec.Config.Env {
 			if strings.TrimSpace(key) != "" {

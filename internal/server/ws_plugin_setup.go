@@ -117,6 +117,25 @@ func (s *Server) handleWorkspaceSetupProject(ctx context.Context, sink frameSink
 	go s.runWorkspaceSetup(target.WorkspaceID, target.Cwd, branch, commands)
 }
 
+// worktreeIdentityEnv resolves the BYSPACE_SOURCE_CHECKOUT_PATH / BYSPACE_WORKTREE_PATH /
+// BYSPACE_BRANCH_NAME overlay for a workspace lifecycle process. The stored MainRepoRoot is
+// authoritative; git is the fallback for a record that predates it or a path with no record. An
+// empty branch is read from the checkout. Setup, teardown, scripts, and services all share this so
+// the documented contract holds uniformly.
+func (s *Server) worktreeIdentityEnv(ctx context.Context, workspaceID, cwd, branch string) map[string]string {
+	source := ""
+	if rec := s.findWorkspaceRecord(workspaceID); rec != nil && rec.MainRepoRoot != nil {
+		source = strings.TrimSpace(*rec.MainRepoRoot)
+	}
+	if source == "" {
+		source = workspace.WorktreeMainRepoRoot(ctx, cwd)
+	}
+	if branch == "" {
+		branch, _ = workspace.BranchName(ctx, cwd)
+	}
+	return workspace.WorktreeIdentityEnv(source, cwd, branch)
+}
+
 func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []string) {
 	// One run per workspace. Two concurrent setups of the same worktree race on the same
 	// node_modules and lockfiles, and the second one's failure looks like the project is broken.
@@ -167,6 +186,10 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 
 	s.broadcastSetupProgress(snap)
 
+	// The documented worktree contract: setup commands can reach the source checkout, this
+	// worktree, and the branch (e.g. to copy machine-local .env). Resolved once, not per command.
+	identityEnv := s.worktreeIdentityEnv(context.Background(), workspaceID, cwd, branch)
+
 	fail := func(msg string) {
 		snap.mu.Lock()
 		snap.Status = "failed"
@@ -197,7 +220,7 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		cmd.Dir = cwd
 		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive
 		// bash source an arbitrary file before the project command runs.
-		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"}))
+		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"}, identityEnv))
 		out, err := cmd.CombinedOutput()
 		snap.mu.Lock()
 		snap.Log.Write(out)
@@ -405,7 +428,7 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	invocation := workspace.BuildShellInvocation(command)
 	// Sanitized: BASH_ENV would make bash source an arbitrary file before the script runs, and
 	// ExternalProcessEnv keeps the daemon's own identity out of the child.
-	env := workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ()))
+	env := workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), s.worktreeIdentityEnv(ctx, workspaceID, cwd, "")))
 	if port > 0 {
 		env = append(env,
 			fmt.Sprintf("PORT=%d", port),

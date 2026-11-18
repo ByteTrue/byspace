@@ -118,6 +118,36 @@ func TestResolveProviderSpecWithConfigACPKeepsGenericTransport(t *testing.T) {
 	}
 }
 
+// An ACP agent's command names the exact argv that starts its stdio server. The generic spec
+// defaults to `--acp`, which is wrong for an agent whose ACP mode is a subcommand (`hermes acp`)
+// or whose launcher is a package runner (`npx -y pkg --acp`). The configured tail must replace
+// the default, or the agent starts with the wrong arguments and never answers initialize.
+func TestResolveProviderSpecWithConfigACPUsesCommandTail(t *testing.T) {
+	cases := []struct {
+		name    string
+		command []any
+		want    []string
+	}{
+		{"subcommand", []any{"hermes", "acp"}, []string{"acp"}},
+		{"package runner", []any{"npx", "-y", "@google/gemini-cli", "--acp"}, []string{"-y", "@google/gemini-cli", "--acp"}},
+		{"binary only", []any{"cursor-agent"}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := map[string]any{"extends": "acp", "command": tc.command}
+			spec := ResolveProviderSpecWithConfig("my-agent", cfg)
+			if len(spec.DefaultArgs) != len(tc.want) {
+				t.Fatalf("DefaultArgs = %v, want %v", spec.DefaultArgs, tc.want)
+			}
+			for i, arg := range tc.want {
+				if spec.DefaultArgs[i] != arg {
+					t.Fatalf("DefaultArgs = %v, want %v", spec.DefaultArgs, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestProviderSpecForLaunchKeepsCommandTail(t *testing.T) {
 	cfg := map[string]any{"extends": "pi", "command": []any{"node", "/tmp/fake-pi.mjs"}}
 

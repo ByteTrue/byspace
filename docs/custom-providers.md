@@ -483,11 +483,11 @@ absolute workspace paths.
 
 ### Generic ACP diagnostics
 
-BySpace diagnostics for `extends: "acp"` providers report the configured command, resolved launcher binary, version output, ACP `initialize`, ACP `session/new`, model count, modes, and final status.
+BySpace diagnostics for `extends: "acp"` providers report the configured command, the resolved launcher binary, its `--version` output, PATH matches, and the daemon's PATH. They resolve the command the way launch does — a `<PROVIDER>_COMMAND` environment variable beats the configured binary — so a provider installed somewhere the daemon cannot see shows up as `Resolved path: not found`.
 
 For package-runner commands such as `npx -y @google/gemini-cli --acp`, the version probe keeps the package spec and runs `npx -y @google/gemini-cli --version`. This diagnoses the actual agent package instead of only proving that `npx` exists.
 
-ACP probes use short timeouts and browser-suppression environment variables so agents that enter an auth/browser flow fail as a diagnostic error instead of hanging the provider screen.
+The diagnostic does not start an ACP session: it proves the launcher resolves and reports a version, not that the agent answers `initialize`. To check the protocol end to end, create an agent on the provider and send a message.
 
 ### Example: Google Gemini CLI
 

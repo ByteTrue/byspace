@@ -287,6 +287,13 @@ func applySpecOverrides(spec ProviderSpec, providerID string, cfg map[string]any
 	}
 	if argv := configCommandArgv(cfg); len(argv) > 0 {
 		spec.Binary = argv[0]
+		// An ACP provider's command names the exact argv that starts its stdio agent
+		// (`hermes acp`, `npx -y pkg --acp`). The generic ACP spec defaults to `--acp`, which is
+		// wrong for any agent whose ACP flag is a subcommand or whose launcher is a package runner.
+		// The configured tail replaces the default; native protocols keep their own launch args.
+		if spec.Protocol == "acp" {
+			spec.DefaultArgs = argv[1:]
+		}
 	}
 	return spec
 }

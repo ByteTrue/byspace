@@ -127,14 +127,8 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_, _ = s.rpcCall(ctx, "initialize", map[string]any{
-		"protocolVersion": 1,
-		"clientCapabilities": map[string]any{
-			"fs": map[string]any{
-				"readTextFile":  true,
-				"writeTextFile": true,
-			},
-			"terminal": true,
-		},
+		"protocolVersion":    1,
+		"clientCapabilities": acpClientCapabilities(cfg.ProviderConfig),
 	})
 
 	if cfg.SessionHandle != "" {
@@ -179,6 +173,38 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 	}
 
 	return s, nil
+}
+
+// acpClientCapabilities builds the `initialize` capability advertisement from the provider's
+// `params.clientCapabilities`, defaulting to handling fs reads/writes and terminals on the host.
+// An agent that manages its own environment (a container, a remote box) sets these to false so it
+// keeps those operations to itself; the advertisement is what tells it BySpace will not handle them.
+func acpClientCapabilities(providerConfig map[string]any) map[string]any {
+	caps := map[string]any{
+		"fs": map[string]any{
+			"readTextFile":  true,
+			"writeTextFile": true,
+		},
+		"terminal": true,
+	}
+	params, _ := providerConfig["params"].(map[string]any)
+	override, _ := params["clientCapabilities"].(map[string]any)
+	if override == nil {
+		return caps
+	}
+	if terminal, ok := override["terminal"].(bool); ok {
+		caps["terminal"] = terminal
+	}
+	if fs, ok := override["fs"].(map[string]any); ok {
+		fsCaps := caps["fs"].(map[string]any)
+		if read, ok := fs["readTextFile"].(bool); ok {
+			fsCaps["readTextFile"] = read
+		}
+		if write, ok := fs["writeTextFile"].(bool); ok {
+			fsCaps["writeTextFile"] = write
+		}
+	}
+	return caps
 }
 
 func (s *ACPSession) rpcCall(ctx context.Context, method string, params map[string]any) (map[string]any, error) {
