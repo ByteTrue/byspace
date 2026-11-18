@@ -1,32 +1,4 @@
 import { z } from "zod";
-import type { AgentProvider } from "./agent-types.js";
-import { AgentProviderSchema } from "./provider-manifest.js";
-
-const ProviderCommandDefaultSchema = z.object({
-  mode: z.literal("default"),
-});
-
-const ProviderCommandAppendSchema = z.object({
-  mode: z.literal("append"),
-  args: z.array(z.string()).optional(),
-});
-
-const ProviderCommandReplaceSchema = z.object({
-  mode: z.literal("replace"),
-  argv: z.array(z.string().min(1)).min(1),
-});
-
-export const ProviderCommandSchema = z.discriminatedUnion("mode", [
-  ProviderCommandDefaultSchema,
-  ProviderCommandAppendSchema,
-  ProviderCommandReplaceSchema,
-]);
-
-export const ProviderRuntimeSettingsSchema = z.object({
-  command: ProviderCommandSchema.optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  disallowedTools: z.array(z.string()).optional(),
-});
 
 const ProviderProfileThinkingOptionSchema = z.object({
   id: z.string(),
@@ -109,26 +81,6 @@ export const ProviderOverridesSchema = z
     }
   });
 
-export const AgentProviderRuntimeSettingsMapSchema = z
-  .record(z.string(), ProviderRuntimeSettingsSchema)
-  .superRefine((providers, ctx) => {
-    for (const providerId of Object.keys(providers)) {
-      const parsedProviderId = AgentProviderSchema.safeParse(providerId);
-      if (!parsedProviderId.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [providerId],
-          message: `Invalid agent provider "${providerId}".`,
-        });
-      }
-    }
-  });
-
-export type ProviderCommand = z.infer<typeof ProviderCommandSchema>;
-export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettingsSchema>;
 export type ProviderProfileModel = z.infer<typeof ProviderProfileModelSchema>;
 export type ProviderOverride = z.infer<typeof ProviderOverrideSchema>;
 export type ProviderOverrides = z.infer<typeof ProviderOverridesSchema>;
-export type AgentProviderRuntimeSettingsMap = Partial<
-  Record<AgentProvider, ProviderRuntimeSettings>
->;

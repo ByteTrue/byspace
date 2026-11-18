@@ -1,8 +1,8 @@
 ---
 kind: work
 status: in_progress
-current_unit: "七批已 commit：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写"
-next_action: "flag owner 三独立 gap（per-agent Claude options 未接线/ProviderRuntimeSettings 死 surface/Codex env-only 未真实验证）；Chief 远期"
+current_unit: "八批已 commit：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options"
+next_action: "Chief 远期认真做；瘦身批次一全部闭环"
 must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；不 push 不开 PR"
 proof_gap: ""
 ---
@@ -57,6 +57,9 @@ proof_gap: ""
 | 三死字段删除 | order/byspaceTools/catalogRefreshTimeoutMs | schema+store+config_reload 删字段 | config-safe（passthrough strip unknown），无消费者破坏 | grep 源码零残留；protocol provider-config/messages 64 pass；go test store/server Config|Reload|Provider ok | 通过 |
 | custom-providers.md 重写 | docs/custom-providers.md | 750→~390 行 | 去 fiction（Codex TOML/pi params/ACP Auto Accept/catalogRefreshTimeoutMs）+去堆积（Z.AI/Qwen vendor 表+一例/WebSearch 一次/删 Full example） | 通读核实；docs/public-docs 零残留 rpcTimeoutMs/catalogRefreshTimeoutMs/Auto Accept/requires_openai_auth/model_providers/byspaceTools | 通过 |
 | 第七批类型/规范+对账 | typecheck/lint/format + npm run audit | 重建 embedded UI+重启 daemon 后 | 全绿 | typecheck-15/lint-7/format:files EXIT=0；audit-docs.txt AUDIT_EXIT=0：Go 80.5s ok、入站/出站缺口 0、重审账本 ✔、浏览器 11/11 | 通过 |
+| Claude per-agent options 接线 | claudeLaunchArgs | config.options allowedTools/disallowedTools/additionalDirectories/settings/sandbox | flags+merged --settings JSON 达 CLI，deny 与 provider-level 合并去重 | TestClaudeLaunchArgsCarryProviderOptions 绿（turnparams_test.go）；go providers 全包 ok | 通过 |
+| 死 surface 删除 | ProviderRuntimeSettings/AgentProviderRuntimeSettingsMap/ProviderCommand | provider-config.ts 删三 schema+三 type | 零消费者，config-safe | grep 源码零残留；build:client/typecheck EXIT=0；protocol messages 28 pass | 通过 |
+| 第八批类型/规范+对账 | typecheck/lint/format + npm run audit | 重建 embedded UI+重启 daemon 后 | 全绿 | typecheck-16/lint-8/format-3 EXIT=0；audit-options.txt AUDIT_EXIT=0：Go 82.0s ok、入站/出站缺口 0、重审账本 ✔、浏览器 11/11 | 通过 |
 
 ## 证据与决定
 
@@ -84,6 +87,13 @@ proof_gap: ""
   · **连带 stale 修复**：public-docs/custom-providers.md:195 Full reference 句删 order+byspaceTools retired 句加 params；docs/providers.md:154-157 rpcTimeoutMs fiction→readyTimeout 60s 固定不可配；docs/data-model.md:279-284 byspaceTools retired 节"Both keys still parsed"→"gone from schema, keys ignored"；AGENTS.md:66 "Integrate don't append" 规则删尾部 custom-providers.md 反例引用（doc 已修好）；messages.attachments.test.ts 删 stale git 测试（git 字段 b103 已删但测试漏修）。
   · **验证**：format:files/lint-7/typecheck-15 EXIT=0；go test providers/store/server ok；protocol 64 pass；web provider 32 pass。重建 embedded UI（build-webui-4）+make build（build-go-6，bin 31600178）+重启 dev daemon（sh_1ed0c67140017wx1TCXqYqULW6 PID 77248，health OK srv_StogP7vptNiA 0.26.4）。audit-docs.txt AUDIT_EXIT=0 四步全过+浏览器 11/11。12 files +205/-545。
 - **待 flag owner（三独立 gap，非本批，未擅自扩范围）**：①per-agent Claude options 整条未接线——SDK doc public-docs/sdk/provider-options.md:75 disallowedTools/sandbox/allowedTools，ClaudeSession 零读 ProviderOptions（codex options 活 codexturn.go:103/:112）；本批接线的是 provider-level disallowedTools（agents.providers.<id>.disallowedTools），per-agent config.options.disallowedTools 是另一条路径仍未接线。②ProviderRuntimeSettingsSchema/AgentProviderRuntimeSettingsMapSchema（provider-config.ts:25/:119）零消费者死 surface（含 disallowedTools:28）——独立死代码。③Codex env-only custom endpoint 是否真工作未拿真实 endpoint 验证（外部二进制行为不可核）。
+- 第八批范围（owner m09911「这些都按照你觉得最优雅的解法去处理吧」+{{ACCOUNT_z7h8i234}}「那就按你建议的来做吧」）：三 gap 最优雅解法——Claude 接线（补回真实功能）+OpenCode 文档降级（无 per-session API，不新造机制）+死 surface 删+Codex 注明。
+  · **Claude per-agent options 接线**（claude.go claudeLaunchArgs）：读 cfg.ProviderOptions——allowedTools→--allowedTools variadic、additionalDirectories→--add-dir variadic、disallowedTools→--disallowedTools（与 provider-level providerDisallowedTools 合并去重，per-agent 先）；settings（map）+sandbox（map）merge 进单一 --settings JSON（含 fast_mode），CLI 自己消费嵌套对象 BySpace 不逐字段映射。新 helper optionStringList（[]any 过滤空串）+appendUniqueStrings（保序去重）。测试 TestClaudeLaunchArgsCarryProviderOptions（flags+settings merge+deny 合并）。**这是补回 SDK 文档承诺的真实功能（Claude CLI 本身支持这些 flag），非砍功能。**
+  · **OpenCode per-agent permission 文档降级**：OpenCode permission 是 config 级（opencode.json）+运行时 permission-request 流，HTTP API 无 per-session create 透传路径（exa 核实 opencode.ai/docs/api）→不新造机制（违背瘦身），改文档注明 permission 走 OpenCode 自己 config。docs/providers.md options 节 OpenCode 条+public-docs/sdk/provider-options.md OpenCode 节（删 per-agent SDK 例，改 opencode.json 例）。
+  · **删 strict 校验虚构**：ProviderOptionsSchema=z.record(z.string(),z.json()) permissive，Go 无 per-provider strict 校验（只 Codex 透传）→docs/providers.md:73+SDK provider-options.md intro 删"strict schema/Unknown keys fail"改"passes through without per-provider schema check"。
+  · **删死 surface**：provider-config.ts 删 ProviderCommandSchema（discriminatedUnion default/append/replace）+ProviderRuntimeSettingsSchema+AgentProviderRuntimeSettingsMapSchema+三 type（ProviderCommand/ProviderRuntimeSettings/AgentProviderRuntimeSettingsMap）+AgentProvider/AgentProviderSchema import（零外部消费者，grep 确认）。
+  · **Codex env-only 注明**（docs/custom-providers.md Codex 节）：补"BySpace only passes env through; whether Codex routes to custom endpoint is Codex's own behavior, not controlled/verified by BySpace. Test with real prompt."（gap 3 诚实标注，外部二进制不可核）。
+  · **验证**：gofmt；go providers 全包 ok（18.1s）；build:client-22/typecheck-16 EXIT=0；protocol messages 28 pass；lint-8/format-3 EXIT=0。重建 embedded UI（build-webui-5）+make build（build-go-7，bin 31600178）+重启 dev daemon（sh_1ed35d473001YKbh7lPzRLnK7R PID 87729，health OK）。audit-options.txt AUDIT_EXIT=0 四步全过+浏览器 11/11。7 files +182/-124。
 
 ## 完成核对
 
@@ -95,10 +105,11 @@ proof_gap: ""
 - worktree env 注入（修 doc-vs-code gap，让文档承诺成真）：通过（三身份变量注入 setup/teardown/scripts/services 四 launch 点，测试绿，docs 无需改）。
 - ACP 自助接入根因修复（command argv tail/provider env 达进程/clientCapabilities 可配）+ provider-adapter skill：通过（三 bug 测试绿，skill embed+测试绿，diagnostic 文档过度承诺修正；audit-skill 四步全过+浏览器 11/11）。
 - custom-providers.md 重写（去 fiction+去堆积）+ disallowedTools 接线 + 三死字段删除：通过（doc 750→~390 行，Codex TOML/pi params/ACP Auto Accept/catalogRefreshTimeoutMs fiction 删，Z.AI/Qwen 收敛 vendor 表+一例；disallowedTools 达 CLI 测试绿；order/byspaceTools/catalogRefreshTimeoutMs 删 config-safe；audit-docs 四步全过+浏览器 11/11）。
+- per-agent options 三 gap 处理：通过（Claude per-agent options 接线补回真实功能+测试绿；OpenCode permission 文档降级走自己 config；strict 校验虚构删；ProviderRuntimeSettings/ProviderCommand 死 surface 删；Codex env-only 诚实注明；audit-options 四步全过+浏览器 11/11）。
 - forge 建议交付：通过（owner m10653 认可，Go 保持 switch，gitea 家族留，不建插件内核）。
 - 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing/development 更新；custom-providers.md 重写完成）。
 - 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
 - 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
 - commit：c7a0e4e92（死包+quota+COMPAT）、c4000826f（bywork）、5ab0f2d9a（serviceproxy）、e887e013b（bywork）、a81ec8b84（forge 文档）、9ea695900（provider 6→4）、086a1c788（bywork）、4fddad678（ACP 自助+worktree env+skill）、248ac0c06（bywork）。第七批（custom-providers 重写+disallowedTools 接线+三死字段）commit 见 git log。main ahead origin，未 push——owner 未授权 push。pre-commit hooks（lint/format/typecheck）全过。
 - 保留项确认未动：平台广度（安卓/Web/Windows/Mac）、changelog/What's New、schedules/heartbeat、git review UI、forge（GitHub+GitLab+Gitea）、Chief/roles。
-- 待 flag owner（三独立 gap，非本批）：per-agent Claude options 未接线（SDK doc disallowedTools/sandbox/allowedTools，ClaudeSession 零读 ProviderOptions）、ProviderRuntimeSettingsSchema 死 surface、Codex env-only custom endpoint 未真实验证。Chief 远期认真做。
+- 待 flag owner（三独立 gap，非本批）：per-agent Claude options 未接线（SDK doc disallowedTools/sandbox/allowedTools，ClaudeSession 零读 ProviderOptions）、ProviderRuntimeSettingsSchema 死 surface、Codex env-only custom endpoint 未真实验证。→owner m09911「按最优雅解法处理」+{{ACCOUNT_z7h8i234}}「按你建议做」→第八批全部闭环（Claude 接线/OpenCode 降级/死 surface 删/Codex 注明）。Chief 远期认真做。

@@ -8,9 +8,12 @@ category: TypeScript SDK
 
 # Provider options
 
-`config.options` passes settings straight through to the provider CLI. BySpace validates the object against that provider's strict schema before starting the agent, so an unknown or misspelled key fails agent creation instead of silently doing nothing.
+`config.options` passes settings straight through to the provider CLI. The names and nesting are the
+provider's own contract; BySpace does not validate them against a per-provider schema, so an unknown
+key is the provider's to accept or reject.
 
-Options are provider-native. A Codex sandbox key is not a Claude sandbox key. Codex, Claude, and OpenCode accept options; every other provider rejects a non-empty `options`.
+Options are provider-native. A Codex sandbox key is not a Claude sandbox key. Codex and Claude accept
+options; OpenCode reads its permissions from its own config rather than from `options` (see below).
 
 Provider options are not a host boundary. They constrain the agent CLI, which runs as your user on your machine. For untrusted work, run the daemon in a container or on a separate machine. See [Security](/docs/security).
 
@@ -100,11 +103,16 @@ await client.close();
 
 | Option                  | Values                                                                                                  |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| `allowedTools`          | Tool names the agent may use without asking                                                             |
-| `disallowedTools`       | Tool names the agent may never use                                                                      |
-| `additionalDirectories` | Extra directories the agent may access                                                                  |
+| `allowedTools`          | Tool names the agent may use without asking (`--allowedTools`)                                          |
+| `disallowedTools`       | Tool names the agent may never use (`--disallowedTools`, merged with the provider entry's deny rules)   |
+| `additionalDirectories` | Extra directories the agent may access (`--add-dir`)                                                    |
 | `sandbox`               | `enabled`, `failIfUnavailable`, `allowUnsandboxedCommands`, `excludedCommands`, `filesystem`, `network` |
 | `settings`              | `permissions` (`allow`/`ask`/`deny` rule lists) and a nested `sandbox`                                  |
+
+`allowedTools`, `disallowedTools`, and `additionalDirectories` become launch flags. `sandbox` and
+`settings` are nested objects the Claude CLI consumes itself, so BySpace merges them into a single
+`--settings` JSON rather than mapping each field. The sandbox is Claude Code's own; BySpace passes the
+object through and does not interpret it.
 
 `failIfUnavailable: true` makes agent startup fail when the sandbox cannot be established. Leave it off and Claude runs unsandboxed instead.
 
@@ -112,47 +120,37 @@ await client.close();
 
 ## OpenCode
 
-Allow reads and edits, deny anything that reaches outside the project, and gate shell commands by pattern:
+OpenCode does not read `config.options`. Its permissions are application policy set in OpenCode's own
+config file (`opencode.json`), not a per-session parameter the HTTP API accepts, so BySpace cannot
+forward them per agent. Configure permissions there instead:
 
-```ts
-import { createBySpaceClient } from "@bytetrue/client";
-
-const client = createBySpaceClient({ url: "ws://127.0.0.1:6777/ws" });
-await client.connect();
-
-const agent = await client.agents.create({
-  config: {
-    provider: "opencode/opencode/gpt-5.5",
-    options: {
-      permission: {
-        read: "allow",
-        edit: "allow",
-        webfetch: "deny",
-        external_directory: "deny",
-        bash: {
-          "git status": "allow",
-          "git diff*": "allow",
-          "git push*": "deny",
-          "*": "ask",
-        },
-      },
-    },
-  },
-  cwd: "/Users/me/dev/storefront",
-  prompt: "Implement the requested change and show me the diff.",
-});
-
-const result = await agent.waitForFinish();
-console.log(result.status, result.lastMessage);
-
-await client.close();
+```json
+{
+  "permission": {
+    "read": "allow",
+    "edit": "allow",
+    "webfetch": "deny",
+    "external_directory": "deny",
+    "bash": {
+      "git status": "allow",
+      "git diff*": "allow",
+      "git push*": "deny",
+      "*": "ask"
+    }
+  }
+}
 ```
 
-Every permission is `ask`, `allow`, or `deny`. Tools that take a target — `read`, `edit`, `glob`, `grep`, `list`, `bash`, `task`, `external_directory`, `repo_clone`, `repo_overview`, `lsp`, `skill` — also accept a pattern map, where later keys act as the fallback. Tools without a target — `todowrite`, `question`, `webfetch`, `websearch`, `codesearch`, `doom_loop` — take a bare action.
+Every permission is `ask`, `allow`, or `deny`. Tools that take a target — `read`, `edit`, `glob`,
+`grep`, `list`, `bash`, `task`, `external_directory`, `repo_clone`, `repo_overview`, `lsp`, `skill` —
+also accept a pattern map, where later keys act as the fallback. Tools without a target — `todowrite`,
+`question`, `webfetch`, `websearch`, `codesearch`, `doom_loop` — take a bare action. `permission: "deny"`
+as a bare string applies to everything at once. See the
+[OpenCode permissions reference](https://opencode.ai/docs/permissions/).
 
-`permission: "deny"` as a bare string applies to everything at once.
-
-An `ask` resolves to a permission request in BySpace, and `waitForFinish()` returns `permission` while it is pending. Use `allow` and `deny` for unattended runs. See [Events](/docs/sdk/events) for reacting to a pending request.
+An `ask` resolves to a permission request in BySpace, and `waitForFinish()` returns `permission` while
+it is pending. Use `allow` and `deny` for unattended runs. See [Events](/docs/sdk/events) for reacting
+to a pending request.
 
 ## Modes and options
 

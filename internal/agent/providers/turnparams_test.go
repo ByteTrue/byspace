@@ -132,6 +132,53 @@ func TestClaudeLaunchArgsCarryDisallowedTools(t *testing.T) {
 	}
 }
 
+// Per-agent provider options (config.options) reach Claude as launch flags and a merged --settings
+// JSON. Before this they were silently dropped, so the SDK's documented options did nothing.
+func TestClaudeLaunchArgsCarryProviderOptions(t *testing.T) {
+	args := claudeLaunchArgs(LaunchConfig{
+		Model: "opus",
+		ProviderOptions: map[string]any{
+			"allowedTools":          []any{"Read", "Bash(git log *)"},
+			"disallowedTools":       []any{"WebFetch"},
+			"additionalDirectories": []any{"/Users/me/dev/lib"},
+			"settings":              map[string]any{"permissions": map[string]any{"deny": []any{"Read(.env)"}}},
+			"sandbox":               map[string]any{"enabled": true},
+		},
+		ProviderConfig: map[string]any{"disallowedTools": []any{"WebSearch", "WebFetch"}},
+	})
+	joined := strings.Join(args, "\x00")
+	if !strings.Contains(joined, "--allowedTools\x00Read\x00Bash(git log *)") {
+		t.Fatalf("args %v missing --allowedTools", args)
+	}
+	if !strings.Contains(joined, "--add-dir\x00/Users/me/dev/lib") {
+		t.Fatalf("args %v missing --add-dir", args)
+	}
+	// Per-agent deny rules come first, provider-level rules append, duplicates drop once.
+	if !strings.Contains(joined, "--disallowedTools\x00WebFetch\x00WebSearch") {
+		t.Fatalf("args %v missing merged deny rules", args)
+	}
+	// settings and sandbox merge into one --settings JSON the CLI consumes itself.
+	idx := -1
+	for i, arg := range args {
+		if arg == "--settings" {
+			idx = i + 1
+		}
+	}
+	if idx < 0 || idx >= len(args) {
+		t.Fatalf("args %v missing --settings", args)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(args[idx]), &settings); err != nil {
+		t.Fatalf("--settings not JSON: %v", err)
+	}
+	if _, ok := settings["permissions"]; !ok {
+		t.Fatalf("--settings missing nested settings.permissions: %v", settings)
+	}
+	if sandbox, ok := settings["sandbox"].(map[string]any); !ok || sandbox["enabled"] != true {
+		t.Fatalf("--settings missing sandbox: %v", settings)
+	}
+}
+
 // "off" and "default" are BySpace option ids, not Claude effort levels: passing them makes the CLI
 // reject the launch.
 func TestClaudeLaunchArgsSkipNonEffortThinking(t *testing.T) {

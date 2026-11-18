@@ -95,17 +95,73 @@ func claudeLaunchArgs(cfg LaunchConfig) []string {
 	}
 	// Fast mode is a settings flag, not a launch flag: the CLI merges --settings into its settings
 	// file. Codex has a per-turn serviceTier; Claude reads this once per process.
+	settings := map[string]any{}
 	if fast, _ := cfg.FeatureValues["fast_mode"].(bool); fast && ClaudeModelSupportsFastMode(cfg.Model) {
-		args = append(args, "--settings", `{"fastMode":true}`)
+		settings["fastMode"] = true
 	}
-	// disallowedTools reaches the CLI as deny rules. A third-party Anthropic-compatible endpoint
-	// (Z.AI, Qwen, a proxy) does not support Anthropic's server-side tools, so a provider entry
-	// lists them here (e.g. ["WebSearch"]) and the CLI drops them from the model's context.
-	if rules := providerDisallowedTools(cfg.ProviderConfig); len(rules) > 0 {
-		args = append(args, "--disallowedTools")
+	// Per-agent provider options (config.options) reach the CLI two ways: tool rules and extra
+	// directories are launch flags, while `settings` and `sandbox` are nested objects the CLI consumes
+	// itself, so they merge into the same --settings JSON rather than being mapped field by field.
+	opts := cfg.ProviderOptions
+	if rules := optionStringList(opts["allowedTools"]); len(rules) > 0 {
+		args = append(args, "--allowedTools")
 		args = append(args, rules...)
 	}
+	if dirs := optionStringList(opts["additionalDirectories"]); len(dirs) > 0 {
+		args = append(args, "--add-dir")
+		args = append(args, dirs...)
+	}
+	// disallowedTools merges the per-agent list with the provider-level deny rules (a third-party
+	// Anthropic-compatible endpoint lists e.g. ["WebSearch"] on the provider entry). Per-agent rules
+	// come first; duplicates are dropped so the CLI sees each rule once.
+	deny := optionStringList(opts["disallowedTools"])
+	deny = appendUniqueStrings(deny, providerDisallowedTools(cfg.ProviderConfig))
+	if len(deny) > 0 {
+		args = append(args, "--disallowedTools")
+		args = append(args, deny...)
+	}
+	if nested, ok := opts["settings"].(map[string]any); ok {
+		for key, value := range nested {
+			settings[key] = value
+		}
+	}
+	if sandbox, ok := opts["sandbox"].(map[string]any); ok && len(sandbox) > 0 {
+		settings["sandbox"] = sandbox
+	}
+	if len(settings) > 0 {
+		if encoded, err := json.Marshal(settings); err == nil {
+			args = append(args, "--settings", string(encoded))
+		}
+	}
 	return args
+}
+
+// optionStringList reads a string-array option, tolerating the JSON shapes a config file or a client
+// patch can produce ([]any or []string), dropping blanks.
+func optionStringList(raw any) []string {
+	items, _ := raw.([]any)
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+// appendUniqueStrings appends values not already present, preserving order.
+func appendUniqueStrings(base, extra []string) []string {
+	seen := make(map[string]bool, len(base))
+	for _, value := range base {
+		seen[value] = true
+	}
+	for _, value := range extra {
+		if !seen[value] {
+			seen[value] = true
+			base = append(base, value)
+		}
+	}
+	return base
 }
 
 // providerDisallowedTools reads the deny rules from a provider config entry, tolerating the JSON

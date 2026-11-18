@@ -70,34 +70,26 @@ a value the process does not use. Codex carries `plan_mode` and the system promp
 
 `AgentSessionConfig.providerOptions` carries JSON-safe configuration for the selected provider. The
 names and nesting are the provider's native contract; options are not portable between providers.
-BySpace validates the object with the selected provider's strict schema before constructing a session.
-Unknown keys fail with their `providerOptions.*` path. BySpace-owned controls such as cwd, model,
-prompt, environment, session identity, MCP transport, callbacks, and hooks cannot be passed here.
+BySpace passes the object through to the provider adapter without a per-provider schema check — an
+unknown key is the provider's to accept or reject, not BySpace's. BySpace-owned controls such as cwd,
+model, prompt, environment, session identity, MCP transport, callbacks, and hooks are separate fields,
+not keys inside `providerOptions`.
 
-This BySpace version accepts these keys:
+How each adapter consumes the options:
 
-- **Codex:** `approval_policy`, `sandbox_mode`,
+- **Codex:** passed verbatim into the `config` object of `thread/start` / `thread/resume`, so Codex
+  reads its own native keys: `approval_policy`, `sandbox_mode`,
   `sandbox_workspace_write.{writable_roots,network_access,exclude_slash_tmp,exclude_tmpdir_env_var}`,
-  `web_search`, `features.multi_agent_v2`, and `features.network_proxy`. A network proxy object may
-  contain `enabled`, `proxy_url`, `socks_url`, `enable_socks5`, `enable_socks5_udp`,
-  `allow_local_binding`, `allow_upstream_proxy`, `dangerously_allow_all_unix_sockets`,
-  `dangerously_allow_non_loopback_proxy`, `domains`, and `unix_sockets`. See the
+  `web_search`, `features.multi_agent_v2`, and `features.network_proxy`. See the
   [Codex configuration reference](https://developers.openai.com/codex/config-reference).
-- **Claude:** `allowedTools`, `disallowedTools`, `additionalDirectories`, `sandbox`, and `settings`.
-  The accepted sandbox fields cover enablement, fail-if-unavailable behavior, excluded and
-  unsandboxed commands, filesystem read/write rules, network domain/socket/local-binding rules,
-  weaker nested sandboxing, ignored violations, and the ripgrep command. `settings` accepts native
-  `permissions.{allow,ask,deny}` and sandbox settings. See the
-  [Claude Agent SDK TypeScript reference](https://platform.claude.com/docs/en/agent-sdk/typescript)
-  and [Claude settings reference](https://code.claude.com/docs/en/settings).
-- **OpenCode:** `permission`, either one `ask`/`allow`/`deny` action or the native per-tool rule
-  object. Supported entries are `read`, `edit`, `glob`, `grep`, `list`, `bash`, `task`,
-  `external_directory`, `todowrite`, `question`, `webfetch`, `websearch`, `codesearch`,
-  `repo_clone`, `repo_overview`, `lsp`, `doom_loop`, and `skill`. See the
-  [OpenCode permissions reference](https://opencode.ai/docs/permissions/). OpenCode permissions are
-  application policy, not an OS sandbox.
-
-Each provider definition owns its option schema and exact MCP preapproval mapping.
+- **Claude:** mapped to launch flags and a merged `--settings` JSON. `allowedTools` →
+  `--allowedTools`, `additionalDirectories` → `--add-dir`, and `disallowedTools` → `--disallowedTools`
+  (merged with the provider entry's `disallowedTools`, duplicates dropped). `settings` and `sandbox`
+  are nested objects the Claude CLI consumes itself, so they merge into `--settings` rather than being
+  mapped field by field. See the [Claude settings reference](https://code.claude.com/docs/en/settings).
+- **OpenCode:** `providerOptions` is not forwarded. OpenCode permissions are application policy set in
+  OpenCode's own config (`opencode.json`), not a per-session parameter the HTTP API accepts, so configure
+  them there. See the [OpenCode permissions reference](https://opencode.ai/docs/permissions/).
 
 ## Provider-specific notes
 

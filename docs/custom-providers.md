@@ -135,6 +135,8 @@ config files.
 ```
 
 - The endpoint must speak the OpenAI **Responses API**, not just chat completions.
+- BySpace only passes `env` through; whether Codex actually routes to the custom endpoint is Codex's
+  own behavior, which BySpace does not control or verify. Test the endpoint with a real prompt.
 - Set `models` explicitly. BySpace does not discover a custom Codex endpoint's model IDs.
 - To run several endpoints side by side, define multiple entries extending `"codex"` with different
   IDs, labels, and env.
