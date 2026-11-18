@@ -1,5 +1,4 @@
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
-import type { SessionEventSubscription } from "@bytetrue/protocol/messages";
 import { ConnectionSubscriptions, type TimelineSubscription } from "./connection/index.js";
 import type { z } from "zod";
 import type { AgentAttentionNotificationPayload } from "@bytetrue/protocol/agent-attention-notification";
@@ -1074,7 +1073,6 @@ export class DaemonClient {
   });
   private readonly subscriptions = new ConnectionSubscriptions({
     timelines: (agentIds) => (this.isConnected ? this.sendTimelineSubscription(agentIds) : null),
-    events: (events) => this.sendEventSubscription(events),
     failed: (error) =>
       this.logger.error({ err: error }, "Failed to update connection subscriptions"),
   });
@@ -3092,29 +3090,11 @@ export class DaemonClient {
   }
 
   private updateEventSubscriptions(): void {
-    const events: SessionEventSubscription[] = [
-      "project.update",
-      "providers_snapshot_update",
-      "agent_attention_required",
-      "agent_permission_request",
-      "agent_permission_resolved",
-    ];
+    // The daemon broadcasts session events unconditionally; demand is tracked locally. Without
+    // listeners there is no snapshot body to fetch, so drop the pending ones.
     if (this.eventListeners.size === 0 && !this.messageHandlers.has("providers_snapshot_update")) {
       this.providerSnapshotUpdates.clear();
     }
-    this.subscriptions.setEvents(
-      events.filter(
-        (type) => this.eventListeners.size > 0 || (this.messageHandlers.get(type)?.size ?? 0) > 0,
-      ),
-    );
-  }
-
-  private async sendEventSubscription(events: SessionEventSubscription[]): Promise<void> {
-    if (this.connectionState.status !== "connected") return;
-    await this.sendCorrelatedSessionRequest({
-      message: { type: "session.events.set_subscription.request", events },
-      responseType: "session.events.set_subscription.response",
-    });
   }
 
   private async sendTimelineSubscription(agentIds: string[]): Promise<void> {

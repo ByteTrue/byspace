@@ -1,5 +1,3 @@
-import type { SessionEventSubscription } from "@bytetrue/protocol/messages";
-
 /** Calling releases demand; ready acknowledges the initial daemon membership. */
 export type TimelineSubscription = (() => void) & { readonly ready: Promise<void> };
 
@@ -21,12 +19,10 @@ class TimelineInterest {
 export class ConnectionSubscriptions {
   private viewed = new Set<string>();
   private timelines = new Map<string, Set<TimelineInterest>>();
-  private events: SessionEventSubscription[] = [];
 
   constructor(
     private readonly send: {
       timelines(agentIds: string[]): Promise<void> | null;
-      events(events: SessionEventSubscription[]): Promise<void>;
       failed(error: unknown): void;
     },
   ) {}
@@ -80,15 +76,8 @@ export class ConnectionSubscriptions {
     }
   }
 
-  setEvents(events: SessionEventSubscription[]): void {
-    if (JSON.stringify(this.events) === JSON.stringify(events)) return;
-    this.events = events;
-    void this.send.events(events).catch(this.send.failed);
-  }
-
   restore(): void {
     if (this.agentIds().length) void this.syncTimelines().catch(this.send.failed);
-    if (this.events.length) void this.send.events(this.events).catch(this.send.failed);
   }
 
   close(): void {
