@@ -1,8 +1,8 @@
 ---
 kind: work
 status: in_progress
-current_unit: "九批已 commit+push：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options+catalog脚本删/plugins扁平化"
-next_action: "Chief 远期认真做；瘦身批次一全部闭环，已 push origin main"
+current_unit: "十批已 commit+push：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options+catalog脚本删/plugins扁平化+relay迁移桥删"
+next_action: "Chief 远期认真做；瘦身批次一全部闭环。唯一保留 COMPAT=xterm-ipad-ctrl-c，等 @xterm/xterm 7.0.0 发布后删"
 must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；git review-draft 链 owner 明确不做"
 proof_gap: ""
 ---
@@ -36,7 +36,7 @@ proof_gap: ""
 | Usage 页消失 | web settings-screen | 打开 Host 设置 | 导航无 usage 项，直达 /usage 路由无此页 | Playwright 探针：设置侧栏仅 Projects/Connections/Agents，无 Usage；/settings/hosts/…/usage 无 Usage heading | 通过 |
 | context meter 仍工作 | composer tooltip | 悬停 context 环 | tokens/cost 照常显示，无 usage 段、无 provider.usage RPC | 探针：img "Context window 2% used"，tooltip "16k / 1m tokens Session cost $0.0047"，无 Balance/Usage/Quota 字样 | 通过 |
 | provider.usage RPC 移除 | daemon WS | 发 provider.usage.list.request | 无此 case（unknown message），authz 表无此条目 | rg 全仓零残留（仅 node-surface-snapshot.json 历史快照）；go test 全绿；入站对账缺口 0 | 通过 |
-| COMPAT 清零 | rg "COMPAT\(" | 批删后全仓 grep | 零命中（含注释政策改写） | 源码仅剩 2 个故意保留标签：terminal-keys.ts xterm-ipad-ctrl-c（WebKit iPad 硬件键盘 Ctrl+C keyCode=13 上游 bug，永久）+ workers/relay/main.go relay-room-v3（dated 迁移，remove after 2026-12-15）。其余 ~310 处全删 | 通过 |
+| COMPAT 清零 | rg "COMPAT\(" | 批删后全仓 grep | 零命中（含注释政策改写） | 源码仅剩 1 个保留标签：terminal-keys.ts xterm-ipad-ctrl-c（WebKit iPad 硬件键盘 Ctrl+C keyCode=13 上游 bug xtermjs/xterm.js#5721，修复在 PR#5742 但 milestone 7.0.0 未发布，npm 最新 stable 6.0.0/beta 6.1.0-beta.338，须等 7.0.0）。relay-room-v3 迁移桥第十批已删（owner 单用户无遗留连接）。其余 ~310 处全删 | 通过 |
 | COMPAT 删后 Go 测试 | go test ./... | audit 第一步 | 全绿 | stream 4 测试因 selective timeline 恒开重写：conformance 3 个（subscribeTimeline helper + pace script + subscribeTimelineOnly 避免 fetch 复活死 runtime）+ TestStreamFramesAreCoalesced（create 不带 initialPrompt→idle 时订阅落地→再 send_agent_message 触发 turn，首 token leading flush 不再早于订阅被滤掉）；create_agent_request.git 死字段全链删；audit-3.txt go test ok | 通过 |
 | COMPAT 删后入站/出站对账 | npm run audit:go-parity / go-emit-parity | audit 第二三步 | 缺口 0 | 入站缺口 0/出站缺口 0/未路由 0（parity-2.txt）；出站 MISSING 0/OPTIONAL 0/NEVER_SENT 0 | 通过 |
 | COMPAT 删后浏览器验证 | npm run audit:browser | audit 第四步（daemon origin 服务 embedded UI） | 12/12 | 先重建 embedded web UI（build:daemon-web-ui，dist 原为 Nov 15 陈旧→仍门控已删 features 走 legacy fallback）+ make build 重嵌 + 重启 dev daemon；browser-2.txt 12/12 全过（Chief home/pinned/providers/thinking menu 全恢复） | 通过 |
@@ -102,7 +102,8 @@ proof_gap: ""
 
 - 死包四目录删除：通过（make build + go test 全绿）。
 - quota 整链删除：通过（RPC/authz/client/web/e2e/docs 全清，浏览器探针确认 Usage 页消失、context 环保留）。
-- COMPAT 版本漂移层删除：通过（~310 处，源码仅剩 2 故意标签；Go 发送表/authz/审计豁免同步）。
+- COMPAT 版本漂移层删除：通过（~310 处，源码仅剩 1 保留标签 xterm-ipad-ctrl-c；Go 发送表/authz/审计豁免同步）。
+- relay-room-v3 迁移桥删除（第十批，owner {{ACCOUNT_h1501774}}「只有我一个人用，最坏不过重连一下」）：通过（/migrate handler+migrateOldRoom+migratedRooms+attachment.KeyVersion+WebSocketMessage KeyVersion 检查+closeAllSockets+handleFetch WaitUntil 全删；RoomKeyVersion 常量保留是活路由机制；wasm 编译绿+internal/relay 测试绿+gofmt 干净；全仓 COMPAT 只剩 xterm-ipad-ctrl-c）。xterm 升级核实：7.0.0 未发布（修复 PR#5742 已合但无 release），workaround 须留。
 - serviceproxy Host 路由代理层删除：通过（脚本本体保留，audit-4 四步全过+浏览器 12/12；记忆 product-scope 已增补）。
 - provider 内置 6→4（删 copilot+omp，copilot 改走 ACP catalog 自助，omp 弃用）：通过（typecheck/lint/format 三绿，go test 绿，audit-provider 四步全过+浏览器 11/11；记忆 product-scope 已增补）。owner m09911「omp 无所谓」确认弃用。
 - worktree env 注入（修 doc-vs-code gap，让文档承诺成真）：通过（三身份变量注入 setup/teardown/scripts/services 四 launch 点，测试绿，docs 无需改）。
@@ -114,6 +115,6 @@ proof_gap: ""
 - 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing/development 更新；custom-providers.md 重写完成）。
 - 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
 - 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
-- commit+push：c7a0e4e92（死包+quota+COMPAT）、c4000826f（bywork）、5ab0f2d9a（serviceproxy）、e887e013b（bywork）、a81ec8b84（forge 文档）、9ea695900（provider 6→4）、086a1c788（bywork）、4fddad678（ACP 自助+worktree env+skill）、248ac0c06（bywork）、9bc69dc20（custom-providers 重写+disallowedTools 接线+三死字段）、34df9af8e（per-agent options 三 gap）。owner m11436「可以 push」→git push origin main（e5db67d4d..34df9af8e），main 与 origin 同步。第九批（catalog 脚本删+plugins 扁平化）commit 见 git log。pre-commit hooks（lint/format/typecheck）全过。
+- commit+push：c7a0e4e92（死包+quota+COMPAT）、c4000826f（bywork）、5ab0f2d9a（serviceproxy）、e887e013b（bywork）、a81ec8b84（forge 文档）、9ea695900（provider 6→4）、086a1c788（bywork）、4fddad678（ACP 自助+worktree env+skill）、248ac0c06（bywork）、9bc69dc20（custom-providers 重写+disallowedTools 接线+三死字段）、34df9af8e（per-agent options 三 gap）。owner m11436「可以 push」→git push origin main（e5db67d4d..34df9af8e），main 与 origin 同步。第九批（catalog 脚本删+plugins 扁平化）37ec6b0ed 已 push。第十批（relay-room-v3 迁移桥删，owner {{ACCOUNT_h1501774}} 授权单用户无遗留连接）commit 见 git log；xterm 7.0.0 未发布 workaround 保留。pre-commit hooks（lint/format/typecheck）全过。
 - 保留项确认未动：平台广度（安卓/Web/Windows/Mac）、changelog/What's New、schedules/heartbeat、git review UI、forge（GitHub+GitLab+Gitea）、Chief/roles。
 - 待 flag owner（三独立 gap，非本批）：per-agent Claude options 未接线（SDK doc disallowedTools/sandbox/allowedTools，ClaudeSession 零读 ProviderOptions）、ProviderRuntimeSettingsSchema 死 surface、Codex env-only custom endpoint 未真实验证。→owner m09911「按最优雅解法处理」+{{ACCOUNT_z7h8i234}}「按你建议做」→第八批全部闭环（Claude 接线/OpenCode 降级/死 surface 删/Codex 注明）。Chief 远期认真做。

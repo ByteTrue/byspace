@@ -85,14 +85,6 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	// COMPAT(relay-room-v3): added 2026-11, remove after 2026-12-15. A room created before the key
-	// bump cannot move, so its sockets are closed here and their owners reconnect to the current
-	// room. Once every daemon has reconnected, the old key has no sockets and this path can go.
-	if req.URL.Path == "/migrate" {
-		r.closeAllSockets()
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 	// The object only ever sees upgrades that already passed the Worker's checks;
 	// it still validates so a direct object fetch cannot skip them.
 	conn, problem := relay.NewConnection(req.URL.Query())
@@ -132,7 +124,6 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ServerID:     conn.ServerID(),
 		Role:         conn.Role(),
 		ConnectionID: conn.ConnectionID(),
-		KeyVersion:   relay.RoomKeyVersion,
 	})
 
 	// Opening bookkeeping runs on this request, exactly like the TypeScript
@@ -147,17 +138,6 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // It may run on a brand new wasm instance after hibernation, so nothing from
 // ServeHTTP survives here except what was serialized onto the socket.
 func (r *room) WebSocketMessage(_ context.Context, socket *cfws.HibernatingConn, mt cfws.MessageType, data []byte) error {
-	saved, ok := attachmentOf(socket.JSValue())
-	if !ok {
-		return nil
-	}
-	// A socket accepted under an older room key cannot reach its peers any more: new connections
-	// route to a room created under the current key. Close it (and its peers) so every end reconnects
-	// to the current room, which is the only way a room moves to a better region.
-	if saved.KeyVersion != relay.RoomKeyVersion {
-		r.closeAllSockets()
-		return nil
-	}
 	conn, ok := connectionFromAttachment(socket.JSValue())
 	if !ok {
 		return nil
@@ -287,42 +267,6 @@ func awaitPromise(promise js.Value) (js.Value, error) {
 	}
 }
 
-// migratedRooms remembers the servers whose previous-key room this isolate already drained.
-var migratedRooms sync.Map
-
-// migrateOldRoom closes the sockets left in the room created under the previous key. Both ends route
-// to the current key, so a socket in the old room cannot reach them: without this, an idle daemon
-// would sit there until it happened to send a frame, and every client would see it offline.
-//
-// COMPAT(relay-room-v3): added 2026-11, remove after 2026-12-15 with the /migrate handler.
-func migrateOldRoom(serverID string) {
-	if _, done := migratedRooms.LoadOrStore(serverID, struct{}{}); done {
-		return
-	}
-	oldKey := "relay-v" + strconv.Itoa(relay.RoomKeyVersion-1) + ":" + serverID
-	ns, err := cloudflare.NewDurableObjectNamespace("RELAY")
-	if err != nil {
-		migratedRooms.Delete(serverID)
-		return
-	}
-	stub, err := ns.Get(ns.IdFromName(oldKey))
-	if err != nil {
-		migratedRooms.Delete(serverID)
-		return
-	}
-	req, err := http.NewRequest(http.MethodPost, "https://relay-room.internal/migrate", nil)
-	if err != nil {
-		migratedRooms.Delete(serverID)
-		return
-	}
-	res, err := stub.Fetch(req)
-	if err != nil {
-		migratedRooms.Delete(serverID)
-		return
-	}
-	_ = res.Body.Close()
-}
-
 func takeDailyBudget() (relay.MeterDecision, error) {
 	ns, err := cloudflare.NewDurableObjectNamespace("RELAY_METER")
 	if err != nil {
@@ -389,9 +333,6 @@ type attachment struct {
 	ServerID     string `json:"serverId"`
 	Role         string `json:"role"`
 	ConnectionID string `json:"connectionId"`
-	// KeyVersion is the room key generation that accepted this socket. Sockets from an older one are
-	// closed on their next message so both ends reconnect to the current room.
-	KeyVersion int `json:"keyVersion,omitempty"`
 }
 
 // writeAttachment serializes a socket's routing identity onto the socket.
@@ -459,18 +400,6 @@ func attachmentOf(socket js.Value) (attachment, bool) {
 	return saved, true
 }
 
-// closeAllSockets closes every socket in this room, which makes both ends reconnect through the
-// Worker and join the room for the current key version.
-func (r *room) closeAllSockets() {
-	sockets, ok := callJS(r.state.JSValue(), "getWebSockets")
-	if !ok {
-		return
-	}
-	for i := 0; i < sockets.Length(); i++ {
-		_ = cfws.HibernatingConnFromJS(sockets.Index(i)).Close(1012, "relay room moved")
-	}
-}
-
 // handleFetch forwards /ws into the Durable Object that owns the requested
 // serverId, and answers /health without waking an object.
 func handleFetch(w http.ResponseWriter, req *http.Request) {
@@ -526,11 +455,6 @@ func handleFetch(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-
-	// Background: the previous key's room still holds the sockets that were open when the key
-	// changed. Drain it without delaying this handshake.
-	serverID := conn.ServerID()
-	cloudflare.WaitUntil(func() { migrateOldRoom(serverID) })
 
 	// Meter after the upgrade, not before it. The decision only logs and never refuses a handshake,
 	// so its Durable Object round trip has no business sitting between the client and its socket.
