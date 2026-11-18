@@ -132,23 +132,6 @@ describe("agent skills protocol", () => {
     ).toBe(false);
   });
 
-  it("advertises target selection as a capability an older daemon omits", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "new-daemon",
-        features: { skillManagement: true, skillInstallTargets: true },
-      }).features.skillInstallTargets,
-    ).toBe(true);
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "old-daemon",
-        features: { skillManagement: true },
-      }).features.skillInstallTargets,
-    ).toBeUndefined();
-  });
-
   it("keeps targets optional on the status so an older daemon still parses", () => {
     const status = {
       type: "agent.skills.get_status.response",

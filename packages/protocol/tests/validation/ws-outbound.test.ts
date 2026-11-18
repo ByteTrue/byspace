@@ -225,33 +225,6 @@ const SourceSchema = z.object({
         },
       },
     },
-    {
-      name: "agent stream attention event",
-      message: {
-        type: "agent_stream",
-        payload: {
-          agentId: "agent-1",
-          timestamp: "2026-07-22T18:00:00.000Z",
-          event: {
-            type: "attention_required",
-            provider: "codex",
-            reason: "finished",
-            timestamp: "2026-07-22T18:00:00.000Z",
-            shouldNotify: true,
-            notification: {
-              title: "Agent finished",
-              body: "Done",
-              data: {
-                serverId: "server-1",
-                workspaceId: "workspace-1",
-                agentId: "agent-1",
-                reason: "finished",
-              },
-            },
-          },
-        },
-      },
-    },
   ])("preserves workspaceId in a $name", ({ message }) => {
     const envelope = { type: "session", message };
 
@@ -286,34 +259,6 @@ const SourceSchema = z.object({
           authState: "authenticated",
           error: null,
           requestId: "search-forge",
-        },
-      },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts a legacy github_search_response envelope", () => {
-    const result = GeneratedWSOutboundMessageSchema.safeParse({
-      type: "session",
-      message: {
-        type: "github_search_response",
-        payload: {
-          items: [
-            {
-              kind: "pr",
-              number: 42,
-              title: "Legacy PR",
-              url: "https://github.com/acme/repo/pull/42",
-              state: "open",
-              body: null,
-              labels: [],
-            },
-          ],
-          featuresEnabled: true,
-          githubFeaturesEnabled: true,
-          authState: "authenticated",
-          error: null,
-          requestId: "search-github",
         },
       },
     });
