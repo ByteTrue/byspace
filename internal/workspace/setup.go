@@ -37,8 +37,8 @@ func ReadTeardownCommands(cwd string) []string {
 // ScriptConfig is one entry from byspace.json's `scripts` map.
 //
 // Two forms exist: a bare command (`"dev": "vite"`) which runs and is watched, and an object
-// with `"type": "service"` plus a `port`, which additionally gets a proxy route and a health
-// check. Only the command and port matter here; the proxy lives in the service-proxy subsystem.
+// with `"type": "service"` plus a `port`, which additionally gets a stable port allocation and a
+// health check.
 type ScriptConfig struct {
 	Command string
 	Type    string // "" (plain script) or "service"
@@ -98,7 +98,7 @@ func ReadScriptConfigs(cwd string) map[string]ScriptConfig {
 
 // ReadScripts extracts just the commands from <cwd>/byspace.json.
 //
-// Shape follows the workspace-script config already used by the service proxy:
+// Shape follows the workspace-script config:
 // `"scripts": {"dev": "vite", "test": "vitest run"}`.
 func ReadScripts(cwd string) map[string]string {
 	if strings.TrimSpace(cwd) == "" {

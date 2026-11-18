@@ -455,9 +455,7 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service" as const,
-        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.byspace.localhost:6767",
         lifecycle: "running" as const,
         health: "healthy" as const,
         exitCode: null,
@@ -485,9 +483,7 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.byspace.localhost:6767",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,
@@ -678,9 +674,7 @@ describe("mergeWorkspaces", () => {
           {
             scriptName: "web",
             type: "service",
-            hostname: "web.byspace.localhost",
             port: 3000,
-            proxyUrl: "http://web.byspace.localhost:6767",
             lifecycle: "running",
             health: "healthy",
             exitCode: null,
@@ -694,9 +688,7 @@ describe("mergeWorkspaces", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.byspace.localhost:6767",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,

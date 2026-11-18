@@ -1,8 +1,7 @@
 // Port of archive/expo-app:packages/app/src/screens/workspace/workspace-scripts-button.tsx: the header's
-// Scripts button and its panel (each script with run/stop/restart/view, services with their URL
-// and route choice). Same mutations, restart model and test IDs. The panel is a popover rather
-// than a menu: its rows hold several buttons each, which a menu's single-item focus model hides
-// from the keyboard.
+// Scripts button and its panel (each script with run/stop/restart/view, services with their URL).
+// Same mutations, restart model and test IDs. The panel is a popover rather than a menu: its rows
+// hold several buttons each, which a menu's single-item focus model hides from the keyboard.
 import * as Clipboard from "~/lib/clipboard";
 import {
   createContext,
@@ -33,21 +32,9 @@ import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import { openServiceUrl } from "@/utils/open-service-url";
-import {
-  resolveWorkspaceScriptLink,
-  type WorkspaceScriptLinkKind,
-  type WorkspaceScriptLinkTarget,
-} from "@/utils/workspace-script-links";
-import { useWorkspaceServiceRoutePreferencesStore } from "@/workspace-service-routes/store";
+import { resolveWorkspaceScriptLink } from "@/utils/workspace-script-links";
 import { cn } from "cn";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { keepFocusElsewhere } from "~/lib/menu-focus";
 import { Button } from "~/components/ui/button";
 
 type RowActionIcon = "copy" | "open" | "restart" | "start" | "stop" | "terminal";
@@ -126,138 +113,30 @@ function ScriptRowActionButton({
   );
 }
 
-function routeLabelKey(kind: WorkspaceScriptLinkKind) {
-  switch (kind) {
-    case "public":
-      return "workspace.scripts.routes.public" as const;
-    case "byspace":
-      return "workspace.scripts.routes.byspace" as const;
-    case "direct":
-      return "workspace.scripts.routes.direct" as const;
-  }
-}
-
-function ServiceRouteOption({
-  scriptName,
-  selectedKind,
-  target,
-  onSelect,
-}: {
-  scriptName: string;
-  selectedKind: WorkspaceScriptLinkKind;
-  target: WorkspaceScriptLinkTarget;
-  onSelect: (kind: WorkspaceScriptLinkKind) => void;
-}): ReactElement {
-  const { t } = useTranslation();
-  const handleSelect = useCallback(() => onSelect(target.kind), [onSelect, target.kind]);
-  return (
-    <DropdownMenuCheckboxItem
-      checked={target.kind === selectedKind}
-      onSelect={handleSelect}
-      data-testid={`workspace-scripts-route-${scriptName}-${target.kind}`}
-    >
-      <span className="flex min-w-0 flex-col">
-        <span>{t(routeLabelKey(target.kind))}</span>
-        <span className="truncate text-xs text-muted-foreground">{target.label}</span>
-      </span>
-    </DropdownMenuCheckboxItem>
-  );
-}
-
-function ServiceRouteSelector({
-  scriptName,
-  selectedTarget,
-  targets,
-  onSelect,
-}: {
-  scriptName: string;
-  selectedTarget: WorkspaceScriptLinkTarget;
-  targets: WorkspaceScriptLinkTarget[];
-  onSelect: (kind: WorkspaceScriptLinkKind) => void;
-}): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenu>
-      <Tooltip delayDuration={250}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              aria-label={t("workspace.scripts.accessibility.chooseUrl", { scriptName })}
-              data-testid={`workspace-scripts-route-${scriptName}`}
-              className="min-w-0 flex-1 justify-start"
-            >
-              <span className="flex size-3.5 items-center justify-center text-muted-foreground group-hover/route:text-foreground">
-                <ChevronDown size={14} />
-              </span>
-              <span className="min-w-0 shrink truncate text-xs leading-[14px] text-muted-foreground group-hover/route:text-foreground">
-                {selectedTarget.label}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent data-testid={`workspace-scripts-route-${scriptName}-tooltip`} side="top">
-          {t("workspace.scripts.actions.chooseUrl")}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        side="bottom"
-        align="end"
-        className="w-max min-w-[220px] max-w-[280px]"
-        onCloseAutoFocus={keepFocusElsewhere}
-      >
-        {targets.map((target) => (
-          <ServiceRouteOption
-            key={target.kind}
-            scriptName={scriptName}
-            selectedKind={selectedTarget.kind}
-            target={target}
-            onSelect={onSelect}
-          />
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 function ServiceLinkRow({
-  selectedTarget,
-  targets,
+  link,
   scriptName,
-  onSelectKind,
   onCopy,
 }: {
-  selectedTarget: WorkspaceScriptLinkTarget;
-  targets: WorkspaceScriptLinkTarget[];
+  link: { label: string; url: string };
   scriptName: string;
-  onSelectKind: (kind: WorkspaceScriptLinkKind) => void;
   onCopy: (url: string, label: string) => void;
 }): ReactElement {
   const { t } = useTranslation();
   const closePanel = useContext(ClosePanelContext);
-  const { label, url } = selectedTarget;
+  const { label, url } = link;
   const handleCopy = useCallback(() => {
     closePanel();
     onCopy(url, label);
   }, [closePanel, label, onCopy, url]);
   return (
     <div className="flex min-h-[18px] items-center gap-2 py-0.5">
-      {targets.length > 1 ? (
-        <ServiceRouteSelector
-          scriptName={scriptName}
-          selectedTarget={selectedTarget}
-          targets={targets}
-          onSelect={onSelectKind}
-        />
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="size-3.5" />
-          <span className="min-w-0 shrink truncate text-xs leading-[14px] text-muted-foreground">
-            {label}
-          </span>
-        </div>
-      )}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="size-3.5" />
+        <span className="min-w-0 shrink truncate text-xs leading-[14px] text-muted-foreground">
+          {label}
+        </span>
+      </div>
       <ScriptRowActionButton
         accessibilityLabel={t("workspace.scripts.accessibility.copyUrl", { scriptName })}
         testID={`workspace-scripts-copy-${scriptName}`}
@@ -300,8 +179,6 @@ function ScriptRow({
   onStopScript,
   onRestartScript,
   onCopyUrl,
-  preferredRouteKind,
-  onSelectRouteKind,
   onViewTerminal,
 }: {
   script: ScriptDescriptor;
@@ -313,8 +190,6 @@ function ScriptRow({
   onStopScript: (scriptName: string) => void;
   onRestartScript: (scriptName: string) => void;
   onCopyUrl: (url: string, label: string) => void;
-  preferredRouteKind: WorkspaceScriptLinkKind | null;
-  onSelectRouteKind: (kind: WorkspaceScriptLinkKind) => void;
   onViewTerminal?: (terminalId: string) => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -322,12 +197,7 @@ function ScriptRow({
   const isRunning = script.lifecycle === "running";
   const isService = (script.type ?? "service") === "service";
   const exitCode = script.exitCode ?? null;
-  const serviceLink = resolveWorkspaceScriptLink({ script, activeConnection });
-  const selectedLink =
-    isService && isRunning
-      ? (serviceLink.targets.find((target) => target.kind === preferredRouteKind) ??
-        serviceLink.primary)
-      : null;
+  const selectedLink = resolveWorkspaceScriptLink({ script, activeConnection });
   const liveTerminalId =
     script.terminalId && liveTerminalIdSet.has(script.terminalId) ? script.terminalId : null;
   const ScriptIcon = isService ? Globe : SquareTerminal;
@@ -425,13 +295,7 @@ function ScriptRow({
       </div>
       {selectedLink ? (
         <div className="mt-0.5 px-3">
-          <ServiceLinkRow
-            selectedTarget={selectedLink}
-            targets={serviceLink.targets}
-            scriptName={name}
-            onSelectKind={onSelectRouteKind}
-            onCopy={onCopyUrl}
-          />
+          <ServiceLinkRow link={selectedLink} scriptName={name} onCopy={onCopyUrl} />
         </div>
       ) : null}
     </div>
@@ -461,12 +325,6 @@ export function WorkspaceScriptsButton({
   const closePanel = useCallback(() => setOpen(false), []);
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
-  const preferredRouteKind = useWorkspaceServiceRoutePreferencesStore(
-    (state) => state.byServerId[serverId] ?? null,
-  );
-  const setPreferredRoute = useWorkspaceServiceRoutePreferencesStore(
-    (state) => state.setPreferredRoute,
-  );
   const liveTerminalIdSet = useMemo(() => new Set(liveTerminalIds), [liveTerminalIds]);
   const pendingRestartRef = useRef<Set<string>>(new Set());
 
@@ -545,11 +403,6 @@ export function WorkspaceScriptsButton({
     },
     [toast],
   );
-  const handleSelectRouteKind = useCallback(
-    (kind: WorkspaceScriptLinkKind) => setPreferredRoute(serverId, kind),
-    [serverId, setPreferredRoute],
-  );
-
   if (scripts.length === 0) return null;
   const hasAnyRunning = scripts.some((s) => s.lifecycle === "running");
   const ghost = presentation === "ghost" || ghostProp;
@@ -590,8 +443,6 @@ export function WorkspaceScriptsButton({
                 onStopScript={handleStopScript}
                 onRestartScript={handleRestartScript}
                 onCopyUrl={handleCopyUrl}
-                preferredRouteKind={preferredRouteKind}
-                onSelectRouteKind={handleSelectRouteKind}
                 onViewTerminal={onViewTerminal}
               />
             ))}

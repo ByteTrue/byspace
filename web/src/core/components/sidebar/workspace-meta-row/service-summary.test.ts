@@ -8,9 +8,7 @@ function script(overrides: Partial<Script>): Script {
   return {
     scriptName: "dev",
     type: "service",
-    hostname: "localhost",
     port: null,
-    proxyUrl: null,
     lifecycle: "running",
     health: null,
     exitCode: null,

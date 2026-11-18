@@ -2,17 +2,9 @@ import { parseHostPort } from "@bytetrue/protocol/daemon-endpoints";
 import type { WorkspaceScriptPayload } from "@bytetrue/protocol/messages";
 import type { ActiveConnection } from "@/runtime/host-runtime";
 
-export type WorkspaceScriptLinkKind = "public" | "byspace" | "direct";
-
 export interface WorkspaceScriptLinkTarget {
-  kind: WorkspaceScriptLinkKind;
   label: string;
   url: string;
-}
-
-export interface ResolvedWorkspaceScriptLink {
-  primary: WorkspaceScriptLinkTarget | null;
-  targets: WorkspaceScriptLinkTarget[];
 }
 
 function isLoopbackHost(host: string): boolean {
@@ -20,10 +12,6 @@ function isLoopbackHost(host: string): boolean {
   return (
     normalizedHost === "localhost" || normalizedHost === "127.0.0.1" || normalizedHost === "::1"
   );
-}
-
-function stripUrlProtocol(url: string): string {
-  return url.replace(/^https?:\/\//, "");
 }
 
 function buildDirectServiceUrl(
@@ -48,31 +36,15 @@ function buildDirectServiceUrl(
   }
 }
 
-function addTarget(
-  targets: WorkspaceScriptLinkTarget[],
-  kind: WorkspaceScriptLinkKind,
-  url: string | null | undefined,
-): void {
-  if (!url || targets.some((target) => target.url === url)) return;
-  targets.push({ kind, label: stripUrlProtocol(url), url });
-}
-
+// A running service is reachable at its own port on the daemon's host. Remote access goes
+// through a tunnel, which forwards that port — the client needs no proxy route.
 export function resolveWorkspaceScriptLink(input: {
   script: WorkspaceScriptPayload;
   activeConnection: ActiveConnection | null;
-}): ResolvedWorkspaceScriptLink {
+}): WorkspaceScriptLinkTarget | null {
   const { script, activeConnection } = input;
-  if (script.type !== "service" || script.lifecycle !== "running") {
-    return { primary: null, targets: [] };
-  }
-
-  const localProxyUrl = script.localProxyUrl;
-  const publicProxyUrl = script.publicProxyUrl;
-
-  const targets: WorkspaceScriptLinkTarget[] = [];
-  addTarget(targets, "public", publicProxyUrl);
-  addTarget(targets, "byspace", localProxyUrl);
-  addTarget(targets, "direct", buildDirectServiceUrl(activeConnection, script.port));
-
-  return { primary: targets[0] ?? null, targets };
+  if (script.type !== "service" || script.lifecycle !== "running") return null;
+  const url = buildDirectServiceUrl(activeConnection, script.port);
+  if (!url) return null;
+  return { label: url.replace(/^https?:\/\//, ""), url };
 }

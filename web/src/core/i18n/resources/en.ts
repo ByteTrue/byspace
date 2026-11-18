@@ -663,7 +663,6 @@ export const en = {
     scripts: {
       title: "Scripts",
       actions: {
-        chooseUrl: "Choose URL",
         copyUrl: "Copy URL",
         openService: "View service",
         restart: "Restart",
@@ -679,13 +678,7 @@ export const en = {
         stopScript: "Stop {{scriptName}}",
         restartScript: "Restart {{scriptName}}",
         copyUrl: "Copy {{scriptName}} URL",
-        chooseUrl: "Choose URL for {{scriptName}}",
         script: "{{scriptName}} script",
-      },
-      routes: {
-        public: "Reverse proxy",
-        byspace: "Memorable",
-        direct: "Direct",
       },
       states: {
         exitCode: "exit {{code}}",

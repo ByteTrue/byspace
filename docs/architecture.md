@@ -185,7 +185,7 @@ Enables remote access when the daemon is behind a firewall.
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
 - New homes keep relay disabled until pairing consent. `DaemonConfigStore` persists the desired state, while the relay runtime starts or stops the outbound transport live; pairing reads that current state instead of a startup snapshot.
-- Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
+- E2EE channels preserve application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`.
 
 The production relay is the Cloudflare Worker in `workers/relay`, deployed as `byspace-relay-go` at `app.byspace.cc.cd`. It serves the hosted web UI and the relay from that one origin (`assets` in `wrangler.jsonc`; `/ws` and `/health` stay on the worker via `run_worker_first`), and the Deploy App workflow deploys it on web releases. The separate `relay.byspace.cc.cd` hostname is retired — it was a second route to the same Durable Object namespace. `BYSPACE_RELAY_UPSTREAM` in the Worker env proxies all traffic to another relay instead; it is unset in production.

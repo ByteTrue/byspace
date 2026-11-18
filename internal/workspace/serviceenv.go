@@ -88,12 +88,8 @@ func ResolveServiceBindHost(daemonListenHost string) string {
 	return "0.0.0.0"
 }
 
-// BuildServiceEnv produces the environment a service script runs with.
-//
-// Only port discovery is implemented; the proxy URLs Node also injects belong to the
-// service-proxy subsystem, which this build does not have. Emitting a URL that goes nowhere
-// would be worse than omitting it, so BYSPACE_URL / BYSPACE_SERVICE_*_URL are absent until the
-// proxy exists (tracked in the service-proxy issue).
+// BuildServiceEnv produces the environment a service script runs with: the bind host, the
+// script's own port, and every sibling service's port so one script can find another.
 func BuildServiceEnv(scriptName string, daemonListenHost string, peers []ServicePeer) (map[string]string, error) {
 	names := make([]string, 0, len(peers))
 	for _, peer := range peers {

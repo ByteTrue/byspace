@@ -1,8 +1,8 @@
 ---
 kind: work
 status: in_progress
-current_unit: "死包+quota+COMPAT 三批全删并通过全部验证（typecheck/lint/format 三绿，audit 四步全过，浏览器 12/12）"
-next_action: "收尾：记忆已同步（settings-taxonomy Usage 删除/product-scope 无版本漂移+quota）；待 commit（不 push）；另聊 serviceproxy/provider-ACP/forge 插件化"
+current_unit: "死包+quota+COMPAT+serviceproxy 四批全删并通过全部验证（typecheck/lint/format 三绿，audit 四步全过，浏览器 12/12）"
+next_action: "serviceproxy 批 commit（不 push）；把 provider/ACP skill+模板方案要点 + forge 插件化方案要点摆给 owner 看"
 must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；不 push 不开 PR"
 proof_gap: ""
 ---
@@ -15,7 +15,7 @@ proof_gap: ""
 
 保留不砍：平台广度（安卓/Web/Windows/Mac 天天用）、changelog（What's New 入口）、schedules/heartbeat、完整 git review UI、forge 的 GitHub+GitLab（Gitea 待商榷）、Chief/roles（远期认真做）。
 
-搁置另聊：provider 官方支持策略（skill+模板/ACP 接入点）、forge 插件化取舍、serviceproxy 去留（先给用户讲解）。
+搁置另聊：provider 官方支持策略（skill+模板/ACP 接入点）、forge 插件化取舍。serviceproxy 已讲解，owner 拍板「已被 tunnel 完全替代，直接砍」→本批执行删除。
 
 ## 已定方案与约束
 
@@ -41,6 +41,9 @@ proof_gap: ""
 | COMPAT 删后入站/出站对账 | npm run audit:go-parity / go-emit-parity | audit 第二三步 | 缺口 0 | 入站缺口 0/出站缺口 0/未路由 0（parity-2.txt）；出站 MISSING 0/OPTIONAL 0/NEVER_SENT 0 | 通过 |
 | COMPAT 删后浏览器验证 | npm run audit:browser | audit 第四步（daemon origin 服务 embedded UI） | 12/12 | 先重建 embedded web UI（build:daemon-web-ui，dist 原为 Nov 15 陈旧→仍门控已删 features 走 legacy fallback）+ make build 重嵌 + 重启 dev daemon；browser-2.txt 12/12 全过（Chief home/pinned/providers/thinking menu 全恢复） | 通过 |
 | 类型/规范 | npm run typecheck && npm run lint && npm run format | 每批后跑 | 全绿 | typecheck EXIT=0（typecheck-10.txt）、lint 0 警告 0 错误（lint-4.txt，2095 文件 177 规则）、format EXIT=0（format-1.txt，2492 文件）；改动测试文件分批 vitest 全绿（protocol/client/relay/web ~1400 tests） | 通过 |
+| serviceproxy 删除后构建+测试 | make build + go test | 删 Host 路由代理层后 | 编译通过，脚本功能本体保留 | go build ./... EXIT=0；go test server/workspace/cli EXIT=0（go-test-3.txt）；servicePortAllocator/PORT env/isPortOpen 健康检查保留 | 通过 |
+| serviceproxy 删除后对账+浏览器 | npm run audit | 重建 embedded UI+重启 daemon 后 | 四步全过 | audit-4.txt：Go 82.3s ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12；scripts button 直连 http://localhost:port | 通过 |
+| serviceproxy 批类型/规范 | typecheck/lint/format | 批后跑 | 全绿 | typecheck-11.txt EXIT=0、lint-5.txt 0 警告 0 错误、format oxfmt 2488 文件；改动测试 vitest 绿（workspace-script-links 4 + scripts-button 等 5 文件 76） | 通过 |
 
 ## 证据与决定
 
@@ -52,15 +55,17 @@ proof_gap: ""
 - COMPAT 批关键教训：①audit:browser 默认对 daemon origin（6778）跑，服务的是 **embedded web UI**（internal/webui/dist，go:embed），不是 Vite 8082。改 web 源码后必须 `npm run build:daemon-web-ui`（重建 web/dist→同步 internal/webui/dist+预压缩）+ `make build` 重嵌 + 重启 dev daemon，否则浏览器测的是陈旧 UI（本次 dist 停在 Nov 15，仍门控已删 features→sidebar 走 structural fallback、providers 缺）。早期 quota 12/12 是对 Vite 8082（--base）跑的，故未暴露。②selective timeline 恒开后，Go stream 测试须先订阅 agent_stream；fetch_agent_timeline 会 ensureAgentLoaded 复活刚 process_exit 删除的 runtime，故 test2 用 subscribeTimelineOnly 不 fetch。TestStreamFramesAreCoalesced 另有一层：首 token 走 leading-edge 立即 flush，若 create 带 initialPrompt 则 turn 在订阅握手期间就跑完、首帧早于订阅被滤掉（merged text 少 tok0）→改 create 不带 initialPrompt（agent idle）→订阅落地→send_agent_message 触发 turn，全部 600 delta 在订阅后流出。③python replace() 静默跳过曾致两次误删→全程改用 edit 工具并行批量。
 - COMPAT 删除范围（~310 处/72 文件）：features 版本门（只留 webPush/daemonServiceInstall/daemonTunnels/agentRoleNames 四个 runtime-state/catalog 门）、legacy RPC/字段别名（github_pr/github_issue 附件→forge_*、github_search、checkout.github.*→checkout.forge.*、githubPrNumber→checkoutSource、githubFeaturesEnabled、PR-status github 镜像、pipeline rawStatus）、client caps 机制、retired 子系统 wire（chat/loop/browser-automation/plugin/voice/dictation/hub-execution/editor）、localStorage 迁移、model-normalize shim、binaryCiphertext 协商、create_agent_request.git 死字段。Go 发送表/authz/审计豁免同步。
 - 过时文档清理：git rm docs/refactors/session-decomposition-plan.md（Node 时代 god-file 拆分计划，packages/server 已不存在）；docs/forge-providers.md 删 GitHub compat shim 段；docs/product.md 改 Go 单二进制/Wails 平台/删 in-app browser；docs/data-model.md voice/dictation 段改 keys 已删；docs/timeline-sync.md 删 features 门；docs/protocol-compatibility.md 全文重写（无版本漂移政策）；AGENTS.md 规则改 "No version compatibility"。docs/custom-providers.md（791 行段落堆积）未动，留待后续。
+- serviceproxy 删除范围（owner m00196「已被 tunnel 完全替代，直接砍」）：git rm internal/serviceproxy/（930 行）+internal/server/service_proxy_wiring.go+test+docs/service-proxy.md+web/src/core/workspace-service-routes/。server.go 删 serviceProxyRoutes 字段+HTTP proxy dispatch；ws_plugin_setup.go workspaceScript 删 hostname/localProxyURL/publicProxyURL，payload 只发 scriptName/type/port/lifecycle/health/exitCode/terminalId；findWorkspaceRecord 迁到 workspace_auto_name.go 保留。protocol WorkspaceScriptPayloadSchema 删四 URL 字段；web workspace-script-links.ts 简化单 direct target、scripts-button 删路由选择 UI、replica-cache 删 URL 序列化；CLI script start 打印 http://localhost:port；i18n 删 routes.{public,byspace,direct}+chooseUrl。保留脚本本体：servicePortAllocator 稳定端口、PORT/WORKSPACE_SCRIPT_PORT/BYSPACE_PORT/BYSPACE_SERVICE_<NAME>_PORT env、isPortOpen 健康检查。公网层 Go 从未接线（BuildPublicURL 零调用者、BYSPACE_SERVICE_PROXY_* env 零消费者）。docs/development.md env 表删 _URL/BYSPACE_URL 死行（Go 只注入 PORT 系）、删"PORT 不默认注入"过时示例；architecture.md E2EE 句改恒 binary/raw+text/base64。35 files +76/-1918，11 deleted。
 
 ## 完成核对
 
 - 死包四目录删除：通过（make build + go test 全绿）。
 - quota 整链删除：通过（RPC/authz/client/web/e2e/docs 全清，浏览器探针确认 Usage 页消失、context 环保留）。
 - COMPAT 版本漂移层删除：通过（~310 处，源码仅剩 2 故意标签；Go 发送表/authz/审计豁免同步）。
-- 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing 更新）。custom-providers.md 段落堆积留待后续。
+- serviceproxy Host 路由代理层删除：通过（脚本本体保留，audit-4 四步全过+浏览器 12/12；记忆 product-scope 已增补）。
+- 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing/development 更新）。custom-providers.md 段落堆积留待后续。
 - 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
 - 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
 - commit：c7a0e4e92（main，ahead 1，未 push——owner 未授权 push）。pre-commit hooks（lint/format/typecheck）全过。
 - 保留项确认未动：平台广度（安卓/Web/Windows/Mac）、changelog/What's New、schedules/heartbeat、git review UI、forge（GitHub+GitLab+Gitea）、Chief/roles。
-- 待另聊（owner m00196 提出，非本批执行项）：serviceproxy 详解、provider/ACP skill+模板方案、forge 插件化取舍。
+- 待另聊（owner m00196 提出）：provider/ACP skill+模板方案要点、forge 插件化取舍（serviceproxy 已讲解并砍除）。

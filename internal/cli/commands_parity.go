@@ -966,12 +966,8 @@ func runScriptGroupCmd(args []string, stdout io.Writer) error {
 		// A service script's whole point is the URL: printing the terminal id told the user nothing about which
 		// address to open, and for a service script there is no terminal to look at.
 		if script, ok := resp["script"].(map[string]any); ok {
-			if url, _ := script["proxyUrl"].(string); url != "" {
-				fmt.Fprintln(stdout, url)
-				return nil
-			}
-			if url, _ := script["localProxyUrl"].(string); url != "" {
-				fmt.Fprintln(stdout, url)
+			if port, ok := script["port"].(float64); ok && port > 0 {
+				fmt.Fprintf(stdout, "http://localhost:%d\n", int(port))
 				return nil
 			}
 		}

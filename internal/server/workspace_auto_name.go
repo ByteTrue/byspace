@@ -9,6 +9,20 @@ import (
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
+// findWorkspaceRecord looks a workspace up by id.
+func (s *Server) findWorkspaceRecord(workspaceID string) *store.WorkspaceRecord {
+	records, err := s.store.ListWorkspaces()
+	if err != nil {
+		return nil
+	}
+	for index := range records {
+		if records[index].WorkspaceID == workspaceID {
+			return &records[index]
+		}
+	}
+	return nil
+}
+
 // scheduleWorkspaceAutoName generates a title for a workspace from its first agent's prompt.
 //
 // Ported from workspace-auto-name.ts. A worktree or directory created from a request has no title

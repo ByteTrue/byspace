@@ -75,13 +75,11 @@ Omit a service `port` to let BySpace allocate one. An explicit numeric `port` is
 
 Services receive:
 
-- `BYSPACE_PORT` — this service's assigned port
-- `BYSPACE_URL` — this service's proxied URL
-- `BYSPACE_SERVICE_<NAME>_PORT` — a peer service's current port
-- `BYSPACE_SERVICE_<NAME>_URL` — a peer service's stable proxied URL
+- `PORT` / `WORKSPACE_SCRIPT_PORT` / `BYSPACE_PORT` — this service's assigned port
+- `BYSPACE_SERVICE_<NAME>_PORT` — a peer service's port (stable across restarts)
 - `HOST` — bind host chosen for the daemon context
 
-Script names are upper-cased for peer variables and runs of non-alphanumeric characters become `_`. Prefer peer `_URL` values when the application accepts URLs; they remain stable across peer restarts.
+Script names are upper-cased for peer variables and runs of non-alphanumeric characters become `_`. Point a frontend at `http://localhost:$BYSPACE_SERVICE_API_PORT` to reach a peer instead of hard-coding a port.
 
 A command is not ready to become a service until the underlying process actually binds to the assigned host/port. Inspect the project's real CLI/configuration rather than guessing a framework flag.
 

@@ -65,9 +65,7 @@ interface RenderCounts {
 const runningScript: WorkspaceScriptPayload = {
   scriptName: "web",
   type: "service",
-  hostname: "web.byspace.localhost",
   port: 3000,
-  proxyUrl: "http://web.byspace.localhost:6767",
   lifecycle: "running",
   health: "healthy",
   exitCode: null,

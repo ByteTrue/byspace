@@ -257,11 +257,7 @@ const StoredAgentSchema = z.strictObject({
 const WorkspaceScriptSchema = z.strictObject({
   scriptName: z.string(),
   type: z.enum(["script", "service"]),
-  hostname: z.string(),
   port: z.number().int().positive().nullable(),
-  localProxyUrl: z.string().nullable().optional(),
-  publicProxyUrl: z.string().nullable().optional(),
-  proxyUrl: z.string().nullable(),
   lifecycle: z.enum(["running", "stopped"]),
   health: z.enum(["healthy", "unhealthy"]).nullable(),
   exitCode: z.number().nullable(),
@@ -687,11 +683,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     scripts: workspace.scripts.map((script) => ({
       scriptName: script.scriptName,
       type: script.type,
-      hostname: script.hostname,
       port: script.port,
-      ...(script.localProxyUrl !== undefined ? { localProxyUrl: script.localProxyUrl } : {}),
-      ...(script.publicProxyUrl !== undefined ? { publicProxyUrl: script.publicProxyUrl } : {}),
-      proxyUrl: script.proxyUrl,
       lifecycle: script.lifecycle,
       health: script.health,
       exitCode: script.exitCode,

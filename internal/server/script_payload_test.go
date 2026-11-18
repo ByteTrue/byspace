@@ -2,7 +2,7 @@ package server
 
 import "testing"
 
-// WorkspaceScriptPayloadSchema names the fields scriptName/type/hostname/port/lifecycle/health.
+// WorkspaceScriptPayloadSchema names the fields scriptName/type/port/lifecycle/health.
 // Sending name/status instead makes the whole response fail client-side validation, so the
 // script panel shows nothing at all.
 func TestWorkspaceScriptPayloadMatchesProtocol(t *testing.T) {
@@ -24,7 +24,7 @@ func TestWorkspaceScriptPayloadMatchesProtocol(t *testing.T) {
 	if payload["lifecycle"] != "running" {
 		t.Fatalf("LifecycleSchema is running|stopped, got %v", payload["lifecycle"])
 	}
-	for _, key := range []string{"hostname", "port", "localProxyUrl", "publicProxyUrl", "proxyUrl", "health", "exitCode", "terminalId"} {
+	for _, key := range []string{"port", "health", "exitCode", "terminalId"} {
 		if _, ok := payload[key]; !ok {
 			t.Fatalf("missing required key %q in %+v", key, payload)
 		}

@@ -96,30 +96,15 @@ that reads what it needs from `process.env` and invoke it as
 
 Every `scripts` entry with `"type": "service"` receives these environment variables:
 
-| Variable                      | Value                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `BYSPACE_SERVICE_<NAME>_URL`  | Proxied URL for a declared peer service. Prefer this for peer discovery; it survives peer restarts.                       |
-| `BYSPACE_SERVICE_<NAME>_PORT` | Raw ephemeral port for a declared peer service. Use only as a bypass escape hatch; it can go stale if that peer restarts. |
-| `BYSPACE_URL`                 | Self alias for `BYSPACE_SERVICE_<SELF>_URL`.                                                                              |
-| `BYSPACE_PORT`                | Self alias for `BYSPACE_SERVICE_<SELF>_PORT`.                                                                             |
-| `HOST`                        | Bind host for the service process.                                                                                        |
+| Variable                      | Value                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                        | The port this service should bind. Injected for every service script.                                              |
+| `WORKSPACE_SCRIPT_PORT`       | Alias for `PORT`.                                                                                                  |
+| `BYSPACE_PORT`                | Alias for `PORT`.                                                                                                  |
+| `BYSPACE_SERVICE_<NAME>_PORT` | The port a declared peer service owns, so one script can find another. Survives peer restarts (stable allocation). |
+| `HOST`                        | Bind host for the service process.                                                                                 |
 
-Service proxy hostnames use the double-dash shape: `web--feature-auth--project.localhost` or, on the default branch, `web--project.localhost`. Optional public aliases use the same leftmost label under the configured public base host.
-
-`<NAME>` is normalized from the script name by uppercasing it, replacing each run of non-`A-Z0-9` characters with `_`, and trimming leading or trailing `_`. For example, `app-server` and `app.server` both normalize to `APP_SERVER`; that collision fails at spawn time with an actionable error. The `BYSPACE_SERVICE_*`, `BYSPACE_URL`, and `BYSPACE_PORT` names are injected into every service.
-
-`PORT` is not injected by default. If a framework requires `PORT`, set it in the command:
-
-```json
-{
-  "scripts": {
-    "web": {
-      "type": "service",
-      "command": "PORT=$BYSPACE_PORT npm run dev:web"
-    }
-  }
-}
-```
+`<NAME>` is normalized from the script name by uppercasing it, replacing each run of non-`A-Z0-9` characters with `_`, and trimming leading or trailing `_`. For example, `app-server` and `app.server` both normalize to `APP_SERVER`; that collision fails at spawn time with an actionable error. The `BYSPACE_SERVICE_*_PORT` and `BYSPACE_PORT` names are injected into every service.
 
 Service ports use OS ephemeral allocation by default. Set `worktrees.servicePorts` in
 `$BYSPACE_HOME/config.json`, or replace it for one project with `worktree.servicePorts` in
@@ -160,7 +145,7 @@ Or persist it in `config.json`:
 }
 ```
 
-When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/public/*`, the WebSocket upgrade, and service-proxy routes. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
+When enabled, opening the daemon HTTP origin (for example `http://localhost:6777/`) serves the web app. The same HTTP server continues to serve `/api/*`, `/public/*`, and the WebSocket upgrade. Static files load without daemon bearer auth; API and WebSocket calls still enforce auth.
 
 The served app auto-bootstraps a connection to the same origin, so opening `http://localhost:6777/` directly usually skips the Add Host step.
 

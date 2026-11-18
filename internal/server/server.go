@@ -34,7 +34,6 @@ import (
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/hostsync"
 	"github.com/ByteTrue/byspace/internal/schedule"
-	"github.com/ByteTrue/byspace/internal/serviceproxy"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/tunnel"
@@ -291,8 +290,6 @@ type Server struct {
 	// boot and on every config write; it used to be declared and never assigned, so the gate was
 	// permanently closed and every inbound tunnel open was refused.
 	tunnelsEnabled bool
-	// serviceProxyRoutes serves `type: "service"` scripts at their hostnames.
-	serviceProxyRoutes *serviceproxy.Proxy
 	// labelSubscribers are sinks that asked for incremental label updates.
 	labelSubscribers map[frameSink]bool
 
@@ -562,19 +559,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.hostAllowed(r.Host) {
 		http.Error(w, "Forbidden host", http.StatusForbidden)
 		return
-	}
-
-	// A registered service hostname is served by the reverse proxy, not by the daemon API. Checked
-	// after hostAllowed so a rebinding attempt cannot reach a script, and before auth because a dev
-	// server has its own access control (usually none).
-	s.mu.Lock()
-	proxy := s.serviceProxyRoutes
-	s.mu.Unlock()
-	if proxy != nil {
-		if _, registered := proxy.Lookup(r.Host); registered {
-			proxy.ServeHTTP(w, r)
-			return
-		}
 	}
 
 	// The bundled web UI is served before auth, so the app shell and its assets load without the

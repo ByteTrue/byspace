@@ -114,7 +114,7 @@ Commands run with the worktree as `cwd`. Use `$BYSPACE_SOURCE_CHECKOUT_PATH` to 
 
 ## Scripts and services
 
-`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and BySpace supervises it as a long-running process, assigns it a port, and routes HTTP traffic to it through the daemon's reverse proxy.
+`scripts` are named commands you can run inside a worktree on demand. Mark one as a _service_ and BySpace supervises it as a long-running process and assigns it a stable port you open directly.
 
 Run them from the app, or manage them from automation with [`byspace script`](/docs/cli#workspace-scripts) and the [agent-facing CLI](/docs/agent-tools#reference).
 
@@ -193,33 +193,28 @@ are available as `BYSPACE_SCRIPTNAME`, `BYSPACE_WORKSPACE_ID`, `BYSPACE_BRANCH_N
 the same block. BySpace trusts the external allocator, so the returned port may already be in use, for
 example by a service BySpace will attach to.
 
-### Reverse proxy
+### Opening a service
 
-Every service is reachable through the daemon at a deterministic hostname:
+A service binds its assigned port on the daemon's host. Open it directly:
 
 ```
-http://<script>--<branch>--<project>.localhost:<daemon-port>
-
-# on the default branch, the branch label is dropped:
-http://<script>--<project>.localhost:<daemon-port>
+http://localhost:<service-port>
 ```
 
-`*.localhost` resolves to `127.0.0.1` on modern systems, so these URLs work out of the box. The proxy supports WebSocket upgrades.
+The scripts button in the workspace shows the URL and copies it to the clipboard. To reach a service from another device, forward its port through a tunnel (see [connectivity](connectivity.md)).
 
 ### Service-to-service
 
-Services launched from the same workspace see each other's ports and proxy URLs. Given `web` and `api` above, each process gets:
+Services launched from the same workspace see each other's ports. Given `web` and `api` above, each process gets:
 
 ```
-BYSPACE_PORT=3000                         # this service's port
-BYSPACE_URL=http://web--my-app.localhost:6777  # this service's proxy URL
+PORT=3000                          # this service's port (also BYSPACE_PORT, WORKSPACE_SCRIPT_PORT)
+BYSPACE_PORT=3000
 BYSPACE_SERVICE_API_PORT=51732
-BYSPACE_SERVICE_API_URL=http://api--my-app.localhost:6777
 BYSPACE_SERVICE_WEB_PORT=3000
-BYSPACE_SERVICE_WEB_URL=http://web--my-app.localhost:6777
 ```
 
-Script names are upper-cased and non-alphanumerics become `_`. Point your frontend at `$BYSPACE_SERVICE_API_URL` instead of hard-coding a port.
+Script names are upper-cased and non-alphanumerics become `_`. Point your frontend at `http://localhost:$BYSPACE_SERVICE_API_PORT` instead of hard-coding a port; the allocation is stable across peer restarts.
 
 ## Terminals
 
@@ -243,13 +238,11 @@ Setup, teardown, scripts, and services all see:
 - `$BYSPACE_SOURCE_CHECKOUT_PATH`, the original repo root
 - `$BYSPACE_WORKTREE_PATH`, the worktree directory
 - `$BYSPACE_BRANCH_NAME`, the worktree's branch
-- `$BYSPACE_WORKTREE_PORT`, legacy per-worktree port (prefer `$BYSPACE_PORT` inside services)
 
 Services additionally get:
 
-- `$BYSPACE_PORT`, this service's assigned port
-- `$BYSPACE_URL`, this service's proxy URL
-- `$BYSPACE_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
+- `$PORT` / `$WORKSPACE_SCRIPT_PORT` / `$BYSPACE_PORT`, this service's assigned port
+- `$BYSPACE_SERVICE_<NAME>_PORT`, peer service ports (stable across restarts)
 - `$HOST`, `127.0.0.1` for local-only daemons, `0.0.0.0` when the daemon binds all interfaces
 
 BySpace injects these names for project scripts.
