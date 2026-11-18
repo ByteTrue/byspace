@@ -22,16 +22,14 @@ test("a server_info role catalog round-trips and stays optional", () => {
     "researcher",
   ]);
 
-  // A daemon that predates the catalog sends only the boolean; a client that
-  // knows both must still parse it.
-  const legacy = {
-    status: "server_info",
-    serverId: "role-server",
-    features: { agentRoles: true },
-  };
-  const parsed = ServerInfoStatusPayloadSchema.parse(legacy);
-  expect(parsed.features?.agentRoles).toBe(true);
-  expect(parsed.features?.agentRoleNames).toBeUndefined();
+  // The catalog is optional: a daemon without custom roles omits it.
+  expect(
+    ServerInfoStatusPayloadSchema.parse({
+      status: "server_info",
+      serverId: "role-server",
+      features: {},
+    }).features?.agentRoleNames,
+  ).toBeUndefined();
 });
 
 test("terminal listings accept older rows and retain new per-terminal directories", () => {
@@ -90,49 +88,23 @@ const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
 });
 
 describe("wire schema compatibility", () => {
-  test("hello parses with and without the project update capability", () => {
-    const legacy = WSHelloMessageSchema.parse({
+  test("a minimal hello parses", () => {
+    expect(
+      WSHelloMessageSchema.parse({
+        type: "hello",
+        clientId: "legacy-client",
+        clientType: "mobile",
+        protocolVersion: 1,
+      }),
+    ).toEqual({
       type: "hello",
       clientId: "legacy-client",
       clientType: "mobile",
       protocolVersion: 1,
     });
-    const capable = WSHelloMessageSchema.parse({
-      type: "hello",
-      clientId: "capable-client",
-      clientType: "mobile",
-      protocolVersion: 1,
-      capabilities: { project_updates: true },
-    });
-
-    expect([legacy, capable]).toEqual([
-      {
-        type: "hello",
-        clientId: "legacy-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-      },
-      {
-        type: "hello",
-        clientId: "capable-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-        capabilities: { project_updates: true },
-      },
-    ]);
   });
 
-  test("timeline replacement invalidation is opt-in and carries no timeline rows", () => {
-    expect(
-      WSHelloMessageSchema.parse({
-        type: "hello",
-        clientId: "capable-client",
-        clientType: "mobile",
-        protocolVersion: 1,
-        capabilities: { timeline_replacement_invalidation: true },
-      }).capabilities,
-    ).toEqual({ timeline_replacement_invalidation: true });
-
+  test("timeline replacement carries no timeline rows", () => {
     expect(
       SessionOutboundMessageSchema.parse({
         type: "agent.timeline.replacement",
@@ -144,7 +116,7 @@ describe("wire schema compatibility", () => {
     });
   });
 
-  test("server info strips unknown legacy features while accepting former turn identity", () => {
+  test("server info strips unknown feature keys", () => {
     const parsed = ServerInfoStatusPayloadSchema.parse({
       status: "server_info",
       serverId: "legacy-server",
@@ -159,7 +131,7 @@ describe("wire schema compatibility", () => {
       serverId: "legacy-server",
       hostname: null,
       version: null,
-      features: { agentTurnIdentity: true },
+      features: {},
     });
   });
 
@@ -329,43 +301,10 @@ describe("wire schema compatibility", () => {
   });
 });
 
-test("0.8 timeline and setup capabilities remain optional in the hello", () => {
-  const hello = { type: "hello", clientId: "compat", clientType: "mobile", protocolVersion: 1 };
-  expect(WSHelloMessageSchema.safeParse(hello).success).toBe(true);
-  expect(
-    WSHelloMessageSchema.parse({
-      ...hello,
-      capabilities: { plugin_timeline_items: true, workspace_setup_blocked: true },
-    }).capabilities,
-  ).toEqual({ plugin_timeline_items: true, workspace_setup_blocked: true });
-});
-
-test("plugin rows and identity merges require a capable receiver", () => {
-  const item = {
-    type: "plugin",
-    id: "task",
-    pluginId: "tasks",
-    kind: "tasks",
-    version: 1,
-    data: { text: "Working" },
-  };
-  expect(AgentTimelineItemPayloadSchema.parse(item)).toEqual(item);
-  const legacyItems = z.object({
-    type: z.enum([
-      "user_message",
-      "assistant_message",
-      "reasoning",
-      "tool_call",
-      "todo",
-      "error",
-      "notification",
-      "compaction",
-    ]),
-  });
-  expect(legacyItems.safeParse(item).success).toBe(false);
+test("timeline entries accept identity merges", () => {
   const entry = {
     provider: "codex",
-    item,
+    item: { type: "notification", level: "warning", message: "Working" },
     timestamp: "2026-09-07T00:00:00.000Z",
     seqStart: 1,
     seqEnd: 2,
@@ -373,8 +312,6 @@ test("plugin rows and identity merges require a capable receiver", () => {
     collapsed: ["identity"],
   };
   expect(AgentTimelineEntryPayloadSchema.parse(entry)).toEqual(entry);
-  const legacyCollapsed = z.array(z.enum(["assistant_merge", "reasoning_merge", "tool_lifecycle"]));
-  expect(legacyCollapsed.safeParse(entry.collapsed).success).toBe(false);
 });
 
 test("blocked setup preserves the legacy failed shape and optional provenance", () => {

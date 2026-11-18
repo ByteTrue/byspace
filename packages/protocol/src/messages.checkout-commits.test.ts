@@ -3,7 +3,6 @@ import { describe, expect, test } from "vitest";
 import {
   CheckoutCommitsListRequestSchema,
   CheckoutCommitsListResponseSchema,
-  ServerInfoStatusPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
 } from "./messages.js";
@@ -134,30 +133,5 @@ describe("checkout.commits.list schemas", () => {
         },
       }),
     ).toMatchObject({ type: "checkout.commits.list.response" });
-  });
-
-  test("accepts the commit history server_info feature flags", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          commitsList: true,
-          commitBaseClassification: true,
-        },
-      }).features,
-    ).toEqual({ commitsList: true, commitBaseClassification: true });
-  });
-
-  test("still parses server_info without the commitsList feature flag", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "srv_test",
-        features: {
-          providersSnapshot: true,
-        },
-      }).features,
-    ).toEqual({ providersSnapshot: true });
   });
 });

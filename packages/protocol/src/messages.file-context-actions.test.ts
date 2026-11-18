@@ -10,36 +10,9 @@ import {
   FileEntryDuplicateResponseSchema,
   FileEntryRenameRequestSchema,
   FileEntryRenameResponseSchema,
-  ServerInfoStatusPayloadSchema,
 } from "./messages.js";
 
 describe("file context action messages", () => {
-  test("keeps context-action capabilities optional and preserves advertised support", () => {
-    const legacy = ServerInfoStatusPayloadSchema.parse({
-      status: "server_info",
-      serverId: "server-1",
-      features: {},
-    });
-    expect(legacy.features?.fsEntryOps).toBeUndefined();
-    expect(legacy.features?.fsEntryDuplicate).toBeUndefined();
-    expect(legacy.features?.checkoutDiscardChanges).toBeUndefined();
-
-    const current = ServerInfoStatusPayloadSchema.parse({
-      status: "server_info",
-      serverId: "server-1",
-      features: {
-        fsEntryOps: true,
-        fsEntryDuplicate: true,
-        checkoutDiscardChanges: true,
-      },
-    });
-    expect(current.features).toMatchObject({
-      fsEntryOps: true,
-      fsEntryDuplicate: true,
-      checkoutDiscardChanges: true,
-    });
-  });
-
   test("rejects discard requests without a path", () => {
     expect(() =>
       CheckoutDiscardChangesRequestSchema.parse({

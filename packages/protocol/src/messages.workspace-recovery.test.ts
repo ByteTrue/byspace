@@ -1,9 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  SessionInboundMessageSchema,
-  SessionOutboundMessageSchema,
-  ServerInfoStatusPayloadSchema,
-} from "./messages.js";
+import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "./messages.js";
 
 describe("workspace recovery protocol", () => {
   test("parses the read-only recovery inspection exchange", () => {
@@ -64,24 +60,6 @@ describe("workspace recovery protocol", () => {
         }),
       ).toMatchObject({ payload });
     }
-  });
-
-  test("keeps the capability optional for older daemons", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "old-host",
-        features: {},
-      }).features?.workspaceRecovery,
-    ).toBeUndefined();
-
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "new-host",
-        features: { workspaceRecovery: true },
-      }).features?.workspaceRecovery,
-    ).toBe(true);
   });
 
   test("accepts unavailable reasons added by newer daemons", () => {
