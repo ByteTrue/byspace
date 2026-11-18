@@ -274,7 +274,7 @@ describe("formatChangelogDate", () => {
 
 describe("the repository's own CHANGELOG.md", () => {
   const markdown = readFileSync(
-    fileURLToPath(new URL("../../../../../CHANGELOG.md", import.meta.url)),
+    fileURLToPath(new URL("../../../../CHANGELOG.md", import.meta.url)),
     "utf8",
   );
   const releases = parseChangelog(markdown);

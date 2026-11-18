@@ -174,9 +174,9 @@ If `main` contains changes you do not want to release, branch from the affected 
 
 ## Release completion and heartbeat
 
-A release is **in progress** after npm publication and tag push. Report it as
-**shipped** only after every applicable build, publication, asset, and deployment
-passes the completion checklist.
+A release is **in progress** after the tag push. Report it as **shipped** only
+after every applicable build, publication, asset, and deployment passes the
+completion checklist.
 
 Immediately after every beta, stable, or promotion tag push, create a heartbeat
 that resumes the release in the current conversation. Create it automatically
@@ -184,9 +184,10 @@ with `create_heartbeat`. The heartbeat owns the release until it either reaches
 the completion checklist or finds a failure that needs new user authority.
 
 Each heartbeat checks the release tag commit, all GitHub Actions runs for the
-release tag, npm dist-tags, the GitHub Release body and assets, and the deployed
-web app. Inspect the GitHub Release itself and confirm both the npm tarball and
-container descriptor are present with their `.sha256` siblings.
+release tag, the GitHub Release body and assets, and the deployed web app. The
+npm package is not published, so there are no dist-tags to check; the tarball is
+a local dry-run artifact and the Release carries the container descriptor with
+its `.sha256` sibling.
 
 Delete the heartbeat only after every applicable checklist item passes, then
 report the release as shipped.

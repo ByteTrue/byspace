@@ -87,7 +87,6 @@ jobs:
           scripts/parity-surface.test.mjs
           scripts/relay-worker.test.mjs
           scripts/repo-config.test.mjs
-          scripts/generated-assets.test.mjs
           scripts/config-schema.test.mjs
           scripts/web-layout.test.mjs
           scripts/web-routes.test.mjs
@@ -191,6 +190,11 @@ jobs:
         run: |
           npm pack --dry-run --ignore-scripts --workspace=@bytetrue/protocol
           npm pack --dry-run --ignore-scripts --workspace=@bytetrue/client
+
+      # Renders the brand mark with sharp and the component sheet with python3, so it needs the
+      # installed deps this job has and the dependency-free `changes` job does not.
+      - name: Check generated assets
+        run: node --test scripts/generated-assets.test.mjs
 
   go-tests:
     name: go-tests

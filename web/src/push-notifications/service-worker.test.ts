@@ -8,7 +8,7 @@ import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "./internal/types";
  * typechecked. Loading it into a fake worker global is the only way to keep its
  * push handling honest.
  */
-const source = readFileSync(join(__dirname, "../../../public/sw.js"), "utf8");
+const source = readFileSync(join(__dirname, "../../public/sw.js"), "utf8");
 
 interface FakeClient {
   focus: () => Promise<void>;
