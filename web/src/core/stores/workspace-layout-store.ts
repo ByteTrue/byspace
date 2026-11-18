@@ -59,7 +59,7 @@ import {
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
-import { panelTargetSupportsHostForWorkspaceKey } from "@/plugins/workspace-panels/locations";
+import { panelSupportsHost } from "@/panels/panel-manifest";
 
 export {
   AMBIENT_PLACEMENT,
@@ -466,11 +466,7 @@ function getOpenTabPlacement(
   );
   const requestedPlacement = placement ?? AMBIENT_PLACEMENT;
   const supportsPane = (pane: SplitPane) =>
-    panelTargetSupportsHostForWorkspaceKey(
-      workspaceKey,
-      target,
-      pane.id === explorerSidebarPaneId ? "explorer" : "main",
-    );
+    panelSupportsHost(target.kind, pane.id === explorerSidebarPaneId ? "explorer" : "main");
   const requestedPaneId =
     requestedPlacement.mode === "pane" || requestedPlacement.mode === "prefer"
       ? requestedPlacement.paneId
@@ -1109,14 +1105,7 @@ export function createWorkspaceLayoutStore(
           const movingTab = collectAllTabs(currentLayout.root).find(
             (tab) => tab.tabId === normalizedTabId,
           );
-          if (
-            !movingTab ||
-            !panelTargetSupportsHostForWorkspaceKey(
-              normalizedWorkspaceKey,
-              movingTab.target,
-              "main",
-            )
-          ) {
+          if (!movingTab || !panelSupportsHost(movingTab.target.kind, "main")) {
             return null;
           }
 
@@ -1198,14 +1187,7 @@ export function createWorkspaceLayoutStore(
             );
             const destinationHost =
               normalizedToPaneId === explorerSidebarPaneId ? "explorer" : "main";
-            if (
-              !movingTab ||
-              !panelTargetSupportsHostForWorkspaceKey(
-                normalizedWorkspaceKey,
-                movingTab.target,
-                destinationHost,
-              )
-            ) {
+            if (!movingTab || !panelSupportsHost(movingTab.target.kind, destinationHost)) {
               return state;
             }
             const nextLayout = moveTabToPaneInLayout({

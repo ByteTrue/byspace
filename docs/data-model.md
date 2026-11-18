@@ -65,9 +65,6 @@ $BYSPACE_HOME/
 ├── runtime/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by BySpace; reconciled on daemon bootstrap
-├── plugins/
-│   ├── sources.json                      # Git origin, ref, commit, and managed checkout ownership
-│   └── {pluginId}/{version}/checkout/    # Source checkout for one installed Git commit
 └── push-tokens.json                     # Expo push notification tokens
 ```
 
@@ -235,16 +232,13 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
     skills?: {
       selection?: { mode: "all" } | { mode: "custom", skills: string[] }
     },
-    // ProviderOverrideSchema; legacy entries with `command: { mode, ... }` are migrated to the
-    // current shape on load via `migrateProviderSettings`. Custom provider IDs must declare
-    // `extends` (one of the built-ins or `"acp"`) and `label`. See `provider-launch-config.ts`.
+    // ProviderOverrideSchema. Custom provider IDs must declare `extends` (one of the
+    // built-ins or `"acp"`) and `label`. See `provider-config.ts`.
     providers: Record<providerId, ProviderOverride>,
     metadataGeneration: {
       providers: [{ provider, model?, thinkingOptionId? }]
     }
   },
-  pluginsEnabled: boolean,
-  plugins: Record<pluginId, { source: "directory", path: string, enabled?: boolean }>,
   log: {
     level, format,
     console: { level, format },
@@ -254,12 +248,6 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
 ```
 
 All fields are optional with sensible defaults.
-
-Git-managed plugins still appear as directory sources in `config.json`. This keeps the plugin
-runtime and protocol config compatible with directory-only clients. `plugins/sources.json` owns the
-Git-specific origin, tracking ref, installed commit, repository subdirectory, and checkout root.
-BySpace writes it atomically. An update creates and validates a new version directory before changing
-the configured directory path; successful activation removes the old version.
 
 ### Profile lists
 

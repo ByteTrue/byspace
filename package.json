@@ -29,9 +29,6 @@
     "workers/relay"
   ],
   "scripts": {
-    "acp:version-drift": "node scripts/check-acp-catalog-version-drift.mjs",
-    "acp:version-drift:check": "node scripts/check-acp-catalog-version-drift.mjs --fail-on-drift",
-    "acp:version-drift:update": "node scripts/check-acp-catalog-version-drift.mjs --update",
     "audit": "node scripts/audit.mjs",
     "audit:browser": "node scripts/browser-conformance.mjs",
     "audit:emit": "node scripts/go-emit-parity.mjs",

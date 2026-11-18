@@ -11,7 +11,7 @@ import type {
 import { SortableInlineList } from "@/components/sortable-inline-list";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { PanelIconProps } from "@/panels/panel-registry";
-import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
+import { panelSupportsHost } from "@/panels/panel-manifest";
 import type { WorkspaceDesktopTabRowItem } from "@/screens/workspace/workspace-desktop-tabs-row";
 import {
   WorkspaceTabIcon,
@@ -85,7 +85,7 @@ function ExplorerSidebarTab({
   const handleHoverOut = useCallback(() => setHovered(false), []);
   const handleClose = useCallback(() => void onCloseTab(tabId), [onCloseTab, tabId]);
   const handleMoveToMain = useCallback(() => onMoveTabToMain(tabId), [onMoveTabToMain, tabId]);
-  const canMoveToMain = panelTargetSupportsHost(normalizedServerId, item.tab.target, "main");
+  const canMoveToMain = panelSupportsHost(item.tab.target.kind, "main");
   const renderPresentation = useCallback(
     (presentation: WorkspaceTabPresentation) => (
       <ContextMenu>

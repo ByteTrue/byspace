@@ -76,7 +76,7 @@ import {
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { RenderProfile } from "@/utils/render-profiler";
-import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
+import { panelSupportsHost } from "@/panels/panel-manifest";
 
 /** Width or height of an element, kept current with a ResizeObserver. */
 interface SplitContainerProps {
@@ -465,10 +465,7 @@ export function SplitContainer({
           ? overData.paneId
           : null;
       const destinationHost = destinationPaneId === explorerSidebarPaneId ? "explorer" : "main";
-      if (
-        !activeTab ||
-        !panelTargetSupportsHost(normalizedServerId, activeTab.target, destinationHost)
-      ) {
+      if (!activeTab || !panelSupportsHost(activeTab.target.kind, destinationHost)) {
         setDropPreview(null);
         setTabDropPreview(null);
         return;
@@ -495,7 +492,7 @@ export function SplitContainer({
 
       setDropPreview(computePaneOverDropPreview({ overData, rects }));
     },
-    [normalizedServerId, panesById, explorerSidebarPaneId, uiTabs],
+    [panesById, explorerSidebarPaneId, uiTabs],
   );
 
   const applyTabDropEnd = useCallback(

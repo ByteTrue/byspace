@@ -1,9 +1,9 @@
 ---
 kind: work
 status: in_progress
-current_unit: "八批已 commit：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options"
-next_action: "Chief 远期认真做；瘦身批次一全部闭环"
-must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；不 push 不开 PR"
+current_unit: "九批已 commit+push：死包+quota+COMPAT+serviceproxy+provider+ACP自助/worktree-env/skill+custom-providers重写+per-agent options+catalog脚本删/plugins扁平化"
+next_action: "Chief 远期认真做；瘦身批次一全部闭环，已 push origin main"
+must_hold: "只删已授权项；保留平台广度/changelog/schedules/git review/forge(GitHub+GitLab)/Chief；git review-draft 链 owner 明确不做"
 proof_gap: ""
 ---
 
@@ -60,6 +60,9 @@ proof_gap: ""
 | Claude per-agent options 接线 | claudeLaunchArgs | config.options allowedTools/disallowedTools/additionalDirectories/settings/sandbox | flags+merged --settings JSON 达 CLI，deny 与 provider-level 合并去重 | TestClaudeLaunchArgsCarryProviderOptions 绿（turnparams_test.go）；go providers 全包 ok | 通过 |
 | 死 surface 删除 | ProviderRuntimeSettings/AgentProviderRuntimeSettingsMap/ProviderCommand | provider-config.ts 删三 schema+三 type | 零消费者，config-safe | grep 源码零残留；build:client/typecheck EXIT=0；protocol messages 28 pass | 通过 |
 | 第八批类型/规范+对账 | typecheck/lint/format + npm run audit | 重建 embedded UI+重启 daemon 后 | 全绿 | typecheck-16/lint-8/format-3 EXIT=0；audit-options.txt AUDIT_EXIT=0：Go 82.0s ok、入站/出站缺口 0、重审账本 ✔、浏览器 11/11 | 通过 |
+| catalog 版本漂移脚本删 | git rm + package.json + development.md | 删 452 行脚本+3 npm script+doc 节 | 零残留引用，catalog 自助接入不受影响 | grep check-acp-catalog-version-drift/acp:version-drift 全仓零命中；脚本非 CI/audit/lefthook（纯手动孤儿） | 通过 |
+| plugins shim 扁平化 | 删 4 shim+消费者内联 | panelTargetSupportsHost*→panelSupportsHost(target.kind,host)；slash plugin 死路径删 | kind:"plugin" 活类型保留（layout/draft store 持久化引用），行为等价 | 174 测试绿（layout-store/panel-manifest/split-container/composer/autocomplete）；typecheck-17/lint-10/format EXIT=0；零残留 @/plugins 引用 | 通过 |
+| 第九批类型/规范+对账 | typecheck/lint/format + npm run audit | 重建 embedded UI+重启 daemon 后 | 全绿 | audit-plugins.txt AUDIT_EXIT=0：Go 84.6s ok、入站/出站缺口 0、重审账本 ✔、浏览器 11/11 | 通过 |
 
 ## 证据与决定
 
@@ -107,9 +110,10 @@ proof_gap: ""
 - custom-providers.md 重写（去 fiction+去堆积）+ disallowedTools 接线 + 三死字段删除：通过（doc 750→~390 行，Codex TOML/pi params/ACP Auto Accept/catalogRefreshTimeoutMs fiction 删，Z.AI/Qwen 收敛 vendor 表+一例；disallowedTools 达 CLI 测试绿；order/byspaceTools/catalogRefreshTimeoutMs 删 config-safe；audit-docs 四步全过+浏览器 11/11）。
 - per-agent options 三 gap 处理：通过（Claude per-agent options 接线补回真实功能+测试绿；OpenCode permission 文档降级走自己 config；strict 校验虚构删；ProviderRuntimeSettings/ProviderCommand 死 surface 删；Codex env-only 诚实注明；audit-options 四步全过+浏览器 11/11）。
 - forge 建议交付：通过（owner m10653 认可，Go 保持 switch，gitea 家族留，不建插件内核）。
+- 第九批（catalog 脚本删+plugins 扁平化，owner m11436「除了 git，另外两个候选都可以做」）：通过（check-acp-catalog-version-drift.mjs 452 行+3 npm script+development.md 节删；web/src/core/plugins/ 4 shim 66 行删，活逻辑内联 panelSupportsHost+slash 直接合并，kind:"plugin" 活类型保留；data-model.md 退役 plugin runtime 残留清理；174 测试绿，audit-plugins 四步全过+浏览器 11/11）。git review-draft 链 owner 明确不做。
 - 过时文档清理：通过（session-decomposition-plan 删；protocol-compatibility 重写；product/forge/data-model/timeline-sync/terminal-activity/qa/rpc-namespacing/development 更新；custom-providers.md 重写完成）。
 - 验证：typecheck/lint/format 三绿；npm run audit 四步全过（audit-3.txt：Go 测试 ok、入站/出站缺口 0、重审账本 ✔、浏览器 12/12）。
 - 记忆同步：settings-taxonomy.md（Usage 删除）、product-scope.md（无版本漂移+quota）已更新。
-- commit：c7a0e4e92（死包+quota+COMPAT）、c4000826f（bywork）、5ab0f2d9a（serviceproxy）、e887e013b（bywork）、a81ec8b84（forge 文档）、9ea695900（provider 6→4）、086a1c788（bywork）、4fddad678（ACP 自助+worktree env+skill）、248ac0c06（bywork）。第七批（custom-providers 重写+disallowedTools 接线+三死字段）commit 见 git log。main ahead origin，未 push——owner 未授权 push。pre-commit hooks（lint/format/typecheck）全过。
+- commit+push：c7a0e4e92（死包+quota+COMPAT）、c4000826f（bywork）、5ab0f2d9a（serviceproxy）、e887e013b（bywork）、a81ec8b84（forge 文档）、9ea695900（provider 6→4）、086a1c788（bywork）、4fddad678（ACP 自助+worktree env+skill）、248ac0c06（bywork）、9bc69dc20（custom-providers 重写+disallowedTools 接线+三死字段）、34df9af8e（per-agent options 三 gap）。owner m11436「可以 push」→git push origin main（e5db67d4d..34df9af8e），main 与 origin 同步。第九批（catalog 脚本删+plugins 扁平化）commit 见 git log。pre-commit hooks（lint/format/typecheck）全过。
 - 保留项确认未动：平台广度（安卓/Web/Windows/Mac）、changelog/What's New、schedules/heartbeat、git review UI、forge（GitHub+GitLab+Gitea）、Chief/roles。
 - 待 flag owner（三独立 gap，非本批）：per-agent Claude options 未接线（SDK doc disallowedTools/sandbox/allowedTools，ClaudeSession 零读 ProviderOptions）、ProviderRuntimeSettingsSchema 死 surface、Codex env-only custom endpoint 未真实验证。→owner m09911「按最优雅解法处理」+{{ACCOUNT_z7h8i234}}「按你建议做」→第八批全部闭环（Claude 接线/OpenCode 降级/死 surface 删/Codex 注明）。Chief 远期认真做。
