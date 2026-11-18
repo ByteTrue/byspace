@@ -1,0 +1,192 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ComboboxOption as ComboboxOptionType } from "@/widgets/combobox";
+import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
+import {
+  getHostProjectSourceDirectory,
+  resolveInitialProject,
+  type HostProjectListItem,
+} from "@/projects/host-projects";
+import {
+  createManualProjectSelectionContextKey,
+  createProjectSelectionContextKey,
+  createProjectSelection,
+  reconcileProjectSelection,
+  resolveInitialProjectSelectionSource,
+  resolveProjectSelection,
+  type ProjectSelection,
+  type ProjectSelectionContext,
+} from "./project-selection";
+
+const PROJECT_OPTION_PREFIX = "project:";
+
+interface NewWorkspaceProjectPickerInput {
+  selectedServerId: string;
+  projects: HostProjectListItem[];
+  routeProject: HostProjectListItem | null;
+  routeProjectContextViewKey: string | null;
+  lastActiveProject: HostProjectListItem | null;
+}
+
+interface NewWorkspaceProjectPickerState {
+  selectedProject: HostProjectListItem | null;
+  selectedSourceDirectory: string | null;
+  projectPickerOptions: ComboboxOptionType[];
+  projectByOptionId: Map<string, HostProjectListItem>;
+  selectedProjectOptionId: string;
+  projectTriggerLabel: string;
+  handleSelectProjectOption: (id: string) => void;
+  /** True when the user (or the route) pinned the project, scoping the host picker. */
+  isProjectSelectionLocked: boolean;
+}
+
+function projectOptionId(projectId: string): string {
+  return `${PROJECT_OPTION_PREFIX}${projectId}`;
+}
+
+function computeProjectOptionData(projects: readonly HostProjectListItem[]) {
+  const projectByOptionId = new Map<string, HostProjectListItem>();
+  const options = projects.map((project) => {
+    const id = projectOptionId(project.viewKey);
+    projectByOptionId.set(id, project);
+    return { id, label: project.projectName };
+  });
+  return { options, projectByOptionId };
+}
+
+function resolveWorkspaceIdFromProjectWorkspaceKey(input: {
+  selectedServerId: string;
+  workspaceKey: string;
+}): string | null {
+  const prefix = `${input.selectedServerId}:`;
+  return input.workspaceKey.startsWith(prefix) ? input.workspaceKey.slice(prefix.length) : null;
+}
+
+function hasPendingArchiveForProject(input: {
+  selectedServerId: string;
+  project: HostProjectListItem;
+}): boolean {
+  for (const workspaceKey of input.project.workspaceKeys) {
+    const workspaceId = resolveWorkspaceIdFromProjectWorkspaceKey({
+      selectedServerId: input.selectedServerId,
+      workspaceKey,
+    });
+    if (
+      workspaceId &&
+      isWorkspaceArchivePending({ serverId: input.selectedServerId, workspaceId })
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function useNewWorkspaceProjectPicker({
+  selectedServerId,
+  projects,
+  routeProject,
+  routeProjectContextViewKey,
+  lastActiveProject,
+}: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
+  const selectableProjects = projects;
+  const initialProject = useMemo(() => {
+    const hostProjects = selectableProjects.filter((p) =>
+      p.hosts.some((h) => h.serverId === selectedServerId),
+    );
+    return (
+      resolveInitialProject({
+        routeProject,
+        lastActiveProject,
+        projects: hostProjects,
+      }) ?? null
+    );
+  }, [lastActiveProject, routeProject, selectableProjects, selectedServerId]);
+
+  const selectionContextKey = createProjectSelectionContextKey({
+    selectedServerId,
+    routeProjectViewKey: routeProjectContextViewKey,
+  });
+  const manualSelectionContextKey = createManualProjectSelectionContextKey({
+    routeProjectViewKey: routeProjectContextViewKey,
+  });
+  const shouldPreserveMissingProject = useCallback(
+    (project: HostProjectListItem) =>
+      hasPendingArchiveForProject({
+        selectedServerId,
+        project,
+      }),
+    [selectedServerId],
+  );
+  const selectionContext = useMemo<ProjectSelectionContext>(
+    () => ({
+      contextKey: selectionContextKey,
+      manualContextKey: manualSelectionContextKey,
+      selectedServerId,
+      initialProject,
+      initialProjectSource: resolveInitialProjectSelectionSource({
+        initialProject,
+        routeProject,
+        lastActiveProject,
+      }),
+      projects: selectableProjects,
+      routeProject,
+      lastActiveProject,
+      shouldPreserveMissingProject,
+    }),
+    [
+      initialProject,
+      lastActiveProject,
+      manualSelectionContextKey,
+      routeProject,
+      selectableProjects,
+      selectedServerId,
+      selectionContextKey,
+      shouldPreserveMissingProject,
+    ],
+  );
+  const [projectSelection, setProjectSelection] = useState<ProjectSelection>(() =>
+    createProjectSelection(selectionContext),
+  );
+
+  useEffect(() => {
+    setProjectSelection((current) => reconcileProjectSelection(current, selectionContext));
+  }, [selectionContext]);
+
+  const activeSelection = reconcileProjectSelection(projectSelection, selectionContext);
+  const selectedProject = resolveProjectSelection(activeSelection, selectionContext);
+  const { options: projectPickerOptions, projectByOptionId } = useMemo(
+    () => computeProjectOptionData(selectableProjects),
+    [selectableProjects],
+  );
+  const handleSelectProjectOption = useCallback(
+    (id: string) => {
+      const project = projectByOptionId.get(id);
+      if (!project) return;
+      setProjectSelection({
+        contextKey: manualSelectionContextKey,
+        project,
+        originProject: project,
+        source: "manual",
+      });
+    },
+    [manualSelectionContextKey, projectByOptionId],
+  );
+
+  return {
+    selectedProject,
+    selectedSourceDirectory: selectedProject
+      ? getHostProjectSourceDirectory(selectedProject, selectedServerId)
+      : null,
+    projectPickerOptions,
+    projectByOptionId,
+    selectedProjectOptionId: selectedProject ? projectOptionId(selectedProject.viewKey) : "",
+    projectTriggerLabel: selectedProject?.projectName ?? "Choose project",
+    handleSelectProjectOption,
+    // A manual pick or a routed project pins the project: the host picker must
+    // only offer hosts that have it. An automatically carried-over project
+    // (last-active / fallback) must not restrict the host list.
+    isProjectSelectionLocked:
+      projectSelection.source === "manual" ||
+      (projectSelection.source === "initial" && selectionContext.initialProjectSource === "route"),
+  };
+}

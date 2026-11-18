@@ -67,7 +67,7 @@ signalling the pid only when nothing acks, because the process holding the daemo
 `byspace tray`, which no `serve` process identity matches. A stop for a desktop-hosted daemon quits
 the app: nothing else can keep its supervisor from starting the daemon again.
 
-The Node daemon this replaced is kept read-only under `archive/packages/server/`. When a ported behaviour looks wrong, read the archived source at the same call site — it answers "did the port break this, or was it always like this?" faster than any other evidence. [docs/archive-parity.md](archive-parity.md) describes how to use it.
+The Node daemon this replaced is readable at the git tag `v0.20.0`. When a ported behaviour looks wrong, read the archived source at the same call site — it answers "did the port break this, or was it always like this?" faster than any other evidence. [docs/archive-parity.md](archive-parity.md) describes how to use it.
 
 Project identity is daemon-global rather than session-owned. After registry bootstrap, the daemon's
 project Git observer keeps one non-recursive watch on each lexically equivalent active project root
@@ -116,10 +116,12 @@ host's client; plugin subprocesses use the same facade over a host-owned IPC tra
 
 ### `web` — Web client
 
-React, Vite, and shadcn/ui client that connects to one or more daemons. `web/src/core` holds the
-modules ported from the Expo app (state, daemon runtime, screens, i18n); the rest of `web/src` is
-the shell (router, sidebar, shadcn components) and the web APIs `web/src/core` calls in place of the
-React Native and Expo ones (`~/app/navigation`, `~/app/route-focus`, `~/lib/*`).
+React, Vite, and shadcn/ui client that connects to one or more daemons. `web/src` is one tree with a
+single `@/` alias and three directory roles: `ui/` is vendored shadcn (`npx shadcn add` writes here,
+never restyled), `platform/` is the web stand-ins for the React Native and Expo APIs the app was
+ported from, and every other directory is a feature. `ui/` and `platform/` may import only npm
+packages and each other; features are free to import anything. `scripts/web-layout.test.mjs`
+enforces both rules and the alias.
 
 - React Router routes at the Expo app's URLs (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.); see [routing.md](routing.md). The `workspaceId` URL segment is an opaque workspace id, not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state. Direct TCP and relay connections use the ordinary client transport. (The Electron desktop transports — socket, pipe, and SSH — were retired with the desktop app; LAN access uses the daemon's bundled same-origin web UI, remote access the relay.)
@@ -127,7 +129,7 @@ React Native and Expo ones (`~/app/navigation`, `~/app/route-focus`, `~/lib/*`).
 - `runtime/directory-sync` owns directory cache selection and network reconciliation. On demand it paints accepted rows for one host, then passes the persisted per-entity cursor through `project.list`, `fetch_workspaces`, and `fetch_agents`; the daemon returns each entity's latest projection when its sequence is newer, plus tombstones.
 - `workspace-labels` owns one sequenced catalog replica per connected host, the deterministic cross-host projection that surfaces spanning hosts use (the filter page, the manager), and the per-host resolution a workspace row's chips use. Two hosts may give one name different colors, so a row resolves against its own host's catalog and a merged answer would be wrong there. Catalogs never synchronize between hosts; assignment creates a missing definition only on the target host. On the daemon, catalog and assignment rewrites share a journaled commit boundary. Startup recovery completes that commit before workspace or catalog publication.
 - `SessionContext` wraps the daemon client for the active session
-- Composer UI and submit/draft behavior live in `web/src/core/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
+- Composer UI and submit/draft behavior live in `web/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
 - Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication
 - Timeline sync correctness is documented in [docs/timeline-sync.md](timeline-sync.md): live streams are for immediacy, `fetch_agent_timeline_request` is authoritative, and catch-up is paged but complete.
 
@@ -327,24 +329,24 @@ Two workspaces can share the same `cwd` (e.g. a `directory` workspace and a `loc
 
 **Directory-backed (shared by same-`cwd` workspaces) — keyed by `(serverId, cwd)`, never by `workspaceId`:**
 
-| Surface                 | Key                                                      | Source                                              |
-| ----------------------- | -------------------------------------------------------- | --------------------------------------------------- |
-| Git status              | `checkoutStatusQueryKey(serverId, cwd)`                  | `web/src/core/git/query-keys.ts`                    |
-| Git diff                | `checkoutDiffQueryKey(serverId, cwd, mode, baseRef, ws)` | `web/src/core/git/query-keys.ts`                    |
-| Forge change request    | `checkoutPrStatusQueryKey(serverId, cwd)`                | `web/src/core/git/query-keys.ts`                    |
-| Change request timeline | `prPaneTimelineQueryKey({ serverId, cwd, prNumber })`    | `web/src/core/git/pull-request-panel/query-keys.ts` |
-| File preview content    | `(serverId, cwd, path)` of the live file model           | `web/src/core/file-pane/live-file/hook.ts`          |
-| File explorer listings  | fetched via `listDirectory(workspaceRoot, path)`         | `web/src/core/hooks/use-file-explorer-actions.ts`   |
+| Surface                 | Key                                                      | Source                                         |
+| ----------------------- | -------------------------------------------------------- | ---------------------------------------------- |
+| Git status              | `checkoutStatusQueryKey(serverId, cwd)`                  | `web/src/git/query-keys.ts`                    |
+| Git diff                | `checkoutDiffQueryKey(serverId, cwd, mode, baseRef, ws)` | `web/src/git/query-keys.ts`                    |
+| Forge change request    | `checkoutPrStatusQueryKey(serverId, cwd)`                | `web/src/git/query-keys.ts`                    |
+| Change request timeline | `prPaneTimelineQueryKey({ serverId, cwd, prNumber })`    | `web/src/git/pull-request-panel/query-keys.ts` |
+| File preview content    | `(serverId, cwd, path)` of the live file model           | `web/src/file-pane/live-file/hook.ts`          |
+| File explorer listings  | fetched via `listDirectory(workspaceRoot, path)`         | `web/src/hooks/use-file-explorer-actions.ts`   |
 
 **Workspace-owned (independent per workspace) — keyed by `workspaceId` (falling back to `cwd` only when no `workspaceId` exists):**
 
-| State                        | Key builder / store                                | Source                                                    |
-| ---------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
-| Review draft comments        | `buildReviewDraftKey`                              | `web/src/core/review/store.ts`                            |
-| Working diff comparison      | `workingDiffComparisonKey` (in-memory)             | `web/src/core/git/working-diff-comparison/state.ts`       |
-| Composer attachments         | `buildWorkspaceAttachmentScopeKey`                 | `web/src/core/attachments/workspace-attachments-store.ts` |
-| File explorer nav/open state | `fileExplorer` map keyed `workspace:{workspaceId}` | `web/src/core/hooks/use-file-explorer-actions.ts`         |
-| File explorer expanded paths | `expandedPathsByWorkspace[workspaceStateKey]`      | `web/src/core/stores/panel-store/state.ts`                |
+| State                        | Key builder / store                                | Source                                               |
+| ---------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Review draft comments        | `buildReviewDraftKey`                              | `web/src/review/store.ts`                            |
+| Working diff comparison      | `workingDiffComparisonKey` (in-memory)             | `web/src/git/working-diff-comparison/state.ts`       |
+| Composer attachments         | `buildWorkspaceAttachmentScopeKey`                 | `web/src/attachments/workspace-attachments-store.ts` |
+| File explorer nav/open state | `fileExplorer` map keyed `workspace:{workspaceId}` | `web/src/hooks/use-file-explorer-actions.ts`         |
+| File explorer expanded paths | `expandedPathsByWorkspace[workspaceStateKey]`      | `web/src/stores/panel-store/state.ts`                |
 
 `diff-pane.tsx` is the canonical wiring site: it passes `{ serverId, cwd }` to the git queries and `{ serverId, workspaceId, cwd }` to the draft/comparison/attachment scope keys.
 

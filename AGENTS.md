@@ -12,12 +12,19 @@ This is an npm workspace monorepo with a unified Go single binary:
 - `internal/` — The Go daemon, CLI, Wails v3 desktop/Android host (`internal/gui`), self-updater (`internal/selfupdate`), agent providers (`internal/agent`), workspace/git (`internal/workspace`), terminal, tunnel, and embedded web UI (`internal/webui`)
 - `build/` — Native packaging templates (`build/darwin` for `BySpace.app` / `.dmg`, `build/android` for the Wails v3 Android sideload APK)
 - `workers/relay` — The Go relay compiled to WebAssembly and run as a Cloudflare Durable Object with WebSocket hibernation
-- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. `web/src/core` holds the modules ported from the retired Expo app. Comments that say "the Expo app" or cite `archive/expo-app:packages/app/...` refer to it; `git show archive/expo-app:packages/app/src/<path>` prints the original
+- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. One tree under `web/src` with a single `@/` alias: `ui/` is vendored shadcn, `platform/` is the web stand-ins for the retired Expo app's React Native APIs, everything else is a feature directory. `scripts/web-layout.test.mjs` enforces the roles. Comments that say "the Expo app" or cite `archive/expo-app:packages/app/...` refer to that retired app; `git show archive/expo-app:packages/app/src/<path>` prints the original
 - `packages/relay` — E2E encryption primitives
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade
 - `packages/highlight` — Cross-package syntax highlighting
 - `third_party/go-pty` — Pinned PTY library with the Windows ConPTY payload loader; read its README before upgrading
+- `scripts/` — Build, release, dev-server and parity-guard scripts (`*.mjs`), with their `*.test.mjs` contract checks beside them
+- `docker/` — Self-hosted web+relay container image; see [docs/docker.md](docs/docker.md)
+- `design/` — The component sheet and its vendored shadcn reference (`design/references/shadcn`), the only component reference the UI is built against
+- `assets/` — Logo and README mockups
+- `public-docs/` — User-facing docs, rendered into the app's `/docs` routes by `scripts/build-public-docs.mjs`. Internal knowledge lives in `docs/` instead
+- `bywork/` — Working records: `work/` for in-flight changes, `memory/` for cross-task judgments, `vision/` for direction, `archive/v1/` for the frozen v1 history
+- `.agents/skills/` — Release skills for the coding agent working in this repo. Not the skills the daemon ships to agents; those are `internal/server/skills/`
 
 ## Docs
 
@@ -49,9 +56,11 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/permissions.md](docs/permissions.md)                           | Semantic daemon permissions, principals, credentials, pairing invitations, and Hub authority                   |
 | [docs/terminal-performance.md](docs/terminal-performance.md)         | Terminal latency pipeline, coalescing/backpressure invariants, benchmark + perf spec usage                     |
 | [docs/agent-stream-performance.md](docs/agent-stream-performance.md) | Assistant text pipeline — coalescing window, paced reveal, why arrival lumps are smoothed at render            |
+| [docs/timeline-sync.md](docs/timeline-sync.md)                       | Chat delivery — live stream vs authoritative history, resume/resync invariants, why deltas never reach history |
+| [docs/i18n.md](docs/i18n.md)                                         | UI translations — supported locales, where strings live, adding a key                                          |
 | [docs/file-observation.md](docs/file-observation.md)                 | Recursive watcher ownership, Linux constraints, teardown invariants, and Parcel comparison                     |
 | [docs/go-parity-audit.md](docs/go-parity-audit.md)                   | Go 版本对齐审计 — 四个检查各挡什么、基线守卫、出站审计的下钻与局限                                             |
-| [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 何时读、怎么读、能回答什么、四个对齐守卫、何时可以删                                    |
+| [docs/archive-parity.md](docs/archive-parity.md)                     | 已归档的 Node daemon — 在 tag v0.20.0 里怎么读、能回答什么、四个对齐守卫、何时可以删                           |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, performance, UI proof                                     |
 | [docs/explorer-sidebar.md](docs/explorer-sidebar.md)                 | Explorer sidebar and ordinary side-pane host contracts, lifecycle, placement, and routing preferences          |
@@ -68,7 +77,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 - **One fact, one doc.** Every other mention is a link. If you are about to write the same paragraph in two docs, one of them is a link.
 - **Respect the layers.** `CONTRIBUTING.md` and this file name things and link out. Activity docs like `docs/qa.md` and `docs/testing.md` set the bar for a kind of work. Subject docs like `docs/hover.md` own one thing completely. A layer never re-explains the one below it.
 - **One subject per doc.** If the subject doesn't fit in a sentence, split the doc. A section per provider, vendor, or platform is a table plus one worked example.
-- **Delete.** Obsolete sections go. Prefer a `web/src/core/thing.ts:120` reference over a pasted block.
+- **Delete.** Obsolete sections go. Prefer a `web/src/thing.ts:120` reference over a pasted block.
 - **New doc?** Add a row to the table above and link it from the docs that should send readers there.
 - Code-level facts belong in comments next to the code, not here.
 
@@ -132,11 +141,11 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
   - `npm run build:client` — rebuild protocol and client declarations.
   - `npm run build:relay` — rebuild the relay package's declarations.
   - Do not patch inferred callback parameters or add local duplicate types just to silence stale declaration errors.
-- **Go code is built with `make build`.** It produces `./bin/byspace`, which the e2e suite and `npm run cli` both use, so a Go change is invisible until you rebuild. `gofmt -w` is the Go formatter — `npm run format` only handles JS/TS.
+- **Go code is built with `make build`.** It produces `./.dev/bin/byspace`, which the e2e suite and `npm run cli` both use, so a Go change is invisible until you rebuild. `gofmt -w` is the Go formatter — `npm run format` only handles JS/TS.
 - **Run `npm run format` before committing.** This repo uses Biome for formatting. Do not manually fix formatting — let the formatter handle it.
 - **Always use npm scripts for linting and formatting.** Do not run tools directly with `npx eslint`, `npx oxfmt`, `npx oxlint`, or package-local binaries. For targeted checks, pass file paths through the npm script:
-  - `npm run lint -- web/src/core/components/message.tsx`
-  - `npm run format:files -- AGENTS.md web/src/core/components/message.tsx`
+  - `npm run lint -- web/src/components/message.tsx`
+  - `npm run format:files -- AGENTS.md web/src/components/message.tsx`
 - **No version compatibility. App and daemon ship together.** Read [docs/protocol-compatibility.md](docs/protocol-compatibility.md) before touching `packages/protocol`. The short version:
   - Change both sides in the same commit. Removing fields, narrowing types, and requiring fields are all allowed. No COMPAT shims, no legacy wire names, no feature gates for old hosts.
   - Wire schemas stay pure — no `.transform()`, `.catch()`, or `.preprocess()`. `server_info.features` carries runtime state (webPush keys, service-install support, tunnel opt-in) and catalogs (`agentRoleNames`), never version detection.
@@ -147,13 +156,14 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 The app is a web app (browser, installed PWA, and the Wails desktop and Android webviews). There
 are no platform gates: write plain web code. Use `useIsCompactFormFactor()` from
 `@/constants/layout` for layout decisions — sidebar overlay vs pinned, modal vs full screen,
-single-panel vs split — and `isDev` from `@/constants/platform` for development-only code.
+single-panel vs split. For development-only code use the `__DEV__` global, which
+`web/vite.config.ts` defines and `web/src/env.d.ts` declares.
 
 ### Rules
 
 - **NEVER use raw DOM APIs in a module that can be imported outside a browser.** A DOM
   call at module scope breaks non-browser importers (the e2e harness and unit tests import
-  `web/src/core` modules in Node).
+  `web/src` modules in Node).
 - **Hover-to-show UI is CSS.** Reveal kebabs and action buttons with Tailwind `group-hover` (in the
   sidebar, shadcn's `SidebarMenuAction showOnHover`), and show them always on compact layouts.
   Pointer-enter handlers are for code that must know about hover, never the only way to a control.

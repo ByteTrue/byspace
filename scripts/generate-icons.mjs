@@ -1,14 +1,15 @@
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./is-main-module.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const root = resolve(__dirname, "..");
+const repoRoot = resolve(__dirname, "..");
 
 // 导入单一事实来源的品牌矢量路径
 const { BYSPACE_LOGO_PATH, BYSPACE_LOGO_VIEWBOX } =
-  await import("../web/src/core/components/icons/byspace-logo-path.ts");
+  await import("../web/src/components/icons/byspace-logo-path.ts");
 
 const S = 1024;
 const RX = 228; // 标准 App Icon 平滑圆角半径
@@ -50,22 +51,47 @@ ${badge}
 }
 
 async function renderPng(svgStr, size, outPath) {
+  mkdirSync(dirname(outPath), { recursive: true });
   await sharp(Buffer.from(svgStr)).resize(size, size).png().toFile(outPath);
   console.log(`Generated: ${outPath} (${size}x${size})`);
 }
 
-async function main() {
+// Every path this writes is committed, so the guard in scripts/generated-assets.test.mjs renders
+// into a temp root and compares bytes. Keep the list and the writes in step.
+export const OUTPUTS = [
+  "web/public/pwa-icon-512.png",
+  "web/public/pwa-icon-192.png",
+  "web/public/apple-touch-icon.png",
+  "web/public/pwa-maskable-512.png",
+  "web/public/pwa-maskable-192.png",
+  "web/src/assets/images/notification-icon.png",
+  "web/src/assets/images/favicon.png",
+  "web/src/assets/images/favicon-light.png",
+  "web/src/assets/images/favicon-dark.png",
+  "web/src/assets/images/favicon-light-running.png",
+  "web/src/assets/images/favicon-dark-running.png",
+  "web/src/assets/images/favicon-light-attention.png",
+  "web/src/assets/images/favicon-dark-attention.png",
+  "assets/logo.svg",
+  "internal/gui/icon.png",
+  "internal/gui/tray.png",
+  "internal/gui/tray-template.png",
+  "build/windows/icon-256.png",
+  "build/windows/icon-128.png",
+  "build/windows/icon-64.png",
+  "build/windows/icon-48.png",
+  "build/windows/icon-32.png",
+  "build/windows/icon-16.png",
+];
+
+export async function generateIcons(root = repoRoot) {
   console.log("Generating BySpace icons from vector mark...");
 
   // 1. 标准圆角应用图标与大尺寸资产
   const appIconSvg = makeSvg({ rounded: true });
   await renderPng(appIconSvg, 512, resolve(root, "web/public/pwa-icon-512.png"));
   await renderPng(appIconSvg, 192, resolve(root, "web/public/pwa-icon-192.png"));
-  await renderPng(
-    appIconSvg,
-    96,
-    resolve(root, "web/src/core/assets/images/notification-icon.png"),
-  );
+  await renderPng(appIconSvg, 96, resolve(root, "web/src/assets/images/notification-icon.png"));
 
   // 2. 全出血 Apple Touch Icon (180x180, iOS 规范: 纯黑无透明圆角，避免黑色脏硬边)
   const appleTouchSvg = makeSvg({ rounded: false });
@@ -79,21 +105,21 @@ async function main() {
   // 4. Favicon 家族 (48x48 PNG)
   // none 状态
   const favNoneSvg = makeSvg({ rounded: true, status: "none" });
-  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon.png"));
-  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon-light.png"));
-  await renderPng(favNoneSvg, 48, resolve(root, "web/src/core/assets/images/favicon-dark.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/assets/images/favicon.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/assets/images/favicon-light.png"));
+  await renderPng(favNoneSvg, 48, resolve(root, "web/src/assets/images/favicon-dark.png"));
 
   // running 状态 (右下角蓝点)
   const favRunningSvg = makeSvg({ rounded: true, status: "running" });
   await renderPng(
     favRunningSvg,
     48,
-    resolve(root, "web/src/core/assets/images/favicon-light-running.png"),
+    resolve(root, "web/src/assets/images/favicon-light-running.png"),
   );
   await renderPng(
     favRunningSvg,
     48,
-    resolve(root, "web/src/core/assets/images/favicon-dark-running.png"),
+    resolve(root, "web/src/assets/images/favicon-dark-running.png"),
   );
 
   // attention 状态 (右下角绿点)
@@ -101,16 +127,17 @@ async function main() {
   await renderPng(
     favAttentionSvg,
     48,
-    resolve(root, "web/src/core/assets/images/favicon-light-attention.png"),
+    resolve(root, "web/src/assets/images/favicon-light-attention.png"),
   );
   await renderPng(
     favAttentionSvg,
     48,
-    resolve(root, "web/src/core/assets/images/favicon-dark-attention.png"),
+    resolve(root, "web/src/assets/images/favicon-dark-attention.png"),
   );
 
   // 5. README.md 顶层 Logo (assets/logo.svg)
   // 带圆角黑底卡片，确保在 GitHub 浅色和深色主题下都完美可见
+  mkdirSync(dirname(resolve(root, "assets/logo.svg")), { recursive: true });
   writeFileSync(resolve(root, "assets/logo.svg"), appIconSvg);
   console.log("Generated: assets/logo.svg");
 
@@ -147,7 +174,12 @@ async function main() {
   console.log("All BySpace icon assets generated successfully!");
 }
 
-main().catch((err) => {
-  console.error("Icon generation failed:", err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  // An explicit output root lets the drift guard render without touching committed assets.
+  const target = process.argv[2] ? resolve(process.argv[2]) : repoRoot;
+  if (!isAbsolute(target)) throw new Error("output root must be absolute");
+  await generateIcons(target).catch((err) => {
+    console.error("Icon generation failed:", err);
+    process.exit(1);
+  });
+}

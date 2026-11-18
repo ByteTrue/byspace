@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 import type { DaemonClient as InternalDaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { parseHostWorkspaceRouteFromPathname } from "../../../src/core/utils/host-routes";
+import { parseHostWorkspaceRouteFromPathname } from "../../../src/utils/host-routes";
 import { gotoAppShell } from "./app";
 import { clickTopLevelNavItem } from "./sidebar-chrome";
 import { connectDaemonClient } from "./daemon-client-loader";

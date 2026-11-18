@@ -1,0 +1,319 @@
+/**
+ * @vitest-environment jsdom
+ */
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HOME_PROJECT_VIEW_KEY } from "@/chief/home-workspace";
+import type { ProjectHostEntry, ProjectSummary, WorkspaceSummary } from "@/utils/projects";
+import type { ProjectHostError, UseProjectsResult } from "@/hooks/use-projects";
+
+const { projectsState, push } = vi.hoisted(() => ({
+  projectsState: {
+    current: {
+      projects: [],
+      hostErrors: [],
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    } as UseProjectsResult,
+  },
+  push: vi.fn(),
+}));
+
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  const icon = (name: string) => {
+    const Icon = () => React.createElement("span", { "data-icon": name });
+    Icon.displayName = name;
+    return Icon;
+  };
+  return {
+    ...actual,
+    ChevronRight: icon("ChevronRight"),
+    MoreVertical: icon("MoreVertical"),
+    ExternalLink: icon("ExternalLink"),
+    Pencil: icon("Pencil"),
+    FolderGit2: icon("FolderGit2"),
+  };
+});
+
+vi.mock("@/platform/navigation", () => ({
+  router: { push },
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, values?: Record<string, string>) => {
+      if (key === "sidebar.project.empty.title") return "No projects yet";
+      if (key === "settings.projectList.hostLoadFailed") {
+        return `Couldn't load projects from host ${values?.hostName}: ${values?.message}`;
+      }
+      if (key === "settings.projectList.editProject") return `Edit ${values?.projectName}`;
+      return key;
+    },
+  }),
+}));
+
+vi.mock("@/ui/spinner", () => ({
+  Spinner: () => React.createElement("span", { "data-testid": "projects-loading-spinner" }),
+}));
+
+vi.mock("@/hooks/use-projects", () => ({
+  useProjects: () => projectsState.current,
+}));
+
+vi.mock("@/projects/icons", () => ({
+  useProjectIcons: () => new Map(),
+}));
+
+import ProjectsScreen from "./projects-screen";
+
+function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceSummary {
+  return {
+    id: "ws-1",
+    name: "main",
+    workspaceKind: "directory",
+    status: "done",
+    currentBranch: "main",
+    changeRequestNumber: null,
+    ...overrides,
+  };
+}
+
+function hostEntry(overrides: Partial<ProjectHostEntry> = {}): ProjectHostEntry {
+  return {
+    serverId: "host-a",
+    projectId: "project-a",
+    projectName: "Project",
+    projectCustomName: null,
+    serverName: "alpha",
+    isOnline: true,
+    repoRoot: "/home/me/proj",
+    workspaceCount: 1,
+    workspaces: [workspaceSummary()],
+    ...overrides,
+  };
+}
+
+function project(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
+  const hosts = overrides.hosts ?? [hostEntry()];
+  const totalWorkspaceCount =
+    overrides.totalWorkspaceCount ?? hosts.reduce((sum, host) => sum + host.workspaceCount, 0);
+  const onlineHostCount = overrides.onlineHostCount ?? hosts.filter((h) => h.isOnline).length;
+  return {
+    viewKey: "remote:github.com/acme/app",
+    projectName: "acme/app",
+    hosts,
+    totalWorkspaceCount,
+    hostCount: hosts.length,
+    onlineHostCount,
+    githubUrl: "https://github.com/acme/app",
+    ...overrides,
+  };
+}
+
+function setProjectsState(overrides: Partial<UseProjectsResult>) {
+  projectsState.current = {
+    projects: [],
+    hostErrors: [],
+    isLoading: false,
+    isFetching: false,
+    refetch: vi.fn(),
+    ...overrides,
+  };
+}
+
+function findRow(container: HTMLElement, projectKey: string): HTMLElement {
+  const row = container.querySelector<HTMLElement>(`[data-testid="project-row-${projectKey}"]`);
+  if (!row) throw new Error(`Expected row for ${projectKey}`);
+  return row;
+}
+
+describe("ProjectsScreen", () => {
+  let container: HTMLElement | null = null;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    vi.stubGlobal("React", React);
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    setProjectsState({});
+    push.mockReset();
+  });
+
+  afterEach(() => {
+    if (root) {
+      act(() => {
+        root?.unmount();
+      });
+    }
+    root = null;
+    container?.remove();
+    container = null;
+    vi.unstubAllGlobals();
+  });
+
+  function render(serverId = "host-a") {
+    act(() => {
+      root?.render(<ProjectsScreen serverId={serverId} />);
+    });
+  }
+
+  it("renders a row whose visible content is the project name only", () => {
+    setProjectsState({
+      projects: [
+        project({
+          projectName: "acme/app",
+          hosts: [hostEntry({ projectName: "acme/app", serverName: "alpha", workspaceCount: 5 })],
+        }),
+      ],
+    });
+
+    render();
+
+    const rows = container?.querySelectorAll('[data-testid^="project-row-"]') ?? [];
+    expect(rows.length).toBe(1);
+    expect(container?.textContent).toContain("acme/app");
+    expect(container?.textContent).not.toContain("workspace");
+    expect(container?.textContent).not.toContain("offline");
+    expect(container?.textContent).not.toContain("github.com");
+  });
+
+  it("navigates to the project detail route when the row is pressed", () => {
+    setProjectsState({
+      projects: [project({ viewKey: "remote:github.com/acme/app" })],
+    });
+
+    render();
+
+    const row = findRow(container!, "remote:github.com/acme/app");
+    act(() => {
+      row.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith("/settings/hosts/host-a/projects/project-a");
+  });
+
+  it("does not render a kebab menu on the row", () => {
+    setProjectsState({
+      projects: [project({ viewKey: "remote:github.com/acme/app" })],
+    });
+
+    render();
+
+    expect(
+      container?.querySelector('[data-testid="project-row-menu-remote:github.com/acme/app"]'),
+    ).toBeNull();
+  });
+
+  it("renders a centered loading spinner before the first response", () => {
+    setProjectsState({ isLoading: true, projects: [] });
+
+    render();
+
+    expect(container?.querySelector('[data-testid="projects-loading-spinner"]')).not.toBeNull();
+  });
+
+  it("renders the empty state when there are no projects", () => {
+    setProjectsState({ projects: [] });
+
+    render();
+
+    expect(container?.textContent).toContain("No projects yet");
+    expect(container?.textContent).not.toContain("Non-GitHub remote projects aren't supported yet");
+  });
+
+  it("renders a partial-host-failure banner above the list, naming each failed host", () => {
+    const hostErrors: ProjectHostError[] = [
+      { serverId: "a", serverName: "alpha", message: "timed out" },
+      { serverId: "b", serverName: "beta", message: "unreachable" },
+    ];
+    setProjectsState({
+      projects: [project({ hosts: [hostEntry({ serverId: "a" })] })],
+      hostErrors,
+    });
+
+    render("a");
+
+    const banner = container?.querySelector('[data-testid="projects-host-errors"]');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain("alpha");
+    expect(banner?.textContent).not.toContain("beta");
+    expect(container?.querySelector('[data-testid^="project-row-"]')).not.toBeNull();
+  });
+
+  it("shows only projects belonging to the selected host", () => {
+    setProjectsState({
+      projects: [
+        project({
+          viewKey: "host-a-project",
+          projectName: "Host A",
+          hosts: [hostEntry({ serverId: "host-a", projectId: "project-a", projectName: "Host A" })],
+        }),
+        project({
+          viewKey: "host-b-project",
+          projectName: "Host B",
+          hosts: [hostEntry({ serverId: "host-b", projectId: "project-b", projectName: "Host B" })],
+        }),
+      ],
+    });
+
+    render("host-b");
+
+    expect(container?.textContent).not.toContain("Host A");
+    expect(container?.textContent).toContain("Host B");
+  });
+
+  it("omits the daemon's Home project, which has no settings a user can change", () => {
+    setProjectsState({
+      projects: [
+        project({
+          viewKey: HOME_PROJECT_VIEW_KEY,
+          projectName: "BySpace-WorkSpace",
+          hosts: [
+            hostEntry({
+              serverId: "host-a",
+              projectId: "prj_home",
+              projectName: "BySpace-WorkSpace",
+            }),
+          ],
+        }),
+        project({
+          viewKey: "remote:github.com/acme/app",
+          projectName: "acme/app",
+          hosts: [hostEntry({ serverId: "host-a", projectId: "prj_app", projectName: "acme/app" })],
+        }),
+      ],
+    });
+
+    render("host-a");
+
+    // The sidebar row is disabled for the same reason; a settings screen offering default-host
+    // and removal would be the other door into the daemon's own project.
+    expect(container?.textContent).not.toContain("BySpace-WorkSpace");
+    expect(container?.textContent).toContain("acme/app");
+  });
+
+  it("does not include the word 'checkout' anywhere in the rendered tree", () => {
+    setProjectsState({
+      projects: [
+        project({
+          hosts: [
+            hostEntry({ serverId: "a", serverName: "alpha", workspaceCount: 3 }),
+            hostEntry({ serverId: "b", serverName: "beta", workspaceCount: 2 }),
+          ],
+        }),
+      ],
+      hostErrors: [{ serverId: "x", serverName: "x", message: "down" }],
+    });
+
+    render("a");
+
+    const html = container?.innerHTML.toLowerCase() ?? "";
+    expect(html).not.toContain("checkout");
+  });
+});

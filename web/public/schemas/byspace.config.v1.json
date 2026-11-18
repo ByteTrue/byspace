@@ -257,6 +257,13 @@
                 "minimum": 1,
                 "maximum": 65535
               }
+            },
+            "allowedTargets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "A \"host:port\" destination on this machine's network."
+              }
             }
           },
           "additionalProperties": false

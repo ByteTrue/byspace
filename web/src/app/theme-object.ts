@@ -1,7 +1,7 @@
 import { createElement, useMemo, type ComponentType } from "react";
 import { useAppSettings } from "@/hooks/use-settings";
 import { darkTheme, lightTheme, THEME_OPTIONS, type Theme } from "@/styles/theme";
-import { useResolvedColorScheme } from "~/app/color-scheme";
+import { useResolvedColorScheme } from "@/app/color-scheme";
 
 /**
  * The theme object for the current appearance setting, for code that needs a colour as a value

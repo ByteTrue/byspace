@@ -489,7 +489,7 @@ These small files are not validated as full Zod schemas but are persisted under 
 
 ## Client-side stores (App)
 
-These live in the browser's `localStorage` (through `~/lib/local-storage-async`) or `IndexedDB`, not on the daemon filesystem.
+These live in the browser's `localStorage` (through `@/platform/local-storage-async`) or `IndexedDB`, not on the daemon filesystem.
 
 ### Keying convention: directory-backed vs workspace-owned
 

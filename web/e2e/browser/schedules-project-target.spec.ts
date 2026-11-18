@@ -13,7 +13,7 @@ import { expectNoTruncation } from "../support/helpers/no-truncation";
 import { expectSettled, expectStableHeight } from "../support/helpers/settled";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { clickTopLevelNavItem } from "../support/helpers/sidebar-chrome";
-import { buildSchedulesRoute } from "../../src/core/utils/host-routes";
+import { buildSchedulesRoute } from "../../src/utils/host-routes";
 
 const MOBILE_SHEET_VIEWPORT = { width: 390, height: 844 };
 

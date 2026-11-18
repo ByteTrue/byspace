@@ -6,11 +6,11 @@
 // those screens, or going back to the project picker, replaces it, as the stack did.
 import { useState, type ReactNode } from "react";
 import { useLocation, useRoutes, type Location, type RouteObject } from "react-router";
-import { RouteFocusProvider } from "~/app/route-focus";
+import { RouteFocusProvider } from "@/platform/route-focus";
 import HostWorkspaceRoute from "@/app/h/[serverId]/workspace/[workspaceId]/index";
 import { parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
-import { HostLayout } from "~/app/routes";
-import { GlobalLocationProvider } from "~/app/navigation";
+import { HostLayout } from "@/app/routes";
+import { GlobalLocationProvider } from "@/platform/navigation";
 
 /** The data router's entry for the route (it matches it; this layer renders it). */
 export const WORKSPACE_ROUTE: RouteObject = {

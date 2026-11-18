@@ -11,7 +11,8 @@ import type { HostProfile } from "@/types/host-connection";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/utils/format-version";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { DiscordIcon, ForgeIcon } from "~/components/forge-icon";
+import { DiscordIcon } from "@/components/icons/discord-icon";
+import { ForgeIcon } from "@/git/forge-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +20,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { SidebarIconButton } from "~/sidebar/sidebar-icon-button";
+} from "@/ui/dropdown-menu";
+import { SidebarIconButton } from "@/sidebar/sidebar-icon-button";
 
 const DISCORD_URL = "https://discord.gg/jz8T2uahpH";
 const GITHUB_ISSUE_URL = "https://github.com/ByteTrue/byspace/issues/new";

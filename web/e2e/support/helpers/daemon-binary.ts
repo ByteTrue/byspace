@@ -14,6 +14,7 @@ export function goDaemonBinary(): string {
 
   const binary = path.join(
     REPO_ROOT,
+    ".dev",
     "bin",
     process.platform === "win32" ? "byspace.exe" : "byspace",
   );

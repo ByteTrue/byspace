@@ -1,6 +1,6 @@
-import { Separator } from "~/components/ui/separator";
-import * as Clipboard from "~/lib/clipboard";
-import { Button } from "~/components/ui/button";
+import { Separator } from "@/ui/separator";
+import * as Clipboard from "@/platform/clipboard";
+import { Button } from "@/ui/button";
 import { useCallback, useState, type ComponentType, type ReactElement } from "react";
 import { Check, Copy, ExternalLink, FileDiff, Folder, GitBranch, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -21,19 +21,19 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { cn } from "cn";
-import { AgentStatusDot } from "~/components/agent-status-dot";
+import { AgentStatusDot } from "@/components/agent-status-dot";
 import {
   CHECK_TONE_CLASS,
   CheckPresentationIcon,
   getCheckPresentationTone,
-} from "~/components/check-presentation";
-import { ForgeIcon } from "~/components/forge-icon";
+} from "@/git/check-presentation.view";
+import { ForgeIcon } from "@/git/forge-icon";
 import {
   InfoHoverCard,
   InfoHoverCardContent,
   InfoHoverCardTrigger,
-} from "~/components/info-hover-card";
-import { DiffStat, PullRequestStateIcon } from "~/sidebar/meta-row";
+} from "@/components/info-hover-card";
+import { DiffStat, PullRequestStateIcon } from "@/sidebar/meta-row";
 
 // Geometry follows archive/expo-app:packages/app/src/components/workspace-hover-card.tsx: a 260px card, 12px
 // info rows on a 12px rail, 12px icons, separators between the sections.

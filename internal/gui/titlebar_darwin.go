@@ -114,7 +114,7 @@ static void insetLights(void *p) {
 	// 8pt below the window's top edge (shadcn's inset sidebar and card padding). The 12pt
 	// traffic-light circles sit ~1pt below the vertical center of their 16pt NSButton frames,
 	// so centering the frames in a 49pt band lands the visible circles on y=25.25pt with the
-	// sidebar toggle and page titles (web/src/core/components/sidebar/sidebar-header-row.tsx).
+	// sidebar toggle and page titles (web/src/components/sidebar/sidebar-header-row.tsx).
 	l->height = 49.0;
 	NSView *views[5] = {box, bar};
 	for (int i = 0; i < 3; i++) {

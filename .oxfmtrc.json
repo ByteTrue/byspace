@@ -16,12 +16,11 @@
     "**/*.gen.ts",
     "**/*.gen.tsx",
     "web/public/schemas/*.json",
-    "archive/**",
     "bywork/**",
     "design/references/**",
     "design/sheet-assets/**",
     "design/component-sheet.html",
-    "web/src/components/ui/**",
+    "web/src/ui/**",
     "web/src/styles/shadcn-tailwind.css"
   ]
 }

@@ -31,12 +31,25 @@ npm run dev:app
 
 Root checkout dev is split across two terminals:
 
-- `npm run dev:daemon` builds `./bin/byspace` and runs the daemon on `127.0.0.1:6778` in development mode, so development-only providers such as Mock Load Test are available.
+- `npm run dev:daemon` builds `./.dev/bin/byspace` and runs the daemon on `127.0.0.1:6778` in development mode, so development-only providers such as Mock Load Test are available.
 - `npm run dev:app` (or `npm run dev`) runs the web app (`web/`, Vite) on `http://localhost:8082` and connects to the dev daemon.
 
 The launcher passes the current Git branch as `BYSPACE_DEV_BUILD_LABEL`, which the app shows in the titlebar row. Production builds leave it unset and show no label.
 
 Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
+
+## Build outputs
+
+Two roots, and nothing else gets a directory: `.dev/` holds everything a local build regenerates
+(dev binaries in `.dev/bin/`, intermediate bundles in `.dev/build/`, test evidence in
+`.dev/test-results/` and `.dev/vitest/`), `dist/` holds only what ships — zip, dmg, exe, apk, CLI
+binaries, `SHA256SUMS`, npm tarballs. `build/` is packaging templates under Git; a build never writes
+into it.
+
+Four generated directories stay where their consumer requires them: `internal/webui/dist`
+(`//go:embed`), `packages/*/dist` (npm `exports`), `web/dist` (Vite default, wrangler `assets`), and
+`build/android/app/{build,src/main/jniLibs}` (Gradle layout). `make clean` clears the two roots and
+the embedded web assets, and leaves `.dev/byspace-home` alone.
 
 ## Android build
 
@@ -306,8 +319,8 @@ skips recording, which is what needs ffmpeg. Add `E2E_PRESERVE_HOME=1` to keep e
 daemon's temp home, with its `daemon.log` (the daemon's stderr); `E2E_PRINT_CONSOLE=1` prints the
 browser console and the relay log on failure, which otherwise only exist as report attachments.
 
-The e2e harness runs `bin/byspace.exe` on Windows and `bin/byspace` elsewhere. A Go change is
-invisible to a local browser spec until that exact file is rebuilt — `go build -o bin/byspace` on
+The e2e harness runs `.dev/bin/byspace.exe` on Windows and `.dev/bin/byspace` elsewhere. A Go change is
+invisible to a local browser spec until that exact file is rebuilt — `go build -o .dev/bin/byspace` on
 Windows silently leaves the stale `.exe` in place.
 
 ## Testing with Playwright MCP

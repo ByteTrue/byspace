@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
+import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatPullRequestThreadPath } from "@/git/pull-request-panel/activity-location";
 import { canAddPullRequestActivityToChat } from "@/git/pull-request-panel/context-attachment";
@@ -33,10 +33,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { keepFocusElsewhere } from "~/lib/menu-focus";
-import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
-import { Card } from "~/components/ui/card";
+} from "@/ui/dropdown-menu";
+import { keepFocusElsewhere } from "@/platform/menu-focus";
+import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
+import { Card } from "@/ui/card";
 
 const ADD_TO_CHAT_MENU_ICON = <MessageSquarePlus size={14} className="text-muted-foreground" />;
 const COPY_MENU_ICON = <Copy size={14} className="text-muted-foreground" />;

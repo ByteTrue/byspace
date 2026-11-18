@@ -36,7 +36,7 @@ export interface IsolatedHostDaemonOptions {
    */
   preserveHome?: boolean;
   /**
-   * Test a daemon binary other than bin/byspace — used to exercise a released or
+   * Test a daemon binary other than .dev/bin/byspace — used to exercise a released or
    * otherwise prebuilt binary. Replaces the old `publishedVersion` npm install path,
    * which only existed because the daemon used to ship as an npm package.
    */

@@ -30,7 +30,7 @@ import {
   useCodeFont,
   useUnwrappedDiffLines,
 } from "./changes-pane-helpers";
-import { buildHostWorkspaceRoute } from "../../src/core/utils/host-routes";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 import { getServerId } from "../support/helpers/server-id";
 import { openChangesPanel, waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 

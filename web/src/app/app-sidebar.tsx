@@ -8,13 +8,13 @@ import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
-import { SidebarToggle } from "~/app/sidebar-toggle";
-import { Button } from "~/components/ui/button";
-import { SidebarContent, SidebarHeader } from "~/components/ui/sidebar";
-import { SidebarListSkeleton } from "~/sidebar/list-parts";
-import { SidebarNavRows } from "~/sidebar/nav-menu";
-import { SidebarFooter } from "~/sidebar/sidebar-footer";
-import { SidebarWorkspaceList } from "~/sidebar/workspace-list";
+import { SidebarToggle } from "@/app/sidebar-toggle";
+import { Button } from "@/ui/button";
+import { SidebarContent, SidebarHeader } from "@/ui/sidebar";
+import { SidebarListSkeleton } from "@/sidebar/list-parts";
+import { SidebarNavRows } from "@/sidebar/nav-menu";
+import { SidebarFooter } from "@/sidebar/sidebar-footer";
+import { SidebarWorkspaceList } from "@/sidebar/workspace-list";
 
 const DEV_BUILD_LABEL = process.env.BYSPACE_DEV_BUILD_LABEL?.trim() || null;
 

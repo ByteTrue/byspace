@@ -1,11 +1,11 @@
 # Menus
 
-Menus are shadcn's `DropdownMenu` and `ContextMenu` (`web/src/components/ui/`), used at the call
+Menus are shadcn's `DropdownMenu` and `ContextMenu` (`web/src/ui/`), used at the call
 site as shadcn documents them. There is no menu engine of our own: the Expo app's (popover on wide
 screens, bottom sheet on phones, submenu pages as data) was removed when the app moved to shadcn
 components as shipped. A phone gets the same popover as a desktop.
 
-`web/src/core/components/ui/context-menu.tsx` is the one wrapper that stays. A context-menu row is
+`web/src/ui/context-menu.tsx` is the one wrapper that stays. A context-menu row is
 shadcn's `ContextMenuTrigger` around a div that also presses: click, Enter/Space, press-in and long
 press. Use its `ContextMenuTrigger` for a row that both opens something and has a right-click menu;
 use shadcn's directly when the area has no press of its own.
@@ -14,7 +14,7 @@ use shadcn's directly when the area has no press of its own.
 
 A menu whose contents depend on what else is on screen gets one component per surface, not one
 component with `isMobile` branches inside it. The workspace header menu is the example
-(`web/src/core/screens/workspace/workspace-header-menu.tsx`): compact has no tab strip, so it
+(`web/src/screens/workspace/workspace-header-menu.tsx`): compact has no tab strip, so it
 carries new-tab actions, while wide leaves those to the strip's `+` menu and lists workspace
 actions only. Items both surfaces share live in one component that each menu renders, from the same
 callbacks, so the two can't drift.
@@ -29,7 +29,8 @@ what makes a choice list audible as on/off things. A row whose submenu is open i
 An item whose request is still running stays in the menu with a `Spinner` and a pending label, and
 the menu stays open (`onSelect` calls `event.preventDefault()`) until the request settles. A
 trailing hint is `DropdownMenuShortcut`, or `Shortcut` (`web/src/components/shortcut.tsx`) for a
-key chord.
+key chord. `Shortcut` is shadcn's `Kbd` plus the app's two policies — hide the hint when a layer
+owns the keyboard, and normalize a stored chord for display — so it is not a hand-drawn key cap.
 
 Give options icons; leave the root rows without them. The root is labels and their current values,
 and a column of icons there is decoration competing with the values you actually came to read.
@@ -67,14 +68,14 @@ around.
 
 - **The shortcut engine asks whether a layer owns the keyboard.** Every Radix layer counts, so
   Escape closes the menu instead of leaving the page or interrupting the agent behind it
-  (`web/src/core/lib/overlay-root.ts`). An overlay of your own needs `role="dialog"` and
+  (`web/src/lib/overlay-root.ts`). An overlay of your own needs `role="dialog"` and
   `data-state="open"` to count.
 - **React bubbles a portal's events through the component tree, not the DOM.** A right-click in a
   row's portaled menu reached the context-menu trigger of the area around the row and opened that
   menu too; the context-menu wrapper ignores a `contextmenu` whose target is outside its own
   element. A press inside a menu opened from a list row (a `Command` item) selected the row under
   it; the accessory stops propagation
-  (`web/src/core/screens/workspace/workspace-tab-trailing-accessory.tsx`).
+  (`web/src/screens/workspace/workspace-tab-trailing-accessory.tsx`).
 - **A closing menu is still on screen for its fade-out.** A press that lands during it counts as
   outside the menu being reopened and closes that one too. Tests wait for
   `getByRole("menu")` to reach zero before opening the next menu, as a person's next click does.

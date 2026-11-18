@@ -10,7 +10,7 @@ import {
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { expectSettled, expectStableHeight } from "../support/helpers/settled";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
-import { buildSchedulesRoute } from "../../src/core/utils/host-routes";
+import { buildSchedulesRoute } from "../../src/utils/host-routes";
 
 interface ScheduleSeedClient {
   scheduleCreate(input: {

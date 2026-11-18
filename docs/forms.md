@@ -6,11 +6,11 @@ whatever screen you happen to be near.
 
 Golden example files:
 
-- `web/src/core/schedules/schedule-form-model.ts` (+ `.test.ts`) — the model
-- `web/src/core/schedules/use-schedule-form-model.ts` — model lifetime adapter
-- `web/src/core/schedules/use-schedule-form-provider-snapshot.ts` — async input adapter
-- `web/src/core/components/schedules/schedule-form-sheet.tsx` — render + intent dispatch
-- `web/src/core/schedules/aggregated-schedules.ts` / `hooks/use-schedules.ts` — load-state gating
+- `web/src/schedules/schedule-form-model.ts` (+ `.test.ts`) — the model
+- `web/src/schedules/use-schedule-form-model.ts` — model lifetime adapter
+- `web/src/schedules/use-schedule-form-provider-snapshot.ts` — async input adapter
+- `web/src/components/schedules/schedule-form-sheet.tsx` — render + intent dispatch
+- `web/src/schedules/aggregated-schedules.ts` / `hooks/use-schedules.ts` — load-state gating
 - `web/e2e/browser/schedules-*.spec.ts` — the behavioral contract
 
 ## The form model
@@ -57,8 +57,8 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
 ## Form kit
 
 - Compose shadcn's `Field` (`FieldLabel`, `FieldDescription`, `FieldError`) around `Input`,
-  `Textarea`, `InputGroup`, `Select`, `Switch` or `Tabs` from `web/src/components/ui/`, used as
-  shipped. `SelectField` (`web/src/core/components/ui/select-field.tsx`) is the picker for a value
+  `Textarea`, `InputGroup`, `Select`, `Switch` or `Tabs` from `web/src/ui/`, used as
+  shipped. `SelectField` (`web/src/ui/select-field.tsx`) is the picker for a value
   that needs a search or a sheet. Screens never nudge a component's styles to align a row.
 - The composer's input is the one text field with an editing surface of its own
   (`EditingTextInput`, for IME composition and programmatic edits). Every other field is shadcn's

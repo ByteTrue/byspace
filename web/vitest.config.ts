@@ -36,6 +36,8 @@ export default defineConfig((env) =>
     },
     test: {
       maxWorkers: 2,
+      // 失败截图与附件落在仓库的 .dev/ 下，不在 web/ 里留产物目录。
+      attachmentsDir: path.resolve(webRoot, "../.dev/vitest/attachments"),
       projects: [
         {
           extends: true,
@@ -59,9 +61,9 @@ export default defineConfig((env) =>
               headless: true,
               connectTimeout: 180_000,
               instances: [{ browser: "chromium" }],
-              screenshotDirectory: ".vitest-screenshots",
+              screenshotDirectory: path.resolve(webRoot, "../.dev/vitest/screenshots"),
             },
-            globalSetup: path.join(webRoot, "src/core/runtime/websocket-test-global-setup.ts"),
+            globalSetup: path.join(webRoot, "src/runtime/websocket-test-global-setup.ts"),
           },
         },
       ],

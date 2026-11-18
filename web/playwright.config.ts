@@ -19,6 +19,8 @@ function videoMode(): "on" | "on-first-retry" | "retain-on-failure" | "off" {
 
 export default defineConfig({
   testDir: "./e2e/browser",
+  // 过程证据统一落在仓库的 .dev/ 下，别在 web/ 里再长一个产物目录。
+  outputDir: "../.dev/test-results",
   globalSetup: "./e2e/support/global-setup.ts",
   timeout: 60_000,
   expect: {

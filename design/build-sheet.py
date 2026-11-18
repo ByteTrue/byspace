@@ -31,6 +31,8 @@ def data_uri(path: pathlib.Path, mime: str) -> str:
 
 
 def main() -> int:
+    # An explicit output path lets the drift guard build without overwriting the committed sheet.
+    out = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else OUT
     html = SRC.read_text()
 
     def font(m: re.Match) -> str:
@@ -56,8 +58,8 @@ def main() -> int:
     if left:
         print("unreplaced placeholders:", left, file=sys.stderr)
         return 1
-    OUT.write_text(html)
-    print(f"wrote {OUT.relative_to(ROOT.parent)} ({OUT.stat().st_size // 1024} KB, {len(used)} icons)")
+    out.write_text(html)
+    print(f"wrote {out} ({out.stat().st_size // 1024} KB, {len(used)} icons)")
     return 0
 
 

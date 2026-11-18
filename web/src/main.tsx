@@ -4,8 +4,8 @@ import { installCryptoPolyfills } from "@/polyfills/install-crypto-polyfills";
 import { noteHistoryEntry } from "@/navigation/workspace-route-navigation";
 import { installExternalLinkHandler } from "@/utils/external-links";
 import { installImeAnchorGuard } from "@/utils/ime-anchor";
-import { router } from "~/app/router";
-import { bindRouter } from "~/app/navigation";
+import { router } from "@/app/router";
+import { bindRouter } from "@/platform/navigation";
 import "./index.css";
 
 installCryptoPolyfills(globalThis.crypto);

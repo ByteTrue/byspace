@@ -1,0 +1,77 @@
+// Port of archive/expo-app:packages/app/src/components/headers/header-toggle-button.tsx: a large header icon
+// button (28px, 32px on a phone) with a tooltip naming it and its shortcut.
+import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { Button } from "@/ui/button";
+import { Shortcut } from "@/components/shortcut";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
+import type { ShortcutKey } from "@/utils/format-shortcut";
+
+interface HeaderToggleButtonState {
+  hovered: boolean;
+  pressed: boolean;
+}
+
+interface HeaderToggleButtonProps {
+  onPress: () => void;
+  tooltipLabel: string;
+  tooltipKeys: ShortcutKey[];
+  tooltipSide: "left" | "right" | "top" | "bottom";
+  tooltipDelayDuration?: number;
+  style?: unknown;
+  disabled?: boolean;
+  testID?: string;
+  accessible?: boolean;
+  accessibilityRole?: string;
+  accessibilityLabel?: string;
+  accessibilityState?: { expanded?: boolean };
+  children: ReactNode | ((state: HeaderToggleButtonState) => ReactNode);
+}
+
+export function HeaderToggleButton({
+  onPress,
+  tooltipLabel,
+  tooltipKeys,
+  tooltipSide,
+  tooltipDelayDuration = 0,
+  style,
+  disabled,
+  testID,
+  accessibilityLabel,
+  accessibilityState,
+  children,
+}: HeaderToggleButtonProps): ReactElement {
+  const expanded = accessibilityState?.expanded;
+  return (
+    <Tooltip delayDuration={tooltipDelayDuration}>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid={testID}
+          aria-label={accessibilityLabel}
+          aria-expanded={typeof expanded === "boolean" ? expanded : undefined}
+          disabled={disabled}
+          onClick={onPress}
+          style={
+            style && typeof style === "object" && !Array.isArray(style)
+              ? (style as CSSProperties)
+              : undefined
+          }
+        >
+          {typeof children === "function" ? children({ hovered: false, pressed: false }) : children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent data-testid={testID ? `${testID}-tooltip` : undefined} side={tooltipSide}>
+        <span className="flex items-center gap-2">
+          {tooltipLabel}
+          <Shortcut keys={tooltipKeys} />
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** The large header button's frame, for slots that reserve its place. */
+export const headerIconSlotStyle = {
+  slot: { width: 28, height: 28 },
+};

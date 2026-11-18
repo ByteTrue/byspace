@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { seedWorkspace, type SeedDaemonClient } from "./seed-client";
 import { getServerId } from "./server-id";
-import { buildHostAgentDetailRoute } from "../../../src/core/utils/host-routes";
+import { buildHostAgentDetailRoute } from "../../../src/utils/host-routes";
 
 export interface MockAgentWorkspace {
   agentId: string;

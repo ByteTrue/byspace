@@ -1,4 +1,4 @@
-import { Badge } from "~/components/ui/badge";
+import { Badge } from "@/ui/badge";
 import { Fragment, useCallback, useMemo, type MouseEvent, type ReactNode } from "react";
 import {
   ExternalLink,
@@ -38,7 +38,7 @@ import type { SidebarWorkspaceTrailing } from "@/hooks/use-settings";
 import { identityForeground, identityTint } from "@/styles/identity-colors";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { cn } from "cn";
-import { useResolvedColorScheme } from "~/app/color-scheme";
+import { useResolvedColorScheme } from "@/app/color-scheme";
 
 const PR_STATE_ICON = {
   open: GitPullRequest,

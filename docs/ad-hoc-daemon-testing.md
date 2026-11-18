@@ -14,15 +14,15 @@ do not use `createBySpaceDaemon` as a product launch path.
 
 Some behaviour only exists once two real daemons and a browser are in the loop: host-list sync, tunnel authorization, the pairing flow, a password gate that only a relay connection hits. Unit tests and the in-process harness below fake the client and run one daemon, so they cannot see it. Two real bugs in the host-sync epic — a dropped direct-connection password, and a CLI command that booted the production home — showed up only on this path.
 
-Run it locally without touching 6777. Build the binary first (`go build -o bin/byspace.exe .`), then:
+Run it locally without touching 6777. Build the binary first (`go build -o .dev/bin/byspace.exe .`), then:
 
 ```bash
 # a relay the two daemons meet on
-./bin/byspace.exe relay --addr 127.0.0.1:8791 &
+./.dev/bin/byspace.exe relay --addr 127.0.0.1:8791 &
 
 # two daemons, each with its own home and port, both pointed at that relay
-./bin/byspace.exe serve --addr 127.0.0.1:8792 --home "$TEMP/v2a" --relay ws://127.0.0.1:8791/ws &
-./bin/byspace.exe serve --addr 127.0.0.1:8793 --home "$TEMP/v2b" --relay ws://127.0.0.1:8791/ws &
+./.dev/bin/byspace.exe serve --addr 127.0.0.1:8792 --home "$TEMP/v2a" --relay ws://127.0.0.1:8791/ws &
+./.dev/bin/byspace.exe serve --addr 127.0.0.1:8793 --home "$TEMP/v2b" --relay ws://127.0.0.1:8791/ws &
 
 # the web app, pointed at daemon A
 BYSPACE_LISTEN=127.0.0.1:8792 npm run dev:app &
@@ -43,9 +43,9 @@ Stop the daemons and the web app when done and remove the temp homes. Confirm 67
 
 ```bash
 npm run build:relay
-BYSPACE_HOME=$TEMP/v2a ./bin/byspace.exe relay --addr 127.0.0.1:8791 &
-BYSPACE_HOME=$TEMP/v2a ./bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/v2a --relay ws://127.0.0.1:8791/ws &
-printf 'pw\npw\n' | ./bin/byspace.exe daemon set-password --addr 127.0.0.1:8792
+BYSPACE_HOME=$TEMP/v2a ./.dev/bin/byspace.exe relay --addr 127.0.0.1:8791 &
+BYSPACE_HOME=$TEMP/v2a ./.dev/bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/v2a --relay ws://127.0.0.1:8791/ws &
+printf 'pw\npw\n' | ./.dev/bin/byspace.exe daemon set-password --addr 127.0.0.1:8792
 E2E_HOME=$TEMP/v2a E2E_PASSWORD=pw node scripts/e2e-relay-client-check.mjs
 ```
 
@@ -53,7 +53,7 @@ It checks two things a Go test cannot see. First, the daemon's per-session e2ee 
 
 Use a fresh `connectionId` per run (the script does, from a timestamp). A reused one lets a socket left over from an earlier run receive frames meant for this one, which looks like a decryption failure.
 
-`scripts/e2e-host-replica-check.mjs` covers the other half: start one daemon (`./bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/h`) and run it with no relay. It drives `hosts.sync.exchange` through the shipped `packages/client` against that daemon and checks the record round trip: write, read back, delete leaving a tombstone, a record carrying a password refused, a carried record merged in from another replica, and the 256 KB cap. Run it after changing anything in `internal/hostsync` or the sync RPC.
+`scripts/e2e-host-replica-check.mjs` covers the other half: start one daemon (`./.dev/bin/byspace.exe serve --addr 127.0.0.1:8792 --home $TEMP/h`) and run it with no relay. It drives `hosts.sync.exchange` through the shipped `packages/client` against that daemon and checks the record round trip: write, read back, delete leaving a tombstone, a record carrying a password refused, a carried record merged in from another replica, and the 256 KB cap. Run it after changing anything in `internal/hostsync` or the sync RPC.
 
 ## Quick start
 

@@ -3,21 +3,16 @@
 # entries execute every contract regardless of these paths, while main pushes
 # route exactly like pull requests.
 #
-# Note: dependency changes always touch package-lock.json; omitting bare
-# package.json from workspace keeps version-bump release commits ("chore(release): cut vX.Y.Z")
-# on the fast format/lint/typecheck track instead of re-running all 16 Playwright shards.
-routing:
-  - ".github/actions/**"
-
+# Note: dependency changes always touch package-lock.json, which the **/* globs
+# below already match. Bare package.json is deliberately not routed to app/sdk/go:
+# version-bump release commits ("chore(release): cut vX.Y.Z") then stay on the fast
+# format/lint/typecheck track instead of re-running all 16 Playwright shards.
+# A dependency or shared-config change can break any consumer, so it runs every contract. The
+# **/* globs below do not match package-lock.json, which is why it needs its own entry.
 workspace:
   - "package-lock.json"
-  - "patches/**"
-  - "tsconfig.json"
   - "tsconfig.base.json"
   - "vitest.config.ts"
-
-ci:
-  - ".github/actions/**"
 
 format:
   - ".agents/**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
@@ -29,8 +24,6 @@ quality:
 
 go:
   - "main.go"
-  - "main_android.go"
-  - "cmd/**"
   - "internal/**"
   - "workers/**"
   - "go.mod"
@@ -46,10 +39,8 @@ sdk:
   - "packages/protocol/**"
 
 browser:
-  - "cmd/**"
   - "internal/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
-  - "packages/protocol/src/client-capabilities.ts"
   - "web/**"
 
 relay:
