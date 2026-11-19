@@ -5,6 +5,36 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.27.0 - 2026-11-19
+
+### Added
+
+- Added a bundled `byspace-provider-adapter` skill that configures custom agent providers
+- Added `BYSPACE_SOURCE_CHECKOUT_PATH`, `BYSPACE_WORKTREE_PATH`, and `BYSPACE_BRANCH_NAME` environment variables to workspace setup, teardown, and script commands
+
+### Changed
+
+- Replaced the embedded desktop window with a native system tray that opens the installed BySpace PWA or the local web app in the default browser
+- Local web connections on `127.0.0.1` and `localhost` now sign in automatically with the local CLI credential and expose desktop host settings in Settings
+- Moved GitHub Copilot CLI to the ACP provider catalog; Claude Code, Codex, OpenCode, and Pi remain the built-in providers
+
+### Removed
+
+- Removed the Android APK build in favor of the installed web app
+- Removed the `.localhost` workspace service proxy in favor of direct script ports and tunnels
+- Removed the provider usage balance section and Usage settings page
+
+### Fixed
+
+- Fixed a stalled tunnel stream freezing other streams and terminal or file transfers sharing the connection
+- Fixed tunnel responses larger than 16 MiB stalling on a fresh stream
+- Fixed upstream tunnel traffic failing to resume after a connection drop
+- Fixed idle tunnel stream cleanup marking a healthy port forward as errored
+- Fixed relay reconnect delay staying at the 30-second cap after a long-lived connection dropped
+- Fixed remote daemon updates replacing the binary without restarting the daemon process
+- Fixed custom ACP providers dropping their configured launch arguments, provider environment variables, and `clientCapabilities`
+- Fixed Claude Code agents ignoring configured `allowedTools`, `disallowedTools`, `additionalDirectories`, `settings`, and `sandbox` options
+
 ## 0.26.4 - 2026-11-17
 
 ### Removed
