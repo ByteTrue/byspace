@@ -101,11 +101,13 @@ test("applies the interface font size to settings text", async ({ page }) => {
   const interfaceSizeInput = page.getByLabel("Interface font size");
   const contentSizeInput = page.getByLabel("Content font size");
   await expect(interfaceSizeInput).toHaveValue("21");
-  await expect(contentSizeInput).toHaveValue("21");
+  // Content font size is an independent setting (default 15): seeding the interface size must
+  // not move it, and changing the interface size below must leave it alone.
+  await expect(contentSizeInput).toHaveValue("15");
   await interfaceSizeInput.fill("12");
   await interfaceSizeInput.press("Tab");
 
   await expect(interfaceSizeInput).toHaveValue("12");
-  await expect(contentSizeInput).toHaveValue("21");
+  await expect(contentSizeInput).toHaveValue("15");
   await expect(sectionTitle).toHaveCSS("font-size", "10px");
 });

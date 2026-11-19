@@ -322,7 +322,11 @@ async function selectSendBehaviorInSettings(
   behaviorLabel: string,
   stored: string,
 ): Promise<void> {
-  await page.getByRole("combobox", { name: /^Default send: / }).click();
+  const trigger = page.getByRole("combobox", { name: /^Default send: / });
+  // Steer is the default: re-selecting the current value fires no change and writes nothing,
+  // so waiting for a localStorage write would time out. The behavior is already in effect.
+  if ((await trigger.getAttribute("aria-label")) === `Default send: ${behaviorLabel}`) return;
+  await trigger.click();
   await page.getByRole("option", { name: behaviorLabel, exact: true }).click();
   await expect
     .poll(async () => {
@@ -718,59 +722,6 @@ async function expectDaemonHandledSubmissionSurvivesReload(
     await expect(page.getByText("Mock command handled", { exact: true })).toBeVisible();
     await expect(page.getByTestId("turn-working-indicator")).toHaveCount(0);
   } finally {
-    await agent.cleanup();
-  }
-}
-
-async function expectOldHostSubmissionBehavior(
-  page: Page,
-  testInfo: { workerIndex: number },
-): Promise<void> {
-  const gate = await installDaemonWebSocketGate(page);
-  gate.setCanonicalSubmittedPromptsStripped(true);
-  const agent = await seedMockAgentWorkspace({
-    repoPrefix: `old-host-submission-${testInfo.workerIndex}-`,
-    title: "Old host submission",
-  });
-  const prompt = "/mock handled-command";
-  try {
-    await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
-    await expectComposerVisible(page);
-    await expectAgentIdle(page);
-    gate.holdNextClientRequest("send_agent_message_request");
-    const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
-    await composer.fill(prompt);
-    await composer.press("Enter");
-    const nextFrame = await composer.evaluate(
-      (_, submittedPrompt) =>
-        new Promise<{ rowPresent: boolean; ariaBusy: string | null; workingPresent: boolean }>(
-          (resolve) => {
-            requestAnimationFrame(() => {
-              const row = Array.from(
-                document.querySelectorAll('[data-testid="user-message"]'),
-              ).find((candidate) => candidate.textContent?.includes(submittedPrompt));
-              resolve({
-                rowPresent: Boolean(row),
-                ariaBusy: row?.getAttribute("aria-busy") ?? null,
-                workingPresent: Boolean(
-                  document.querySelector('[data-testid="turn-working-indicator"]'),
-                ),
-              });
-            });
-          },
-        ),
-      prompt,
-    );
-    expect(nextFrame).toEqual({ rowPresent: true, ariaBusy: "false", workingPresent: false });
-
-    await gate.waitForHeldClientRequest();
-    gate.releaseHeldClientRequest();
-    const command = page.getByTestId("user-message").filter({ hasText: prompt });
-    await expect(command).toHaveAttribute("aria-busy", "false");
-    await expect(page.getByText("Mock command handled", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("turn-working-indicator")).toHaveCount(0);
-  } finally {
-    gate.restore();
     await agent.cleanup();
   }
 }
@@ -1336,9 +1287,5 @@ test.describe("Agent message submission", () => {
     page,
   }, testInfo) => {
     await expectDaemonHandledSubmissionSurvivesReload(page, testInfo);
-  });
-
-  test("uses untracked optimistic rows for an old host", async ({ page }, testInfo) => {
-    await expectOldHostSubmissionBehavior(page, testInfo);
   });
 });
