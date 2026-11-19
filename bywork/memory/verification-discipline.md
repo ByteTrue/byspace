@@ -20,6 +20,9 @@
 - **别把猜测写成归因**：说过「app-tests 那 6 个是 packages/client/dist 陈旧」，没验证就写进了 PR。CI 全新构建同样红、本地 `npx vitest run <file>` 也复现，真因是测试仍在驱动 `c7a0e4e92` 删掉的 legacy RPC。归因要么有复现，要么标明是猜测。
 - **Go 的 flake 要看报错性质**：`TempDir RemoveAll cleanup: ... directory not empty` 是 teardown 竞态，不是断言失败；每次 CI 红的用例还不一样。判断是不是自己引入的，看本次对该包的 diff 有没有语义改动（本轮只有注释与 gofmt 对齐）。
 
+- **「这个验收本机代跑不了」要先问能不能用 dev 实例搭出同一条路径**。tunnel 空闲断连的验收被记成「需要用户在目标机上开 tunnel」拖了一天；实际用本地 relay + 两个 dev daemon + 真实 E2EE 客户端就是同一条 D2D 转发路径，15 分钟就跑完了（`.dev/tunnel-verify/run.mjs`）。真正不能碰的是生产 home 与端口，不是这条行为本身。
+- **e2e 超时未必是功能坏了，可能是测试在等一个永远不会发生的写入**。Steer 已是默认发送行为，重复选中不触发 onValueChange、不写 localStorage，测试却 poll 那个 key 到超时；字体测试则把「contentFontSize 跟随 uiBaseFontSize」的旧默认值当成契约。看到超时先读默认值与当前实现，再决定是修产品还是修测试。
+
 ## 依据
 
 - 类型：可重跑证明（各误判均有事故记录）。
