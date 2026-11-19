@@ -1,4 +1,4 @@
-import { test } from "../support/fixtures";
+import { expect, test } from "../support/fixtures";
 import {
   closeModelPicker,
   expectModelSearchEmptyState,
@@ -125,6 +125,14 @@ test.describe("Cross-provider model search", () => {
         await clickNewChat(page);
         await expectComposerVisible(page);
         await openModelPicker(page);
+        // The frame height is derived from the loaded catalog, so the resting
+        // sample has to wait for the provider's model count. Sampling earlier
+        // records the loading frame and makes the search frame look like a resize.
+        await expect(
+          page
+            .locator('[data-testid^="model-provider-"]')
+            .filter({ hasText: `${LARGE_CATALOG_SIZE} models` }),
+        ).toBeVisible();
       });
 
       const restingHeight = await readModelPickerHeight(page);
