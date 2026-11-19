@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。唯一非代码问题是 CI lint 的 npm 注册表签名故障（rolldown 无公钥），需重跑确认恢复"
+next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。CI run 44440509266 已全绿（lint 重跑后通过，确为注册表侧临时故障）"
 must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -193,4 +193,4 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
   - `agent-profiles-settings.spec.ts:22`：legacy 收藏迁移已退役，删用例与 helper；`sidebar-workspace.spec.ts:218` 删 `features.workspaceMarkUnread` 断言。
   - `agent-timeline-pagination.spec.ts:271` 本轮复验通过，确认是 flake 而非稳定失败。
 - **tunnel 验收**：见 project-npm work，已 complete。
-- **CI lint 的 rolldown 签名错误是 npm 注册表侧故障**（`EMISSINGSIGNATUREKEY`），oxlint 本地 0/0；不是本分支能修的，需重跑。
+- **CI lint 的 rolldown 签名错误确为注册表侧临时故障**：同一 lockfile 本地 npm 12.2.2 与锁定的 10.9.9 都通过（702 包签名 + 230 attestation），`gh run rerun --failed` 后 lint 转绿，run 44440509266 全绿。没有为绕开它改依赖或关签名检查。
