@@ -5,6 +5,12 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.27.1 - 2026-11-19
+
+### Fixed
+
+- Fixed the macOS desktop app crashing on startup when creating the menu bar status item off the main OS thread
+
 ## 0.27.0 - 2026-11-19
 
 ### Added

@@ -186,6 +186,13 @@ var (
 	darwinStopChan chan struct{}
 )
 
+func init() {
+	// Lock the main goroutine to the OS main thread (m0 / pthread_main_np() == 1)
+	// during package initialization before runtime.main() unlocks it, as required
+	// by AppKit/Cocoa for NSStatusBar and NSApplication.
+	runtime.LockOSThread()
+}
+
 //export byspaceTrayAction
 func byspaceTrayAction(action C.int) {
 	darwinTrayMu.Lock()
@@ -241,9 +248,6 @@ func runPlatformTray(initial trayViewState, cb trayCallbacks) error {
 		<-stopCh
 		return nil
 	}
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
 	vStr := C.CString("Version " + initial.version)
 	defer C.free(unsafe.Pointer(vStr))
