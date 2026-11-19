@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。CI run 44440509266 已全绿（lint 重跑后通过，确为注册表侧临时故障）"
+next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。CI run 44440509266 已全绿；随后 docs 提交触发的 run 44441833922 暴露 model-search 采样竞态，已修（524b574bc），等 run 44445203689"
 must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -191,6 +191,7 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
   - `appearance-theme-picker.spec.ts:90`：`contentFontSize` 是独立设置（默认 15），旧断言把它当成跟随 `uiBaseFontSize`。改为断言独立且不受界面字号影响。
   - `agent-message-submission.spec.ts:1341`：老 host 不回显 canonical prompt 的兼容路径已不存在（`untracked` 在 src 零命中），删用例 + `expectOldHostSubmissionBehavior` + gate 的 `stripCanonicalSubmittedPrompts` 全套。
   - `agent-profiles-settings.spec.ts:22`：legacy 收藏迁移已退役，删用例与 helper；`sidebar-workspace.spec.ts:218` 删 `features.workspaceMarkUnread` 断言。
+  - `model-search-across-providers.spec.ts:115`：量 resting 高宽前先等 provider 行出现 "200 models"。picker 高度由已加载目录的模型数推出，`openModelPicker` 只等容器可见 → 采到加载帧 220，搜索时目录就绪变 400。本地 `--repeat-each=2` 4 passed，提交 524b574bc。
   - `agent-timeline-pagination.spec.ts:271` 本轮复验通过，确认是 flake 而非稳定失败。
 - **tunnel 验收**：见 project-npm work，已 complete。
 - **CI lint 的 rolldown 签名错误确为注册表侧临时故障**：同一 lockfile 本地 npm 12.2.2 与锁定的 10.9.9 都通过（702 包签名 + 230 attestation），`gh run rerun --failed` 后 lint 转绿，run 44440509266 全绿。没有为绕开它改依赖或关签名检查。
