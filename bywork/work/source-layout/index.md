@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批、三件遗留、用户批准的两件（修 6 个 app-tests、删空转订阅 RPC）、以及随之暴露的 sdk-tests 17 个失败均已完成并推送。PR #51 剩余失败已逐条证明是 main 上既有的（playwright 8 个 + go-tests flake）。tunnel 验收需用户在目标机跑"
+next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。唯一非代码问题是 CI lint 的 npm 注册表签名故障（rolldown 无公钥），需重跑确认恢复"
 must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
@@ -175,7 +175,7 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
   - 结果 **563 passed / 62 文件**（原 575，净删 12 个用例），lint 0、typecheck 0、契约组 98/98。
   - **同一 job 还跑 `packages/client`，又暴露出 1 个**：`packages/client/src/terminals/index.test.ts`（35 行、仅 1 个用例）断言老 host 会让终端操作在发请求前抛「Update the host」。该 gate 已不存在——整个 `packages/client` 里除这个测试外没有这串字符串。整文件删除（commit 见 `git log` 的 terminal feature-gate 那条），client 套件 **143 passed / 5 文件**。教训：本地只跑 protocol + connection.test.ts 不够，sdk-tests 的实际覆盖面是 protocol + client 两个包。
 - **`supportsDesktopPaneSplits()` 恒为 true，背后有一整条死分支**：`web/src/constants/layout.ts:89` 直接 `return true`（自带 shortcut 注释）。`web/src/screens/workspace/workspace-screen.tsx:1493` 的 `canRenderDesktopPaneSplits` 因此恒真，:3354 的 `shouldRenderDesktopPaneFallback` 恒假，:3913-3939 那段 `WorkspaceDesktopTabsRow` 渲染永不执行；`web/src/workspace-tabs/explorer-sidebar.ts:35` 的 `"dock"` 分支同理不可达。另有 4 处 `canRenderDesktopPaneSplits &&` 守卫恒真。删它属于 pane split 的行为改动，注释说「下次改 pane split 时一起删」。
-- **v0.26.4 发布验收**（`bywork/work/project-npm/index.md`）：**资产哈希项已结案**——`gh release download v0.26.4` 取全部 19 个资产到 `.dev/release-verify/`，`shasum -a 256 -c SHA256SUMS` 16 个原生资产全 OK，`shasum -a 256 -c BySpace-0.26.4-container.txt.sha256` OK（SHA256SUMS 不含 container 描述符，它有自己的兄弟文件）。原始输出 `.dev/release-verify.log`。**tunnel 空闲稳定性仍 `无法判定`**：需要两台目标机上的真实 tunnel，本机 `lsof -nP -iTCP:34125` 无监听，按 must_hold 不动生产 relay/tunnel 配置，只能由用户在目标机跑。
+- **v0.26.4 发布验收**（`bywork/work/project-npm/index.md`）：**资产哈希项已结案**——`gh release download v0.26.4` 取全部 19 个资产到 `.dev/release-verify/`，`shasum -a 256 -c SHA256SUMS` 16 个原生资产全 OK，`shasum -a 256 -c BySpace-0.26.4-container.txt.sha256` OK（SHA256SUMS 不含 container 描述符，它有自己的兄弟文件）。原始输出 `.dev/release-verify.log`。**tunnel 空闲稳定性已结案**：后来用本地 relay + 两个 dev daemon 搭出同一条 D2D 路径实测 15 分钟 0 断连，见 `bywork/work/project-npm/index.md` 与 `.dev/tunnel-verify/`。
   - **heartbeat 工具其实可用**——不是 MCP 工具而是 CLI：`byspace heartbeat <create|list|delete>`。之前记的「工具不可用」只是 MCP 侧没有 `create_heartbeat`。但 v0.26.4 已发布完成，**补建 babysit heartbeat 无意义**：它的职责是盯到完成，事后建不产生承诺的行为。
   - 顺带修了 `docs/release.md` 两处与事实矛盾的话（:177 说 npm 发布后进行中、:186-189 要求检查 dist-tags 与 Release 里的 tarball）：**这个包根本没发布**，`npm view bytetrue-byspace` 404，全仓只有 `--dry-run` publish 脚本。
 - **端口 6778 被别的 agent 占着（环境坑，不是缺陷）**：`audit:browser` 首跑 3/6（sidebar 快照 `text: Not found`），根因不是我的改动——`lsof -nP -iTCP:6778 -sTCP:LISTEN` 显示 PID 18224 是另一个 worktree 的 dev daemon，serving 它自己的旧 UI。**没有动它**。改用 `BYSPACE_LISTEN=127.0.0.1:6779` 起自己的 → 11/11。教训：`npm run cli -- daemon status` 报 stopped 不代表端口空闲，它只认自己 home 的 pid 文件。
@@ -183,3 +183,14 @@ E 在 F 前：先把 alias 收敛成一个，F 的搬运就只改一种前缀，
 - `web/public/schemas/byspace.config.v1.json` 的生成器随 Node daemon 一起消失了。C 批已定：Go 侧 `internal/store/store.go:1113 LoadDaemonConfig` 读的是无类型 map，没有可生成的定义源，所以它是手工维护的对外契约，用 daemon 自己的设置路径表守住。
 - **`scripts/e2e-runnable.test.mjs` 从来没进过 CI（既有缺口，本轮已补）**：`scripts/*.test.mjs` 磁盘 18 个，CI 只跑 17 个（`changes` 15 + `project-npm` 1 + `typecheck` 的 generated-assets 1），差的正是它。`git log -1` 显示来自 `4f93ce184`（Go 全量移植），`git show origin/main:.github/workflows/ci.yml | grep -c e2e-runnable` = 0。**它不是死代码**：单独跑 8/8 通过，保护的分类器被 `docs/go-parity-audit.md:25,122` 明确推荐（「手工筛这份清单错了两次，每次错都产生约 26 条看起来和真缺陷一样的失败」），分类的 mock provider（`one-minute-stream`）在 e2e 里仍在用。**一度判它是 Node 时代遗物，错了**——那次 grep 漏了 docs。
   - 已修：接进 `changes` job（只用 `node:` 内建，符合该 job 无依赖约束）；并加第 10 条守卫「every repository guard runs in some CI job」——`readdirSync(scripts)` 的 `*.test.mjs` 逐个在 ci.yml 里找。**见红→绿**：撤掉那行 → 精确报 `guards no CI job runs: e2e-runnable.test.mjs`；恢复 → 10/10。契约组总数 97 → **98/98**。
+## 收尾轮（2026-11-19）：用户要求「所有失败这次都一起修复掉」
+
+- **sdk-tests 17 个 + client 1 个**：都是 `c7a0e4e92` 删能力后没同步的测试（features 是封闭 z.object，只剩 webPush/agentRoleNames/daemonTunnels/daemonServiceInstall 四个 key，旧 flag 全被剥掉）。按 no-version-drift 删用例或改写为当前契约，不恢复旧行为。提交 5ebd120cd（9 文件 25+/291-）、74f2058e7（删 `packages/client/src/terminals/index.test.ts` 的 old-host gate 用例）。本地 protocol 563 passed、client 143 passed。
+- **playwright 8 个既有失败**（提交 e1bfafc6a，6 文件 9+/144-，本地 5 个 spec **62 passed --retries=0**，`.dev/e2e-fix-green.log`）：
+  - 4 个 Steer 用例：Steer 已是默认发送行为，重复选中不触发 onValueChange、不写 localStorage，测试 poll 那个 key 到 10s 超时。修为「当前值已是目标值就跳过选择」。
+  - `appearance-theme-picker.spec.ts:90`：`contentFontSize` 是独立设置（默认 15），旧断言把它当成跟随 `uiBaseFontSize`。改为断言独立且不受界面字号影响。
+  - `agent-message-submission.spec.ts:1341`：老 host 不回显 canonical prompt 的兼容路径已不存在（`untracked` 在 src 零命中），删用例 + `expectOldHostSubmissionBehavior` + gate 的 `stripCanonicalSubmittedPrompts` 全套。
+  - `agent-profiles-settings.spec.ts:22`：legacy 收藏迁移已退役，删用例与 helper；`sidebar-workspace.spec.ts:218` 删 `features.workspaceMarkUnread` 断言。
+  - `agent-timeline-pagination.spec.ts:271` 本轮复验通过，确认是 flake 而非稳定失败。
+- **tunnel 验收**：见 project-npm work，已 complete。
+- **CI lint 的 rolldown 签名错误是 npm 注册表侧故障**（`EMISSINGSIGNATUREKEY`），oxlint 本地 0/0；不是本分支能修的，需重跑。
