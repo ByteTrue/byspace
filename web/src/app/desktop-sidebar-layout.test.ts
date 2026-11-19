@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   canDesktopAppSidebarShare,
-  resolveDesktopAppChromeLayout,
   resolveDesktopAppContentMinimum,
   resolveDesktopSidebarVisibility,
   resolveDesktopSidebarWidth,
@@ -26,52 +25,6 @@ describe("desktop sidebar layout", () => {
         canShare: true,
       }),
     ).toBe(false);
-  });
-
-  it("keeps the sidebar toggle window-owned beside left window controls", () => {
-    expect(
-      resolveDesktopAppChromeLayout({
-        desktopSidebarRendered: true,
-        hasTopLeftWindowControls: true,
-        sidebarControlsEnabled: true,
-      }),
-    ).toEqual({
-      sidebarCorners: "top-left",
-      contentCorners: "top-right",
-      sidebarToggleOwner: "window",
-    });
-    expect(
-      resolveDesktopAppChromeLayout({
-        desktopSidebarRendered: true,
-        hasTopLeftWindowControls: false,
-        sidebarControlsEnabled: true,
-      }),
-    ).toEqual({
-      sidebarCorners: "none",
-      contentCorners: "both",
-      sidebarToggleOwner: "content",
-    });
-    expect(
-      resolveDesktopAppChromeLayout({
-        desktopSidebarRendered: false,
-        hasTopLeftWindowControls: true,
-        sidebarControlsEnabled: true,
-      }),
-    ).toEqual({
-      sidebarCorners: "none",
-      contentCorners: "both",
-      sidebarToggleOwner: "window",
-    });
-  });
-
-  it("hides the window-owned sidebar toggle when app chrome is suppressed", () => {
-    expect(
-      resolveDesktopAppChromeLayout({
-        desktopSidebarRendered: false,
-        hasTopLeftWindowControls: true,
-        sidebarControlsEnabled: false,
-      }).sidebarToggleOwner,
-    ).toBe("none");
   });
 
   it("yields app navigation when settings needs the shell width", () => {

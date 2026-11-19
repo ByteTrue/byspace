@@ -19,7 +19,6 @@ import { WorkspaceRenameHost } from "@/app/workspace-rename-host";
 import { WorkspaceShortcutTargetsSubscriber } from "@/app/workspace-shortcut-targets-subscriber";
 import { WorktreeSetupCalloutSource } from "@/app/worktree-setup-callout-source";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { DesktopSidebarVisibilityProvider } from "@/contexts/desktop-sidebar-visibility-context";
 import { useActiveWorktreeNewAction } from "@/app/use-active-worktree-new-action";
 import { useCompactWebViewportZoomLock } from "@/platform/use-compact-web-viewport-zoom-lock";
 import { useGlobalNewWorkspaceAction } from "@/app/use-global-new-workspace-action";
@@ -196,56 +195,54 @@ function AppChromeContent() {
 
   return (
     <CommandCenterProvider>
-      <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
-        <SidebarModelProvider active={sidebarActive}>
-          <SidebarSlotProvider value={sidebarSlot}>
-            <SidebarProvider
-              open={sidebarOpen}
-              onOpenChange={ignoreOpenChange}
-              style={providerStyle}
-              className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
+      <SidebarModelProvider active={sidebarActive}>
+        <SidebarSlotProvider value={sidebarSlot}>
+          <SidebarProvider
+            open={sidebarOpen}
+            onOpenChange={ignoreOpenChange}
+            style={providerStyle}
+            className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
+          >
+            <MobileSidebarSync />
+            {/* One element for both, so a workspace covered by Settings stays mounted (the
+              workspace layer); Settings on a phone run full-bleed as a plain block. */}
+            {importSessionSheet}
+            {framed ? (
+              <Sidebar data-testid="left-sidebar">
+                {chromeEnabled ? (
+                  <AppSidebar onImportSession={openImportSession} />
+                ) : (
+                  <div ref={setSlotElement} className="flex min-h-0 flex-1 flex-col" />
+                )}
+                {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen.
+                A route's own navigation cannot be collapsed: the rail only resizes it. */}
+                {(chromeEnabled || routeOwnsSidebar) &&
+                !isCompactLayout &&
+                !isWorkspaceFocusModeEnabled ? (
+                  <SidebarResizeRail
+                    width={sidebarWidth}
+                    viewportWidth={viewportWidth}
+                    collapsible={!routeOwnsSidebar}
+                  />
+                ) : null}
+              </Sidebar>
+            ) : null}
+            <SidebarInset
+              className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
             >
-              <MobileSidebarSync />
-              {/* One element for both, so a workspace covered by Settings stays mounted (the
-                workspace layer); Settings on a phone run full-bleed as a plain block. */}
-              {importSessionSheet}
-              {framed ? (
-                <Sidebar variant="inset" data-testid="left-sidebar">
-                  {chromeEnabled ? (
-                    <AppSidebar onImportSession={openImportSession} />
-                  ) : (
-                    <div ref={setSlotElement} className="flex min-h-0 flex-1 flex-col" />
-                  )}
-                  {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen.
-                  A route's own navigation cannot be collapsed: the rail only resizes it. */}
-                  {(chromeEnabled || routeOwnsSidebar) &&
-                  !isCompactLayout &&
-                  !isWorkspaceFocusModeEnabled ? (
-                    <SidebarResizeRail
-                      width={sidebarWidth}
-                      viewportWidth={viewportWidth}
-                      collapsible={!routeOwnsSidebar}
-                    />
-                  ) : null}
-                </Sidebar>
-              ) : null}
-              <SidebarInset
-                className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
-              >
-                {content}
-              </SidebarInset>
-            </SidebarProvider>
-          </SidebarSlotProvider>
-          <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
-        </SidebarModelProvider>
-        <WorktreeSetupCalloutSource />
-        <CommandCenterRootActions />
-        <CommandCenterWorkspaceActions />
-        <WorkspacePinShortcutHandler />
-        <WorkspaceRenameHost />
-        <CommandCenter />
-        <HostChooserModal />
-      </DesktopSidebarVisibilityProvider>
+              {content}
+            </SidebarInset>
+          </SidebarProvider>
+        </SidebarSlotProvider>
+        <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
+      </SidebarModelProvider>
+      <WorktreeSetupCalloutSource />
+      <CommandCenterRootActions />
+      <CommandCenterWorkspaceActions />
+      <WorkspacePinShortcutHandler />
+      <WorkspaceRenameHost />
+      <CommandCenter />
+      <HostChooserModal />
     </CommandCenterProvider>
   );
 }

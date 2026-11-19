@@ -1,4 +1,3 @@
-import { SidebarTopBar } from "@/components/sidebar/sidebar-header-row";
 import { useCallback } from "react";
 import { GitBranch, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -8,7 +7,6 @@ import { SidebarCalloutViewport } from "@/contexts/sidebar-callout-context";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/sidebar/view-store";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button } from "@/ui/button";
 import { SidebarContent, SidebarHeader } from "@/ui/sidebar";
 import { SidebarListSkeleton } from "@/sidebar/list-parts";
@@ -18,7 +16,6 @@ import { SidebarWorkspaceList } from "@/sidebar/workspace-list";
 
 const DEV_BUILD_LABEL = process.env.BYSPACE_DEV_BUILD_LABEL?.trim() || null;
 
-/** The Expo app's LeftSidebar, inside shadcn's inset Sidebar: header, workspace list, callouts, footer. */
 /**
  * `onImportSession` opens the import sheet, which the chrome renders outside the sidebar: on a phone
  * the sidebar is a Sheet whose content unmounts when it closes, and the import sheet with it.
@@ -68,14 +65,10 @@ export function AppSidebar({ onImportSession }: { onImportSession: () => void })
             <X />
           </Button>
         </SidebarHeader>
-      ) : (
-        <SidebarTopBar>
-          <SidebarToggle host="sidebar" />
-        </SidebarTopBar>
-      )}
+      ) : null}
       {/* Pinned above the list, as the Expo app's header was: a wheel over them scrolls nothing,
           and they stay in reach when the list is scrolled. */}
-      <div className="shrink-0 pt-0.5">
+      <div className="shrink-0 empty:hidden">
         <SidebarNavRows onBeforeNavigate={closeOnNavigate} />
       </div>
       {/* overflow-x hidden as the Expo app's list: it scrolls up and down only. */}

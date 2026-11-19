@@ -74,7 +74,7 @@ export function WorkspacesSectionHeader({ onBeforeNavigate }: { onBeforeNavigate
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const hasListControls = allProjects.length > 0 || hasActiveHostFilter;
   return (
-    <div className="flex shrink-0 items-center gap-2 pt-3 pr-3 pb-1.5 pl-4">
+    <div className="flex shrink-0 items-center gap-2 pt-1.5 pr-3 pb-1 pl-4">
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
         Workspaces
       </span>

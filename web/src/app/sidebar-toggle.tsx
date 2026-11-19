@@ -1,9 +1,8 @@
 import { useCallback } from "react";
 import { Menu, PanelLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
+import { useIsFocused } from "@/platform/route-focus";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { Shortcut } from "@/widgets/shortcut";
@@ -14,13 +13,13 @@ const MAC_TOGGLE_KEYS = ["mod", "B"];
 const OTHER_TOGGLE_KEYS = ["mod", "."];
 
 /**
- * The sidebar toggle, as in the Expo app's SidebarMenuToggle: exactly one host shows it, the
- * sidebar's top row while the pinned sidebar is open, otherwise the content header.
+ * The left sidebar's collapse/expand toggle in the active screen's content header.
+ * Hidden when a workspace stays mounted behind a pushed screen (`WorkspaceLayer`).
  */
-export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
+export function SidebarToggle() {
   const { t } = useTranslation();
+  const isFocused = useIsFocused();
   const isCompact = useIsCompactFormFactor();
-  const desktopSidebarVisible = useDesktopSidebarVisible();
   const isOpen = usePanelStore((state) => selectIsAgentListOpen(state, { isCompact }));
   const toggleAgentListForLayout = usePanelStore((state) => state.toggleAgentListForLayout);
   const toggle = useCallback(
@@ -28,7 +27,7 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
     [isCompact, toggleAgentListForLayout],
   );
 
-  if (resolveSidebarToggleHost({ isCompact, desktopSidebarVisible }) !== host) return null;
+  if (!isFocused) return null;
 
   return (
     <Tooltip>
@@ -43,7 +42,7 @@ export function SidebarToggle({ host }: { host: "sidebar" | "content" }) {
           {isCompact ? <Menu /> : <PanelLeft />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side={host === "sidebar" ? "bottom" : "right"}>
+      <TooltipContent side="bottom">
         {t("shell.menu.toggleSidebar")}
         <Shortcut keys={getShortcutOs() === "mac" ? MAC_TOGGLE_KEYS : OTHER_TOGGLE_KEYS} />
       </TooltipContent>

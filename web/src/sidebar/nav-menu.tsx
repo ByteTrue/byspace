@@ -4,7 +4,13 @@ import {
   useSidebarNavMenuEntries,
 } from "@/sidebar-nav/use-sidebar-nav-entries";
 import { Shortcut } from "@/widgets/shortcut";
-import { SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/ui/sidebar";
+import {
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+} from "@/ui/sidebar";
 
 type NavEntry = ReturnType<typeof useSidebarNavMenuEntries>[number];
 
@@ -46,12 +52,15 @@ export function SidebarNavRows({ onBeforeNavigate }: { onBeforeNavigate?: () => 
   const entries = useSidebarNavMenuEntries();
   if (entries.length === 0) return null;
   return (
-    <SidebarGroup data-testid="sidebar-nav-rows">
-      <SidebarMenu>
-        {entries.map((entry) => (
-          <NavRow key={entry.id} entry={entry} onBeforeNavigate={onBeforeNavigate} />
-        ))}
-      </SidebarMenu>
-    </SidebarGroup>
+    <>
+      <SidebarGroup className="px-2 pt-0.5 pb-1.5" data-testid="sidebar-nav-rows">
+        <SidebarMenu>
+          {entries.map((entry) => (
+            <NavRow key={entry.id} entry={entry} onBeforeNavigate={onBeforeNavigate} />
+          ))}
+        </SidebarMenu>
+      </SidebarGroup>
+      <SidebarSeparator />
+    </>
   );
 }

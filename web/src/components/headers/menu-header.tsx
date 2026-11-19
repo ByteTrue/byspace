@@ -5,8 +5,8 @@ import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { SidebarToggle } from "@/app/sidebar-toggle";
 
-export function SidebarMenuToggle({ host = "content" }: { host?: "sidebar" | "content" } = {}) {
-  return <SidebarToggle host={host} />;
+export function SidebarMenuToggle() {
+  return <SidebarToggle />;
 }
 
 interface MenuHeaderProps {
