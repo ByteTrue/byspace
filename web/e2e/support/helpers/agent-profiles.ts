@@ -47,35 +47,6 @@ export async function seedAgentProfiles(profiles: AgentProfile[]): Promise<HostS
   };
 }
 
-export async function stageLegacyFavoritesForHostMigration(
-  page: Page,
-  favorites: Array<{ provider: string; modelId: string }>,
-): Promise<void> {
-  const serverId = getServerId();
-  await gotoAppShell(page);
-  await page.evaluate(
-    ({ favorites: storedFavorites, serverId: hostId }) => {
-      const preferencesKey = "@byspace:create-agent-preferences";
-      const raw = localStorage.getItem(preferencesKey);
-      const preferences = raw ? JSON.parse(raw) : {};
-      localStorage.setItem(
-        preferencesKey,
-        JSON.stringify({ ...preferences, favoriteModels: storedFavorites }),
-      );
-      localStorage.removeItem(`@byspace:legacy-favorites-to-agent-profiles:v1:${hostId}`);
-
-      // Preserve this upgrade-shaped storage across the fixture's next-page
-      // default seed; a reload is the startup boundary under test.
-      const nonce = localStorage.getItem("@byspace:e2e-seed-nonce");
-      if (nonce) {
-        localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
-      }
-    },
-    { favorites, serverId },
-  );
-  await page.reload();
-}
-
 export async function expectHostAgentProfiles(expected: AgentProfile[]): Promise<void> {
   const client = await connectAgentProfilesClient();
   try {
