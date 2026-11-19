@@ -2,7 +2,7 @@
 kind: work
 status: complete
 current_unit: "全部完成（A–F 六批）"
-next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。CI run 44440509266 已全绿；随后 docs 提交触发的 run 44441833922 暴露 model-search 采样竞态，已修（524b574bc），等 run 44445203689"
+next_action: "无。六批、三件遗留、两件授权修复、sdk/client 烂测试、playwright 8 个既有失败、tunnel 验收全部完成并推送。CI run 44440509266 已全绿；随后 docs 提交触发的 run 44441833922 暴露 model-search 采样竞态，已修（524b574bc），run 44445402754 全绿（model-search 修复已在其中验证）"
 must_hold: "不改既有测试断言（例外：用户明确授权的两处——删 file-explorer 失效用例、修 6 个 app-tests 与 connection.test.ts 的 wire 断言）；不重启 6777 生产 daemon；每批独立可验证可回滚；shadcn 原件永不 restyle；ui/ 与 platform/ 不许依赖功能目录"
 proof_gap: ""
 ---
