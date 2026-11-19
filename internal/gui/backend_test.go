@@ -80,59 +80,28 @@ func TestDaemonSupervisorAttachesAndTakesOverOnExit(t *testing.T) {
 		addr, sup.OwnsInProcessDaemon(), ProbeDaemonHealth(addr))
 }
 
-func TestLightStepMatchesMagpieRule(t *testing.T) {
-	type look struct {
-		on, shown, release bool
-	}
-	for name, looks := range map[string][]look{
-		"closed":        {{true, false, false}, {true, false, true}},
-		"off":           {{false, false, false}, {false, false, false}, {false, false, false}},
-		"shown":         {{true, true, false}, {true, true, false}, {true, true, false}},
-		"shown between": {{true, false, false}, {true, true, false}, {true, false, false}, {true, false, true}},
-		"turned off":    {{true, false, false}, {false, false, false}, {true, false, false}, {true, false, true}},
-	} {
-		ticks := 0
-		for i, l := range looks {
-			var release bool
-			ticks, release = LightStep(l.on, l.shown, ticks)
-			if release != l.release {
-				t.Fatalf("%s: look %d released=%v, want %v", name, i, release, l.release)
-			}
-			if release {
-				ticks = 0
-			}
-		}
-	}
-}
-
-func TestIdleAtRequiresNoActiveAgentsUnfocusedWindowAndSettleElapsed(t *testing.T) {
+func TestIdleAtRequiresNoActiveAgentsAndSettleElapsed(t *testing.T) {
 	now := time.Now()
-	if IdleAt(true, false, now, now, 10*time.Second) {
+	if IdleAt(true, now, now, 10*time.Second) {
 		t.Fatal("must not be idle while an agent is running")
 	}
-	if IdleAt(false, true, time.Time{}, now, 10*time.Second) {
-		t.Fatal("must not be idle while the window is focused in the foreground")
-	}
-	if IdleAt(false, false, now.Add(-5*time.Second), now, 10*time.Second) {
+	if IdleAt(false, now.Add(-5*time.Second), now, 10*time.Second) {
 		t.Fatal("must not be idle before the 10s settle window has elapsed")
 	}
-	if !IdleAt(false, false, now.Add(-11*time.Second), now, 10*time.Second) {
-		t.Fatal("expected idle once agents finished >10s ago and window is unfocused")
+	if !IdleAt(false, now.Add(-11*time.Second), now, 10*time.Second) {
+		t.Fatal("expected idle once agents finished >10s ago")
 	}
 }
 
 func TestDesktopSettingsDefaultsAndPersistence(t *testing.T) {
 	dir := t.TempDir()
 	def := LoadDesktopSettings(dir)
-	if def.Lightweight || def.NoAutoUpdate || def.NoAutoDownload || def.AutoRestart {
-		t.Fatalf("expected all booleans false by default (matching magpie), got %+v", def)
+	if def.NoAutoUpdate || def.NoAutoDownload || def.AutoRestart {
+		t.Fatalf("expected all booleans false by default, got %+v", def)
 	}
 	want := DesktopSettings{
-		Lightweight:    true,
 		NoAutoDownload: true,
 		AutoRestart:    true,
-		WindowWidth:    1440,
-		WindowHeight:   900,
 	}
 	if err := SaveDesktopSettings(dir, want); err != nil {
 		t.Fatalf("SaveDesktopSettings: %v", err)
@@ -143,24 +112,6 @@ func TestDesktopSettingsDefaultsAndPersistence(t *testing.T) {
 	}
 	if got.EffectiveKeepAwake() != "system" {
 		t.Fatalf("expected default EffectiveKeepAwake=system, got %s", got.EffectiveKeepAwake())
-	}
-}
-
-func TestDockStepAndShouldShowInDock(t *testing.T) {
-	if got := DockStep(true, true, true); got != (dockMove{}) {
-		t.Fatalf("already regular: got %+v", got)
-	}
-	if got := DockStep(false, true, true); got != (dockMove{policy: true, again: true, front: true}) {
-		t.Fatalf("joining Dock to front must set again=true: got %+v", got)
-	}
-	if !ShouldShowInDock(DesktopSettings{HideFromDock: false}, false, false) {
-		t.Fatal("when HideFromDock is false, app stays in Dock even when window is hidden")
-	}
-	if ShouldShowInDock(DesktopSettings{HideFromDock: true}, false, false) {
-		t.Fatal("when HideFromDock is true and window is hidden, app should leave Dock")
-	}
-	if !ShouldShowInDock(DesktopSettings{HideFromDock: true}, true, false) {
-		t.Fatal("when window is shown, app should be in Dock")
 	}
 }
 

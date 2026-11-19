@@ -1,7 +1,5 @@
 // Port of archive/expo-app:packages/app/src/constants/layout.ts. The compact breakpoint itself
 // lives in @/platform/use-compact-form-factor and is re-exported here for the app's callers.
-import { isWailsContainer } from "@/platform/wails";
-import { useEffect, useState } from "react";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -23,57 +21,6 @@ export const SETTINGS_DESKTOP_SIDEBAR_WIDTH = 320;
 export const SETTINGS_DESKTOP_DETAIL_MIN_WIDTH = 400;
 export const SETTINGS_DESKTOP_SPLIT_MIN_WIDTH =
   SETTINGS_DESKTOP_SIDEBAR_WIDTH + SETTINGS_DESKTOP_DETAIL_MIN_WIDTH;
-
-// Desktop app constants for macOS traffic light buttons
-// These buttons (close/minimize/maximize) overlay the top-left corner
-export const DESKTOP_TRAFFIC_LIGHT_WIDTH = 72;
-
-function isMacWailsDesktopWindow(): boolean {
-  return isWailsContainer() && /Mac/i.test(window.navigator?.platform ?? "");
-}
-
-function isMacWindowFullscreen(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  if (document.fullscreenElement) {
-    return true;
-  }
-  return (
-    window.outerWidth > 0 &&
-    window.outerHeight > 0 &&
-    window.innerWidth === window.screen?.width &&
-    window.innerHeight === window.screen?.height
-  );
-}
-
-/**
- * Returns the horizontal inset (in px) needed to clear the macOS traffic-light window controls
- * when running inside the Wails macOS desktop app with MacTitleBarHiddenInset.
- * Returns 0 on web browsers, Windows/Linux/Android, and when the macOS window is in full screen.
- */
-export function useMacTrafficLightInset(): number {
-  const [inset, setInset] = useState<number>(() =>
-    isMacWailsDesktopWindow() && !isMacWindowFullscreen() ? DESKTOP_TRAFFIC_LIGHT_WIDTH : 0,
-  );
-
-  useEffect(() => {
-    if (!isMacWailsDesktopWindow()) {
-      return;
-    }
-    const update = () => {
-      setInset(isMacWindowFullscreen() ? 0 : DESKTOP_TRAFFIC_LIGHT_WIDTH);
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  return inset;
-}
-
-// Custom desktop window controls (minimize/maximize/close) — top-right
-export const DESKTOP_WINDOW_CONTROLS_HEIGHT = HEADER_INNER_HEIGHT;
 
 /**
  * Reactive hook — re-renders the component when the breakpoint changes.

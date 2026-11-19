@@ -1,14 +1,11 @@
-import type { CSSProperties, ReactNode } from "react";
-import { useMemo } from "react";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "cn";
-import { useMacTrafficLightInset } from "@/constants/layout";
 import { SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/ui/sidebar";
 
 /**
- * The desktop sidebar's top row, for every route: 36px, the height of the content card's
- * ScreenHeader beside it, so both sit on the row the macOS traffic lights are centered on
- * (internal/gui/titlebar_darwin.go), and clearing the lights in the desktop app.
+ * The desktop sidebar's top row, for every route: 36px, matching the height of the content card's
+ * ScreenHeader beside it.
  */
 export function SidebarTopBar({
   className,
@@ -17,16 +14,9 @@ export function SidebarTopBar({
   className?: string;
   children: ReactNode;
 }) {
-  const trafficLightInset = useMacTrafficLightInset();
-  const style = useMemo<CSSProperties | undefined>(
-    () => (trafficLightInset > 0 ? { paddingLeft: 12 + trafficLightInset } : undefined),
-    [trafficLightInset],
-  );
   return (
     <SidebarHeader
-      data-wails-drag="true"
       className={cn("h-9 shrink-0 flex-row items-center gap-1 px-3 pt-0 pb-px", className)}
-      style={style}
     >
       {children}
     </SidebarHeader>

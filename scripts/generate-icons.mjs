@@ -141,7 +141,7 @@ export async function generateIcons(root = repoRoot) {
   writeFileSync(resolve(root, "assets/logo.svg"), appIconSvg);
   console.log("Generated: assets/logo.svg");
 
-  // 6. Wails 桌面客户端图标 (internal/gui/icon.png)
+  // 6. 桌面客户端图标 (internal/gui/icon.png)
   // Apple macOS Big Sur+ HIG 规范：1024x1024 画布内主体圆角矩形为 824x824（四周各 100px 透明边距），
   // 否则在 macOS Dock 栏中会比标准系统图标大一圈（1024/824 = 1.24x）。
   const macScale = 824 / 1024;

@@ -1,4 +1,4 @@
-//go:build (!darwin && !linux && !windows) || android
+//go:build !darwin && !linux && !windows
 
 package awake
 

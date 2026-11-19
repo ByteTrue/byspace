@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -26,7 +27,7 @@ import (
 // Repo is the GitHub repository where BySpace releases are published.
 const Repo = "ByteTrue/byspace"
 
-// GUI reports whether this binary was built with the Wails v3 desktop/mobile GUI (!nogui).
+// GUI reports whether this binary was built with the desktop system tray (!nogui).
 var GUI bool
 
 // Release describes one published BySpace release and its downloadable assets.
@@ -282,11 +283,6 @@ func LegacyBinaryAsset() string {
 	return name
 }
 
-// APKAsset returns the Android APK asset name.
-func APKAsset() string {
-	return "byspace-android-arm64.apk"
-}
-
 // Bundle returns the enclosing macOS .app path when the running binary (or symlink target)
 // lives inside Contents/MacOS/<exe>, or "" otherwise.
 func Bundle() string {
@@ -309,16 +305,39 @@ func BundleOf(exe string) string {
 	return app
 }
 
-// Executable returns the running binary path with symlinks resolved.
-func Executable() (string, error) {
+var (
+	initialExecutable    string
+	initialExecutableErr error
+	stageInstallMu       sync.Mutex
+)
+
+func init() {
+	initialExecutable, initialExecutableErr = resolveExecutable()
+}
+
+func resolveExecutable() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
+	exe = strings.TrimSuffix(exe, " (deleted)")
 	if resolved, evalErr := filepath.EvalSymlinks(exe); evalErr == nil {
-		return resolved, nil
+		return strings.TrimSuffix(resolved, " (deleted)"), nil
 	}
 	return exe, nil
+}
+
+// Executable returns the running binary path captured at process startup with symlinks resolved,
+// so post-update callers still resolve the canonical target path after Windows renames the running
+// binary to .old or Linux unlinks /proc/self/exe (" (deleted)").
+func Executable() (string, error) {
+	if initialExecutable != "" {
+		return initialExecutable, nil
+	}
+	if initialExecutableErr != nil {
+		return resolveExecutable()
+	}
+	return resolveExecutable()
 }
 
 // Writable reports whether dir can be written to by the current user.
@@ -678,6 +697,8 @@ func fetchAssetAttempt(ctx context.Context, a Asset, destPath string) error {
 
 // StageBinary downloads and verifies the release binary next to exe (as exe + ".new").
 func StageBinary(ctx context.Context, rel *Release, exe string) (string, error) {
+	stageInstallMu.Lock()
+	defer stageInstallMu.Unlock()
 	if exe == "" {
 		var err error
 		exe, err = Executable()
@@ -809,6 +830,8 @@ func moveAside(exe string) (string, error) {
 // an antivirus scanner holds the new download open and restoring from .old on failure (ported
 // from magpie's InstallBinaryAside).
 func InstallBinary(staged, exe string) error {
+	stageInstallMu.Lock()
+	defer stageInstallMu.Unlock()
 	if err := os.Rename(staged, exe); err == nil {
 		return nil
 	} else if runtime.GOOS != "windows" {
@@ -834,6 +857,8 @@ func InstallBinary(staged, exe string) error {
 
 // StageApp downloads and unpacks the macOS BySpace.app bundle next to bundle.
 func StageApp(ctx context.Context, rel *Release, bundle string) (string, error) {
+	stageInstallMu.Lock()
+	defer stageInstallMu.Unlock()
 	asset, ok := rel.Assets[AppAsset()]
 	if !ok {
 		return "", fmt.Errorf("release %s has no %s", rel.Version, AppAsset())
@@ -866,6 +891,8 @@ func StageApp(ctx context.Context, rel *Release, bundle string) (string, error) 
 
 // InstallApp atomically swaps the staged .app bundle in for bundle.
 func InstallApp(staged, bundle string) error {
+	stageInstallMu.Lock()
+	defer stageInstallMu.Unlock()
 	old := filepath.Join(filepath.Dir(staged), "old.app")
 	_ = os.RemoveAll(old)
 	if err := os.Rename(bundle, old); err != nil {

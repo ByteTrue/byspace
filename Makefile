@@ -1,12 +1,11 @@
-# Go 侧构建与全平台分发入口（对齐 Magpie 同构单入口 + -tags nogui 分离 + 二进制直发）：
+# Go 侧构建与全平台分发入口（同构单入口 + -tags nogui 分离 + 二进制直发）：
 #   make build                 → 编译无头单二进制（-tags nogui, CGO_ENABLED=0，供 CLI / Daemon / Docker 使用）
-#   make build-app             → 编译带 Wails v3 桌面 GUI 的单二进制（macOS / Windows / Linux）
+#   make build-app             → 编译带系统托盘宿主的桌面单二进制（macOS / Windows / Linux）
 #   make app                   → 打包 macOS BySpace.app bundle 及 dist/byspace-darwin-<arch>.zip
 #   make dmg                   → 打包 macOS dist/byspace-darwin-<arch>.dmg 安装镜像
-#   make build-android         → 编译 libwails.so (android/arm64) 并打包侧载 APK (dist/byspace-android-arm64.apk)
 #   make release-cli           → 交叉编译全平台 CLI 二进制 (dist/byspace-cli-<os>-<arch>)
-#   make release-windows       → 交叉编译 Windows Wails v3 桌面客户端 (dist/byspace-windows-<arch>.exe)
-#   make release-linux-desktop → 在 Linux 宿主上编译 Wails v3 桌面客户端 (dist/byspace-linux-<arch>)
+#   make release-windows       → 交叉编译 Windows 桌面托盘客户端 (dist/byspace-windows-<arch>.exe)
+#   make release-linux-desktop → 编译 Linux 桌面客户端 (dist/byspace-linux-<arch>)
 #   make checksums             → 生成 dist/SHA256SUMS
 
 VERSION    ?= $(shell node -p "require('./package.json').version" 2>/dev/null || echo dev)
@@ -31,13 +30,13 @@ ifeq ($(OS),Windows_NT)
   APP_BINARY := .dev/bin/byspace-app.exe
 endif
 
-.PHONY: build build-app app dmg build-android release-cli release-windows release-linux-desktop checksums build-web build-full test vet clean
+.PHONY: build build-app app dmg release-cli release-windows release-linux-desktop checksums build-web build-full test vet clean
 
 ## build: 编译无头单二进制（-tags nogui，零 CGO）
 build:
 	CGO_ENABLED=0 go build -tags nogui -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY) .
 
-## build-app: 编译带 Wails v3 桌面客户端的单二进制
+## build-app: 编译带系统托盘宿主的桌面单二进制
 build-app:
 	CGO_ENABLED=1 GOARCH=$(GOARCH) go build -trimpath -ldflags "$(LDFLAGS)" -o $(APP_BINARY) .
 
@@ -65,10 +64,6 @@ dmg: app
 	@rm -rf $(BUILD_DIR)/dmg
 	@echo "● Built dist/byspace-darwin-$(GOARCH).dmg"
 
-## build-android: 编译 Wails v3 Android 侧载客户端 APK (dist/byspace-android-arm64.apk)
-build-android:
-	VERSION="$(VERSION)" bash ./build/android/build.sh
-
 ## release-cli: 交叉编译全平台无头 CLI 二进制到 dist/
 release-cli:
 	@mkdir -p dist
@@ -80,7 +75,7 @@ release-cli:
 
 WINVER = $(shell echo $(VERSION) | sed -E 's/^v//; s/[^0-9.].*//')
 
-## release-windows: 交叉编译 Windows Wails v3 桌面客户端到 dist/ (含 PE 图标/版本/DPI Manifest)
+## release-windows: 交叉编译 Windows 桌面托盘客户端到 dist/ (含 PE 图标/版本/DPI Manifest)
 release-windows:
 	@mkdir -p dist
 	@go run github.com/tc-hib/go-winres@v0.3.3 make --in build/windows/winres.json --arch amd64,arm64 --out rsrc \
@@ -90,10 +85,10 @@ release-windows:
 		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch go build -trimpath -ldflags="$(LDFLAGS) -H windowsgui" -o dist/byspace-windows-$$arch.exe . || exit 1; \
 	done; rm -f rsrc_windows_*.syso
 
-## release-linux-desktop: 在 Linux 宿主上编译 Wails v3 桌面客户端 (需 libgtk-3-dev libwebkit2gtk-4.1-dev)
+## release-linux-desktop: 编译 Linux 桌面客户端
 release-linux-desktop:
 	@mkdir -p dist
-	CGO_ENABLED=1 GOOS=linux GOARCH=$(GOARCH) go build -trimpath -ldflags="$(LDFLAGS)" -o dist/byspace-linux-$(GOARCH) .
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -trimpath -ldflags="$(LDFLAGS)" -o dist/byspace-linux-$(GOARCH) .
 	@echo "● Built dist/byspace-linux-$(GOARCH)"
 
 ## checksums: 生成 dist/SHA256SUMS

@@ -127,10 +127,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install GTK4 and WebKitGTK 6.0 headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
       - run: make release-linux-desktop GOARCH="${{ matrix.goarch }}" VERSION="${{ needs.context.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
@@ -167,41 +163,8 @@ jobs:
             dist/byspace-darwin-*.dmg
           if-no-files-found: error
 
-  build-android:
-    needs: [context, web-assets]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          ref: ${{ needs.context.outputs.sha }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: webui-dist
-          path: internal/webui/dist
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Install Android NDK & SDK 36
-        run: |
-          set -euo pipefail
-          SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)"
-          yes | "$SDKM" --licenses >/dev/null || true
-          "$SDKM" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
-      - run: make build-android VERSION="${{ needs.context.outputs.version }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-android
-          path: dist/byspace-android-arm64.apk
-          if-no-files-found: error
-
   publish:
-    needs: [context, build-cli-and-windows, build-linux-desktop, build-macos, build-android]
+    needs: [context, build-cli-and-windows, build-linux-desktop, build-macos]
     if: needs.context.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:

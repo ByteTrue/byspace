@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs the Wails v3 desktop client in dev mode against this checkout's .dev/byspace-home
+// Runs the desktop tray host in dev mode against this checkout's .dev/byspace-home
 // on 127.0.0.1:6778 (attaching to an existing dev daemon on 6778 or starting it in-process).
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -49,9 +49,7 @@ if (!existsSync(binary)) {
   process.exit(1);
 }
 
-// macOS: run the binary from inside an app bundle, as the packaged app does. Notification Center
-// (internal/gui/notify.go) only serves bundled apps; outside one, notifications fall back to the
-// webview's. A dev bundle id keeps the dev app's notification permission apart from BySpace's.
+// macOS: run the binary from inside an app bundle, as the packaged app does.
 function devMacBundle() {
   const bundle = resolve(rootDir, ".dev", "build", "BySpace Dev.app");
   const executable = resolve(bundle, "Contents", "MacOS", "byspace-app");
@@ -81,7 +79,7 @@ function devMacBundle() {
 const launchBinary = process.platform === "darwin" ? devMacBundle() : binary;
 
 console.log("══════════════════════════════════════════════════════");
-console.log("  BySpace Desktop Client Dev (Wails v3)");
+console.log("  BySpace Desktop Tray Host Dev");
 console.log("══════════════════════════════════════════════════════");
 console.log(`  Home:    ${process.env.BYSPACE_HOME}`);
 console.log(`  Daemon:  ${process.env.BYSPACE_LISTEN}`);

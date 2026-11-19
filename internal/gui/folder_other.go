@@ -1,12 +1,26 @@
-//go:build !windows && !nogui
+//go:build !windows
 
 package gui
 
-import "github.com/wailsapp/wails/v3/pkg/application"
+import (
+	"os"
+	"runtime"
 
-func openFolder(app *application.App, path string) error {
-	if app == nil {
-		return nil
+	"github.com/ByteTrue/byspace/internal/proc"
+)
+
+func openFolder(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
 	}
-	return app.Env.OpenFileManager(path, false)
+	opener := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		opener = "open"
+	}
+	cmd := proc.Command(opener, path)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }

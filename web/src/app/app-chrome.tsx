@@ -38,14 +38,11 @@ import { AppSidebar } from "@/app/app-sidebar";
 import { SidebarResizeRail } from "@/app/sidebar-resize-rail";
 import { SidebarSlotProvider } from "@/app/sidebar-slot";
 import { WorkspaceLayer } from "@/app/workspace-layer";
-import { Sidebar, useSidebar } from "@/ui/sidebar";
-import {
-  DesktopWindowTitleBar,
-  usesWindowsTitleBarShell,
-  WindowsShellFrame,
-  WindowsShellMain,
-} from "@/app/desktop-window-titlebar";
+import { Sidebar, SidebarInset, SidebarProvider, useSidebar } from "@/ui/sidebar";
 import { useWindowDimensions } from "@/platform/use-window-dimensions";
+import { cn } from "cn";
+
+const ignoreOpenChange = () => {};
 
 // Routes that stand alone without app chrome, as in the Expo app's root layout.
 const STANDALONE_ONBOARDING_ROUTES = new Set(["", "/", "/welcome", "/pair-scan"]);
@@ -180,7 +177,6 @@ function AppChromeContent() {
   );
   const routeOwnsSidebar = !chromeEnabled && slotClaimed;
   const framed = !(isSettingsRoute && isCompactLayout);
-  const windowsShellTitleBar = usesWindowsTitleBarShell(isCompactLayout);
   const sidebarOpen = routeOwnsSidebar ? !isCompactLayout : desktopSidebarVisible;
   // On a phone the explorer is a sheet over the page instead of a docked pane.
   // Memoized: opening or closing the sidebar re-renders this shell, and must not re-render the page
@@ -203,54 +199,42 @@ function AppChromeContent() {
       <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
         <SidebarModelProvider active={sidebarActive}>
           <SidebarSlotProvider value={sidebarSlot}>
-            {/* The Windows L-shell needs the titlebar as a sibling of the whole sidebar row, so
-              the frame is one component; the JSX props are element slots, not values flowing into
-              a memoized child. */}
-            {/* eslint-disable react-perf/jsx-no-jsx-as-prop -- one layout stays in one tree */}
-            <WindowsShellFrame
-              shell={windowsShellTitleBar}
-              titleBar={
-                <DesktopWindowTitleBar
-                  showLeadingNav={!sidebarOpen && !isWorkspaceFocusModeEnabled}
-                  onToggleSidebar={toggleAgentList}
-                />
-              }
+            <SidebarProvider
               open={sidebarOpen}
+              onOpenChange={ignoreOpenChange}
               style={providerStyle}
-              sidebar={
-                framed ? (
-                  <Sidebar variant="inset" data-testid="left-sidebar">
-                    {chromeEnabled ? (
-                      <AppSidebar onImportSession={openImportSession} />
-                    ) : (
-                      <div ref={setSlotElement} className="flex min-h-0 flex-1 flex-col" />
-                    )}
-                    {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen.
-                    A route's own navigation cannot be collapsed: the rail only resizes it. */}
-                    {(chromeEnabled || routeOwnsSidebar) &&
-                    !isCompactLayout &&
-                    !isWorkspaceFocusModeEnabled ? (
-                      <SidebarResizeRail
-                        width={sidebarWidth}
-                        viewportWidth={viewportWidth}
-                        collapsible={!routeOwnsSidebar}
-                      />
-                    ) : null}
-                  </Sidebar>
-                ) : null
-              }
-              inset={
-                <WindowsShellMain framed={framed} compact={isCompactLayout}>
-                  {content}
-                </WindowsShellMain>
-              }
+              className="h-svh data-resizing:**:data-[slot=sidebar-container]:transition-none data-resizing:**:data-[slot=sidebar-gap]:transition-none"
             >
               <MobileSidebarSync />
               {/* One element for both, so a workspace covered by Settings stays mounted (the
                 workspace layer); Settings on a phone run full-bleed as a plain block. */}
               {importSessionSheet}
-            </WindowsShellFrame>
-            {/* eslint-enable react-perf/jsx-no-jsx-as-prop */}
+              {framed ? (
+                <Sidebar variant="inset" data-testid="left-sidebar">
+                  {chromeEnabled ? (
+                    <AppSidebar onImportSession={openImportSession} />
+                  ) : (
+                    <div ref={setSlotElement} className="flex min-h-0 flex-1 flex-col" />
+                  )}
+                  {/* Focus mode hides the sidebar on purpose; the rail would only toggle it unseen.
+                  A route's own navigation cannot be collapsed: the rail only resizes it. */}
+                  {(chromeEnabled || routeOwnsSidebar) &&
+                  !isCompactLayout &&
+                  !isWorkspaceFocusModeEnabled ? (
+                    <SidebarResizeRail
+                      width={sidebarWidth}
+                      viewportWidth={viewportWidth}
+                      collapsible={!routeOwnsSidebar}
+                    />
+                  ) : null}
+                </Sidebar>
+              ) : null}
+              <SidebarInset
+                className={cn("min-h-0 overflow-hidden", !framed && "block flex-1 bg-transparent")}
+              >
+                {content}
+              </SidebarInset>
+            </SidebarProvider>
           </SidebarSlotProvider>
           <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
         </SidebarModelProvider>

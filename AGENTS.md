@@ -8,11 +8,11 @@ BySpace is a desktop, mobile, and web app for monitoring and controlling your lo
 
 This is an npm workspace monorepo with a unified Go single binary:
 
-- `main.go` — The unified entry point (launches the Wails v3 desktop/Android GUI when built without `-tags nogui`, and dispatches `serve`, `relay`, and all CLI subcommands)
-- `internal/` — The Go daemon, CLI, Wails v3 desktop/Android host (`internal/gui`), self-updater (`internal/selfupdate`), agent providers (`internal/agent`), workspace/git (`internal/workspace`), terminal, tunnel, and embedded web UI (`internal/webui`)
-- `build/` — Native packaging templates (`build/darwin` for `BySpace.app` / `.dmg`, `build/android` for the Wails v3 Android sideload APK)
+- `main.go` — The unified entry point (launches the desktop tray host and Local Web when built without `-tags nogui`, and dispatches `serve`, `relay`, and all CLI subcommands)
+- `internal/` — The Go daemon, CLI, desktop tray host (`internal/gui`), self-updater (`internal/selfupdate`), agent providers (`internal/agent`), workspace/git (`internal/workspace`), terminal, tunnel, and embedded web UI (`internal/webui`)
+- `build/` — Native packaging templates (`build/darwin` for `BySpace.app` / `.dmg`, `build/windows` for PE icon/manifest resources)
 - `workers/relay` — The Go relay compiled to WebAssembly and run as a Cloudflare Durable Object with WebSocket hibernation
-- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the UI the Wails desktop and Android clients embed. One tree under `web/src` with a single `@/` alias: `ui/` is vendored shadcn, `platform/` is the web stand-ins for the retired Expo app's React Native APIs, everything else is a feature directory. `scripts/web-layout.test.mjs` enforces the roles. Comments that say "the Expo app" or cite `archive/expo-app:packages/app/...` refer to that retired app; `git show archive/expo-app:packages/app/src/<path>` prints the original
+- `web` — The web client (React, Vite, shadcn/ui): browser, installed PWA, and the Local Web UI opened by the desktop tray host. One tree under `web/src` with a single `@/` alias: `ui/` is vendored shadcn, `platform/` is the web stand-ins for the retired Expo app's React Native APIs, everything else is a feature directory. `scripts/web-layout.test.mjs` enforces the roles. Comments that say "the Expo app" or cite `archive/expo-app:packages/app/...` refer to that retired app; `git show archive/expo-app:packages/app/src/<path>` prints the original
 - `packages/relay` — E2E encryption primitives
 - `packages/protocol` — Wire schemas and shared protocol types
 - `packages/client` — Daemon client library and SDK facade
@@ -153,7 +153,7 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 
 ## Platform gating
 
-The app is a web app (browser, installed PWA, and the Wails desktop and Android webviews). There
+The app is a web app (browser and installed PWA, including Local Web opened by the desktop tray host). There
 are no platform gates: write plain web code. Use `useIsCompactFormFactor()` from
 `@/constants/layout` for layout decisions — sidebar overlay vs pinned, modal vs full screen,
 single-panel vs split. For development-only code use the `__DEV__` global, which

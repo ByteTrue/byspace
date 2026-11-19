@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -66,5 +67,70 @@ func TestControlRequestIsAckedAndReachesTheProcessOwner(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatalf("%s never reached the process owner", tc.msgType)
 		}
+	}
+}
+
+func TestDaemonUpdateReplacesBinaryAndRequestsRestart(t *testing.T) {
+	dir := t.TempDir()
+	executable := filepath.Join(dir, "byspace")
+	if err := os.WriteFile(executable, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(dir, "home"), Version: "0.20.2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	srv.selfUpdateExecutable = executable
+	srv.selfUpdateFetch = func(_ context.Context, version string) ([]byte, error) {
+		return []byte("new-binary-" + version), nil
+	}
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	_ = ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"cli_update","protocolVersion":1}`))
+	_ = readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	reqFrame, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "daemon.update.request",
+			"requestId": "req_update_1",
+			"version":   "0.20.3",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, reqFrame); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := readUntilSessionType(t, ctx, ws, "daemon.update.response", "")
+	if resp["success"] != true || resp["restartRequired"] != true || resp["newVersion"] != "0.20.3" {
+		t.Fatalf("unexpected daemon.update.response: %+v", resp)
+	}
+
+	body, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "new-binary-0.20.3" {
+		t.Fatalf("binary contents = %q, want %q", string(body), "new-binary-0.20.3")
+	}
+
+	select {
+	case got := <-srv.ControlRequests():
+		if !got.Restart || got.Reason != "daemon_update" {
+			t.Fatalf("expected restart control request with reason daemon_update, got %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("daemon.update.request did not trigger a restart control request")
 	}
 }

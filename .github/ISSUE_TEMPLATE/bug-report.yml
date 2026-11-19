@@ -43,10 +43,8 @@ body:
       label: Where did this happen
       description: The surface you saw the bug on. Pick the closest match.
       options:
-        - iOS app
-        - Android app
-        - Web (browser)
-        - Desktop (Electron)
+        - Web (browser / PWA)
+        - Desktop (System tray + Local Web)
         - CLI
         - Daemon
         - Other

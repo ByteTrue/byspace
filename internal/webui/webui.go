@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -43,12 +45,10 @@ var contentTypes = map[string]string{
 // Handler serves the BySpace web UI from an external directory (if provided and valid)
 // or from the Go-embedded dist/ filesystem (if built with assets).
 type Handler struct {
-	fsys                  fs.FS
-	injectConnectionHint  bool
-	explicitListen        string
-	label                 string
-	credential            string
-	disablePrecompression bool
+	fsys                 fs.FS
+	injectConnectionHint bool
+	label                string
+	credential           string
 }
 
 // WithConnectionHint enables injecting window.__BYSPACE_INITIAL_DAEMON_CONNECTION__ into index.html
@@ -62,20 +62,9 @@ func (h *Handler) WithConnectionHint(label string) *Handler {
 	return h
 }
 
-// WithExplicitConnectionHint injects a fixed daemon listen address into index.html instead of r.Host.
-// Wails desktop windows serve static assets from wails://localhost while the daemon listens on loopback TCP.
-func (h *Handler) WithExplicitConnectionHint(listenAddr, label string) *Handler {
-	if h == nil {
-		return nil
-	}
-	h.injectConnectionHint = true
-	h.explicitListen = strings.TrimSpace(listenAddr)
-	h.label = label
-	return h
-}
-
-// WithLocalCredential attaches this host's local CLI credential to the injected connection hint so
-// the desktop app window authenticates automatically even when a daemon password is configured.
+// WithLocalCredential attaches this host's local CLI credential to the injected connection hint
+// for direct loopback requests (127.0.0.1 / ::1 / localhost) so the local browser or installed PWA
+// authenticates automatically even when a daemon password is configured.
 func (h *Handler) WithLocalCredential(token string) *Handler {
 	if h == nil {
 		return nil
@@ -84,18 +73,7 @@ func (h *Handler) WithLocalCredential(token string) *Handler {
 	return h
 }
 
-// WithoutPrecompression disables serving pre-compressed .br/.gz responses with Content-Encoding headers.
-// In-process WebView scheme handlers (WKURLSchemeTask, WebViewAssetLoader) do not decompress HTTP
-// Content-Encoding streams; with precompression disabled, TryServe inflates .gz assets in memory.
-func (h *Handler) WithoutPrecompression() *Handler {
-	if h == nil {
-		return nil
-	}
-	h.disablePrecompression = true
-	return h
-}
-
-// ServeHTTP implements http.Handler so Handler can be passed directly to Wails AssetOptions.
+// ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !h.TryServe(w, r) {
 		http.NotFound(w, r)
@@ -137,10 +115,10 @@ func hasFile(fsys fs.FS, name string) bool {
 
 func isExcludedPath(reqPath string) bool {
 	switch reqPath {
-	case "/api", "/public", "/ws", "/health":
+	case "/api", "/public", "/ws", "/health", "/_byspace":
 		return true
 	}
-	for _, prefix := range []string{"/api/", "/public/"} {
+	for _, prefix := range []string{"/api/", "/public/", "/_byspace/"} {
 		if strings.HasPrefix(reqPath, prefix) {
 			return true
 		}
@@ -169,7 +147,7 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 
 	finalFile := resolvedFile
 	encoding := ""
-	if !isIndex && !h.disablePrecompression {
+	if !isIndex {
 		finalFile, encoding = h.resolveEncoding(resolvedFile, r.Header.Get("Accept-Encoding"))
 	}
 
@@ -187,7 +165,7 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	if isIndex && h.injectConnectionHint {
-		data = injectDaemonConnectionHint(data, r, h.explicitListen, h.label, h.credential)
+		data = injectDaemonConnectionHint(data, r, h.label, h.credential)
 	}
 
 	w.Header().Set("Content-Type", getContentType(resolvedFile))
@@ -260,13 +238,56 @@ func setCacheHeaders(w http.ResponseWriter, isIndex bool, resolvedFile string) {
 	}
 }
 
-func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListen, label, credential string) []byte {
-	host := explicitListen
-	useTLS := false
+func isLoopbackHost(hostPort string) bool {
+	host := strings.TrimSpace(hostPort)
 	if host == "" {
-		host = r.Host
-		useTLS = r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+		return false
 	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// IsDirectLoopbackRequest reports whether r arrived directly over loopback with a loopback Host header
+// and no reverse-proxy forwarding headers.
+func IsDirectLoopbackRequest(r *http.Request) bool {
+	return isDirectLoopbackRequest(r)
+}
+
+// IsLoopbackOrigin reports whether an HTTP Origin header is empty (same-origin GET) or names a loopback host.
+func IsLoopbackOrigin(origin string) bool {
+	trimmed := strings.TrimSpace(origin)
+	if trimmed == "" {
+		return true
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return isLoopbackHost(u.Host)
+}
+
+func isDirectLoopbackRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "Forwarded", "CF-Connecting-IP"} {
+		if strings.TrimSpace(r.Header.Get(header)) != "" {
+			return false
+		}
+	}
+	return isLoopbackHost(r.RemoteAddr) && isLoopbackHost(r.Host)
+}
+
+func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, label, credential string) []byte {
+	host := r.Host
+	useTLS := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 	hint := map[string]any{
 		"listen": host,
 		"useTls": useTLS,
@@ -274,7 +295,7 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 	if strings.TrimSpace(label) != "" {
 		hint["label"] = strings.TrimSpace(label)
 	}
-	if credential != "" {
+	if credential != "" && isDirectLoopbackRequest(r) {
 		hint["password"] = credential
 	}
 	b, err := json.Marshal(hint)
@@ -287,17 +308,7 @@ func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, explicitListe
 		"&", `\u0026`,
 	).Replace(string(b))
 
-	// When explicitListen is set, we are serving inside a Wails desktop window: load Wails'
-	// /wails/runtime.js (which registers the --wails-draggable mouse handlers and double-click zoom),
-	// map the titlebar's data-wails-drag attribute to the drag CSS, and sync the Windows caption
-	// tint from the sidebar backdrop. Window dragging is owned by the frontend's
-	// DesktopWindowTitleBar (web/src/app/desktop-window-titlebar.tsx); there is deliberately no
-	// page-wide top-strip mousedown hijack here — it ate text selection in the app header.
-	wailsHead := ""
-	if explicitListen != "" {
-		wailsHead = `<script type="module" src="/wails/runtime.js"></script><style>[data-wails-drag="true"]{--wails-draggable:drag;-webkit-user-select:none;user-select:none;cursor:default}button,[role="button"],a,input,textarea,select,[data-menu-item="true"],[tabindex="0"]{--wails-draggable:no-drag}</style><script>(function(){if(!/Windows/i.test(navigator.userAgent))return;var last="";function syncTint(){var el=document.querySelector('[data-testid="left-sidebar"]')||document.body;if(!el)return;var c=document.createElement("canvas").getContext("2d");if(!c)return;c.fillStyle="#f7f7f8";c.fillRect(0,0,1,1);var bg=getComputedStyle(el).backgroundColor;if(bg&&bg!=="rgba(0, 0, 0, 0)"&&bg!=="transparent"){c.fillStyle=bg;c.fillRect(0,0,1,1)}var d=c.getImageData(0,0,1,1).data,r=d[0],g=d[1],b=d[2],k=r+","+g+","+b;if(k===last)return;last=k;var dark=(0.2126*r+0.7152*g+0.0722*b)<128;fetch("/_byspace/desktop/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({titleBarColor:[r,g,b],titleBarDark:dark})}).catch(function(){last=""})}window.addEventListener("DOMContentLoaded",function(){setTimeout(syncTint,60);setTimeout(syncTint,400);new MutationObserver(function(){setTimeout(syncTint,80)}).observe(document.documentElement,{attributes:true,childList:true,subtree:true})});matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){setTimeout(syncTint,200)})})();</script>`
-	}
-	script := wailsHead + "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
+	script := "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
 	htmlStr := string(htmlBytes)
 	lower := strings.ToLower(htmlStr)
 	if idx := strings.Index(lower, "</head>"); idx != -1 {

@@ -1,4 +1,4 @@
-//go:build !darwin && !windows && !android
+//go:build !darwin && !windows
 
 package autostart
 

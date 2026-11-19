@@ -39,7 +39,7 @@ type, storage, and git metadata names retain their upstream `BySpace` spelling.
 ## Components at a glance
 
 - **Daemon:** Local server that spawns and manages agent processes and exposes the WebSocket API.
-- **App:** React web client (`web/`): browser, installed PWA, and the UI the Wails desktop and Android clients embed. The Expo app it replaced is retired, along with its native mobile builds and the Electron desktop app.
+- **App:** React web client (`web/`): browser, installed PWA, and the Local Web UI opened by the desktop tray host. The Expo app it replaced is retired, along with native mobile/WebView wrappers and the Electron desktop app.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
 - **Relay:** Optional encrypted bridge for remote access without opening ports directly.
 

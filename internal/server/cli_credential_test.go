@@ -229,3 +229,84 @@ func TestWebUIIsServedBeforeAuth(t *testing.T) {
 		t.Fatalf("GET /ws = %d, want 401", wsRecorder.Code)
 	}
 }
+
+func TestWebUILoopbackAutoInjectsCLICredentialOnlyForDirectLoopback(t *testing.T) {
+	homeDir := t.TempDir()
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<!doctype html><head><title>app</title></head><body>ok</body>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(Options{HomeDir: homeDir, Version: "test", WebDir: webDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	credential := EnsureCLICredential(homeDir)
+
+	// Direct loopback request gets the local CLI credential injected for zero-prompt Local Web login.
+	loopbackReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:6777/", nil)
+	loopbackReq.RemoteAddr = "127.0.0.1:54321"
+	loopbackReq.Host = "127.0.0.1:6777"
+	loopbackRec := httptest.NewRecorder()
+	srv.ServeHTTP(loopbackRec, loopbackReq)
+	if loopbackRec.Code != http.StatusOK {
+		t.Fatalf("loopback GET / = %d, want 200", loopbackRec.Code)
+	}
+	if !strings.Contains(loopbackRec.Body.String(), `"password":"`+credential+`"`) {
+		t.Fatalf("loopback index.html missing injected CLI credential: %s", loopbackRec.Body.String())
+	}
+
+	// Non-loopback LAN request must never receive the local CLI credential.
+	lanReq := httptest.NewRequest(http.MethodGet, "http://192.168.1.50:6777/", nil)
+	lanReq.RemoteAddr = "192.168.1.99:54321"
+	lanReq.Host = "192.168.1.50:6777"
+	lanRec := httptest.NewRecorder()
+	srv.ServeHTTP(lanRec, lanReq)
+	if lanRec.Code != http.StatusOK {
+		t.Fatalf("LAN GET / = %d, want 200", lanRec.Code)
+	}
+	if strings.Contains(lanRec.Body.String(), credential) {
+		t.Fatalf("LAN index.html leaked CLI credential: %s", lanRec.Body.String())
+	}
+}
+
+func TestDesktopSettingsEndpointRequiresDirectLoopbackAndLoopbackOrigin(t *testing.T) {
+	homeDir := t.TempDir()
+	srv := newTestServer(t, homeDir)
+	srv.SetDesktopSettingsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"desktop":true}`))
+	}))
+
+	// Direct loopback request succeeds.
+	okReq := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:6777/_byspace/desktop/settings", nil)
+	okReq.RemoteAddr = "127.0.0.1:54321"
+	okReq.Host = "127.0.0.1:6777"
+	okReq.Header.Set("Origin", "http://127.0.0.1:6777")
+	okRec := httptest.NewRecorder()
+	srv.ServeHTTP(okRec, okReq)
+	if okRec.Code != http.StatusOK {
+		t.Fatalf("loopback GET /_byspace/desktop/settings = %d, want 200", okRec.Code)
+	}
+
+	// Cross-site Origin on loopback is rejected (CSRF protection).
+	csrfReq := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:6777/_byspace/desktop/settings", nil)
+	csrfReq.RemoteAddr = "127.0.0.1:54321"
+	csrfReq.Host = "127.0.0.1:6777"
+	csrfReq.Header.Set("Origin", "https://evil.example")
+	csrfRec := httptest.NewRecorder()
+	srv.ServeHTTP(csrfRec, csrfReq)
+	if csrfRec.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin POST /_byspace/desktop/settings = %d, want 403", csrfRec.Code)
+	}
+
+	// Non-loopback client is rejected.
+	lanReq := httptest.NewRequest(http.MethodGet, "http://192.168.1.50:6777/_byspace/desktop/settings", nil)
+	lanReq.RemoteAddr = "192.168.1.99:54321"
+	lanReq.Host = "192.168.1.50:6777"
+	lanRec := httptest.NewRecorder()
+	srv.ServeHTTP(lanRec, lanReq)
+	if lanRec.Code != http.StatusForbidden {
+		t.Fatalf("LAN GET /_byspace/desktop/settings = %d, want 403", lanRec.Code)
+	}
+}

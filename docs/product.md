@@ -71,7 +71,7 @@ Anyone who builds software:
 
 ## Current state (November 2026)
 
-- Desktop (Wails v3), Android (Wails v3 sideload), web (browser + PWA), CLI
+- Desktop (System tray + Local Web / installed PWA), web (browser + PWA on desktop and mobile), CLI
 - Built-in providers: Claude Code (Agent SDK), Codex (app-server), OpenCode, Pi. Any ACP-compatible agent (e.g. GitHub Copilot) connects through the provider catalog.
 - One-click ACP provider catalog: CodeWhale, Cursor, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
 - Agents drive the daemon themselves through the bundled `byspace` skill and CLI (workspaces, agents, schedules, heartbeats, terminals, workspace renaming)

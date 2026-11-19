@@ -42,24 +42,13 @@ Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` sta
 
 Two roots, and nothing else gets a directory: `.dev/` holds everything a local build regenerates
 (dev binaries in `.dev/bin/`, intermediate bundles in `.dev/build/`, test evidence in
-`.dev/test-results/` and `.dev/vitest/`), `dist/` holds only what ships — zip, dmg, exe, apk, CLI
+`.dev/test-results/` and `.dev/vitest/`), `dist/` holds only what ships — zip, dmg, exe, CLI
 binaries, `SHA256SUMS`, npm tarballs. `build/` is packaging templates under Git; a build never writes
 into it.
 
-Four generated directories stay where their consumer requires them: `internal/webui/dist`
-(`//go:embed`), `packages/*/dist` (npm `exports`), `web/dist` (Vite default, wrangler `assets`), and
-`build/android/app/{build,src/main/jniLibs}` (Gradle layout). `make clean` clears the two roots and
-the embedded web assets, and leaves `.dev/byspace-home` alone.
-
-## Android build
-
-`make build-android` runs `build/android/build.sh` and needs a local Android toolchain:
-
-- `ANDROID_HOME` set to an SDK containing platform `android-36` and build-tools `36.0.0` (the SDK Android Studio installs works).
-- An NDK under `$ANDROID_HOME/ndk` (release CI uses `27.1.12297006`), or `ANDROID_NDK_HOME` pointing at one.
-- JDK 21: set `JAVA_HOME`, or `brew install openjdk@21` — the script falls back to `/opt/homebrew/opt/openjdk@21`.
-
-Release CI installs these itself (`.github/workflows/release.yml`, `build-android` job).
+Three generated directories stay where their consumer requires them: `internal/webui/dist`
+(`//go:embed`), `packages/*/dist` (npm `exports`), and `web/dist` (Vite default, wrangler `assets`).
+`make clean` clears the two roots and the embedded web assets, and leaves `.dev/byspace-home` alone.
 
 ## Worktree starting refs
 

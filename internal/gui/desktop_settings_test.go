@@ -1,40 +1,95 @@
-//go:build !nogui
-
 package gui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestDesktopWindowActionDoesNotPersistSettings(t *testing.T) {
+func TestDesktopSettingsAPIGetAndPost(t *testing.T) {
 	homeDir := t.TempDir()
-	settingsPath := filepath.Join(homeDir, desktopSettingsFile)
-	if err := os.WriteFile(settingsPath, []byte(`{"theme":"dark"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	called := ""
+	takeOverCalled := false
 	handler := withDesktopSettingsAPI(
-		http.NotFoundHandler(), homeDir, nil, nil, nil, nil,
-		func(action string) map[string]any { called = action; return nil }, nil, nil, nil,
+		http.NotFoundHandler(),
+		homeDir,
+		func() DaemonHostStatus {
+			return DaemonHostStatus{InProcess: true, Healthy: true, Addr: "127.0.0.1:6777"}
+		},
+		func() { takeOverCalled = true },
+		nil,
+		nil,
 	)
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/_byspace/desktop/window", strings.NewReader(`{"action":"minimize"}`)))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("window action returned %d: %s", recorder.Code, recorder.Body.String())
+
+	getRec := httptest.NewRecorder()
+	handler.ServeHTTP(getRec, httptest.NewRequest(http.MethodGet, "/_byspace/desktop/settings", nil))
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET returned %d: %s", getRec.Code, getRec.Body.String())
 	}
-	if called != "minimize" {
-		t.Fatalf("window action = %q, want minimize", called)
+
+	postRec := httptest.NewRecorder()
+	handler.ServeHTTP(
+		postRec,
+		httptest.NewRequest(
+			http.MethodPost,
+			"/_byspace/desktop/settings",
+			strings.NewReader(`{"keepAwake":"display","noAutoDownload":true,"takeOverDaemon":true}`),
+		),
+	)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("POST returned %d: %s", postRec.Code, postRec.Body.String())
 	}
-	content, err := os.ReadFile(settingsPath)
-	if err != nil {
+	if !takeOverCalled {
+		t.Fatal("expected takeOverDaemon to invoke callback")
+	}
+	var body struct {
+		Desktop  bool            `json:"desktop"`
+		Settings DesktopSettings `json:"settings"`
+	}
+	if err := json.Unmarshal(postRec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if string(content) != `{"theme":"dark"}` {
-		t.Fatalf("window action rewrote settings: %s", content)
+	if !body.Desktop || body.Settings.KeepAwake != "display" || !body.Settings.NoAutoDownload {
+		t.Fatalf("unexpected response body: %+v", body)
 	}
+}
+
+func TestDesktopSettingsRestartToUpdateInvokesAutoRelaunch(t *testing.T) {
+	homeDir := t.TempDir()
+	relaunchCh := make(chan struct{}, 1)
+	updater := &ClientUpdater{
+		Version: "0.20.2",
+		HomeDir: homeDir,
+		AutoRelaunch: func() {
+			select {
+			case relaunchCh <- struct{}{}:
+			default:
+			}
+		},
+	}
+	handler := withDesktopSettingsAPI(
+		http.NotFoundHandler(),
+		homeDir,
+		func() DaemonHostStatus {
+			return DaemonHostStatus{InProcess: true, Healthy: true, Addr: "127.0.0.1:6777"}
+		},
+		nil,
+		updater,
+		nil,
+	)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(
+		rec,
+		httptest.NewRequest(
+			http.MethodPost,
+			"/_byspace/desktop/settings",
+			strings.NewReader(`{"restartToUpdate":true}`),
+		),
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST returned %d: %s", rec.Code, rec.Body.String())
+	}
+	<-relaunchCh
 }

@@ -2,7 +2,7 @@
 
 ## 结论
 
-- 前端在 `web/`：Vite + React 19 + TS + Tailwind v4 + shadcn/ui（Radix）+ React Router。三个宿主（浏览器/PWA、Wails 桌面、Android webview）都是标准浏览器引擎，无平台门。
+- 前端在 `web/`：Vite + React 19 + TS + Tailwind v4 + shadcn/ui（Radix）+ React Router。唯一宿主是标准浏览器与已安装 PWA，无平台门（Wails 桌面 WebView 与 Android WebView 壳已于 2026-11-19 退役）。
 - shadcn/ui 是唯一组件参照，light + dark 一起改，布局不动。参照快照在 `design/references/shadcn/`（上游 commit b8d7baa15b1dca5716f13153e63795fc3d741f6b，2026-10-30），数值从快照抄，不凭印象。
 - Expo（RN Web）已退役：2026-11-03 切换完成，逻辑在 web/src，packages/app + Expo + RN 依赖已删；旧实现只存在于 git tag `archive/expo-app`（`git show archive/expo-app:packages/app/src/<path>` 可查）。
 - `web/src` 是一棵树、一个 `@/` alias、三种目录角色：`ui/` vendored shadcn（`npx shadcn add` 落点，永不 restyle）、`platform/` RN/Expo API 的网页替身、其余全是功能目录。`ui/` 与 `platform/` 只许 import npm 包与彼此，功能目录自由。规则由 `scripts/web-layout.test.mjs` 机械守住，不靠文档自觉。应用自建在 shadcn 之上的组件放 `widgets/`，不放 `ui/`。

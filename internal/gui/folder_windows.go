@@ -1,4 +1,4 @@
-//go:build windows && !nogui
+//go:build windows
 
 package gui
 
@@ -9,12 +9,10 @@ import (
 	"syscall"
 
 	"github.com/ByteTrue/byspace/internal/proc"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// openFolder starts Explorer on path without blocking the GUI thread (ported from
-// magpie's internal/gui/folder_windows.go).
-func openFolder(_ *application.App, path string) error {
+// openFolder starts Explorer on path without blocking the caller.
+func openFolder(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		return err
 	}

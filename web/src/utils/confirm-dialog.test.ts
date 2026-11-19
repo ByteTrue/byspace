@@ -5,12 +5,10 @@ import { confirmDialog, getPendingConfirmDialog } from "./confirm-dialog";
 describe("confirmDialog", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    delete (window as { wails?: unknown }).wails;
     getPendingConfirmDialog()?.settle(false);
   });
 
-  it("opens the in-page dialog in the desktop app too, never a native one", async () => {
-    (window as { wails?: unknown }).wails = {};
+  it("opens the in-page dialog and never a native fetch", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const answer = confirmDialog({ title: "Close terminal?", message: "" });

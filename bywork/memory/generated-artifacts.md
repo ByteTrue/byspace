@@ -3,7 +3,7 @@
 ## 结论
 
 - 生成文件只在它是外部契约时才提交进仓库；提交的生成文件必须配漂移测试（生成器重跑比对）。
-- 产物两个根：`.dev/` 装本地可再生的一切，`dist/` 只装对外发布物；`build/` 只放 git 跟踪的打包模板，构建不许往里写。四个例外由消费方钉死：`internal/webui/dist`（go:embed）、`packages/*/dist`（npm exports）、`web/dist`（wrangler assets）、`build/android/app/{build,src/main/jniLibs}`（gradle）。布局写在 `docs/development.md#build-outputs`。
+- 产物两个根：`.dev/` 装本地可再生的一切，`dist/` 只装对外发布物；`build/` 只放 git 跟踪的打包模板，构建不许往里写。三个例外由消费方钉死：`internal/webui/dist`（go:embed）、`packages/*/dist`（npm exports）、`web/dist`（wrangler assets）（原 `build/android` 已随 Wails v3 退役移除）。布局写在 `docs/development.md#build-outputs`。
 - 过程证据靠配置改落点，不靠事后删：playwright `outputDir`、vitest `attachmentsDir`/`screenshotDirectory` 都指向 `.dev/`。vitest 的显式 `page.screenshot({path})` 仍按测试文件目录解析（`@vitest/browser` 的 `resolveScreenshotPath` 对 customPath 走 `resolve(dirname(testPath), customPath)`），配置管不到，写截图别传相对 path。
 - `rm -rf .dev` 现在会连 dev daemon 状态一起删；`make clean` 只删 `.dev/{bin,build,test-results,vitest}` 与 `dist/`，不碰 `.dev/byspace-home`。
 - 批量 URL/symlink 改名前先确认改名目标存在；改名脚本本身要在真实目标上验证。

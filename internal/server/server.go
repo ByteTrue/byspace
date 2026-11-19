@@ -73,6 +73,8 @@ type Options struct {
 	DisableWebUI bool
 	// RelayUseTLS marks pairing offers as wss://. Set from `serve --relay-use-tls`.
 	RelayUseTLS bool
+	// DesktopSettingsHandler serves /_byspace/desktop/settings for local loopback browser clients.
+	DesktopSettingsHandler http.Handler
 }
 
 type managedPi struct {
@@ -182,10 +184,11 @@ type Server struct {
 	store     *store.Store
 	schedules *schedule.Service
 	// prStatus keeps the PR status of every live checkout fresh while a client is connected.
-	prStatus     *prStatusState
-	webUI        *webui.Handler
-	piCommand    string
-	piSessionDir string
+	prStatus               *prStatusState
+	webUI                  *webui.Handler
+	desktopSettingsHandler http.Handler
+	piCommand              string
+	piSessionDir           string
 
 	mu                sync.Mutex
 	agents            map[string]*managedPi
@@ -302,7 +305,11 @@ type Server struct {
 	setupRuns   map[string]bool
 	// controlRequests receives a client's restart/stop ask. The process owner listens: the CLI's
 	// `serve` loop, or the desktop app whose daemon runs in-process. A server cannot restart itself.
-	controlRequests chan ControlRequest
+	controlRequests      chan ControlRequest
+	selfUpdateMu         sync.Mutex
+	selfUpdateBusy       bool
+	selfUpdateExecutable string
+	selfUpdateFetch      func(ctx context.Context, version string) ([]byte, error)
 	// notifiedChildren records which (child, reason) pairs already prompted their parent.
 	notifiedChildren   map[string]bool
 	notifiedChildrenMu sync.Mutex
@@ -353,7 +360,8 @@ func New(opts Options) (*Server, error) {
 		ui = webui.NewHandler(opts.WebDir)
 	}
 	if ui != nil {
-		ui = ui.WithConnectionHint("BySpace")
+		localToken := EnsureCLICredential(homeDir)
+		ui = ui.WithConnectionHint("BySpace").WithLocalCredential(localToken)
 	}
 
 	st := store.New(homeDir)
@@ -382,44 +390,45 @@ func New(opts Options) (*Server, error) {
 	_ = EnsureCLICredential(homeDir)
 
 	srv := &Server{
-		providerCatalogs:      make(map[string]*providerCatalog),
-		controlRequests:       make(chan ControlRequest, 1),
-		homeDir:               homeDir,
-		listenAddr:            opts.ListenAddr,
-		relay:                 newRelayRuntime(RelayConfig{}),
-		relayUseTLS:           opts.RelayUseTLS,
-		serverID:              serverID,
-		version:               ver,
-		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
-		startedAt:             time.Now(),
-		metrics:               newRuntimeMetrics(),
-		directory:             directorysync.NewService(),
-		keyPair:               kp,
-		pubKeyB64:             pubB64,
-		vapidKeys:             vapidKeys,
-		store:                 st,
-		webUI:                 ui,
-		piCommand:             opts.PiCommand,
-		piSessionDir:          opts.PiSessionDir,
-		agents:                make(map[string]*managedPi),
-		terminals:             make(map[uint8]*terminal.Session),
-		terminalSlotsByID:     make(map[string]uint8),
-		downloadTokens:        make(map[string]downloadTokenEntry),
-		setupSnapshots:        make(map[string]*setupSnapshot),
-		workspaceScripts:      make(map[string]*workspaceScript),
-		scriptPorts:           newServicePortAllocator(),
-		agentLoads:            make(map[string]*agentLoad),
-		terminalUnsubscribers: make(map[frameSink]map[string][]func()),
-		terminalDelivered:     make(map[frameSink]map[string]int64),
-		idempotentAgents:      make(map[string]string),
-		fileSubs:              make(map[string]fileSubscription),
-		diffSubs:              make(map[string]diffSubscription),
-		clients:               make(map[frameSink]bool),
-		timelineViews:         make(map[frameSink]map[string]bool),
-		clientPresence:        make(map[frameSink]attention.ClientPresence),
-		directorySyncSinks:    make(map[frameSink]bool),
-		pollStop:              make(chan struct{}),
-		skillsQueue:           newSerialQueue(),
+		providerCatalogs:       make(map[string]*providerCatalog),
+		controlRequests:        make(chan ControlRequest, 1),
+		homeDir:                homeDir,
+		listenAddr:             opts.ListenAddr,
+		relay:                  newRelayRuntime(RelayConfig{}),
+		relayUseTLS:            opts.RelayUseTLS,
+		serverID:               serverID,
+		version:                ver,
+		epoch:                  fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
+		startedAt:              time.Now(),
+		metrics:                newRuntimeMetrics(),
+		directory:              directorysync.NewService(),
+		keyPair:                kp,
+		pubKeyB64:              pubB64,
+		vapidKeys:              vapidKeys,
+		store:                  st,
+		webUI:                  ui,
+		desktopSettingsHandler: opts.DesktopSettingsHandler,
+		piCommand:              opts.PiCommand,
+		piSessionDir:           opts.PiSessionDir,
+		agents:                 make(map[string]*managedPi),
+		terminals:              make(map[uint8]*terminal.Session),
+		terminalSlotsByID:      make(map[string]uint8),
+		downloadTokens:         make(map[string]downloadTokenEntry),
+		setupSnapshots:         make(map[string]*setupSnapshot),
+		workspaceScripts:       make(map[string]*workspaceScript),
+		scriptPorts:            newServicePortAllocator(),
+		agentLoads:             make(map[string]*agentLoad),
+		terminalUnsubscribers:  make(map[frameSink]map[string][]func()),
+		terminalDelivered:      make(map[frameSink]map[string]int64),
+		idempotentAgents:       make(map[string]string),
+		fileSubs:               make(map[string]fileSubscription),
+		diffSubs:               make(map[string]diffSubscription),
+		clients:                make(map[frameSink]bool),
+		timelineViews:          make(map[frameSink]map[string]bool),
+		clientPresence:         make(map[frameSink]attention.ClientPresence),
+		directorySyncSinks:     make(map[frameSink]bool),
+		pollStop:               make(chan struct{}),
+		skillsQueue:            newSerialQueue(),
 	}
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
 	// config.daemon.hostnames takes precedence when present.
@@ -543,6 +552,11 @@ func (s *Server) Close() error {
 	return nil
 }
 
+// SetDesktopSettingsHandler installs the loopback-only /_byspace/desktop/settings HTTP handler.
+func (s *Server) SetDesktopSettingsHandler(h http.Handler) {
+	s.desktopSettingsHandler = h
+}
+
 // ServeHTTP handles /health, /ws, and embedded/external Web UI routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS mirrors archive/packages/server/src/server/bootstrap.ts: an allow-list from
@@ -566,8 +580,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// the local UI unreachable in the one situation it exists for: a browser opened at
 	// http://127.0.0.1:6777 answers `{"error":"Unauthorized"}` and a password box it never gets.
 	//
-	// Safe because TryServe refuses /api, /mcp, /public, /ws and /health itself.
+	// Safe because TryServe refuses /api, /mcp, /public, /ws, /health and /_byspace itself.
 	if s.webUI != nil && s.webUI.TryServe(w, r) {
+		return
+	}
+
+	if r.URL.Path == "/_byspace/desktop/settings" && s.desktopSettingsHandler != nil {
+		secFetchSite := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+		sameSiteFetch := secFetchSite == "" || secFetchSite == "same-origin" || secFetchSite == "same-site" || secFetchSite == "none"
+		if !webui.IsDirectLoopbackRequest(r) || !webui.IsLoopbackOrigin(r.Header.Get("Origin")) || !sameSiteFetch {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		s.desktopSettingsHandler.ServeHTTP(w, r)
 		return
 	}
 
@@ -4328,33 +4353,17 @@ func (s *Server) rememberIdempotentAgent(key, agentID string) {
 
 // applyCORS writes the allow-listed CORS headers and answers preflight requests.
 // It reports whether the request was fully handled.
-func isWailsNativeOrigin(origin string) bool {
-	lower := strings.ToLower(strings.TrimSpace(origin))
-	return lower == "wails://localhost" ||
-		lower == "wails://wails.localhost" ||
-		lower == "http://wails.localhost" ||
-		lower == "https://wails.localhost"
-}
-
 func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin != "" {
-		if isWailsNativeOrigin(origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Vary", "Origin")
-		} else {
-			for _, allowed := range s.corsOrigins() {
-				if allowed == "*" || allowed == origin {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-					w.Header().Set("Vary", "Origin")
-					break
-				}
+		for _, allowed := range s.corsOrigins() {
+			if allowed == "*" || allowed == origin {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Vary", "Origin")
+				break
 			}
 		}
 	}
@@ -4832,6 +4841,14 @@ func (s *Server) requestControl(req ControlRequest) {
 	case s.controlRequests <- req:
 	default:
 	}
+}
+
+// RequestRestart asks the process owner to restart the daemon for the given reason.
+func (s *Server) RequestRestart(reason string) {
+	s.requestControl(ControlRequest{
+		Restart: true,
+		Reason:  reason,
+	})
 }
 
 // filterSnapshotEntries keeps only the providers named in a refresh request.

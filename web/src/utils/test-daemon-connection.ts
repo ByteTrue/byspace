@@ -62,11 +62,6 @@ function readBrowserConnectionContext(): DaemonConnectionBrowserContext {
   if (typeof window === "undefined") {
     return { isWeb: false, protocol: null };
   }
-  const hostname = window.location?.hostname?.toLowerCase() ?? "";
-  // Wails v3 serves Android WebView assets from https://wails.localhost with mixed content allowed.
-  if (hostname === "wails.localhost" || "wails" in window) {
-    return { isWeb: false, protocol: window.location?.protocol ?? null };
-  }
   return {
     isWeb: true,
     protocol: window.location.protocol,

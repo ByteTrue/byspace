@@ -9,6 +9,9 @@
   "orientation": "portrait",
   "theme_color": "#181B1A",
   "background_color": "#181B1A",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "categories": ["developer", "productivity", "utilities"],
   "icons": [
     {

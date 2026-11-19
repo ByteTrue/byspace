@@ -23,8 +23,10 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/ByteTrue/byspace/internal/daemon"
+	"github.com/ByteTrue/byspace/internal/gui"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/relay"
+	"github.com/ByteTrue/byspace/internal/selfupdate"
 	"github.com/ByteTrue/byspace/internal/server"
 	"github.com/ByteTrue/byspace/internal/store"
 )
@@ -36,7 +38,7 @@ const DefaultDevAddr = "127.0.0.1:6778"
 
 const usageText = `byspace — single-binary AI coding agent host, desktop & mobile app, web workbench, CLI & E2EE relay
 
-  byspace [app|gui|tray]          open the native Wails desktop app (or start in the system tray)
+  byspace [app|gui|tray]          start the desktop system tray and open the local web app
   byspace serve [--addr host:port] [--home <dir>] [--relay <ws-url>] [--web-dir <dir>]
                                   run the daemon, Pi agent host, and web UI (default 127.0.0.1:6777)
   byspace web [--addr host:port] [--lan] [--home <dir>] [--web-dir <dir>]
@@ -407,6 +409,9 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	settingsHandler, cleanupSettings := gui.NewStandaloneSettingsHandler(resolvedHome, version, listenAddr, srv.HasActiveAgentWork, srv.RequestRestart)
+	defer cleanupSettings()
+	srv.SetDesktopSettingsHandler(settingsHandler)
 	// The daemon ships the skills, so an installed copy can be stale after an update. This runs on
 	// the real entry point, not in server.New: constructing a server must not write to the user's
 	// skill homes (tests and the offline pairing command also construct one).
@@ -439,8 +444,11 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		return err
 	}
 	boundAddr := listenTarget.Address()
+	startupExe, _ := selfupdate.Executable()
 	exeName := ""
-	if exe, exeErr := os.Executable(); exeErr == nil {
+	if startupExe != "" {
+		exeName = filepath.Base(startupExe)
+	} else if exe, exeErr := os.Executable(); exeErr == nil {
 		exeName = filepath.Base(exe)
 	}
 	_ = daemon.WritePIDLock(srv.HomeDir(), daemon.PIDLockInfo{
@@ -520,7 +528,7 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if !addrExplicit && strings.TrimSpace(os.Getenv("BYSPACE_LISTEN")) == "" {
 		restartArgs = withoutFlag(args, "addr")
 	}
-	if _, spawnErr := daemon.StartBackgroundArgs("", srv.HomeDir(), restartArgs); spawnErr != nil {
+	if _, spawnErr := daemon.StartBackgroundArgs(startupExe, srv.HomeDir(), restartArgs); spawnErr != nil {
 		fmt.Fprintf(os.Stderr, "daemon restart: %v\n", spawnErr)
 	}
 	return nil
@@ -557,7 +565,23 @@ func runWeb(version string, args []string, stdout io.Writer) error {
 	// If a daemon is already answering /health on this address, report its URL instead of failing on EADDRINUSE.
 	if st, err := probeHealth(listenAddr); err == nil {
 		fmt.Fprintf(stdout, "● byspace web already served on http://%s [serverId=%s]\n", listenAddr, st.ServerID)
+		if os.Getenv("BYSPACE_E2E") != "1" {
+			_ = gui.OpenLocalWebApp(gui.BuildLocalWebURL(daemon.DialAddress(listenAddr), ""))
+		}
 		return nil
+	}
+
+	if os.Getenv("BYSPACE_E2E") != "1" {
+		go func() {
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := probeHealth(listenAddr); err == nil {
+					_ = gui.OpenLocalWebApp(gui.BuildLocalWebURL(daemon.DialAddress(listenAddr), ""))
+					return
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+		}()
 	}
 
 	return runServe(version, []string{"--addr", listenAddr, "--home", resolvedHome, "--web-dir", *webDir}, stdout)

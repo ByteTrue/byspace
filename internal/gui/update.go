@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -31,7 +30,6 @@ type ClientUpdater struct {
 	CheckInterval time.Duration
 	OnFound       func(newVersion string)
 	OnReady       func(newVersion string)
-	OnAndroidAPK  func(newVersion, apkURL string)
 	IsIdle        func() bool
 	AutoRelaunch  func()
 
@@ -63,15 +61,13 @@ func (u *ClientUpdater) Start() {
 		u.CheckInterval = 6 * time.Hour
 	}
 	u.stopCh = make(chan struct{})
-	if runtime.GOOS != "android" {
-		if b := selfupdate.Bundle(); b != "" && selfupdate.Writable(filepath.Dir(b)) {
-			u.bundle = b
-		} else if exe, err := selfupdate.Executable(); err == nil && selfupdate.Writable(filepath.Dir(exe)) {
-			u.exe = exe
-			u.self, _ = os.Stat(exe)
-			selfupdate.RemoveOld(exe)
-			selfupdate.RemoveStaleNew(exe)
-		}
+	if b := selfupdate.Bundle(); b != "" && selfupdate.Writable(filepath.Dir(b)) {
+		u.bundle = b
+	} else if exe, err := selfupdate.Executable(); err == nil && selfupdate.Writable(filepath.Dir(exe)) {
+		u.exe = exe
+		u.self, _ = os.Stat(exe)
+		selfupdate.RemoveOld(exe)
+		selfupdate.RemoveStaleNew(exe)
 	}
 	u.mu.Unlock()
 
@@ -193,17 +189,6 @@ func (u *ClientUpdater) Check(forceDownload bool) {
 		return
 	}
 
-	if runtime.GOOS == "android" {
-		u.mu.Lock()
-		u.latest = rel
-		u.state = "found"
-		u.mu.Unlock()
-		if apk, ok := rel.Assets[selfupdate.APKAsset()]; ok && apk.URL != "" && u.OnAndroidAPK != nil {
-			u.OnAndroidAPK(rel.Version, apk.URL)
-		}
-		return
-	}
-
 	u.mu.Lock()
 	bundle := u.bundle
 	exe := u.exe
@@ -298,9 +283,6 @@ func (u *ClientUpdater) downloadAndStage(ctx context.Context, rel *selfupdate.Re
 // AutoTick checks whether an already-staged update should be automatically installed and
 // relaunched because AutoRestart is enabled in settings and the app/daemon are idle.
 func (u *ClientUpdater) AutoTick() {
-	if runtime.GOOS == "android" {
-		return
-	}
 	prefs := LoadDesktopSettings(u.HomeDir)
 	if prefs.NoAutoUpdate || !prefs.AutoRestart {
 		return

@@ -1,6 +1,5 @@
-// Port of archive/expo-app:packages/app/src/screens/settings/desktop-app-section.tsx: the Wails desktop app's General and About rows. Same logic, DOM view.
+// Port of archive/expo-app:packages/app/src/screens/settings/desktop-app-section.tsx: the local desktop host's General and About rows. Same logic, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/desktop-app-section.py; edit it directly.
-import { isWailsDesktopContainer } from "@/platform/wails";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "cn";
@@ -10,18 +9,28 @@ import { Switch } from "@/ui/switch";
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/ui/item";
 
 type KeepAwakeLevel = "off" | "system" | "display";
-type DockMode = "hide" | "window" | "show";
 type UpdateEveryStr = "30" | "60" | "360" | "1440";
 
 interface DesktopPreferences {
   keepAwake?: KeepAwakeLevel;
-  dockMode?: DockMode;
-  hideFromDock: boolean;
-  lightweight: boolean;
   noAutoUpdate: boolean;
   updateEvery?: number;
   noAutoDownload: boolean;
   autoRestart: boolean;
+}
+
+function isLoopbackDesktopOrigin(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const hostname = window.location?.hostname?.toLowerCase() ?? "";
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1" ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost")
+  );
 }
 
 interface DaemonHostStatus {
@@ -205,12 +214,12 @@ function useDesktopSettingsState() {
         setState(data);
       }
     } catch {
-      // Ignore outside the Wails desktop host
+      // Ignore when the local host settings endpoint is unavailable
     }
   }, []);
 
   useEffect(() => {
-    if (!isWailsDesktopContainer()) {
+    if (!isLoopbackDesktopOrigin()) {
       return;
     }
     void fetchSettings();
@@ -251,8 +260,7 @@ function useDesktopSettingsState() {
 }
 
 /**
- * Desktop rows embedded at the bottom of the Settings → General card (matching Magpie's General
- * page: Open at login, Show in Dock [Hide | With window | Show], Lightweight mode, Prevent sleep
+ * Desktop rows embedded at the bottom of the Settings → General card (Open at login, Prevent sleep
  * [Off | On | Screen on too]).
  */
 export function DesktopGeneralRows() {
@@ -260,15 +268,6 @@ export function DesktopGeneralRows() {
   const isZh = isChineseLanguage(i18n.language);
   const { state, sendPatch } = useDesktopSettingsState();
   const prefs = state?.settings;
-
-  const dockOptions = useMemo(
-    () => [
-      { value: "hide" as const, label: isZh ? "隐藏" : "Hide" },
-      { value: "window" as const, label: isZh ? "打开窗口时" : "With window" },
-      { value: "show" as const, label: isZh ? "常驻" : "Show" },
-    ],
-    [isZh],
-  );
 
   const sleepOptions = useMemo(
     () => [
@@ -283,17 +282,6 @@ export function DesktopGeneralRows() {
     (value: boolean) => sendPatch({ openAtLogin: value }),
     [sendPatch],
   );
-  const handleDockModeChange = useCallback(
-    (value: string) => {
-      const mode = dockOptions.find((option) => option.value === value)?.value;
-      if (mode) sendPatch({ dockMode: mode });
-    },
-    [dockOptions, sendPatch],
-  );
-  const handleLightweightChange = useCallback(
-    (value: boolean) => sendPatch({ lightweight: value }),
-    [sendPatch],
-  );
   const handleKeepAwakeChange = useCallback(
     (value: string) => {
       const level = sleepOptions.find((option) => option.value === value)?.value;
@@ -306,8 +294,6 @@ export function DesktopGeneralRows() {
     return null;
   }
 
-  const isMac = state?.platform === "darwin";
-  const dockMode: DockMode = prefs.dockMode ?? (prefs.hideFromDock ? "window" : "show");
   const keepAwake: KeepAwakeLevel = prefs.keepAwake ?? "system";
 
   return (
@@ -321,38 +307,6 @@ export function DesktopGeneralRows() {
           onCheckedChange={handleOpenAtLoginChange}
           aria-label={isZh ? "开机自启" : "Open at login"}
           data-testid="desktop-open-at-login-toggle"
-        />
-      </Item>
-      {isMac ? (
-        <Item variant="outline">
-          <ItemContent>
-            <ItemTitle>{isZh ? "程序坞 (Dock) 图标" : "Show in Dock"}</ItemTitle>
-          </ItemContent>
-          <Tabs value={dockMode} onValueChange={handleDockModeChange}>
-            <TabsList>
-              {dockOptions.map((option) => (
-                <TabsTrigger key={option.value} value={option.value}>
-                  {option.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </Item>
-      ) : null}
-      <Item variant="outline">
-        <ItemContent>
-          <ItemTitle>{isZh ? "轻量模式" : "Lightweight mode"}</ItemTitle>
-          <ItemDescription>
-            {isZh
-              ? "窗口关闭 1 分钟后释放约 100 MB 内存；后台 Daemon 与 Agent 继续运行，仅下次打开时重载页面"
-              : "A closed window frees about 100 MB after a minute; the daemon and agents keep running, only the page reloads"}
-          </ItemDescription>
-        </ItemContent>
-        <Switch
-          checked={prefs.lightweight}
-          onCheckedChange={handleLightweightChange}
-          aria-label={isZh ? "轻量模式" : "Lightweight mode"}
-          data-testid="desktop-lightweight-toggle"
         />
       </Item>
       <Item variant="outline">

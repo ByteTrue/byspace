@@ -59,25 +59,34 @@ func TestWebUIHandlerRoutingAndCompression(t *testing.T) {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 
-	// 4. Explicit connection hint + WithoutPrecompression for Wails in-process asset serving
-	wailsHandler := NewFSHandler(mockFS).
-		WithoutPrecompression().
-		WithExplicitConnectionHint("127.0.0.1:6777", "BySpace")
+	// 4. Connection hint + local credential only injected on direct loopback requests
+	loopbackHandler := NewFSHandler(mockFS).
+		WithConnectionHint("BySpace").
+		WithLocalCredential("local-cli-token-123")
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "https://wails.localhost/", nil)
-	wailsHandler.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `"listen":"127.0.0.1:6777"`) || !strings.Contains(rec.Body.String(), `"useTls":false`) {
-		t.Fatalf("expected explicit loopback connection hint, got %q", rec.Body.String())
+	req = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:6777/", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	loopbackHandler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"listen":"127.0.0.1:6777"`) || !strings.Contains(rec.Body.String(), `"password":"local-cli-token-123"`) {
+		t.Fatalf("expected direct loopback request to receive credential in connection hint, got %q", rec.Body.String())
 	}
 
+	// Non-loopback remote address must NOT receive the local credential
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "https://wails.localhost/assets/main-0123456789abcdef.js", nil)
-	req.Header.Set("Accept-Encoding", "gzip, br")
-	wailsHandler.ServeHTTP(rec, req)
-	if rec.Header().Get("Content-Encoding") != "" {
-		t.Fatalf("expected uncompressed asset for Wails scheme handler, got Content-Encoding=%q", rec.Header().Get("Content-Encoding"))
+	req = httptest.NewRequest(http.MethodGet, "http://192.168.1.50:6777/", nil)
+	req.RemoteAddr = "192.168.1.99:54321"
+	loopbackHandler.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), `"password"`) || strings.Contains(rec.Body.String(), "local-cli-token-123") {
+		t.Fatalf("non-loopback request must never receive local credential, got %q", rec.Body.String())
 	}
-	if rec.Body.String() != "console.log(1)" {
-		t.Fatalf("expected raw js body, got %q", rec.Body.String())
+
+	// Reverse-proxied request on loopback (X-Forwarded-For or non-loopback Host) must NOT receive the local credential
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:6777/", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
+	loopbackHandler.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), `"password"`) || strings.Contains(rec.Body.String(), "local-cli-token-123") {
+		t.Fatalf("proxied request must never receive local credential, got %q", rec.Body.String())
 	}
 }

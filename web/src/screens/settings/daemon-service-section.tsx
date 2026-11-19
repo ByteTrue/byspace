@@ -1,6 +1,5 @@
 // Port of archive/expo-app:packages/app/src/screens/settings/daemon-service-section.tsx: the daemon service toggle, DOM view.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/settings-small-sections.py; edit it directly.
-import { isWailsDesktopContainer } from "@/platform/wails";
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
@@ -8,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { Switch } from "@/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -42,8 +40,6 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const localDaemonServerId = useLocalDaemonServerId();
-  const isLocalDaemon = localDaemonServerId === serverId;
   const serviceFeature = useHostFeature(serverId, "daemonServiceInstall");
   const { config } = useDaemonConfig(serverId);
   const [isBusy, setIsBusy] = useState(false);
@@ -98,10 +94,7 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
     [client, hostLabel, t],
   );
 
-  // Inside the Wails desktop app, the local host's login startup is owned by Settings → General →
-  // Open at login (which launches the tray app and its in-process daemon together). Hide the
-  // duplicate headless OS service toggle for the local host while keeping it for remote servers.
-  if (serviceFeature !== true || (isWailsDesktopContainer() && isLocalDaemon)) {
+  if (serviceFeature !== true) {
     return null;
   }
 

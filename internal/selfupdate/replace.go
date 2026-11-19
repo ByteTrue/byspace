@@ -95,6 +95,36 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 	result := Result{PreviousVersion: u.CurrentVersion}
 	u.report(PhaseStarting)
 
+	if u.ExecutablePath == "" && u.Fetch == nil && strings.TrimSpace(os.Getenv("BYSPACE_RELEASE_BASE_URL")) == "" {
+		if bundle := Bundle(); bundle != "" {
+			if reason := writableReason(bundle); reason != "" {
+				result.Error = reason
+				return result, nil
+			}
+			u.report(PhaseDownloading)
+			rel, err := Latest(ctx)
+			if err != nil {
+				result.Error = fmt.Sprintf("download failed: %v", err)
+				return result, nil
+			}
+			staged, err := StageApp(ctx, rel, bundle)
+			if err != nil {
+				result.Error = fmt.Sprintf("download failed: %v", err)
+				return result, nil
+			}
+			u.report(PhaseInstalling)
+			if err := InstallApp(staged, bundle); err != nil {
+				result.Error = fmt.Sprintf("install failed: %v", err)
+				return result, nil
+			}
+			u.report(PhaseComplete)
+			result.Success = true
+			result.NewVersion = rel.Version
+			result.RestartRequired = true
+			return result, nil
+		}
+	}
+
 	executable, err := u.executable()
 	if err != nil {
 		result.Error = err.Error()
@@ -107,8 +137,15 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 		return result, nil
 	}
 
+	targetVersion := u.TargetVersion
+	if targetVersion == "" && u.Fetch == nil && strings.TrimSpace(os.Getenv("BYSPACE_RELEASE_BASE_URL")) == "" {
+		if rel, relErr := Latest(ctx); relErr == nil && rel != nil && rel.Version != "" {
+			targetVersion = rel.Version
+		}
+	}
+
 	u.report(PhaseDownloading)
-	payload, err := u.fetch(ctx)
+	payload, err := u.fetchVersion(ctx, targetVersion)
 	if err != nil {
 		result.Error = fmt.Sprintf("download failed: %v", err)
 		return result, nil
@@ -126,7 +163,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 
 	u.report(PhaseComplete)
 	result.Success = true
-	result.NewVersion = u.TargetVersion
+	result.NewVersion = targetVersion
 	result.RestartRequired = true
 	return result, nil
 }
@@ -155,12 +192,12 @@ func (u *Updater) executable() (string, error) {
 	return resolved, nil
 }
 
-// fetch downloads the release payload.
-func (u *Updater) fetch(ctx context.Context) ([]byte, error) {
+// fetchVersion downloads the release payload.
+func (u *Updater) fetchVersion(ctx context.Context, version string) ([]byte, error) {
 	if u.Fetch != nil {
-		return u.Fetch(ctx, u.TargetVersion)
+		return u.Fetch(ctx, version)
 	}
-	return Download(ctx, u.TargetVersion)
+	return Download(ctx, version)
 }
 
 // writableReason reports why the binary cannot be replaced, or "" when it can.

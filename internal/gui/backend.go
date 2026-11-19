@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -127,10 +126,11 @@ type DaemonSupervisor struct {
 	// not always the bind target.
 	Addr string
 	// ListenAddr is the target the in-process daemon binds: it may be a wildcard host or a socket.
-	ListenAddr    string
-	HomeDir       string
-	Version       string
-	WatchInterval time.Duration
+	ListenAddr             string
+	HomeDir                string
+	Version                string
+	WatchInterval          time.Duration
+	DesktopSettingsHandler http.Handler
 
 	// onControlRequest handles a client's restart/stop ask; the app supplies it (see SetControlHandler).
 	onControlRequest func(server.ControlRequest)
@@ -146,11 +146,8 @@ type DaemonSupervisor struct {
 }
 
 // Start either attaches to an existing daemon on Addr (and watches for its exit) or starts an
-// in-process daemon immediately. On Android it is a no-op because the mobile app is a remote client.
+// in-process daemon immediately.
 func (d *DaemonSupervisor) Start() error {
-	if runtime.GOOS == "android" {
-		return nil
-	}
 	d.mu.Lock()
 	if d.ListenAddr == "" {
 		if d.Addr != "" {
@@ -260,18 +257,15 @@ func (d *DaemonSupervisor) Status() DaemonHostStatus {
 	return st
 }
 
-// TakeOver terminates an external BySpace daemon listening on Addr and starts the daemon
-// in-process inside this desktop client (ported from magpie's takeOverGateway).
-func (d *DaemonSupervisor) TakeOver() DaemonHostStatus {
-	if d == nil {
-		return DaemonHostStatus{}
-	}
-	if d.OwnsInProcessDaemon() {
-		return d.Status()
+// StopExternalDaemon terminates an external BySpace daemon listening on Addr so a relaunched
+// or taking-over process can bind the port with the new binary.
+func (d *DaemonSupervisor) StopExternalDaemon() {
+	if d == nil || d.OwnsInProcessDaemon() {
+		return
 	}
 	st := d.Status()
 	if st.Reason == "not-byspace" || st.Reason == "container" {
-		return st
+		return
 	}
 	if st.ExternalPID > 0 && (proc.IsBySpace(st.ExternalPath) || st.Healthy) {
 		_ = proc.Terminate(st.ExternalPID)
@@ -287,6 +281,22 @@ func (d *DaemonSupervisor) TakeOver() DaemonHostStatus {
 			time.Sleep(150 * time.Millisecond)
 		}
 	}
+}
+
+// TakeOver terminates an external BySpace daemon listening on Addr and starts the daemon
+// in-process inside this desktop client (ported from magpie's takeOverGateway).
+func (d *DaemonSupervisor) TakeOver() DaemonHostStatus {
+	if d == nil {
+		return DaemonHostStatus{}
+	}
+	if d.OwnsInProcessDaemon() {
+		return d.Status()
+	}
+	st := d.Status()
+	if st.Reason == "not-byspace" || st.Reason == "container" {
+		return st
+	}
+	d.StopExternalDaemon()
 	_ = d.startInProcess()
 	return d.Status()
 }
@@ -366,6 +376,7 @@ func (d *DaemonSupervisor) startInProcess() error {
 	listenAddr := d.ListenAddr
 	homeDir := d.HomeDir
 	version := d.Version
+	settingsHandler := d.DesktopSettingsHandler
 	d.mu.Unlock()
 	if listenAddr == "" {
 		listenAddr = addr
@@ -382,9 +393,10 @@ func (d *DaemonSupervisor) startInProcess() error {
 	boundAddr := target.Address()
 
 	srv, err := server.New(server.Options{
-		HomeDir:    homeDir,
-		Version:    version,
-		ListenAddr: boundAddr,
+		HomeDir:                homeDir,
+		Version:                version,
+		ListenAddr:             boundAddr,
+		DesktopSettingsHandler: settingsHandler,
 	})
 	if err != nil {
 		_ = ln.Close()
