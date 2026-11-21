@@ -27,6 +27,9 @@ pnpm-debug.log*
 *.swo
 *~
 
+# Stray release-build binaries; the dev build lives in .dev/bin/
+/bin/
+
 # TypeScript
 *.tsbuildinfo
 tsconfig.tsbuildinfo

@@ -1687,6 +1687,22 @@ export const en = {
   menu: {
     backdrop: "Menu backdrop",
   },
+  piBackgroundTerminal: {
+    title: "Background Terminal",
+    count: "Background ({{count}})",
+    accessibilityLabel: "Background Terminal: {{count}} running",
+    stop: "Stop",
+    stopCommand: "Stop {{command}}",
+    stopFailed: "Could not stop the command.",
+    unavailable: "Background Terminal is unavailable.",
+    status: {
+      running: "Running",
+      exited: "Exited",
+      failed: "Failed",
+      timed_out: "Timed out",
+      killed: "Killed",
+    },
+  },
   subagents: {
     title: "Subagents",
     pillLabelOne: "1 subagent",

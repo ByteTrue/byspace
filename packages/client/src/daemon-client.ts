@@ -3000,6 +3000,18 @@ export class DaemonClient {
     return payload;
   }
 
+  managePiBackgroundTerminal(agentId: string, taskId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"agent.pi.manage_background_terminal.response">(
+      {
+        message: {
+          type: "agent.pi.manage_background_terminal.request",
+          agentId,
+          ...(taskId ? { taskId } : {}),
+        },
+      },
+    );
+  }
+
   async listProviderSubagents(
     parentAgentId: string,
     options: { requestId?: string; timeout?: number } = {},

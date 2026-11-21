@@ -1152,6 +1152,50 @@ func (s *Server) handleAgentPermissionResponse(ctx context.Context, _ frameSink,
 	})
 }
 
+func (s *Server) handlePiManageBackgroundTerminal(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+		TaskID    string `json:"taskId"`
+	}
+	var tasks []pi.BackgroundTerminalTask
+	var responseError any
+	if err := json.Unmarshal(raw, &req); err != nil {
+		responseError = err.Error()
+	} else if req.TaskID != "" && !s.authorizationForSink(sink).Has("workspace.write") {
+		responseError = "Permission denied: stopping a background terminal requires workspace.write"
+	} else {
+		// The roster lives in the running Pi process; starting a cold agent cannot recover it,
+		// so say so instead of letting "not running" read as "extension unavailable".
+		s.mu.Lock()
+		mp := s.agents[req.AgentID]
+		s.mu.Unlock()
+		var session interface {
+			ManageBackgroundTerminal(ctx context.Context, taskID string) ([]pi.BackgroundTerminalTask, error)
+		}
+		ok := false
+		if mp != nil {
+			session, ok = mp.session.(interface {
+				ManageBackgroundTerminal(ctx context.Context, taskID string) ([]pi.BackgroundTerminalTask, error)
+			})
+		}
+		if !ok {
+			responseError = "Background Terminal requires a running Pi agent"
+		} else {
+			var err error
+			tasks, err = session.ManageBackgroundTerminal(ctx, req.TaskID)
+			if err != nil {
+				responseError = err.Error()
+			}
+		}
+	}
+	_ = sendSessionMsg(ctx, sink, "agent.pi.manage_background_terminal.response", map[string]any{
+		"requestId": req.RequestID,
+		"tasks":     tasks,
+		"error":     responseError,
+	})
+}
+
 func (s *Server) handleProviderSubagentsList(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID     string `json:"requestId"`

@@ -14,6 +14,7 @@ var InboundPermission = map[string][]string{
 	"agent.config.apply.request":                       {"workspace.write", "hub.execute"},
 	"agent.detach.request":                             {"workspace.write"},
 	"agent.fork_context.request":                       {"workspace.read"},
+	"agent.pi.manage_background_terminal.request":      {"workspace.read"},
 	"agent.provider_subagents.list.request":            {"workspace.read"},
 	"agent.provider_subagents.timeline.get.request":    {"workspace.read"},
 	"agent.rewind.request":                             {"workspace.write"},

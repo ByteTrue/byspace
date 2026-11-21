@@ -1656,6 +1656,22 @@ export const zhCN: TranslationResources = {
   menu: {
     backdrop: "菜单背景",
   },
+  piBackgroundTerminal: {
+    title: "后台终端",
+    count: "后台（{{count}}）",
+    accessibilityLabel: "后台终端：{{count}} 个命令正在运行",
+    stop: "停止",
+    stopCommand: "停止 {{command}}",
+    stopFailed: "无法停止命令。",
+    unavailable: "后台终端不可用。",
+    status: {
+      running: "运行中",
+      exited: "已退出",
+      failed: "失败",
+      timed_out: "已超时",
+      killed: "已终止",
+    },
+  },
   subagents: {
     title: "Subagent",
     pillLabelOne: "1 个 subagent",

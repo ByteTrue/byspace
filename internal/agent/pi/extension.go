@@ -19,7 +19,8 @@ const (
 	// conversation tree — the mechanism rewind is built on, since pi exposes no RPC for it.
 	TreeExtensionCommand = "byspace_tree"
 	// CaptureExtensionCommand asks the extension to emit the current entry list.
-	CaptureExtensionCommand = "byspace_capture"
+	CaptureExtensionCommand   = "byspace_capture"
+	backgroundTerminalCommand = "byspace_background_terminal"
 )
 
 // piIntegrationExtension is the pi extension source generated per agent.
@@ -126,6 +127,43 @@ export default function byspaceIntegration(pi) {
     handler: async (args, ctx) => {
       const payload = decodePayload(args.trim());
       emitEntryCapture(ctx, "command", payload.requestId);
+    },
+  });
+
+  pi.registerCommand("byspace_background_terminal", {
+    description: "Internal BySpace background terminal bridge",
+    handler: async (args, ctx) => {
+      // requestId must survive a decode failure: a thrown handler never reports back and the
+      // daemon would wait out its whole budget.
+      let requestId = "";
+      let timer;
+      try {
+        const payload = decodePayload(args.trim());
+        requestId = payload.requestId;
+        let result;
+        // Contract: respond must be called synchronously inside emit — a listener that awaits
+        // first reports unavailable instead of its roster.
+        pi.events?.emit("bytetrue.background-terminal.manage", {
+          sessionId: ctx.sessionManager.getSessionId(),
+          taskId: payload.taskId,
+          respond: (tasks) => { result = tasks; },
+        });
+        if (result === undefined) {
+          emitCommandResult(ctx, requestId, { ok: true, result: null });
+          return;
+        }
+        // A respond promise that never settles would pin pi's active command count and block its
+        // graceful shutdown; fail fast under the daemon's budget instead.
+        const tasks = await Promise.race([
+          result,
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("background terminal respond timed out")), 4000); }),
+        ]);
+        emitCommandResult(ctx, requestId, { ok: true, result: tasks ?? null });
+      } catch (error) {
+        emitCommandResult(ctx, requestId, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      } finally {
+        clearTimeout(timer);
+      }
     },
   });
 

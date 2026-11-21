@@ -1803,6 +1803,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "agent_permission_response":
 		s.handleAgentPermissionResponse(ctx, sink, raw)
 
+	case "agent.pi.manage_background_terminal.request":
+		s.handlePiManageBackgroundTerminal(ctx, sink, raw)
+
 	case "agent.provider_subagents.list.request":
 		s.handleProviderSubagentsList(ctx, sink, raw)
 

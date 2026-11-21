@@ -61,8 +61,9 @@ func (s *Session) RewindConversation(ctx context.Context, messageID string) erro
 }
 
 type commandResult struct {
-	ok  bool
-	err string
+	ok     bool
+	err    string
+	result json.RawMessage
 }
 
 // awaitCommandResult registers interest in a BYSPACE_COMMAND_RESULT with this request id.
@@ -92,9 +93,10 @@ func (s *Session) handleCommandResultNotification(text string) {
 		return
 	}
 	var payload struct {
-		RequestID string `json:"requestId"`
-		OK        bool   `json:"ok"`
-		Error     string `json:"error"`
+		RequestID string          `json:"requestId"`
+		OK        bool            `json:"ok"`
+		Error     string          `json:"error"`
+		Result    json.RawMessage `json:"result"`
 	}
 	if json.Unmarshal([]byte(strings.TrimSpace(rest)), &payload) != nil || payload.RequestID == "" {
 		return
@@ -105,7 +107,7 @@ func (s *Session) handleCommandResultNotification(text string) {
 		return
 	}
 	select {
-	case ch <- commandResult{ok: payload.OK, err: payload.Error}:
+	case ch <- commandResult{ok: payload.OK, err: payload.Error, result: payload.Result}:
 	default:
 	}
 }

@@ -29,6 +29,7 @@ import { ArchivedAgentCallout } from "@/panels/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/widgets/retained-panel";
 import { Composer } from "@/composer";
+import { PiBackgroundTerminalTrack } from "@/composer/pi-background-terminal";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import {
   resolveComposerTrackControlClearance,
@@ -1275,19 +1276,34 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     () => streamViewRef.current?.scrollToBottom(),
     [streamViewRef],
   );
-  const streamControls = useMemo(
+  const showComposerActions = hasActiveComposer && isPaneVisible;
+  const showPiBackgroundTerminal = isPaneFocused && effectiveAgent.provider === "pi";
+  const composerActions = useMemo(
     () =>
-      hasActiveComposer && isPaneVisible ? (
-        <AgentStreamHeaderControls
-          showScrollToBottom={showScrollToBottom}
-          onCollapseAll={handleCollapseAll}
-          onScrollToBottom={handleScrollToBottom}
-        />
+      showComposerActions ? (
+        <>
+          {showPiBackgroundTerminal ? (
+            <PiBackgroundTerminalTrack serverId={serverId} agentId={agentId} />
+          ) : null}
+          <AgentStreamHeaderControls
+            showScrollToBottom={showScrollToBottom}
+            onCollapseAll={handleCollapseAll}
+            onScrollToBottom={handleScrollToBottom}
+          />
+        </>
       ) : null,
-    [handleCollapseAll, handleScrollToBottom, hasActiveComposer, isPaneVisible, showScrollToBottom],
+    [
+      agentId,
+      handleCollapseAll,
+      handleScrollToBottom,
+      serverId,
+      showComposerActions,
+      showPiBackgroundTerminal,
+      showScrollToBottom,
+    ],
   );
   const hasVisibleAgentTracks =
-    streamControls !== null ||
+    composerActions !== null ||
     hasAgentTracks({
       subagentRows,
       tasks,
@@ -1384,7 +1400,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
           tasks={tasks}
           archiveFinishedStatus={archiveFinishedSubagents.status}
           onArchiveFinished={archiveFinishedSubagents.archiveFinished}
-          actions={streamControls}
+          actions={composerActions}
         />
       ) : null}
     </div>

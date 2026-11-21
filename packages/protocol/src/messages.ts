@@ -1808,6 +1808,13 @@ export const AgentTimelineListPromptsRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const PiManageBackgroundTerminalRequestMessageSchema = z.object({
+  type: z.literal("agent.pi.manage_background_terminal.request"),
+  agentId: z.string(),
+  taskId: z.string().optional(),
+  requestId: z.string(),
+});
+
 export const ProviderSubagentListRequestMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.request"),
   parentAgentId: z.string(),
@@ -2964,6 +2971,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DaemonUpdateRequestMessageSchema,
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
+  PiManageBackgroundTerminalRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -4012,6 +4020,23 @@ export const ProviderSubagentDescriptorPayloadSchema = z.object({
 export type ProviderSubagentDescriptorPayload = z.infer<
   typeof ProviderSubagentDescriptorPayloadSchema
 >;
+
+export const PiManageBackgroundTerminalResponseMessageSchema = z.object({
+  type: z.literal("agent.pi.manage_background_terminal.response"),
+  payload: z.object({
+    requestId: z.string(),
+    tasks: z
+      .array(
+        z.object({
+          id: z.string(),
+          command: z.string(),
+          status: z.enum(["running", "exited", "failed", "timed_out", "killed"]),
+        }),
+      )
+      .nullable(),
+    error: z.string().nullable(),
+  }),
+});
 
 export const ProviderSubagentListResponseMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.response"),
@@ -5664,6 +5689,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
+  PiManageBackgroundTerminalResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,
