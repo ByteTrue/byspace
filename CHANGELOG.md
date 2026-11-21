@@ -5,6 +5,22 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.27.2 - 2026-11-21
+
+### Added
+
+- Added listing and stopping Background Terminal tasks from the Pi composer
+
+### Changed
+
+- Changed the sidebar collapse toggle to sit in the screen header instead of the sidebar's top row
+- Removed the inset card around the main content so the sidebar and content are full-bleed
+
+### Fixed
+
+- Fixed large tunnel responses stalling when a slow local write delayed acknowledgements
+- Fixed Pi subagents disappearing when resuming a session from a large transcript
+
 ## 0.27.1 - 2026-11-19
 
 ### Fixed
