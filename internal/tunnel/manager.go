@@ -78,14 +78,11 @@ type stream struct {
 	lastActivity atomic.Int64
 }
 
-// downItem is one queued local write plus the ack to send once it lands. ackSeq is the downstream
-// cursor at accept time, so the ack reflects bytes actually written, not bytes merely queued.
-// closeStream marks the terminal Close frame: the writer drains every queued write before it, so a
-// response that arrived just before Close still reaches the local socket.
+// downItem is one queued local write. closeStream marks the terminal Close frame: the writer
+// drains every queued write before it, so a response that arrived just before Close still reaches
+// the local socket.
 type downItem struct {
 	payload     []byte
-	ackSeq      uint64
-	ack         bool
 	closeStream bool
 }
 
@@ -495,7 +492,12 @@ func (m *Manager) handleLocalConn(f *forward, conn net.Conn) {
 	}
 
 	id := "t" + m.idPrefix + "." + strconv.FormatUint(m.nextStream.Add(1), 10)
-	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{}), downCap: 16 * 1024 * 1024, downNotify: make(chan struct{}, 1), owner: f}
+	// downCap is twice the target's 16 MiB replay window. Acks now fire at accept, so this queue is
+	// the only buffer holding accepted-but-unwritten bytes: a response larger than the replay window
+	// (the 20 MiB test) must fit here while the writer drains, plus one window of scheduling slack so
+	// a brief writer stall does not overflow a healthy transfer. pendingCap (disconnected replay) stays
+	// at one window because it only holds bytes during a peer replacement, not a live write.
+	s := &stream{id: id, conn: conn, opened: make(chan openResult, 1), remotePort: f.remotePort, pendingCap: 16 * 1024 * 1024, writeDone: make(chan struct{}), downCap: 32 * 1024 * 1024, downNotify: make(chan struct{}, 1), owner: f}
 	s.lastActivity.Store(time.Now().UnixNano())
 
 	m.mu.Lock()
@@ -793,9 +795,11 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 		}
 		target.framesDown.Add(1)
 		target.lastActivity.Store(time.Now().UnixNano())
-		if !target.enqueueDown(downItem{payload: frame.Payload, ack: true, ackSeq: next}) {
-			m.dropStream(owner, target, "downstream buffer exceeded 16 MiB")
+		if !target.enqueueDown(downItem{payload: frame.Payload}) {
+			m.dropStream(owner, target, fmt.Sprintf("downstream buffer exceeded %d MiB", target.downCap>>20))
+			return
 		}
+		_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(next)})
 	case OpcodeDataDownstreamSeq:
 		sequence, payload, ok := decodeSequencedPayload(frame.Payload)
 		if !ok {
@@ -814,14 +818,16 @@ func (m *Manager) handleFrame(peer PeerConn, frame Frame) {
 		target.framesDown.Add(1)
 		target.lastActivity.Store(time.Now().UnixNano())
 		m.logf("tunnel %s stream %s data received: sequence=%d", m.peerID, target.id, sequence)
-		// Always acknowledge a sequenced frame. The target sequences everything it sends on a
-		// fresh stream, so gating the ack on our own resumable flag — which only a reconnect sets —
-		// left its replay buffer filling until the response died at 16 MiB.
-		// accept advanced the cursor to sequence+1; ack that value once the write lands, so the
-		// target frees replay bytes only after they reach the local socket.
-		if !target.enqueueDown(downItem{payload: accepted, ack: true, ackSeq: sequence + 1}) {
-			m.dropStream(owner, target, "downstream buffer exceeded 16 MiB")
+		// Ack at accept, not at write. The queue holds the bytes until the local socket takes them
+		// and survives a peer replacement; a failed write kills the stream, so an accepted byte is
+		// never silently lost. Waiting for conn.Write to land tied the ack rate to the local socket:
+		// one slow write froze the acks while the target kept sending, and its 16 MiB replay window
+		// filled mid-response on a healthy transfer.
+		if !target.enqueueDown(downItem{payload: accepted}) {
+			m.dropStream(owner, target, fmt.Sprintf("downstream buffer exceeded %d MiB", target.downCap>>20))
+			return
 		}
+		_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: target.id, Payload: encodeSequence(sequence + 1)})
 	case OpcodeResume:
 		target.writeMu.Lock()
 		next := target.downstream.next
@@ -856,27 +862,34 @@ func (m *Manager) pumpDownstream(s *stream) {
 			}
 			continue
 		}
-		item := s.pendingDown[0]
-		s.pendingDown[0] = downItem{}
-		s.pendingDown = s.pendingDown[1:]
-		s.pendingDownBytes -= len(item.payload)
+		// Coalesce every queued write into one conn.Write. Per-frame writes gave the shared read loop
+		// a scheduling edge between each one: on a fast response it enqueued a full budget before this
+		// writer's first Write landed and the queue overflowed on a healthy transfer. One batched write
+		// drains the queue at socket speed instead of one scheduling slot per frame.
+		var batch []byte
+		var closeAfter bool
+		for len(s.pendingDown) > 0 {
+			item := s.pendingDown[0]
+			s.pendingDown[0] = downItem{}
+			s.pendingDown = s.pendingDown[1:]
+			s.pendingDownBytes -= len(item.payload)
+			if item.closeStream {
+				closeAfter = true
+				break
+			}
+			batch = append(batch, item.payload...)
+		}
 		s.writeMu.Unlock()
 
-		if item.closeStream {
+		if len(batch) > 0 {
+			if _, err := s.conn.Write(batch); err != nil {
+				m.dropStream(s.owner, s, err.Error())
+				return
+			}
+		}
+		if closeAfter {
 			m.dropStream(s.owner, s, "")
 			return
-		}
-		if _, err := s.conn.Write(item.payload); err != nil {
-			m.dropStream(s.owner, s, err.Error())
-			return
-		}
-		if item.ack {
-			m.mu.Lock()
-			peer := m.peer
-			m.mu.Unlock()
-			if peer != nil {
-				_ = peer.Send(Frame{Opcode: OpcodeDataAck, TunnelID: s.id, Payload: encodeSequence(item.ackSeq)})
-			}
 		}
 	}
 }
