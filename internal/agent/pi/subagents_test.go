@@ -17,7 +17,7 @@ func TestSubagentExitUpdatesJoinBySession(t *testing.T) {
 		"description": "Review the diff",
 		"cwd":         "/repo",
 		"sessionFile": "/tmp/sess_a.jsonl",
-	})
+	}, "")
 	if len(updates) != 1 {
 		t.Fatalf("updates = %+v", updates)
 	}
@@ -43,7 +43,7 @@ func TestSubagentExitUpdatesStatusesAndUnknownSessions(t *testing.T) {
 	updates := SubagentExitUpdates(launched, []any{
 		map[string]any{"status": "failed", "sessionId": "sess_a"},
 		map[string]any{"status": "succeeded", "sessionId": "sess_unknown"},
-	})
+	}, "")
 	if len(updates) != 1 || updates[0].Status != "failed" {
 		t.Fatalf("updates = %+v", updates)
 	}

@@ -261,7 +261,7 @@ func TestStructuredToolDetailsPermissionsAndSubagents(t *testing.T) {
 		"status":      "completed",
 		"sessionId":   "sess_child_01",
 		"sessionFile": "/tmp/child.jsonl",
-	})
+	}, "")
 	if len(subs) != 1 || subs[0].ID != "sub_01" || subs[0].Status != "completed" || subs[0].SessionFile != "/tmp/child.jsonl" {
 		t.Fatalf("unexpected parsed subagents: %+v", subs)
 	}

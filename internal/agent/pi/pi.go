@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -214,6 +215,9 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
+	if !opts.NoSession && filepath.IsAbs(opts.Session) && strings.HasSuffix(opts.Session, ".jsonl") {
+		s.restoreSubagents(opts.Session)
+	}
 	proc.OnEvent(s.handleRawEvent)
 
 	return s, nil
@@ -324,8 +328,8 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			if role == "custom" {
 				// An extension's context message (CustomMessage). subagent-exit is how the subagent
 				// tool reports the child's outcome after the launch already returned.
-				if customType, _ := msg["customType"].(string); customType == "subagent-exit" {
-					for _, sub := range s.applySubagentExitLocked(msg["details"]) {
+				if customType, _ := msg["customType"].(string); isSubagentExit(customType) {
+					for _, sub := range s.applySubagentExitLocked(msg["details"], "") {
 						extraEvents = append(extraEvents, map[string]any{
 							"type":     "byspace_provider_subagents",
 							"subagent": sub,
@@ -474,15 +478,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		s.frames.AddToolCall(targetIdx, s.timeline[targetIdx].Item, s.activeTurnID, visible)
 		extraEvents = append(extraEvents, s.flushFramesLocked()...)
 		if strings.HasPrefix(toolName, "subagent") {
-			for _, sub := range ParseSubagentDetails(callID, args, ev["result"]) {
+			for _, sub := range ParseSubagentDetails(callID, args, ev["result"], "") {
 				s.upsertSubagentLocked(sub)
 			}
 		}
 
 	case "custom_message":
 		// The persisted form of the same extension message (session entry type custom_message).
-		if customType, _ := ev["customType"].(string); customType == "subagent-exit" {
-			for _, sub := range s.applySubagentExitLocked(ev["details"]) {
+		if customType, _ := ev["customType"].(string); isSubagentExit(customType) {
+			for _, sub := range s.applySubagentExitLocked(ev["details"], "") {
 				extraEvents = append(extraEvents, map[string]any{
 					"type":     "byspace_provider_subagents",
 					"subagent": sub,
@@ -1159,8 +1163,8 @@ func (s *Session) subagentListLocked() []SubagentDescriptor {
 // The launch is the only thing that carries an id; the completion names the child by session. A
 // descriptor that never got its completion stayed "running" in the app forever, which is what a
 // finished subagent looked like.
-func (s *Session) applySubagentExitLocked(details any) []SubagentDescriptor {
-	updates := SubagentExitUpdates(s.subagentListLocked(), details)
+func (s *Session) applySubagentExitLocked(details any, now string) []SubagentDescriptor {
+	updates := SubagentExitUpdates(s.subagentListLocked(), details, now)
 	for _, sub := range updates {
 		s.upsertSubagentLocked(sub)
 	}

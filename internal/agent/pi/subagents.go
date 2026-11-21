@@ -1,11 +1,124 @@
 package pi
 
 import (
+	"bufio"
+	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// restoreSubagents rebuilds the roster from the same launch and exit records used live.
+//
+// Two passes keep memory at one small head struct per line: only the leaf branch's entries are
+// ever fully parsed, so a session with hundreds of MB of history costs an index, not a copy.
+func (s *Session) restoreSubagents(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		slog.Warn("pi subagent restore: cannot open session file", "path", path, "error", err)
+		return
+	}
+	defer f.Close()
+	type head struct {
+		Type     string `json:"type"`
+		ID       string `json:"id"`
+		ParentID string `json:"parentId"`
+	}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	var heads []head
+	byID := make(map[string]int)
+	leafID := ""
+	for scanner.Scan() {
+		var h head
+		if json.Unmarshal(scanner.Bytes(), &h) != nil || h.Type == "session" {
+			continue
+		}
+		if h.ID != "" {
+			byID[h.ID] = len(heads)
+			leafID = h.ID
+		}
+		heads = append(heads, h)
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("pi subagent restore: transcript scan failed", "path", path, "error", err)
+		return
+	}
+	// Mark the leaf branch; file order is already time order, so no reverse is needed. A broken
+	// parent chain degrades to a linear replay instead of silently restoring nothing.
+	branch := make(map[int]bool, len(heads))
+	if leafID != "" {
+		for limit := len(heads); leafID != ""; {
+			idx, ok := byID[leafID]
+			if !ok || idx >= limit {
+				slog.Warn("pi subagent restore: broken parent chain, replaying whole transcript", "path", path)
+				branch = nil
+				break
+			}
+			branch[idx] = true
+			leafID, limit = heads[idx].ParentID, idx
+		}
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		slog.Warn("pi subagent restore: cannot rewind transcript", "path", path, "error", err)
+		return
+	}
+	scanner = bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	args := make(map[string]any)
+	idx := -1
+	for scanner.Scan() {
+		raw := scanner.Bytes()
+		var h head
+		if json.Unmarshal(raw, &h) != nil || h.Type == "session" {
+			continue
+		}
+		idx++
+		if branch != nil && !branch[idx] {
+			continue
+		}
+		var entry map[string]any
+		if json.Unmarshal(raw, &entry) != nil {
+			continue
+		}
+		ts, _ := entry["timestamp"].(string)
+		if entry["type"] == "message" {
+			entry, _ = entry["message"].(map[string]any)
+		}
+		if customType, _ := entry["customType"].(string); isSubagentExit(customType) {
+			s.applySubagentExitLocked(entry["details"], ts)
+			continue
+		}
+		switch entry["role"] {
+		case "assistant":
+			blocks, _ := entry["content"].([]any)
+			for _, raw := range blocks {
+				block, _ := raw.(map[string]any)
+				if block["type"] == "toolCall" && block["name"] == "subagent" {
+					id, _ := block["id"].(string)
+					args[id] = block["arguments"]
+				}
+			}
+		case "toolResult":
+			if entry["toolName"] != "subagent" || entry["isError"] == true {
+				continue
+			}
+			id, _ := entry["toolCallId"].(string)
+			for _, sub := range ParseSubagentDetails(id, args[id], entry["details"], ts) {
+				s.upsertSubagentLocked(sub)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("pi subagent restore: replay scan failed", "path", path, "error", err)
+	}
+}
+
+func isSubagentExit(customType string) bool {
+	return customType == "subagent-exit" || customType == "subagent-notify"
+}
 
 func mapSubagentStatus(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
@@ -15,7 +128,7 @@ func mapSubagentStatus(raw string) string {
 		return "completed"
 	case "failed", "error", "timed_out", "timeout":
 		return "failed"
-	case "canceled", "cancelled", "stopped", "aborted":
+	case "canceled", "cancelled", "stopped", "aborted", "paused":
 		return "canceled"
 	default:
 		return "running"
@@ -23,11 +136,15 @@ func mapSubagentStatus(raw string) string {
 }
 
 // ParseSubagentDetails extracts subagent metadata from a Pi tool result's details or custom message.
-func ParseSubagentDetails(toolCallID string, args any, details any) []SubagentDescriptor {
+// now stamps CreatedAt/UpdatedAt; pass "" for live events, or the transcript row's timestamp when
+// replaying so restored descriptors keep their historical times.
+func ParseSubagentDetails(toolCallID string, args any, details any, now string) []SubagentDescriptor {
 	records := subagentRecords(details)
 
 	argsMap, _ := args.(map[string]any)
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if now == "" {
+		now = time.Now().UTC().Format(time.RFC3339Nano)
+	}
 	var out []SubagentDescriptor
 
 	for _, rec := range records {
@@ -137,7 +254,7 @@ func LocateSubagentSessionFile(desc SubagentDescriptor, sessionDirOverride strin
 // The completion record carries no id: the extension knows the child by the session it started.
 // sessionId is therefore the key that joins a finished task to its descriptor, which is why the
 // launch details hoist it to the top level as well.
-func SubagentExitUpdates(records []SubagentDescriptor, details any) []SubagentDescriptor {
+func SubagentExitUpdates(records []SubagentDescriptor, details any, now string) []SubagentDescriptor {
 	raw := subagentRecords(details)
 	bySession := make(map[string]*SubagentDescriptor, len(records))
 	byID := make(map[string]*SubagentDescriptor, len(records))
@@ -145,7 +262,9 @@ func SubagentExitUpdates(records []SubagentDescriptor, details any) []SubagentDe
 		bySession[records[i].SessionID] = &records[i]
 		byID[records[i].ID] = &records[i]
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if now == "" {
+		now = time.Now().UTC().Format(time.RFC3339Nano)
+	}
 	out := make([]SubagentDescriptor, 0, len(raw))
 	for _, rec := range raw {
 		rawStatus, _ := rec["status"].(string)
