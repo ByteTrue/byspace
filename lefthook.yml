@@ -32,8 +32,9 @@ pre-commit:
       glob: "*.go"
       # npm run format is oxfmt, which does not read Go. CI's format job runs gofmt over these same
       # roots; without this job a Go change commits unformatted and only CI catches it.
-      run: |
-        unformatted="$(gofmt -l {staged_files})"
-        if [ -n "$unformatted" ]; then echo "$unformatted"; echo "run: gofmt -w $unformatted"; exit 1; fi
+      # lefthook wraps the run string in sh -c "..." without escaping inner double quotes,
+      # so any quoted shell here breaks the wrapper. Keep the run quote-free: gofmt -l prints
+      # the offenders and exits 0, -e turns a non-empty listing into the failure.
+      run: gofmt -l -e {staged_files}
     - name: typecheck
       run: npm run typecheck
