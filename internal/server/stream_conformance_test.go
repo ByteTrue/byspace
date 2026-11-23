@@ -384,6 +384,9 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 			case "turn_completed":
 				turnCompleted++
 			case "timeline":
+				if replace, present := event["replace"]; present && replace == nil {
+					t.Fatalf("optional timeline replace field was serialized as null: %+v", event)
+				}
 				itemType, _ := item["type"].(string)
 				switch itemType {
 				case "user_message":

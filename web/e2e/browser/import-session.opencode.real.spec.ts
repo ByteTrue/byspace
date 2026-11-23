@@ -7,7 +7,8 @@ import { connectSeedClient, type SeededWorkspace } from "../support/helpers/seed
 import { getServerId } from "../support/helpers/server-id";
 import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 
-const OPENCODE_REAL_MODEL = "openrouter/google/gemini-2.5-flash-lite";
+const OPENCODE_REAL_MODEL =
+  process.env.E2E_OPENCODE_MODEL ?? "openrouter/google/gemini-2.5-flash-lite";
 const OPENCODE_SEED_TIMEOUT_MS = 45_000;
 const BYSPACE_REPO_PATH = path.resolve(import.meta.dirname, "../../..");
 
@@ -26,8 +27,8 @@ interface ImportableOpenCodeSession {
 interface OpenCodeImportScenario {
   workspace: SeededWorkspace;
   prompt: string;
-  promptPreview: string;
   response: string;
+  providerHandleId: string;
 }
 
 let workspace: SeededWorkspace | null = null;
@@ -54,8 +55,7 @@ test("imports a real OpenCode session from the workspace import sheet", async ({
 async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImportScenario> {
   const response = `BYSPACE_OPENCODE_IMPORT_E2E_OK_${randomUUID().slice(0, 8)}`;
   const prompt = `Do not use tools. Reply with exactly: ${response}`;
-  const promptPreview = JSON.stringify(prompt);
-  await launchOpenCodeSessionInWorkspace(BYSPACE_REPO_PATH, prompt);
+  const providerHandleId = await launchOpenCodeSessionInWorkspace(BYSPACE_REPO_PATH, prompt);
   const client = await connectSeedClient();
   try {
     const createdWorkspace = await client.createWorkspace({
@@ -73,8 +73,8 @@ async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImport
     }
     return {
       prompt,
-      promptPreview,
       response,
+      providerHandleId,
       workspace: {
         client,
         repoPath: BYSPACE_REPO_PATH,
@@ -95,21 +95,30 @@ async function seedBySpaceWorkspaceWithOpenCodeSession(): Promise<OpenCodeImport
   }
 }
 
-async function launchOpenCodeSessionInWorkspace(repoPath: string, prompt: string): Promise<void> {
+async function launchOpenCodeSessionInWorkspace(repoPath: string, prompt: string): Promise<string> {
   const result = await runOpenCodeSeed(repoPath, prompt);
   if (result.code !== 0 || result.timedOut) {
     throw new Error(formatOpenCodeLaunchError(result, prompt));
   }
+  for (const line of result.stdout.split(/\r?\n/u)) {
+    try {
+      const event = JSON.parse(line) as { sessionID?: unknown };
+      if (typeof event.sessionID === "string" && event.sessionID) {
+        return event.sessionID;
+      }
+    } catch {
+      // --print-logs may interleave non-JSON diagnostics with the JSON event stream.
+    }
+  }
+  throw new Error(`OpenCode launch did not report a session id:\n${result.stdout}`);
 }
 
-function openCodeSeedArgs(repoPath: string, prompt: string): string[] {
+function openCodeSeedArgs(prompt: string): string[] {
   return [
     "run",
     "--print-logs",
     "--log-level",
-    "INFO",
-    "--dir",
-    repoPath,
+    "info",
     "--model",
     OPENCODE_REAL_MODEL,
     "--format",
@@ -120,11 +129,17 @@ function openCodeSeedArgs(repoPath: string, prompt: string): string[] {
 
 function runOpenCodeSeed(repoPath: string, prompt: string): Promise<OpenCodeSeedResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn("opencode", openCodeSeedArgs(repoPath, prompt), {
-      cwd: repoPath,
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      process.platform === "win32" ? "opencode.cmd" : "opencode",
+      openCodeSeedArgs(prompt),
+      {
+        cwd: repoPath,
+        shell: process.platform === "win32",
+        // OpenCode reads PWD on Windows; spawn cwd alone leaves the Playwright web/ directory.
+        env: { ...process.env, PWD: repoPath },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -153,7 +168,7 @@ function runOpenCodeSeed(repoPath: string, prompt: string): Promise<OpenCodeSeed
 function formatOpenCodeLaunchError(result: OpenCodeSeedResult, prompt: string): string {
   return [
     "OpenCode launch failed",
-    `command: ${["opencode", ...openCodeSeedArgs(BYSPACE_REPO_PATH, prompt)].join(" ")}`,
+    `command: ${["opencode", ...openCodeSeedArgs(prompt)].join(" ")}`,
     `exit: ${result.code ?? "null"}`,
     result.signal ? `signal: ${result.signal}` : null,
     result.timedOut ? `timed out after ${OPENCODE_SEED_TIMEOUT_MS}ms` : null,
@@ -199,7 +214,7 @@ async function findImportableOpenCodeSession(
   });
   const entry = sessions.entries.find(
     (session) =>
-      session.providerId === "opencode" && session.firstPromptPreview === scenario.promptPreview,
+      session.providerId === "opencode" && session.providerHandleId === scenario.providerHandleId,
   );
   if (!entry) {
     return null;
@@ -232,7 +247,7 @@ async function expectImportedSessionOpen(
   scenario: OpenCodeImportScenario,
 ): Promise<void> {
   await expect(
-    page.locator('[data-testid="user-message"]', { hasText: scenario.promptPreview }),
+    page.locator('[data-testid="user-message"]', { hasText: scenario.prompt }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.locator('[data-testid="assistant-message"]', { hasText: scenario.response }),

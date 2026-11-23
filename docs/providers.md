@@ -18,8 +18,9 @@ Four providers are built in, each with a native adapter under `internal/agent/pr
 Every other agent — GitHub Copilot, Cursor, Kimi, Kiro, Trae, and any ACP-compatible binary — connects
 through the generic ACP host (`acp.go`), not a built-in adapter. There are two ways in:
 
-- **The in-app provider catalog** (`web/src/data/acp-provider-catalog.ts`). Each entry is a
-  one-click install that writes an `extends: "acp"` provider config with the right `command`.
+- **Copy setup prompt** (Settings → Agents → Add provider): copies a prompt whose absolute template
+  path points into `$BYSPACE_HOME/resources/byspace-provider-adapter`. An agent reads that template
+  on demand and writes the provider config; BySpace does not install it as a skill.
 - **Manual config**: `extends: "acp"` plus a `command` in `config.json`. See
   [custom-providers.md](custom-providers.md#adding-a-generic-acp-provider).
 
@@ -200,9 +201,9 @@ Some ACP agents expose custom agents through session config rather than the slas
 config option with `id: "agent"` and `category: "_agent"`. BySpace maps that to the `agent` provider
 feature, using the display name as the option value; the blank value means the agent's default.
 
-BySpace tools do not reach an ACP agent automatically. The daemon gives ACP sessions an empty
-`mcpServers` array, and the bundled skill is only readable if the client reads `~/.agents/skills` or
-`~/.claude/skills`. ACP agents execute filesystem operations in their own environment by default while
+BySpace tools do not reach an ACP agent automatically. The daemon forwards configured MCP servers
+but does not inject its own MCP server or install the ACP onboarding template as a skill. ACP agents
+execute filesystem operations in their own environment by default while
 terminal operations run through BySpace on the host; `params.clientCapabilities` tunes which operations
 BySpace handles (see [custom-providers.md](custom-providers.md#acp-providers)).
 
@@ -283,6 +284,89 @@ list again. The provider returns the resumed session, storage config, persistenc
 timeline for that one native session; the daemon seeds the timeline and publishes the BySpace agent only
 after it is ready.
 
+| Provider | Native history                                                                                | Native archive                          | Provider-owned child timelines |
+| -------- | --------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------ |
+| Claude   | Supported                                                                                     | BySpace-owned archive                   | Native task sessions           |
+| Codex    | `thread/list` plus `thread/read` or `thread/items/list`                                       | `thread/archive` and `thread/unarchive` | Collaboration sessions         |
+| OpenCode | v1/v2 session history                                                                         | v1/v2 native archive                    | `/children` sessions           |
+| Pi       | Session JSONL                                                                                 | BySpace-owned archive                   | Session JSONL children         |
+| ACP      | `session/list` when the negotiated capability exists; otherwise an explicit unsupported error | BySpace-owned archive                   | Not exposed                    |
+
+Native archive runs before the BySpace record changes. A native failure leaves the agent unarchived; a
+provider without native archive keeps the BySpace lifecycle only. Sending a prompt to an archived native
+session follows the same rule in reverse.
+
+## Background activity
+
+The composer's background track reads the same normalized task shape from Pi background terminals,
+Claude native background tasks, and OpenCode v2 shells. Stop operates on the selected native ID and
+returns the provider's refreshed roster; the daemon does not mark a task stopped before the provider
+confirms it. OpenCode v1 has no native shell inventory, so it does not show this track.
+
+## Protocol parity ledger
+
+The reference root below is `paseo/packages/server/src/server/agent/providers` at commit
+`9c4106561ad816fda917f43adce827c01faf47b1`. Keep a row and its fixture when porting or removing a
+protocol behavior; a missing row is an unaudited gap. Shared server behavior uses
+`paseo/packages/server/src/server` as its reference root.
+
+| Contract                              | Reference                                                          | Go owner                                                          | Regression fixture                                         |
+| ------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| Startup and control outcomes          | `session.ts`                                                       | `internal/server/server.go`, provider adapters                    | `provider_lifecycle_test.go`                               |
+| Runtime capabilities                  | provider `capabilities.ts`/`agent.ts`                              | `internal/agent/providers/driver.go`, negotiated sessions         | `capabilities_test.go`                                     |
+| User MCP launch input                 | `agent-manager.ts`                                                 | `internal/agent/providers/driver.go`, `internal/server/server.go` | `driver_test.go`                                           |
+| Native history and archive            | provider history/session modules                                   | `internal/server/ws_workspace.go`, provider adapters              | `codex_history_test.go`, `opencode_history_test.go`        |
+| Cancellation cleanup                  | provider `agent.ts`                                                | provider adapters                                                 | `provider_lifecycle_test.go`                               |
+| Native scoped rewind                  | `opencode/rewind.ts`, `claude/rewind.ts`, `pi/rewind.ts`           | `internal/server/ws_git_system.go`, provider adapters             | `internal/server/rewind_safety_test.go`                    |
+| Background snapshots and live updates | `claude/background-work.ts`, `opencode/v2/background-inventory.ts` | provider sessions and SDK activity                                | `claude_background_test.go`, `opencode_background_test.go` |
+| Managed/native subagent targets       | `claude/subagents`, `opencode/v2/children.ts`                      | provider sessions and timeline RPCs                               | `claude_sidecars_test.go`, `opencode_events_test.go`       |
+
+| OpenCode contract                | Reference                                                        | Go owner                         | Regression fixture                                               |
+| -------------------------------- | ---------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
+| v1/v2 transport and launch       | `opencode/v2/api.ts`, `service-selection.ts`, `configuration.ts` | `opencode.go`, `opencodepool.go` | `opencode_events_test.go`, `opencode_review_regressions_test.go` |
+| SSE activity and native identity | `opencode/event-consumer.ts`, `opencode/v2/timeline.ts`          | `opencode.go`                    | `opencode_events_test.go`                                        |
+| Reconnect and gap recovery       | `opencode/event-consumer.ts`, `opencode/v2/streaming.test.ts`    | `opencode.go`                    | `opencode_events_test.go`                                        |
+| Permissions and children         | `opencode/v2/permissions.ts`, `children.ts`                      | `opencode.go`                    | `opencode_events_test.go`                                        |
+| Steering and abort               | `opencode/v2/turns.ts`                                           | `opencode.go`                    | `opencode_review_regressions_test.go`                            |
+| Session-scoped revert            | `opencode/rewind.ts`                                             | `opencode.go`                    | `opencode_events_test.go`                                        |
+
+| ACP contract                    | Reference      | Go owner | Regression fixture               |
+| ------------------------------- | -------------- | -------- | -------------------------------- |
+| Native permission option IDs    | `acp-agent.ts` | `acp.go` | `acp_permissions_test.go`        |
+| Session update families         | `acp-agent.ts` | `acp.go` | `acp_updates_test.go`            |
+| Tool details and terminal state | `acp-agent.ts` | `acp.go` | `acp_updates_test.go`            |
+| Dynamic catalogs and controls   | `acp-agent.ts` | `acp.go` | `acp_capabilities_test.go`       |
+| Cancel, resume, and close       | `acp-agent.ts` | `acp.go` | `acp_review_regressions_test.go` |
+| Opt-in host filesystem          | `acp-agent.ts` | `acp.go` | `acp_files_test.go`              |
+| Native MCP configuration        | `acp-agent.ts` | `acp.go` | `acp_mcp_test.go`                |
+
+| Codex contract                    | Reference                   | Go owner                   | Regression fixture                 |
+| --------------------------------- | --------------------------- | -------------------------- | ---------------------------------- |
+| Notifications and item families   | `codex-app-server-agent.ts` | `codex.go`, `codexturn.go` | `codex_parity_test.go`             |
+| Approvals and MCP elicitation     | `codex-app-server-agent.ts` | `codex.go`                 | `codex_questions_test.go`          |
+| Turn outcomes and steering        | `codex-app-server-agent.ts` | `codex.go`, `codexturn.go` | `codex_review_regressions_test.go` |
+| Collaboration subagents           | `codex-app-server-agent.ts` | `codex.go`                 | `codex_parity_test.go`             |
+| Custom prompt discovery/expansion | `codex-app-server-agent.ts` | `codex.go`                 | `codex_prompts_test.go`            |
+| Native/on-disk skills             | `codex-app-server-agent.ts` | `codex.go`                 | `codex_parity_test.go`             |
+| Compact, goals, and model catalog | `codex-app-server-agent.ts` | `codex.go`, `driver.go`    | `codex_parity_test.go`             |
+
+| Claude contract                    | Reference                                        | Go owner    | Regression fixture                |
+| ---------------------------------- | ------------------------------------------------ | ----------- | --------------------------------- |
+| Partial text/reasoning/tool deltas | `claude/agent.ts`, `query.ts`, `partial-json.ts` | `claude.go` | `claude_stream_review_test.go`    |
+| Native task lifecycle              | `claude/task-state.ts`, `subagents`              | `claude.go` | `claude_parity_test.go`           |
+| Status, compaction, and recovery   | `claude/agent.ts`, `background-work.ts`          | `claude.go` | `claude_parity_test.go`           |
+| Admitted steering and cancellation | `claude/query.ts`, `agent.ts`                    | `claude.go` | `claude_parity_test.go`           |
+| Live model and thinking            | `claude/agent.live-settings.test.ts`             | `claude.go` | `claude_parity_test.go`           |
+| Native rewind and MCP              | `claude/rewind.ts`, `options.ts`                 | `claude.go` | `claude_message_identity_test.go` |
+
+| Pi contract                            | Reference                            | Go owner                                         | Regression fixture                             |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------ | ---------------------------------------------- |
+| No-turn terminal outcomes              | `pi/agent.ts`, `rpc-types.ts`        | `internal/agent/pi/pi.go`                        | `pi_test.go`                                   |
+| Negotiated model input                 | `pi/agent.ts`, `rpc-types.ts`        | `internal/agent/pi/pi.go`, SDK model types       | `pi_test.go`                                   |
+| Abort queue clearing                   | `pi/agent.ts`                        | `internal/agent/pi/pi.go`                        | `pi_test.go`                                   |
+| Compaction and retry                   | `pi/agent.ts`                        | `internal/agent/pi/pi.go`                        | `protocol_parity_test.go`                      |
+| Rich results, custom messages, and MCP | `pi/tool-call-mapper.ts`, `agent.ts` | `internal/agent/pi/pi.go`, integration extension | `protocol_parity_test.go`, `extension_test.go` |
+
 ## Provider helper processes
 
 Provider-owned helper processes that can outlive an individual agent session must be recorded in the
@@ -320,9 +404,34 @@ refreshes them in their actual execution context, so every connected client rece
 Configuration replacement invalidates only changed providers; unchanged entries and discovery in flight
 survive.
 
+## The slash-command palette
+
+The composer's `/` list is whatever the provider answers `list_commands` with; the daemon keeps no table of
+its own. A draft has no session yet, so the daemon starts the provider named by the draft's provider, model and
+cwd, asks it once, and closes it (`internal/server/ws_agent.go`, `handleListCommands`). The client caches the
+answer per draft key forever and per agent for a minute, so no provider process is spawned per keystroke.
+
+Every provider publishes its inventory at a different moment, and reading too early returns a short list
+rather than an error:
+
+- Claude announces commands on its `init` message a moment after the process starts, so `GetCommands` waits
+  for it (5s cap) instead of answering with the static fallback.
+- ACP agents publish in batches. `settleCommands` waits for a 600ms quiet window, capped at 1.5s, and gives
+  cursor, kiro and trae 10s because their inventory arrives seconds after `session/new`.
+- Pi answers `get_commands` in its own shape (`source`, `input.hint`), which the adapter maps to
+  `kind`/`argumentHint`; pi never lists the commands it handles itself, so those are seeded.
+- OpenCode lists commands over its HTTP API. Codex merges native and on-disk skills with custom
+  prompts from `~/.codex/prompts/*.md`; it executes `/compact` and version-gated `/goal` operations
+  out of band instead of sending their slash text as a prompt.
+
+The client owns `/exit`, `/quit`, `/q`, `/clear` and `/new`, and resolves them before any provider command,
+so a provider command with one of those names is dropped from the palette rather than shown dead
+(`web/src/client-slash-commands`). Drafts hide client commands, so a provider's own `/clear` stays visible
+there.
+
 ## Adding a provider
 
-Most agents need no Go code: add an `extends: "acp"` config (or a catalog entry) and the generic ACP host
+Most agents need no Go code: add an `extends: "acp"` config and the generic ACP host
 launches them. See [custom-providers.md](custom-providers.md).
 
 A new **built-in** provider needs a native adapter:

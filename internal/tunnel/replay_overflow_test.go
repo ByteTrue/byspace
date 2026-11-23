@@ -18,6 +18,7 @@ import (
 // The local socket is the observable that distinguishes the two. conn.Close runs after the lock, so
 // its peer sees EOF only when the overflow path actually finished.
 func TestReplayOverflowReleasesTheStream(t *testing.T) {
+	requireTCP(t)
 	// A service that floods its response without reading, so the target's downstream replay buffer
 	// is what fills up. Upstream must stay quiet: that queue has its own overflow path.
 	service, err := net.Listen("tcp", "127.0.0.1:0")

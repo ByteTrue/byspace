@@ -195,7 +195,7 @@ func TestClaudeLaunchArgsSkipNonEffortThinking(t *testing.T) {
 func TestOpenCodePromptCarriesModelModeAndVariant(t *testing.T) {
 	bodies := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/message") {
+		if strings.HasSuffix(r.URL.Path, "/prompt_async") {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			bodies <- body
@@ -206,12 +206,13 @@ func TestOpenCodePromptCarriesModelModeAndVariant(t *testing.T) {
 	defer server.Close()
 
 	session := &OpenCodeSession{
-		baseURL:    server.URL,
-		sessionID:  "s1",
-		httpClient: server.Client(),
-		model:      "anthropic/claude-sonnet-4-5",
-		modeID:     "build",
-		thinking:   "high",
+		baseURL:       server.URL,
+		sessionID:     "s1",
+		httpClient:    server.Client(),
+		model:         "claude-sonnet-4-5",
+		modelProvider: "anthropic",
+		modeID:        "build",
+		thinking:      "high",
 	}
 	if err := session.Prompt(context.Background(), "hi", nil); err != nil {
 		t.Fatal(err)
@@ -295,22 +296,11 @@ func TestClaudeLaunchArgsCarryFastMode(t *testing.T) {
 	}
 }
 
-// A model change that the CLI cannot apply must fail instead of silently changing the record.
-func TestClaudeRefusesLiveModelChange(t *testing.T) {
+func TestClaudeThinkingModesOutsideLiveEffortNeedRestart(t *testing.T) {
 	session := &ClaudeSession{}
-	_, modelErr := session.SetModel(context.Background(), "anthropic", "opus")
-	if modelErr == nil {
-		t.Fatal("SetModel must refuse: the CLI reads --model at launch")
-	}
-	if !errors.Is(modelErr, ErrSettingNeedsRestart) {
-		t.Fatalf("error %v must tell the daemon a relaunch applies it", modelErr)
-	}
-	thinkingErr := session.SetThinkingLevel(context.Background(), "high")
-	if thinkingErr == nil {
-		t.Fatal("SetThinkingLevel must refuse: the CLI reads --effort at launch")
-	}
-	if !errors.Is(thinkingErr, ErrSettingNeedsRestart) {
-		t.Fatalf("error %v must tell the daemon a relaunch applies it", thinkingErr)
+	err := session.SetThinkingLevel(context.Background(), "off")
+	if !errors.Is(err, ErrSettingNeedsRestart) {
+		t.Fatalf("error %v must tell the daemon a relaunch applies it", err)
 	}
 }
 

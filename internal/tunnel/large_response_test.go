@@ -15,6 +15,7 @@ import (
 // acknowledges it. If those acknowledgements never arrive, the replay buffer fills at 16 MiB and
 // the stream dies mid-response even though both peers are healthy and reading.
 func TestLargeResponseFlowsOnAFreshStream(t *testing.T) {
+	requireTCP(t)
 	const total = 20 << 20 // 20 MiB, past the 16 MiB replay budget.
 	payload := make([]byte, total)
 	for i := range payload {

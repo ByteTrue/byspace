@@ -1426,22 +1426,6 @@ export const en = {
     searchPlaceholder: "Search models...",
     openProviderSettings: "Open {{provider}} settings",
   },
-  providerCatalog: {
-    title: "Add provider",
-    search: "Search providers",
-    noProviders: "No providers found",
-    actions: {
-      add: "Add",
-      adding: "Adding",
-      installed: "Installed",
-      cancel: "Cancel",
-      installInstructions: "Install instructions",
-      installInstructionsFor: "{{provider}} install instructions",
-    },
-    errors: {
-      unableToInstall: "Unable to install provider",
-    },
-  },
   providerSelection: {
     defaultModel: "Default",
     selectModel: "Select model",
@@ -1694,6 +1678,9 @@ export const en = {
     stop: "Stop",
     stopCommand: "Stop {{command}}",
     stopFailed: "Could not stop the command.",
+    listFailed: "Could not refresh background activity. Showing the last known state.",
+    kind: "Shell",
+    stopping: "Stopping…",
     unavailable: "Background Terminal is unavailable.",
     status: {
       running: "Running",
@@ -2494,6 +2481,13 @@ export const en = {
       unavailable: "Connect to this host to see providers",
       loading: "Loading...",
       addErrorTitle: "Unable to add provider",
+      acpOnboarding: {
+        description:
+          "Paste this prompt into your agent to configure an ACP provider. The guide is read on demand and is not installed as a skill.",
+        copyPrompt: "Copy onboarding prompt",
+        copyFailed: "Unable to copy the onboarding prompt",
+        promptUnavailable: "The onboarding prompt is unavailable",
+      },
       updateErrorTitle: "Unable to update provider",
       actions: {
         menu: "{{name}} actions",

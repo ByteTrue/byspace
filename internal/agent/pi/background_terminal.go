@@ -7,14 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
-// BackgroundTerminalTask is the task card sent to BySpace, without log paths or output.
-type BackgroundTerminalTask struct {
-	ID      string `json:"id"`
-	Command string `json:"command"`
-	Status  string `json:"status"`
-}
+// BackgroundTerminalTask retains the existing extension API name.
+type BackgroundTerminalTask = sdk.BackgroundTask
 
 // ManageBackgroundTerminal lists the active Pi session's tasks, optionally stopping one first.
 //

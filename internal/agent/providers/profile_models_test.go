@@ -159,6 +159,19 @@ func TestProviderSpecForLaunchKeepsCommandTail(t *testing.T) {
 	}
 }
 
+func TestResolveProviderLaunchUsesAliasProtocolAndConfiguredCommand(t *testing.T) {
+	spec, command, argv := resolveProviderLaunch(LaunchConfig{
+		Provider: "codex-alias",
+		ProviderConfig: map[string]any{
+			"extends": "codex",
+			"command": []any{"node", "/tmp/fake-codex.mjs"},
+		},
+	})
+	if spec.Protocol != "codex-rpc" || len(argv) != 2 || argv[0] != "node" || argv[1] != "/tmp/fake-codex.mjs" {
+		t.Fatalf("protocol=%q command=%q argv=%v", spec.Protocol, command, argv)
+	}
+}
+
 func TestIsConfiguredProvider(t *testing.T) {
 	cfg := map[string]any{"providers": map[string]any{"diagnostic": map[string]any{"extends": "pi"}}}
 

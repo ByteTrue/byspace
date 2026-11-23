@@ -191,13 +191,16 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     equal,
   );
   const client = useSessionStore((state) => state.sessions[params.serverId]?.client ?? null);
+  const parentStatus = useSessionStore(
+    (state) => state.sessions[params.serverId]?.agents.get(params.parentAgentId)?.status,
+  );
 
   useEffect(() => {
     if (!client) return;
     void refreshProviderSubagents(client, params.serverId, params.parentAgentId).catch(
       () => undefined,
     );
-  }, [client, params.parentAgentId, params.serverId]);
+  }, [client, params.parentAgentId, params.serverId, parentStatus]);
 
   return useMemo(() => {
     if (params.providerParentSubagentId) return providerRows;

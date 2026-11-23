@@ -72,8 +72,8 @@ Anyone who builds software:
 ## Current state (November 2026)
 
 - Desktop (System tray + Local Web / installed PWA), web (browser + PWA on desktop and mobile), CLI
-- Built-in providers: Claude Code (Agent SDK), Codex (app-server), OpenCode, Pi. Any ACP-compatible agent (e.g. GitHub Copilot) connects through the provider catalog.
-- One-click ACP provider catalog: CodeWhale, Cursor, Hermes, Qwen Coder, Kimi Code, and others — plus custom ACP providers
+- Built-in providers: Claude Code (Agent SDK), Codex (app-server), OpenCode, Pi. Any ACP-compatible agent (e.g. GitHub Copilot) connects through generic ACP config.
+- ACP onboarding: copy a setup prompt with an absolute on-demand template path, or write custom ACP provider config directly
 - Agents drive the daemon themselves through the bundled `byspace` skill and CLI (workspaces, agents, schedules, heartbeats, terminals, workspace renaming)
 - Scheduled agents (cron-style triggers) via app and CLI
 - Frequent releases (multiple per week)

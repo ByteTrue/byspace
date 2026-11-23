@@ -2,43 +2,34 @@ package providers
 
 import "testing"
 
-// The advertisement defaults to handling fs and terminals on the host. A provider's
-// `params.clientCapabilities` overrides individual flags so an agent that manages its own
-// environment keeps those operations to itself.
 func TestACPClientCapabilities(t *testing.T) {
 	fsOf := func(caps map[string]any) map[string]any {
 		fs, _ := caps["fs"].(map[string]any)
 		return fs
 	}
-
-	// No config: full host delegation.
-	def := acpClientCapabilities(nil)
-	if def["terminal"] != true || fsOf(def)["readTextFile"] != true || fsOf(def)["writeTextFile"] != true {
-		t.Fatalf("defaults = %v, want all true", def)
+	config := func(read, write, terminal any) map[string]any {
+		return map[string]any{"params": map[string]any{"clientCapabilities": map[string]any{
+			"terminal": terminal,
+			"fs":       map[string]any{"readTextFile": read, "writeTextFile": write},
+		}}}
 	}
-
-	// Container agent: keep terminal and fs inside its own environment.
-	container := acpClientCapabilities(map[string]any{
-		"params": map[string]any{
-			"clientCapabilities": map[string]any{
-				"terminal": false,
-				"fs":       map[string]any{"readTextFile": false, "writeTextFile": false},
-			},
-		},
-	})
-	if container["terminal"] != false || fsOf(container)["readTextFile"] != false || fsOf(container)["writeTextFile"] != false {
-		t.Fatalf("container = %v, want all false", container)
+	tests := []struct {
+		name                  string
+		config                map[string]any
+		read, write, terminal bool
+	}{
+		{name: "filesystem defaults off", read: false, write: false, terminal: true},
+		{name: "read opt in", config: config(true, nil, nil), read: true, write: false, terminal: true},
+		{name: "write opt in", config: config(nil, true, nil), read: false, write: true, terminal: true},
+		{name: "both opt in", config: config(true, true, nil), read: true, write: true, terminal: true},
+		{name: "terminal override", config: config(nil, nil, false), read: false, write: false, terminal: false},
 	}
-
-	// Partial override: only the named flag changes, the rest keep their defaults.
-	partial := acpClientCapabilities(map[string]any{
-		"params": map[string]any{
-			"clientCapabilities": map[string]any{
-				"fs": map[string]any{"writeTextFile": false},
-			},
-		},
-	})
-	if partial["terminal"] != true || fsOf(partial)["readTextFile"] != true || fsOf(partial)["writeTextFile"] != false {
-		t.Fatalf("partial = %v, want terminal+read true, write false", partial)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := acpClientCapabilities(tt.config)
+			if fsOf(got)["readTextFile"] != tt.read || fsOf(got)["writeTextFile"] != tt.write || got["terminal"] != tt.terminal {
+				t.Fatalf("capabilities = %v, want read=%v write=%v terminal=%v", got, tt.read, tt.write, tt.terminal)
+			}
+		})
 	}
 }

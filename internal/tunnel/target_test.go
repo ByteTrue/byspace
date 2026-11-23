@@ -13,6 +13,7 @@ import (
 // startEchoService runs a TCP service that echoes whatever it receives, standing in for the dev
 // server a tunnel exposes.
 func startEchoService(t *testing.T) (port int, stop func()) {
+	requireTCP(t)
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -36,6 +37,7 @@ func startEchoService(t *testing.T) (port int, stop func()) {
 // startEchoServiceOn is the same service on another address, skipping when the platform cannot bind
 // it. Used to prove that a destination on another host is reachable by name only.
 func startEchoServiceOn(t *testing.T, host string) (port int, stop func()) {
+	requireTCP(t)
 	t.Helper()
 	listener, err := net.Listen("tcp", host+":0")
 	if err != nil {
@@ -234,6 +236,7 @@ func downstreamPayload(frame Frame) ([]byte, bool) {
 }
 
 func TestTargetForwardsBytes(t *testing.T) {
+	requireTCP(t)
 	port, stop := startEchoService(t)
 	defer stop()
 
@@ -278,6 +281,7 @@ func TestTargetForwardsBytes(t *testing.T) {
 }
 
 func TestTargetUpstreamHalfCloseKeepsResponse(t *testing.T) {
+	requireTCP(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -344,6 +348,7 @@ func TestTargetResumeAcknowledgesExistingStream(t *testing.T) {
 }
 
 func TestTargetReconnectResumesPendingResponse(t *testing.T) {
+	requireTCP(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

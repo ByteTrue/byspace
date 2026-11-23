@@ -9,12 +9,10 @@ import (
 	"time"
 )
 
-// RewindSupport reports which rewind modes a provider implements.
-//
-// `conversation` needs pi's tree navigation (via the integration extension). `files` is the
-// daemon's own job — it restores the working tree — so it does not depend on the provider.
+// RewindSupport reports the native checkpoints this session actually owns.
+// Pi navigates its conversation tree but has no session-scoped file revert.
 func (s *Session) RewindSupport() (conversation, files, both bool) {
-	return true, true, true
+	return true, false, false
 }
 
 // RewindConversation moves pi's conversation leaf to the given user message.
@@ -161,8 +159,15 @@ func (s *Session) handleEntryCaptureNotification(message string) {
 		if id == "" || text == "" {
 			return
 		}
-		// Index by normalized text: the client knows the message text, not pi's entry id.
-		s.treeEntries[strings.TrimSpace(text)] = id
+		normalized := strings.TrimSpace(text)
+		s.treeEntries[normalized] = id
+		for index := range s.treeEntryCaptures {
+			if s.treeEntryCaptures[index].id == id {
+				s.treeEntryCaptures[index].text = normalized
+				return
+			}
+		}
+		s.treeEntryCaptures = append(s.treeEntryCaptures, piTreeEntryCapture{id: id, text: normalized})
 	}
 	for _, entry := range payload.Entries {
 		record(entry.ID, entry.Text)
@@ -172,12 +177,45 @@ func (s *Session) handleEntryCaptureNotification(message string) {
 	}
 }
 
-// TreeEntryForMessage resolves a user message's text to pi's tree entry id.
-func (s *Session) TreeEntryForMessage(text string) (string, bool) {
+// TreeEntryForMessage resolves a canonical message id (or legacy text) to pi's tree entry id.
+func (s *Session) TreeEntryForMessage(messageID string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id, ok := s.treeEntries[strings.TrimSpace(text)]
-	return id, ok
+	key := strings.TrimSpace(messageID)
+	if id, ok := s.treeEntries[key]; ok {
+		return id, true
+	}
+	for targetIndex, entry := range s.timeline {
+		item := entry.Item
+		if item.Type != "user_message" || (item.MessageID != key && item.ClientMessageID != key) {
+			continue
+		}
+		text := strings.TrimSpace(item.Text)
+		occurrence := 0
+		for index := 0; index < targetIndex; index++ {
+			candidate := s.timeline[index].Item
+			if candidate.Type == "user_message" && strings.TrimSpace(candidate.Text) == text {
+				occurrence++
+			}
+		}
+		matchedCapture := false
+		for _, capture := range s.treeEntryCaptures {
+			if capture.text != text {
+				continue
+			}
+			matchedCapture = true
+			if occurrence == 0 {
+				return capture.id, true
+			}
+			occurrence--
+		}
+		if matchedCapture {
+			return "", false
+		}
+		id, ok := s.treeEntries[text]
+		return id, ok
+	}
+	return "", false
 }
 
 // SetCleanup registers a function to run when the session closes (the generated extension's

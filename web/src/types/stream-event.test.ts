@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { AgentStreamEventPayload } from "@bytetrue/protocol/messages";
 import type { ThoughtItem } from "@/types/stream";
-import { applyStreamEvent } from "@/types/stream";
+import { applyStreamEvent, replaceWithCanonicalStream } from "@/types/stream";
 
 const baseTimestamp = new Date(0);
 
-const assistantChunk = (text: string, messageId?: string): AgentStreamEventPayload => ({
+const assistantChunk = (
+  text: string,
+  messageId?: string,
+): Extract<AgentStreamEventPayload, { type: "timeline" }> => ({
   type: "timeline",
   provider: "codex",
   item: {
@@ -58,6 +61,113 @@ const reasoningChunk = (text: string): AgentStreamEventPayload => ({
 });
 
 describe("applyStreamEvent", () => {
+  it("applies an authoritative canonical text replacement", () => {
+    const initial = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: assistantChunk("wrong", "message-1"),
+      timestamp: baseTimestamp,
+    });
+    const result = applyStreamEvent({
+      tail: initial.tail,
+      head: initial.head,
+      event: { ...assistantChunk("canonical", "message-1"), replace: true },
+      timestamp: baseTimestamp,
+    });
+    expect(result.head).toHaveLength(1);
+    expect(result.head[0]).toMatchObject({ kind: "assistant_message", text: "canonical" });
+  });
+
+  it("replaces Markdown-split tail blocks without duplicating the canonical message", () => {
+    const result = applyStreamEvent({
+      tail: [
+        {
+          id: "part-1",
+          kind: "assistant_message",
+          messageId: "message-1",
+          text: "first",
+          timestamp: baseTimestamp,
+        },
+        {
+          id: "part-2",
+          kind: "assistant_message",
+          messageId: "message-1",
+          text: "second",
+          timestamp: baseTimestamp,
+        },
+      ],
+      head: [],
+      event: { ...assistantChunk("first second", "message-1"), replace: true },
+      timestamp: baseTimestamp,
+    });
+    expect(result.tail).toHaveLength(0);
+    expect(result.head).toHaveLength(1);
+    expect(result.head[0]).toMatchObject({ kind: "assistant_message", text: "first second" });
+  });
+
+  it("does not duplicate a cursorless live assistant already present in canonical history", () => {
+    const canonical = {
+      id: "canonical-root",
+      kind: "assistant_message" as const,
+      messageId: "message-root",
+      text: "ROOT_DONE",
+      timestamp: baseTimestamp,
+      timelineCursor: { epoch: "epoch-1", seq: 10 },
+    };
+    const live = {
+      id: "live-root",
+      kind: "assistant_message" as const,
+      messageId: "message-root",
+      text: "ROOT_DONE",
+      timestamp: baseTimestamp,
+    };
+    const trailingTool = {
+      id: "trailing-tool",
+      kind: "tool_call" as const,
+      timestamp: baseTimestamp,
+      timelineCursor: { epoch: "epoch-1", seq: 11 },
+      payload: {
+        source: "agent" as const,
+        data: {
+          provider: "claude" as const,
+          callId: "call-after",
+          name: "notification",
+          status: "completed" as const,
+          error: null,
+          detail: { type: "unknown" as const, input: null, output: null },
+        },
+      },
+    };
+    const result = replaceWithCanonicalStream({
+      previousTail: [canonical],
+      previousHead: [live],
+      canonical: [canonical, trailingTool],
+      sendingClientMessageIds: [],
+      canonicalCoverage: { epoch: "epoch-1", endSeq: 11 },
+      preserveContinuity: true,
+    });
+    expect(
+      [...result.tail, ...result.head].filter((item) => item.kind === "assistant_message"),
+    ).toHaveLength(1);
+    expect(result.head).toHaveLength(0);
+    expect(result.tail.at(-1)).toMatchObject({ kind: "tool_call", id: "trailing-tool" });
+
+    const continued = replaceWithCanonicalStream({
+      previousTail: [canonical],
+      previousHead: [{ ...live, text: "ROOT_DONE with a newer suffix" }],
+      canonical: [canonical, trailingTool],
+      sendingClientMessageIds: [],
+      canonicalCoverage: { epoch: "epoch-1", endSeq: 11 },
+      preserveContinuity: true,
+    });
+    expect(continued.head).toHaveLength(1);
+    expect(continued.head[0]).toMatchObject({
+      kind: "assistant_message",
+      text: "ROOT_DONE with a newer suffix",
+    });
+    expect(continued.tail.filter((item) => item.kind === "assistant_message")).toHaveLength(0);
+  });
+
   it("buffers reasoning chunks in head", () => {
     const result = applyStreamEvent({
       tail: [],

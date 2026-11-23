@@ -27,7 +27,18 @@ import (
 //
 // Returns a message describing why the directory is still on disk, or nil when it is gone (or was
 // never ours to remove).
-func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string) *string {
+func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string) (*string, error) {
+	// Native archival is the fallible remote phase. Finish it for every workspace before
+	// mutating any local records, so a later failure cannot leave a half-archived batch.
+	for _, id := range ids {
+		rec, ok := s.workspaceRecord(id)
+		if !ok || rec.ArchivedAt != nil {
+			continue
+		}
+		if err := s.prepareArchivedWorkspaceNative(ctx, id); err != nil {
+			return nil, err
+		}
+	}
 	archived := make([]store.WorkspaceRecord, 0, len(ids))
 	for _, id := range ids {
 		rec, ok := s.workspaceRecord(id)
@@ -36,12 +47,11 @@ func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string
 		}
 		already := rec.ArchivedAt != nil
 		if !already {
-			s.teardownArchivedWorkspace(id, now)
+			s.teardownArchivedWorkspaceLocal(id, now)
 			if _, err := s.store.ArchiveWorkspace(id, now); err != nil {
-				continue
+				return nil, err
 			}
 			rec.ArchivedAt = &now
-			s.archiveWorkspaceContents(ctx, id, now)
 			if prj, ok := s.projectForWorkspace(rec.ProjectID); ok {
 				s.broadcastWorkspaceUpsert(rec, prj)
 			}
@@ -49,9 +59,9 @@ func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string
 		archived = append(archived, rec)
 	}
 	if len(archived) == 0 {
-		return nil
+		return nil, nil
 	}
-	return s.removeArchivedWorktree(ctx, archived[0])
+	return s.removeArchivedWorktree(ctx, archived[0]), nil
 }
 
 // adoptWorktreePlacement gives a workspace created on a BySpace worktree directory the worktree

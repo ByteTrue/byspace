@@ -11,6 +11,7 @@ import {
 } from "../support/helpers/rewind-flow";
 
 const GREETING = "Say hello back.";
+const CODEX_MODEL = process.env.E2E_CODEX_MODEL ?? "gpt-5.4-mini";
 
 test.use({ e2eInjectBySpaceTools: true });
 
@@ -19,8 +20,8 @@ function verificationPrompt(workspacePath: string): string {
     "Use BySpace tools to perform this exact UI verification.",
     "Do not edit files or run shell commands. Every prompt below is intentionally non-actionable.",
     `1. Create a local workspace at ${workspacePath} titled "Presentation QA workspace".`,
-    `2. In that workspace, create a codex/gpt-5.4-mini agent titled "Greeting child" with the initial prompt "${GREETING}".`,
-    `3. Create a schedule named "Greeting schedule" with prompt "${GREETING}", cron "0 0 1 1 *", timezone "Europe/Berlin", provider "codex/gpt-5.4-mini", cwd ${workspacePath}, maxRuns 1, and expiresIn "1h". Delete that schedule using its returned id.`,
+    `2. In that workspace, create a ${CODEX_MODEL} agent titled "Greeting child" with the initial prompt "${GREETING}".`,
+    `3. Create a schedule named "Greeting schedule" with prompt "${GREETING}", cron "0 0 1 1 *", timezone "Europe/Berlin", provider "${CODEX_MODEL}", cwd ${workspacePath}, maxRuns 1, and expiresIn "1h". Delete that schedule using its returned id.`,
     `4. Create a heartbeat named "Greeting heartbeat" with prompt "${GREETING}", cron "0 0 1 1 *", timezone "Europe/Berlin", maxRuns 1, and expiresIn "1h". Delete that heartbeat using its returned id.`,
     `5. After the child agent finishes, send it the follow-up prompt "${GREETING}" synchronously.`,
     "6. Archive the workspace from step 1.",
@@ -60,6 +61,10 @@ async function runPresentationJourney(handle: AgentHandle, workspacePath: string
 }
 
 test.describe("real Codex BySpace tool-call presentation", () => {
+  test.skip(
+    true,
+    "BySpace MCP injection is retired; agents receive BySpace tools through the optional bundled skill and CLI",
+  );
   test.setTimeout(600_000);
 
   test("renders owned tool inputs and results as readable text", async ({ page }, testInfo) => {
@@ -81,7 +86,7 @@ test.describe("real Codex BySpace tool-call presentation", () => {
       await captureToolCall(page, testInfo, {
         label: "Create agent",
         artifact: "create-agent-prompt-presentation",
-        expectedText: ["Prompt", GREETING, "Greeting child", "codex/gpt-5.4-mini", "Result"],
+        expectedText: ["Prompt", GREETING, "Greeting child", CODEX_MODEL, "Result"],
       });
       await captureToolCall(page, testInfo, {
         label: "Send agent prompt",

@@ -111,6 +111,7 @@ func TestDecodeCopiesPayload(t *testing.T) {
 // handshake all worked on their own, and still not one byte crossed, because each end listened for
 // the direction the other one sent. A single-end test cannot see that.
 func TestManagerAndTargetExchangeBytes(t *testing.T) {
+	requireTCP(t)
 	// A real TCP service for the target to dial.
 	service, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -170,6 +171,7 @@ func TestManagerAndTargetExchangeBytes(t *testing.T) {
 // the host on the open frame, the target checks it against the allowlist and dials it, and the bytes
 // come back. Nothing here is a stub below the TCP service.
 func TestManagerReachesRemoteHostThroughTarget(t *testing.T) {
+	requireTCP(t)
 	// A second loopback address stands in for another machine on the target's network.
 	servicePort, stop := startEchoServiceOn(t, "127.0.0.2")
 	defer stop()

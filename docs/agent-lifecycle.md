@@ -80,9 +80,9 @@ A watched child that closes before its finish event also notifies the caller so 
 
 ## Provider-managed child agents
 
-Some providers run their own child sessions inside one provider runtime. Pi surfaces these through the shared provider-subagents channel (`agent.provider_subagents.*`): a finished tool call whose name starts with `subagent` carries the descriptor (`ParseSubagentDetails`, `internal/agent/pi/pi.go`), and a `subagent-exit` custom message folds the child's terminal status onto it. The child's read-only timeline is a tail of the session JSONL it names.
+Some providers run their own child sessions inside one provider runtime. They surface through the shared provider-subagents channel (`agent.provider_subagents.*`): Pi reads subagent tool descriptors and `subagent-exit` messages from session JSONL, Claude uses native task lifecycle events, Codex uses collaboration sessions, and OpenCode enumerates `/children`. The read-only timeline comes from the provider adapter for that native child handle.
 
-The provider still owns the underlying runtime. BySpace tracks the child as a subagent in the parent's subagents track so it can be opened and watched, but prompts and history hydration route through the provider adapter for that native child handle. There is no side channel: a subagent whose events never reached the stream is absent until replay rebuilds it from the transcript.
+The provider still owns the underlying runtime. BySpace tracks the child as a subagent in the parent's subagents track so it can be opened and watched, but prompts and history hydration route through the provider adapter. There is no side channel: a subagent whose events never reached the stream is absent until replay rebuilds it from the transcript.
 
 ## Archive
 

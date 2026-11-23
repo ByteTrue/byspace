@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,18 +21,23 @@ import (
 // OpenCodeSession hosts an OpenCode agent via its HTTP/SSE server (`opencode serve`)
 // or an ACP/JSON-RPC compatible OpenCode binary.
 type OpenCodeSession struct {
-	baseURL    string
-	httpClient *http.Client
-	cmd        *exec.Cmd
-	acpFallbk  *ACPSession
+	baseURL          string
+	version          int
+	httpClient       *http.Client
+	streamHTTPClient *http.Client
+	cmd              *exec.Cmd
+	acpFallbk        *ACPSession
 
 	mu                  sync.Mutex
 	status              string
 	sessionID           string
 	cwd                 string
 	model               string
+	modelProvider       string
 	modeID              string
 	thinking            string
+	systemPrompt        string
+	mcpServers          map[string]sdk.MCPServerConfig
 	turnCounter         int
 	nextClientMessageID string
 	// nextOutputSchema constrains the next reply (the prompt's json_schema format), then clears.
@@ -43,32 +48,46 @@ type OpenCodeSession struct {
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
 	// lastError is the provider's own text for the most recent failure.
-	lastError        string
-	eventSubscribers map[int]func(map[string]any)
-	nextSubID        int
+	lastError          string
+	eventSubscribers   map[int]func(map[string]any)
+	nextSubID          int
+	eventCancel        context.CancelFunc
+	dispatchCancel     context.CancelFunc
+	closed             bool
+	partTypes          map[string]string
+	messageRoles       map[string]string
+	materializedText   map[string]string
+	closedParts        map[string]bool
+	toolIndexByID      map[string]int
+	pendingPermissions map[string]map[string]any
+	eventTimelineIndex int
 }
 
 // StartOpenCodeSession starts or attaches to an OpenCode agent session.
 func StartOpenCodeSession(cfg LaunchConfig, cmdOverride string) (ManagedSession, error) {
+	return startOpenCodeSessionWithArgs(cfg, cmdOverride, nil)
+}
+
+func startOpenCodeSessionWithArgs(cfg LaunchConfig, cmdOverride string, commandArgs []string) (ManagedSession, error) {
 	urlOverride := strings.TrimSpace(os.Getenv("OPENCODE_SERVER_URL"))
 	if strings.HasPrefix(cmdOverride, "http://") || strings.HasPrefix(cmdOverride, "https://") {
 		urlOverride = cmdOverride
 	}
 
 	if urlOverride != "" {
-		return newHTTPOpenCodeSession(cfg, strings.TrimRight(urlOverride, "/"))
+		return newHTTPOpenCodeSessionForVersion(cfg, strings.TrimRight(urlOverride, "/"), 2, os.Getenv("OPENCODE_SERVER_PASSWORD"))
 	}
 
 	// No override and no explicit ACP request: start (or reuse) an `opencode serve` process. Without this
 	// an OpenCode agent on a machine with no manually started server did not work at all — the session
 	// appeared to exist and every request failed.
 	if !strings.HasSuffix(cmdOverride, "acp") {
-		// Pass nil args so the pool runs `opencode serve --port <p>` rather than prepending
-		// spec.DefaultArgs ("acp"), which ran `opencode acp serve` and hung 30s until timeout.
-		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, nil, openCodePoolEnv(cfg.Env))
+		// Only configured command-tail arguments are forwarded. Provider default args contain
+		// "acp" and must not turn the server launch into `opencode acp serve`.
+		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, commandArgs, openCodePoolEnv(cfg.Env))
 		server, err := pool.Acquire(context.Background())
 		if err == nil && server != nil {
-			return newHTTPOpenCodeSession(cfg, server.URL)
+			return newHTTPOpenCodeSessionForVersion(cfg, server.URL, server.Version, server.Password)
 		}
 		// Fall through to ACP: a machine without the server binary can still drive the agent through
 		// stdio, and that is better than failing the create.
@@ -76,42 +95,63 @@ func StartOpenCodeSession(cfg LaunchConfig, cmdOverride string) (ManagedSession,
 
 	// If command override points to a stdio script/binary or `opencode acp`, drive via ACP/stdio
 	spec := GetProviderSpec("opencode")
-	spec.DefaultArgs = []string{"acp"}
+	spec.DefaultArgs = append(append([]string{}, commandArgs...), "acp")
 	return StartACPSession(cfg, spec, cmdOverride)
 }
 
 func newHTTPOpenCodeSession(cfg LaunchConfig, baseURL string) (*OpenCodeSession, error) {
-	client := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: &http.Transport{Proxy: nil},
+	return newHTTPOpenCodeSessionForVersion(cfg, baseURL, 1, "")
+}
+
+func newHTTPOpenCodeSessionForVersion(cfg LaunchConfig, baseURL string, version int, password string) (*OpenCodeSession, error) {
+	if version == 2 {
+		return newOpenCodeV2Session(cfg, baseURL, password)
 	}
+	if version != 1 {
+		return nil, fmt.Errorf("unsupported OpenCode protocol version %d", version)
+	}
+	client := newOpenCodeHTTPClient(password)
 	s := &OpenCodeSession{
 		baseURL:          baseURL,
+		version:          version,
 		httpClient:       client,
+		streamHTTPClient: newOpenCodeStreamHTTPClient(password),
 		status:           "idle",
 		cwd:              cfg.Cwd,
 		model:            cfg.Model,
+		modelProvider:    cfg.ModelProvider,
 		modeID:           cfg.ModeID,
 		thinking:         cfg.ThinkingOptionID,
 		sessionID:        cfg.SessionHandle,
 		eventSubscribers: make(map[int]func(map[string]any)),
+		partTypes:        make(map[string]string), messageRoles: make(map[string]string),
+		materializedText: make(map[string]string), closedParts: make(map[string]bool),
+		toolIndexByID: make(map[string]int), pendingPermissions: make(map[string]map[string]any),
+		systemPrompt: cfg.SystemPrompt, mcpServers: cfg.MCPServers, eventTimelineIndex: -1,
 	}
 
 	if s.sessionID == "" {
 		body, _ := json.Marshal(map[string]any{"cwd": cfg.Cwd})
 		resp, err := client.Post(baseURL+"/session", "application/json", bytes.NewReader(body))
-		if err == nil {
-			var res map[string]any
-			_ = json.NewDecoder(resp.Body).Decode(&res)
-			_ = resp.Body.Close()
-			if id, ok := res["id"].(string); ok && id != "" {
-				s.sessionID = id
-			}
+		if err != nil {
+			return nil, fmt.Errorf("opencode create session: %w", err)
 		}
-		if s.sessionID == "" {
-			s.sessionID = "oc_sess_1"
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			return nil, fmt.Errorf("opencode v1 create session: %s: %s", resp.Status, strings.TrimSpace(string(message)))
 		}
+		var res map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return nil, fmt.Errorf("opencode create session: %w", err)
+		}
+		id, _ := res["id"].(string)
+		if id == "" {
+			return nil, fmt.Errorf("opencode create session: response has no id")
+		}
+		s.sessionID = id
 	}
+	s.startEventStream()
 	return s, nil
 }
 
@@ -144,6 +184,9 @@ func (s *OpenCodeSession) SetNextClientMessageID(id string) {
 
 // SetNextOutputSchema constrains the next reply to schema.
 func (s *OpenCodeSession) SetNextOutputSchema(schema any) error {
+	if s.version == 2 {
+		return errors.New("OpenCode v2 does not support BySpace structured outputs")
+	}
 	object, ok := schema.(map[string]any)
 	if !ok {
 		return errors.New("OpenCode structured outputs require a JSON object schema.")
@@ -225,155 +268,166 @@ func (s *OpenCodeSession) AppendTimelineItem(item sdk.TimelineItem) sdk.Timeline
 
 func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return fmt.Errorf("OpenCode session is closed")
+	}
+	if s.status == "running" {
+		s.mu.Unlock()
+		return fmt.Errorf("OpenCode turn is already running")
+	}
+	s.resetOpenCodeTurnUsageLocked()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
+	turnID := s.activeTurnID
+	dispatchCtx, dispatchCancel := context.WithCancel(context.Background())
+	s.dispatchCancel = dispatchCancel
 	s.status = "running"
-	// The client's own id comes back on this row so it can reconcile the bubble it rendered
-	// optimistically instead of leaving a duplicate, and can settle the pending submission.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
-	s.timeline = append(s.timeline, sdk.TimelineEntry{
-		Seq:       len(s.timeline) + 1,
-		TurnID:    s.activeTurnID,
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item:      userMessage(message, clientMsgID),
-	})
-	sid := s.sessionID
-	// Read the turn's model/mode/thinking under the same lock as the rest of the turn state: the
-	// runtime setters write them, and reading them inside the goroutine would race.
-	model, modeID, variant := s.model, s.modeID, s.thinking
+	userEntry := sdk.TimelineEntry{
+		Seq: len(s.timeline) + 1, TurnID: s.activeTurnID, Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		Item: userMessage(message, clientMsgID),
+	}
+	s.timeline = append(s.timeline, userEntry)
 	outputSchema := s.nextOutputSchema
 	s.nextOutputSchema = nil
-	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
-	for _, fn := range s.eventSubscribers {
-		subs = append(subs, fn)
-	}
+	subs := s.copyOpenCodeSubscribersLocked()
 	s.mu.Unlock()
-
 	for _, fn := range subs {
 		fn(map[string]any{"type": "turn_start"})
 	}
-
+	publishOpenCodeTimeline(subs, userEntry.Seq, userEntry.TurnID, userEntry.Item)
 	go func() {
-		parts := []map[string]any{{"type": "text", "text": message}}
-		parts = append(parts, imageBlocksForOpenCode(images)...)
-		body := map[string]any{
-			"parts": parts,
-		}
-		// OpenCode takes the model, the agent (mode) and the thinking variant per message. They were
-		// stored on the session and never sent, so the pickers changed the record while every turn
-		// ran with whatever the server defaulted to.
-		if trimmed := strings.TrimSpace(model); trimmed != "" {
-			// A bare model id names no provider; OpenCode's own provider is the one that can resolve
-			// it, which is what the node daemon fell back to as well.
-			provider, modelID, ok := strings.Cut(trimmed, "/")
-			if !ok {
-				provider, modelID = "opencode", trimmed
-			}
-			body["model"] = map[string]any{"providerID": provider, "modelID": modelID}
-		}
-		if trimmed := strings.TrimSpace(modeID); trimmed != "" {
-			body["agent"] = trimmed
-		}
-		if trimmed := strings.TrimSpace(variant); trimmed != "" && trimmed != "default" {
-			body["variant"] = trimmed
-		}
-		if outputSchema != nil {
-			body["format"] = map[string]any{"type": "json_schema", "schema": outputSchema}
-		}
-		payload, _ := json.Marshal(body)
-		resp, err := s.httpClient.Post(s.baseURL+"/session/"+sid+"/message", "application/json", bytes.NewReader(payload))
-		var replyText string
-		var turnUsage *sdk.AgentUsage
-		if err == nil {
-			// A non-2xx answer is the provider's error (quota, auth, a rejected request), and it used to
-			// be decoded as an empty reply: the turn then settled as completed with no row.
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-				err = fmt.Errorf("opencode %s: %s", resp.Status, strings.TrimSpace(string(body)))
-				_ = resp.Body.Close()
-			} else {
-				var res map[string]any
-				if json.NewDecoder(resp.Body).Decode(&res) == nil {
-					if t, ok := res["text"].(string); ok {
-						replyText = t
-					} else if parts, ok := res["parts"].([]any); ok {
-						turnUsage = openCodeUsageFromParts(parts)
-						for _, p := range parts {
-							if pm, ok := p.(map[string]any); ok {
-								if t, ok := pm["text"].(string); ok {
-									replyText += t
-								}
-							}
-						}
-					}
-				}
-				_ = resp.Body.Close()
-			}
-		}
-
-		s.mu.Lock()
-		if turnUsage != nil {
-			s.lastUsage = turnUsage
-		}
-		finishedTurnID := s.activeTurnID
-		if err != nil {
-			s.lastError = err.Error()
-		}
-		if replyText != "" {
-			s.timeline = append(s.timeline, sdk.TimelineEntry{
-				Seq:       len(s.timeline) + 1,
-				TurnID:    s.activeTurnID,
-				Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-				Item: sdk.TimelineItem{
-					Type: "assistant_message",
-					Text: replyText,
-				},
-			})
-		}
-		s.status = "idle"
-		s.activeTurnID = ""
-		waiters := s.finishWaiters
-		s.finishWaiters = nil
-		for _, ch := range waiters {
-			ch <- err
-			close(ch)
-		}
-		endSubs := make([]func(map[string]any), 0, len(s.eventSubscribers))
-		for _, fn := range s.eventSubscribers {
-			endSubs = append(endSubs, fn)
-		}
-		s.mu.Unlock()
-
-		for _, fn := range endSubs {
-			if replyText != "" {
-				fn(map[string]any{"type": "message_end"})
-			}
-			if err != nil {
-				// The provider answered with an error. Settling the turn as completed left the record idle
-				// and wrote no [System Error] row.
-				fn(map[string]any{
-					"type":   "byspace_turn_failed",
-					"turnId": finishedTurnID,
-					"error":  err.Error(),
-				})
-				continue
-			}
-			fn(map[string]any{"type": "agent_end"})
+		requestCtx, cancel := context.WithTimeout(dispatchCtx, 30*time.Second)
+		defer cancel()
+		if err := s.dispatchOpenCodePrompt(requestCtx, message, images, outputSchema, "queue"); err != nil {
+			// A dispatch timeout is a terminal dispatch failure, not permission to leave the turn
+			// running forever. A late error still cannot settle a newer turn.
+			s.finishOpenCodeTurnForID(turnID, err, false)
 		}
 	}()
 	return nil
 }
 
-func (s *OpenCodeSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
-	return s.Prompt(ctx, message, images)
+func (s *OpenCodeSession) resetOpenCodeTurnUsageLocked() {
+	if s.version != 1 || s.lastUsage == nil {
+		return
+	}
+	usage := *s.lastUsage
+	usage.TotalCostUSD = 0
+	s.lastUsage = &usage
 }
 
-func (s *OpenCodeSession) Abort(_ context.Context) error {
+func (s *OpenCodeSession) copyOpenCodeSubscribersLocked() []func(map[string]any) {
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
+	return subs
+}
+
+func (s *OpenCodeSession) finishOpenCodeTurn(turnErr error, canceled bool) {
+	s.mu.Lock()
+	turnID := s.activeTurnID
+	s.mu.Unlock()
+	s.finishOpenCodeTurnForID(turnID, turnErr, canceled)
+}
+
+func (s *OpenCodeSession) finishOpenCodeTurnForID(expectedTurnID string, turnErr error, canceled bool) {
+	s.mu.Lock()
+	turnID := s.activeTurnID
+	if turnID == "" || turnID != expectedTurnID {
+		s.mu.Unlock()
+		return
+	}
+	if s.dispatchCancel != nil {
+		s.dispatchCancel()
+		s.dispatchCancel = nil
+	}
+	if turnErr != nil {
+		s.lastError = turnErr.Error()
+	}
+	s.status = "idle"
+	s.activeTurnID = ""
+	waiters := s.finishWaiters
+	s.finishWaiters = nil
+	subs := s.copyOpenCodeSubscribersLocked()
+	s.mu.Unlock()
+	for _, ch := range waiters {
+		ch <- turnErr
+		close(ch)
+	}
+	for _, fn := range subs {
+		switch {
+		case canceled:
+			fn(map[string]any{"type": "byspace_turn_canceled", "turnId": turnID, "reason": "Interrupted"})
+		case turnErr != nil:
+			fn(map[string]any{"type": "byspace_turn_failed", "turnId": turnID, "error": turnErr.Error()})
+		default:
+			fn(map[string]any{"type": "byspace_turn_completed", "turnId": turnID})
+		}
+	}
+}
+
+func (s *OpenCodeSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
+	s.mu.Lock()
+	if s.status != "running" || s.activeTurnID == "" {
+		s.mu.Unlock()
+		return fmt.Errorf("OpenCode has no active turn to steer")
+	}
+	s.mu.Unlock()
+	if err := s.dispatchOpenCodePrompt(ctx, message, images, nil, "steer"); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	turnID := s.activeTurnID
+	entry := sdk.TimelineEntry{Seq: len(s.timeline) + 1, TurnID: turnID, Timestamp: time.Now().UTC().Format(time.RFC3339Nano), Item: userMessage(message, clientMsgID)}
+	s.timeline = append(s.timeline, entry)
+	subs := s.copyOpenCodeSubscribersLocked()
+	s.mu.Unlock()
+	publishOpenCodeTimeline(subs, entry.Seq, turnID, entry.Item)
+	return nil
+}
+
+func (s *OpenCodeSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
 	sid := s.sessionID
-	s.status = "idle"
+	// Bind the native interrupt and local cleanup to the turn that was active when Abort began.
+	// A slow HTTP response must not cancel a turn started after the native idle event.
+	expectedTurnID := s.activeTurnID
+	endpoint := s.baseURL + "/session/" + url.PathEscape(sid) + "/abort"
+	if s.version == 2 {
+		endpoint = s.baseURL + "/api/session/" + url.PathEscape(sid) + "/interrupt"
+	}
 	s.mu.Unlock()
-	_, _ = s.httpClient.Post(s.baseURL+"/session/"+sid+"/abort", "application/json", bufio.NewReader(strings.NewReader("{}")))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("opencode interrupt: %s", resp.Status)
+	}
+
+	s.mu.Lock()
+	if expectedTurnID == "" || s.activeTurnID != expectedTurnID {
+		s.mu.Unlock()
+		return nil
+	}
+	for _, index := range failRunningToolCalls(s.timeline, "Interrupted") {
+		entry := &s.timeline[index]
+		if entry.SeqEnd == 0 {
+			entry.SeqEnd = entry.Seq
+		}
+	}
+	s.mu.Unlock()
+	s.finishOpenCodeTurnForID(expectedTurnID, nil, true)
 	return nil
 }
 
@@ -395,6 +449,46 @@ func (s *OpenCodeSession) WaitForFinish(ctx context.Context) error {
 	}
 }
 
+func (s *OpenCodeSession) ArchiveNative(ctx context.Context, archived bool) error {
+	s.mu.Lock()
+	sid, cwd := s.sessionID, s.cwd
+	endpoint := s.baseURL + "/session/" + url.PathEscape(sid)
+	if s.version == 2 {
+		endpoint = s.baseURL + "/api/session/" + url.PathEscape(sid)
+	}
+	s.mu.Unlock()
+	var body map[string]any
+	if s.version == 2 {
+		body = map[string]any{"archived": archived}
+	} else {
+		archivedAt := int64(0)
+		if archived {
+			archivedAt = time.Now().UnixMilli()
+		}
+		body = map[string]any{"time": map[string]any{"archived": archivedAt}}
+	}
+	payload, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint+"?directory="+url.QueryEscape(cwd), bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("opencode archive: %s: %s", resp.Status, strings.TrimSpace(string(message)))
+	}
+	return nil
+}
+
+func (s *OpenCodeSession) Capabilities() sdk.AgentCapabilities {
+	return sdk.AgentCapabilities{SupportsStreaming: true, SupportsSessionPersistence: true, SupportsMcpServers: true, SupportsReasoningStream: true, SupportsToolInvocations: true, CanCancel: true, CanSelectModel: true, CanSelectThinking: true, SupportsImages: true, SupportsAttachments: true, SupportsNativeArchive: true, SupportsHistoryImport: true, SupportsNativeSubagents: true}
+}
+
 func (s *OpenCodeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -408,6 +502,7 @@ func (s *OpenCodeSession) GetState(_ context.Context) (*sdk.SessionState, error)
 func (s *OpenCodeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
+	s.modelProvider = provider
 	s.mu.Unlock()
 	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
@@ -441,18 +536,146 @@ func (s *OpenCodeSession) GetCommands(ctx context.Context) ([]sdk.SlashCommand, 
 }
 
 func (s *OpenCodeSession) PendingPermissions() []map[string]any {
-	return []map[string]any{}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]map[string]any, 0, len(s.pendingPermissions))
+	for _, request := range s.pendingPermissions {
+		out = append(out, request)
+	}
+	return out
 }
 
-func (s *OpenCodeSession) RespondToPermission(_ string, _ map[string]any) error {
-	return nil
+func (s *OpenCodeSession) RespondToPermission(requestID string, response map[string]any) error {
+	return s.respondToOpenCodePermission(requestID, response)
 }
 
-func (s *OpenCodeSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
-	return []sdk.SubagentDescriptor{}
+func (s *OpenCodeSession) ListSubagents(parentAgentID string) []sdk.SubagentDescriptor {
+	s.mu.Lock()
+	sid, cwd := s.sessionID, s.cwd
+	endpoint := s.baseURL + "/session/" + url.PathEscape(sid) + "/children"
+	if s.version == 2 {
+		// OpenCode 2.3 removed the v1 children route. Its flat session list retains
+		// parentID, which is the native ownership relation.
+		endpoint = s.baseURL + "/api/session"
+	}
+	s.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?directory="+url.QueryEscape(cwd), nil)
+	if err != nil {
+		return []sdk.SubagentDescriptor{}
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return []sdk.SubagentDescriptor{}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return []sdk.SubagentDescriptor{}
+	}
+	var payload any
+	if json.NewDecoder(resp.Body).Decode(&payload) != nil {
+		return []sdk.SubagentDescriptor{}
+	}
+	children, _ := payload.([]any)
+	if object, _ := payload.(map[string]any); object != nil {
+		children, _ = object["data"].([]any)
+	}
+	result := make([]sdk.SubagentDescriptor, 0, len(children))
+	for _, raw := range children {
+		child, _ := raw.(map[string]any)
+		id := openCodeString(child["id"])
+		if id == "" || (s.version == 2 && openCodeString(child["parentID"]) != sid) {
+			continue
+		}
+		title := openCodeString(child["title"])
+		status := openCodeString(child["status"])
+		if status == "" {
+			status = "completed"
+		}
+		childCwd := openCodeString(child["directory"])
+		if childCwd == "" {
+			childCwd = cwd
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		descriptor := sdk.SubagentDescriptor{ID: id, ParentAgentID: parentAgentID, Provider: "opencode", Title: &title, Description: nil, Status: status, CreatedAt: now, UpdatedAt: now, ToolCallID: nil, Cwd: &childCwd, SessionID: id}
+		applyOpenCodeSubagentFacts(child, &descriptor)
+		if s.version == 2 {
+			s.addOpenCodeSubagentFacts(ctx, id, childCwd, &descriptor)
+		} else {
+			descriptor.Subtitle = sdk.BuildSubagentSubtitle(descriptor.Kind, descriptor.Model, descriptor.Effort, descriptor.TotalTokens)
+		}
+		result = append(result, descriptor)
+	}
+	return result
 }
 
-func (s *OpenCodeSession) GetSubagent(_, _ string) (sdk.SubagentDescriptor, bool) {
+func (s *OpenCodeSession) addOpenCodeSubagentFacts(ctx context.Context, sessionID, cwd string, descriptor *sdk.SubagentDescriptor) {
+	endpoint := s.baseURL + "/api/session/" + url.PathEscape(sessionID) + "/message?directory=" + url.QueryEscape(cwd)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return
+	}
+	var payload any
+	if json.NewDecoder(resp.Body).Decode(&payload) != nil {
+		return
+	}
+	messages, _ := payload.([]any)
+	if object, _ := payload.(map[string]any); object != nil {
+		messages, _ = object["data"].([]any)
+	}
+	for _, raw := range messages {
+		message, _ := raw.(map[string]any)
+		if openCodeString(message["type"]) == "assistant" {
+			applyOpenCodeSubagentFacts(message, descriptor)
+		}
+	}
+	descriptor.Subtitle = sdk.BuildSubagentSubtitle(descriptor.Kind, descriptor.Model, descriptor.Effort, descriptor.TotalTokens)
+}
+
+func applyOpenCodeSubagentFacts(message map[string]any, descriptor *sdk.SubagentDescriptor) {
+	if agent := openCodeString(message["agent"]); agent != "" {
+		descriptor.Kind = &agent
+	}
+	if model, _ := message["model"].(map[string]any); model != nil {
+		if id := openCodeString(model["id"]); id != "" {
+			descriptor.Model = &id
+		}
+		if variant := openCodeString(model["variant"]); variant != "" && variant != "default" {
+			descriptor.Effort = &variant
+		}
+	}
+	if tokens, _ := message["tokens"].(map[string]any); tokens != nil {
+		total := 0
+		for _, key := range []string{"input", "output", "reasoning"} {
+			value, _ := numericParam(tokens, key)
+			total += value
+		}
+		if cache, _ := tokens["cache"].(map[string]any); cache != nil {
+			for _, key := range []string{"read", "write"} {
+				value, _ := numericParam(cache, key)
+				total += value
+			}
+		}
+		total64 := int64(total)
+		descriptor.TotalTokens = &total64
+	}
+}
+
+func (s *OpenCodeSession) GetSubagent(parentAgentID, subagentID string) (sdk.SubagentDescriptor, bool) {
+	for _, subagent := range s.ListSubagents(parentAgentID) {
+		if subagent.ID == subagentID {
+			return subagent, true
+		}
+	}
 	return sdk.SubagentDescriptor{}, false
 }
 
@@ -470,8 +693,21 @@ func (s *OpenCodeSession) OnEvent(fn func(map[string]any)) func() {
 }
 
 func (s *OpenCodeSession) Close() error {
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	turnID := s.activeTurnID
+	cmd := s.cmd
+	s.mu.Unlock()
+	if s.eventCancel != nil {
+		s.eventCancel()
+	}
+	s.finishOpenCodeTurnForID(turnID, fmt.Errorf("OpenCode session is closed"), false)
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
 	}
 	return nil
 }
@@ -480,7 +716,10 @@ func (s *OpenCodeSession) Close() error {
 //
 // OpenCode's revert restores the conversation and the files the session changed, so both are true.
 func (s *OpenCodeSession) RewindCapabilities() RewindCapabilities {
-	return RewindCapabilities{Conversation: true, Files: true}
+	if s.version == 2 {
+		return RewindCapabilities{Conversation: true, Both: true}
+	}
+	return RewindCapabilities{Both: true}
 }
 
 // Rewind reverts the conversation to a message.
@@ -489,6 +728,15 @@ func (s *OpenCodeSession) RewindCapabilities() RewindCapabilities {
 // later prompt triggers its cleanup, which permanently drops the reverted messages, so there is nothing to undo here
 // even if a caller asks.
 func (s *OpenCodeSession) RewindConversation(ctx context.Context, messageID string) error {
+	return s.RewindConversationMode(ctx, messageID, "both")
+}
+
+// RewindConversationMode keeps v2 conversation-only rewinds from touching files.
+// The native revert endpoint cannot restore files without changing conversation history.
+func (s *OpenCodeSession) RewindConversationMode(ctx context.Context, messageID, mode string) error {
+	if mode == "files" {
+		return errors.New("OpenCode does not support files-only rewind")
+	}
 	trimmed := strings.TrimSpace(messageID)
 	if trimmed == "" {
 		return errors.New("rewind needs a message id")
@@ -500,7 +748,27 @@ func (s *OpenCodeSession) RewindConversation(ctx context.Context, messageID stri
 	if sid == "" {
 		return errors.New("rewind needs a session")
 	}
+	resolved, err := s.resolveOpenCodeMessageID(ctx, trimmed)
+	if err != nil {
+		return err
+	}
+	trimmed = resolved
+	if s.version == 2 {
+		if err := s.postOpenCodeV2(ctx, "/api/session/"+url.PathEscape(sid)+"/revert/stage", map[string]any{"messageID": trimmed, "files": mode == "both"}); err != nil {
+			return err
+		}
+		if err := s.postOpenCodeV2(ctx, "/api/session/"+url.PathEscape(sid)+"/revert/commit", map[string]any{}); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		s.status = "idle"
+		s.mu.Unlock()
+		return nil
+	}
 
+	if mode == "conversation" {
+		return errors.New("OpenCode v1 does not support conversation-only rewind")
+	}
 	s.mu.Lock()
 	directory := s.cwd
 	s.mu.Unlock()
@@ -530,6 +798,40 @@ func (s *OpenCodeSession) RewindConversation(ctx context.Context, messageID stri
 	s.status = "idle"
 	s.mu.Unlock()
 	return nil
+}
+
+func (s *OpenCodeSession) RewindFiles(context.Context, string) error {
+	return errors.New("OpenCode does not support files-only rewind")
+}
+
+func (s *OpenCodeSession) resolveOpenCodeMessageID(ctx context.Context, messageID string) (string, error) {
+	lookup := func() string {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, entry := range s.timeline {
+			item := entry.Item
+			if item.Type != "user_message" || (item.MessageID != messageID && item.ClientMessageID != messageID) {
+				continue
+			}
+			if item.MessageID != "" && item.MessageID != item.ClientMessageID {
+				return item.MessageID
+			}
+		}
+		return ""
+	}
+	if resolved := lookup(); resolved != "" {
+		return resolved, nil
+	}
+	s.mu.Lock()
+	sessionID := s.sessionID
+	s.mu.Unlock()
+	if _, err := s.replayOpenCodeHistory(ctx, sessionID); err != nil {
+		return "", err
+	}
+	if resolved := lookup(); resolved != "" {
+		return resolved, nil
+	}
+	return messageID, nil
 }
 
 // TreeEntryForMessage maps a message id to the provider's own reference.
@@ -581,11 +883,15 @@ func (s *OpenCodeSession) listCommandsFromServer(ctx context.Context) []sdk.Slas
 	s.mu.Lock()
 	baseURL := s.baseURL
 	cwd := s.cwd
+	path := "/command"
+	if s.version == 2 {
+		path = "/api/command"
+	}
 	s.mu.Unlock()
 	if baseURL == "" {
 		return nil
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/command", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
 	if err != nil {
 		return nil
 	}
@@ -602,13 +908,22 @@ func (s *OpenCodeSession) listCommandsFromServer(ctx context.Context) []sdk.Slas
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
-	var entries []struct {
+	type commandEntry struct {
 		Name        string   `json:"name"`
 		Description string   `json:"description"`
 		Hints       []string `json:"hints"`
 		Source      string   `json:"source"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	var entries []commandEntry
+	if s.version == 2 {
+		var envelope struct {
+			Data []commandEntry `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+			return nil
+		}
+		entries = envelope.Data
+	} else if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
 		return nil
 	}
 	out := make([]sdk.SlashCommand, 0, len(entries))

@@ -1,11 +1,15 @@
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"errors"
+
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -28,7 +32,9 @@ func TestTeardownArchivedWorkspaceArchivesAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv.teardownArchivedWorkspace("ws_1", "2026-02-01T00:00:00Z")
+	if err := srv.teardownArchivedWorkspace(context.Background(), "ws_1", "2026-02-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
 
 	record, err := srv.store.GetAgent("agt_1")
 	if err != nil {
@@ -43,7 +49,9 @@ func TestTeardownArchivedWorkspaceArchivesAgents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv.teardownArchivedWorkspace("ws_1", "2026-02-01T00:00:00Z")
+	if err := srv.teardownArchivedWorkspace(context.Background(), "ws_1", "2026-02-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
 	other, err := srv.store.GetAgent("agt_other")
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +59,112 @@ func TestTeardownArchivedWorkspaceArchivesAgents(t *testing.T) {
 	if other.ArchivedAt != nil {
 		t.Fatal("an agent in another workspace was archived")
 	}
+}
+
+type failingNativeArchiveSession struct{ providers.ManagedSession }
+
+func (failingNativeArchiveSession) ArchiveNative(context.Context, bool) error {
+	return errors.New("native archive unavailable")
+}
+
+type successfulNativeArchiveSession struct{ providers.ManagedSession }
+
+func (successfulNativeArchiveSession) ArchiveNative(context.Context, bool) error { return nil }
+
+func TestWorkspaceArchiveDoesNotMutateLocalRecordsAfterNativeFailure(t *testing.T) {
+	srv := &Server{store: store.New(t.TempDir()), agents: make(map[string]*managedPi)}
+	dir := t.TempDir()
+	if err := srv.store.UpsertAgent(store.AgentRecord{
+		ID: "agt_native", Provider: "mock", Cwd: dir, WorkspaceID: "ws_1", LastStatus: "idle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	srv.agents["agt_native"] = &managedPi{
+		record:  store.AgentRecord{ID: "agt_native", Provider: "mock", Cwd: dir, WorkspaceID: "ws_1"},
+		session: failingNativeArchiveSession{ManagedSession: providers.StartMockSession(providers.MockLaunchOptions{Cwd: dir})},
+	}
+	err := srv.archiveWorkspaceContents(context.Background(), "ws_1", "2026-02-01T00:00:00Z")
+	if err == nil {
+		t.Fatal("expected native archive failure")
+	}
+	rec, getErr := srv.store.GetAgent("agt_native")
+	if getErr != nil {
+		t.Fatal(getErr)
+	}
+	if rec.ArchivedAt != nil {
+		t.Fatal("local record was archived despite the native failure")
+	}
+	if err := srv.store.UpsertWorkspace(store.WorkspaceRecord{WorkspaceID: "ws_1", Cwd: dir}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err == nil {
+		t.Fatal("workspace archive hid the native failure")
+	}
+	workspace, found := srv.workspaceRecord("ws_1")
+	if !found || workspace.ArchivedAt != nil {
+		t.Fatalf("workspace mutated after native failure: found=%v archivedAt=%v", found, workspace.ArchivedAt)
+	}
+}
+
+func TestBatchNativeArchiveFailureLeavesEarlierWorkspacesUntouched(t *testing.T) {
+	setup := func(t *testing.T) *Server {
+		srv := &Server{store: store.New(t.TempDir()), agents: make(map[string]*managedPi)}
+		if err := srv.store.UpsertProject(store.ProjectRecord{ProjectID: "project-1", RootPath: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			id   string
+			fail bool
+		}{{"ws_1", false}, {"ws_2", true}} {
+			agentID := "agt_" + tc.id
+			rec := store.AgentRecord{ID: agentID, Provider: "mock", Cwd: t.TempDir(), WorkspaceID: tc.id, LastStatus: "idle"}
+			if err := srv.store.UpsertWorkspace(store.WorkspaceRecord{WorkspaceID: tc.id, ProjectID: "project-1", Cwd: rec.Cwd}); err != nil {
+				t.Fatal(err)
+			}
+			if err := srv.store.UpsertAgent(rec); err != nil {
+				t.Fatal(err)
+			}
+			base := providers.StartMockSession(providers.MockLaunchOptions{Cwd: rec.Cwd})
+			var session providers.ManagedSession = successfulNativeArchiveSession{ManagedSession: base}
+			if tc.fail {
+				session = failingNativeArchiveSession{ManagedSession: base}
+			}
+			srv.agents[agentID] = &managedPi{record: rec, session: session}
+		}
+		return srv
+	}
+	assertUntouched := func(t *testing.T, srv *Server) {
+		t.Helper()
+		for _, id := range []string{"ws_1", "ws_2"} {
+			workspace, found := srv.workspaceRecord(id)
+			if !found || workspace.ArchivedAt != nil {
+				t.Fatalf("%s mutated after native failure: found=%v archivedAt=%v", id, found, workspace.ArchivedAt)
+			}
+			agent, err := srv.store.GetAgent("agt_" + id)
+			if err != nil || agent.ArchivedAt != nil {
+				t.Fatalf("%s agent mutated after native failure: err=%v archivedAt=%v", id, err, agent.ArchivedAt)
+			}
+		}
+	}
+
+	t.Run("workspace batch", func(t *testing.T) {
+		srv := setup(t)
+		if _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1", "ws_2"}, "2026-02-01T00:00:00Z"); err == nil {
+			t.Fatal("expected native archive failure")
+		}
+		assertUntouched(t, srv)
+	})
+
+	t.Run("project removal", func(t *testing.T) {
+		srv := setup(t)
+		sink := &recordingSink{}
+		srv.handleProjectRemove(context.Background(), sink, []byte(`{"requestId":"request-1","projectId":"project-1"}`))
+		assertUntouched(t, srv)
+		projects, err := srv.store.ListProjects()
+		if err != nil || len(projects) != 1 || projects[0].ArchivedAt != nil {
+			t.Fatalf("project mutated after native failure: err=%v projects=%#v", err, projects)
+		}
+	})
 }
 
 // A setup run still writing into a worktree outlives the archive unless it is stopped.

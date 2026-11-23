@@ -14,6 +14,13 @@ const BUILTIN_PROVIDER_IDS = new Set(BUILTIN_PROVIDER_ICON_NAMES);
 const KNOWN_PROVIDER_IDS = new Set(KNOWN_PROVIDER_ICON_NAMES);
 const providerSnapshotIconSvgsByServer = new Map<string, ReadonlyMap<string, string>>();
 
+export const ACP_PROVIDER_ICON_ALIASES: Readonly<Record<string, string>> = {
+  copilot: "github-copilot-cli",
+  devin: "dimcode",
+  hermes: "junie",
+  kiro: "kimi",
+};
+
 export function replaceProviderSnapshotIcons(
   serverId: string,
   entries: readonly Pick<ProviderSnapshotEntry, "provider" | "iconSvg">[],

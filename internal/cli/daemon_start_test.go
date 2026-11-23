@@ -20,6 +20,7 @@ import (
 // empty URL and printed "stopped" for every running daemon. The address that works is in the PID
 // lock the daemon wrote — the same one the rest of the CLI dials.
 func TestDaemonStatusProbesTheAddressTheDaemonRecorded(t *testing.T) {
+	t.Setenv("BYSPACE_HOST", "")
 	homeDir := t.TempDir()
 	srv, err := server.New(server.Options{HomeDir: filepath.Join(homeDir, "daemon"), Version: "9.9.9-test"})
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 // socket that filled its TCP window blocked that one loop, so every other stream's bytes stopped
 // behind it. Here stream A's service never reads; stream B must still get its bytes echoed back.
 func TestTargetSlowStreamDoesNotBlockOthers(t *testing.T) {
+	requireTCP(t)
 	// Service A accepts but never reads, so the target's writes to it fill and block.
 	listenerA, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -92,6 +93,7 @@ func TestTargetSlowStreamDoesNotBlockOthers(t *testing.T) {
 // A half-close queued behind writes must drain them before signalling EOF, so the service reads the
 // whole request. This pins the ordering the upstream queue introduced.
 func TestTargetHalfCloseDrainsQueuedWrites(t *testing.T) {
+	requireTCP(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

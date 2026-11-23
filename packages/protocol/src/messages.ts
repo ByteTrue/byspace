@@ -841,6 +841,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
     provider: AgentProviderSchema,
     item: AgentTimelineItemPayloadSchema,
     turnId: z.string().optional(),
+    replace: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("permission_requested"),
@@ -1805,6 +1806,11 @@ export const FetchAgentTimelineRequestMessageSchema = z.object({
 export const AgentTimelineListPromptsRequestMessageSchema = z.object({
   type: z.literal("agent.timeline.list_prompts.request"),
   agentId: z.string(),
+  requestId: z.string(),
+});
+
+export const AcpOnboardingPromptRequestMessageSchema = z.object({
+  type: z.literal("provider.acp.get_onboarding_prompt.request"),
   requestId: z.string(),
 });
 
@@ -2971,6 +2977,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DaemonUpdateRequestMessageSchema,
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
+  AcpOnboardingPromptRequestMessageSchema,
   PiManageBackgroundTerminalRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
@@ -4021,6 +4028,15 @@ export type ProviderSubagentDescriptorPayload = z.infer<
   typeof ProviderSubagentDescriptorPayloadSchema
 >;
 
+export const AcpOnboardingPromptResponseMessageSchema = z.object({
+  type: z.literal("provider.acp.get_onboarding_prompt.response"),
+  payload: z.object({
+    requestId: z.string(),
+    prompt: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const PiManageBackgroundTerminalResponseMessageSchema = z.object({
   type: z.literal("agent.pi.manage_background_terminal.response"),
   payload: z.object({
@@ -4030,7 +4046,20 @@ export const PiManageBackgroundTerminalResponseMessageSchema = z.object({
         z.object({
           id: z.string(),
           command: z.string(),
-          status: z.enum(["running", "exited", "failed", "timed_out", "killed"]),
+          description: z.string().nullable().optional(),
+          kind: z.enum(["shell", "monitor", "agent", "other"]).optional(),
+          status: z.enum([
+            "running",
+            "exited",
+            "failed",
+            "timed_out",
+            "killed",
+            "completed",
+            "canceled",
+          ]),
+          startedAt: z.string().nullable().optional(),
+          canStop: z.boolean().optional(),
+          nativeSessionId: z.string().optional(),
         }),
       )
       .nullable(),
@@ -5689,6 +5718,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
+  AcpOnboardingPromptResponseMessageSchema,
   PiManageBackgroundTerminalResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,

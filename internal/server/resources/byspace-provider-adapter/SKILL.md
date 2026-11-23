@@ -9,7 +9,7 @@ argument-hint: "[agent name or ACP command]"
 
 Connect an agent to BySpace without touching BySpace source. BySpace ships four native adapters — Claude, Codex, OpenCode, Pi. Every other agent connects through the Agent Client Protocol (ACP): BySpace spawns the agent over stdio JSON-RPC and hosts its filesystem and terminal operations. Your job is to produce a correct `config.json` provider entry and prove it launches.
 
-**User's request:** $ARGUMENTS
+If the user has not named an agent, ask which ACP-compatible agent they want to connect before changing configuration.
 
 ## Outcome
 
@@ -36,11 +36,7 @@ Check the agent's ACP mode exists before writing config. If the agent only offer
 
 ## Workflow
 
-### 1. Check the catalog first
-
-BySpace ships an in-app ACP catalog (Settings → Agents → Add provider) with ready-made entries for common agents. If the agent is there, the user can add it from the UI with no file editing. The catalog entry is the same config this skill writes; use it as the reference shape. Only hand-write config for an agent the catalog does not cover.
-
-### 2. Build the provider entry
+### 1. Build the provider entry
 
 The entry lives at `agents.providers.<id>` in `config.json`:
 
@@ -68,7 +64,7 @@ Rules that the config schema enforces (a violation is rejected on load):
 
 Merge into the existing `agents.providers` map. Never replace unrelated provider entries. If `config.json` is invalid, stop and report rather than overwriting it.
 
-### 3. Validate the launcher
+### 2. Validate the launcher
 
 ```bash
 byspace provider diagnostic <id>
@@ -82,7 +78,7 @@ Reload config without restarting:
 byspace daemon reload
 ```
 
-### 4. Verify end to end
+### 3. Verify end to end
 
 Create an agent on the provider and send a message — that is the only check that proves the ACP handshake (`initialize` + `session/new`) and a real turn:
 
@@ -93,7 +89,7 @@ byspace run --provider <id> "Say hello"   # starts an agent and waits for the tu
 
 If the agent enters an auth or browser flow, complete it in the agent's own terms first. A turn that never finishes usually means the command argv is wrong (step 2) or the backend env is missing (step 2 `env`).
 
-### 5. Report
+### 4. Report
 
 ```markdown
 ## Connected
@@ -116,7 +112,8 @@ If the agent has no ACP mode, say that directly and name what would be needed (a
 ## Guardrails
 
 - The four built-ins are native adapters, not ACP. Do not reconfigure `claude`/`codex`/`opencode`/`pi` as ACP providers; to point one at a different binary or endpoint, use its own override fields (`command`, `env`), not `extends: "acp"`.
-- BySpace tools do not reach an ACP agent: the daemon gives ACP sessions an empty `mcpServers`. The bundled BySpace skill is only usable if the agent reads `~/.agents/skills` or `~/.claude/skills`.
+- This resource is read on demand. Do not install or copy it into `~/.agents/skills`, `~/.claude/skills`, or another agent skill directory. Its absolute path is on the daemon host; reading outside the workspace can require agent approval or an external-directory permission. Never bypass that approval.
+- Forward only the MCP servers the user configured for this provider. Do not add BySpace source tools or a plugin bridge.
 - An ACP agent runs filesystem operations itself by default; terminals run through BySpace on the host. To keep operations inside a container or remote agent, set `params.clientCapabilities` (`fs.readTextFile`/`fs.writeTextFile`/`terminal` to `false`). Delegating fs to BySpace requires shared absolute workspace paths.
 - Do not copy machine-local secrets into config without explicit authorization. Prefer the agent's own auth flow.
 - Never restart the production daemon on port 6777 to test a provider; use the dev daemon (`npm run dev:daemon`, port 6778) or the packaged app's own reload.

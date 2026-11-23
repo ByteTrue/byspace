@@ -2,9 +2,14 @@ package pi
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // Marker prefixes the pi integration extension emits through `ctx.ui.notify`. They are the only
@@ -188,6 +193,46 @@ export default function byspaceIntegration(pi) {
 // ExtensionOptions are the per-agent pieces baked into the generated extension.
 type ExtensionOptions struct {
 	SystemPrompt string
+	MCPServers   map[string]sdk.MCPServerConfig
+}
+
+var piMCPName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func piMCPRegistrations(servers map[string]sdk.MCPServerConfig) (string, error) {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var source strings.Builder
+	for _, name := range names {
+		if !piMCPName.MatchString(name) {
+			return "", fmt.Errorf("pi built-in MCP cannot register server %q: names may only contain letters, digits, underscores, and hyphens", name)
+		}
+		server := servers[name]
+		if server.Type == "sse" {
+			return "", fmt.Errorf("pi built-in MCP cannot register SSE server %q: use streamable HTTP", name)
+		}
+		native := map[string]any{}
+		if server.Type == "stdio" {
+			native["command"] = server.Command
+			if server.Args != nil {
+				native["args"] = server.Args
+			}
+			if server.Env != nil {
+				native["env"] = server.Env
+			}
+		} else {
+			native["url"] = server.URL
+			if server.Headers != nil {
+				native["headers"] = server.Headers
+			}
+		}
+		encodedName, _ := json.Marshal(name)
+		encodedServer, _ := json.Marshal(native)
+		fmt.Fprintf(&source, "  pi.registerMcpServer(%s, %s);\n", encodedName, encodedServer)
+	}
+	return source.String(), nil
 }
 
 // WriteIntegrationExtension materialises the extension into a temp dir and returns its path
@@ -200,6 +245,15 @@ func WriteIntegrationExtension(opts ExtensionOptions) (string, func(), error) {
 	}
 
 	source := piIntegrationExtension
+	if len(opts.MCPServers) > 0 {
+		registrations, err := piMCPRegistrations(opts.MCPServers)
+		if err != nil {
+			return "", nil, err
+		}
+		source = strings.Replace(source,
+			"export default function byspaceIntegration(pi) {",
+			"export default function byspaceIntegration(pi) {\n"+registrations, 1)
+	}
 	if prompt := strings.TrimSpace(opts.SystemPrompt); prompt != "" {
 		promptJSON, _ := json.Marshal("\n\n" + prompt)
 		source = strings.Replace(source,

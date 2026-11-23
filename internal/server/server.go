@@ -1803,6 +1803,9 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "agent_permission_response":
 		s.handleAgentPermissionResponse(ctx, sink, raw)
 
+	case "provider.acp.get_onboarding_prompt.request":
+		s.handleACPOnboardingPrompt(ctx, sink, base.RequestID)
+
 	case "agent.pi.manage_background_terminal.request":
 		s.handlePiManageBackgroundTerminal(ctx, sink, raw)
 
@@ -2466,7 +2469,8 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			// a forced assistant response). They live beside providerOptions in the protocol, not inside
 			// it, and were absent here: every featureValues the specs set at create time was dropped, so
 			// mockPromptRejections, mockSteerAmbiguousFailures and the rest silently did nothing.
-			FeatureValues map[string]any `json:"featureValues"`
+			FeatureValues map[string]any                 `json:"featureValues"`
+			MCPServers    map[string]sdk.MCPServerConfig `json:"mcpServers"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -2641,6 +2645,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			SystemPrompt:     req.Config.SystemPrompt,
 			ProviderOptions:  req.Config.ProviderOptions,
 			FeatureValues:    req.Config.FeatureValues,
+			MCPServers:       req.Config.MCPServers,
 			Env:              req.Env,
 		},
 	}
@@ -2763,15 +2768,17 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 	text = appendAttachmentHints(text, req.Attachments)
 
-	// Sending a message to an archived agent unarchives it. Node does the same by default: the
-	// archive is a tidy-up, not a tombstone, and refusing would make "continue this conversation"
-	// fail with an error the user cannot act on. The finish-notification path is the one exception,
-	// and it does not go through here.
+	// Sending a message to an archived agent unarchives the native thread before loading it.
+	// Codex rejects thread/resume while archived, so loading first cannot work.
 	if record, readErr := s.store.GetAgent(req.AgentID); readErr == nil && record != nil && record.ArchivedAt != nil {
-		if unarchived, archiveErr := s.store.UnarchiveAgent(req.AgentID); archiveErr == nil && unarchived != nil {
-			// The client's sidebar still shows the agent as archived; without this broadcast the
-			// message is accepted and the row stays greyed out until a reload.
-			s.broadcastAgentUpdate(*unarchived)
+		if _, archiveErr := s.unarchiveAgent(ctx, req.AgentID); archiveErr != nil {
+			_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
+				"requestId": req.RequestID,
+				"agentId":   req.AgentID,
+				"accepted":  false,
+				"error":     archiveErr.Error(),
+			})
+			return
 		}
 	}
 
@@ -3283,14 +3290,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			thinking = *rec.Config.ThinkingOptionID
 		}
 	}
-	if rec.Persistence != nil {
-		if nh, ok := rec.Persistence.NativeHandle.(string); ok && nh != "" {
-			sessionPath = nh
-		} else if rec.Persistence.SessionID != "" {
-			if _, statErr := os.Stat(rec.Persistence.SessionID); statErr == nil {
-				sessionPath = rec.Persistence.SessionID
-			}
-		}
+	sessionPath = nativeSessionHandle(rec)
+
+	modelProvider, modelID, modelErr := providers.ResolveModelIdentity(rec.Provider, model, providerOptionsOf(rec))
+	if modelErr != nil {
+		return nil, modelErr
 	}
 
 	var cmdOverride string
@@ -3308,7 +3312,8 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		ProviderConfig:   s.providerConfigFor(rec.Provider),
 		CommandOverride:  cmdOverride,
 		Cwd:              rec.Cwd,
-		Model:            model,
+		Model:            modelID,
+		ModelProvider:    modelProvider,
 		ModeID:           modeID,
 		ThinkingOptionID: thinking,
 		SessionHandle:    sessionPath,
@@ -3316,6 +3321,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		ProviderOptions:  providerOptionsOf(rec),
 		FeatureValues:    featureValuesOf(rec),
 		SystemPrompt:     s.systemPromptFor(rec),
+		MCPServers:       mcpServersOf(rec),
 		HomeDir:          s.homeDir,
 	})
 	if err != nil {
@@ -3325,6 +3331,20 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	if sessionPath != "" && (rec.Provider == "pi" || rec.Provider == "") {
 		if restored, loadErr := pi.LoadTimelineFromJSONL(sessionPath); loadErr == nil && len(restored) > 0 {
 			sess.SeedTimeline(restored)
+		}
+	}
+	if sessionPath != "" && (rec.Provider == "codex" || rec.Provider == "opencode") {
+		loader, ok := sess.(interface {
+			LoadNativeHistory(context.Context) error
+		})
+		if ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			loadErr := loader.LoadNativeHistory(ctx)
+			cancel()
+			if loadErr != nil {
+				_ = sess.Close()
+				return nil, fmt.Errorf("load %s native history: %w", rec.Provider, loadErr)
+			}
 		}
 	}
 
@@ -3422,18 +3442,23 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			// Streamed deltas arrive here already merged, one frame per window, by the session that
 			// numbered them (sdk.StreamFrames): merging here, after the seq was taken, broke the seq
 			// continuity every client checks.
+			event := map[string]any{
+				"type":     "timeline",
+				"provider": rec.Provider,
+				"turnId":   turnID,
+				"item":     ev["item"],
+			}
+			// Optional wire fields must be absent, not null: the client schema rejects null.
+			if replace, ok := ev["replace"].(bool); ok {
+				event["replace"] = replace
+			}
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
 				"timestamp": nowStr,
 				"seq":       seq,
 				"epoch":     s.epoch,
-				"event": map[string]any{
-					"type":     "timeline",
-					"provider": rec.Provider,
-					"turnId":   turnID,
-					"item":     ev["item"],
-				},
+				"event":     event,
 			})
 			for _, sub := range sess.ListSubagents(rec.ID) {
 				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
@@ -3444,7 +3469,16 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 		case "message_end":
 			if !isPi {
-				if txt := sess.LastAssistantText(); txt != "" {
+				hasAssistantRow := false
+				for _, entry := range sess.Timeline() {
+					if entry.Item.Type == "assistant_message" {
+						hasAssistantRow = true
+						break
+					}
+				}
+				// Providers that already published their assistant row must not also send the
+				// legacy final-text fallback: the client treats that unsequenced row as a delta.
+				if txt := sess.LastAssistantText(); !hasAssistantRow && txt != "" {
 					s.broadcastSessionMsg("agent_stream", map[string]any{
 						"agentId":   rec.ID,
 						"provider":  rec.Provider,
@@ -3489,12 +3523,15 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				}
 			}
 
-		case "byspace_provider_subagents":
+		case "byspace_provider_subagents", "subagent_upsert":
 			// The provider finished tracking a subagent (subagent-exit). Pi sessions only broadcast
 			// descriptors alongside timeline frames, so a completion that produced no row — the
 			// usual case, the child's result arrives as a custom message — never reached a client
 			// and the row stayed "running".
 			if sub, ok := ev["subagent"].(sdk.SubagentDescriptor); ok {
+				if sub.ParentAgentID == "" {
+					sub.ParentAgentID = rec.ID
+				}
 				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
 					"kind":     "upsert",
 					"subagent": sub,
@@ -3522,6 +3559,25 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"request": perm,
 				})
 			}
+
+		case "usage_updated", "mode_changed", "model_changed", "thinking_option_changed":
+			event := map[string]any{"type": ev["type"], "provider": rec.Provider}
+			switch ev["type"] {
+			case "usage_updated":
+				event["usage"] = ev["usage"]
+				event["turnId"] = ev["turnId"]
+			case "mode_changed":
+				event["currentModeId"] = ev["currentModeId"]
+				event["availableModes"] = ev["availableModes"]
+				if event["availableModes"] == nil {
+					event["availableModes"] = []any{}
+				}
+			case "model_changed":
+				event["runtimeInfo"] = map[string]any{"provider": rec.Provider, "sessionId": nil, "model": ev["modelId"]}
+			case "thinking_option_changed":
+				event["thinkingOptionId"] = ev["thinkingOptionId"]
+			}
+			s.broadcastSessionMsg("agent_stream", map[string]any{"agentId": rec.ID, "provider": rec.Provider, "timestamp": nowStr, "event": event})
 
 		case "byspace_turn_canceled":
 			// The client ends its "running" affordance on this, so a cancelled turn that never reports it leaves the
@@ -3602,6 +3658,20 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				})
 			}
 
+		case "permission_resolved":
+			requestID, _ := ev["requestId"].(string)
+			if requestID != "" {
+				s.broadcastSessionMsg("agent_stream", map[string]any{
+					"agentId": rec.ID, "provider": rec.Provider, "timestamp": nowStr, "event": map[string]any{
+						"type": "permission_resolved", "provider": rec.Provider,
+						"requestId": requestID, "resolution": ev["resolution"],
+					},
+				})
+				s.broadcastSessionMsg("agent_permission_resolved", map[string]any{
+					"agentId": rec.ID, "requestId": requestID, "resolution": ev["resolution"],
+				})
+			}
+
 		case "byspace_turn_completed":
 			turnID, _ := ev["turnId"].(string)
 			// Drop a completion from an older turn. Pi emits one completion per turn, but a
@@ -3656,10 +3726,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				mp.record.LastStatus = sess.Status()
 				mp.record.UpdatedAt = nowStr
 				recCopy := mp.record
-				// Drop the dead runtime so the next send/resume rebuilds it from
-				// persistence instead of writing into a closed pipe. Node does this by
-				// closing the agent when the provider session dies.
-				delete(s.agents, rec.ID)
+				// Only a process exit makes the runtime unusable. A normal agent_end is
+				// turn completion for Claude/Codex/OpenCode, not process death; unloading
+				// there discards canonical message IDs and provider mappings before rewind.
+				if evType == "process_exit" {
+					delete(s.agents, rec.ID)
+				}
 				s.mu.Unlock()
 				_ = s.store.UpsertAgent(recCopy)
 				if evType == "process_exit" {
@@ -3710,14 +3782,21 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 }
 
 func (s *Server) syncPiPersistence(mp *managedPi) {
+	_ = s.syncPiPersistenceChecked(mp)
+}
+
+func (s *Server) syncPiPersistenceChecked(mp *managedPi) error {
 	if mp == nil || mp.session == nil {
-		return
+		return nil
 	}
 	sctx, scancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer scancel()
 	st, err := mp.session.GetState(sctx)
-	if err != nil || st == nil || (st.SessionID == "" && st.SessionFile == "") {
-		return
+	if err != nil {
+		return err
+	}
+	if st == nil || (st.SessionID == "" && st.SessionFile == "") {
+		return nil
 	}
 	sid := st.SessionID
 	if sid == "" && st.SessionFile != "" {
@@ -3738,7 +3817,7 @@ func (s *Server) syncPiPersistence(mp *managedPi) {
 	}
 	recCopy := mp.record
 	s.mu.Unlock()
-	_ = s.store.UpsertAgent(recCopy)
+	return s.store.UpsertAgent(recCopy)
 }
 
 func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
@@ -3835,8 +3914,10 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 	status := rec.LastStatus
 	pendingPerms := []map[string]any{}
 	var activeTurn any
+	var session providers.ManagedSession
 	s.mu.Lock()
 	if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
+		session = mp.session
 		status = resolveAgentStatus(rec.LastStatus, mp.session.Status())
 		pendingPerms = mp.session.PendingPermissions()
 		if tid, startedAt := mp.session.ActiveTurn(); tid != "" && status == "running" {
@@ -3867,7 +3948,8 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		labels = map[string]string{}
 	}
 
-	rewindCaps := providers.RewindCapabilitiesFor(rec.Provider)
+	rewindCaps := rewindCapabilitiesForSession(rec.Provider, session)
+	caps := providers.CapabilitiesFor(rec.Provider, session)
 
 	payload := map[string]any{
 		"id":               rec.ID,
@@ -3890,22 +3972,25 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"status":         status,
 		"activeTurn":     activeTurn,
 		"capabilities": map[string]any{
-			"supportsStreaming":          true,
-			"supportsSessionPersistence": true,
-			"supportsDynamicModes":       false,
-			"supportsMcpServers":         true,
-			"supportsReasoningStream":    true,
-			"supportsToolInvocations":    true,
+			"supportsStreaming":          caps.SupportsStreaming,
+			"supportsSessionPersistence": caps.SupportsSessionPersistence,
+			"supportsDynamicModes":       caps.SupportsDynamicModes,
+			"supportsMcpServers":         caps.SupportsMcpServers,
+			"supportsReasoningStream":    caps.SupportsReasoningStream,
+			"supportsToolInvocations":    caps.SupportsToolInvocations,
 			// A capability is a promise the client renders a button from; claiming it everywhere made
 			// Rewind appear for providers that cannot do it, and pressing it fails.
 			"supportsRewindConversation": rewindCaps.Conversation,
 			"supportsRewindFiles":        rewindCaps.Files,
 			"supportsRewindBoth":         rewindCaps.SupportsRewindBoth(),
-			"canCancel":                  true,
-			"canSelectModel":             true,
-			"canSelectThinking":          true,
-			"supportsImages":             true,
-			"supportsAttachments":        true,
+			"canCancel":                  caps.CanCancel,
+			"canSelectModel":             caps.CanSelectModel,
+			"canSelectThinking":          caps.CanSelectThinking,
+			"supportsImages":             caps.SupportsImages,
+			"supportsAttachments":        caps.SupportsAttachments,
+			"supportsNativeArchive":      caps.SupportsNativeArchive,
+			"supportsHistoryImport":      caps.SupportsHistoryImport,
+			"supportsNativeSubagents":    caps.SupportsNativeSubagents,
 		},
 		"currentModeId":      modeID,
 		"availableModes":     providers.GetProviderSpec(rec.Provider).Modes,
@@ -5073,6 +5158,13 @@ func providerOptionsOf(rec store.AgentRecord) map[string]any {
 }
 
 // featureValuesOf reads the provider feature toggles a client set at create time.
+func mcpServersOf(rec store.AgentRecord) map[string]sdk.MCPServerConfig {
+	if rec.Config == nil || len(rec.Config.MCPServers) == 0 {
+		return nil
+	}
+	return rec.Config.MCPServers
+}
+
 func featureValuesOf(rec store.AgentRecord) map[string]any {
 	if rec.Config == nil || len(rec.Config.FeatureValues) == 0 {
 		return nil

@@ -277,8 +277,7 @@ describe("translation resources", () => {
   it("includes provider selector and pairing keys for the Batch 4D migration", () => {
     expect(en.modelSelector.title).toBe("Select provider");
     expect(en.modelSelector.profiles).toBe("Profiles");
-    expect(en.providerCatalog.title).toBe("Add provider");
-    expect(en.providerCatalog.actions.installInstructions).toBe("Install instructions");
+    expect(en.settings.providers.acpOnboarding.copyPrompt).toBe("Copy onboarding prompt");
     expect(en.pairing.link.title).toBe("Paste pairing link");
     expect(en.pairing.connectionMethods.direct.title).toBe("Direct connection");
   });

@@ -545,13 +545,12 @@ func (s *MockSession) OnEvent(fn func(map[string]any)) func() {
 }
 
 func (s *MockSession) Close() error {
-	s.mu.Lock()
-	cancel := s.cancel
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if err := s.Abort(context.Background()); err != nil {
+		return err
 	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	return s.WaitForFinish(ctx)
 }
 
 // ---------------------------------------------------------------- emit helpers
@@ -1197,6 +1196,7 @@ func (s *MockSession) endTurn(turnID string) bool {
 	if s.activeTurnID != turnID {
 		return false
 	}
+	failRunningToolCalls(s.timeline, "Interrupted")
 	s.activeTurnID = ""
 	s.activeTurnAssistantMsg = ""
 	s.turnStartedAt = ""

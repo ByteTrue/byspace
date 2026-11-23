@@ -29,19 +29,19 @@ const scenarios: TaskScenario[] = [
     entries: ["Claude inventory alpha", "Claude inventory beta"],
     providerConfig: { model: "opus" },
     prompt:
-      "Use TaskCreate to create exactly two tasks named Claude inventory alpha and Claude inventory beta. Use TaskUpdate to mark each in_progress and then completed. Do not use subagents, shell commands, or edit files. Finish with TASKS_COMPLETE.",
+      "Use TaskCreate to create exactly two tasks named Claude inventory alpha and Claude inventory beta. Use TaskUpdate to mark each in_progress and then completed. Do not use subagents, shell commands, or edit files. If TaskCreate or TaskUpdate is unavailable, reply exactly NATIVE_TASKS_UNAVAILABLE. Otherwise finish with TASKS_COMPLETE.",
   },
   {
     provider: "codex",
     entries: ["Codex inventory alpha", "Codex inventory beta"],
     prompt:
-      "Use update_plan to track exactly two steps named Codex inventory alpha and Codex inventory beta. Move each through in_progress and completed. Do not use subagents, shell commands, or edit files. Finish with TASKS_COMPLETE.",
+      "Use update_plan to track exactly two steps named Codex inventory alpha and Codex inventory beta. Move each through in_progress and completed. Do not use subagents, shell commands, or edit files. If update_plan is unavailable, reply exactly NATIVE_TASKS_UNAVAILABLE. Otherwise finish with TASKS_COMPLETE.",
   },
   {
     provider: "opencode",
     entries: ["OpenCode inventory alpha", "OpenCode inventory beta"],
     prompt:
-      "Use TodoWrite to track exactly two tasks named OpenCode inventory alpha and OpenCode inventory beta. Move each through in_progress and completed. Do not use subagents, shell commands, or edit files. Finish with TASKS_COMPLETE.",
+      "Use TodoWrite to track exactly two tasks named OpenCode inventory alpha and OpenCode inventory beta. Move each through in_progress and completed. Do not use subagents, shell commands, or edit files. If TodoWrite is unavailable, reply exactly NATIVE_TASKS_UNAVAILABLE. Otherwise finish with TASKS_COMPLETE.",
   },
 ];
 
@@ -66,6 +66,17 @@ test.describe("real provider composer task lists", () => {
           providerConfig: scenario.providerConfig,
         });
         await sendMessage(handle, scenario.prompt);
+        const unavailable = page
+          .getByTestId("assistant-message")
+          .filter({ hasText: "NATIVE_TASKS_UNAVAILABLE" });
+        if ((await unavailable.count()) > 0) {
+          await expect(unavailable.last()).toBeVisible();
+          await expect(page.getByRole("button", { name: /^\d+\/\d+ tasks$/ })).toHaveCount(0);
+          test.skip(
+            true,
+            `${scenario.provider} does not expose its native task tool in this installation`,
+          );
+        }
         await openCompletedTaskList(page, scenario.entries.length);
         await expectTaskListEntries(page, scenario.entries);
         await expectCompletedTaskActivity(page, scenario.entries);

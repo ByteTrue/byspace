@@ -41,6 +41,41 @@ afterEach(() => {
 });
 
 describe("Pi background terminal track", () => {
+  it("uses semantic titles and hides completed native work", async () => {
+    managePiBackgroundTerminal.mockResolvedValueOnce({
+      requestId: "list",
+      tasks: [
+        {
+          ...first,
+          description: "Development server",
+          kind: "shell",
+          canStop: true,
+          startedAt: new Date(Date.now() - 65_000).toISOString(),
+        },
+        { ...second, status: "completed" },
+      ],
+      error: null,
+    });
+    const client = renderTrack();
+    try {
+      const pill = await screen.findByRole("button", { name: "Background Terminal: 1 running" });
+      fireEvent.click(pill);
+      const panel = within(await screen.findByTestId("pi-background-terminal-track-panel"));
+      expect(panel.getByText("Development server")).toBeTruthy();
+      expect(panel.getByText("npm run dev")).toBeTruthy();
+      expect(
+        panel.getByText(
+          (_content, element) =>
+            element?.children.length === 0 &&
+            (element.textContent?.replace(/\s+/g, " ").includes("Shell · Running · 1m") ?? false),
+        ),
+      ).toBeTruthy();
+      expect(panel.queryByText("npm run watch")).toBeNull();
+    } finally {
+      client.clear();
+    }
+  });
+
   it("does not show a track when the extension is unavailable", async () => {
     managePiBackgroundTerminal.mockResolvedValueOnce({
       requestId: "list",
@@ -57,7 +92,7 @@ describe("Pi background terminal track", () => {
     }
   });
 
-  it("hides a stale roster after repeated list failures", async () => {
+  it("retains a stale roster with retry after list failures", async () => {
     managePiBackgroundTerminal
       .mockResolvedValueOnce({ requestId: "list", tasks: [first], error: null })
       .mockRejectedValue(new Error("agent gone"));
@@ -70,7 +105,14 @@ describe("Pi background terminal track", () => {
           await client.refetchQueries({ queryKey: key });
         });
       }
-      await waitFor(() => expect(screen.queryByTestId("pi-background-terminal-track")).toBeNull());
+      const pill = screen.getByRole("button", { name: "Background Terminal: 1 running" });
+      fireEvent.click(pill);
+      const panel = within(await screen.findByTestId("pi-background-terminal-track-panel"));
+      expect(
+        panel.getByText("Could not refresh background activity. Showing the last known state."),
+      ).toBeTruthy();
+      expect(panel.getByRole("button", { name: "Retry" })).toBeTruthy();
+      expect(panel.getByText("npm run dev")).toBeTruthy();
     } finally {
       client.clear();
     }
@@ -99,7 +141,7 @@ describe("Pi background terminal track", () => {
       fireEvent.click(stop);
       expect((await panel.findByRole("alert")).textContent).toContain("Could not stop the command");
       fireEvent.click(stop);
-      expect((await panel.findByText("Killed")).textContent).toBe("Killed");
+      await waitFor(() => expect(panel.queryByText("npm run dev")).toBeNull());
       expect(panel.queryByRole("button", { name: "Stop npm run dev" })).toBeNull();
       expect(panel.getByRole("button", { name: "Stop npm run watch" }).textContent).toBe("Stop");
       expect(screen.getByRole("button", { name: "Background Terminal: 1 running" })).toBe(pill);

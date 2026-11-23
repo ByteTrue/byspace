@@ -44,6 +44,7 @@ func echoPeer(conn PeerConn, stop <-chan struct{}) {
 // The whole point of a tunnel: a connection to the local port reaches the peer and its bytes come
 // back. Everything below the relay is real — listener, accepted socket, frame encoding, pumps.
 func TestLocalPortReachesPeerAndBack(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-1", "target-host", t.Logf)
 	defer func() { _ = m.Close() }()
 
@@ -85,6 +86,7 @@ func TestLocalPortReachesPeerAndBack(t *testing.T) {
 // A port with no live peer must fail fast rather than accept and hang: accepting then hanging
 // looks to the user like the remote service is slow.
 func TestConnectionWithoutPeerFails(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-2", "", t.Logf)
 	defer func() { _ = m.Close() }()
 
@@ -113,6 +115,7 @@ func TestConnectionWithoutPeerFails(t *testing.T) {
 
 // Replacing the peer tears down live streams: their ids belonged to the old connection.
 func TestPeerReplacementTearsDownStreams(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-3", "", t.Logf)
 	defer func() { _ = m.Close() }()
 
@@ -156,6 +159,7 @@ func TestPeerReplacementTearsDownStreams(t *testing.T) {
 }
 
 func TestStreamCloseLogIdentifiesFramesAndReason(t *testing.T) {
+	requireTCP(t)
 	var logs strings.Builder
 	closed := make(chan struct{})
 	var closeOnce sync.Once
@@ -205,6 +209,7 @@ func TestStreamCloseLogIdentifiesFramesAndReason(t *testing.T) {
 }
 
 func TestAddForwardRejectsBadPort(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-4", "", t.Logf)
 	defer func() { _ = m.Close() }()
 	for _, port := range []int{0, -1, 70000} {
@@ -216,6 +221,7 @@ func TestAddForwardRejectsBadPort(t *testing.T) {
 
 // The list output is sorted, so the UI does not reorder rows between polls.
 func TestStatusIsSorted(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-5", "", t.Logf)
 	defer func() { _ = m.Close() }()
 	for _, port := range []int{3005, 3001, 3003} {
@@ -233,6 +239,7 @@ func TestStatusIsSorted(t *testing.T) {
 
 // Close releases the listeners; the ports must be free afterwards.
 func TestCloseReleasesListeners(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-6", "", t.Logf)
 	if _, err := m.AddForward(ForwardConfig{RemotePort: 3006, Label: ""}); err != nil {
 		t.Fatal(err)
@@ -270,6 +277,7 @@ func itoa(value int) string {
 // life, which reported a tunnel as Connected for a host that had been stopped — the tunnels page
 // showed a green badge for a daemon that was not running.
 func TestStatusDoesNotInferConnectedFromAPeerObject(t *testing.T) {
+	requireTCP(t)
 	manager := NewManager("srv_peer", "peer-host", t.Logf)
 	t.Cleanup(func() { _ = manager.Close() })
 	if _, err := manager.AddForward(ForwardConfig{RemotePort: 5432, Label: "db"}); err != nil {
@@ -318,6 +326,7 @@ func (stubPeer) Close() error         { return nil }
 // then answered allowed. Refusing that stream is the difference between an update notice and
 // silently serving a different machine's service.
 func TestNonLoopbackForwardRequiresHostCapableTarget(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-host", "target-host", t.Logf)
 	defer func() { _ = m.Close() }()
 
@@ -366,6 +375,7 @@ func TestNonLoopbackForwardRequiresHostCapableTarget(t *testing.T) {
 
 // The same port on two different machines is two rules, not an edit of one.
 func TestForwardsDistinguishHostsWithTheSamePort(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-hosts", "target-host", t.Logf)
 	defer func() { _ = m.Close() }()
 
@@ -392,6 +402,7 @@ func TestForwardsDistinguishHostsWithTheSamePort(t *testing.T) {
 // rule already uses. Two rules for one destination collide in the manager and one silently replaces
 // the other, so the edit is refused instead.
 func TestRegistryRejectsDuplicateDestinationOnEdit(t *testing.T) {
+	requireTCP(t)
 	// The rule being replaced comes last in the second case: putting the collision second was the
 	// order that slipped through the merge and deleted the other rule.
 	cases := [][]ForwardConfig{
@@ -442,6 +453,7 @@ func TestRegistryRejectsDuplicateDestinationOnEdit(t *testing.T) {
 // The manager keys forwards by destination, so a duplicate would overwrite the map entry and leave
 // the first listener running untracked.
 func TestAddForwardRejectsDuplicateDestination(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-dup", "", t.Logf)
 	defer m.Close()
 	if _, err := m.AddForward(ForwardConfig{RemotePort: 3800}); err != nil {
@@ -465,6 +477,7 @@ func TestAddForwardRejectsDuplicateDestination(t *testing.T) {
 // hardwired loopback and the UI's "open to the network" warning described behavior the daemon
 // never performed.
 func TestAddForwardBindsRequestedListenHost(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer", "peer-host", nil)
 	defer m.Close()
 

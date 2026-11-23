@@ -237,10 +237,10 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open st
 talking to AI coding agents — think LSP for agents. Any agent that speaks ACP over JSON-RPC 2.0 on
 stdio can be added with `extends: "acp"`.
 
-BySpace ships an in-app ACP catalog (Settings → Agents → Add provider) for common agents — Copilot,
-Cursor, Gemini CLI, Hermes, Kimi, Kiro, Qwen Code, and more. A catalog entry creates exactly the
-config below; use the catalog first and only hand-write an entry for an agent it does not list. The
-bundled `byspace-provider-adapter` skill walks an agent through connecting one.
+Settings → Agents → Add provider has one **Copy setup prompt** action. Paste it into an agent on the
+daemon host. The prompt contains the absolute path to BySpace's on-demand ACP configuration template;
+the agent reads that file and writes the config below. BySpace does not install the template in an
+agent skill directory. Existing ACP provider configs keep working.
 
 ### Adding a generic ACP provider
 
@@ -268,10 +268,9 @@ and the agent reports its capabilities, modes, and models at runtime. Prompts, s
 tool calls, and permission requests flow over stdin/stdout. Permission requests surface in BySpace
 as confirm prompts for you to answer.
 
-**BySpace tools do not reach an ACP agent.** The daemon gives ACP sessions an empty `mcpServers`
-array, and the bundled skill is only readable if the client reads `~/.agents/skills` or
-`~/.claude/skills`. Copy the skill into that client's own skill directory to give it the CLI, and
-accept that a client started this way has no `BYSPACE_AGENT_ID` of its own.
+**BySpace tools do not reach an ACP agent automatically.** The daemon forwards configured MCP
+servers but does not inject its own MCP server. The ACP onboarding template is read on demand from
+`$BYSPACE_HOME/resources/byspace-provider-adapter`; it is not an installed skill.
 
 ### Client capabilities
 
@@ -289,7 +288,7 @@ handles:
         "command": ["container-agent", "acp"],
         "params": {
           "clientCapabilities": {
-            "fs": { "readTextFile": false, "writeTextFile": false },
+            "fs": { "readTextFile": true, "writeTextFile": true },
             "terminal": false
           }
         }

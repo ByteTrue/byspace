@@ -36,7 +36,7 @@ func (s *Server) scheduleHooks() schedule.Hooks {
 			return err == nil && record != nil && record.ArchivedAt == nil
 		},
 		ArchiveWorkspace: func(workspaceID string) error {
-			s.archiveWorkspaces(context.Background(), []string{workspaceID}, time.Now().UTC().Format(time.RFC3339Nano))
+			_, _ = s.archiveWorkspaces(context.Background(), []string{workspaceID}, time.Now().UTC().Format(time.RFC3339Nano))
 			return nil
 		},
 		Logf: func(format string, args ...any) {
@@ -78,7 +78,7 @@ func (s *Server) executeScheduledRun(ctx context.Context, sched schedule.StoredS
 		}
 		// The run's own workspace, never the project's: the run created it, and it goes once the run
 		// is over unless the schedule asked to keep it for inspection.
-		s.archiveWorkspaces(context.Background(), []string{ws.WorkspaceID}, time.Now().UTC().Format(time.RFC3339Nano))
+		_, _ = s.archiveWorkspaces(context.Background(), []string{ws.WorkspaceID}, time.Now().UTC().Format(time.RFC3339Nano))
 	}()
 
 	created, err := s.createScheduleRunWorkspace(ctx, *config, sched.Prompt)

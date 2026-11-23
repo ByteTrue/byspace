@@ -40,6 +40,24 @@ func readEntries(t *testing.T, path string) []map[string]any {
 	return entries
 }
 
+func TestClaudeForkHasConversationRejectsTitleOnlyTranscript(t *testing.T) {
+	root := t.TempDir()
+	titleOnly := writeSession(t, root, "-repo", "title-only", []map[string]any{
+		{"type": "custom-title", "customTitle": "Forked session"},
+	})
+	if claudeForkHasConversation(titleOnly) {
+		t.Fatal("a title-only transcript is not resumable")
+	}
+	conversation := writeSession(t, root, "-repo", "conversation", []map[string]any{
+		{"type": "user", "uuid": "m1", "message": map[string]any{
+			"role": "user", "content": []any{map[string]any{"type": "text", "text": "hello"}},
+		}},
+	})
+	if !claudeForkHasConversation(conversation) {
+		t.Fatal("a transcript with a user message is resumable")
+	}
+}
+
 // A fork is a transcript-file operation, so Go can do it even though the SDK's forkSession is a JS function.
 func TestForkClaudeSessionUpToMessage(t *testing.T) {
 	root := t.TempDir()
@@ -62,25 +80,56 @@ func TestForkClaudeSessionUpToMessage(t *testing.T) {
 
 	path := filepath.Join(root, "projects", "-repo", forkedID+".jsonl")
 	entries := readEntries(t, path)
-	// The message itself stays plus the trailing title entry.
-	if len(entries) != 2 {
-		t.Fatalf("entries = %d", len(entries))
+	// upToMessageId is exclusive: rewinding to the assistant removes that turn.
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want only the first user message", len(entries))
 	}
-	if entries[0]["sessionId"] != forkedID || entries[1]["sessionId"] != forkedID {
+	if entries[0]["sessionId"] != forkedID {
 		t.Fatal("an entry kept the source session id")
 	}
 	// Every uuid is fresh: a shared one would make the daemon dedupe the fork away as the original.
-	if entries[0]["uuid"] == "m1" || entries[1]["uuid"] == "m2" {
+	if entries[0]["uuid"] == "m1" {
 		t.Fatal("a uuid was reused")
-	}
-	// The parent link points at the remapped ancestor, not at a uuid that no longer exists.
-	if entries[1]["parentUuid"] != entries[0]["uuid"] {
-		t.Fatalf("parentUuid = %v, want %v", entries[1]["parentUuid"], entries[0]["uuid"])
 	}
 	// The fork records where it came from.
 	forkedFrom, ok := entries[0]["forkedFrom"].(map[string]any)
 	if !ok || forkedFrom["sessionId"] != source {
 		t.Fatalf("forkedFrom = %v", entries[0]["forkedFrom"])
+	}
+}
+
+func TestForkClaudeSessionToFirstMessageCreatesEmptyFork(t *testing.T) {
+	root := t.TempDir()
+	source := "11111111-1111-4111-8111-111111111112"
+	writeSession(t, root, "-repo", source, []map[string]any{
+		{"type": "user", "uuid": "m1", "sessionId": source},
+		{"type": "assistant", "uuid": "m2", "sessionId": source, "parentUuid": "m1"},
+	})
+	forkedID, err := ForkClaudeSession(root, source, "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := readEntries(t, filepath.Join(root, "projects", "-repo", forkedID+".jsonl"))
+	if len(entries) != 0 {
+		t.Fatalf("entries = %d, want an empty conversation", len(entries))
+	}
+}
+
+func TestForkClaudeSessionQueuedCommandUsesParentTurn(t *testing.T) {
+	root := t.TempDir()
+	source := "11111111-1111-4111-8111-111111111113"
+	writeSession(t, root, "-repo", source, []map[string]any{
+		{"type": "user", "uuid": "m1", "sessionId": source},
+		{"type": "assistant", "uuid": "m2", "sessionId": source, "parentUuid": "m1"},
+		{"type": "attachment", "uuid": "a1", "sessionId": source, "source_uuid": "queued-command", "parentUuid": "m2"},
+	})
+	forkedID, err := ForkClaudeSession(root, source, "queued-command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := readEntries(t, filepath.Join(root, "projects", "-repo", forkedID+".jsonl"))
+	if len(entries) != 1 || entries[0]["type"] != "user" {
+		t.Fatalf("entries = %#v, want only the user before the command turn", entries)
 	}
 }
 

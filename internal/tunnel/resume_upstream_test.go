@@ -21,6 +21,7 @@ import (
 // The peer the running pump holds must be the one that fails. Replacing the peer object does not do
 // it: the old pump keeps writing through the old object, which still works.
 func TestUpstreamResumesAfterPumpExit(t *testing.T) {
+	requireTCP(t)
 	port, stop := startEchoService(t)
 	defer stop()
 

@@ -10,6 +10,7 @@ import (
 
 // The file holds peer passwords, so it must not be world-readable.
 func TestRegistrySavesPrivately(t *testing.T) {
+	requireTCP(t)
 	dir := t.TempDir()
 	r := NewRegistry(dir, t.Logf)
 	defer r.Close()
@@ -65,6 +66,7 @@ func TestRegistryToleratesCorruptFile(t *testing.T) {
 
 // The gate is a kill switch, not a UI filter: turning it off must release the local listeners.
 func TestDisablingGateReleasesListeners(t *testing.T) {
+	requireTCP(t)
 	dir := t.TempDir()
 	r := NewRegistry(dir, t.Logf)
 	defer r.Close()
@@ -101,6 +103,7 @@ func TestDisablingGateReleasesListeners(t *testing.T) {
 
 // Removing a peer rewrites the file without it.
 func TestRegistryRemove(t *testing.T) {
+	requireTCP(t)
 	dir := t.TempDir()
 	r := NewRegistry(dir, t.Logf)
 	defer r.Close()
@@ -129,6 +132,7 @@ func TestRegistryRemove(t *testing.T) {
 // A destination host is part of the rule. The same port number on two machines is two rules, and an
 // edit replaces exactly the destination it names.
 func TestRegistryKeepsRemoteHostsDistinct(t *testing.T) {
+	requireTCP(t)
 	dir := t.TempDir()
 	r := NewRegistry(dir, t.Logf)
 	defer r.Close()
@@ -207,6 +211,7 @@ func TestRegistryRejectsMalformedRemoteHost(t *testing.T) {
 // The rule list reports the destination host and the address the listener actually bound, so the row
 // shows the destination rather than implying every rule goes to the peer's loopback.
 func TestRegistryListKeepsHostsAndListenAddress(t *testing.T) {
+	requireTCP(t)
 	r := NewRegistry(t.TempDir(), t.Logf)
 	defer r.Close()
 	r.SetPeerFactory(func(PeerConfig) (PeerConn, error) { return nil, nil })
@@ -299,6 +304,7 @@ func TestAggregateState(t *testing.T) {
 }
 
 func TestRegistryPinsLocalPortAcrossRestartsAndMergesForwards(t *testing.T) {
+	requireTCP(t)
 	dir := t.TempDir()
 	r := NewRegistry(dir, t.Logf)
 	r.SetPeerFactory(func(PeerConfig) (PeerConn, error) { return nil, nil })

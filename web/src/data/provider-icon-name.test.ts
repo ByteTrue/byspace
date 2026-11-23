@@ -4,8 +4,12 @@ import {
   KNOWN_PROVIDER_ICON_NAMES,
   TERMINAL_PROFILE_ICON_NAMES,
 } from "@bytetrue/protocol/provider-icon-names";
-import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
-import { replaceProviderSnapshotIcons, resolveProviderIconName } from "./provider-icon-name";
+import { ACP_PROVIDER_ICON_SVGS } from "@/assets/acp-provider-icons";
+import {
+  ACP_PROVIDER_ICON_ALIASES,
+  replaceProviderSnapshotIcons,
+  resolveProviderIconName,
+} from "./provider-icon-name";
 
 describe("resolveProviderIconName", () => {
   it("returns the built-in identifier for known provider ids", () => {
@@ -73,21 +77,13 @@ describe("resolveProviderIconName", () => {
 });
 
 describe("known provider icon names", () => {
-  it("includes every ACP catalog entry that ships an icon", () => {
-    const known = new Set(KNOWN_PROVIDER_ICON_NAMES);
-    for (const entry of ACP_PROVIDER_CATALOG) {
-      if (entry.iconSvg) {
-        expect(known).toContain(entry.id);
-      }
-    }
-  });
-
-  it("only lists ACP icon ids that have a catalog entry with an icon", () => {
+  it("keeps every registered ACP icon id backed by a vendored SVG", () => {
     const builtin = new Set(BUILTIN_PROVIDER_ICON_NAMES);
     const terminalOnly = new Set(TERMINAL_PROFILE_ICON_NAMES);
-    const catalogIdsWithIcons = new Set(
-      ACP_PROVIDER_CATALOG.filter((entry) => entry.iconSvg).map((entry) => entry.id),
-    );
+    const catalogIdsWithIcons = new Set([
+      ...Object.keys(ACP_PROVIDER_ICON_SVGS),
+      ...Object.keys(ACP_PROVIDER_ICON_ALIASES),
+    ]);
     for (const name of KNOWN_PROVIDER_ICON_NAMES) {
       if (!builtin.has(name) && !terminalOnly.has(name)) {
         expect(catalogIdsWithIcons).toContain(name);

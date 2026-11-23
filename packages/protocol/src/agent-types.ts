@@ -395,6 +395,7 @@ export type AgentStreamEvent =
       provider: AgentProvider;
       turnId?: string;
       timestamp?: string;
+      replace?: boolean;
     }
   | {
       type: "permission_requested";

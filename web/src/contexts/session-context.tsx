@@ -9,13 +9,13 @@ import {
 } from "@/contexts/use-agent-initialization";
 import type { StreamItem } from "@/types/stream";
 import { deriveAgentStreamTurnLiveness } from "@/timeline/session-stream-reducers";
-import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
-import { requestTimelineReplacement } from "@/timeline/timeline-replacement";
 import {
   consumeForcedTimelineTailReplacement,
-  type TimelineResponsePayload,
-  type ViewedTimelineOwner,
-} from "@/timeline/viewed-timeline-sync";
+  fenceTimelineRequest,
+  requestTimelineReplacement,
+  TimelineReplacementRequests,
+} from "@/timeline/timeline-replacement";
+import type { TimelineResponsePayload, ViewedTimelineOwner } from "@/timeline/viewed-timeline-sync";
 import type { SessionOutboundMessage } from "@bytetrue/protocol/messages";
 import { parseServerInfoStatusPayload } from "@bytetrue/protocol/messages";
 import {
@@ -195,7 +195,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const _sessionStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attentionNotifiedRef = useRef<Map<string, number>>(new Map());
   const appStateRef = useRef(AppState.currentState);
-  const forcedTimelineTailReplacements = useRef(new Set<string>());
+  const forcedTimelineTailReplacements = useRef(new TimelineReplacementRequests());
   const viewedTimelineSyncRef = useRef<ViewedTimelineOwner | null>(null);
   const isAppVisible = useAppVisible();
 
@@ -324,6 +324,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       receivedPayload,
       forcedTimelineTailReplacements.current,
     );
+    if (!payload) return;
     const owner = viewedTimelineSyncRef.current;
     if (!owner) throw new Error("Viewed timeline owner is unavailable");
     owner.applyTimelineResponse(payload);
@@ -358,13 +359,31 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           });
           setAgentInitializing(agentId, true);
         }
+        const fencedRequest = fenceTimelineRequest(
+          forcedTimelineTailReplacements.current,
+          agentId,
+          request,
+        );
+        const requestGeneration = forcedTimelineTailReplacements.current.generation(agentId);
         try {
-          const page = await getHostRuntimeStore().fetchAgentTimeline(serverId, agentId, request);
+          const page = await getHostRuntimeStore().fetchAgentTimeline(
+            serverId,
+            agentId,
+            fencedRequest,
+          );
+          if (forcedTimelineTailReplacements.current.generation(agentId) !== requestGeneration) {
+            // The response handler rejected this page. End its catch-up chain too: following
+            // hasNewer would register a pre-rewind cursor under the new generation.
+            return { ...page, hasNewer: false, endCursor: null };
+          }
           if (shouldInitialize && getInitDeferred(initKey)) {
             refreshAgentInitializationTimeout({ key: initKey, agentId, setAgentInitializing });
           }
           return page;
         } catch (error) {
+          if (fencedRequest.requestId) {
+            forcedTimelineTailReplacements.current.forget(fencedRequest.requestId);
+          }
           if (shouldInitialize) {
             setAgentInitializing(agentId, false);
             rejectInitDeferred(initKey, error instanceof Error ? error : new Error(String(error)));
@@ -372,18 +391,15 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           throw error;
         }
       },
-      fetchLatestTail: async (agentId) => {
-        forcedTimelineTailReplacements.current.add(agentId);
-        try {
-          return await getHostRuntimeStore().fetchAgentTimeline(
-            serverId,
-            agentId,
-            planTimelineTailFetch(),
-          );
-        } finally {
-          forcedTimelineTailReplacements.current.delete(agentId);
-        }
-      },
+      fetchLatestTail: (agentId) =>
+        requestTimelineReplacement(
+          {
+            fetchAgentTimeline: (requestedAgentId, request) =>
+              getHostRuntimeStore().fetchAgentTimeline(serverId, requestedAgentId, request),
+          },
+          agentId,
+          forcedTimelineTailReplacements.current,
+        ),
       reportError: (error) => {
         console.warn("[Session] viewed timeline synchronization failed", { serverId, error });
       },
@@ -458,12 +474,18 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     const unsubTimelineReplacement = client.on("agent.timeline.replacement", (message) => {
       if (message.type !== "agent.timeline.replacement") return;
+      const agentId = message.payload.agentId;
+      owner.flushStreamAgent(agentId);
+      // Keep the last good timeline visible until the authoritative replacement arrives. An
+      // optimistic clear needs a rollback that can erase newer replacements and live events.
       void requestTimelineReplacement(
         {
-          fetchAgentTimeline: (agentId, request) =>
-            getHostRuntimeStore().fetchAgentTimeline(serverId, agentId, request),
+          fetchAgentTimeline: (requestedAgentId, request) =>
+            getHostRuntimeStore().fetchAgentTimeline(serverId, requestedAgentId, request),
         },
-        message.payload.agentId,
+        agentId,
+        forcedTimelineTailReplacements.current,
+        { destructive: true },
       ).catch((error: unknown) => {
         console.warn("[Session] timeline replacement refresh failed", { serverId, error });
       });

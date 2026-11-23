@@ -13,8 +13,8 @@ func TestRewindCapabilitiesFor(t *testing.T) {
 		t.Fatal("both needs both halves")
 	}
 
-	// opencode reverts files as well; codex only rolls the thread back.
-	if opencode := RewindCapabilitiesFor("opencode"); !opencode.Conversation || !opencode.Files {
+	// OpenCode never advertises file-only rewind; its loaded session narrows conversation support by version.
+	if opencode := RewindCapabilitiesFor("opencode"); !opencode.Conversation || opencode.Files || !opencode.SupportsRewindBoth() {
 		t.Fatalf("opencode = %+v", opencode)
 	}
 	if codex := RewindCapabilitiesFor("codex"); !codex.Conversation || codex.Files {
@@ -22,9 +22,8 @@ func TestRewindCapabilitiesFor(t *testing.T) {
 	}
 
 	// Non-built-in providers (copilot/omp connect through ACP, cursor and unknown are custom)
-	// honestly report nothing, as does any provider whose node implementation Go has not ported.
-	// claude forks the transcript; files are not restored because the SDK's checkpoints are unreachable from Go.
-	if claude := RewindCapabilitiesFor("claude"); !claude.Conversation || claude.Files {
+	// honestly report nothing. Claude restores its own checkpointed files and forks the transcript.
+	if claude := RewindCapabilitiesFor("claude"); !claude.Conversation || !claude.Files {
 		t.Fatalf("claude = %+v", claude)
 	}
 

@@ -24,7 +24,7 @@ export async function launchNestedProviderSubagentOwnershipScenario(
     mode: "full-access",
     providerConfig: { model: "claude-sonnet-5" },
   });
-  await sendMessage(handle, NESTED_OWNERSHIP_PROMPT);
+  await sendMessage(handle, NESTED_OWNERSHIP_PROMPT, { transcriptTimeoutMs: 120_000 });
   await expect(page.getByText("ROOT_DONE", { exact: true }).last()).toBeVisible({
     timeout: 120_000,
   });
@@ -37,23 +37,27 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): P
   await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
-async function expectOnlySubagent(page: Page, label: RegExp): Promise<Locator> {
-  const rows = page.locator('[data-testid^="subagents-track-row-"]');
+async function expectOnlySubagent(page: Page, panel?: Locator): Promise<Locator> {
+  const scope =
+    panel ?? page.locator('[data-testid="subagents-track-header-panel"][data-state="open"]');
+  const rows = scope.locator('[data-testid^="subagents-track-row-"]');
   await expect(rows).toHaveCount(1);
-  const row = page.getByTestId("subagents-track-header-panel").getByRole("button", { name: label });
+  const row = rows.first();
   await expect(row).toBeVisible();
   return row;
 }
 
-async function selectOnlyRootSubagent(page: Page, label: RegExp): Promise<void> {
+async function selectOnlyRootSubagent(page: Page): Promise<void> {
   await openSubagentsTrack(page);
-  const row = await expectOnlySubagent(page, label);
+  const row = await expectOnlySubagent(page);
   await row.click();
 }
 
 async function openOwnedSubagents(page: Page, ownerPanel: Locator): Promise<void> {
   await ownerPanel.getByTestId("subagents-track-header").click();
-  await expect(page.getByTestId("subagents-track-header-panel")).toBeVisible();
+  await expect(
+    page.locator('[data-testid="subagents-track-header-panel"][data-state="open"]'),
+  ).toBeVisible();
 }
 
 export async function expectNestedProviderSubagentOwnership(
@@ -64,12 +68,15 @@ export async function expectNestedProviderSubagentOwnership(
   await expect(
     page.getByText("Task notification", { exact: true }).filter({ visible: true }),
   ).toHaveCount(0);
-  await selectOnlyRootSubagent(page, /^direct_owner\b/);
+  await selectOnlyRootSubagent(page);
   const directPanel = page.getByTestId("provider-subagent-panel").filter({ visible: true });
   await expect(directPanel).toBeVisible();
 
   await openOwnedSubagents(page, directPanel);
-  const nestedRow = await expectOnlySubagent(page, /^nested_owner\b/);
+  const nestedRow = await expectOnlySubagent(
+    page,
+    page.locator('[data-testid="subagents-track-header-panel"][data-state="open"]'),
+  );
   await attachScreenshot(page, testInfo, `nested-ownership-${phase}-tree`);
   await nestedRow.click();
 

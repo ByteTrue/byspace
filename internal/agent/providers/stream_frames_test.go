@@ -197,7 +197,7 @@ func TestACPKeepsAlternatingTextAndThoughtOrdered(t *testing.T) {
 	update("agent_thought_chunk", "think")
 	update("agent_message_chunk", "more")
 	update("agent_message_chunk", "!")
-	update("plan", "")
+	update("session_info_update", "")
 	frames := timelineEvents(events)
 	if len(frames) != 3 {
 		t.Fatalf("alternating updates collapsed across row boundaries: %+v", frames)

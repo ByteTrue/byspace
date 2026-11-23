@@ -34,7 +34,9 @@ func seedArchivedWorktree(t *testing.T, srv *Server) (store.WorkspaceRecord, str
 	if err := srv.store.UpsertWorkspace(rec); err != nil {
 		t.Fatal(err)
 	}
-	if message := srv.archiveWorkspaces(context.Background(), []string{rec.WorkspaceID}, "2026-02-01T00:00:00Z"); message != nil {
+	if message, err := srv.archiveWorkspaces(context.Background(), []string{rec.WorkspaceID}, "2026-02-01T00:00:00Z"); err != nil {
+		t.Fatalf("archiveWorkspaces() error = %v", err)
+	} else if message != nil {
 		t.Fatalf("directory left behind: %s", *message)
 	}
 	return rec, repoRoot

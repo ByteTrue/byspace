@@ -17,7 +17,7 @@ import {
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
-test("remembers real Codex GPT-6 Astra after repeated successful workspace creation", async ({
+test("remembers the selected real Codex model after repeated successful workspace creation", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -33,12 +33,15 @@ test("remembers real Codex GPT-6 Astra after repeated successful workspace creat
         { timeout: 60_000 },
       )
       .toBe("ready");
-    const snapshot = await client.getProvidersSnapshot({ cwd: workspace.repoPath });
-    const codex = snapshot.entries.find((entry) => entry.provider === "codex");
-    expect(codex?.status).toBe("ready");
-    const astra = codex?.models?.find((model) => model.id === "gpt-6-astra");
-    expect(astra?.id).toBe("gpt-6-astra");
-    const label = astra!.label;
+    let modelId = process.env.E2E_CODEX_MODEL ?? "gpt-6-astra";
+    const catalog = await client.listProviderModels("codex", { cwd: workspace.repoPath });
+    expect(catalog.error ?? null).toBeNull();
+    const selectedModel = catalog.models?.find(
+      (model) => model.id === modelId || modelId.endsWith(`/${model.id}`),
+    );
+    expect(selectedModel?.id).toBeDefined();
+    modelId = selectedModel!.id;
+    const label = selectedModel!.label;
     await startWithoutRememberedModel(page);
     await gotoWorkspace(page, workspace.workspaceId);
     await waitForSidebarHydration(page);
@@ -47,21 +50,21 @@ test("remembers real Codex GPT-6 Astra after repeated successful workspace creat
       const count = index + 1;
       await test.step(`create workspace ${count} and return`, async () => {
         await select(page, "codex", label);
-        await expectSavedSelection(page, "codex", "gpt-6-astra");
+        await expectSavedSelection(page, "codex", modelId);
         await submitNewWorkspacePrompt(page, "Reply with OK. Do not use tools or change files.");
         await expect(page).toHaveURL(/\/workspace\//);
-        await expectCreatedModelAgents(page, client, "codex", "gpt-6-astra", count);
+        await expectCreatedModelAgents(page, client, "codex", modelId, count);
         await expect(
           page.getByTestId("assistant-message").filter({ hasText: "OK", visible: true }),
         ).toBeVisible({
           timeout: 60_000,
         });
         await openGlobalNewWorkspaceComposer(page);
-        await expectSavedSelection(page, "codex", "gpt-6-astra");
+        await expectSavedSelection(page, "codex", modelId);
         await expectRememberedModel(page, label);
       });
     }
-    await page.screenshot({ path: test.info().outputPath("astra-remembered.png") });
+    await page.screenshot({ path: test.info().outputPath("model-remembered.png") });
   } finally {
     await client.close();
     await workspace.cleanup();

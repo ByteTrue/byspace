@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/gui/autostart"
 	"github.com/ByteTrue/byspace/internal/naming"
@@ -985,8 +987,14 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		//     archived and the row the user just restored is still history.
 		//   - Failures are reported. The old code returned silently, so a client waiting for
 		//     agent_refreshed hung until its own timeout and the cause never reached the log.
-		if unarchived, archiveErr := s.store.UnarchiveAgent(base.AgentID); archiveErr == nil && unarchived != nil {
-			s.broadcastAgentUpdate(*unarchived)
+		if _, archiveErr := s.unarchiveAgent(ctx, base.AgentID); archiveErr != nil {
+			_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+				"requestId":   base.RequestID,
+				"requestType": "refresh_agent_request",
+				"error":       archiveErr.Error(),
+				"code":        "agent_refresh_failed",
+			})
+			return
 		}
 		mp, err := s.ensureAgentLoaded(base.AgentID)
 		if err != nil {
@@ -1073,46 +1081,34 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		var rewindErr error
 		if mp, err := s.ensureAgentLoaded(req.AgentID); err != nil {
 			rewindErr = err
+		} else if req.Mode != "conversation" && req.Mode != "files" && req.Mode != "both" {
+			rewindErr = fmt.Errorf("unsupported rewind mode %q", req.Mode)
 		} else {
-			// Files rewind restores the working tree; conversation rewind moves the provider's
-			// own conversation branch. Truncating only the in-memory timeline (the previous
-			// behaviour) changes nothing in the provider and is lost on the next hydration.
-			// The wire mode is "files", matching AgentRewindModeSchema; checking a "code" value
-			// the protocol never sends made a files-only rewind a silent no-op that still
-			// reported ok.
-			if req.Mode == "files" || req.Mode == "both" {
-				if err := workspace.DiscardChanges(ctx, mp.record.Cwd); err != nil {
-					rewindErr = err
-				}
-			}
-			if rewindErr == nil && (req.Mode == "conversation" || req.Mode == "both") {
-				target := strings.TrimSpace(req.MessageID)
-				if target == "" && req.Seq > 0 {
-					// Older clients send a cursor; map it to the message at that position.
-					tl := dedupeSubmittedPrompts(mp.session.Timeline())
-					for i := len(tl) - 1; i >= 0; i-- {
-						if tl[i].Seq <= req.Seq && tl[i].Item.Type == "user_message" {
-							target = tl[i].Item.Text
-							break
-						}
+			// A provider-native revert is session-scoped. Never substitute a whole-workspace reset:
+			// that would destroy unrelated edits, untracked files, and another session's work.
+			target := strings.TrimSpace(req.MessageID)
+			if target == "" && req.Seq > 0 {
+				tl := dedupeSubmittedPrompts(mp.session.Timeline())
+				for i := len(tl) - 1; i >= 0; i-- {
+					if tl[i].Seq <= req.Seq && tl[i].Item.Type == "user_message" {
+						target = tl[i].Item.Text
+						break
 					}
 				}
-				if target == "" {
-					rewindErr = fmt.Errorf("rewind needs a message id")
-				} else if s.isUnacknowledgedSubmittedPrompt(mp.session, mp.record.ID, target) {
-					// The daemon wrote this row when the prompt was submitted; the provider has not
-					// echoed it back, so it has no checkpoint for the turn. Node refuses with this exact
-					// wording, and the client shows it as-is.
-					rewindErr = fmt.Errorf("Cannot rewind before the provider acknowledges the submitted prompt")
-				} else if err := s.rewindConversation(ctx, mp, target); err != nil {
-					rewindErr = err
-				}
+			}
+			if target == "" {
+				rewindErr = fmt.Errorf("rewind needs a message id")
+			} else if s.isUnacknowledgedSubmittedPrompt(mp.session, mp.record.ID, target) {
+				rewindErr = fmt.Errorf("Cannot rewind before the provider acknowledges the submitted prompt")
+			} else if err := s.rewindConversation(ctx, mp, target, req.Mode); err != nil {
+				rewindErr = err
 			}
 		}
 		var errText any
 		ok := rewindErr == nil
 		if rewindErr != nil {
 			errText = rewindErr.Error()
+			log.Printf("agent rewind failed for %s: %v", req.AgentID, rewindErr)
 		}
 		_ = sendSessionMsg(ctx, sink, "agent.rewind.response", map[string]any{
 			"requestId": base.RequestID,
@@ -1696,12 +1692,30 @@ func scanLocalSkills() ([]string, []string) {
 	return bundled, installed
 }
 
+func rewindCapabilitiesForSession(provider string, session providers.ManagedSession) providers.RewindCapabilities {
+	if session == nil {
+		return providers.RewindCapabilitiesFor(provider)
+	}
+	if capable, ok := session.(interface {
+		RewindCapabilities() providers.RewindCapabilities
+	}); ok {
+		return capable.RewindCapabilities()
+	}
+	if capable, ok := session.(interface {
+		RewindSupport() (conversation, files, both bool)
+	}); ok {
+		conversation, files, _ := capable.RewindSupport()
+		return providers.RewindCapabilities{Conversation: conversation, Files: files}
+	}
+	return providers.RewindCapabilitiesFor(provider)
+}
+
 // rewindConversation asks the provider to move its conversation branch back to a message.
 //
 // The client identifies the message by text or id; pi navigates by its own tree entry id, which
 // the integration extension captured. Returns a clear error when the mapping is missing rather
 // than silently doing nothing.
-func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target string) error {
+func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target, mode string) error {
 	rw, ok := mp.session.(interface {
 		RewindConversation(context.Context, string) error
 		TreeEntryForMessage(string) (string, bool)
@@ -1709,25 +1723,107 @@ func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target s
 	if !ok {
 		return fmt.Errorf("provider %s does not support conversation rewind", mp.record.Provider)
 	}
+	capabilities := rewindCapabilitiesForSession(mp.record.Provider, mp.session)
+	if mode == "files" && !capabilities.Files {
+		return fmt.Errorf("provider %s does not support files-only rewind", mp.record.Provider)
+	}
+	if mode == "both" && !capabilities.SupportsRewindBoth() {
+		return fmt.Errorf("provider %s does not support combined rewind", mp.record.Provider)
+	}
+	var retained []sdk.TimelineEntry
+	if mode != "files" {
+		var found bool
+		retained, found = timelineBeforeUserMessage(mp.session.Timeline(), target)
+		if !found {
+			return fmt.Errorf("rewind message %s is not in the timeline", target)
+		}
+	}
 	entryID := target
 	if resolved, found := rw.TreeEntryForMessage(target); found {
 		entryID = resolved
 	}
-	if err := rw.RewindConversation(ctx, entryID); err != nil {
+	nativeFiles, hasNativeFiles := mp.session.(interface {
+		RewindFiles(context.Context, string) error
+	})
+	if mode == "files" {
+		if !hasNativeFiles {
+			return fmt.Errorf("provider %s does not support files-only rewind", mp.record.Provider)
+		}
+		if err := nativeFiles.RewindFiles(ctx, entryID); err != nil {
+			return err
+		}
+		s.broadcastSessionMsg("agent.timeline.replacement", map[string]any{
+			"agentId": mp.record.ID, "epoch": s.epoch,
+		})
+		return nil
+	}
+
+	// Providers with a combined primitive keep the old session alive until native file rewind
+	// succeeds, then commit the prepared conversation replacement.
+	if mode == "both" {
+		if combined, ok := mp.session.(interface {
+			RewindConversationAndFiles(context.Context, string) error
+		}); ok {
+			if err := combined.RewindConversationAndFiles(ctx, entryID); err != nil {
+				return err
+			}
+			mp.session.SeedTimeline(retained)
+			if s.store != nil {
+				if err := s.syncPiPersistenceChecked(mp); err != nil {
+					return fmt.Errorf("rewind succeeded but saving the replacement session failed: %w", err)
+				}
+			}
+			s.broadcastSessionMsg("agent.timeline.replacement", map[string]any{
+				"agentId": mp.record.ID, "epoch": s.epoch,
+			})
+			return nil
+		}
+	}
+
+	// OpenCode performs conversation and file rewind atomically. Other providers rewind the
+	// conversation first so a failed fork cannot destroy files while leaving chat untouched.
+	_, scoped := mp.session.(interface {
+		RewindConversationMode(context.Context, string, string) error
+	})
+	if scopedSession, ok := mp.session.(interface {
+		RewindConversationMode(context.Context, string, string) error
+	}); ok {
+		if err := scopedSession.RewindConversationMode(ctx, entryID, mode); err != nil {
+			return err
+		}
+	} else if err := rw.RewindConversation(ctx, entryID); err != nil {
 		return err
 	}
-	// The provider owns its timeline: RewindConversation already dropped the rows after the target,
-	// so there is nothing to reconcile here beyond telling clients the history moved.
-	// A rewind rewrites history: everything after the target is gone and the rows that follow carry
-	// seq numbers that no longer continue the client's cursor. A client that keeps its cursor would
-	// treat every later row as a gap, drop it, and leave the prompt it just sent without a messageId
-	// — so the rewind trigger never appears on it. Node broadcasts agent.timeline.replacement for
-	// exactly this case; the client answers by refetching the tail.
+	mp.session.SeedTimeline(retained)
+	// A fork changes the native handle. Do not report success until the replacement handle is durable.
+	if s.store != nil {
+		if err := s.syncPiPersistenceChecked(mp); err != nil {
+			return fmt.Errorf("rewind succeeded but saving the replacement session failed: %w", err)
+		}
+	}
+	var fileErr error
+	if mode == "both" && !scoped && hasNativeFiles {
+		fileErr = nativeFiles.RewindFiles(ctx, entryID)
+	}
 	s.broadcastSessionMsg("agent.timeline.replacement", map[string]any{
-		"agentId": mp.record.ID,
-		"epoch":   s.epoch,
+		"agentId": mp.record.ID, "epoch": s.epoch,
 	})
+	if fileErr != nil {
+		return fmt.Errorf("conversation rewind succeeded but file rewind failed: %w", fileErr)
+	}
 	return nil
+}
+
+func timelineBeforeUserMessage(entries []sdk.TimelineEntry, messageID string) ([]sdk.TimelineEntry, bool) {
+	for index, entry := range entries {
+		if entry.Item.Type != "user_message" {
+			continue
+		}
+		if entry.Item.MessageID == messageID || entry.Item.ClientMessageID == messageID {
+			return append([]sdk.TimelineEntry(nil), entries[:index]...), true
+		}
+	}
+	return nil, false
 }
 
 // validRepoSegment matches a GitHub owner or repository name.

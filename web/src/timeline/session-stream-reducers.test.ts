@@ -461,6 +461,28 @@ describe("processTimelineResponse", () => {
     expect(result.cursor).toEqual({ epoch: "epoch-2", startSeq: 1, endSeq: 1 });
   });
 
+  it("drops same-epoch live rows for a forced rewind replacement", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem("old answer", "old-answer")],
+      currentHead: [makeAssistantItem("streaming answer", "streaming-answer")],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 1 },
+      payload: {
+        ...baseTimelineInput.payload,
+        reset: true,
+        forceReplacement: true,
+        epoch: "epoch-1",
+        window: { minSeq: 0, maxSeq: 0, nextSeq: 1 },
+        startCursor: null,
+        endCursor: null,
+        entries: [],
+      },
+    });
+
+    expect(result.tail).toEqual([]);
+    expect(result.head).toEqual([]);
+  });
+
   it("replaces destructively when the same epoch rewinds behind the local cursor", () => {
     const result = processTimelineResponse({
       ...baseTimelineInput,

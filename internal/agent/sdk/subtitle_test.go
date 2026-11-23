@@ -57,7 +57,20 @@ func TestFormatTokens(t *testing.T) {
 }
 
 // The subtitle grows as the subagent reports; Refresh recomputes from the raw facts.
+func TestBuildSubagentSubtitleDoesNotRepeatTheSameFact(t *testing.T) {
+	got := BuildSubagentSubtitle(strPtr("Workflow"), strPtr("Workflow"), nil, nil)
+	if got == nil || *got != "Workflow" {
+		t.Fatalf("subtitle = %v", got)
+	}
+}
+
 func TestRefreshSubagentSubtitle(t *testing.T) {
+	workflow := SubagentDescriptor{Title: strPtr("Workflow"), Kind: strPtr("Workflow"), TotalTokens: i64Ptr(25600)}
+	RefreshSubagentSubtitle(&workflow)
+	if workflow.Subtitle == nil || *workflow.Subtitle != "Workflow · 25.6k tok" {
+		t.Fatalf("workflow subtitle = %v", workflow.Subtitle)
+	}
+
 	descriptor := SubagentDescriptor{Title: strPtr("audit")}
 	RefreshSubagentSubtitle(&descriptor)
 	if descriptor.Subtitle == nil || *descriptor.Subtitle != "audit" {

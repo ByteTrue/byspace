@@ -50,15 +50,16 @@ func (s *Server) autoArchiveAfterMerge(ctx context.Context, rec store.WorkspaceR
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	// Native provider state and local agent teardown finish before the workspace becomes archived.
+	if err := s.archiveWorkspaceContents(ctx, rec.WorkspaceID, now); err != nil {
+		return false
+	}
 	rec.AutoArchivedChangeRequestURL = &state.PullRequestURL
 	rec.ArchivedAt = &now
 	rec.UpdatedAt = now
 	if err := s.store.UpsertWorkspace(rec); err != nil {
 		return false
 	}
-	// Free the agents and terminals the workspace was holding: an archived worktree with a live
-	// provider keeps spending tokens.
-	s.archiveWorkspaceContents(ctx, rec.WorkspaceID, now)
 	if projects, listErr := s.store.ListProjects(); listErr == nil {
 		for _, prj := range projects {
 			if prj.ProjectID == rec.ProjectID {

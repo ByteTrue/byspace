@@ -328,9 +328,18 @@ func (p *Process) SendRaw(payload any) error {
 	return err
 }
 
+// NextRequestID reserves an ID when a caller must correlate events that arrive before the RPC response.
+func (p *Process) NextRequestID() string {
+	return fmt.Sprintf("req_%d", p.reqSeq.Add(1))
+}
+
 // Request sends a command with an auto-generated "id": "req_N" and waits for the matching "type": "response".
 func (p *Process) Request(ctx context.Context, command map[string]any) (json.RawMessage, error) {
-	reqID := fmt.Sprintf("req_%d", p.reqSeq.Add(1))
+	return p.RequestWithID(ctx, p.NextRequestID(), command)
+}
+
+// RequestWithID is Request with a caller-reserved request ID.
+func (p *Process) RequestWithID(ctx context.Context, reqID string, command map[string]any) (json.RawMessage, error) {
 	outbound := make(map[string]any, len(command)+1)
 	for k, v := range command {
 		outbound[k] = v

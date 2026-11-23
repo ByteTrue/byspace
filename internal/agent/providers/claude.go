@@ -27,13 +27,17 @@ import (
 type ClaudeSession struct {
 	proc *jsonl.Process
 
-	mu          sync.Mutex
-	status      string
-	sessionID   string
-	sessionFile string
-	model       string
-	modeID      string
-	thinking    string
+	mu                 sync.Mutex
+	status             string
+	sessionID          string
+	sessionFile        string
+	model              string
+	modeID             string
+	thinking           string
+	launchConfig       LaunchConfig
+	command            string
+	configDir          string
+	providerMessageIDs map[string]string
 	// lastError is the provider's own text for the most recent failure, for the sidebar and the
 	// [System Error] row.
 	lastError           string
@@ -45,6 +49,8 @@ type ClaudeSession struct {
 	toolArgsByID        map[string]any
 	pendingPermissions  map[string]map[string]any
 	subagents           map[string]sdk.SubagentDescriptor
+	subagentTimelines   map[string][]sdk.TimelineEntry
+	subagentToolOwners  map[string]string
 	finishWaiters       []chan error
 	eventSubscribers    map[int]func(map[string]any)
 	// taskState accumulates Claude's task-list tools into the plan panel's todo item. Kept per session
@@ -60,6 +66,28 @@ type ClaudeSession struct {
 	nextSubID int
 	// commands are the slash commands the CLI announced on its init message.
 	commands []sdk.SlashCommand
+	// commandsReady closes when that init message arrives. A listing asked for before it would answer
+	// with the two-command fallback below and never the user's own skills.
+	commandsReady      chan struct{}
+	controlCounter     int
+	pendingControls    map[string]chan claudeControlResult
+	messageCounter     int
+	queuedMessages     map[string]bool
+	frames             *sdk.StreamFrames
+	streamSeq          int
+	streamMessageID    string
+	streamText         map[string]string
+	streamReasoning    map[string]string
+	streamTextIdx      map[string]int
+	streamReasoningIdx map[string]int
+	streamBlocks       map[int]string
+	streamToolJSON     map[string]string
+	nativeTasks        bool
+	nativeTaskIDs      map[string]string
+	compactionOpen     bool
+	compactionIdx      int
+	backgroundTasks    []sdk.BackgroundTask
+	backgroundStops    map[string]bool
 }
 
 // StartClaudeSession launches a Claude Code stream-json subprocess.
@@ -74,6 +102,7 @@ func claudeLaunchArgs(cfg LaunchConfig) []string {
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
+		"--include-partial-messages",
 	}
 	if cfg.Model != "" && cfg.Model != "default" {
 		args = append(args, "--model", cfg.Model)
@@ -92,6 +121,13 @@ func claudeLaunchArgs(cfg LaunchConfig) []string {
 	}
 	if effort := claudeEffortArg(cfg.ThinkingOptionID); effort != "" {
 		args = append(args, "--effort", effort)
+	}
+	if len(cfg.MCPServers) > 0 {
+		encoded, err := json.Marshal(map[string]any{"mcpServers": cfg.MCPServers})
+		if err != nil {
+			panic(fmt.Sprintf("marshal validated Claude MCP configuration: %v", err))
+		}
+		args = append(args, "--mcp-config", string(encoded))
 	}
 	// Fast mode is a settings flag, not a launch flag: the CLI merges --settings into its settings
 	// file. Codex has a per-turn serviceTier; Claude reads this once per process.
@@ -188,12 +224,21 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		Command: bin,
 		Args:    args,
 		Cwd:     cfg.Cwd,
-		Env:     cfg.Env,
+		Env: append(append([]string{}, cfg.Env...),
+			"CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=true",
+			"CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1",
+		),
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	configDir := ""
+	for _, entry := range cfg.Env {
+		if value, ok := strings.CutPrefix(entry, "CLAUDE_CONFIG_DIR="); ok {
+			configDir = value
+		}
+	}
 	s := &ClaudeSession{
 		proc:               proc,
 		status:             "idle",
@@ -206,8 +251,19 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		toolArgsByID:       make(map[string]any),
 		pendingPermissions: make(map[string]map[string]any),
 		subagents:          make(map[string]sdk.SubagentDescriptor),
+		subagentTimelines:  make(map[string][]sdk.TimelineEntry),
+		subagentToolOwners: make(map[string]string),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 		homeDir:            cfg.HomeDir,
+		launchConfig:       cfg,
+		command:            bin,
+		configDir:          resolveClaudeConfigDir(configDir),
+		providerMessageIDs: make(map[string]string),
+		commandsReady:      make(chan struct{}),
+		pendingControls:    make(map[string]chan claudeControlResult),
+		queuedMessages:     make(map[string]bool),
+		nativeTaskIDs:      make(map[string]string),
+		compactionIdx:      -1,
 	}
 	if strings.HasSuffix(cfg.SessionHandle, ".jsonl") {
 		s.sessionFile = cfg.SessionHandle
@@ -218,19 +274,31 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		// Resuming by session id: the process the CLI starts knows the conversation, but this
 		// transport cannot ask it for the transcript, and an imported session has no provider-side
 		// history to replay. Node loads it from disk at construction for the same reason.
-		if path := FindClaudeTranscript(cfg.SessionHandle, cfg.Cwd, ""); path != "" {
+		if path := FindClaudeTranscript(cfg.SessionHandle, cfg.Cwd, s.configDir); path != "" {
 			s.sessionFile = path
 			if entries, loadErr := LoadClaudeTimelineFromJSONL(path); loadErr == nil && len(entries) > 0 {
 				s.timeline = entries
 			}
 		}
 	}
-	proc.OnEvent(s.handleRawEvent)
+	proc.OnEvent(func(ev map[string]any) { s.handleProcessEvent(proc, ev) })
 	return s, nil
+}
+
+func (s *ClaudeSession) handleProcessEvent(proc *jsonl.Process, ev map[string]any) {
+	s.mu.Lock()
+	current := s.proc == proc
+	s.mu.Unlock()
+	if current {
+		s.handleRawEvent(ev)
+	}
 }
 
 func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 	evType, _ := ev["type"].(string)
+	if evType == "control_response" && s.resolveControl(ev) {
+		return
+	}
 	var extraEvents []map[string]any
 
 	s.mu.Lock()
@@ -238,16 +306,35 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 	case "system":
 		if sid, ok := ev["session_id"].(string); ok && sid != "" {
 			s.sessionID = sid
+			if s.sessionFile == "" && s.launchConfig.Cwd != "" {
+				s.sessionFile = filepath.Join(ClaudeProjectDir(s.launchConfig.Cwd, s.configDir), sid+".jsonl")
+			}
 		}
 		// The init message is where the CLI announces the commands and skills it has loaded. The
 		// node daemon read them from the SDK; without this the "/" menu offered two commands that
 		// happen to be hardcoded here.
 		if commands := claudeCommandsFromInit(ev); len(commands) > 0 {
 			s.commands = commands
+			select {
+			case <-s.commandsReady:
+			default:
+				close(s.commandsReady)
+			}
 		}
+		if ev["subtype"] == "init" || ev["subtype"] == "task_notification" {
+			extraEvents = append(extraEvents, s.openClaudeAutonomousTurnLocked()...)
+		}
+		extraEvents = append(extraEvents, s.handleClaudeSystemLocked(ev)...)
+
+	case "stream_event":
+		if parentToolUseID(ev) != "" {
+			break
+		}
+		s.handleClaudeStreamEventLocked(ev)
 
 	case "assistant":
 		if parent := parentToolUseID(ev); parent != "" {
+			s.recordClaudeSubagentAssistantLocked(parent, ev)
 			// A message from inside a subagent. Its tool calls belong to that subagent's
 			// timeline, not to the conversation the user is reading — mixing them made a
 			// delegated task look like the parent agent had gone off and done unrelated work.
@@ -256,7 +343,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			// again would deadlock the read loop (see notes/013).
 			if sub := s.markSubagentActiveLocked(parent); sub != nil {
 				extraEvents = append(extraEvents, map[string]any{
-					"type":      "agent.provider_subagents.update",
+					"type":      "byspace_provider_subagents",
 					"kind":      "upsert",
 					"subagent":  *sub,
 					"updatedAt": time.Now().UTC().Format(time.RFC3339Nano),
@@ -285,16 +372,11 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 					Detail: detail,
 					Error:  card.Error,
 				})
-				extraEvents = append(extraEvents, map[string]any{
-					"type":   "byspace_stream_timeline",
-					"seq":    s.timeline[idx].SeqEnd,
-					"turnId": s.activeTurnID,
-					"item":   s.timeline[idx].Item,
-				})
+				extraEvents = append(extraEvents, s.claudeTimelineEventLocked(idx))
 				break
 			}
 			if content, ok := msg["content"].([]any); ok {
-				for _, rawBlock := range content {
+				for blockIndex, rawBlock := range content {
 					block, ok := rawBlock.(map[string]any)
 					if !ok {
 						continue
@@ -303,17 +385,11 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 					switch bType {
 					case "thinking":
 						if th, _ := block["thinking"].(string); th != "" {
-							s.appendItemLocked(sdk.TimelineItem{
-								Type: "reasoning",
-								Text: th,
-							})
+							s.appendClaudeFinalTextLocked(claudeAssistantMessageID(ev), blockIndex, "reasoning", th)
 						}
 					case "text":
 						if txt, _ := block["text"].(string); txt != "" {
-							s.appendItemLocked(sdk.TimelineItem{
-								Type: "assistant_message",
-								Text: txt,
-							})
+							s.appendClaudeFinalTextLocked(claudeAssistantMessageID(ev), blockIndex, "assistant_message", txt)
 							extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
 						}
 					case "tool_use":
@@ -322,14 +398,17 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 						input := block["input"]
 						normName := strings.ToLower(name)
 						s.toolArgsByID[callID] = input
-						idx := s.appendItemLocked(sdk.TimelineItem{
-							Type:   "tool_call",
-							CallID: callID,
-							Name:   name,
-							Status: "running",
-							Detail: sdk.BuildToolCallDetail(normName, input, nil),
-							Error:  nil,
-						})
+						idx, known := s.toolIndexByID[callID]
+						if known {
+							s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail(normName, input, nil)
+							s.addToolFrameLocked(idx)
+						} else {
+							idx = s.appendItemLocked(sdk.TimelineItem{
+								Type: "tool_call", CallID: callID, Name: name, Status: "running",
+								Detail: sdk.BuildToolCallDetail(normName, input, nil),
+							})
+							s.addToolFrameLocked(idx)
+						}
 						// Claude's task-list tools update the plan panel. Observed here because TodoWrite
 						// carries the whole list in its input, so the panel can move before the tool
 						// finishes; the Task* family reports in its result instead.
@@ -339,12 +418,17 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 						if callID != "" {
 							s.toolIndexByID[callID] = idx
 						}
-						extraEvents = append(extraEvents, map[string]any{
-							"type":       "tool_execution_start",
-							"toolCallId": callID,
-							"toolName":   name,
-						})
-						if strings.EqualFold(name, "Task") {
+						if !known {
+							extraEvents = append(extraEvents, map[string]any{
+								"type": "tool_execution_start", "toolCallId": callID, "toolName": name,
+							})
+						}
+						if name == "Workflow" {
+							if event := s.declareClaudeWorkflowLocked(callID); event != nil {
+								extraEvents = append(extraEvents, event)
+							}
+						}
+						if !s.nativeTasks && strings.EqualFold(name, "Task") {
 							now := time.Now().UTC().Format(time.RFC3339Nano)
 							title := "Subagent"
 							desc := ""
@@ -370,7 +454,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 							sdk.RefreshSubagentSubtitle(&descriptor)
 							s.subagents[callID] = descriptor
 							extraEvents = append(extraEvents, map[string]any{
-								"type":      "agent.provider_subagents.update",
+								"type":      "byspace_provider_subagents",
 								"kind":      "upsert",
 								"subagent":  descriptor,
 								"updatedAt": now,
@@ -383,9 +467,10 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 
 	case "user":
 		if parent := parentToolUseID(ev); parent != "" {
+			s.recordClaudeSubagentToolResultsLocked(parent, ev)
 			if sub := s.markSubagentActiveLocked(parent); sub != nil {
 				extraEvents = append(extraEvents, map[string]any{
-					"type":      "agent.provider_subagents.update",
+					"type":      "byspace_provider_subagents",
 					"kind":      "upsert",
 					"subagent":  *sub,
 					"updatedAt": time.Now().UTC().Format(time.RFC3339Nano),
@@ -440,10 +525,13 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 							extraEvents = append(extraEvents, s.todoTimelineEvent(snapshot)...)
 						}
 					}
-					if sub, exists := s.subagents[callID]; exists {
+					if sub, exists := s.subagents[callID]; exists && !s.nativeTasks && (sub.Kind == nil || *sub.Kind != "Workflow") {
 						sub.Status = status
 						sub.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 						s.subagents[callID] = sub
+					}
+					if event := s.observeClaudeWorkflowResultLocked(callID, block["content"], isErr); event != nil {
+						extraEvents = append(extraEvents, event)
 					}
 					extraEvents = append(extraEvents, map[string]any{
 						"type":       "tool_execution_end",
@@ -461,26 +549,34 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 				toolName = "Tool Approval"
 			}
 			perm := map[string]any{
-				"id":       reqID,
-				"provider": "claude",
-				"name":     toolName,
-				"kind":     "tool",
-				"title":    "Allow " + toolName + "?",
-				"input":    reqObj["input"],
+				"id": reqID, "provider": "claude", "name": toolName, "kind": "tool",
+				"title": "Allow " + toolName + "?", "input": reqObj["input"],
+				"metadata": map[string]any{"toolUseId": reqObj["tool_use_id"]},
 			}
 			if reqID != "" {
 				s.pendingPermissions[reqID] = perm
-				extraEvents = append(extraEvents, map[string]any{
-					"type":    "extension_ui_request",
-					"id":      reqID,
-					"method":  "confirm",
-					"title":   "Allow " + toolName + "?",
-					"message": "Claude requested permission to run " + toolName,
-				})
+				if toolName == "ExitPlanMode" {
+					perm["kind"] = "plan"
+					perm["title"] = "Plan"
+					perm["description"] = "Review the proposed plan before implementation starts."
+					perm["actions"] = []map[string]any{
+						{"id": "dismiss", "label": "Dismiss", "behavior": "deny", "variant": "danger", "intent": "dismiss"},
+						{"id": "implement", "label": "Implement", "behavior": "allow", "variant": "primary", "intent": "implement"},
+					}
+					extraEvents = append(extraEvents, map[string]any{"type": "permission_requested", "request": perm})
+				} else {
+					extraEvents = append(extraEvents, map[string]any{
+						"type": "extension_ui_request", "id": reqID, "method": "confirm",
+						"title": "Allow " + toolName + "?", "message": "Claude requested permission to run " + toolName,
+					})
+				}
 			}
 		}
 
 	case "result":
+		if s.activeTurnID == "" {
+			break
+		}
 		if sid, ok := ev["session_id"].(string); ok && sid != "" {
 			s.sessionID = sid
 		}
@@ -502,27 +598,40 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			break
 		}
 		if resTxt, ok := ev["result"].(string); ok && resTxt != "" && s.lastAssistantTextLocked() == "" {
-			s.appendItemLocked(sdk.TimelineItem{
-				Type: "assistant_message",
-				Text: resTxt,
-			})
+			s.appendClaudeTextDeltaLocked("claude-result", 0, "assistant_message", resTxt)
+			s.appendClaudeFinalTextLocked("claude-result", 0, "assistant_message", resTxt)
 			extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
 		}
 		s.status = "idle"
 		s.activeTurnID = ""
+		s.compactionOpen = false
+		s.compactionIdx = -1
 		s.notifyFinishLocked(nil)
 		extraEvents = append(extraEvents, map[string]any{"type": "agent_end"})
+
+	case "command_lifecycle":
+		uuid, _ := ev["command_uuid"].(string)
+		state, _ := ev["state"].(string)
+		if state != "queued" {
+			delete(s.queuedMessages, uuid)
+		}
 
 	case "process_exit":
 		s.status = "closed"
 		s.notifyFinishLocked(fmt.Errorf("claude process exited"))
 	}
 
+	if claudeStreamNeedsTrailingFrame(ev) {
+		extraEvents = append(s.flushFramesLocked(), extraEvents...)
+	}
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)
 	}
 	s.mu.Unlock()
+	if evType == "process_exit" {
+		s.failControls(fmt.Errorf("claude process exited"))
+	}
 
 	for _, fn := range subs {
 		fn(ev)
@@ -540,25 +649,29 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 func (s *ClaudeSession) AppendTimelineItem(item sdk.TimelineItem) sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	entry := sdk.TimelineEntry{
-		Seq:       len(s.timeline) + 1,
-		SeqEnd:    len(s.timeline) + 1,
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item:      sdk.LimitTimelineItemContent(item),
-	}
-	s.timeline = append(s.timeline, entry)
-	return entry
+	idx := s.appendItemLocked(sdk.LimitTimelineItemContent(item))
+	s.sealClaudeTimelineEntryLocked(idx)
+	return s.timeline[idx]
 }
 
 func (s *ClaudeSession) appendItemLocked(item sdk.TimelineItem) int {
-	seq := len(s.timeline) + 1
 	s.timeline = append(s.timeline, sdk.TimelineEntry{
-		Seq:       seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Item:      item,
 	})
 	return len(s.timeline) - 1
+}
+
+// sealClaudeTimelineEntryLocked assigns one monotonic stream sequence to a completed row or delta.
+func (s *ClaudeSession) sealClaudeTimelineEntryLocked(idx int) int {
+	s.streamSeq++
+	entry := &s.timeline[idx]
+	if entry.Seq == 0 {
+		entry.Seq = s.streamSeq
+	}
+	entry.SeqEnd = s.streamSeq
+	return s.streamSeq
 }
 
 func (s *ClaudeSession) lastAssistantTextLocked() string {
@@ -640,12 +753,18 @@ func (s *ClaudeSession) ActiveTurn() (string, string) {
 func (s *ClaudeSession) Prompt(_ context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
-	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
-	s.status = "running"
+	s.messageCounter++
+	providerMessageID := fmt.Sprintf("byspace-message-%d", s.messageCounter)
 	// The client's own id comes back on this row so it can reconcile the bubble it rendered
 	// optimistically instead of leaving a duplicate, and can settle the pending submission.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
-	s.appendItemLocked(userMessage(message, clientMsgID))
+	s.providerMessageIDs[clientMsgID] = providerMessageID
+	s.queuedMessages[providerMessageID] = true
+	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
+	s.status = "running"
+	idx := s.appendItemLocked(userMessage(message, clientMsgID))
+	s.sealClaudeTimelineEntryLocked(idx)
+	userEvent := s.claudeTimelineEventLocked(idx)
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)
@@ -654,12 +773,14 @@ func (s *ClaudeSession) Prompt(_ context.Context, message string, images []sdk.I
 
 	for _, fn := range subs {
 		fn(map[string]any{"type": "turn_start"})
+		fn(userEvent)
 	}
 
 	content := []map[string]any{{"type": "text", "text": message}}
 	content = append(content, imageBlocksForClaude(images)...)
 	return s.proc.SendRaw(map[string]any{
 		"type": "user",
+		"uuid": providerMessageID,
 		"message": map[string]any{
 			"role":    "user",
 			"content": content,
@@ -667,21 +788,112 @@ func (s *ClaudeSession) Prompt(_ context.Context, message string, images []sdk.I
 	})
 }
 
-func (s *ClaudeSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
-	return s.Prompt(ctx, message, images)
+func (s *ClaudeSession) Steer(_ context.Context, message string, images []sdk.ImageContent) error {
+	if err := s.denyClaudePermissionsForSteer(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.status != "running" || s.activeTurnID == "" {
+		s.mu.Unlock()
+		return errors.New("claude steering requires an active turn")
+	}
+	s.messageCounter++
+	providerMessageID := fmt.Sprintf("byspace-steer-%d", s.messageCounter)
+	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
+	s.providerMessageIDs[clientMsgID] = providerMessageID
+	s.queuedMessages[providerMessageID] = true
+	idx := s.appendItemLocked(userMessage(message, clientMsgID))
+	s.sealClaudeTimelineEntryLocked(idx)
+	userEvent := s.claudeTimelineEventLocked(idx)
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
+	s.mu.Unlock()
+	for _, fn := range subs {
+		fn(userEvent)
+	}
+	content := []map[string]any{{"type": "text", "text": message}}
+	content = append(content, imageBlocksForClaude(images)...)
+	if err := s.proc.SendRaw(map[string]any{
+		"type": "user", "uuid": providerMessageID, "priority": "next",
+		"message": map[string]any{"role": "user", "content": content},
+	}); err != nil {
+		s.mu.Lock()
+		delete(s.queuedMessages, providerMessageID)
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
-func (s *ClaudeSession) Abort(_ context.Context) error {
-	_ = s.proc.SendRaw(map[string]any{
-		"type": "control_request",
-		"request": map[string]any{
-			"subtype": "interrupt",
-		},
-	})
+func (s *ClaudeSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
-	s.status = "idle"
-	s.notifyFinishLocked(nil)
+	turnID := s.activeTurnID
+	queued := make([]string, 0, len(s.queuedMessages))
+	for id := range s.queuedMessages {
+		queued = append(queued, id)
+	}
 	s.mu.Unlock()
+	if turnID == "" {
+		return nil
+	}
+	allWithdrawn := len(queued) > 0
+	for _, id := range queued {
+		response, err := s.control(ctx, "cancel_async_message", map[string]any{"message_uuid": id})
+		if err != nil {
+			return err
+		}
+		cancelled, _ := response["cancelled"].(bool)
+		allWithdrawn = allWithdrawn && cancelled
+	}
+	if !allWithdrawn {
+		if _, err := s.control(ctx, "interrupt", nil); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	s.queuedMessages = make(map[string]bool)
+	for requestID := range s.pendingPermissions {
+		_ = s.proc.SendRaw(map[string]any{
+			"type": "control_response",
+			"response": map[string]any{
+				"subtype": "success", "request_id": requestID,
+				"response": map[string]any{"behavior": "deny"},
+			},
+		})
+	}
+	s.pendingPermissions = make(map[string]map[string]any)
+	updated := failRunningToolCalls(s.timeline, "Interrupted")
+	events := make([]map[string]any, 0, len(updated)+1)
+	for _, index := range updated {
+		entry := &s.timeline[index]
+		if entry.SeqEnd == 0 {
+			entry.SeqEnd = entry.Seq
+		}
+		events = append(events, map[string]any{
+			"type": "byspace_stream_timeline", "seq": entry.SeqEnd,
+			"turnId": turnID, "item": entry.Item,
+		})
+	}
+	s.status = "idle"
+	s.activeTurnID = ""
+	s.notifyFinishLocked(nil)
+	if turnID != "" {
+		events = append(events, map[string]any{
+			"type": "byspace_turn_canceled", "turnId": turnID, "reason": "Interrupted",
+		})
+	}
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
 	return nil
 }
 
@@ -714,25 +926,57 @@ func (s *ClaudeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	}, nil
 }
 
-// SetModel refuses rather than pretending.
-//
-// The Claude CLI reads --model once at launch and has no in-process switch, so recording a new
-// model on the session would only change the record and the UI. The caller is told to restart; the
-// daemon has already written the new model, so the restart picks it up.
-func (s *ClaudeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
-	return nil, fmt.Errorf("%w: claude reads --model at launch; restart the agent to switch models", ErrSettingNeedsRestart)
+func (s *ClaudeSession) SetModel(ctx context.Context, provider, modelID string) (*sdk.Model, error) {
+	var nativeModel any = modelID
+	if modelID == "" || modelID == "default" {
+		nativeModel = nil
+	}
+	if _, err := s.control(ctx, "set_model", map[string]any{"model": nativeModel}); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	s.model = modelID
+	s.mu.Unlock()
+	return &sdk.Model{Provider: provider, ID: modelID}, nil
 }
 
-// SetThinkingLevel refuses for the same reason: --effort is a launch flag.
-func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error {
-	return fmt.Errorf("%w: claude reads --effort at launch; restart the agent to change the thinking level", ErrSettingNeedsRestart)
+func (s *ClaudeSession) SetThinkingLevel(ctx context.Context, level string) error {
+	switch level {
+	case "low", "medium", "high", "xhigh":
+	default:
+		return fmt.Errorf("%w: claude thinking level %q applies on the next session", ErrSettingNeedsRestart, level)
+	}
+	if _, err := s.control(ctx, "apply_flag_settings", map[string]any{
+		"settings": map[string]any{"effortLevel": level},
+	}); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.thinking = level
+	s.mu.Unlock()
+	return nil
 }
 
 // GetCommands returns the commands the CLI announced at startup.
 //
 // The two entry answer is what a session shows before its init message arrives; the init message
 // carries the provider's own list, including the user's skills.
-func (s *ClaudeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+func (s *ClaudeSession) GetCommands(ctx context.Context) ([]sdk.SlashCommand, error) {
+	s.mu.Lock()
+	announced := len(s.commands) > 0
+	s.mu.Unlock()
+	if !announced {
+		// The init message follows process start by a moment. Reading before it answered the two
+		// commands below — a draft listing would show those and no skills at all. Bounded so a CLI
+		// that never sends init cannot hold the request open.
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-s.commandsReady:
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.commands) > 0 {
@@ -758,28 +1002,31 @@ func (s *ClaudeSession) PendingPermissions() []map[string]any {
 
 func (s *ClaudeSession) RespondToPermission(requestID string, resp map[string]any) error {
 	s.mu.Lock()
-	delete(s.pendingPermissions, requestID)
+	pending := s.pendingPermissions[requestID]
 	s.mu.Unlock()
-
-	behavior, _ := resp["behavior"].(string)
-	if behavior == "" {
-		behavior = "allow"
+	if pending == nil {
+		return fmt.Errorf("no pending Claude permission request with id %q", requestID)
 	}
-	return s.proc.SendRaw(map[string]any{
+	if err := s.proc.SendRaw(map[string]any{
 		"type": "control_response",
 		"response": map[string]any{
-			"subtype":    "success",
-			"request_id": requestID,
-			"response": map[string]any{
-				"behavior": behavior,
-			},
+			"subtype": "success", "request_id": requestID,
+			"response": claudePermissionControlPayload(pending, resp),
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	delete(s.pendingPermissions, requestID)
+	s.mu.Unlock()
+	s.emitClaudePermissionResolved(requestID, pending, resp)
+	return nil
 }
 
 func (s *ClaudeSession) ListSubagents(parentAgentID string) []sdk.SubagentDescriptor {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.refreshClaudeSidecarsLocked()
 	out := make([]sdk.SubagentDescriptor, 0, len(s.subagents))
 	for _, sub := range s.subagents {
 		sub.ParentAgentID = parentAgentID
@@ -791,6 +1038,7 @@ func (s *ClaudeSession) ListSubagents(parentAgentID string) []sdk.SubagentDescri
 func (s *ClaudeSession) GetSubagent(parentAgentID, subagentID string) (sdk.SubagentDescriptor, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.refreshClaudeSidecarsLocked()
 	sub, ok := s.subagents[subagentID]
 	if ok {
 		sub.ParentAgentID = parentAgentID
@@ -1006,14 +1254,31 @@ func parseClaudeSessionMeta(filePath string, fallbackTime time.Time) claudeSessi
 		}
 		switch rType {
 		case "user":
-			if txt, ok := msg["content"].(string); ok && txt != "" {
+			var txt string
+			switch content := msg["content"].(type) {
+			case string:
+				txt = content
+			case []any:
+				parts := make([]string, 0, len(content))
+				for _, rawBlock := range content {
+					block, _ := rawBlock.(map[string]any)
+					if block["type"] == "text" {
+						if text, _ := block["text"].(string); text != "" {
+							parts = append(parts, text)
+						}
+					}
+				}
+				txt = strings.Join(parts, "\n")
+			}
+			if txt != "" {
 				if meta.firstPrompt == "" {
 					meta.firstPrompt = txt
 				}
+				messageID, _ := row["uuid"].(string)
 				meta.entries = append(meta.entries, sdk.TimelineEntry{
 					Seq:       len(meta.entries) + 1,
 					Timestamp: ts,
-					Item:      sdk.TimelineItem{Type: "user_message", Text: txt},
+					Item:      sdk.TimelineItem{Type: "user_message", MessageID: messageID, Text: txt},
 				})
 			}
 		case "assistant":
@@ -1048,6 +1313,11 @@ func parseClaudeSessionMeta(filePath string, fallbackTime time.Time) claudeSessi
 func parentToolUseID(ev map[string]any) string {
 	if raw, ok := ev["parent_tool_use_id"]; ok {
 		if parent, isString := raw.(string); isString {
+			return strings.TrimSpace(parent)
+		}
+	}
+	if event, ok := ev["event"].(map[string]any); ok {
+		if parent, isString := event["parent_tool_use_id"].(string); isString {
 			return strings.TrimSpace(parent)
 		}
 	}
@@ -1141,6 +1411,7 @@ func (s *ClaudeSession) todoTimelineEvent(snapshot *taskstate.Snapshot) []map[st
 	} else {
 		s.timeline[index].Item.Items = items
 	}
+	s.sealClaudeTimelineEntryLocked(index)
 	entry := s.timeline[index]
 	return []map[string]any{{
 		"type": "timeline",
@@ -1254,11 +1525,8 @@ func imageAltText(mimeType string) string {
 }
 
 // RewindCapabilities reports what this provider can rewind.
-//
-// Claude can restore files through the SDK's `rewindFiles` checkpoints, which Go does not have, so only the conversation
-// is offered — and a client that only gets `Conversation` renders the conversation-only control.
 func (s *ClaudeSession) RewindCapabilities() RewindCapabilities {
-	return RewindCapabilities{Conversation: true}
+	return RewindCapabilities{Conversation: true, Files: true}
 }
 
 // RewindConversation forks the transcript up to a message and continues in the fork.
@@ -1270,41 +1538,146 @@ func (s *ClaudeSession) RewindCapabilities() RewindCapabilities {
 // The session id changes, because Claude identifies a conversation by its transcript file. Handing the client the new id
 // is what makes the next prompt continue in the fork instead of appending to the original.
 func (s *ClaudeSession) RewindConversation(ctx context.Context, messageID string) error {
-	trimmed := strings.TrimSpace(messageID)
-	if trimmed == "" {
-		return errors.New("rewind needs a message id")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	sessionID := s.sessionID
-	s.mu.Unlock()
-	// The config directory comes from the environment (CLAUDE_CONFIG_DIR) or the default location; keeping it out of
-	// the session struct means a user who moves their config does not need a new session to rewind.
-	configDir := resolveClaudeConfigDir("")
-
-	if sessionID == "" {
-		return errors.New("Claude session is not ready for rewind")
-	}
-	forkedID, err := ForkClaudeSession(configDir, sessionID, trimmed)
+	prepared, err := s.prepareClaudeConversationRewind(ctx, messageID)
 	if err != nil {
 		return err
 	}
-
-	s.mu.Lock()
-	s.sessionID = forkedID
-	s.status = "idle"
-	s.mu.Unlock()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = prepared.proc.Close()
+		}
+	}()
+	if err := s.commitClaudeConversationRewind(prepared); err != nil {
+		return err
+	}
+	committed = true
 	return nil
 }
 
-// TreeEntryForMessage maps a message id to the provider's own reference.
-//
-// Claude addresses messages by uuid directly, so the mapping is the identity.
+type claudePreparedConversationRewind struct {
+	proc            *jsonl.Process
+	sessionID       string
+	sessionFile     string
+	hasConversation bool
+}
+
+// prepareClaudeConversationRewind leaves the running process untouched until native file rewind
+// has succeeded. Closing it first made a failed combined rewind destroy the still-valid session.
+func (s *ClaudeSession) prepareClaudeConversationRewind(ctx context.Context, messageID string) (*claudePreparedConversationRewind, error) {
+	trimmed := strings.TrimSpace(messageID)
+	if trimmed == "" {
+		return nil, errors.New("rewind needs a message id")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	sessionID := s.sessionID
+	sessionFile := s.sessionFile
+	configDir := s.configDir
+	launch := s.launchConfig
+	command := s.command
+	s.mu.Unlock()
+	if sessionID == "" {
+		return nil, errors.New("Claude session is not ready for rewind")
+	}
+	forkedID, forkedFile, err := forkClaudeSession(configDir, sessionID, sessionFile, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	hasConversation := claudeForkHasConversation(forkedFile)
+	if hasConversation {
+		launch.SessionHandle = forkedID
+	} else {
+		launch.SessionHandle = ""
+	}
+	proc, err := jsonl.Start(jsonl.LaunchConfig{
+		Command: command,
+		Args:    claudeLaunchArgs(launch),
+		Cwd:     launch.Cwd,
+		Env: append(append([]string{}, launch.Env...),
+			"CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=true",
+			"CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1",
+		),
+	})
+	if err != nil {
+		return nil, err
+	}
+	proc.OnEvent(func(ev map[string]any) { s.handleProcessEvent(proc, ev) })
+	return &claudePreparedConversationRewind{
+		proc: proc, sessionID: forkedID, sessionFile: forkedFile, hasConversation: hasConversation,
+	}, nil
+}
+
+func (s *ClaudeSession) commitClaudeConversationRewind(prepared *claudePreparedConversationRewind) error {
+	s.mu.Lock()
+	oldProc := s.proc
+	sessionID := s.sessionID
+	sessionFile := s.sessionFile
+	s.proc = prepared.proc
+	s.sessionID = prepared.sessionID
+	s.sessionFile = prepared.sessionFile
+	if !prepared.hasConversation {
+		s.sessionFile = ""
+	}
+	s.status = "idle"
+	s.queuedMessages = make(map[string]bool)
+	s.mu.Unlock()
+	if err := oldProc.Close(); err != nil {
+		_ = prepared.proc.Close()
+		s.mu.Lock()
+		s.proc = oldProc
+		s.sessionID = sessionID
+		s.sessionFile = sessionFile
+		s.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+func (s *ClaudeSession) RewindConversationAndFiles(ctx context.Context, messageID string) error {
+	prepared, err := s.prepareClaudeConversationRewind(ctx, messageID)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = prepared.proc.Close()
+		}
+	}()
+	if err := s.RewindFiles(ctx, messageID); err != nil {
+		return err
+	}
+	if err := s.commitClaudeConversationRewind(prepared); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+// TreeEntryForMessage maps either BySpace message identity to Claude's transcript uuid.
 func (s *ClaudeSession) TreeEntryForMessage(messageID string) (string, bool) {
 	trimmed := strings.TrimSpace(messageID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if providerMessageID := s.providerMessageIDs[trimmed]; providerMessageID != "" {
+		return providerMessageID, true
+	}
+	for _, entry := range s.timeline {
+		if entry.Item.Type != "user_message" ||
+			(entry.Item.MessageID != trimmed && entry.Item.ClientMessageID != trimmed) {
+			continue
+		}
+		if providerMessageID := s.providerMessageIDs[entry.Item.ClientMessageID]; providerMessageID != "" {
+			return providerMessageID, true
+		}
+		if providerMessageID := s.providerMessageIDs[entry.Item.MessageID]; providerMessageID != "" {
+			return providerMessageID, true
+		}
+	}
+	// Imported sessions already carry Claude's native uuid.
 	return trimmed, trimmed != ""
 }
 
@@ -1424,23 +1797,47 @@ func intField(m map[string]any, key string) int {
 	return 0
 }
 
+// claudeRootOnlyCommands must run at the top level, so they stay out of inline autocomplete.
+// Ported from claude/agent.ts CLAUDE_ROOT_ONLY_COMMANDS.
+var claudeRootOnlyCommands = map[string]bool{
+	"clear": true, "compact": true, "context": true, "debug": true, "extra-usage": true,
+	"heapdump": true, "init": true, "loop": true, "schedule": true, "usage": true,
+}
+
 // claudeCommandsFromInit reads the slash commands the CLI announced on its init message.
+//
+// The init list also carries the CLI's internal commands: Claude Code reserves the `__` prefix for its
+// own server-launched sessions, and a user cannot run those from a BySpace agent. The CLI exposes
+// commands and skills as one flat list with no source metadata, so everything that is not a root-only
+// command is treated as a skill — that is what the composer's inline "/" filter keys on.
 func claudeCommandsFromInit(ev map[string]any) []sdk.SlashCommand {
 	if subtype, _ := ev["subtype"].(string); subtype != "init" {
 		return nil
 	}
 	names, _ := ev["slash_commands"].([]any)
 	commands := make([]sdk.SlashCommand, 0, len(names))
+	seen := make(map[string]bool, len(names))
 	for _, raw := range names {
 		name, ok := raw.(string)
-		if !ok || strings.TrimSpace(name) == "" {
+		if !ok {
 			continue
 		}
+		name = strings.TrimPrefix(strings.TrimSpace(name), "/")
+		if name == "" || strings.HasPrefix(name, "__") || seen[name] {
+			continue
+		}
+		seen[name] = true
+		kind := "skill"
+		if claudeRootOnlyCommands[name] {
+			kind = "command"
+		}
 		commands = append(commands, sdk.SlashCommand{
-			Name:   strings.TrimPrefix(strings.TrimSpace(name), "/"),
+			Name:   name,
+			Kind:   kind,
 			Source: "command",
 		})
 	}
+	sort.Slice(commands, func(i, j int) bool { return commands[i].Name < commands[j].Name })
 	return commands
 }
 

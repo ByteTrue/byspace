@@ -131,10 +131,6 @@ vi.mock("@/stores/provider-settings-store", () => ({
     selector({ open: openProviderSettingsMock }),
 }));
 
-vi.mock("@/screens/provider-catalog-list", () => ({
-  ProviderCatalogList: () => null,
-}));
-
 vi.mock("@/hooks/use-providers-snapshot", () => ({
   useProvidersSnapshot: () => ({
     entries: snapshotState.entries,

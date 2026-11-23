@@ -13,6 +13,7 @@ import (
 // acks stopped behind it. Here stream A's client never reads; stream B must still get its bytes and
 // its DataAck must still reach the peer.
 func TestSlowStreamDoesNotBlockOthers(t *testing.T) {
+	requireTCP(t)
 	// The manager logs stream lifecycle through this writer, not t.Logf: a pump goroutine can still
 	// be draining when the test returns, and logging through t after that races the test framework.
 	// The assertions here are byte transfer and the DataAck, so the log text is discarded.

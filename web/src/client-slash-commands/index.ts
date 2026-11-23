@@ -43,6 +43,28 @@ for (const command of CLIENT_SLASH_COMMANDS) {
   }
 }
 
+// A provider command that shares a name with a client command (or one of its aliases) can never run:
+// submit resolves the client command first. Dropping the unreachable row leaves one entry per name in
+// the palette. Duplicate provider names also collapse, first wins, matching the daemon.
+export function claimClientSlashCommandNames<T extends { name: string }>(
+  commands: readonly T[],
+): T[] {
+  const taken = new Set<string>();
+  for (const command of CLIENT_SLASH_COMMANDS) {
+    taken.add(command.name);
+    for (const alias of command.aliases) {
+      taken.add(alias);
+    }
+  }
+  return commands.filter((command) => {
+    if (taken.has(command.name)) {
+      return false;
+    }
+    taken.add(command.name);
+    return true;
+  });
+}
+
 export function resolveClientSlashCommand(input: {
   text: string;
   hasAttachments: boolean;

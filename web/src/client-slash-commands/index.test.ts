@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLIENT_SLASH_COMMANDS,
   buildDraftAgentSetup,
+  claimClientSlashCommandNames,
   resolveClientSlashCommand,
 } from "@/client-slash-commands";
 import type { Agent } from "@/stores/session-store";
@@ -56,6 +57,21 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
     turn: overrides.turn ?? { phase: "idle", cancellationRequestId: null },
   };
 }
+
+describe("claimClientSlashCommandNames", () => {
+  // Submit resolves a client command before any provider command, so a provider `/clear` row would be
+  // visible and inert.
+  it("drops provider commands that collide with a client name or alias", () => {
+    const commands = claimClientSlashCommandNames([
+      { name: "clear" },
+      { name: "new" },
+      { name: "q" },
+      { name: "review" },
+      { name: "review" },
+    ]);
+    expect(commands.map((command) => command.name)).toEqual(["review"]);
+  });
+});
 
 describe("resolveClientSlashCommand", () => {
   it("declares the exact canonical client commands with their aliases", () => {

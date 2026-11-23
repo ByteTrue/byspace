@@ -8,6 +8,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 // providerCatalog is the provider snapshot the daemon serves from memory.
@@ -80,6 +81,17 @@ func (s *Server) discoveredModels(ctx context.Context, providerID, cwd string) [
 		return s.probePiModelsInCwd(ctx, cwd)
 	case "claude":
 		return providers.ClaudeModelsWithSettings()
+	case "codex":
+		spec, argv := providers.ProviderSpecForLaunch(providerID, s.providerConfigFor(providerID))
+		command := spec.Binary
+		if len(argv) > 0 {
+			command = argv[0]
+		}
+		models, err := providers.ProbeCodexModels(ctx, command, cwd, s.agentEnv(store.AgentRecord{Provider: providerID}))
+		if err != nil {
+			return nil
+		}
+		return models
 	case "opencode":
 		spec, argv := providers.ProviderSpecForLaunch(providerID, s.providerConfigFor(providerID))
 		command := spec.Binary

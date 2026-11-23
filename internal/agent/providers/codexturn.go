@@ -75,6 +75,7 @@ type codexTurnState struct {
 	CollaborationModes []codexCollaborationMode
 	OutputSchema       map[string]any
 	Input              []map[string]any
+	Config             map[string]any
 }
 
 // codexTurnParams builds the `turn/start` parameters.
@@ -89,6 +90,9 @@ func codexTurnParams(st codexTurnState) map[string]any {
 	}
 	if st.Cwd != "" {
 		params["cwd"] = st.Cwd
+	}
+	if len(st.Config) > 0 {
+		params["config"] = st.Config
 	}
 	if st.Model != "" {
 		params["model"] = st.Model
@@ -266,6 +270,15 @@ func codexCollaborationSettings(mode codexCollaborationMode, st codexTurnState) 
 // App-server reports a failed turn as `turn.status: "failed"` with `turn.error.message`; older
 // builds put the message at the top level. Either way the text is the provider's own and is what
 // the timeline's [System Error] row should carry.
+func codexNativeTurnStatus(params map[string]any) string {
+	turn, _ := params["turn"].(map[string]any)
+	status, _ := turn["status"].(string)
+	if status == "" {
+		status, _ = params["status"].(string)
+	}
+	return strings.ToLower(strings.TrimSpace(status))
+}
+
 func codexTurnFailure(params map[string]any) string {
 	turn, _ := params["turn"].(map[string]any)
 	status, _ := turn["status"].(string)

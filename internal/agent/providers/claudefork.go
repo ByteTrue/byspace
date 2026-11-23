@@ -29,18 +29,28 @@ var claudeForkKinds = map[string]bool{
 //
 // Returns the new session id. An empty `upToMessageID` copies the whole session, which is the SDK's documented behaviour.
 func ForkClaudeSession(configDir, sessionID, upToMessageID string) (string, error) {
+	forkedID, _, err := forkClaudeSession(configDir, sessionID, "", upToMessageID)
+	return forkedID, err
+}
+
+// forkClaudeSession also returns the new transcript path so the live transport can resume it.
+// upToMessageID is exclusive, matching the Claude SDK: rewinding to a prompt removes that turn.
+func forkClaudeSession(configDir, sessionID, sourcePath, upToMessageID string) (string, string, error) {
 	if strings.TrimSpace(sessionID) == "" {
-		return "", errors.New("fork needs a session id")
+		return "", "", errors.New("fork needs a session id")
 	}
 	root := resolveClaudeConfigDir(configDir)
-	sourcePath, err := findClaudeSessionFile(root, sessionID)
-	if err != nil {
-		return "", err
+	if strings.TrimSpace(sourcePath) == "" {
+		var err error
+		sourcePath, err = findClaudeSessionFile(root, sessionID)
+		if err != nil {
+			return "", "", err
+		}
 	}
 
 	entries, err := readClaudeSessionEntries(sourcePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Sidechain entries belong to a sub-agent's transcript, not to the conversation being forked.
@@ -52,29 +62,48 @@ func ForkClaudeSession(configDir, sessionID, upToMessageID string) (string, erro
 		conversation = append(conversation, entry)
 	}
 	if len(conversation) == 0 {
-		return "", fmt.Errorf("session %s has no messages to fork", sessionID)
+		return "", "", fmt.Errorf("session %s has no messages to fork", sessionID)
 	}
 
 	if trimmed := strings.TrimSpace(upToMessageID); trimmed != "" {
-		index := -1
-		for i, entry := range conversation {
-			if entryUUID, _ := entry["uuid"].(string); entryUUID == trimmed {
-				index = i
-				break
+		index := claudeConversationEntryIndex(conversation, trimmed)
+		if index < 0 {
+			// A queued slash command is addressed through its attachment, whose source_uuid
+			// points at the command while parentUuid identifies the conversation turn.
+			for _, entry := range conversation {
+				sourceUUID, _ := entry["source_uuid"].(string)
+				parentUUID, _ := entry["parentUuid"].(string)
+				if sourceUUID == trimmed && parentUUID != "" {
+					index = claudeConversationEntryIndex(conversation, parentUUID)
+					break
+				}
 			}
 		}
 		if index < 0 {
-			return "", fmt.Errorf("message %s not found in session %s", trimmed, sessionID)
+			return "", "", fmt.Errorf("message %s not found in session %s", trimmed, sessionID)
 		}
-		// The message itself stays: a rewind to a message keeps the turn that produced it.
-		conversation = conversation[:index+1]
+		conversation = conversation[:index]
 	}
 
 	forkedID := newClaudeSessionID()
 	if err := writeForkedClaudeSession(sourcePath, forkedID, sessionID, conversation); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return forkedID, nil
+	return forkedID, filepath.Join(filepath.Dir(sourcePath), forkedID+".jsonl"), nil
+}
+
+func claudeForkHasConversation(path string) bool {
+	entries, err := LoadClaudeTimelineFromJSONL(path)
+	return err == nil && len(entries) > 0
+}
+
+func claudeConversationEntryIndex(conversation []map[string]any, uuid string) int {
+	for i, entry := range conversation {
+		if entryUUID, _ := entry["uuid"].(string); entryUUID == uuid {
+			return i
+		}
+	}
+	return -1
 }
 
 // findClaudeSessionFile locates a session's transcript under any project directory.
@@ -150,10 +179,6 @@ func writeForkedClaudeSession(sourcePath, forkedID, sourceID string, conversatio
 		}
 		retained = append(retained, entry)
 	}
-	if len(retained) == 0 {
-		return fmt.Errorf("session %s has no messages to fork", sourceID)
-	}
-
 	newUUID := make(map[string]string, len(retained))
 	for _, entry := range retained {
 		uuid, _ := entry["uuid"].(string)

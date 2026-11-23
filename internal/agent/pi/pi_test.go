@@ -496,7 +496,7 @@ sleep 1
 // A stop during the retry backoff is a cancellation too, and it reaches the provider with no new
 // assistant message: only agent_settled{aborted:true}, while the previous attempt's error is still
 // the last one it saw. Reading that error as the turn's outcome would blame the model for a stop.
-func TestAbortDuringRetryBackoffCompletes(t *testing.T) {
+func TestAbortDuringRetryBackoffCancels(t *testing.T) {
 	s, got := newEventSession(t)
 	for _, ev := range []map[string]any{
 		{"type": "agent_start"},
@@ -509,7 +509,7 @@ func TestAbortDuringRetryBackoffCompletes(t *testing.T) {
 		s.handleRawEvent(ev)
 	}
 
-	if want := []string{"byspace_turn_completed"}; !slices.Equal(eventTypes(*got), want) {
+	if want := []string{"byspace_turn_canceled"}; !slices.Equal(eventTypes(*got), want) {
 		t.Fatalf("turn events = %v, want %v", eventTypes(*got), want)
 	}
 	if s.Status() != "idle" {

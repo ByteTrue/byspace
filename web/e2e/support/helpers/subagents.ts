@@ -135,11 +135,11 @@ export async function seedParentWithCrossWorkspaceSubagent(
  * its own whenever a row navigates away, so a flow that comes back to the parent reopens it.
  */
 export async function openSubagentsTrack(page: Page): Promise<void> {
-  const panel = page.getByTestId("subagents-track-header-panel");
-  if ((await panel.count()) === 0) {
+  const openPanel = page.locator('[data-testid="subagents-track-header-panel"][data-state="open"]');
+  if (!(await openPanel.isVisible())) {
     await page.getByTestId("subagents-track-header").click();
   }
-  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await expect(openPanel).toBeVisible({ timeout: 30_000 });
 }
 
 export async function expectSubagentRowVisible(page: Page, childId: string): Promise<void> {

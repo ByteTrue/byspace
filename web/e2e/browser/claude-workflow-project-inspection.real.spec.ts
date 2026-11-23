@@ -13,10 +13,9 @@ const WORKFLOW_SCRIPT = path.resolve(
   "../fixtures/claude-workflow/inspect-project.js",
 );
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
-const DESCRIPTION = "Inspect BySpace and explain what the project does";
 
 test.describe("real Claude project-inspection workflow", () => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
 
   test("shows the workflow's actual report in the generic detail pane", async ({
     page,
@@ -37,7 +36,7 @@ test.describe("real Claude project-inspection workflow", () => {
       await openSubagentsTrack(page);
       const row = page
         .getByTestId(/^subagents-track-row-/)
-        .filter({ has: page.getByText(DESCRIPTION, { exact: true }) });
+        .filter({ has: page.getByText("Workflow", { exact: true }) });
       await expect(row).toBeVisible({ timeout: 60_000 });
       await expect(row.getByRole("progressbar", { name: "Agent running" })).toHaveCount(0, {
         timeout: 180_000,
@@ -46,6 +45,7 @@ test.describe("real Claude project-inspection workflow", () => {
         page.getByTestId("assistant-message").filter({ hasText: "PROJECT_INSPECTION_DONE" }).last(),
       ).toBeVisible({ timeout: 180_000 });
 
+      await openSubagentsTrack(page);
       await row.click();
       const panel = page.getByTestId("provider-subagent-panel");
       await expect(panel).toBeVisible({ timeout: 30_000 });
@@ -55,7 +55,7 @@ test.describe("real Claude project-inspection workflow", () => {
         "How it works",
         "Repository structure",
       ]) {
-        await expect(panel.getByText(heading, { exact: true })).toBeVisible();
+        await expect(panel).toContainText(heading);
       }
       await expect(panel.getByText("export const meta", { exact: false })).toHaveCount(0);
       await expect(

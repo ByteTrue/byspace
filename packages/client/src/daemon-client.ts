@@ -3000,6 +3000,14 @@ export class DaemonClient {
     return payload;
   }
 
+  getAcpOnboardingPrompt() {
+    return this.sendNamespacedCorrelatedSessionRequest<"provider.acp.get_onboarding_prompt.response">(
+      {
+        message: { type: "provider.acp.get_onboarding_prompt.request" },
+      },
+    );
+  }
+
   managePiBackgroundTerminal(agentId: string, taskId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"agent.pi.manage_background_terminal.response">(
       {

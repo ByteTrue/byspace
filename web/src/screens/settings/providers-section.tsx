@@ -10,11 +10,7 @@ import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import {
-  buildAcpProviderConfigPatch,
-  type AcpProviderCatalogItem,
-} from "@/screens/use-acp-provider-catalog";
-import { ProviderCatalogList } from "@/screens/provider-catalog-list";
+import { AcpOnboardingCopyPrompt } from "@/screens/acp-onboarding-copy-prompt";
 import { getProviderIcon } from "@/widgets/provider-icons";
 import { Spinner } from "@/ui/spinner";
 import { Switch } from "@/ui/switch";
@@ -439,38 +435,11 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   );
 }
 
-/**
- * The ACP provider catalog. Its own section, rendered last on the Agents page:
- * adding a provider is a once-per-install errand, so it must never take the top
- * of the page away from the provider list and the agent configuration below it.
- * Collapsed by default for the same reason.
- */
+/** ACP onboarding is a guided copy-prompt action, not a preset catalog. */
 export function AddProviderSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const { refresh } = useProvidersSnapshot(serverId);
-  const { patchConfig } = useDaemonConfig(serverId);
-  const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
   const hasServer = serverId.length > 0;
-
-  const handleInstall = useCallback(
-    async (entry: AcpProviderCatalogItem) => {
-      if (installingProviderId) return;
-      setInstallingProviderId(entry.id);
-      try {
-        await patchConfig(buildAcpProviderConfigPatch(entry));
-        await refresh([entry.id]);
-      } catch (error) {
-        showAlert(
-          t("settings.providers.addErrorTitle"),
-          error instanceof Error ? error.message : String(error),
-        );
-      } finally {
-        setInstallingProviderId((current) => (current === entry.id ? null : current));
-      }
-    },
-    [installingProviderId, patchConfig, refresh, t],
-  );
 
   if (!hasServer || !isConnected) {
     return null;
@@ -484,11 +453,7 @@ export function AddProviderSection({ serverId }: ProvidersSectionProps) {
       collapsible
       defaultCollapsed
     >
-      <ProviderCatalogList
-        serverId={serverId}
-        installingProviderId={installingProviderId}
-        onInstall={handleInstall}
-      />
+      <AcpOnboardingCopyPrompt serverId={serverId} />
     </SettingsSection>
   );
 }

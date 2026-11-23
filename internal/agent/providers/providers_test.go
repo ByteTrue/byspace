@@ -134,6 +134,9 @@ while read line; do
       echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"thread\":{\"id\":\"th_codex_99\"}}}"
       ;;
     *'"method":"turn/start"'*)
+      # Current app-server emits a settings notification before the turn/start response.
+      # The read loop must be able to reach that response while Prompt is waiting.
+      echo '{"jsonrpc":"2.0","method":"thread/settings/updated","params":{}}'
       echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}"
       echo '{"jsonrpc":"2.0","method":"turn/started","params":{}}'
       echo '{"jsonrpc":"2.0","method":"item/reasoning/summaryTextDelta","params":{"delta":"Checking codex..."}}'

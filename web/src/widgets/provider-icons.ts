@@ -5,8 +5,8 @@ import { CodexIcon } from "@/components/icons/codex-icon";
 import { MiniMaxIcon } from "@/components/icons/minimax-icon";
 import { OpenCodeIcon } from "@/components/icons/opencode-icon";
 import { PiIcon } from "@/components/icons/pi-icon";
-import { ACP_PROVIDER_CATALOG } from "@/data/acp-provider-catalog";
-import { resolveProviderIconName } from "@/data/provider-icon-name";
+import { ACP_PROVIDER_ICON_SVGS } from "@/assets/acp-provider-icons";
+import { ACP_PROVIDER_ICON_ALIASES, resolveProviderIconName } from "@/data/provider-icon-name";
 import { SvgXml } from "@/platform/svg-xml";
 
 export interface ProviderIconProps {
@@ -25,9 +25,11 @@ const BUILTIN_PROVIDER_ICONS: Record<string, ProviderIconComponent> = {
   pi: PiIcon as unknown as ProviderIconComponent,
 };
 
-const CATALOG_ICON_SVGS = new Map(
-  ACP_PROVIDER_CATALOG.flatMap((entry) => (entry.iconSvg ? [[entry.id, entry.iconSvg]] : [])),
-);
+const CATALOG_ICON_SVGS = new Map(Object.entries(ACP_PROVIDER_ICON_SVGS));
+for (const [provider, icon] of Object.entries(ACP_PROVIDER_ICON_ALIASES)) {
+  const svg = ACP_PROVIDER_ICON_SVGS[icon as keyof typeof ACP_PROVIDER_ICON_SVGS];
+  if (svg) CATALOG_ICON_SVGS.set(provider, svg);
+}
 
 const catalogIconComponents = new Map<string, ProviderIconComponent>();
 const snapshotIconComponents = new Map<string, { svg: string; component: ProviderIconComponent }>();

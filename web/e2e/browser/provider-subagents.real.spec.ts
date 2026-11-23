@@ -16,6 +16,11 @@ import {
 } from "../support/helpers/provider-subagents";
 import { openSubagentsTrack } from "../support/helpers/subagents";
 
+const OPENCODE_SUBAGENT_MODEL = process.env.E2E_OPENCODE_MODEL ?? "openai/gpt-5.4";
+const OPENCODE_SUBAGENT_MODEL_LABEL = OPENCODE_SUBAGENT_MODEL.split("/")
+  .pop()!
+  .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 interface ProviderSubagentCase {
   provider: RewindFlowProvider;
   sentinel: string;
@@ -31,15 +36,20 @@ const cases: ProviderSubagentCase[] = [
     provider: "claude",
     sentinel: "CLAUDE_CHILD_SENTINEL",
     expectedName: "sentinel_child",
-    providerConfig: { model: "claude-sonnet-5" },
+    providerConfig: { model: process.env.E2E_CLAUDE_MODEL ?? "claude-sonnet-5" },
     prompt:
-      'Use Claude Code\'s native Task tool exactly once. Set its subagent_type input to "Explore" and its name input to "sentinel_child". Ask it to reply with exactly CLAUDE_CHILD_SENTINEL and do nothing else. Wait for it, then reply ROOT_DONE. Do not use BySpace tools.',
+      'Use Claude Code\'s native Task tool exactly once. Set its subagent_type input to "Explore" and its description input to "sentinel_child". Ask it to reply with exactly CLAUDE_CHILD_SENTINEL and do nothing else. Wait for it, then reply ROOT_DONE. Do not use BySpace tools.',
   },
   {
     provider: "codex",
     sentinel: "CODEX_CHILD_SENTINEL",
     expectedName: "Sentinel child",
-    providerConfig: { providerOptions: { features: { multi_agent_v2: true } } },
+    // Codex child threads contain the delegated assistant turn, not a synthetic user item.
+    expectsUserMessage: false,
+    providerConfig: {
+      model: process.env.E2E_CODEX_MODEL,
+      providerOptions: { features: { multi_agent_v2: true } },
+    },
     prompt:
       'Use the native collaboration.spawn_agent tool exactly once with task_name "sentinel_child" and fork_turns "none". Ask it to reply with exactly CODEX_CHILD_SENTINEL and do nothing else. Wait for it with collaboration.wait_agent, then reply ROOT_DONE. Do not use BySpace tools.',
   },
@@ -47,8 +57,11 @@ const cases: ProviderSubagentCase[] = [
     provider: "opencode",
     sentinel: "OPENCODE_CHILD_SENTINEL",
     expectedName: "Verify OpenCode descriptor",
-    expectedSubtitle: /explore · gpt-5\.4(?: · [^\n·]+)? · \d+(?:\.\d+)?k? tokens/i,
-    providerConfig: { model: "openai/gpt-5.4" },
+    expectedSubtitle: new RegExp(
+      `explore · ${OPENCODE_SUBAGENT_MODEL_LABEL}(?: · [^\\n·]+)? · \\d+(?:\\.\\d+)?k? tok`,
+      "i",
+    ),
+    providerConfig: { model: OPENCODE_SUBAGENT_MODEL },
     prompt:
       'Use the task tool exactly once with description "Verify OpenCode descriptor" and the explore subagent. Ask it to reply with exactly OPENCODE_CHILD_SENTINEL and do nothing else. Wait for it, then reply ROOT_DONE.',
   },

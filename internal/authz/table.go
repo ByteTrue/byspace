@@ -106,6 +106,7 @@ var InboundPermission = map[string][]string{
 	"project.list.request":                             {"workspace.read"},
 	"project.remove.request":                           {"workspace.manage"},
 	"project.rename.request":                           {"workspace.manage"},
+	"provider.acp.get_onboarding_prompt.request":       {"daemon.read"},
 	"provider_diagnostic_request":                      {"daemon.read"},
 	"pull_request_timeline_request":                    {"workspace.read"},
 	"push.unregister.request":                          {"workspace.read"},

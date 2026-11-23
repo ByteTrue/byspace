@@ -110,7 +110,7 @@ func TestCodexPromptCarriesTheOutputSchema(t *testing.T) {
 func TestOpenCodePromptCarriesTheOutputSchema(t *testing.T) {
 	bodies := make(chan map[string]any, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/message") {
+		if strings.HasSuffix(r.URL.Path, "/prompt_async") {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			bodies <- body
@@ -141,6 +141,7 @@ func TestOpenCodePromptCarriesTheOutputSchema(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("no prompt reached the server")
 		}
+		session.handleOpenCodeEvent(map[string]any{"type": "session.idle", "properties": map[string]any{"sessionID": "s1"}})
 		_ = session.WaitForFinish(context.Background())
 	}
 }

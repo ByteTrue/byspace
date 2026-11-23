@@ -14,6 +14,7 @@ import (
 // or gave up. A kill has to be visible on both ends, otherwise the backpressure trade (drop one slow
 // stream rather than stall the socket) reads as a hang instead of an error.
 func TestTargetKillReachesTheClient(t *testing.T) {
+	requireTCP(t)
 	// A service that accepts and then goes silent, so the only thing that can end the client's read
 	// is a Close travelling back from the target.
 	service, err := net.Listen("tcp", "127.0.0.1:0")

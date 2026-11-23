@@ -82,6 +82,13 @@ if (!existsSync(binary)) {
   process.exit(1);
 }
 
+// Worktree setup runs this with --build-only instead of `make build`: a stock Windows box has no
+// make, and the setup step that shelled out to it failed the whole worktree.
+if (process.argv.includes("--build-only")) {
+  console.log(`Built ${binary}`);
+  process.exit(0);
+}
+
 console.log("══════════════════════════════════════════════════════");
 console.log("  BySpace Dev Daemon (Go)");
 console.log("══════════════════════════════════════════════════════");

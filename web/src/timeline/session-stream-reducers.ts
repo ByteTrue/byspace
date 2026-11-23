@@ -151,6 +151,7 @@ export interface ProcessTimelineResponseInput {
     hasNewer: boolean;
     hasOlder: boolean;
     mergeWindow?: boolean;
+    forceReplacement?: boolean;
   };
   currentTail: StreamItem[];
   currentHead: StreamItem[];
@@ -376,7 +377,9 @@ function shouldPreserveReplacementContinuity(input: {
   currentEpoch: string | undefined;
   responseEpoch: string;
   reset: boolean;
+  forceReplacement?: boolean;
 }): boolean {
+  if (input.forceReplacement) return false;
   if (input.isResumeReplacement && input.resumePolicy.kind === "replace") {
     return input.resumePolicy.preserveContinuity;
   }
@@ -1362,6 +1365,7 @@ export function processTimelineResponse(
         currentEpoch: currentCursor?.epoch,
         responseEpoch: payload.epoch,
         reset: payload.reset,
+        forceReplacement: payload.forceReplacement,
       }),
       toHydratedEvents,
     });

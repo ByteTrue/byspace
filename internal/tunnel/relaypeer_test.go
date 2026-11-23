@@ -205,6 +205,7 @@ func TestRelayPeerKeepaliveStopsOnClose(t *testing.T) {
 // seconds of every 45, which reads as "constantly disconnecting" while the page still polls a
 // Connected row.
 func TestRunResetsBackoffAfterAProvenConnection(t *testing.T) {
+	requireTCP(t)
 	var accepted atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})

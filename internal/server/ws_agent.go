@@ -19,6 +19,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/naming"
+	"github.com/ByteTrue/byspace/internal/pathutil"
 	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -87,8 +88,10 @@ func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw js
 	// would leave no way to change it at all.
 	var applyErr error
 	if req.ModelID != nil && strings.TrimSpace(*req.ModelID) != "" {
-		prov, mod := pi.SplitModelID(*req.ModelID)
-		if _, err := mp.session.SetModel(ctx, prov, mod); err != nil {
+		prov, mod, resolveErr := providers.ResolveModelIdentity(mp.record.Provider, *req.ModelID, providerOptionsOf(mp.record))
+		if resolveErr != nil {
+			applyErr = resolveErr
+		} else if _, err := mp.session.SetModel(ctx, prov, mod); err != nil {
 			applyErr = err
 		}
 	}
@@ -392,6 +395,12 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.mu.Lock()
 	mp := s.agents[req.AgentID]
+	s.mu.Unlock()
+	if err := s.archiveAgentTreeNative(ctx, req.AgentID); err != nil {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{"status": "agent_archive_failed", "requestId": req.RequestID, "agentId": req.AgentID, "error": err.Error()})
+		return
+	}
+	s.mu.Lock()
 	delete(s.agents, req.AgentID)
 	s.mu.Unlock()
 
@@ -493,6 +502,12 @@ func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json
 	})
 }
 
+// handleListCommands answers the composer's "/" menu.
+//
+// An existing agent already has a provider session, so its commands come from that session. A draft
+// does not: the composer is still choosing provider, model and mode, and the only way to learn which
+// commands that choice offers is to start the provider once, ask it, and shut it down. Answering a
+// draft from anything but the provider is why "/" listed nothing in the new-agent composer.
 func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID   string         `json:"requestId"`
@@ -501,22 +516,127 @@ func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw jso
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	var cmds []pi.SlashCommand
-	if req.AgentID != "" {
-		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil && mp.session != nil {
-			cmds, _ = mp.session.GetCommands(ctx)
-		}
-	}
-	if cmds == nil {
-		cmds = []pi.SlashCommand{}
-	}
-
+	commands, errText := s.listCommands(ctx, req.AgentID, req.DraftConfig)
 	_ = sendSessionMsg(ctx, sink, "list_commands_response", map[string]any{
 		"agentId":   req.AgentID,
-		"commands":  cmds,
-		"error":     nil,
+		"commands":  commands,
+		"error":     errText,
 		"requestId": req.RequestID,
 	})
+}
+
+func (s *Server) listCommands(ctx context.Context, agentID string, draft map[string]any) ([]sdk.SlashCommand, any) {
+	if id := strings.TrimSpace(agentID); id != "" {
+		mp, err := s.ensureAgentLoaded(id)
+		if err != nil {
+			// New-agent composers use a placeholder id before the agent exists. Their draft is
+			// authoritative; a real agent that failed to load still reports the failure.
+			if draft != nil {
+				return s.listDraftCommands(ctx, draft)
+			}
+			// The client caches the answer per agent key, so a load failure reported as an empty
+			// list would hide "/" for the rest of the app session.
+			return []sdk.SlashCommand{}, err.Error()
+		}
+		commands, err := mp.session.GetCommands(ctx)
+		if err != nil {
+			return []sdk.SlashCommand{}, err.Error()
+		}
+		return dedupeSlashCommands(commands), nil
+	}
+	return s.listDraftCommands(ctx, draft)
+}
+
+// listDraftCommands starts the provider a draft names just long enough to ask for its commands.
+//
+// The draft key the client caches on includes provider, model, mode and thinking, so the provider
+// process is spawned once per combination the user tries, not per keystroke.
+func (s *Server) listDraftCommands(ctx context.Context, draft map[string]any) ([]sdk.SlashCommand, any) {
+	provider := draftString(draft, "provider")
+	model := draftModelFromConfig(draft)
+	if provider == "" || model == "" {
+		// Nothing to ask yet. The composer asks again once a model is chosen — without one, every
+		// provider would have to be spawned to guess which one the user means.
+		return []sdk.SlashCommand{}, nil
+	}
+	if !providers.IsKnownProvider(provider) && !providers.IsConfiguredProvider(s.store.LoadDaemonConfig(), provider) {
+		return []sdk.SlashCommand{}, fmt.Sprintf("Provider '%s' is not available. Please ensure the CLI is installed.", provider)
+	}
+	cwd := pathutil.ExpandTilde(draftString(draft, "cwd"))
+	if cwd == "" {
+		return []sdk.SlashCommand{}, nil
+	}
+
+	providerOptions := draftMap(draft, "providerOptions")
+	modelProvider, modelID, err := providers.ResolveModelIdentity(provider, model, providerOptions)
+	if err != nil {
+		return []sdk.SlashCommand{}, err.Error()
+	}
+	launch := providers.LaunchConfig{
+		Provider:         provider,
+		ProviderConfig:   s.providerConfigFor(provider),
+		Cwd:              cwd,
+		Model:            modelID,
+		ModelProvider:    modelProvider,
+		ProviderOptions:  providerOptions,
+		ModeID:           draftString(draft, "modeId"),
+		ThinkingOptionID: draftString(draft, "thinkingOptionId"),
+		// The provider entry's env carries its API keys and base URLs, so a draft can list commands
+		// for a provider the user configured but has no agent on yet.
+		Env:           s.agentEnv(store.AgentRecord{Provider: provider}),
+		FeatureValues: featureValuesOfDraft(draft),
+		HomeDir:       s.homeDir,
+	}
+	if provider == "pi" {
+		launch.CommandOverride = s.piCommand
+	}
+
+	sess, err := providers.StartProviderSession(launch)
+	if err != nil {
+		return []sdk.SlashCommand{}, err.Error()
+	}
+	defer func() { _ = sess.Close() }()
+
+	// A provider publishes its command inventory just after it starts (Claude on its init message,
+	// ACP as a session update). GetCommands waits for it; a provider that never answers must not hold
+	// the request open.
+	listCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	commands, err := sess.GetCommands(listCtx)
+	if err != nil {
+		return []sdk.SlashCommand{}, err.Error()
+	}
+	return dedupeSlashCommands(commands), nil
+}
+
+// dedupeSlashCommands keeps the first command with a given name: a provider may announce the same
+// skill twice, and two entries with one name render two identical rows.
+func draftMap(draft map[string]any, key string) map[string]any {
+	value, _ := draft[key].(map[string]any)
+	return value
+}
+
+func dedupeSlashCommands(commands []sdk.SlashCommand) []sdk.SlashCommand {
+	seen := make(map[string]struct{}, len(commands))
+	out := make([]sdk.SlashCommand, 0, len(commands))
+	for _, command := range commands {
+		if _, ok := seen[command.Name]; ok {
+			continue
+		}
+		seen[command.Name] = struct{}{}
+		out = append(out, command)
+	}
+	return out
+}
+
+func draftString(draft map[string]any, key string) string {
+	value, _ := draft[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func featureValuesOfDraft(draft map[string]any) map[string]any {
+	values, _ := draft["featureValues"].(map[string]any)
+	return values
 }
 
 func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -1130,7 +1250,9 @@ func (s *Server) handleAgentPermissionResponse(ctx context.Context, _ frameSink,
 	if err != nil {
 		return
 	}
-	_ = mp.session.RespondToPermission(req.RequestID, req.Response)
+	if err := mp.session.RespondToPermission(req.RequestID, req.Response); err != nil {
+		return
+	}
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 	s.broadcastSessionMsg("agent_stream", map[string]any{
 		"agentId":   req.AgentID,
@@ -1158,34 +1280,41 @@ func (s *Server) handlePiManageBackgroundTerminal(ctx context.Context, sink fram
 		AgentID   string `json:"agentId"`
 		TaskID    string `json:"taskId"`
 	}
-	var tasks []pi.BackgroundTerminalTask
+	var tasks []sdk.BackgroundTask
 	var responseError any
 	if err := json.Unmarshal(raw, &req); err != nil {
 		responseError = err.Error()
 	} else if req.TaskID != "" && !s.authorizationForSink(sink).Has("workspace.write") {
-		responseError = "Permission denied: stopping a background terminal requires workspace.write"
+		responseError = "Permission denied: stopping background work requires workspace.write"
 	} else {
-		// The roster lives in the running Pi process; starting a cold agent cannot recover it,
-		// so say so instead of letting "not running" read as "extension unavailable".
+		// The roster lives in the running provider process; a cold agent cannot recover live work.
 		s.mu.Lock()
 		mp := s.agents[req.AgentID]
 		s.mu.Unlock()
 		var session interface {
-			ManageBackgroundTerminal(ctx context.Context, taskID string) ([]pi.BackgroundTerminalTask, error)
+			ManageBackgroundTerminal(ctx context.Context, taskID string) ([]sdk.BackgroundTask, error)
 		}
 		ok := false
 		if mp != nil {
 			session, ok = mp.session.(interface {
-				ManageBackgroundTerminal(ctx context.Context, taskID string) ([]pi.BackgroundTerminalTask, error)
+				ManageBackgroundTerminal(ctx context.Context, taskID string) ([]sdk.BackgroundTask, error)
 			})
 		}
 		if !ok {
-			responseError = "Background Terminal requires a running Pi agent"
+			responseError = "Background work requires a running agent with native task support"
 		} else {
 			var err error
 			tasks, err = session.ManageBackgroundTerminal(ctx, req.TaskID)
 			if err != nil {
 				responseError = err.Error()
+			}
+			for i := range tasks {
+				if tasks[i].Kind == "" {
+					tasks[i].Kind = "shell"
+				}
+				if tasks[i].Status == "running" {
+					tasks[i].CanStop = true
+				}
 			}
 		}
 	}
@@ -1281,9 +1410,16 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		return
 	}
 
-	var entries []pi.TimelineEntry
-	if file := pi.LocateSubagentSessionFile(sub, s.piSessionDir); file != "" {
+	var entries []sdk.TimelineEntry
+	if file := pi.LocateSubagentSessionFile(sub, s.piSessionDir); sub.Provider == "pi" && file != "" {
 		entries, _ = pi.LoadTimelineFromJSONL(file)
+	} else if native, ok := mp.session.(interface {
+		SubagentTimeline(string, string) ([]sdk.TimelineEntry, error)
+	}); ok {
+		entries, err = native.SubagentTimeline(req.ParentAgentID, req.SubagentID)
+		if err != nil {
+			entries = nil
+		}
 	}
 	rows := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
@@ -1344,7 +1480,7 @@ func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameS
 		"requestId":     req.RequestID,
 		"parentAgentId": req.ParentAgentID,
 		"subagentId":    req.SubagentID,
-		"provider":      "pi",
+		"provider":      sub.Provider,
 		"direction":     dir,
 		"epoch":         "ep_sub_1",
 		"reset":         false,

@@ -43,14 +43,14 @@ function fullAccessConfig(provider: RewindFlowProvider): ProviderLaunchConfig {
     case "codex":
       return {
         provider,
-        model: "gpt-5.4-mini",
-        thinkingOptionId: "low",
+        model: process.env.E2E_CODEX_MODEL ?? "gpt-5.4-mini",
+        thinkingOptionId: process.env.E2E_CODEX_THINKING ?? "low",
         modeId: "full-access",
       };
     case "opencode":
       return {
         provider,
-        model: "opencode/big-pickle",
+        model: process.env.E2E_OPENCODE_MODEL ?? "opencode/big-pickle",
         modeId: "build",
         featureValues: { auto_accept: true },
       };
@@ -59,8 +59,8 @@ function fullAccessConfig(provider: RewindFlowProvider): ProviderLaunchConfig {
     case "pi":
       return {
         provider,
-        model: "openrouter/google/gemini-2.5-flash-lite",
-        thinkingOptionId: "medium",
+        model: process.env.E2E_PI_MODEL ?? "openrouter/google/gemini-2.5-flash-lite",
+        thinkingOptionId: process.env.E2E_PI_THINKING ?? "medium",
       };
   }
 }
@@ -151,6 +151,27 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
+function realModelOverride(provider: RewindFlowProvider): string | undefined {
+  switch (provider) {
+    case "claude":
+      return process.env.E2E_CLAUDE_MODEL;
+    case "codex":
+      return process.env.E2E_CODEX_MODEL;
+    case "opencode":
+      return process.env.E2E_OPENCODE_MODEL;
+    case "pi":
+      return process.env.E2E_PI_MODEL;
+    case "kimi":
+      return undefined;
+  }
+}
+
+function realThinkingOverride(provider: RewindFlowProvider): string | undefined {
+  if (provider === "codex") return process.env.E2E_CODEX_THINKING;
+  if (provider === "pi") return process.env.E2E_PI_THINKING;
+  return undefined;
+}
+
 export async function launchAgent(input: {
   page: Page;
   provider: RewindFlowProvider;
@@ -158,6 +179,7 @@ export async function launchAgent(input: {
   mode: "full-access";
   providerConfig?: {
     model?: string;
+    thinkingOptionId?: string;
     modeId?: string;
     featureValues?: Record<string, unknown>;
     providerOptions?: { features?: { multi_agent_v2?: boolean } };
@@ -186,9 +208,13 @@ export async function launchAgent(input: {
   if (!createdWorkspace.workspace) {
     throw new Error(createdWorkspace.error ?? `Failed to create workspace ${input.cwd}`);
   }
+  const modelOverride = realModelOverride(input.provider);
+  const thinkingOverride = realThinkingOverride(input.provider);
   const agent = await client.createAgent({
     ...fullAccessConfig(input.provider),
     ...input.providerConfig,
+    ...(modelOverride ? { model: modelOverride } : {}),
+    ...(thinkingOverride ? { thinkingOptionId: thinkingOverride } : {}),
     cwd: input.cwd,
     workspaceId: createdWorkspace.workspace.id,
     title: `rewind-flow-${input.provider}-${randomUUID()}`,
@@ -211,8 +237,13 @@ export async function closeAgent(handle: AgentHandle): Promise<void> {
   await handle.client.close().catch(() => undefined);
 }
 
-export async function sendMessage(handle: AgentHandle, text: string): Promise<void> {
+export async function sendMessage(
+  handle: AgentHandle,
+  text: string,
+  options?: { transcriptTimeoutMs?: number },
+): Promise<void> {
   const before = await transcript(handle.page);
+  const transcriptTimeoutMs = options?.transcriptTimeoutMs ?? 30_000;
   await submitMessage(handle.page, text);
   const finish = await handle.client.waitForFinish(handle.agentId, SEND_TIMEOUT_MS);
   if (finish.status !== "idle") {
@@ -225,7 +256,7 @@ export async function sendMessage(handle: AgentHandle, text: string): Promise<vo
     throw new Error(finish.final.lastError);
   }
   await expect
-    .poll(async () => transcript(handle.page), { timeout: 30_000 })
+    .poll(async () => transcript(handle.page), { timeout: transcriptTimeoutMs })
     .toEqual(
       expect.arrayContaining([
         expect.objectContaining({ role: "user", text }),
@@ -237,7 +268,7 @@ export async function sendMessage(handle: AgentHandle, text: string): Promise<vo
       timeout: 30_000,
     })
     .toBeGreaterThanOrEqual(before.length + 2);
-  await assertComposerIdle(handle);
+  await assertComposerIdle(handle, transcriptTimeoutMs);
 }
 
 export async function assertChatTranscript(
@@ -277,7 +308,6 @@ export async function rewindMessage(
   userMessageIndex: number,
   mode: RewindFlowMode,
 ): Promise<void> {
-  const beforeEpoch = await fetchTimelineEpoch(handle);
   const userMessage = handle.page.getByTestId("user-message").nth(userMessageIndex);
   await expect(userMessage).toBeVisible({ timeout: 30_000 });
   const userMessages = (await transcript(handle.page)).filter((message) => message.role === "user");
@@ -298,7 +328,13 @@ export async function rewindMessage(
   await modeItem.click();
   await expect(handle.page.getByTestId("rewind-menu-content")).toHaveCount(0, { timeout: 10_000 });
   if (mode !== "files") {
-    await waitForNextTimelineEpoch(handle, beforeEpoch);
+    await expect
+      .poll(
+        async () =>
+          (await transcript(handle.page)).filter((message) => message.role === "user").length,
+        { timeout: REWIND_TIMEOUT_MS },
+      )
+      .toBeLessThan(userMessages.length);
   }
   await assertComposerIdle(handle);
 }
@@ -316,13 +352,16 @@ export async function assertFileContains(filePath: string, text: string): Promis
   await expect.poll(() => readFileSync(filePath, "utf8"), { timeout: 10_000 }).toContain(text);
 }
 
-export async function assertComposerIdle(handle: Pick<AgentHandle, "page">): Promise<void> {
+export async function assertComposerIdle(
+  handle: Pick<AgentHandle, "page">,
+  timeoutMs = 30_000,
+): Promise<void> {
   await expectComposerEditable(handle.page);
   await expect(
     handle.page.getByRole("button", { name: /^(?:Stop agent|Canceling agent)$/ }),
-  ).toHaveCount(0, { timeout: 30_000 });
+  ).toHaveCount(0, { timeout: timeoutMs });
   await expect(handle.page.getByTestId("turn-working-indicator")).toHaveCount(0, {
-    timeout: 30_000,
+    timeout: timeoutMs,
   });
 }
 
@@ -333,29 +372,10 @@ export async function cleanupRewindFlow(input: {
   if (input.handle) {
     await closeAgent(input.handle);
   }
-  rmSync(input.cwd, { recursive: true, force: true });
-}
-
-async function fetchTimelineEpoch(handle: AgentHandle): Promise<string | undefined> {
-  const client = handle.client as SeedDaemonClient & {
-    fetchAgentTimeline: (
-      agentId: string,
-      options?: { direction?: "head" | "tail"; projection?: "projected"; limit?: number },
-    ) => Promise<{ epoch?: string }>;
-  };
-  const timeline = await client.fetchAgentTimeline(handle.agentId, {
-    direction: "tail",
-    projection: "projected",
-    limit: 0,
-  });
-  return timeline.epoch;
-}
-
-async function waitForNextTimelineEpoch(
-  handle: AgentHandle,
-  beforeEpoch: string | undefined,
-): Promise<void> {
-  await expect
-    .poll(async () => fetchTimelineEpoch(handle), { timeout: REWIND_TIMEOUT_MS })
-    .not.toBe(beforeEpoch);
+  try {
+    rmSync(input.cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (error) {
+    // A provider can still hold a Windows handle during cleanup; never hide the test's real failure.
+    console.warn(`[e2e] Could not remove temporary rewind workspace ${input.cwd}`, error);
+  }
 }

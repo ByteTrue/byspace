@@ -12,6 +12,7 @@ import (
 // forward is perfectly healthy. Reclaiming that socket must not paint the forward as errored: the
 // listener is still up and the next connection works.
 func TestIdleSweepDoesNotErrorTheForward(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-idle-state", "target-host", func(string, ...any) {})
 	defer func() { _ = m.Close() }()
 	m.idleTimeout.Store(int64(200 * time.Millisecond))

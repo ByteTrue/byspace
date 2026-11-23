@@ -143,6 +143,7 @@ function ProviderSubagentPanel() {
     void refreshProviderSubagents(client, serverId, target.parentAgentId).catch(() => undefined);
   }, [client, serverId, target.parentAgentId]);
 
+  const descriptorUpdatedAt = descriptor?.updatedAt;
   useEffect(() => {
     if (!client) return;
     void client
@@ -155,7 +156,7 @@ function ProviderSubagentPanel() {
         return undefined;
       })
       .catch(() => undefined);
-  }, [client, serverId, target.parentAgentId, target.subagentId]);
+  }, [client, descriptorUpdatedAt, serverId, target.parentAgentId, target.subagentId]);
 
   const loadOlder = useCallback((): boolean => {
     if (!client || isLoadingOlder || !timeline?.hasOlder || !timeline.epoch) {

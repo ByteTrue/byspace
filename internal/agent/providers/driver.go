@@ -432,6 +432,7 @@ type LaunchConfig struct {
 	CommandOverride  string
 	Cwd              string
 	Model            string
+	ModelProvider    string
 	ModeID           string
 	ThinkingOptionID string
 	SessionHandle    string
@@ -445,6 +446,7 @@ type LaunchConfig struct {
 	FeatureValues map[string]any
 	// SystemPrompt is the daemon-side prompt appended to the provider's own.
 	SystemPrompt string
+	MCPServers   map[string]sdk.MCPServerConfig
 	// HomeDir is where materialised provider images land. Empty disables image output rather
 	// than writing somewhere arbitrary.
 	HomeDir string
@@ -454,8 +456,7 @@ type LaunchConfig struct {
 	ProviderConfig map[string]any
 }
 
-// StartProviderSession launches the appropriate host session for any built-in or custom provider.
-func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
+func resolveProviderLaunch(cfg LaunchConfig) (ProviderSpec, string, []string) {
 	spec, argv := ProviderSpecForLaunch(cfg.Provider, cfg.ProviderConfig)
 	cmd := strings.TrimSpace(cfg.CommandOverride)
 	if cmd == "" {
@@ -464,12 +465,6 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 	}
 	if cmd == "" && len(argv) > 0 {
 		cmd = argv[0]
-	}
-	// A profile's command may name an interpreter plus the script to run. Dropping the tail started
-	// the interpreter with the provider's flags instead of the program the user configured.
-	var providerArgs []string
-	if len(argv) > 1 {
-		providerArgs = argv[1:]
 	}
 	if cmd != "" {
 		resolveCommand := cmd
@@ -484,6 +479,18 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 			cmd = resolved
 		}
 	}
+	return spec, cmd, argv
+}
+
+// StartProviderSession launches the appropriate host session for any built-in or custom provider.
+func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
+	spec, cmd, argv := resolveProviderLaunch(cfg)
+	// A profile's command may name an interpreter plus the script to run. Dropping the tail started
+	// the interpreter with the provider's flags instead of the program the user configured.
+	var providerArgs []string
+	if len(argv) > 1 {
+		providerArgs = argv[1:]
+	}
 	// Keep the inherited daemon environment intact, but let a resolved JS CLI find its
 	// interpreter through /usr/bin/env as well. Nil means "inherit the daemon environment".
 	if cfg.Env != nil {
@@ -497,19 +504,25 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		// reach the provider.
 		extPath, extCleanup, extErr := pi.WriteIntegrationExtension(pi.ExtensionOptions{
 			SystemPrompt: cfg.SystemPrompt,
+			MCPServers:   cfg.MCPServers,
 		})
 		if extErr != nil {
-			extPath, extCleanup = "", func() {}
+			return nil, extErr
+		}
+		launchModel := cfg.Model
+		if cfg.ModelProvider != "" && cfg.Model != "" {
+			launchModel = cfg.ModelProvider + "/" + cfg.Model
 		}
 		sess, err := pi.StartSession(pi.LaunchOptions{
 			Command:          cmd,
 			Args:             providerArgs,
 			Cwd:              cfg.Cwd,
 			Env:              cfg.Env,
-			Model:            cfg.Model,
+			Model:            launchModel,
 			ThinkingOptionID: cfg.ThinkingOptionID,
 			Session:          cfg.SessionHandle,
 			ExtensionPaths:   []string{extPath},
+			HomeDir:          cfg.HomeDir,
 		})
 		if err != nil {
 			extCleanup()
@@ -520,7 +533,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 	case "claude-stream":
 		return StartClaudeSession(cfg, cmd)
 	case "codex-rpc":
-		return StartCodexSession(cfg, cmd)
+		return startCodexSessionWithArgs(cfg, cmd, providerArgs)
 	case "mock-native":
 		// Scripted provider: no subprocess, no binary. It exists so the end-to-end specs have something that
 		// streams deterministically without a model.
@@ -533,7 +546,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 			FeatureValues: cfg.FeatureValues,
 		}), nil
 	case "opencode-http":
-		return StartOpenCodeSession(cfg, cmd)
+		return startOpenCodeSessionWithArgs(cfg, cmd, providerArgs)
 	default:
 		return StartACPSession(cfg, spec, cmd)
 	}

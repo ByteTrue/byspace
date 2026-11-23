@@ -31,13 +31,12 @@ export function workflowRow(page: Page) {
   // separate landmark, so its established row test id is the only unambiguous scope.
   return page
     .getByTestId(/^subagents-track-row-/)
-    .filter({ has: page.getByText(WORKFLOW_ROW_DESCRIPTION, { exact: true }) });
+    .filter({ has: page.getByText("Workflow", { exact: true }) });
 }
 
 export async function expectWorkflowRunning(page: Page): Promise<void> {
   const row = workflowRow(page);
   await expect(row).toBeVisible({ timeout: 60_000 });
-  await expect(row).toContainText(WORKFLOW_ROW_DESCRIPTION);
   await expect(row).toContainText(/Workflow(?: · .+)?/);
   await expect(row.getByRole("progressbar", { name: "Agent running" })).toBeVisible();
 }

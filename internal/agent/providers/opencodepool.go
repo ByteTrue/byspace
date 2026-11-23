@@ -2,6 +2,8 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -35,10 +37,12 @@ const openCodeHomeDirName = "opencode-home"
 
 // OpenCodeServer is one running `opencode serve` process.
 type OpenCodeServer struct {
-	URL    string
-	Port   int
-	cmd    *exec.Cmd
-	exited chan error
+	URL      string
+	Port     int
+	Version  int
+	Password string
+	cmd      *exec.Cmd
+	exited   chan error
 	// generation increments on every restart; a client holding an old URL must not keep using it.
 	generation int
 	// retired marks a server that has been replaced and must not be handed out again.
@@ -204,12 +208,34 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 
 	args := make([]string, 0, len(p.args)+3)
 	args = append(args, p.args...)
+	version, versionErr := probeOpenCodeBinaryVersion(ctx, p.command, p.args, p.env)
+	if versionErr != nil {
+		return nil, versionErr
+	}
+
 	args = append(args, "serve", "--port", fmt.Sprint(port))
 
 	env := make([]string, 0, len(p.env)+4)
 	env = append(env, os.Environ()...)
 	for key, value := range p.env {
 		env = append(env, key+"="+value)
+	}
+	password := ""
+	if version == 2 {
+		password = os.Getenv("OPENCODE_SERVER_PASSWORD")
+		for key, value := range p.env {
+			if key == "OPENCODE_SERVER_PASSWORD" && value != "" {
+				password = value
+			}
+		}
+		if password == "" {
+			buf := make([]byte, 16)
+			if _, err := rand.Read(buf); err != nil {
+				return nil, fmt.Errorf("opencode server password: %w", err)
+			}
+			password = hex.EncodeToString(buf)
+		}
+		env = append(env, "OPENCODE_SERVER_PASSWORD="+password)
 	}
 	env = execres.AppendStandardDirs(env)
 
@@ -231,10 +257,12 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 		}()
 	}
 	server := &OpenCodeServer{
-		URL:    fmt.Sprintf("http://127.0.0.1:%d", port),
-		Port:   port,
-		cmd:    cmd,
-		exited: exited,
+		URL:      fmt.Sprintf("http://127.0.0.1:%d", port),
+		Port:     port,
+		Version:  version,
+		Password: password,
+		cmd:      cmd,
+		exited:   exited,
 	}
 
 	// Wait for it to answer rather than assuming it is up: a server that failed to bind returns
@@ -290,7 +318,14 @@ func (p *OpenCodePool) serverAlive(server *OpenCodeServer) bool {
 // treating it as dead would restart a working one on every acquire.
 func probeOpenCodeServer(server *OpenCodeServer) bool {
 	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	response, err := client.Get(server.URL + "/session")
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/session", nil)
+	if err != nil {
+		return false
+	}
+	if server.Password != "" {
+		req.SetBasicAuth("opencode", server.Password)
+	}
+	response, err := client.Do(req)
 	if err != nil {
 		return false
 	}

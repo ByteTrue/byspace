@@ -63,6 +63,7 @@ type Target struct {
 	// the sweeper goroutine reads it concurrently with tests shortening it. Both are captured from
 	// the globals at construction.
 	dialTimeout time.Duration
+	dial        func(network, address string, timeout time.Duration) (net.Conn, error)
 	idleTimeout atomic.Int64 // nanoseconds
 }
 
@@ -153,6 +154,7 @@ func NewTarget(enabled func() bool, passwordSet func() bool, allowed func() []En
 		streams:     make(map[string]*targetStream),
 		stop:        make(chan struct{}),
 		dialTimeout: tunnelDialTimeout,
+		dial:        net.DialTimeout,
 	}
 	t.idleTimeout.Store(int64(tunnelIdleTimeout))
 	go t.sweepIdle()
@@ -267,7 +269,7 @@ func (t *Target) Open(tunnelID string, remotePort int, remoteHost string, ownerK
 		existing.writeMu.Unlock()
 		return OpenResult{TunnelID: id, Allowed: true}, nil
 	}
-	conn, err := net.DialTimeout("tcp", dialed, t.dialTimeout)
+	conn, err := t.dial("tcp", dialed, t.dialTimeout)
 	if err != nil {
 		t.mu.Unlock()
 		return OpenResult{Allowed: false, Reason: fmt.Sprintf("Failed to connect to %s: %v", dialed, err)}, nil

@@ -483,6 +483,41 @@ function reconcileReplacementHeadAgainstTail(
   };
 }
 
+function reconcileAssistantBeforeCanonicalTail(
+  tail: StreamItem[],
+  head: StreamItem[],
+  liveAssistant: StreamItem,
+): CanonicalStreamReplacementResult | null {
+  if (liveAssistant.kind !== "assistant_message" || !liveAssistant.messageId) return null;
+  // A canonical notification/tool row may follow the assistant in fetched history. Match by
+  // provider identity instead of assuming the assistant is still the last canonical row.
+  let matchingIndex = -1;
+  for (let index = tail.length - 2; index >= 0; index -= 1) {
+    const candidate = tail[index];
+    if (
+      candidate?.kind === "assistant_message" &&
+      candidate.messageId === liveAssistant.messageId
+    ) {
+      matchingIndex = index;
+      break;
+    }
+  }
+  if (matchingIndex < 0) return null;
+  const canonicalAssistant = tail[matchingIndex]!;
+  if (canonicalAssistant.kind !== "assistant_message") return null;
+  if (canonicalAssistant.text.startsWith(liveAssistant.text)) {
+    return { tail, head: head.slice(1), acknowledgedClientMessageIds: [] };
+  }
+  if (liveAssistant.text.startsWith(canonicalAssistant.text)) {
+    return {
+      tail: tail.filter((_, index) => index !== matchingIndex),
+      head,
+      acknowledgedClientMessageIds: [],
+    };
+  }
+  return null;
+}
+
 function preserveReplacementHead(
   tail: StreamItem[],
   currentHead: StreamItem[],
@@ -516,6 +551,12 @@ function preserveReplacementHead(
   }
 
   const liveAssistant = unreconciledHead[liveAssistantIndex];
+  const reconciledAssistant = reconcileAssistantBeforeCanonicalTail(
+    reconciledTail,
+    unreconciledHead,
+    liveAssistant,
+  );
+  if (reconciledAssistant) return reconciledAssistant;
   const tailAssistant = reconciledTail.at(-1);
   if (
     liveAssistant.kind !== "assistant_message" ||
@@ -1562,6 +1603,9 @@ export function reduceStreamUpdate(
   const source = options?.source ?? "live";
   switch (event.type) {
     case "timeline":
+      if (event.replace) {
+        return replaceCanonicalStreamSnapshot(state, event);
+      }
       return applyTimelineTurnId(
         reduceTimelineEvent(
           state,
@@ -1584,6 +1628,50 @@ export function reduceStreamUpdate(
     default:
       return state;
   }
+}
+
+function matchesCanonicalStreamSnapshot(
+  item: StreamItem,
+  event: Extract<AgentStreamEventPayload, { type: "timeline" }>,
+): boolean {
+  if (event.item.type === "assistant_message") {
+    return (
+      item.kind === "assistant_message" &&
+      (!event.item.messageId || item.messageId === event.item.messageId)
+    );
+  }
+  return event.item.type === "reasoning" && item.kind === "thought";
+}
+
+function replaceCanonicalStreamSnapshot(
+  state: StreamItem[],
+  event: Extract<AgentStreamEventPayload, { type: "timeline" }>,
+): StreamItem[] {
+  if (event.item.type !== "assistant_message" && event.item.type !== "reasoning") {
+    return state;
+  }
+  let index = -1;
+  for (let candidate = state.length - 1; candidate >= 0; candidate -= 1) {
+    if (matchesCanonicalStreamSnapshot(state[candidate]!, event)) {
+      index = candidate;
+      break;
+    }
+  }
+  if (index < 0) return state;
+  const current = state[index];
+  if (!current) return state;
+  let replacement: StreamItem = current;
+  if (current.kind === "assistant_message" && event.item.type === "assistant_message") {
+    replacement = { ...current, text: event.item.text, messageId: event.item.messageId };
+  } else if (current.kind === "thought" && event.item.type === "reasoning") {
+    replacement = { ...current, text: event.item.text, durationMs: event.item.durationMs };
+  }
+  // Markdown promotion can leave earlier blocks with the same native message ID. The canonical
+  // snapshot contains the whole message, so retaining those blocks duplicates its prefix.
+  return state.flatMap((item, candidate) => {
+    if (candidate === index) return [replacement];
+    return matchesCanonicalStreamSnapshot(item, event) ? [] : [item];
+  });
 }
 
 function applyTimelineTurnId(
@@ -2136,6 +2224,14 @@ export function applyStreamEvent(params: {
     nextHead = [tailAssistant];
     changedTail = true;
     changedHead = true;
+  }
+
+  if (event.type === "timeline" && event.replace) {
+    const retainedTail = nextTail.filter((item) => !matchesCanonicalStreamSnapshot(item, event));
+    if (retainedTail.length !== nextTail.length) {
+      nextTail = retainedTail;
+      changedTail = true;
+    }
   }
 
   // For streamable kinds, apply to head

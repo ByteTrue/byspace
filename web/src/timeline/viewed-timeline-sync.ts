@@ -170,7 +170,10 @@ export interface TimelinePageResult {
 export type TimelineResponsePayload = Extract<
   SessionOutboundMessage,
   { type: "fetch_agent_timeline_response" }
->["payload"];
+>["payload"] & {
+  /** Client-only marker: a rewind replacement must not retain same-epoch live rows. */
+  forceReplacement?: boolean;
+};
 
 export function consumeForcedTimelineTailReplacement(
   payload: TimelineResponsePayload,

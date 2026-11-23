@@ -38,6 +38,9 @@ type TimelineItem struct {
 	Details    any    `json:"-"`
 	// Items is the todo item's task list.
 	Items []TaskItem `json:"-"`
+	// Trigger distinguishes manual and automatic compaction rows.
+	Trigger   string `json:"-"`
+	PreTokens int    `json:"-"`
 }
 
 // TaskItem is one row of a todo item. Mirrors AgentTaskItem in packages/protocol.
@@ -102,6 +105,15 @@ func (i TimelineItem) MarshalJSON() ([]byte, error) {
 			"type":    i.Type,
 			"message": i.Message,
 		})
+	case "compaction":
+		item := map[string]any{"type": i.Type, "status": i.Status}
+		if i.Trigger != "" {
+			item["trigger"] = i.Trigger
+		}
+		if i.PreTokens > 0 {
+			item["preTokens"] = i.PreTokens
+		}
+		return json.Marshal(item)
 	}
 	item := map[string]any{
 		"type": i.Type,
@@ -147,6 +159,7 @@ type Model struct {
 	Provider         string             `json:"provider"`
 	ID               string             `json:"id"`
 	Name             string             `json:"name,omitempty"`
+	Input            []string           `json:"input,omitempty"`
 	Reasoning        bool               `json:"reasoning,omitempty"`
 	ThinkingLevelMap map[string]*string `json:"thinkingLevelMap,omitempty"`
 	ContextWindow    int                `json:"contextWindow,omitempty"`
@@ -189,6 +202,18 @@ type ContextUsage struct {
 
 // AgentUsage is what the composer renders: token counts, spend, and context fill.
 // Mirrors AgentUsageSchema in packages/protocol.
+// MCPServerConfig is the canonical user MCP configuration from the wire.
+// Adapters translate it to their native launch or session shape.
+type MCPServerConfig struct {
+	Type       string            `json:"type"`
+	Command    string            `json:"command,omitempty"`
+	Args       []string          `json:"args,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	URL        string            `json:"url,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	AlwaysLoad bool              `json:"alwaysLoad,omitempty"`
+}
+
 type AgentUsage struct {
 	InputTokens             int     `json:"inputTokens,omitempty"`
 	CachedInputTokens       int     `json:"cachedInputTokens,omitempty"`
@@ -257,10 +282,25 @@ type SubagentDescriptor struct {
 	Model       *string `json:"-"`
 	Effort      *string `json:"-"`
 	TotalTokens *int64  `json:"-"`
+	// Kind is the provider's task type (for example Claude's Workflow or Explore).
+	Kind *string `json:"-"`
 
 	// Internal pointer fields used for timeline recovery
 	SessionID   string `json:"-"`
 	SessionFile string `json:"-"`
+}
+
+// BackgroundTask is provider-owned work shown in the composer track.
+// Output is deliberately absent: native providers do not share a portable log API.
+type BackgroundTask struct {
+	ID              string  `json:"id"`
+	Command         string  `json:"command"`
+	Description     *string `json:"description,omitempty"`
+	Kind            string  `json:"kind,omitempty"`
+	Status          string  `json:"status"`
+	StartedAt       *string `json:"startedAt,omitempty"`
+	CanStop         bool    `json:"canStop,omitempty"`
+	NativeSessionID string  `json:"nativeSessionId,omitempty"`
 }
 
 // ImportableSession is a provider-owned transcript that can be imported as an agent.

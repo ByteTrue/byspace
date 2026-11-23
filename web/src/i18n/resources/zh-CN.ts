@@ -1400,22 +1400,6 @@ export const zhCN: TranslationResources = {
     searchPlaceholder: "搜索模型...",
     openProviderSettings: "打开 {{provider}} 设置",
   },
-  providerCatalog: {
-    title: "添加 provider",
-    search: "搜索 providers",
-    noProviders: "未找到 providers",
-    actions: {
-      add: "添加",
-      adding: "正在添加",
-      installed: "已安装",
-      cancel: "取消",
-      installInstructions: "安装说明",
-      installInstructionsFor: "{{provider}} 安装说明",
-    },
-    errors: {
-      unableToInstall: "无法安装 provider",
-    },
-  },
   providerSelection: {
     defaultModel: "默认",
     selectModel: "选择模型",
@@ -1663,6 +1647,9 @@ export const zhCN: TranslationResources = {
     stop: "停止",
     stopCommand: "停止 {{command}}",
     stopFailed: "无法停止命令。",
+    listFailed: "无法刷新后台活动，正在显示最后一次已知状态。",
+    kind: "Shell",
+    stopping: "正在停止…",
     unavailable: "后台终端不可用。",
     status: {
       running: "运行中",
@@ -2447,6 +2434,13 @@ export const zhCN: TranslationResources = {
       unavailable: "连接到这个 Host 以查看 Providers",
       loading: "正在加载...",
       addErrorTitle: "无法添加 Provider",
+      acpOnboarding: {
+        description:
+          "将提示词粘贴到你的 agent 中以配置 ACP provider。指南按需读取，不会安装为 skill。",
+        copyPrompt: "复制接入提示词",
+        copyFailed: "无法复制接入提示词",
+        promptUnavailable: "接入提示词不可用",
+      },
       updateErrorTitle: "无法更新 Provider",
       actions: {
         menu: "{{name}} actions",

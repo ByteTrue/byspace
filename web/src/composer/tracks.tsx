@@ -6,6 +6,8 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactElement,
@@ -25,7 +27,9 @@ export function ComposerTrackBar({ children }: { children: ReactNode }): ReactEl
       className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center px-4 pb-2 md:pb-2.5"
       data-testid="composer-track-bar"
     >
-      <div className="flex w-full max-w-[820px] items-center gap-1">{children}</div>
+      <div className="pointer-events-auto flex w-full max-w-[820px] items-center gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)] [scrollbar-width:none]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -59,7 +63,9 @@ export function ComposerTrackPill({
   children,
 }: ComposerTrackPillProps): ReactElement {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
+  useEffect(() => initializeTrackRowTabStops(panelRef.current));
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <ComposerTrackPillTrigger
@@ -71,8 +77,10 @@ export function ComposerTrackPill({
         side="top"
         align="start"
         sideOffset={12}
+        ref={panelRef}
         data-testid={`${testID}-panel`}
         onCloseAutoFocus={keepFocusElsewhere}
+        onKeyDown={handleTrackNavigation}
         className="max-h-[440px] w-max max-w-[620px] min-w-[280px] overflow-y-auto p-1"
       >
         <ClosePanelContext value={close}>{children}</ClosePanelContext>
@@ -96,11 +104,11 @@ function ComposerTrackPillTrigger({
         variant="outline"
         data-testid={testID}
         aria-label={accessibilityLabel}
-        className="pointer-events-auto min-w-0 shrink"
+        className="pointer-events-auto min-w-0 shrink-0"
       >
         {/* Segments sit twice as far apart as a mark from its own text, so a count reads as
           belonging to the mark on its left. */}
-        <span className="flex min-w-0 shrink items-center gap-4">
+        <span className="flex min-w-0 shrink-0 items-center gap-4">
           {segments.map((segment, index) => (
             <span
               key={segment.bucket ?? "plain"}
@@ -149,7 +157,48 @@ export interface ComposerTrackRowProps {
   testID?: string;
 }
 
-const ROW = "mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 py-1";
+const ROW = "group mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 py-1";
+
+function initializeTrackRowTabStops(panel: HTMLDivElement | null) {
+  if (!panel) return;
+  const allRows = Array.from(panel.querySelectorAll<HTMLElement>("[data-composer-track-row]"));
+  const enabledRows = allRows.filter((row) => row.getAttribute("aria-disabled") !== "true");
+  const tabbable = enabledRows.find((row) => row.tabIndex === 0) ?? enabledRows[0];
+  allRows.forEach((row) => {
+    row.tabIndex = row === tabbable ? 0 : -1;
+  });
+  const active = panel.ownerDocument.activeElement;
+  if (active instanceof HTMLElement && allRows.includes(active) && !enabledRows.includes(active)) {
+    tabbable?.focus();
+  }
+}
+
+export function handleTrackNavigation(event: KeyboardEvent<HTMLDivElement>) {
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const row = (event.target as HTMLElement).closest("[data-composer-track-row]");
+  if (row !== event.target) return;
+  const allRows = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>("[data-composer-track-row]"),
+  );
+  const rows = allRows.filter((candidate) => candidate.getAttribute("aria-disabled") !== "true");
+  const index = rows.indexOf(row as HTMLElement);
+  if (rows.length === 0) return;
+  event.preventDefault();
+  let next: HTMLElement;
+  if (index < 0) {
+    next = event.key === "ArrowUp" || event.key === "End" ? rows[rows.length - 1] : rows[0];
+  } else if (event.key === "Home") {
+    next = rows[0];
+  } else if (event.key === "End") {
+    next = rows[rows.length - 1];
+  } else {
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    next = rows[(index + direction + rows.length) % rows.length];
+  }
+  for (const candidate of allRows) candidate.tabIndex = -1;
+  next.tabIndex = 0;
+  next.focus();
+}
 
 /**
  * One line in a track panel, the same rail for every tracker. Rows carry action buttons, so the
@@ -166,8 +215,11 @@ export function ComposerTrackRow({
 }: ComposerTrackRowProps): ReactElement {
   const closePanel = useContext(ClosePanelContext);
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const handlePointerEnter = useCallback(() => setHovered(true), []);
   const handlePointerLeave = useCallback(() => setHovered(false), []);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
   const handleSelect = useCallback(() => {
     if (disabled) return;
     if (closeOnSelect) closePanel();
@@ -186,7 +238,12 @@ export function ComposerTrackRow({
     typeof children === "function" ? children({ active }) : children;
   if (!onPress) {
     return (
-      <div aria-label={accessibilityLabel} className={ROW}>
+      <div
+        aria-label={accessibilityLabel}
+        className={cn(ROW, "focus:bg-muted focus:outline-none")}
+        data-composer-track-row
+        tabIndex={-1}
+      >
         {content(false)}
       </div>
     );
@@ -194,17 +251,20 @@ export function ComposerTrackRow({
   return (
     <div
       role="button"
-      tabIndex={disabled ? -1 : 0}
+      tabIndex={-1}
       aria-disabled={disabled || undefined}
       aria-label={accessibilityLabel}
       data-testid={testID}
+      data-composer-track-row
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className={cn(ROW, "cursor-pointer", hovered && "bg-muted")}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      className={cn(ROW, "cursor-pointer focus:outline-none", (hovered || focused) && "bg-muted")}
     >
-      {content(hovered)}
+      {content(hovered || focused)}
     </div>
   );
 }

@@ -12,7 +12,11 @@ import { orderAutocompleteOptions } from "@/widgets/autocomplete-utils";
 import { useAutocomplete } from "../lib/use-autocomplete";
 import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  claimClientSlashCommandNames,
+  CLIENT_SLASH_COMMANDS,
+  type ClientSlashCommand,
+} from "@/client-slash-commands";
 import {
   applySlashCommandReplacement,
   filterAndRankCommandAutocompleteEntries,
@@ -201,7 +205,12 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   }
 
   if (input.mode === "command") {
-    const providerCommands = input.commands.map((command) => ({
+    // Client commands are hidden in a draft, so a provider's own `/clear` is reachable there and must
+    // stay; once the agent exists the client command owns the name and the provider row is dead.
+    const providerNames = input.isDraftContext
+      ? input.commands
+      : claimClientSlashCommandNames(input.commands);
+    const providerCommands = providerNames.map((command) => ({
       source: "provider" as const,
       command,
     }));
@@ -211,7 +220,7 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
         : CLIENT_SLASH_COMMANDS.map(
             (command): AvailableCommand => ({ source: "client", command }),
           )),
-      ...input.commands.map((command): AvailableCommand => ({ source: "provider", command })),
+      ...providerCommands,
     ];
     const availableCommands: AvailableCommand[] =
       input.activeSlashCommand?.position === "inline"

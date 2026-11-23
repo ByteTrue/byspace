@@ -24,8 +24,8 @@ func (s *piBackgroundTerminalSession) ManageBackgroundTerminal(_ context.Context
 }
 
 func TestPiManageBackgroundTerminal(t *testing.T) {
-	const runningRoster = `[{"id":"task-1","command":"npm run dev","status":"running"}]`
-	const stoppedRoster = `[{"id":"task-1","command":"npm run dev","status":"killed"}]`
+	const runningRoster = `[{"id":"task-1","command":"npm run dev","kind":"shell","status":"running","canStop":true}]`
+	const stoppedRoster = `[{"id":"task-1","command":"npm run dev","kind":"shell","status":"killed"}]`
 	for _, tc := range []struct {
 		name, params, tasks, responseError string
 		permissions                        []string
@@ -34,8 +34,8 @@ func TestPiManageBackgroundTerminal(t *testing.T) {
 		{name: "list", tasks: runningRoster, responseError: "null", permissions: []string{"workspace.read"}, calls: 1},
 		{name: "empty task lists", params: `,"taskId":""`, tasks: runningRoster, responseError: "null", permissions: []string{"workspace.read"}, calls: 1},
 		{name: "stop", params: `,"taskId":"task-1"`, tasks: stoppedRoster, responseError: "null", permissions: []string{"workspace.read", "workspace.write"}, calls: 1},
-		{name: "reject read-only stop", params: `,"taskId":"task-1"`, tasks: "null", responseError: `"Permission denied: stopping a background terminal requires workspace.write"`, permissions: []string{"workspace.read"}},
-		{name: "cold agent", tasks: "null", responseError: `"Background Terminal requires a running Pi agent"`, permissions: []string{"workspace.read"}},
+		{name: "reject read-only stop", params: `,"taskId":"task-1"`, tasks: "null", responseError: `"Permission denied: stopping background work requires workspace.write"`, permissions: []string{"workspace.read"}},
+		{name: "cold agent", tasks: "null", responseError: `"Background work requires a running agent with native task support"`, permissions: []string{"workspace.read"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			piSession := &piBackgroundTerminalSession{}

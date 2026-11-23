@@ -14,7 +14,7 @@ import (
 func BuildSubagentSubtitle(title, model, effort *string, totalTokens *int64) *string {
 	parts := make([]string, 0, 4)
 	appendPart := func(value string) {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
+		if trimmed := strings.TrimSpace(value); trimmed != "" && (len(parts) == 0 || parts[len(parts)-1] != trimmed) {
 			parts = append(parts, trimmed)
 		}
 	}
@@ -66,4 +66,7 @@ func trimZero(value float64) string {
 // "check the logs" to "check the logs · Sonnet · high · 12.3k tok" as the subagent reports.
 func RefreshSubagentSubtitle(descriptor *SubagentDescriptor) {
 	descriptor.Subtitle = BuildSubagentSubtitle(descriptor.Title, descriptor.Model, descriptor.Effort, descriptor.TotalTokens)
+	if descriptor.Kind != nil && (descriptor.Title == nil || !strings.EqualFold(*descriptor.Kind, *descriptor.Title)) {
+		descriptor.Subtitle = BuildSubagentSubtitle(descriptor.Kind, descriptor.Subtitle, nil, nil)
+	}
 }

@@ -26,6 +26,7 @@ import {
   type WorkspaceSetupSnapshot,
 } from "@/stores/workspace-setup-store";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { processCarriageReturns } from "@/panels/setup-log";
 
 function useSetupPanelDescriptor(
   target: { kind: "setup"; workspaceId: string },
@@ -100,22 +101,6 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}m ${remainingSeconds}s`;
-}
-
-/**
- * Process carriage returns in log text so progress-bar output renders cleanly.
- * Splits on \r, keeps only the last segment per CR-delimited group (unless followed by \n).
- */
-function processCarriageReturns(text: string): string {
-  if (!text.includes("\r")) return text;
-  return text
-    .split("\n")
-    .map((line) => {
-      if (!line.includes("\r")) return line;
-      const segments = line.split("\r");
-      return segments[segments.length - 1];
-    })
-    .join("\n");
 }
 
 type SetupCommand = WorkspaceSetupSnapshot["detail"]["commands"][number];

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -320,10 +321,10 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		if provider == "pi" || provider == "claude" {
 			continue
 		}
-		providerErrors = append(providerErrors, map[string]any{
-			"provider": provider,
-			"message":  fmt.Sprintf("%s sessions cannot be listed by this host", provider),
-		})
+		spec, _ := providers.ProviderSpecForLaunch(provider, s.providerConfigFor(provider))
+		if spec.Protocol != "codex-rpc" && spec.Protocol != "opencode-http" && spec.Protocol != "acp" {
+			providerErrors = append(providerErrors, map[string]any{"provider": provider, "message": fmt.Sprintf("%s sessions cannot be listed by this host", provider)})
+		}
 	}
 
 	// A search scans deeper than the page it returns: filtering happens after listing, so scanning
@@ -407,6 +408,41 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		}
 	}
 
+	nativeProviders := req.Providers
+	if len(nativeProviders) == 0 {
+		nativeProviders = []string{"codex", "opencode"}
+	}
+	for _, provider := range nativeProviders {
+		if provider == "pi" || provider == "claude" {
+			continue
+		}
+		spec, _ := providers.ProviderSpecForLaunch(provider, s.providerConfigFor(provider))
+		if spec.Protocol != "codex-rpc" && spec.Protocol != "opencode-http" && spec.Protocol != "acp" {
+			continue
+		}
+		listed, err := s.listNativeProviderSessions(ctx, provider, req.Cwd, listLimit)
+		if err != nil {
+			providerErrors = append(providerErrors, map[string]any{"provider": provider, "message": err.Error()})
+			continue
+		}
+		for _, session := range listed {
+			if query != "" && !matchesSessionPreview(session.Title, session.FirstPromptPreview, session.LastPromptPreview, query) {
+				continue
+			}
+			if importedHandles[provider+":"+session.ProviderHandleID] {
+				filteredCount++
+				continue
+			}
+			entries = append(entries, map[string]any{"providerId": provider, "provider": provider, "providerLabel": session.ProviderLabel, "providerHandleId": session.ProviderHandleID, "cwd": session.Cwd, "title": session.Title, "firstPromptPreview": session.FirstPromptPreview, "lastPromptPreview": session.LastPromptPreview, "lastActivityAt": session.LastActivityAt})
+		}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return fmt.Sprint(entries[i]["lastActivityAt"]) > fmt.Sprint(entries[j]["lastActivityAt"])
+	})
+	if req.Limit > 0 && len(entries) > req.Limit {
+		entries = entries[:req.Limit]
+	}
+
 	_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
 		"requestId": req.RequestID,
 		"entries":   entries,
@@ -416,6 +452,29 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		"providerErrors":               providerErrors,
 		"error":                        nil,
 	})
+}
+
+func (s *Server) listNativeProviderSessions(ctx context.Context, provider, cwd string, limit int) ([]sdk.ImportableSession, error) {
+	providerConfig := s.providerConfigFor(provider)
+	spec, argv := providers.ProviderSpecForLaunch(provider, providerConfig)
+	command := spec.Binary
+	if len(argv) > 0 {
+		command = argv[0]
+	}
+	cfg := providers.LaunchConfig{Provider: provider, ProviderConfig: providerConfig, Cwd: cwd, Env: s.agentEnv(store.AgentRecord{Provider: provider}), HomeDir: s.homeDir}
+	switch spec.Protocol {
+	case "codex-rpc":
+		return providers.ListCodexSessions(ctx, command, cwd, cfg.Env, limit)
+	case "opencode-http":
+		return providers.ListOpenCodeSessions(ctx, cfg, command, cwd, limit)
+	case "acp":
+		if len(argv) > 1 {
+			spec.DefaultArgs = argv[1:]
+		}
+		return providers.ListACPSessions(ctx, cfg, spec, command, cwd, limit)
+	default:
+		return nil, fmt.Errorf("%s sessions cannot be listed by this host", provider)
+	}
 }
 
 func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -527,6 +586,15 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		// renders verbatim in the user's face.
 		failImport(importFailureMessage(provider, err))
 		return
+	}
+	if provider != "pi" && provider != "claude" {
+		if loader, ok := mp.session.(interface{ LoadNativeHistory(context.Context) error }); ok {
+			if err := loader.LoadNativeHistory(ctx); err != nil {
+				_ = mp.session.Close()
+				failImport(importFailureMessage(provider, err))
+				return
+			}
+		}
 	}
 	if len(history) > 0 {
 		mp.session.SeedTimeline(history)

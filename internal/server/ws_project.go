@@ -226,6 +226,25 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 	}
 	_ = json.Unmarshal(raw, &req)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	workspaces, _ := s.store.ListWorkspaces()
+	removedWS := make([]string, 0)
+	for _, w := range workspaces {
+		if w.ProjectID == req.ProjectID && w.ArchivedAt == nil {
+			removedWS = append(removedWS, w.WorkspaceID)
+		}
+	}
+	for _, workspaceID := range removedWS {
+		if err := s.prepareArchivedWorkspaceNative(ctx, workspaceID); err != nil {
+			_ = sendSessionMsg(ctx, sink, "project.remove.response", map[string]any{
+				"requestId": req.RequestID, "projectId": req.ProjectID, "accepted": false,
+				"removedWorkspaceIds": []string{}, "error": err.Error(),
+			})
+			return
+		}
+	}
+	for _, workspaceID := range removedWS {
+		s.teardownArchivedWorkspaceLocal(workspaceID, now)
+	}
 	projects, _ := s.store.ListProjects()
 	var found bool
 	for _, p := range projects {
@@ -242,14 +261,8 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 		_ = s.store.RemoveProjectCustomIcon(req.ProjectID)
 		s.projectIcons.Delete(req.ProjectID)
 	}
-	workspaces, _ := s.store.ListWorkspaces()
-	removedWS := make([]string, 0)
-	for _, w := range workspaces {
-		if w.ProjectID == req.ProjectID && w.ArchivedAt == nil {
-			s.teardownArchivedWorkspace(w.WorkspaceID, now)
-			_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
-			removedWS = append(removedWS, w.WorkspaceID)
-		}
+	for _, workspaceID := range removedWS {
+		_, _ = s.store.ArchiveWorkspace(workspaceID, now)
 	}
 	// The response alone is not enough: a removal the client is not told about leaves the sidebar showing a project the
 	// daemon has archived, which reads as the click doing nothing.
@@ -494,7 +507,13 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 		// the same checkout. Node's worktree RPC used to ignore scope entirely, so "worktree"
 		// behaves as "every active workspace on this directory" and "workspace" as one record.
 		targets := s.worktreeArchiveTargets(req.WorktreePath, req.RepoRoot, req.BranchName, req.WorkspaceID, req.Scope)
-		directoryError := s.archiveWorkspaces(ctx, targets, now)
+		directoryError, archiveErr := s.archiveWorkspaces(ctx, targets, now)
+		if archiveErr != nil {
+			_ = sendSessionMsg(ctx, sink, "byspace_worktree_archive_response", map[string]any{
+				"requestId": req.RequestID, "success": false, "removedAgents": []string{}, "error": archiveErr.Error(),
+			})
+			return
+		}
 		_ = sendSessionMsg(ctx, sink, "byspace_worktree_archive_response", map[string]any{
 			"requestId":     req.RequestID,
 			"success":       true,
@@ -517,7 +536,14 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 	_ = json.Unmarshal(raw, &req)
 	// Archiving one workspace removes its worktree only when nothing else references it, which is
 	// what keeps a sibling workspace on the same checkout alive.
-	directoryError := s.archiveWorkspaces(ctx, []string{req.WorkspaceID}, now)
+	directoryError, archiveErr := s.archiveWorkspaces(ctx, []string{req.WorkspaceID}, now)
+	if archiveErr != nil {
+		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
+			"requestId": req.RequestID, "workspaceId": req.WorkspaceID, "archivedAt": nil,
+			"directoryError": nil, "error": archiveErr.Error(),
+		})
+		return
+	}
 	_, found := s.workspaceRecord(req.WorkspaceID)
 	if !found {
 		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
@@ -1300,8 +1326,17 @@ func sendLabelError(ctx context.Context, sink frameSink, requestID, requestType 
 // Ported from archiveWorkspaceContents in workspace-archive-service.ts. Archiving only the
 // workspace record leaves its agents running: they keep consuming tokens against a workspace
 // the user just removed from the sidebar, and their terminals keep holding PTYs.
-func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, archivedAt string) {
+func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, archivedAt string) error {
 	agents, _ := s.store.ListAgents()
+	workspaceAgents := make([]store.AgentRecord, 0, len(agents))
+	for _, rec := range agents {
+		if rec.WorkspaceID == workspaceID {
+			workspaceAgents = append(workspaceAgents, rec)
+		}
+	}
+	if err := s.archiveAgentRecordsNative(ctx, workspaceAgents); err != nil {
+		return err
+	}
 
 	s.mu.Lock()
 	type liveAgent struct {
@@ -1366,7 +1401,7 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 		s.noteAgentArchived(rec.ID)
 		s.broadcastAgentUpdate(rec)
 	}
-	_ = ctx
+	return nil
 }
 
 // ValidateProjectDirectoryName applies the node rules for a new directory name.
@@ -1522,7 +1557,23 @@ func worktreeMatches(record store.WorkspaceRecord, worktreePath, resolvedID, rep
 //
 // Order matters: agents first (they can spawn terminals and setup), then terminals, then the setup
 // run's own commands.
-func (s *Server) teardownArchivedWorkspace(workspaceID, archivedAt string) {
+func (s *Server) prepareArchivedWorkspaceNative(ctx context.Context, workspaceID string) error {
+	agents, err := s.store.ListByWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+	return s.archiveAgentRecordsNative(ctx, agents)
+}
+
+func (s *Server) teardownArchivedWorkspace(ctx context.Context, workspaceID, archivedAt string) error {
+	if err := s.prepareArchivedWorkspaceNative(ctx, workspaceID); err != nil {
+		return err
+	}
+	s.teardownArchivedWorkspaceLocal(workspaceID, archivedAt)
+	return nil
+}
+
+func (s *Server) teardownArchivedWorkspaceLocal(workspaceID, archivedAt string) {
 	agents, err := s.store.ListByWorkspace(workspaceID)
 	if err == nil {
 		for _, agent := range agents {

@@ -3,20 +3,28 @@ package tunnel
 import (
 	"io"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
 // A black-holed destination must fail the open within the dial budget, not pin the caller's stream
-// for the OS default (minutes). 192.0.2.1 is TEST-NET-1 (RFC 5737): routable nowhere, so the SYN is
-// dropped and only a timeout ends the dial.
+// for the OS default (minutes). The dial double waits for the supplied deadline because some networks
+// intercept TEST-NET-1 instead of dropping it, which makes a real-network test nondeterministic.
 func TestTargetDialRespectsTimeout(t *testing.T) {
 	target := NewTarget(func() bool { return true }, func() bool { return true }, func() []Endpoint {
 		return []Endpoint{{Host: "192.0.2.1", Port: 9}}
 	})
 	defer target.Close()
 	target.dialTimeout = 300 * time.Millisecond
+	target.dial = func(network, address string, timeout time.Duration) (net.Conn, error) {
+		if network != "tcp" || address != "192.0.2.1:9" || timeout != 300*time.Millisecond {
+			t.Fatalf("unexpected dial: %s %s with %s", network, address, timeout)
+		}
+		time.Sleep(timeout)
+		return nil, &net.OpError{Op: "dial", Net: network, Err: os.ErrDeadlineExceeded}
+	}
 
 	start := time.Now()
 	result, err := target.Open("dial-timeout", 9, "192.0.2.1", "", func(Frame) error { return nil })
@@ -45,6 +53,7 @@ func TestTargetDialRespectsTimeout(t *testing.T) {
 
 // A stream that carries no bytes is reclaimed after the idle timeout, releasing the dialled socket.
 func TestTargetIdleStreamCloses(t *testing.T) {
+	requireTCP(t)
 	port, stop := startEchoService(t)
 	defer stop()
 	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
@@ -71,6 +80,7 @@ func TestTargetIdleStreamCloses(t *testing.T) {
 // The manager side of the same hygiene: an open stream with no traffic is dropped after the idle
 // timeout, closing the local socket the client is holding.
 func TestManagerIdleStreamCloses(t *testing.T) {
+	requireTCP(t)
 	m := NewManager("peer-idle", "target-host", func(string, ...any) {})
 	defer func() { _ = m.Close() }()
 	m.idleTimeout.Store(int64(200 * time.Millisecond))
@@ -122,6 +132,7 @@ func TestManagerIdleStreamCloses(t *testing.T) {
 // Traffic in either direction keeps a stream alive past the idle timeout: the sweeper reclaims
 // silence, not a slow but live connection.
 func TestTargetActivityKeepsStreamAlive(t *testing.T) {
+	requireTCP(t)
 	port, stop := startEchoService(t)
 	defer stop()
 	target := NewTarget(func() bool { return true }, func() bool { return true }, loopbackAllowlist(port))
@@ -162,6 +173,7 @@ func TestTargetActivityKeepsStreamAlive(t *testing.T) {
 // Downstream bytes alone keep a stream alive. An SSE subscription or a log tail pushes for a long
 // time while the client sends nothing, so stamping only the upstream direction would sweep it.
 func TestTargetDownstreamOnlyActivityKeepsStreamAlive(t *testing.T) {
+	requireTCP(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

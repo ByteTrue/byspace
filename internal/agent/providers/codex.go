@@ -40,6 +40,7 @@ type CodexSession struct {
 	threadID        string
 	cwd             string
 	model           string
+	modelProvider   string
 	thinking        string
 	modeID          string
 	featureValues   map[string]any
@@ -56,7 +57,15 @@ type CodexSession struct {
 	nextClientMessageID string
 	// nextOutputSchema constrains the next turn's reply (turn/start outputSchema), then clears.
 	nextOutputSchema map[string]any
+	nextInputPrefix  []map[string]any
+	innerConfig      map[string]any
+	latestPlanText   string
+	goalsEnabled     bool
+	skills           map[string]codexSkill
 	activeTurnID     string
+	pendingUserIndex int
+	pendingUserText  string
+	pendingUserLocal bool
 	// turnIDs is every turn the thread has run, in order. Rewind works in turns rather than messages, so
 	// resolving a message to a turn needs this list.
 	turnIDs []string
@@ -73,19 +82,31 @@ type CodexSession struct {
 	pendingPermissions map[string]map[string]any
 	permissionRPCIDs   map[string]any
 	subagents          map[string]sdk.SubagentDescriptor
+	subagentTimelines  map[string][]sdk.TimelineEntry
+	subagentOutputIdx  map[string]int
 	finishWaiters      []chan error
 	eventSubscribers   map[int]func(map[string]any)
 	nextSubID          int
 	closed             bool
+	delivering         int
+	closeRequested     bool
 }
 
 // StartCodexSession launches `codex app-server` and initializes a thread.
 func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, error) {
+	return startCodexSessionWithArgs(cfg, cmdOverride, nil)
+}
+
+func startCodexSessionWithArgs(cfg LaunchConfig, cmdOverride string, commandArgs []string) (*CodexSession, error) {
 	bin := strings.TrimSpace(cmdOverride)
 	if bin == "" {
 		bin = "codex"
 	}
-	args := []string{"app-server"}
+	goalsEnabled := codexBinarySupportsGoals(bin, commandArgs...)
+	args := codexAppServerArgs(commandArgs)
+	if goalsEnabled {
+		args = append(args, "--enable", "goals")
+	}
 	cmd := proc.Command(bin, args...)
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
@@ -116,40 +137,58 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		status:             "idle",
 		cwd:                cfg.Cwd,
 		model:              cfg.Model,
+		modelProvider:      cfg.ModelProvider,
 		thinking:           cfg.ThinkingOptionID,
 		modeID:             cfg.ModeID,
 		featureValues:      cfg.FeatureValues,
 		providerOptions:    cfg.ProviderOptions,
 		systemPrompt:       cfg.SystemPrompt,
+		innerConfig:        codexInnerConfig(cfg),
+		goalsEnabled:       goalsEnabled,
 		activeTextIdx:      -1,
 		activeThinkIdx:     -1,
 		toolIndexByID:      make(map[string]int),
 		pendingPermissions: make(map[string]map[string]any),
 		permissionRPCIDs:   make(map[string]any),
 		subagents:          make(map[string]sdk.SubagentDescriptor),
+		subagentTimelines:  make(map[string][]sdk.TimelineEntry),
+		subagentOutputIdx:  make(map[string]int),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	go s.readLoop(stdout)
 
-	// Best-effort initialize + thread/start handshake
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, _ = s.rpcCall(ctx, "initialize", map[string]any{
+	failStart := func(err error) (*CodexSession, error) {
+		_ = s.Close()
+		return nil, err
+	}
+	if _, err := s.rpcCall(ctx, "initialize", map[string]any{
 		"clientInfo": map[string]any{
 			"name":    "byspace",
 			"version": "0.20.2",
 		},
-	})
+		"capabilities": map[string]any{
+			"experimentalApi": true, "mcpServerOpenaiFormElicitation": true,
+		},
+	}); err != nil {
+		return failStart(fmt.Errorf("codex initialize: %w", err))
+	}
 	if cfg.SessionHandle != "" {
-		s.threadID = cfg.SessionHandle
-		_, _ = s.rpcCall(ctx, "thread/resume", map[string]any{
+		if _, err := s.rpcCall(ctx, "thread/resume", map[string]any{
 			"threadId": cfg.SessionHandle,
-		})
+		}); err != nil {
+			return failStart(fmt.Errorf("codex thread/resume: %w", err))
+		}
+		s.threadID = cfg.SessionHandle
 	} else {
 		startParams := map[string]any{
 			"cwd":   cfg.Cwd,
 			"model": cfg.Model,
+		}
+		if cfg.ModelProvider != "" {
+			startParams["modelProvider"] = cfg.ModelProvider
 		}
 		// Codex takes its provider settings and MCP servers as an inner `config` object. Without it a
 		// user's sandbox_mode / approval_policy never reached the process, and the BySpace MCP bridge
@@ -158,16 +197,15 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 			startParams["config"] = inner
 		}
 		res, err := s.rpcCall(ctx, "thread/start", startParams)
-		if err == nil {
-			if th, ok := res["thread"].(map[string]any); ok {
-				if tid, ok := th["id"].(string); ok {
-					s.threadID = tid
-				}
-			}
+		if err != nil {
+			return failStart(fmt.Errorf("codex thread/start: %w", err))
 		}
-	}
-	if s.threadID == "" {
-		s.threadID = "th_codex_1"
+		th, _ := res["thread"].(map[string]any)
+		tid, _ := th["id"].(string)
+		if tid == "" {
+			return failStart(fmt.Errorf("codex thread/start: response has no thread.id"))
+		}
+		s.threadID = tid
 	}
 	// Best effort, on its own budget: a slow `thread/start` (Codex starts its own MCP servers
 	// first) must not eat the time this call needs, or the session runs without plan mode and
@@ -282,11 +320,29 @@ func (s *CodexSession) readLoop(stdout io.Reader) {
 
 func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg map[string]any) {
 	params, _ := msg["params"].(map[string]any)
+	if strings.HasPrefix(method, "codex/event/") {
+		if legacy, _ := params["msg"].(map[string]any); legacy != nil {
+			for key, value := range legacy {
+				if _, exists := params[key]; !exists {
+					params[key] = value
+				}
+			}
+		}
+	}
 	var extraEvents []map[string]any
 
 	s.emitMu.Lock()
 	defer s.emitMu.Unlock()
 	s.mu.Lock()
+	if s.routeCodexSubagentLocked(method, params) {
+		for _, descriptor := range s.subagents {
+			extraEvents = append(extraEvents, map[string]any{"type": "subagent_upsert", "subagent": descriptor})
+		}
+		subs := s.copySubscribersLocked()
+		s.mu.Unlock()
+		s.deliverEvents(subs, extraEvents)
+		return
+	}
 	switch method {
 	case "turn/started":
 		s.status = "running"
@@ -305,7 +361,61 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			s.nativeTurnID = id
 			s.recordTurnIDLocked(id)
 		}
+		if s.activeTurnID == "" {
+			s.turnCounter++
+			s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
+		}
 		extraEvents = append(extraEvents, map[string]any{"type": "turn_start"})
+
+	case "turn/plan/updated":
+		rawPlan, _ := params["plan"].([]any)
+		items := make([]sdk.TaskItem, 0, len(rawPlan))
+		for _, raw := range rawPlan {
+			entry, _ := raw.(map[string]any)
+			step, _ := entry["step"].(string)
+			status, _ := entry["status"].(string)
+			items = append(items, sdk.TaskItem{Text: step, Status: status})
+		}
+		index := s.appendItemLocked(sdk.TimelineItem{Type: "todo", Items: items})
+		s.timeline[index].Seq = s.streamSeq
+		s.timeline[index].SeqEnd = s.streamSeq
+		s.streamSeq++
+		extraEvents = append(extraEvents, map[string]any{"type": "timeline_appended", "item": s.timeline[index].Item})
+
+	case "item/commandExecution/outputDelta", "item/fileChange/outputDelta", "codex/event/exec_command_output_delta", "codex/event/patch_apply_output_delta":
+		extraEvents = append(extraEvents, s.appendCodexToolDeltaLocked(params, strings.HasPrefix(method, "codex/event/"))...)
+
+	case "item/commandExecution/terminalInteraction", "codex/event/terminal_interaction":
+		stdin, _ := params["stdin"].(string)
+		itemID, _ := params["itemId"].(string)
+		index := s.appendItemLocked(sdk.TimelineItem{Type: "tool_call", CallID: itemID, Name: "terminal", Status: "completed", Detail: map[string]any{"type": "plain_text", "text": stdin, "icon": "square_terminal", "processId": params["processId"]}})
+		s.timeline[index].Seq = s.streamSeq
+		s.timeline[index].SeqEnd = s.streamSeq
+		s.streamSeq++
+		extraEvents = append(extraEvents, map[string]any{"type": "timeline_appended", "item": s.timeline[index].Item})
+
+	case "thread/compacted":
+		extraEvents = append(extraEvents, s.nativeCompactionLocked("completed", "auto")...)
+
+	case "error":
+		willRetry, _ := params["willRetry"].(bool)
+		errorObject, _ := params["error"].(map[string]any)
+		message, _ := errorObject["message"].(string)
+		if willRetry {
+			index := s.appendItemLocked(sdk.TimelineItem{Type: "tool_call", Name: "codex_retry", Status: "running", Text: message})
+			s.timeline[index].Seq = s.streamSeq
+			s.timeline[index].SeqEnd = s.streamSeq
+			s.streamSeq++
+			extraEvents = append(extraEvents, map[string]any{"type": "timeline_appended", "item": s.timeline[index].Item})
+		}
+
+	case "warning":
+		message, _ := params["message"].(string)
+		index := s.appendItemLocked(sdk.TimelineItem{Type: "notification", Message: message, Level: "warning"})
+		s.timeline[index].Seq = s.streamSeq
+		s.timeline[index].SeqEnd = s.streamSeq
+		s.streamSeq++
+		extraEvents = append(extraEvents, map[string]any{"type": "timeline_appended", "item": s.timeline[index].Item})
 
 	case "item/agentMessage/delta", "codex/event/agent_message_delta":
 		delta, _ := params["delta"].(string)
@@ -337,63 +447,17 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 
 	case "item/started":
 		if item, ok := params["item"].(map[string]any); ok {
-			itemType, _ := item["type"].(string)
-			itemID, _ := item["id"].(string)
-			if itemType == "commandExecution" {
-				cmdStr, _ := item["command"].(string)
-				idx := s.appendItemLocked(sdk.TimelineItem{
-					Type:   "tool_call",
-					CallID: itemID,
-					Name:   "bash",
-					Status: "running",
-					Detail: sdk.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, nil),
-					Error:  nil,
-				})
-				if itemID != "" {
-					s.toolIndexByID[itemID] = idx
-				}
-				if s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, nil) {
-					extraEvents = append(extraEvents, s.flushFramesLocked()...)
-				}
-				extraEvents = append(extraEvents, map[string]any{
-					"type":       "tool_execution_start",
-					"toolCallId": itemID,
-					"toolName":   "bash",
-				})
+			extraEvents = append(extraEvents, s.startCodexItemLocked(item)...)
+			if itemType, _ := item["type"].(string); itemType == "contextCompaction" {
+				extraEvents = append(extraEvents, s.nativeCompactionLocked("loading", "auto")...)
 			}
 		}
 
 	case "item/completed":
 		if item, ok := params["item"].(map[string]any); ok {
-			itemType, _ := item["type"].(string)
-			itemID, _ := item["id"].(string)
-			switch itemType {
-			case "agentMessage":
-				txt, _ := item["text"].(string)
-				if txt != "" && s.activeTextIdx < 0 {
-					s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
-						Type: "assistant_message",
-						Text: txt,
-					})
-					s.frames.AddText(s.activeTextIdx, s.timeline[s.activeTextIdx].Item, s.activeTurnID)
-					extraEvents = append(extraEvents, s.flushFramesLocked()...)
-				}
-				extraEvents = append(extraEvents, s.flushFramesLocked()...)
-				extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
-			case "commandExecution":
-				outStr, _ := item["aggregatedOutput"].(string)
-				cmdStr, _ := item["command"].(string)
-				if idx, ok := s.toolIndexByID[itemID]; ok && idx >= 0 && idx < len(s.timeline) {
-					visible := s.sentItemLocked(idx)
-					s.timeline[idx].Item.Status = "completed"
-					s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, outStr)
-					s.frames.AddToolCall(idx, s.timeline[idx].Item, s.activeTurnID, visible)
-					extraEvents = append(extraEvents, s.flushFramesLocked()...)
-				}
-				extraEvents = append(extraEvents, map[string]any{
-					"type":       "tool_execution_end",
-					"toolCallId": itemID,
-				})
+			extraEvents = append(extraEvents, s.completeCodexItemLocked(item)...)
+			if itemType, _ := item["type"].(string); itemType == "contextCompaction" {
+				extraEvents = append(extraEvents, s.nativeCompactionLocked("completed", "auto")...)
 			}
 		}
 
@@ -429,23 +493,34 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		rawQuestions, _ := params["questions"].([]any)
 		for index, raw := range rawQuestions {
 			question, _ := raw.(map[string]any)
-			title, _ := question["title"].(string)
+			title, _ := question["question"].(string)
+			if title == "" {
+				title, _ = question["title"].(string)
+			}
+			questionID, _ := question["id"].(string)
+			if questionID == "" {
+				questionID = fmt.Sprintf("%d", index)
+			}
+			header, _ := question["header"].(string)
+			if header == "" {
+				header = fmt.Sprintf("Question %d", index+1)
+			}
 			options := make([]map[string]any, 0, 4)
 			if rawOptions, ok := question["options"].([]any); ok {
 				for _, rawOption := range rawOptions {
-					label, _ := rawOption.(string)
-					if label != "" {
-						options = append(options, map[string]any{"label": label})
+					switch option := rawOption.(type) {
+					case string:
+						options = append(options, map[string]any{"label": option})
+					case map[string]any:
+						options = append(options, option)
 					}
 				}
 			}
 			questions = append(questions, map[string]any{
-				"id":       fmt.Sprintf("%d", index),
-				"header":   fmt.Sprintf("Question %d", index+1),
-				"question": title,
-				"options":  options,
-				// The user can always type something else; a fixed list is a suggestion.
-				"isOther": true,
+				"id": questionID, "header": header, "question": title, "options": options,
+				"multiSelect": question["multiSelect"] == true,
+				"isOther":     question["isOther"] != false,
+				"isSecret":    question["isSecret"] == true,
 			})
 		}
 
@@ -466,6 +541,37 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			"message": firstQuestionTitle(questions),
 		})
 
+	case "mcpServer/elicitation/request":
+		mode, _ := params["mode"].(string)
+		schema, _ := params["requestedSchema"].(map[string]any)
+		required, _ := schema["required"].([]any)
+		if mode == "url" || len(required) > 0 {
+			_ = s.sendJSON(map[string]any{"jsonrpc": "2.0", "id": rpcID, "result": map[string]any{
+				"action": "decline", "content": nil, "_meta": nil,
+			}})
+			break
+		}
+		reqID := fmt.Sprintf("codex_elicitation_%v", rpcID)
+		s.permissionRPCIDs[reqID] = rpcID
+		s.pendingPermissions[reqID] = map[string]any{
+			"id": reqID, "provider": "codex", "name": "mcp_elicitation", "kind": "tool",
+			"title": "MCP server requests input", "input": params,
+		}
+		extraEvents = append(extraEvents, map[string]any{
+			"type": "permission_requested", "request": s.pendingPermissions[reqID],
+		})
+
+	case "serverRequest/resolved":
+		requestID := fmt.Sprint(params["requestId"])
+		for _, id := range sortedCodexPermissionIDs(s.pendingPermissions) {
+			if fmt.Sprint(s.permissionRPCIDs[id]) != requestID {
+				continue
+			}
+			delete(s.permissionRPCIDs, id)
+			delete(s.pendingPermissions, id)
+			extraEvents = append(extraEvents, map[string]any{"type": "permission_resolved", "requestId": id})
+		}
+
 	case "thread/tokenUsage/updated", "codex/event/token_usage":
 		// Ported from toAgentUsage. `last` is the most recent request's usage; the context
 		// window is the model's, not the request's.
@@ -474,8 +580,17 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		}
 
 	case "turn/completed", "codex/event/task_complete":
+		// Abort owns cancellation. Ignore the late native completion instead of
+		// reporting the interrupted turn as a success.
+		if s.activeTurnID == "" {
+			break
+		}
 		if s.activeTextIdx >= 0 {
 			extraEvents = append(extraEvents, map[string]any{"type": "message_end"})
+		}
+		if codexNativeTurnStatus(params) == "interrupted" {
+			extraEvents = append(extraEvents, s.finishCancellationLocked("Interrupted")...)
+			break
 		}
 		// A turn that failed is not one that finished: settling it as completed left the record idle
 		// and the transcript silent while app-server held the only copy of the error.
@@ -495,6 +610,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			})
 			break
 		}
+		extraEvents = append(extraEvents, s.emitCodexPlanApprovalLocked(s.latestPlanText)...)
 		s.status = "idle"
 		s.activeTurnID = ""
 		s.nativeTurnID = ""
@@ -515,11 +631,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 	}
 	s.mu.Unlock()
 
-	for _, fn := range subs {
-		for _, ex := range extraEvents {
-			fn(ex)
-		}
-	}
+	s.deliverEvents(subs, extraEvents)
 }
 
 // AppendTimelineItem stores one item in the session's own timeline and returns the entry.
@@ -697,10 +809,20 @@ func (s *CodexSession) LastAssistantText() string {
 }
 
 func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.ImageContent) error {
-	s.emitMu.Lock()
-	defer s.emitMu.Unlock()
+	return s.prompt(ctx, message, images, true)
+}
+
+func (s *CodexSession) prompt(ctx context.Context, message string, images []sdk.ImageContent, allowSlash bool) error {
+	if allowSlash {
+		handled, err := s.tryHandleCodexSlash(ctx, message)
+		if handled {
+			return err
+		}
+	}
+	s.dismissCodexPlanApprovals("The user answered with a message instead of approving. Their message follows.")
 	s.mu.Lock()
 	s.turnCounter++
+	s.latestPlanText = ""
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
 	s.activeTextIdx = -1
@@ -709,12 +831,18 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 	// optimistically instead of leaving a duplicate, and can settle the pending submission.
 	clientMsgID := takeClientMessageID(&s.nextClientMessageID)
 	s.appendUserMessageLocked(userMessage(message, clientMsgID))
+	s.pendingUserIndex = len(s.timeline) - 1
+	s.pendingUserText = message
+	s.pendingUserLocal = true
 	tid := s.threadID
 	outputSchema := s.nextOutputSchema
 	s.nextOutputSchema = nil
+	inputPrefix := s.nextInputPrefix
+	s.nextInputPrefix = nil
 	s.mu.Unlock()
 
-	input := []map[string]any{{"type": "text", "text": message}}
+	input := append([]map[string]any{}, inputPrefix...)
+	input = append(input, map[string]any{"type": "text", "text": message})
 	input = append(input, imageBlocksForCodex(images)...)
 	s.ensureCollaborationModes(ctx)
 
@@ -731,6 +859,7 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 		CollaborationModes: s.collaborationModes,
 		OutputSchema:       outputSchema,
 		Input:              input,
+		Config:             s.innerConfig,
 	}
 	s.mu.Unlock()
 	_, err := s.rpcCall(ctx, "turn/start", codexTurnParams(state))
@@ -743,8 +872,7 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.
 // the current one is still going: the user's correction is not applied to the work in progress,
 // and two turns write to the same thread.
 func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
-	s.emitMu.Lock()
-	defer s.emitMu.Unlock()
+	s.dismissCodexPlanApprovals("The user answered with a message instead of approving. Their message follows.")
 	s.mu.Lock()
 	running := s.status == "running"
 	threadID := s.threadID
@@ -765,20 +893,90 @@ func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.I
 
 	input := []map[string]any{{"type": "text", "text": message}}
 	input = append(input, imageBlocksForCodex(images)...)
-	_, err := s.rpcCall(ctx, "turn/steer", map[string]any{
-		"threadId":       threadID,
-		"expectedTurnId": expectedTurnID,
-		"input":          input,
-	})
-	return err
+	params := map[string]any{
+		"threadId": threadID, "expectedTurnId": expectedTurnID, "input": input,
+	}
+	if clientMsgID != "" {
+		params["clientUserMessageId"] = clientMsgID
+	}
+	result, err := s.rpcCall(ctx, "turn/steer", params)
+	if err != nil {
+		return err
+	}
+	acknowledged, _ := result["turnId"].(string)
+	if turn, ok := result["turn"].(map[string]any); ok {
+		if id, _ := turn["id"].(string); id != "" {
+			acknowledged = id
+		}
+	}
+	if acknowledged != expectedTurnID {
+		return fmt.Errorf("Codex returned an invalid steer acknowledgement")
+	}
+	return nil
 }
 
 func (s *CodexSession) Abort(ctx context.Context) error {
 	s.mu.Lock()
 	tid := s.threadID
+	turnID := s.nativeTurnID
 	s.mu.Unlock()
-	_, _ = s.rpcCall(ctx, "turn/interrupt", map[string]any{"threadId": tid})
-	return nil
+	_, rpcErr := s.rpcCall(ctx, "turn/interrupt", map[string]any{"threadId": tid, "turnId": turnID})
+	if rpcErr != nil {
+		return rpcErr
+	}
+
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	s.mu.Lock()
+	events := s.finishCancellationLocked("Interrupted")
+	subs := s.copySubscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		for _, event := range events {
+			fn(event)
+		}
+	}
+	return rpcErr
+}
+
+func codexPermissionCancellationResult(pending map[string]any) (map[string]any, bool) {
+	if kind, _ := pending["kind"].(string); kind == "plan" {
+		return nil, false
+	}
+	if name, _ := pending["name"].(string); name == "mcp_elicitation" {
+		return map[string]any{"action": "decline", "content": nil, "_meta": nil}, true
+	}
+	if kind, _ := pending["kind"].(string); kind == "question" {
+		return map[string]any{"answers": map[string]any{}}, true
+	}
+	return map[string]any{"decision": "decline"}, true
+}
+
+func (s *CodexSession) finishCancellationLocked(reason string) []map[string]any {
+	turnID := s.activeTurnID
+	for requestID, nativeID := range s.permissionRPCIDs {
+		if result, ok := codexPermissionCancellationResult(s.pendingPermissions[requestID]); ok {
+			_ = s.sendJSON(map[string]any{"jsonrpc": "2.0", "id": nativeID, "result": result})
+		}
+	}
+	s.permissionRPCIDs = make(map[string]any)
+	s.pendingPermissions = make(map[string]map[string]any)
+	for _, index := range failRunningToolCalls(s.timeline, reason) {
+		s.frames.AddToolCall(index, s.timeline[index].Item, turnID, nil)
+	}
+	events := s.flushFramesLocked()
+	s.status = "idle"
+	s.activeTurnID = ""
+	s.nativeTurnID = ""
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.notifyFinishLocked(nil)
+	if turnID != "" {
+		events = append(events, map[string]any{
+			"type": "byspace_turn_canceled", "turnId": turnID, "reason": reason,
+		})
+	}
+	return events
 }
 
 func (s *CodexSession) WaitForFinish(ctx context.Context) error {
@@ -812,6 +1010,7 @@ func (s *CodexSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 func (s *CodexSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
+	s.modelProvider = provider
 	s.mu.Unlock()
 	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
@@ -873,10 +1072,49 @@ func (s *CodexSession) SetThinkingLevel(_ context.Context, level string) error {
 	return nil
 }
 
-func (s *CodexSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
-	return []sdk.SlashCommand{
-		{Name: "compact", Description: "Compact thread context", Source: "builtin"},
-	}, nil
+func (s *CodexSession) GetCommands(ctx context.Context) ([]sdk.SlashCommand, error) {
+	s.mu.Lock()
+	cwd := s.cwd
+	s.mu.Unlock()
+	home := codexHomeDir()
+	commands := []sdk.SlashCommand{{Name: "compact", Description: "Compact thread context", Source: "builtin", Kind: "command"}}
+	s.mu.Lock()
+	goalsEnabled := s.goalsEnabled
+	s.mu.Unlock()
+	if goalsEnabled {
+		commands = append(commands, sdk.SlashCommand{Name: "goal", Description: "Set, pause, resume, or clear the thread goal", ArgumentHint: "[objective|pause|resume|clear]", Source: "builtin", Kind: "command"})
+	}
+	commands = append(commands, listCodexCustomPrompts(home)...)
+	skills, nativeErr := s.listNativeSkills(ctx, cwd)
+	if nativeErr != nil {
+		skills = listCodexSkills(cwd, home)
+	}
+	bySkill := make(map[string]codexSkill, len(skills))
+	for _, skill := range skills {
+		if _, exists := bySkill[skill.command.Name]; !exists {
+			bySkill[skill.command.Name] = skill
+			commands = append(commands, skill.command)
+		}
+	}
+	s.mu.Lock()
+	s.skills = bySkill
+	s.mu.Unlock()
+	byName := make(map[string]sdk.SlashCommand, len(commands))
+	for _, command := range commands {
+		if _, exists := byName[command.Name]; !exists {
+			byName[command.Name] = command
+		}
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]sdk.SlashCommand, 0, len(names))
+	for _, name := range names {
+		result = append(result, byName[name])
+	}
+	return result, nil
 }
 
 func (s *CodexSession) PendingPermissions() []map[string]any {
@@ -891,8 +1129,12 @@ func (s *CodexSession) PendingPermissions() []map[string]any {
 
 func (s *CodexSession) RespondToPermission(requestID string, resp map[string]any) error {
 	s.mu.Lock()
-	rpcID, ok := s.permissionRPCIDs[requestID]
 	pending := s.pendingPermissions[requestID]
+	if pending["kind"] == "plan" {
+		s.mu.Unlock()
+		return s.resolveCodexPlanApproval(requestID, resp, pending)
+	}
+	rpcID, ok := s.permissionRPCIDs[requestID]
 	delete(s.permissionRPCIDs, requestID)
 	delete(s.pendingPermissions, requestID)
 	s.mu.Unlock()
@@ -904,18 +1146,35 @@ func (s *CodexSession) RespondToPermission(requestID string, resp map[string]any
 	// approval expects a decision. Sending `decision` to a question leaves Codex waiting
 	// forever on a reply it cannot parse.
 	if kind, _ := pending["kind"].(string); kind == "question" {
+		answers := map[string]any{}
+		if behavior, _ := resp["behavior"].(string); behavior != "deny" {
+			answers = codexNativeQuestionAnswers(resp, pending)
+		}
 		return s.sendJSON(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      rpcID,
-			"result": map[string]any{
-				"answers": questionAnswersFrom(resp),
-			},
+			"jsonrpc": "2.0", "id": rpcID,
+			"result": map[string]any{"answers": answers},
 		})
+	}
+	if name, _ := pending["name"].(string); name == "mcp_elicitation" {
+		action := "accept"
+		var content any = map[string]any{}
+		if behavior, _ := resp["behavior"].(string); behavior == "deny" {
+			action, content = "decline", nil
+			if resp["interrupt"] == true {
+				action = "cancel"
+			}
+		}
+		return s.sendJSON(map[string]any{"jsonrpc": "2.0", "id": rpcID, "result": map[string]any{
+			"action": action, "content": content, "_meta": nil,
+		}})
 	}
 
 	decision := "accept"
 	if b, _ := resp["behavior"].(string); b == "deny" {
 		decision = "decline"
+		if resp["interrupt"] == true {
+			decision = "cancel"
+		}
 	}
 	return s.sendJSON(map[string]any{
 		"jsonrpc": "2.0",
@@ -980,12 +1239,73 @@ func numericLess(a, b string) bool {
 	return a < b
 }
 
-func (s *CodexSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
-	return []sdk.SubagentDescriptor{}
+func (s *CodexSession) ListSubagents(parentAgentID string) []sdk.SubagentDescriptor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make([]sdk.SubagentDescriptor, 0, len(s.subagents))
+	for _, descriptor := range s.subagents {
+		if descriptor.ParentAgentID == "" {
+			descriptor.ParentAgentID = parentAgentID
+		}
+		result = append(result, descriptor)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt < result[j].CreatedAt })
+	return result
 }
 
-func (s *CodexSession) GetSubagent(_, _ string) (sdk.SubagentDescriptor, bool) {
-	return sdk.SubagentDescriptor{}, false
+func (s *CodexSession) GetSubagent(parentAgentID, id string) (sdk.SubagentDescriptor, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	descriptor, ok := s.subagents[id]
+	if ok && descriptor.ParentAgentID == "" {
+		descriptor.ParentAgentID = parentAgentID
+	}
+	return descriptor, ok
+}
+
+func (s *CodexSession) SubagentTimeline(_, id string) ([]sdk.TimelineEntry, error) {
+	s.mu.Lock()
+	if _, ok := s.subagents[id]; !ok {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("subagent not found: %s", id)
+	}
+	entries := append([]sdk.TimelineEntry(nil), s.subagentTimelines[id]...)
+	hasUser := false
+	for _, entry := range entries {
+		hasUser = hasUser || entry.Item.Type == "user_message"
+	}
+	s.mu.Unlock()
+	if hasUser {
+		return entries, nil
+	}
+
+	// Codex 0.171 can omit the spawn item and the child's userMessage notification. The native
+	// child thread still has both, so fill that gap without inventing a prompt from the parent.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	response, err := s.rpcCall(ctx, "thread/read", map[string]any{"threadId": id, "includeTurns": true})
+	if err != nil {
+		return entries, nil
+	}
+	child := &CodexSession{activeTextIdx: -1, activeThinkIdx: -1, toolIndexByID: map[string]int{}, subagents: map[string]sdk.SubagentDescriptor{}, subagentTimelines: map[string][]sdk.TimelineEntry{}, eventSubscribers: map[int]func(map[string]any){}}
+	child.frames = sdk.NewStreamFrames(func() {})
+	defer child.frames.Stop()
+	thread, _ := response["thread"].(map[string]any)
+	turns, _ := thread["turns"].([]any)
+	for _, rawTurn := range turns {
+		turn, _ := rawTurn.(map[string]any)
+		items, _ := turn["items"].([]any)
+		for _, raw := range items {
+			if item, _ := raw.(map[string]any); item != nil {
+				child.completeCodexHistoryItem(item)
+			}
+		}
+	}
+	native := child.Timeline()
+	if len(native) > 0 {
+		return native, nil
+	}
+	return entries, nil
 }
 
 func (s *CodexSession) OnEvent(fn func(map[string]any)) func() {
@@ -1042,12 +1362,16 @@ func (s *CodexSession) flushFramesLocked() []map[string]any {
 		}
 		entry.SeqEnd = s.streamSeq
 		item := frame.Item
+		turnID := frame.TurnID
 		if frame.Kind == "tool_call" {
 			item = entry.Item
+			// A tool can resolve after its native turn has ended or while the next turn is
+			// active. Keep the original turn identity so the client updates the existing row.
+			turnID = entry.TurnID
 		}
 		events = append(events, map[string]any{
 			"type": "byspace_stream_timeline", "seq": s.streamSeq,
-			"turnId": frame.TurnID, "item": item,
+			"turnId": turnID, "item": item,
 		})
 	}
 	return events
@@ -1060,26 +1384,49 @@ func (s *CodexSession) flushFramesOnTimer() {
 	events := s.flushFramesLocked()
 	subs := s.copySubscribersLocked()
 	s.mu.Unlock()
+	s.deliverEvents(subs, events)
+}
+
+func (s *CodexSession) deliverEvents(subs []func(map[string]any), events []map[string]any) {
+	s.mu.Lock()
+	s.delivering++
+	s.mu.Unlock()
 	for _, fn := range subs {
 		for _, event := range events {
 			fn(event)
 		}
 	}
+	s.mu.Lock()
+	s.delivering--
+	closeRequested := s.closeRequested && s.delivering == 0
+	s.mu.Unlock()
+	if closeRequested {
+		_ = s.Close()
+	}
 }
 
 func (s *CodexSession) Close() error {
-	// A subscriber may close the session from any event callback, so Close cannot wait on emitMu.
-	// Serialize the tail flush with delivery instead, then stop the timer and the subprocess.
+	// A subscriber may close the session from any event callback. Closing discards the tail instead
+	// of calling that subscriber again, which would deadlock a once-guarded close.
 	s.mu.Lock()
-	frames := s.flushFramesLocked()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	if s.delivering > 0 {
+		s.closeRequested = true
+		s.mu.Unlock()
+		return nil
+	}
+	s.closeRequested = false
+	s.closed = true
+	s.status = "closed"
+	frames := s.finishCancellationLocked("Session closed")
 	s.frames.Stop()
 	subs := s.copySubscribersLocked()
+	s.eventSubscribers = make(map[int]func(map[string]any))
 	s.mu.Unlock()
-	for _, fn := range subs {
-		for _, event := range frames {
-			fn(event)
-		}
-	}
+	s.deliverEvents(subs, frames)
 	_ = s.stdin.Close()
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
@@ -1161,6 +1508,29 @@ func codexInnerConfig(cfg LaunchConfig) map[string]any {
 	for key, value := range cfg.ProviderOptions {
 		inner[key] = value
 	}
+	if len(cfg.MCPServers) > 0 {
+		servers := make(map[string]any, len(cfg.MCPServers))
+		for name, server := range cfg.MCPServers {
+			switch server.Type {
+			case "stdio":
+				native := map[string]any{"command": server.Command}
+				if server.Args != nil {
+					native["args"] = server.Args
+				}
+				if server.Env != nil {
+					native["env"] = server.Env
+				}
+				servers[name] = native
+			case "http", "sse":
+				native := map[string]any{"url": server.URL}
+				if server.Headers != nil {
+					native["http_headers"] = server.Headers
+				}
+				servers[name] = native
+			}
+		}
+		inner["mcp_servers"] = servers
+	}
 
 	return inner
 }
@@ -1185,11 +1555,8 @@ func (s *CodexSession) RewindCapabilities() RewindCapabilities {
 	return RewindCapabilities{Conversation: true}
 }
 
-// Rewind rolls the conversation back to a turn.
-//
-// Ported from codex/rewind.ts. Codex counts in TURNS, not messages: `thread/rollback` takes how many turns to drop from
-// the end. The message id is resolved to its position in `turnIDs`, which is why every turn id is recorded as it
-// starts.
+// Rewind forks immediately before the target turn. Codex 0.156 removed thread/rollback;
+// older releases retain the non-destructive fork-then-rollback fallback.
 func (s *CodexSession) RewindConversation(ctx context.Context, messageID string) error {
 	trimmed := strings.TrimSpace(messageID)
 	if trimmed == "" {
@@ -1201,7 +1568,7 @@ func (s *CodexSession) RewindConversation(ctx context.Context, messageID string)
 	turns := append([]string(nil), s.turnIDs...)
 	targetIndex := -1
 	for index, entry := range s.timeline {
-		if entry.Item.MessageID == trimmed && entry.Item.Type == "user_message" {
+		if (entry.Item.MessageID == trimmed || entry.Item.ClientMessageID == trimmed) && entry.Item.Type == "user_message" {
 			// Count the turns that started at or before this message.
 			targetIndex = index
 			break
@@ -1235,20 +1602,91 @@ func (s *CodexSession) RewindConversation(ctx context.Context, messageID string)
 		dropped = len(turns)
 	}
 
-	if _, err := s.rpcCall(ctx, "thread/rollback", map[string]any{
-		"threadId": threadID,
-		"numTurns": dropped,
-	}); err != nil {
-		return err
+	s.mu.Lock()
+	targetTurn := len(turns) - dropped
+	targetTurnID := ""
+	if targetTurn >= 0 && targetTurn < len(turns) {
+		targetTurnID = turns[targetTurn]
+	}
+	forkParams := map[string]any{
+		"threadId": threadID, "cwd": s.cwd, "model": s.model,
+		"excludeTurns": true, "persistExtendedHistory": true,
+	}
+	if s.modelProvider != "" {
+		forkParams["modelProvider"] = s.modelProvider
+	}
+	if len(s.innerConfig) > 0 {
+		forkParams["config"] = s.innerConfig
+	}
+	if s.systemPrompt != "" {
+		forkParams["developerInstructions"] = s.systemPrompt
+	}
+	s.mu.Unlock()
+	if targetTurnID == "" {
+		return errors.New("rewind could not resolve the target Codex turn")
+	}
+	currentParams := make(map[string]any, len(forkParams)+1)
+	for key, value := range forkParams {
+		currentParams[key] = value
+	}
+	currentParams["beforeTurnId"] = targetTurnID
+	response, err := s.rpcCall(ctx, "thread/fork", currentParams)
+	if err != nil {
+		// Releases before beforeTurnId reject that field. Fork first there as well, so even the
+		// legacy rollback never destroys the only copy of the original thread.
+		message := strings.ToLower(err.Error())
+		if !strings.Contains(message, "beforeturnid") || (!strings.Contains(message, "unknown") && !strings.Contains(message, "unexpected")) {
+			return err
+		}
+		response, err = s.rpcCall(ctx, "thread/fork", forkParams)
+		if err != nil {
+			return err
+		}
+		forkedID := codexForkedThreadID(response)
+		if forkedID == "" {
+			return errors.New("codex fork response has no thread id")
+		}
+		response, err = s.rpcCall(ctx, "thread/rollback", map[string]any{"threadId": forkedID, "numTurns": dropped})
+		if err != nil {
+			return err
+		}
+	}
+	forkedID := codexForkedThreadID(response)
+	if forkedID == "" {
+		return errors.New("codex rewind response has no thread id")
 	}
 
-	// The rolled-back turns are gone; the client's transcript is wrong until it is re-read.
+	// The fork ends immediately before the target user row. Keep the matching canonical prefix;
+	// the server publishes it as a timeline replacement after this call returns.
 	s.mu.Lock()
+	s.threadID = forkedID
 	s.turnIDs = s.turnIDs[:len(s.turnIDs)-dropped]
+	s.timeline = s.timeline[:targetIndex]
+	s.streamSeq = 0
+	for _, entry := range s.timeline {
+		if entry.SeqEnd > s.streamSeq {
+			s.streamSeq = entry.SeqEnd
+		}
+	}
 	s.status = "idle"
 	s.nativeTurnID = ""
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.toolIndexByID = make(map[string]int)
+	for index, entry := range s.timeline {
+		if entry.Item.CallID != "" {
+			s.toolIndexByID[entry.Item.CallID] = index
+		}
+	}
+	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	s.mu.Unlock()
 	return nil
+}
+
+func codexForkedThreadID(response map[string]any) string {
+	thread, _ := response["thread"].(map[string]any)
+	id, _ := thread["id"].(string)
+	return id
 }
 
 // TreeEntryForMessage maps a message id to the provider's own reference.

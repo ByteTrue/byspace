@@ -78,6 +78,7 @@ type LaunchOptions struct {
 	Session          string
 	NoSession        bool
 	ExtensionPaths   []string
+	HomeDir          string
 }
 
 // BuildLaunchArgs constructs the command and argument slice matching buildPiLaunch in runtime.ts.
@@ -148,6 +149,11 @@ func hasApproveFlag(argv []string) bool {
 	return false
 }
 
+type piTreeEntryCapture struct {
+	id   string
+	text string
+}
+
 // Session wraps a running Pi RPC process and tracks its live timeline and run state.
 type Session struct {
 	proc *jsonl.Process
@@ -165,6 +171,12 @@ type Session struct {
 	streamedInTurn      bool
 	// turnError is the failure carried by the last assistant message of the running turn, if any.
 	turnError          string
+	abortRequested     bool
+	pendingPromptID    string
+	promptSawAgent     bool
+	modelInput         []string
+	activeCompactionID int
+	homeDir            string
 	timeline           []TimelineEntry
 	activeTextIdx      int
 	activeThinkIdx     int
@@ -175,6 +187,7 @@ type Session struct {
 	subagents          map[string]SubagentDescriptor
 	commandWaiters     map[string]chan commandResult
 	treeEntries        map[string]string
+	treeEntryCaptures  []piTreeEntryCapture
 	ready              bool
 	cleanup            func()
 	finishWaiters      []chan error
@@ -213,6 +226,8 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		commandWaiters:     make(map[string]chan commandResult),
 		treeEntries:        make(map[string]string),
 		eventSubscribers:   make(map[int]func(map[string]any)),
+		activeCompactionID: -1,
+		homeDir:            opts.HomeDir,
 	}
 	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	if !opts.NoSession && filepath.IsAbs(opts.Session) && strings.HasSuffix(opts.Session, ".jsonl") {
@@ -226,6 +241,8 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 func (s *Session) handleRawEvent(ev map[string]any) {
 	evType, _ := ev["type"].(string)
 	var extraEvents []map[string]any
+	completeNoTurn := false
+	noTurnID, noTurnToken := "", ""
 
 	s.emitMu.Lock()
 	defer s.emitMu.Unlock()
@@ -240,6 +257,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 	case "agent_start", "turn_start":
 		s.status = "running"
 		s.turnError = ""
+		if evType == "agent_start" {
+			s.promptSawAgent = true
+		}
 		if s.activeTurnID == "" {
 			s.turnCounter++
 			s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -335,6 +355,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 							"subagent": sub,
 						})
 					}
+				}
+				if event := s.appendCustomMessageLocked(msg); event != nil {
+					extraEvents = append(extraEvents, event)
 				}
 			}
 			if role == "assistant" {
@@ -439,7 +462,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			status = "failed"
 		}
 		args := s.toolArgsByID[callID]
-		detail := s.buildToolDetail(toolName, args, ev["result"])
+		sanitizedResult, imageMarkdown := sanitizeToolResult(ev["result"], s.homeDir)
+		ev["result"] = sanitizedResult
+		detail := s.buildToolDetail(toolName, args, sanitizedResult)
 		if detail == nil {
 			// The provider says this tool produces no card. The placeholder was never appended (see
 			// the start handler), so there is nothing to do here.
@@ -448,7 +473,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// A command's stdout is whatever it printed — a build log, a minified bundle, a `cat` of a
 		// large file — and it travels to every client on every timeline fetch. Capping it here means
 		// the oversized body never reaches the transcript, so it is not re-sent on every fetch.
-		limitedDetail, limitedError := limitToolCall(detail, status, ev["result"], isErr)
+		limitedDetail, limitedError := limitToolCall(detail, status, sanitizedResult, isErr)
 		detail = limitedDetail
 		var targetIdx int
 		var visible *TimelineItem
@@ -477,10 +502,27 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// A finished call goes out at once, with whatever streamed ahead of it.
 		s.frames.AddToolCall(targetIdx, s.timeline[targetIdx].Item, s.activeTurnID, visible)
 		extraEvents = append(extraEvents, s.flushFramesLocked()...)
+		if imageMarkdown != "" {
+			idx := s.appendItemLocked(TimelineItem{Type: "assistant_message", Text: imageMarkdown})
+			extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[idx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[idx].Item})
+		}
 		if strings.HasPrefix(toolName, "subagent") {
 			for _, sub := range ParseSubagentDetails(callID, args, ev["result"], "") {
 				s.upsertSubagentLocked(sub)
 			}
+		}
+
+	case "prompt_result":
+		id, _ := ev["id"].(string)
+		invoked, hasInvoked := ev["agentInvoked"].(bool)
+		completeNoTurn = hasInvoked && !invoked && id != "" && id == s.pendingPromptID && !s.promptSawAgent
+		noTurnID, noTurnToken = s.activeTurnID, s.turnToken
+
+	case "command_output":
+		text, _ := ev["text"].(string)
+		if text != "" {
+			idx := s.appendItemLocked(TimelineItem{Type: "assistant_message", Text: text, MessageID: fmt.Sprintf("command_%d_%d", s.turnCounter, len(s.timeline)+1)})
+			extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[idx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[idx].Item})
 		}
 
 	case "custom_message":
@@ -492,6 +534,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					"subagent": sub,
 				})
 			}
+		}
+		if event := s.appendCustomMessageLocked(ev); event != nil {
+			extraEvents = append(extraEvents, event)
 		}
 
 	case "extension_ui_request":
@@ -510,6 +555,40 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			}
 		}
 
+	case "compaction_start", "compaction_end":
+		trigger := "auto"
+		if reason, _ := ev["reason"].(string); reason == "manual" {
+			trigger = "manual"
+		}
+		if evType == "compaction_start" {
+			idx := s.appendItemLocked(TimelineItem{Type: "compaction", Status: "loading", Trigger: trigger})
+			s.activeCompactionID = idx
+			extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[idx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[idx].Item})
+		} else {
+			idx := s.activeCompactionID
+			if idx < 0 || idx >= len(s.timeline) {
+				idx = s.appendItemLocked(TimelineItem{Type: "compaction", Status: "completed", Trigger: trigger})
+			} else {
+				s.timeline[idx].Item.Status = "completed"
+				s.timeline[idx].Item.Trigger = trigger
+			}
+			s.activeCompactionID = -1
+			extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[idx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[idx].Item})
+			if message, _ := ev["errorMessage"].(string); message != "" {
+				errIdx := s.appendItemLocked(TimelineItem{Type: "assistant_message", Text: "[Error] Failed to compact context: " + message})
+				extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[errIdx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[errIdx].Item})
+			}
+		}
+
+	case "auto_retry_start":
+		attempt, _ := ev["attempt"].(float64)
+		message, _ := ev["errorMessage"].(string)
+		if message == "" {
+			message = "Provider retry"
+		}
+		idx := s.appendItemLocked(TimelineItem{Type: "error", Message: fmt.Sprintf("Provider retry (attempt %d): %s", int(attempt), message)})
+		extraEvents = append(extraEvents, map[string]any{"type": "byspace_stream_timeline", "seq": s.timeline[idx].SeqEnd, "turnId": s.activeTurnID, "item": s.timeline[idx].Item})
+
 	case "agent_end", "agent_settled":
 		willRetry, _ := ev["willRetry"].(bool)
 		// A settle interrupted by the user carries `aborted` and no new assistant message, and only
@@ -517,9 +596,11 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		// branch with the previous attempt's error still in turnError, and reporting that as a
 		// failed turn would blame the model for a cancellation.
 		aborted, _ := ev["aborted"].(bool)
+		aborted = aborted || s.abortRequested
 		if !willRetry && s.status == "running" {
 			finishedTurnID := s.activeTurnID
 			failure := s.turnError
+			s.abortRequested = false
 			s.turnError = ""
 			s.status = "idle"
 			s.resetTurnLocked()
@@ -536,9 +617,14 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				break
 			}
 			s.notifyFinishLocked(nil)
+			eventType := "byspace_turn_completed"
+			if aborted {
+				eventType = "byspace_turn_canceled"
+			}
 			extraEvents = append(extraEvents, map[string]any{
-				"type":   "byspace_turn_completed",
+				"type":   eventType,
 				"turnId": finishedTurnID,
+				"reason": "interrupted",
 				// The token lets the daemon drop a completion that arrives after a newer
 				// turn has already started.
 				"turnToken": s.turnToken,
@@ -555,6 +641,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 
 	subs := s.subscribersLocked()
 	s.mu.Unlock()
+	if completeNoTurn {
+		s.completePromptWithoutAgent(noTurnID, noTurnToken)
+	}
 
 	for _, fn := range subs {
 		for _, pre := range preEvents {
@@ -851,6 +940,9 @@ func (s *Session) SetNextClientMessageID(id string) {
 
 // Prompt sends a user prompt to Pi and appends the user_message to the timeline.
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
+	if len(images) > 0 && !s.supportsImages() {
+		return errors.New("the selected Pi model does not support image input")
+	}
 	// Held until the prompt's row is delivered, so its seq reaches subscribers in order with the
 	// frames around it. What is still merging goes out first: it arrived before the prompt.
 	s.emitMu.Lock()
@@ -869,6 +961,10 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.activeMessageID = ""
 	s.streamedInTurn = false
 	s.status = "running"
+	s.promptSawAgent = false
+	s.abortRequested = false
+	requestID := s.proc.NextRequestID()
+	s.pendingPromptID = requestID
 
 	clientMsgID := s.nextClientMessageID
 	s.nextClientMessageID = ""
@@ -933,35 +1029,98 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	go func() {
 		rctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if _, err := s.proc.Request(rctx, cmd); err != nil {
-			s.mu.Lock()
-			if s.status != "running" {
-				s.mu.Unlock()
-				return
+		data, err := s.proc.RequestWithID(rctx, requestID, cmd)
+		if err == nil {
+			var result struct {
+				AgentInvoked *bool `json:"agentInvoked"`
 			}
-			// A prompt the runtime refuses is a failed turn with no model message behind it.
-			// Settling only the waiters left the daemon's record running and wrote no row.
-			finishedTurnID := s.activeTurnID
-			errorText := err.Error()
-			turnToken := s.turnToken
-			s.status = "idle"
-			s.turnError = ""
-			s.resetTurnLocked()
-			s.notifyFinishLocked(err)
-			subs := s.subscribersLocked()
-			s.mu.Unlock()
-			for _, fn := range subs {
-				fn(map[string]any{
-					"type":      "byspace_turn_failed",
-					"turnId":    finishedTurnID,
-					"error":     errorText,
-					"turnToken": turnToken,
-				})
+			_ = json.Unmarshal(data, &result)
+			if result.AgentInvoked != nil && !*result.AgentInvoked {
+				s.completePromptWithoutAgent(turnID, s.TurnToken())
+			} else if result.AgentInvoked == nil && strings.HasPrefix(strings.TrimSpace(message), "/") {
+				if state, stateErr := s.GetState(rctx); stateErr == nil && !state.IsStreaming {
+					s.completePromptWithoutAgent(turnID, s.TurnToken())
+				}
 			}
+		}
+		if err != nil {
+			s.handlePromptRequestError(requestID, turnID, err)
 		}
 	}()
 	_ = ctx
 	return nil
+}
+
+func (s *Session) handlePromptRequestError(requestID, turnID string, err error) {
+	s.mu.Lock()
+	if s.status != "running" || s.pendingPromptID != requestID || s.activeTurnID != turnID {
+		s.mu.Unlock()
+		return
+	}
+	// A prompt the runtime refuses is a failed turn with no model message behind it.
+	// Settling only the waiters left the daemon's record running and wrote no row.
+	finishedTurnID := s.activeTurnID
+	errorText := err.Error()
+	turnToken := s.turnToken
+	s.status = "idle"
+	s.turnError = ""
+	s.resetTurnLocked()
+	s.notifyFinishLocked(err)
+	subs := s.subscribersLocked()
+	s.mu.Unlock()
+	for _, fn := range subs {
+		fn(map[string]any{
+			"type": "byspace_turn_failed", "turnId": finishedTurnID,
+			"error": errorText, "turnToken": turnToken,
+		})
+	}
+}
+
+func (s *Session) Capabilities() sdk.AgentCapabilities {
+	caps := sdk.DefaultAgentCapabilities()
+	caps.SupportsImages = s.supportsImages()
+	caps.SupportsAttachments = caps.SupportsImages
+	caps.SupportsHistoryImport = true
+	caps.SupportsNativeSubagents = true
+	return caps
+}
+
+func (s *Session) supportsImages() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, input := range s.modelInput {
+		if input == "image" {
+			return true
+		}
+	}
+	return false
+}
+
+// Pi handles some slash commands locally and successfully answers without starting an agent turn.
+// Complete on the next scheduling turn so command_output can arrive between the RPC response and settlement.
+func (s *Session) completePromptWithoutAgent(turnID, turnToken string) {
+	time.AfterFunc(0, func() {
+		s.emitMu.Lock()
+		defer s.emitMu.Unlock()
+		s.mu.Lock()
+		if s.status != "running" || s.activeTurnID != turnID || s.turnToken != turnToken || s.promptSawAgent {
+			s.mu.Unlock()
+			return
+		}
+		preEvents := s.flushFramesLocked()
+		s.status = "idle"
+		s.pendingPromptID = ""
+		s.resetTurnLocked()
+		s.notifyFinishLocked(nil)
+		subs := s.subscribersLocked()
+		s.mu.Unlock()
+		for _, fn := range subs {
+			for _, pre := range preEvents {
+				fn(pre)
+			}
+			fn(map[string]any{"type": "byspace_turn_completed", "turnId": turnID, "turnToken": turnToken})
+		}
+	})
 }
 
 // Steer sends a steering message during an active turn.
@@ -979,6 +1138,12 @@ func (s *Session) Steer(ctx context.Context, message string, images []ImageConte
 
 // Abort cancels the active Pi turn.
 func (s *Session) Abort(ctx context.Context) error {
+	s.mu.Lock()
+	s.abortRequested = s.status == "running"
+	s.mu.Unlock()
+	if _, err := s.proc.Request(ctx, map[string]any{"type": "clear_queue"}); err != nil && err.Error() != "Unknown command: clear_queue" {
+		return err
+	}
 	_, err := s.proc.Request(ctx, map[string]any{"type": "abort"})
 	return err
 }
@@ -1025,6 +1190,11 @@ func (s *Session) GetState(ctx context.Context) (*SessionState, error) {
 	var st SessionState
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return nil, err
+	}
+	if st.Model != nil {
+		s.mu.Lock()
+		s.modelInput = append([]string(nil), st.Model.Input...)
+		s.mu.Unlock()
 	}
 	return &st, nil
 }
@@ -1104,6 +1274,9 @@ func (s *Session) SetModel(ctx context.Context, provider, modelID string) (*Mode
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	s.modelInput = append([]string(nil), m.Input...)
+	s.mu.Unlock()
 	return &m, nil
 }
 
@@ -1116,37 +1289,74 @@ func (s *Session) SetThinkingLevel(ctx context.Context, level string) error {
 	return err
 }
 
+// piBuiltinSlashCommands are the commands pi answers itself, so they never appear in get_commands.
+var piBuiltinSlashCommands = []SlashCommand{
+	{Name: "compact", Description: "Manually compact the session context", ArgumentHint: "[instructions]", Kind: "command"},
+	{Name: "autocompact", Description: "Toggle automatic context compaction", ArgumentHint: "[on|off|toggle]", Kind: "command"},
+}
+
 // GetCommands lists Pi's available slash commands and skills.
+//
+// Pi answers in its own shape — `source` (extension | prompt | skill) and `input.hint` — not the
+// protocol's `kind` and `argumentHint`, so the mapping happens here. Decoding straight into
+// SlashCommand dropped `source`, which labelled every skill a command and left the composer's inline
+// skill filter empty. Pi also omits commands it handles itself, so they are seeded first.
 func (s *Session) GetCommands(ctx context.Context) ([]SlashCommand, error) {
 	raw, err := s.proc.Request(ctx, map[string]any{"type": "get_commands"})
 	if err != nil {
 		return nil, err
 	}
 	var wrapper struct {
-		Commands []SlashCommand `json:"commands"`
+		Commands []piRPCCommand `json:"commands"`
 	}
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return nil, err
 	}
-	// The protocol requires description and argumentHint on every command, and pi sends neither. An
-	// empty value fails the whole list_commands_response, which empties the palette for every provider
-	// rather than for one — so the defaults are filled here rather than left to the client.
-	for index := range wrapper.Commands {
-		command := &wrapper.Commands[index]
-		if strings.TrimSpace(command.Name) == "" {
+	return mapPiCommands(wrapper.Commands), nil
+}
+
+// piRPCCommand is one entry of get_commands: pi's shape, not the protocol's.
+type piRPCCommand struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Source      string `json:"source"`
+	Input       *struct {
+		Hint string `json:"hint"`
+	} `json:"input"`
+}
+
+func mapPiCommands(entries []piRPCCommand) []SlashCommand {
+	// The protocol requires description and argumentHint on every command. An empty description fails
+	// the whole list_commands_response, which empties the palette for every provider rather than for
+	// one — so the defaults are filled here rather than left to the client.
+	commands := make([]SlashCommand, 0, len(entries)+len(piBuiltinSlashCommands))
+	seen := make(map[string]bool, len(entries)+len(piBuiltinSlashCommands))
+	for _, command := range piBuiltinSlashCommands {
+		seen[command.Name] = true
+		commands = append(commands, command)
+	}
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name)
+		if name == "" || seen[name] {
 			continue
 		}
-		if strings.TrimSpace(command.Description) == "" {
-			command.Description = command.Name
+		seen[name] = true
+		description := strings.TrimSpace(entry.Description)
+		if description == "" {
+			// Pi's own fallback: the source says more than repeating the name.
+			description = entry.Source
 		}
-		if command.ArgumentHint == "" {
-			command.ArgumentHint = ""
+		hint := ""
+		if entry.Input != nil {
+			hint = entry.Input.Hint
 		}
-		if strings.TrimSpace(command.Kind) == "" {
-			command.Kind = "command"
+		kind := "command"
+		if entry.Source == "skill" {
+			kind = "skill"
 		}
+		commands = append(commands, SlashCommand{Name: name, Description: description, ArgumentHint: hint, Kind: kind})
 	}
-	return wrapper.Commands, nil
+	return commands
 }
 
 // subagentListLocked copies the tracked descriptors. Caller holds s.mu.

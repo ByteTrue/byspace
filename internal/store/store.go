@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"os"
 	"path/filepath"
 
@@ -85,13 +86,14 @@ type AgentPersistenceHandle struct {
 
 // AgentConfig mirrors SerializableAgentConfig in StoredAgentRecord.
 type AgentConfig struct {
-	ModeID           *string        `json:"modeId,omitempty"`
-	Model            *string        `json:"model,omitempty"`
-	ThinkingOptionID *string        `json:"thinkingOptionId,omitempty"`
-	FeatureValues    map[string]any `json:"featureValues,omitempty"`
-	ProviderOptions  map[string]any `json:"providerOptions,omitempty"`
-	SystemPrompt     *string        `json:"systemPrompt,omitempty"`
-	Role             *string        `json:"role,omitempty"`
+	ModeID           *string                        `json:"modeId,omitempty"`
+	Model            *string                        `json:"model,omitempty"`
+	ThinkingOptionID *string                        `json:"thinkingOptionId,omitempty"`
+	FeatureValues    map[string]any                 `json:"featureValues,omitempty"`
+	ProviderOptions  map[string]any                 `json:"providerOptions,omitempty"`
+	SystemPrompt     *string                        `json:"systemPrompt,omitempty"`
+	MCPServers       map[string]sdk.MCPServerConfig `json:"mcpServers,omitempty"`
+	Role             *string                        `json:"role,omitempty"`
 	// Env is the per-agent environment the wire has always carried. It rides on top of the daemon's
 	// own, with the BySpace identity variables applied last so an agent cannot rename itself.
 	Env map[string]string `json:"env,omitempty"`

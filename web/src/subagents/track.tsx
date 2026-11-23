@@ -181,10 +181,14 @@ function SubagentsTrackRow({
     ({ active }: { active: boolean }) => (
       <>
         <WorkspaceTabIcon presentation={presentation} backdrop={active ? "surface2" : "surface1"} />
-        <span className={ROW_LABEL}>{displayLabel}</span>
-        {presentation.subtitle ? (
-          <span className={ROW_TRAILING}>{presentation.subtitle}</span>
-        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-foreground" title={displayLabel}>
+            {displayLabel}
+          </div>
+          {presentation.subtitle ? (
+            <div className="truncate text-xs text-muted-foreground">{presentation.subtitle}</div>
+          ) : null}
+        </div>
         {row.kind === "byspace" ? (
           <SubagentRowActions
             rowId={row.id}

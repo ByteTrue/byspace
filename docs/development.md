@@ -182,7 +182,12 @@ npm run build:client    # protocol -> client
 npm run build:app-deps  # highlight -> protocol -> client
 npm run build:relay     # relay package declarations
 make build              # the Go binary (gofmt -w formats Go; npm run format does not)
+node ./scripts/dev-daemon.mjs --build-only  # the same build without make; worktree setup runs this
 ```
+
+A stock Windows box has no `make`, so anything that runs during worktree setup must not require it.
+`dev-daemon.mjs` tries `make build` first and falls back to the identical `go build` line; `--build-only`
+stops there instead of starting the daemon.
 
 Rebuild the owning package whenever you have changed it and need clean cross-package types or runtime behavior.
 

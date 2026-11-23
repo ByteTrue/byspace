@@ -17,12 +17,12 @@ A provider is the contract between BySpace and one external agent CLI: how to la
 ## Two tiers
 
 - **Native support**, BySpace ships a bundled adapter for the major agents (Claude Code, Codex, OpenCode, pi). Auto-discovered when the underlying CLI is installed, with mode metadata and voice support where applicable.
-- **ACP catalog**, any agent speaking the [Agent Client Protocol](https://agentclientprotocol.com) is supported through a generic adapter. BySpace ships a curated catalog of one-click installs (Cursor, Gemini, GitHub Copilot, Hermes, Kimi, Qwen Code, and 25+ more), and you can add any other ACP agent yourself.
+- **Generic ACP**, any agent speaking the [Agent Client Protocol](https://agentclientprotocol.com) is supported through a generic adapter. Use **Settings → Agents → Add provider → Copy onboarding prompt** to have an agent configure one, or write the provider config yourself.
 
 Either way, **you install the underlying CLI**. BySpace runs it.
 
 ## Where to go next
 
-- [Supported providers](/docs/supported-providers), the full list with install links.
+- [Supported providers](/docs/supported-providers), native providers and ACP onboarding.
 - [Agent profiles](/docs/agent-profiles), save model, mode, and thinking settings together, with notes to guide delegation.
 - [Custom providers](/docs/custom-providers), add your own provider, point an existing one at a different endpoint, configure multiple provider aliases, or override the binary in `~/.byspace/config.json`.

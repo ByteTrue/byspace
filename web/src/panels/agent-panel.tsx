@@ -1277,14 +1277,11 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     [streamViewRef],
   );
   const showComposerActions = hasActiveComposer && isPaneVisible;
-  const showPiBackgroundTerminal = isPaneFocused && effectiveAgent.provider === "pi";
   const composerActions = useMemo(
     () =>
       showComposerActions ? (
         <>
-          {showPiBackgroundTerminal ? (
-            <PiBackgroundTerminalTrack serverId={serverId} agentId={agentId} />
-          ) : null}
+          <PiBackgroundTerminalTrack serverId={serverId} agentId={agentId} />
           <AgentStreamHeaderControls
             showScrollToBottom={showScrollToBottom}
             onCollapseAll={handleCollapseAll}
@@ -1298,7 +1295,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       handleScrollToBottom,
       serverId,
       showComposerActions,
-      showPiBackgroundTerminal,
       showScrollToBottom,
     ],
   );
@@ -1382,6 +1378,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
           workspaceId={workspaceId}
           agentId={agentId}
           agent={effectiveAgent}
+          isArchived={agentState.archivedAt !== null}
           routeBottomAnchorRequest={routeBottomAnchorRequest}
           hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
           hasActiveComposer={hasActiveComposer}
@@ -1487,6 +1484,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   workspaceId,
   agentId,
   agent,
+  isArchived,
   routeBottomAnchorRequest,
   hasAppliedAuthoritativeHistory,
   hasActiveComposer,
@@ -1500,6 +1498,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   workspaceId: string;
   agentId?: string;
   agent: AgentScreenAgent;
+  isArchived: boolean;
   routeBottomAnchorRequest: RouteBottomAnchorRequest;
   hasAppliedAuthoritativeHistory: boolean;
   hasActiveComposer: boolean;
@@ -1610,10 +1609,10 @@ const AgentStreamSection = memo(function AgentStreamSection({
       agentId={agent.id}
       serverId={serverId}
       context={agent}
-      streamItems={streamItems}
+      streamItems={isArchived ? EMPTY_STREAM_ITEMS : streamItems}
       pendingPermissions={pendingPermissions}
       routeBottomAnchorRequest={routeBottomAnchorRequest}
-      isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
+      isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory && !isArchived}
       bottomOverlayTailClearance={bottomOverlayTailClearance}
       bottomOverlayControlClearance={bottomOverlayControlClearance}
       toast={toast}
