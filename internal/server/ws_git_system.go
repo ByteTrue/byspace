@@ -94,6 +94,9 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		s.refreshWorkspacePlacementAtCwd(ctx, base.Cwd)
 		s.broadcastCheckoutStatusUpdate(ctx, base.Cwd)
 		s.refreshCheckoutDiffStat(ctx, base.Cwd)
+		// The client asking for a refresh is asking for current facts: the pane must not keep a
+		// cached comparison the daemon just re-read.
+		s.diffEngine.InvalidateCwd(base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "checkout.refresh.response", map[string]any{
 			"cwd":       base.Cwd,
 			"success":   true,

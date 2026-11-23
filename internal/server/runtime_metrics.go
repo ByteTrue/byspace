@@ -148,7 +148,7 @@ type runtimeMetricsLatency struct {
 
 // snapshot renders the window. Callers pass the live socket/agent counts because the metrics
 // struct does not own server state.
-func (m *runtimeMetrics) snapshot(sessions map[string]any, sockets map[string]any, uptime float64) map[string]any {
+func (m *runtimeMetrics) snapshot(sessions map[string]any, sockets map[string]any, observation map[string]any, uptime float64) map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -196,16 +196,17 @@ func (m *runtimeMetrics) snapshot(sessions map[string]any, sockets map[string]an
 		"outboundAgentStreamAgentsTop":   topCounts(m.agentStreamAgents),
 		"outboundBinaryFrameTypesTop":    topCounts(m.binary),
 		"latency":                        latency,
+		"fileObservation":                observation,
 	}
 	return out
 }
 
 // flush logs the window and starts a new one.
-func (m *runtimeMetrics) flush(sessions map[string]any, sockets map[string]any, uptime float64) {
+func (m *runtimeMetrics) flush(sessions map[string]any, sockets map[string]any, observation map[string]any, uptime float64) {
 	if m == nil {
 		return
 	}
-	out := m.snapshot(sessions, sockets, uptime)
+	out := m.snapshot(sessions, sockets, observation, uptime)
 	line, err := json.Marshal(out)
 	if err != nil {
 		return
@@ -320,7 +321,7 @@ func (s *Server) startRuntimeMetrics() {
 			case at := <-ticker.C:
 				s.metrics.noteTick(at)
 				sessions, sockets := s.runtimeCounts()
-				s.metrics.flush(sessions, sockets, time.Since(s.startedAt).Seconds())
+				s.metrics.flush(sessions, sockets, s.observation.health(), time.Since(s.startedAt).Seconds())
 			}
 		}
 	}()

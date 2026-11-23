@@ -159,7 +159,32 @@ func gitEnv(base []string) []string {
 	)
 }
 
+// Git runs one git command in cwd and returns its trimmed stdout.
+//
+// Exported for internal/gitdiff, which must run git through this scheduler: a second entry point
+// would undo the bound this package keeps on the daemon's own git process count.
+// CanonicalCwd is the spelling every comparison of two working directories must use. Windows
+// hands the same checkout back with either slash depending on whether the path came from the
+// client or from the watcher, so a raw string comparison silently keeps them apart.
+func CanonicalCwd(cwd string) string {
+	return filepath.ToSlash(filepath.Clean(cwd))
+}
+
+func Git(ctx context.Context, cwd string, args ...string) (string, error) {
+	return runGit(ctx, cwd, args...)
+}
+
+// GitWithInput is Git with input on stdin, for the commands that batch paths
+// (`hash-object --stdin-paths`).
+func GitWithInput(ctx context.Context, cwd, input string, args ...string) (string, error) {
+	return runGitInput(ctx, cwd, input, args...)
+}
+
 func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
+	return runGitInput(ctx, cwd, "", args...)
+}
+
+func runGitInput(ctx context.Context, cwd, input string, args ...string) (string, error) {
 	timeout := gitLocalTimeout
 	if len(args) > 0 && gitNetworkCommands[args[0]] {
 		timeout = gitNetworkTimeout
@@ -179,6 +204,9 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 	// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would
 	// otherwise sit waiting for a prompt nobody can answer, until the timeout fires.
 	cmd.Env = gitEnv(cmd.Environ())
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	startedAt := time.Now()

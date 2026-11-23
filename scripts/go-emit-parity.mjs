@@ -79,6 +79,9 @@ const CONDITIONALLY_OMITTED = new Map([
 /** 这些出站消息由客户端或中继产生，daemon 不发。 */
 const CLIENT_ONLY = new Set(["pong", "terminal_output"]);
 
+/** 这些消息只走二进制帧；客户端组装后再按同名 JSON 消息投递。 */
+const BINARY_ONLY = new Set(["checkout_diff_update"]);
+
 /**
  * 属于尚未实现的子系统，Go 侧没有语义可发。每条都要写明缺口归属。
  *
@@ -626,7 +629,7 @@ export function runAudit({ schemas, members, emits, structTags }) {
       : [...schemas.values()].filter((schema) => schema.key);
   for (const schema of schemaIter) {
     const type = schema.key;
-    if (CLIENT_ONLY.has(type)) continue;
+    if (CLIENT_ONLY.has(type) || BINARY_ONLY.has(type)) continue;
 
     // payload 是 discriminatedUnion / passthrough 时字段没法静态比，
     // 但**发没发**是一个独立且能确定的问题。跳过字段检查不等于跳过存在性检查。

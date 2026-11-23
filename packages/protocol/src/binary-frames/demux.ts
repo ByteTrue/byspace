@@ -9,11 +9,13 @@ import {
   type TerminalStreamFrame,
 } from "./terminal.js";
 import { decodeTunnelFrame, TunnelFrameOpcode, type TunnelFrame } from "./tunnel.js";
+import { decodeDiffFrame, DiffOpcode, type DiffFrame } from "./diff.js";
 
 export type BinaryFrame =
   | { kind: "terminal"; frame: TerminalStreamFrame }
   | { kind: "file_transfer"; frame: FileTransferFrame }
-  | { kind: "tunnel"; frame: TunnelFrame };
+  | { kind: "tunnel"; frame: TunnelFrame }
+  | { kind: "diff"; frame: DiffFrame };
 
 export function decodeBinaryFrame(bytes: Uint8Array): BinaryFrame | null {
   switch (bytes[0]) {
@@ -36,6 +38,12 @@ export function decodeBinaryFrame(bytes: Uint8Array): BinaryFrame | null {
     case TunnelFrameOpcode.Close: {
       const frame = decodeTunnelFrame(bytes);
       return frame ? { kind: "tunnel", frame } : null;
+    }
+    case DiffOpcode.Begin:
+    case DiffOpcode.Bodies:
+    case DiffOpcode.End: {
+      const frame = decodeDiffFrame(bytes);
+      return frame ? { kind: "diff", frame } : null;
     }
     default:
       return null;

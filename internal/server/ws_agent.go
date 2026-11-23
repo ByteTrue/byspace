@@ -852,7 +852,7 @@ func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink
 		cmp = map[string]any{"mode": "uncommitted"}
 	}
 	files := s.checkoutDiffFiles(ctx, req.Cwd, cmp)
-	s.RegisterDiffSubscription(req.SubscriptionID, sink, req.Cwd, cmp, files)
+	s.RegisterDiffSubscription(req.SubscriptionID, sink, req.Cwd, cmp)
 	_ = sendSessionMsg(ctx, sink, "subscribe_checkout_diff_response", map[string]any{
 		"subscriptionId": req.SubscriptionID,
 		"cwd":            req.Cwd,
@@ -925,6 +925,9 @@ func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw j
 	}
 
 	err := workspace.CommitWithOptions(ctx, req.Cwd, message, addAll)
+	// The commit empties the working comparison; the watcher would also report it, but a pane must
+	// not depend on a watcher that may be degraded.
+	s.diffEngine.InvalidateCwd(req.Cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
 			"cwd":       req.Cwd,
@@ -950,6 +953,7 @@ func (s *Server) handleCheckoutDiscardChanges(ctx context.Context, sink frameSin
 	}
 	_ = json.Unmarshal(raw, &req)
 	err := workspace.DiscardPaths(ctx, req.Cwd, req.Paths)
+	s.diffEngine.InvalidateCwd(req.Cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "checkout.discard_changes.response", map[string]any{
 			"cwd":       req.Cwd,

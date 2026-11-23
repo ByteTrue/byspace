@@ -245,6 +245,29 @@ jobs:
       - name: Compile the relay Worker
         run: GOOS=js GOARCH=wasm go build -o /dev/null ./workers/relay/
 
+  # The kqueue backend is the only one that splits structure events from content discovery, so its
+  # real-filesystem contract is checked on a Mac rather than reasoned about from a Linux runner.
+  go-tests-macos:
+    name: go-tests (macos-latest)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.go != 'false') }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test file observation
+        run: go test ./internal/filewatch -count=1
+
+      # macOS is the only backend whose write path is a poll inside the observer, so the
+      # checkout-fact differential has to run here to prove the same scenarios settle.
+      - name: Test checkout observation
+        run: go test ./internal/server -run 'TestCheckoutFactsFollowGitWithoutPolling|TestObservation|TestGitMetadataInvalidates' -count=1
+
   go-tests-windows:
     name: go-tests (windows-latest)
     needs: changes

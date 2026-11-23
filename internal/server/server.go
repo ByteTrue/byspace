@@ -31,6 +31,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/attachment"
 	"github.com/ByteTrue/byspace/internal/attention"
 	"github.com/ByteTrue/byspace/internal/e2ee"
+	"github.com/ByteTrue/byspace/internal/gitdiff"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/hostsync"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -235,7 +236,25 @@ type Server struct {
 	// sent one does not, and stamping it anyway would claim a cursor position it does not hold.
 	directorySyncSinks map[frameSink]bool
 	pollStop           chan struct{}
-	allowedHostnames   []string
+	// checkoutSetWake asks the checkout observer to re-read which checkouts it follows. It is
+	// buffered to one so a burst of new workspaces costs one pass.
+	checkoutSetWake chan struct{}
+	// observation watches working trees and git metadata. Nil on a platform with no backend.
+	observation *observationService
+	// gitInvalidations coalesces classified git metadata changes into refreshes.
+	gitInvalidations *gitInvalidationQueue
+	// gitRefs answers whether a rewritten ref names a different commit.
+	gitRefs *gitRefProbe
+	// diffEngine computes each checkout comparison once and hands every revision to the panes
+	// that asked for it.
+	diffEngine *gitdiff.Engine
+	// diffRefreshed names the last revision whose derived facts (dirty push, diff stat) were
+	// refreshed, so several panes on one comparison refresh them once.
+	diffRefreshed map[gitdiff.Key]uint64
+	// diffSent names the revision at which each pane last received each path's body. Files whose
+	// identity did not move are absent from the next Bodies frame.
+	diffSent         map[string]map[string]uint64
+	allowedHostnames []string
 	// agentLoads deduplicates concurrent cold-start attempts for one agent.
 	agentLoads map[string]*agentLoad
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
@@ -428,6 +447,9 @@ func New(opts Options) (*Server, error) {
 		clientPresence:         make(map[frameSink]attention.ClientPresence),
 		directorySyncSinks:     make(map[frameSink]bool),
 		pollStop:               make(chan struct{}),
+		gitInvalidations:       newGitInvalidationQueue(),
+		gitRefs:                newGitRefProbe(),
+		diffEngine:             gitdiff.New(),
 		skillsQueue:            newSerialQueue(),
 	}
 	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
@@ -453,7 +475,7 @@ func New(opts Options) (*Server, error) {
 		fmt.Fprintf(os.Stderr, "backfilled workspace ownership for %d agent record(s)\n", backfilled)
 	}
 
-	srv.startSubscriptionPoller()
+	srv.startFilePoller()
 	// A relay configured in settings must connect at boot, not only when a CLI flag is passed.
 	srv.ApplyRelayConfig(context.Background())
 	// Tunnels are the same shape of setting: the gate and the configured peers come from config,
@@ -472,7 +494,8 @@ func New(opts Options) (*Server, error) {
 
 	srv.startRuntimeMetrics()
 	srv.startBackgroundGitFetch()
-	srv.startHeadWatch()
+	srv.startObservation()
+	srv.startCheckoutObservation()
 	// Last: recovering an interrupted run archives its workspace, which needs the rest of the
 	// server. Then the clock fires due schedules every second.
 	srv.schedules.Start()
@@ -519,6 +542,10 @@ func (s *Server) Close() error {
 	default:
 		close(s.pollStop)
 	}
+	if s.observation != nil {
+		s.observation.close()
+	}
+	s.diffEngine.Close()
 	s.mu.Lock()
 	agents := make([]*managedPi, 0, len(s.agents))
 	for _, a := range s.agents {
@@ -4756,6 +4783,9 @@ func (s *Server) broadcastCheckoutStatusUpdate(ctx context.Context, cwd string) 
 	if strings.TrimSpace(cwd) == "" {
 		return
 	}
+	// Serving a checkout is the moment to start watching it: the caller here is a workspace being
+	// created or opened, and the user's first edit is what the sidebar is waiting for.
+	s.noteCheckoutSetChanged()
 	st := workspace.GetCheckoutStatus(ctx, cwd, "")
 	s.storeCheckoutGitRuntimeFromStatus(cwd, st)
 	s.broadcastSessionMsg("checkout_status_update", st)

@@ -35,6 +35,7 @@ import type {
   AgentForkContextResponseMessage,
   CheckoutStatusResponse,
   CheckoutCommit,
+  CheckoutDiffUpdate,
   ParsedDiffFile,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
@@ -127,6 +128,7 @@ import { isRelayClientWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { terminalSubscriptionKey } from "@bytetrue/protocol/terminal-subscription-key";
 import {
   asUint8Array,
+  decodeDiffFrame,
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   decodeTerminalStreamFrame,
@@ -134,6 +136,7 @@ import {
   encodeTunnelFrame,
   FileTransferOpcode,
   TerminalStreamOpcode,
+  type DiffFrame,
   type FileTransferFrame,
   type TunnelFrame,
 } from "@bytetrue/protocol/binary-frames/index";
@@ -153,6 +156,7 @@ import {
   normalizeProviderSnapshotUpdateMessage,
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
+import { DiffFrameAssembler } from "./diff-frame-assembler.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
 
 export interface Logger {
@@ -1110,6 +1114,7 @@ export class DaemonClient {
     { cwd: string; path: string; onUpdate: (version: FileVersion) => void }
   >();
   private readonly terminalStreams = new TerminalStreamRouter();
+  private readonly diffFrames = new DiffFrameAssembler();
   private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
   private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
   private completedBinaryFileReads = new Map<string, FileReadResult>();
@@ -3657,6 +3662,7 @@ export class DaemonClient {
 
   unsubscribeCheckoutDiff(subscriptionId: string): void {
     this.checkoutDiffSubscriptions.delete(subscriptionId);
+    this.diffFrames.forget(subscriptionId);
     this.sendSessionMessage({
       type: "unsubscribe_checkout_diff_request",
       subscriptionId,
@@ -5638,6 +5644,14 @@ export class DaemonClient {
       return true;
     }
 
+    const diffFrame = decodeDiffFrame(rawBytes);
+    if (diffFrame) {
+      this.lastInboundAtMs = perfNow();
+      this.handleDiffFrame(diffFrame);
+      this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
+      return true;
+    }
+
     const frame = decodeTerminalStreamFrame(rawBytes);
     if (!frame) {
       return false;
@@ -5682,6 +5696,33 @@ export class DaemonClient {
       perfNow() - binaryStartMs,
     );
     return true;
+  }
+
+  // A diff revision arrives as Begin, Bodies, End. The assembler keeps the bodies the daemon did
+  // not resend and hands back the same payload shape the JSON checkout_diff_update carries, so
+  // the push router needs no second path.
+  private handleDiffFrame(frame: DiffFrame): void {
+    const delivered = this.diffFrames.push(frame);
+    if (!delivered) {
+      return;
+    }
+    const subscription = this.checkoutDiffSubscriptions.get(delivered.subscriptionId);
+    if (!subscription) {
+      return;
+    }
+    const update: CheckoutDiffUpdate = {
+      type: "checkout_diff_update",
+      payload: {
+        subscriptionId: delivered.subscriptionId,
+        cwd: delivered.payload.cwd,
+        files: delivered.payload.files,
+        error: delivered.payload.error,
+        ...(delivered.payload.diffTooLarge !== undefined
+          ? { diffTooLarge: delivered.payload.diffTooLarge }
+          : {}),
+      },
+    };
+    this.deliverSessionMessage(update);
   }
 
   private handleFileTransferFrame(frame: FileTransferFrame): void {

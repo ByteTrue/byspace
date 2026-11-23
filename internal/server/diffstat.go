@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -15,7 +14,7 @@ import (
 // one response, and a merge-base plus a shortstat per workspace would put several git processes
 // behind a single listing. The subscription poller and the explicit refresh keep the cache warm.
 func (s *Server) checkoutDiffStat(cwd string) *workspace.CheckoutDiffStat {
-	key := strings.TrimSpace(cwd)
+	key := workspace.CanonicalCwd(cwd)
 	if key == "" {
 		return nil
 	}
@@ -31,7 +30,7 @@ func (s *Server) checkoutDiffStat(cwd string) *workspace.CheckoutDiffStat {
 // and only updates from pushes. Recomputing without broadcasting changes nothing visible, and
 // never recomputing at all is why the pill never appeared.
 func (s *Server) refreshCheckoutDiffStat(ctx context.Context, cwd string) {
-	key := strings.TrimSpace(cwd)
+	key := workspace.CanonicalCwd(cwd)
 	if key == "" {
 		return
 	}
@@ -78,9 +77,11 @@ func (s *Server) broadcastWorkspaceForCwd(cwd string) {
 			projectByID[project.ProjectID] = project
 		}
 	}
-	target := strings.TrimRight(cwd, "/")
+	// The watcher and the client spell the same checkout differently; compare the canonical form
+	// so a change made by one is broadcast to the workspaces the other opened.
+	target := workspace.CanonicalCwd(cwd)
 	for _, ws := range workspaces {
-		if ws.ArchivedAt != nil || strings.TrimRight(ws.Cwd, "/") != target {
+		if ws.ArchivedAt != nil || workspace.CanonicalCwd(ws.Cwd) != target {
 			continue
 		}
 		if project, ok := projectByID[ws.ProjectID]; ok {
@@ -95,7 +96,7 @@ func (s *Server) broadcastWorkspaceForCwd(cwd string) {
 // git here would run several processes per response. The subscription poller and the explicit
 // refresh write this, and both are already reading the checkout status for their own pushes.
 func (s *Server) checkoutGitRuntime(cwd string) map[string]any {
-	key := strings.TrimSpace(cwd)
+	key := workspace.CanonicalCwd(cwd)
 	if key == "" {
 		return nil
 	}
@@ -158,7 +159,7 @@ func sameGitRuntime(left, right map[string]any) bool {
 // creation, so without this a checkout that switched branches keeps naming the old one. Takes an
 // already-read status so callers that read git themselves do not pay for a second process.
 func (s *Server) storeCheckoutGitRuntimeFromStatus(cwd string, status workspace.CheckoutStatus) {
-	key := strings.TrimSpace(cwd)
+	key := workspace.CanonicalCwd(cwd)
 	if key == "" {
 		return
 	}

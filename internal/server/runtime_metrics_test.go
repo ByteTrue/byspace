@@ -102,7 +102,8 @@ func TestRuntimeMetricsWindowReportsTraffic(t *testing.T) {
 
 	sessions := map[string]any{"activeConnections": 1}
 	sockets := map[string]any{"activeSockets": 1}
-	out := metrics.snapshot(sessions, sockets, 12.5)
+	observation := map[string]any{"subscriptions": 2, "degraded": 1}
+	out := metrics.snapshot(sessions, sockets, observation, 12.5)
 
 	if out["msg"] != "ws_runtime_metrics" {
 		t.Fatalf("msg = %v, want ws_runtime_metrics so `daemon logs` keeps filtering it", out["msg"])
@@ -130,7 +131,7 @@ func TestRuntimeMetricsWindowReportsTraffic(t *testing.T) {
 		t.Fatalf("latency = %+v", latency)
 	}
 
-	metrics.flush(sessions, sockets, 12.5)
+	metrics.flush(sessions, sockets, observation, 12.5)
 	if len(lines) != 1 {
 		t.Fatalf("expected one log line, got %d", len(lines))
 	}
@@ -144,7 +145,7 @@ func TestRuntimeMetricsWindowReportsTraffic(t *testing.T) {
 
 	// The next window starts empty: a counter that never resets turns every line into a total.
 	metrics.recordInbound("ping")
-	out = metrics.snapshot(sessions, sockets, 13)
+	out = metrics.snapshot(sessions, sockets, observation, 13)
 	if inbound := out["inboundMessageTypesTop"].([][2]any); len(inbound) != 1 || inbound[0][1] != int64(1) {
 		t.Fatalf("second window must count from zero: %v", out["inboundMessageTypesTop"])
 	}
@@ -157,9 +158,58 @@ func TestRuntimeMetricsRecordsTimerDrift(t *testing.T) {
 	metrics.noteTick(start)
 	metrics.noteTick(start.Add(runtimeMetricsInterval + 40*time.Millisecond))
 
-	out := metrics.snapshot(nil, nil, 1)
+	out := metrics.snapshot(nil, nil, nil, 1)
 	delay := out["eventLoopDelay"].(map[string]any)
 	if delay["maxMs"].(float64) < 39 {
 		t.Fatalf("expected the 40ms late tick to be recorded, got %v", delay)
+	}
+}
+
+// The watcher is the layer that can fail silently: a busy checkout degrades to an identity poll,
+// and the metrics line is where that becomes visible instead of a diff that stopped updating.
+func TestObservationHealthReachesRuntimeMetrics(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	srv, fake := fakeObservationServer(t)
+	if _, _, err := srv.store.EnsureWorkspaceForCwd(repo); err != nil {
+		t.Fatal(err)
+	}
+	addTestClient(srv)
+	newCheckoutObserver(srv).reconcile()
+	if fake.Diagnostics().Subscriptions == 0 {
+		t.Fatal("no watch was created, the test proves nothing")
+	}
+
+	var lines []string
+	srv.metrics.collect = func(line string) { lines = append(lines, line) }
+	sessions, sockets := srv.runtimeCounts()
+	srv.metrics.flush(sessions, sockets, srv.observation.health(), 1)
+	if len(lines) != 1 {
+		t.Fatalf("expected one metrics line, got %d", len(lines))
+	}
+	var healthy map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &healthy); err != nil {
+		t.Fatalf("the line must be JSON: %v", err)
+	}
+	observed, ok := healthy["fileObservation"].(map[string]any)
+	if !ok {
+		t.Fatalf("fileObservation = %v, want the watcher counters", healthy["fileObservation"])
+	}
+	if observed["subscriptions"].(float64) < 2 {
+		t.Fatalf("subscriptions = %v, want the working tree and the git directory", observed["subscriptions"])
+	}
+	if observed["degraded"].(float64) != 0 || observed["failures"].(float64) != 0 {
+		t.Fatalf("a healthy watcher reported %v", observed)
+	}
+
+	fake.Fail()
+	srv.metrics.flush(sessions, sockets, srv.observation.health(), 2)
+	var degraded map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &degraded); err != nil {
+		t.Fatalf("the line must be JSON: %v", err)
+	}
+	observed, _ = degraded["fileObservation"].(map[string]any)
+	if observed["degraded"].(float64) == 0 || observed["failures"].(float64) == 0 {
+		t.Fatalf("a failed watcher reported %v", observed)
 	}
 }

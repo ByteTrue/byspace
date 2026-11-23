@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ByteTrue/byspace/internal/terminal"
 	"net"
 	"net/http"
 	"os"
@@ -16,10 +15,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agent/providers"
-	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/skip2/go-qrcode"
 
+	"github.com/ByteTrue/byspace/internal/agent/providers"
+	diffframes "github.com/ByteTrue/byspace/internal/diff"
+	"github.com/ByteTrue/byspace/internal/gitdiff"
+	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
@@ -36,11 +38,30 @@ type fileSubscription struct {
 }
 
 type diffSubscription struct {
-	id         string
-	sink       frameSink
-	cwd        string
-	compare    map[string]any
-	lastDigest string
+	id      string
+	sink    frameSink
+	cwd     string
+	compare map[string]any
+	// sub is the engine subscription behind this pane. The engine, not this poller, decides when
+	// a comparison changed: it reads only the files whose identity moved.
+	sub *gitdiff.Subscription
+	// delivered is the last revision this pane received. A body is sent only when the file changed
+	// since that revision; the client keeps the rest.
+	delivered uint64
+}
+
+// diffKey maps a client comparison onto the engine key. Two panes on the same checkout and the
+// same comparison share one computation.
+func diffKey(cwd string, compare map[string]any) gitdiff.Key {
+	mode, _ := compare["mode"].(string)
+	baseRef, _ := compare["baseRef"].(string)
+	ignoreWhitespace, _ := compare["ignoreWhitespace"].(bool)
+	return gitdiff.Key{
+		Cwd:              workspace.CanonicalCwd(cwd),
+		Base:             baseRef,
+		Committed:        strings.TrimSpace(mode) == "base",
+		IgnoreWhitespace: ignoreWhitespace,
+	}
 }
 
 func isLoopbackAddr(remoteAddr string) bool {
@@ -184,38 +205,175 @@ func (s *Server) UnregisterFileSubscription(subID string) {
 	s.mu.Unlock()
 }
 
-// RegisterDiffSubscription registers a live git working diff subscription for checkout_diff_update notifications.
-func (s *Server) RegisterDiffSubscription(subID string, sink frameSink, cwd string, compare map[string]any, files []workspace.ParsedDiffFile) {
+// RegisterDiffSubscription registers a live git comparison subscription for checkout_diff_update
+// notifications. The pane's first answer travels in the subscription response; the engine delivers
+// every later revision of that comparison.
+func (s *Server) RegisterDiffSubscription(subID string, sink frameSink, cwd string, compare map[string]any) {
 	if subID == "" {
 		return
 	}
-	b, _ := json.Marshal(files)
-	sum := sha256.Sum256(b)
+	key := diffKey(cwd, compare)
+	// The entry is installed before subscribing: a shared comparison replays its committed result
+	// from inside Subscribe, and a delivery that found no entry would be dropped.
 	s.mu.Lock()
 	if s.diffSubs == nil {
 		s.diffSubs = make(map[string]diffSubscription)
 	}
-	s.diffSubs[subID] = diffSubscription{
-		id:         subID,
-		sink:       sink,
-		cwd:        cwd,
-		compare:    compare,
-		lastDigest: hex.EncodeToString(sum[:]),
+	previous := s.diffSubs[subID]
+	s.diffSubs[subID] = diffSubscription{id: subID, sink: sink, cwd: cwd, compare: compare}
+	if s.diffSent == nil {
+		s.diffSent = make(map[string]map[string]uint64)
+	}
+	s.diffSent[subID] = make(map[string]uint64)
+	s.mu.Unlock()
+
+	sub := s.diffEngine.Subscribe(key, func(res gitdiff.Result) {
+		s.deliverDiffUpdate(subID, sink, cwd, compare, key, res)
+	})
+
+	s.mu.Lock()
+	installed := false
+	if cur, ok := s.diffSubs[subID]; ok && cur.sink == sink {
+		cur.sub = sub
+		s.diffSubs[subID] = cur
+		installed = true
 	}
 	s.mu.Unlock()
+	if !installed {
+		// Unregistered while the subscription was being created.
+		sub.Unsubscribe()
+	}
+	if previous.sub != nil {
+		previous.sub.Unsubscribe()
+	}
 }
 
 // UnregisterDiffSubscription removes a git diff subscription.
 func (s *Server) UnregisterDiffSubscription(subID string) {
 	s.mu.Lock()
+	ds, ok := s.diffSubs[subID]
 	delete(s.diffSubs, subID)
+	delete(s.diffSent, subID)
 	s.mu.Unlock()
+	// Released outside the lock: releasing the last subscriber closes the comparison, and the
+	// engine delivers nothing to a pane that is gone.
+	if ok && ds.sub != nil {
+		ds.sub.Unsubscribe()
+	}
 }
 
-// PollSubscriptionsOnce checks active file and git diff subscriptions and pushes updates when changed.
+// deliverDiffUpdate pushes one revision of a comparison to one pane. Every revision travels as
+// binary Begin/Bodies/End frames whose Bodies carry only the files this pane has not seen at the
+// current revision; the client keeps the rest of the previous revision.
+func (s *Server) deliverDiffUpdate(subID string, sink frameSink, cwd string, compare map[string]any, key gitdiff.Key, res gitdiff.Result) {
+	s.mu.Lock()
+	ds, ok := s.diffSubs[subID]
+	if !ok || ds.sink != sink || ds.delivered >= res.Revision {
+		s.mu.Unlock()
+		return
+	}
+	ds.delivered = res.Revision
+	s.diffSubs[subID] = ds
+	sent := s.diffSent[subID]
+	s.mu.Unlock()
+
+	var diffErr *diffframes.Error
+	if res.Err != nil {
+		diffErr = &diffframes.Error{Code: "UNKNOWN", Message: res.Err.Error()}
+	}
+	// The engine names the files whose identity moved. Everything else keeps the body this pane
+	// already has; comparing revision numbers instead would resend every file on every edit.
+	moved := make(map[string]bool, len(res.Changed))
+	for _, path := range res.Changed {
+		moved[path] = true
+	}
+	entries := make([]string, 0, len(res.Files))
+	present := make(map[string]bool, len(res.Files))
+	var changed []workspace.ParsedDiffFile
+	for _, file := range res.Files {
+		entries = append(entries, file.Path)
+		present[file.Path] = true
+		_, seen := sent[file.Path]
+		if !seen || moved[file.Path] {
+			changed = append(changed, file)
+		}
+	}
+	begin, err := diffframes.EncodeBegin(subID, diffframes.BeginHeader{
+		Revision: res.Revision,
+		Cwd:      cwd,
+		Compare:  compare,
+		Resolved: diffframes.Resolved{
+			BaseSha:      res.Resolved.BaseSha,
+			HeadSha:      res.Resolved.HeadSha,
+			MergeBaseSha: res.Resolved.MergeBaseSha,
+		},
+		Entries: entries,
+		Error:   diffErr,
+	})
+	if err != nil {
+		return
+	}
+	bodies, err := diffframes.EncodeBodies(subID, changed)
+	if err != nil {
+		return
+	}
+	end, err := diffframes.EncodeEnd(subID, diffframes.EndTrailer{
+		Revision:     res.Revision,
+		Omitted:      res.Omitted,
+		DiffTooLarge: res.DiffTooLarge,
+		Error:        diffErr,
+	})
+	if err != nil {
+		return
+	}
+	ctx := context.Background()
+	for _, frame := range [][]byte{begin, bodies, end} {
+		if err := sink.SendBinary(ctx, frame); err != nil {
+			return
+		}
+	}
+	s.mu.Lock()
+	if current := s.diffSent[subID]; current != nil {
+		for path := range current {
+			if !present[path] {
+				delete(current, path)
+			}
+		}
+		for _, file := range changed {
+			current[file.Path] = res.Revision
+		}
+	}
+	s.mu.Unlock()
+	s.refreshDiffCheckoutFacts(key, res.Revision)
+}
+
+// refreshDiffCheckoutFacts keeps the facts derived from the same comparison honest when it moves:
+// the checkout's dirty/branch push and the composer's diff stat. One revision is refreshed once,
+// however many panes share it.
+func (s *Server) refreshDiffCheckoutFacts(key gitdiff.Key, revision uint64) {
+	s.mu.Lock()
+	if s.diffRefreshed == nil {
+		s.diffRefreshed = make(map[gitdiff.Key]uint64)
+	}
+	if s.diffRefreshed[key] >= revision {
+		s.mu.Unlock()
+		return
+	}
+	s.diffRefreshed[key] = revision
+	s.mu.Unlock()
+	ctx := context.Background()
+	s.broadcastCheckoutStatusIfChanged(ctx, key.Cwd)
+	// The composer's diff pill reads the workspace descriptor, and the descriptor is only pushed
+	// when something re-sends the workspace. Watching the checkout is exactly the moment the user
+	// is editing files, so it is where the stat has to be kept honest.
+	s.refreshCheckoutDiffStat(ctx, key.Cwd)
+}
+
+// PollSubscriptionsOnce checks active file subscriptions and drops the ones whose pane is gone.
+//
+// Git comparisons are not polled here: the diff engine recomputes one on invalidation and delivers
+// every revision, so a pane's cost is one git read per actual change instead of one per second.
 func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
-	// Checkouts to refresh dirtiness for, deduped: several diff subscriptions can share a cwd.
-	statuses := make(map[string]struct{}, len(s.diffSubs))
 	s.mu.Lock()
 	fSubs := make([]fileSubscription, 0, len(s.fileSubs))
 	for _, fs := range s.fileSubs {
@@ -225,15 +383,19 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 			delete(s.fileSubs, fs.id)
 		}
 	}
-	dSubs := make([]diffSubscription, 0, len(s.diffSubs))
+	var deadDiff []diffSubscription
 	for _, ds := range s.diffSubs {
-		if s.clients[ds.sink] {
-			dSubs = append(dSubs, ds)
-		} else {
+		if !s.clients[ds.sink] {
 			delete(s.diffSubs, ds.id)
+			deadDiff = append(deadDiff, ds)
 		}
 	}
 	s.mu.Unlock()
+	for _, ds := range deadDiff {
+		if ds.sub != nil {
+			ds.sub.Unsubscribe()
+		}
+	}
 
 	for _, fs := range fSubs {
 		full := filepath.Join(fs.cwd, fs.path)
@@ -317,57 +479,13 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 			},
 		})
 	}
-
-	for _, ds := range dSubs {
-		// The poll must recompute the same comparison the subscription asked for; recomputing the working diff for
-		// every mode made the "Committed" view refresh with the wrong data as soon as anything changed on disk.
-		//
-		// Dirtiness travels on its own channel, and the app caches it as push-only: it never
-		// polls checkout_status. Without a push, committing from a terminal leaves the Changes pane
-		// believing the checkout is still dirty — the manual comparison never expires and the "See
-		// uncommitted changes" link keeps pointing at an empty diff.
-		statuses[ds.cwd] = struct{}{}
-		files := s.checkoutDiffFiles(ctx, ds.cwd, ds.compare)
-		if files == nil {
-			continue
-		}
-		b, _ := json.Marshal(files)
-		sum := sha256.Sum256(b)
-		digest := hex.EncodeToString(sum[:])
-		if digest == ds.lastDigest {
-			continue
-		}
-		s.mu.Lock()
-		if cur, ok := s.diffSubs[ds.id]; ok {
-			cur.lastDigest = digest
-			s.diffSubs[ds.id] = cur
-		}
-		s.mu.Unlock()
-		_ = sendSessionMsg(ctx, ds.sink, "checkout_diff_update", map[string]any{
-			"subscriptionId": ds.id,
-			"cwd":            ds.cwd,
-			"compare":        ds.compare,
-			"files":          files,
-			"error":          nil,
-		})
-	}
-
-	// One status push per checkout, after the diff loop: several diff subscriptions can share a
-	// cwd, and recomputing git status per subscription would cost a `git status` each.
-	for cwd := range statuses {
-		s.broadcastCheckoutStatusIfChanged(ctx, cwd)
-		// The composer's diff pill reads the workspace descriptor, and the descriptor is only
-		// pushed when something re-sends the workspace. Watching the checkout is exactly the
-		// moment the user is editing files, so it is where the stat has to be kept honest.
-		s.refreshCheckoutDiffStat(ctx, cwd)
-	}
 }
 
 // broadcastCheckoutStatusIfChanged pushes checkout status when its dirty/branch facts move.
 //
-// Called from the subscription poller, so it only runs for checkouts a diff pane is watching.
-// The alternative — a push for every live workspace on a timer — costs one `git status` per
-// workspace per tick, which is exactly what the node daemon avoids by using filesystem watchers.
+// Called from the file-subscription poller and from the diff engine's delivery, so it only runs
+// for checkouts some pane is watching. Pushing for every live workspace on a timer costs one
+// `git status` per workspace per tick.
 func (s *Server) broadcastCheckoutStatusIfChanged(ctx context.Context, cwd string) {
 	st := workspace.GetCheckoutStatus(ctx, cwd, "")
 	dirty := st.IsDirty != nil && *st.IsDirty
@@ -375,6 +493,7 @@ func (s *Server) broadcastCheckoutStatusIfChanged(ctx context.Context, cwd strin
 	if st.CurrentBranch != nil {
 		branch = *st.CurrentBranch
 	}
+	cwd = workspace.CanonicalCwd(cwd)
 	fingerprint := branch + "|" + fmt.Sprint(dirty) + "|" + fmt.Sprint(st.IsGit)
 
 	s.mu.Lock()
@@ -582,17 +701,15 @@ func (s *Server) providerSnapshotTag() string {
 	return "wp_" + hex.EncodeToString(h[:8])
 }
 
-// subscriptionPollInterval is how often file and git-diff subscriptions are re-checked.
-//
-// The node daemon uses filesystem watchers with a 150ms debounce, which is more responsive but
-// needs a native watcher per platform. Polling a cheap fingerprint keeps the behaviour without
-// that dependency; 1s is well under human perception for "the file I just changed".
-const subscriptionPollInterval = time.Second
+// filePollInterval is how often an open file subscription re-stats its path. Checkout facts and
+// diffs are event-driven; this tick is only for fs.file.update, whose version is a file revision
+// rather than a git comparison.
+const filePollInterval = time.Second
 
-// startSubscriptionPoller runs PollSubscriptionsOnce until the server closes.
-func (s *Server) startSubscriptionPoller() {
+// startFilePoller runs PollSubscriptionsOnce until the server closes.
+func (s *Server) startFilePoller() {
 	go func() {
-		ticker := time.NewTicker(subscriptionPollInterval)
+		ticker := time.NewTicker(filePollInterval)
 		defer ticker.Stop()
 		for {
 			select {

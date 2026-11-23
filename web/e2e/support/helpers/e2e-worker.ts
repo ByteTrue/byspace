@@ -206,6 +206,9 @@ export async function startE2EWorker(
         // Specs assume exact workspace counts; the daemon-owned Home
         // workspace would shift them by one.
         BYSPACE_DISABLE_HOME_WORKSPACE: "1",
+        // Set by a spec run that wants to prove the checkout-observation path is what refreshed
+        // the UI; the daemon then keeps no watcher and only the old pollers remain.
+        BYSPACE_DISABLE_FILE_OBSERVATION: process.env.BYSPACE_DISABLE_FILE_OBSERVATION ?? "",
         ...options.environment,
       },
     });

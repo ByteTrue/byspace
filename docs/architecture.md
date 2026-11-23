@@ -95,6 +95,16 @@ not retain non-Git directories.
 | `server/relay-transport.ts`     | Outbound relay connection with E2E encryption                                  |
 | `server/schedule/`              | Cron-based scheduled agents                                                    |
 
+### Checkout observation and diff delivery
+
+Checkout facts move on events, not polls. `internal/filewatch` ([file-observation.md](file-observation.md)) reports a working-tree or git-directory change; `internal/server` classifies the git paths through `internal/workspace/gitmeta` and refreshes only the facts that kind of change can move. The old 1 s full-diff poll per open pane and the 2 s HEAD fingerprint are gone; a checkout whose watcher degrades is re-read on a slow tick until the watch is re-established. A mutation the daemon performs itself (commit, discard) invalidates directly, so the pane never depends on the watcher.
+
+`internal/gitdiff` computes one comparison per key (cwd, base, committed, ignore-whitespace) and shares it between panes. Each result carries a `Revision` and a per-file identity: a file whose identity did not move keeps its parsed body, and only changed files are re-read. Delivered means a revision the pane has; cached means the body's identity is unchanged. Unchanged files are not resent because their identity — blob ids, attributes, modes, status and a hashed `git config --null --list` — is the comparison, not their mtime. A pane tracks the revision it has seen, the daemon sends only `Result.Changed` bodies plus files the pane has never seen, and the client retains the rest; a revision older than the pane's last one is discarded rather than rolling the pane back. An invalidation bumps a generation counter, and an in-flight computation whose generation moved is discarded instead of delivered. Invalidations coalesce over 150 ms so one commit's HEAD, ref and index writes cost one recomputation.
+
+Every comparison of two working directories goes through `workspace.CanonicalCwd`. Windows reports the same checkout with either slash depending on whether the path came from the client or the watcher, and a raw string comparison silently keeps the invalidation away from the pane.
+
+Measured on a 1000-file checkout, one edited file per operation, Windows/amd64, Ryzen AI 9 365 (`go test ./internal/gitdiff -run XXX -bench 'BenchmarkEngineOneFileEdit|BenchmarkFullWorkingDiff' -benchtime 5x`): the engine pays 1.44 s per update against 1.24 s for the full `git diff HEAD` the poller ran every second per pane, and 171 body bytes per update. The win is that the engine pays only after a change and shares it across panes, not that one computation is cheaper; the remaining cost is hashing every file, which is what keeps a same-path rewrite visible.
+
 ### `packages/protocol` — Wire schemas and shared protocol types
 
 The source of truth for WebSocket messages, binary frame codecs, endpoint parsing,
@@ -273,6 +283,8 @@ Terminal I/O is sent as binary WebSocket frames decoded by `decodeTerminalStream
 Terminal PTY size is last-interacting-client-wins. A client claims the PTY size only when its terminal viewport genuinely changes size or the user focuses/taps the terminal. Passive rendering work — attaching, restoring visibility, font settling, renderer refits, or just looking at a visible terminal — must not send a resize frame. The server does not broadcast resize ownership; the resized PTY redraws through normal output, and every attached client renders that output in its own local viewport.
 
 There is also a separate file-transfer binary frame format in the same directory, used for download/upload streams.
+
+Diff revisions use the same binary channel: `Begin (0x30)` carries the revision, comparison and entry list as JSON, `Bodies (0x31)` carries only the files whose identity changed, and `End (0x32)` carries the budgets and error. `packages/client/src/diff-frame-assembler.ts` folds them into the same payload the JSON `checkout_diff_update` used to carry, retaining the bodies a revision did not resend.
 File downloads keep the existing `FileBegin`/`FileChunk`/`FileEnd` framing and stream 256 KiB chunks
 from one stable file handle. Each transfer awaits completion of its own physical WebSocket send before
 reading the next chunk; it is scoped to the requesting physical socket and does not queue unrelated
