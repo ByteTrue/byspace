@@ -106,7 +106,7 @@ func TestWorkspaceArchiveDoesNotMutateLocalRecordsAfterNativeFailure(t *testing.
 	}
 }
 
-func TestBatchNativeArchiveFailureLeavesEarlierWorkspacesUntouched(t *testing.T) {
+func TestNativeArchiveFailureArchiveTeardown(t *testing.T) {
 	setup := func(t *testing.T) *Server {
 		srv := &Server{store: store.New(t.TempDir()), agents: make(map[string]*managedPi)}
 		if err := srv.store.UpsertProject(store.ProjectRecord{ProjectID: "project-1", RootPath: t.TempDir()}); err != nil {
@@ -159,10 +159,21 @@ func TestBatchNativeArchiveFailureLeavesEarlierWorkspacesUntouched(t *testing.T)
 		srv := setup(t)
 		sink := &recordingSink{}
 		srv.handleProjectRemove(context.Background(), sink, []byte(`{"requestId":"request-1","projectId":"project-1"}`))
-		assertUntouched(t, srv)
+		// Removal is best-effort on the native side: a provider that cannot archive must not keep
+		// the project in the sidebar, because the agent's own thread is what failed.
+		for _, id := range []string{"ws_1", "ws_2"} {
+			workspace, found := srv.workspaceRecord(id)
+			if !found || workspace.ArchivedAt == nil {
+				t.Fatalf("%s survived the removal: found=%v archivedAt=%v", id, found, workspace.ArchivedAt)
+			}
+			agent, err := srv.store.GetAgent("agt_" + id)
+			if err != nil || agent.ArchivedAt == nil {
+				t.Fatalf("%s agent survived the removal: err=%v archivedAt=%v", id, err, agent.ArchivedAt)
+			}
+		}
 		projects, err := srv.store.ListProjects()
-		if err != nil || len(projects) != 1 || projects[0].ArchivedAt != nil {
-			t.Fatalf("project mutated after native failure: err=%v projects=%#v", err, projects)
+		if err != nil || len(projects) != 1 || projects[0].ArchivedAt == nil {
+			t.Fatalf("project survived the removal: err=%v projects=%#v", err, projects)
 		}
 	})
 }

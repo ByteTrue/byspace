@@ -34,7 +34,7 @@ func TestCLIVersionHelpLsRunAndLogs(t *testing.T) {
 	fakePi := filepath.Join(tmp, "fake-pi.sh")
 	envProbe := filepath.Join(tmp, "pi-env.txt")
 	script := `#!/bin/sh
-	printf '%s|%s|%s\n' "$BYSPACE_AGENT_ID" "$BYSPACE_HOST" "$PATH" > "` + envProbe + `"
+	printf '%s|%s|%s\n' "$BYSPACE_AGENT_ID" "$BYSPACE_HOST" "$PATH" >> "` + envProbe + `"
 while read line; do
   req_id=$(echo "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
   [ -z "$req_id" ] && req_id="req_1"
@@ -96,15 +96,21 @@ done
 
 	// 3b. The agent's own environment is how it reaches the daemon: without these variables a
 	// shell inside the agent cannot find the right daemon or name itself as a caller.
+	// Every fake pi invocation appends a line: the daemon also runs a short-lived session to name
+	// the workspace, and that one carries no agent identity. The agent's own line is the one with
+	// an id.
 	probe, readErr := os.ReadFile(envProbe)
 	if readErr != nil {
 		t.Fatalf("the agent never saw its environment: %v", readErr)
 	}
-	fields := strings.Split(strings.TrimSpace(string(probe)), "|")
-	if len(fields) != 3 {
-		t.Fatalf("unexpected env probe %q", probe)
+	var fields []string
+	for _, line := range strings.Split(strings.TrimSpace(string(probe)), "\n") {
+		if parts := strings.Split(line, "|"); len(parts) == 3 && parts[0] != "" {
+			fields = parts
+			break
+		}
 	}
-	if fields[0] == "" {
+	if len(fields) != 3 {
 		t.Fatalf("the agent process has no BYSPACE_AGENT_ID (probe %q)", probe)
 	}
 	if fields[1] != addr {

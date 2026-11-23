@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -245,16 +246,18 @@ func TestOpenCodeHTTPSession(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("spawns /bin/sh")
 	}
+	prompted := make(chan string, 1)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/session", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": "oc_http_1"})
 	})
-	mux.HandleFunc("/session/oc_http_1/message", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"parts": []map[string]any{
-				{"type": "text", "text": "Hello from OpenCode HTTP server!"},
-			},
-		})
+	// A v1 turn is dispatched asynchronously and read back from the event stream, so this fake stops
+	// at the HTTP contract: the session is created and the prompt lands on prompt_async with its
+	// parts. The turn itself is covered by the event handler tests.
+	mux.HandleFunc("/session/oc_http_1/prompt_async", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		prompted <- string(body)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -269,6 +272,9 @@ func TestOpenCodeHTTPSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sess.Close()
+	if sess.sessionID != "oc_http_1" {
+		t.Fatalf("session id = %q, want the server's id", sess.sessionID)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -276,11 +282,13 @@ func TestOpenCodeHTTPSession(t *testing.T) {
 	if err := sess.Prompt(ctx, "Hi OpenCode", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := sess.WaitForFinish(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got := sess.LastAssistantText(); got != "Hello from OpenCode HTTP server!" {
-		t.Fatalf("unexpected OpenCode reply: %q", got)
+	select {
+	case body := <-prompted:
+		if !strings.Contains(body, "Hi OpenCode") {
+			t.Fatalf("prompt body = %s; the text never reached the server", body)
+		}
+	case <-ctx.Done():
+		t.Fatal("the prompt never reached the server")
 	}
 }
 

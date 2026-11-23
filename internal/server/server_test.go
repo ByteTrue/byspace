@@ -367,7 +367,9 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// The step list below waits for a scheduled run to start an agent and settle, so a 5s budget
+	// runs out on a loaded runner well before the test does.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
