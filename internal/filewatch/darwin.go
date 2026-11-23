@@ -132,7 +132,7 @@ func (o *darwinObservation) Subscribe(root string, opts Options, handler func(Ev
 
 	// The first snapshot is the baseline: content that changes after this point is reported.
 	sub.snapshot = snapshotIdentities(clean, excludedRoots)
-	if err := sub.scanTree(clean); err != nil {
+	if err := sub.scanTree(clean, false); err != nil {
 		sub.closeHandles()
 		return nil, err
 	}
@@ -281,8 +281,9 @@ func (s *darwinSubscription) run() {
 }
 
 // scanTree watches dir and every directory below it, recording what each one held so a later
-// rescan can tell a creation from a rename.
-func (s *darwinSubscription) scanTree(dir string) error {
+// rescan can tell a creation from a rename. A directory that arrived after the subscription
+// announces its existing children: they are new to the consumer even if they beat the watch.
+func (s *darwinSubscription) scanTree(dir string, announce bool) error {
 	if excluded(s.excluded, dir) {
 		return nil
 	}
@@ -295,11 +296,14 @@ func (s *darwinSubscription) scanTree(dir string) error {
 		return err
 	}
 	for name, entry := range entries {
+		child := filepath.Join(dir, name)
+		if announce {
+			s.emit(Event{Path: child, Kind: Created})
+		}
 		if !entry.isDir {
 			continue
 		}
-		child := filepath.Join(dir, name)
-		if err := s.scanTree(child); err != nil {
+		if err := s.scanTree(child, announce); err != nil {
 			if errors.Is(err, unix.ENOENT) {
 				continue
 			}
@@ -400,14 +404,14 @@ func (s *darwinSubscription) rescanDir(dir string) {
 				if entry.isDir {
 					// The kernel watch follows the inode; the recorded path has to follow too.
 					s.forgetTree(filepath.Join(dir, oldName))
-					_ = s.scanTree(path)
+					_ = s.scanTree(path, false)
 				}
 				continue
 			}
 		}
 		s.emit(Event{Path: path, Kind: Created})
 		if entry.isDir {
-			_ = s.scanTree(path)
+			_ = s.scanTree(path, true)
 		}
 	}
 	for name, entry := range gone {
@@ -471,7 +475,7 @@ func (s *darwinSubscription) applyExclusions() {
 			if !excluded(excludedRoots, s.root) {
 				// A quiet rebuild: a directory that was not watched during its exclusion has no
 				// events to replay, and its existing files must not be announced as created.
-				_ = s.scanTree(s.root)
+				_ = s.scanTree(s.root, false)
 			}
 			s.snapshot = snapshotIdentities(s.root, excludedRoots)
 			close(update.done)
