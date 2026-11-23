@@ -2,10 +2,9 @@ import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell, openSettings } from "../support/helpers/app";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { getServerId } from "../support/helpers/server-id";
+import { seedModelProvider } from "../support/helpers/agent-profiles";
 import {
   expectProviderInstalledInSettings,
-  installAcpCatalogProvider,
-  openAddProviderArea,
   openSettingsHost,
   openSettingsHostSection,
 } from "../support/helpers/settings";
@@ -64,17 +63,20 @@ test.describe("provider removal", () => {
       clientIdPrefix: "provider-removal-e2e",
     });
 
-    try {
-      await removeCustomProvider(client);
+    // Adding a provider is a daemon-config write now: Settings only hands out the setup prompt.
+    const seed = await seedModelProvider({
+      id: CUSTOM_PROVIDER.id,
+      label: CUSTOM_PROVIDER.name,
+      models: [{ id: "junie-test", label: "Junie test", description: "Junie test model" }],
+    });
 
+    try {
       await gotoAppShell(page);
       await openSettings(page);
       await openSettingsHost(page, getServerId());
       await openSettingsHostSection(page, getServerId(), "agents");
 
       await expect(page.getByTestId("provider-actions-claude")).toHaveCount(0);
-      await openAddProviderArea(page);
-      await installAcpCatalogProvider(page, CUSTOM_PROVIDER.name);
       await expectProviderInstalledInSettings(page, CUSTOM_PROVIDER.name);
       await expectProviderSource(client, "custom");
 
@@ -90,6 +92,7 @@ test.describe("provider removal", () => {
       ).toHaveCount(0);
       await expectProviderSource(client, undefined);
     } finally {
+      await seed.restore().catch(() => undefined);
       await removeCustomProvider(client).catch(() => undefined);
       await client.close().catch(() => undefined);
     }

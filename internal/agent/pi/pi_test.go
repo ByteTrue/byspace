@@ -274,9 +274,13 @@ func TestPromptForwardsImageBlocksToPi(t *testing.T) {
 	tmp := t.TempDir()
 	fakePi := filepath.Join(tmp, "fake-pi-echo-images.sh")
 	// Echo back the raw prompt command line so the test can assert image blocks survived.
+	// get_state negotiates a model that accepts images; Prompt refuses them for a text-only model.
 	script := `#!/bin/sh
 while read line; do
   case "$line" in
+    *'"type":"get_state"'*)
+      echo '{"type":"response","id":"req_1","command":"get_state","success":true,"data":{"sessionId":"pi_images","model":{"id":"m","input":["text","image"]}}}'
+      ;;
     *'"type":"prompt"'*)
       echo "{\"type\":\"response\",\"id\":\"r1\",\"command\":\"prompt\",\"success\":true,\"data\":{\"agentInvoked\":true}}"
       echo '{"type":"agent_start"}'
@@ -299,6 +303,10 @@ done
 		t.Fatal(err)
 	}
 	defer sess.Close()
+
+	if _, err := sess.GetState(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 
 	const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 	if err := sess.Prompt(context.Background(), "what colour", []ImageContent{

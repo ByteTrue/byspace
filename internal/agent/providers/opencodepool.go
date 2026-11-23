@@ -81,6 +81,9 @@ type OpenCodePool struct {
 	// probe reports whether a server answers. Overridable for tests, which cannot start a real
 	// opencode binary.
 	probe func(server *OpenCodeServer) bool
+	// probeVersion reads the installed binary's protocol version. Overridable for tests, which have
+	// no opencode binary to ask.
+	probeVersion func(ctx context.Context) (int, error)
 	// startupTimeout bounds the wait for a server to answer. Overridable for tests.
 	startupTimeout time.Duration
 }
@@ -98,6 +101,9 @@ func NewOpenCodePool(homeDir, command string, args []string) *OpenCodePool {
 	pool.allocPort = freePort
 	pool.startProcess = defaultStartProcess
 	pool.probe = probeOpenCodeServer
+	pool.probeVersion = func(ctx context.Context) (int, error) {
+		return probeOpenCodeBinaryVersion(ctx, pool.command, pool.args, pool.env)
+	}
 	pool.startupTimeout = OpenCodeServerStartupTimeout
 	if resolved := execres.Find(context.Background(), pool.command); resolved != "" {
 		pool.command = resolved
@@ -208,7 +214,7 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 
 	args := make([]string, 0, len(p.args)+3)
 	args = append(args, p.args...)
-	version, versionErr := probeOpenCodeBinaryVersion(ctx, p.command, p.args, p.env)
+	version, versionErr := p.probeVersion(ctx)
 	if versionErr != nil {
 		return nil, versionErr
 	}

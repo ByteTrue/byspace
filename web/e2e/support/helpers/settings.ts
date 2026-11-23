@@ -331,21 +331,13 @@ export async function serveJson(page: Page, url: string, body: unknown): Promise
 }
 
 export async function openAddProviderArea(page: Page): Promise<void> {
-  // The catalog sits last on the Agents page and is collapsed by default: adding
-  // a provider is a once-per-install errand.
+  // The add-provider card sits last on the Agents page and is collapsed by default: adding
+  // a provider is a once-per-install errand. It offers the copy-prompt handoff, not a catalog.
   await page.getByTestId("host-page-add-provider-card").scrollIntoViewIfNeeded();
   await page.getByTestId("host-page-add-provider-card-toggle").click();
-  await expect(page.getByRole("textbox", { name: "Search providers" })).toBeVisible();
-}
-
-export async function findAcpCatalogProvider(page: Page, providerName: string): Promise<void> {
-  await page.getByRole("textbox", { name: "Search providers" }).fill(providerName);
-  await expect(page.getByText(providerName, { exact: true })).toBeVisible();
-}
-
-export async function installAcpCatalogProvider(page: Page, providerName: string): Promise<void> {
-  await findAcpCatalogProvider(page, providerName);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Copy onboarding prompt", exact: true }),
+  ).toBeVisible();
 }
 
 export async function expectProviderInstalledInSettings(

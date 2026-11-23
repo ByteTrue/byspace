@@ -4,10 +4,8 @@ import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-
 import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-gate";
 import { scrollChatAwayFromBottom } from "../support/helpers/agent-bottom-anchor";
 import {
-  composerLocator,
   expectComposerDraft,
   expectComposerVisible,
-  fillComposerDraft,
   submitMessage,
 } from "../support/helpers/composer";
 import { readReplicaCache, writeReplicaCache } from "../support/helpers/replica-cache-storage";
@@ -199,6 +197,10 @@ test.describe("Rewind sheet", () => {
       await page.getByTestId("rewind-menu-trigger").first().click();
       const rewindSheet = page.getByTestId("rewind-menu-content");
       await expect(rewindSheet).toBeVisible();
+      // The mock provider keeps its own timeline but has no native file checkpoints, so the sheet
+      // offers the conversation rewind only.
+      await expect(rewindSheet.getByTestId("rewind-menu-files")).toHaveCount(0);
+      await expect(rewindSheet.getByTestId("rewind-menu-both")).toHaveCount(0);
       await expect(
         rewindSheet.getByText("This action cannot be undone", { exact: true }),
       ).toBeVisible();
@@ -207,44 +209,15 @@ test.describe("Rewind sheet", () => {
       await expect(page.getByTestId("rewind-menu-content")).toHaveCount(0);
       await expect(userMessage(page, secondPrompt)).toHaveCount(0);
       await expect(page.getByText("Cycle 1", { exact: true })).toHaveCount(0);
-      await expectUserMessageCount(page, 1);
+      // A conversation rewind drops the target prompt itself; the client puts it back in the
+      // composer, so the timeline keeps nothing from that turn.
+      await expectUserMessageCount(page, 0);
       await expectComposerDraft(page, firstPrompt);
 
       await submitMessage(page, replacementPrompt);
       await expectUserMessageVisible(page, replacementPrompt);
       await expect(userMessage(page, secondPrompt)).toHaveCount(0);
       await expect(page.getByText("Cycle 1", { exact: true })).toHaveCount(0);
-      await expectUserMessageCount(page, 2);
-
-      await fillComposerDraft(page, "");
-      await composerLocator(page).evaluate((element) => element.blur());
-      await userMessage(page, replacementPrompt).hover();
-      await page.getByTestId("rewind-menu-trigger").last().click();
-      await expect(page.getByTestId("rewind-menu-content")).toBeVisible();
-      await page.getByTestId("rewind-menu-files").click();
-      await expect(page.getByTestId("rewind-menu-content")).toHaveCount(0);
-      await expectComposerDraft(page, "");
-      await expectUserMessageCount(page, 2);
-
-      const preservedDraft = "Keep this human draft after rewind.";
-      await fillComposerDraft(page, preservedDraft);
-      await composerLocator(page).evaluate((element) => element.blur());
-      await userMessage(page, replacementPrompt).hover();
-      await page.getByTestId("rewind-menu-trigger").last().click();
-      await expect(page.getByTestId("rewind-menu-content")).toBeVisible();
-      await page.getByTestId("rewind-menu-files").click();
-      await expect(page.getByTestId("rewind-menu-content")).toHaveCount(0);
-      await expectComposerDraft(page, preservedDraft);
-      await expectUserMessageCount(page, 2);
-
-      await fillComposerDraft(page, "");
-      await composerLocator(page).evaluate((element) => element.blur());
-      await userMessage(page, replacementPrompt).hover();
-      await page.getByTestId("rewind-menu-trigger").last().click();
-      await expect(page.getByTestId("rewind-menu-content")).toBeVisible();
-      await page.getByTestId("rewind-menu-both").click();
-      await expect(page.getByTestId("rewind-menu-content")).toHaveCount(0);
-      await expectComposerDraft(page, replacementPrompt);
       await expectUserMessageCount(page, 1);
     } finally {
       await session.cleanup();

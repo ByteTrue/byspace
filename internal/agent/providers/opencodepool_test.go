@@ -60,6 +60,7 @@ func TestAcquireDeduplicatesConcurrentStarts(t *testing.T) {
 	}
 	pool.allocPort = func() (int, error) { return 7100, nil }
 	pool.probe = func(server *OpenCodeServer) bool { return true }
+	pool.probeVersion = func(context.Context) (int, error) { return 2, nil }
 
 	if _, err := pool.Acquire(context.Background()); err != nil {
 		t.Fatal(err)
@@ -83,6 +84,7 @@ func TestStartFailsWhenServerDoesNotAnswer(t *testing.T) {
 	}
 	pool.allocPort = func() (int, error) { return 7101, nil }
 	pool.probe = func(server *OpenCodeServer) bool { return false }
+	pool.probeVersion = func(context.Context) (int, error) { return 2, nil }
 	pool.startupTimeout = 200 * time.Millisecond
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -98,6 +100,7 @@ func TestStartProcessErrorIsReported(t *testing.T) {
 	pool.startProcess = func(ctx context.Context, command string, args []string, dir string, env []string) (*exec.Cmd, error) {
 		return nil, errors.New("no such binary")
 	}
+	pool.probeVersion = func(context.Context) (int, error) { return 2, nil }
 	if _, err := pool.Acquire(context.Background()); err == nil {
 		t.Fatal("a launch failure must be returned")
 	}
@@ -113,6 +116,7 @@ func TestStartBuildsServeCommand(t *testing.T) {
 	}
 	pool.allocPort = func() (int, error) { return 7102, nil }
 	pool.probe = func(server *OpenCodeServer) bool { return true }
+	pool.probeVersion = func(context.Context) (int, error) { return 2, nil }
 	server, err := pool.Acquire(context.Background())
 	if err != nil {
 		t.Fatal(err)

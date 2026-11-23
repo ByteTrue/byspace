@@ -1403,12 +1403,12 @@ func structuredBranchName(message string) string {
 	return string(encoded)
 }
 
-// RewindConversation truncates the scripted history back to its first echoed prompt.
+// RewindConversation drops the target prompt and everything after it.
 //
-// Node's mock does exactly this (keepFirstUserMessageHistory): a conversation rewind drops every
-// entry except the first user_message, which is what the ui-contract spec asserts — one user row
-// left, the assistant content gone. A configured mockRewindError fails first, exercising the
-// client's error path without touching the timeline.
+// The daemon seeds the same slice of entries after a native rewind, so the mock has to agree with
+// it: keep the target and the two disagree silently, which is exactly what happened when the mock
+// kept the first prompt regardless of the target. A configured mockRewindError fails first,
+// exercising the client's error path without touching the timeline.
 func (s *MockSession) RewindConversation(_ context.Context, messageID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1430,10 +1430,14 @@ func (s *MockSession) RewindConversation(_ context.Context, messageID string) er
 			s.cancel = nil
 		}
 	}
-	kept := make([]sdk.TimelineEntry, 0, 1)
-	for _, entry := range s.timeline {
-		if entry.Item.Type == "user_message" {
-			kept = append(kept, entry)
+	target := strings.TrimSpace(messageID)
+	kept := make([]sdk.TimelineEntry, 0, len(s.timeline))
+	for index, entry := range s.timeline {
+		if entry.Item.Type != "user_message" {
+			continue
+		}
+		if entry.Item.MessageID == target || entry.Item.Text == target {
+			kept = append(kept, s.timeline[:index]...)
 			break
 		}
 	}

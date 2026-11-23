@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -233,16 +234,15 @@ func (s *Server) handleProjectRemove(ctx context.Context, sink frameSink, raw js
 			removedWS = append(removedWS, w.WorkspaceID)
 		}
 	}
+	// The native archive is best-effort on removal. A provider that cannot archive natively
+	// (CLI missing, older version, offline) used to abort the whole removal, which left the
+	// project active with no way to retry: the agent's thread is what failed. Removing the
+	// project locally is what the user asked for, so the teardown always runs and the native
+	// failure is logged instead.
 	for _, workspaceID := range removedWS {
 		if err := s.prepareArchivedWorkspaceNative(ctx, workspaceID); err != nil {
-			_ = sendSessionMsg(ctx, sink, "project.remove.response", map[string]any{
-				"requestId": req.RequestID, "projectId": req.ProjectID, "accepted": false,
-				"removedWorkspaceIds": []string{}, "error": err.Error(),
-			})
-			return
+			log.Printf("project remove: native archive failed for workspace %s: %v", workspaceID, err)
 		}
-	}
-	for _, workspaceID := range removedWS {
 		s.teardownArchivedWorkspaceLocal(workspaceID, now)
 	}
 	projects, _ := s.store.ListProjects()

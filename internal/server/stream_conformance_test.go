@@ -557,14 +557,26 @@ esac
 		"type": "session",
 		"message": map[string]any{
 			"type": "create_agent_request", "requestId": "ex1",
-			"initialPrompt": "will kill the provider",
-			"config":        map[string]any{"provider": "pi", "cwd": workDir},
+			"config": map[string]any{"provider": "pi", "cwd": workDir},
 		},
 	})
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
 	agentID, earlyFrames := subscribeTimelineOnly(t, ctx, ws)
+	// Prompt only after the subscription lands. A create-time prompt kills the provider before the
+	// client can subscribe, so the turn_failed would be broadcast to nobody and the race decided
+	// the test.
+	promptReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "send_agent_message_request", "requestId": "ex2", "agentId": agentID,
+			"text": "will kill the provider",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, promptReq); err != nil {
+		t.Fatal(err)
+	}
 
 	var sawTurnFailed, sawTurnCompleted bool
 	for _, f := range earlyFrames {

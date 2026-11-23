@@ -259,11 +259,12 @@ func TestOpenCodeHTTPSession(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	sess, err := StartProviderSession(LaunchConfig{
-		Provider:        "opencode",
-		CommandOverride: ts.URL,
-		Cwd:             t.TempDir(),
-	})
+	// An http command override always selects the v2 transport, so a v1 server like this fake is
+	// exercised through the v1 constructor.
+	sess, err := newHTTPOpenCodeSession(LaunchConfig{
+		Provider: "opencode",
+		Cwd:      t.TempDir(),
+	}, ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
