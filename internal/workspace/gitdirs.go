@@ -49,5 +49,11 @@ func cleanGitDir(cwd, value string) string {
 	if !filepath.IsAbs(value) {
 		value = filepath.Join(cwd, value)
 	}
-	return filepath.Clean(value)
+	value = filepath.Clean(value)
+	// EvalSymlinks also expands Windows 8.3 names. Linked worktrees can report the common
+	// directory with a different spelling from the main checkout, and they must share one watch.
+	if resolved, err := filepath.EvalSymlinks(value); err == nil {
+		value = resolved
+	}
+	return value
 }

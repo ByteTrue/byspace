@@ -262,6 +262,8 @@ jobs:
 
       - name: Test file observation
         run: go test ./internal/filewatch -count=1
+        env:
+          BYSPACE_DEBUG_FILE_OBSERVATION: 1
 
       # macOS is the only backend whose write path is a poll inside the observer, so the
       # checkout-fact differential has to run here to prove the same scenarios settle.

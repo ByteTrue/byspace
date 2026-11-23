@@ -4,6 +4,7 @@ package filewatch
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -253,6 +254,7 @@ func (s *darwinSubscription) closeHandles() {
 
 func (s *darwinSubscription) run() {
 	defer close(s.done)
+	s.debugf("darwin run started kq=%d root=%s", s.kq, s.root)
 	events := make([]unix.Kevent_t, 64)
 	for {
 		if s.stopping.Load() {
@@ -260,6 +262,7 @@ func (s *darwinSubscription) run() {
 		}
 		n, err := unix.Kevent(s.kq, nil, events, nil)
 		if err != nil {
+			s.debugf("darwin kevent error: %v", err)
 			if errors.Is(err, unix.EINTR) {
 				continue
 			}
@@ -268,6 +271,7 @@ func (s *darwinSubscription) run() {
 		}
 		for i := 0; i < n; i++ {
 			event := events[i]
+			s.debugf("darwin event filter=%d ident=%d flags=%#x", event.Filter, event.Ident, event.Fflags)
 			switch event.Filter {
 			case unix.EVFILT_USER:
 				s.applyExclusions()
@@ -436,6 +440,7 @@ func takeByInode(gone map[string]darwinEntry, ino uint64) (string, bool) {
 // reconciles directory entries from the same snapshots the vnode handler uses: a dropped vnode
 // event costs one poll interval, not a permanently missing create, rename or delete.
 func (s *darwinSubscription) contentPoll() {
+	s.debugf("darwin content poll entries=%d", len(s.entries))
 	dirs := make([]string, 0, len(s.entries))
 	for dir := range s.entries {
 		dirs = append(dirs, dir)
@@ -481,7 +486,14 @@ func (s *darwinSubscription) applyExclusions() {
 	}
 }
 
+func (s *darwinSubscription) debugf(format string, args ...any) {
+	if os.Getenv("BYSPACE_DEBUG_FILE_OBSERVATION") == "1" {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
+}
+
 func (s *darwinSubscription) emit(event Event) {
+	s.debugf("darwin emit %s %s", event.Kind, event.Path)
 	if s.stopping.Load() {
 		return
 	}
