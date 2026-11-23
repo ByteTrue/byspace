@@ -432,9 +432,17 @@ func takeByInode(gone map[string]darwinEntry, ino uint64) (string, bool) {
 	return "", false
 }
 
-// contentPoll reports content edits, which kqueue cannot see through a directory watch. It reports
-// only changes to files it already knew: creates, renames and deletes arrive from the vnode events.
+// contentPoll reports content edits, which kqueue cannot see through a directory watch. It also
+// reconciles directory entries from the same snapshots the vnode handler uses: a dropped vnode
+// event costs one poll interval, not a permanently missing create, rename or delete.
 func (s *darwinSubscription) contentPoll() {
+	dirs := make([]string, 0, len(s.entries))
+	for dir := range s.entries {
+		dirs = append(dirs, dir)
+	}
+	for _, dir := range dirs {
+		s.rescanDir(dir)
+	}
 	s.mu.Lock()
 	excludedRoots := s.excluded
 	s.mu.Unlock()

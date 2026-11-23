@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -27,7 +28,17 @@ func ResolveGitDirs(ctx context.Context, cwd string) (worktreeDir string, common
 	if len(lines) < 2 {
 		return "", "", fmt.Errorf("workspace: rev-parse returned %q, want both git directories", out)
 	}
-	return cleanGitDir(cwd, lines[0]), cleanGitDir(cwd, lines[1]), nil
+	worktreeDir = cleanGitDir(cwd, lines[0])
+	commonDir = cleanGitDir(cwd, lines[1])
+	// On Windows, --absolute-git-dir may expand a short 8.3 path while --git-common-dir stays
+	// relative to the caller. Keep one spelling for the same directory or a main worktree would
+	// look like two watch roots.
+	worktreeInfo, worktreeErr := os.Stat(worktreeDir)
+	commonInfo, commonErr := os.Stat(commonDir)
+	if worktreeErr == nil && commonErr == nil && os.SameFile(worktreeInfo, commonInfo) {
+		worktreeDir = commonDir
+	}
+	return worktreeDir, commonDir, nil
 }
 
 // cleanGitDir resolves a rev-parse path against the checkout. --git-common-dir is relative

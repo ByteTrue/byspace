@@ -114,7 +114,11 @@ func TestObservationClassifiesGitMetadata(t *testing.T) {
 	if got := fake.Diagnostics().Subscriptions; got != 1 {
 		t.Fatalf("subscriptions = %d, want one shared directory for a main worktree", got)
 	}
-	gitDir := filepath.Join(repo, ".git")
+	worktreeDir, _, err := workspace.ResolveGitDirs(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("ResolveGitDirs: %v", err)
+	}
+	gitDir := worktreeDir
 
 	fake.Write(filepath.Join(gitDir, "refs", "heads", "feature"))
 	fake.Write(filepath.Join(gitDir, "HEAD"))

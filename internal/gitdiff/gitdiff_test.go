@@ -543,7 +543,8 @@ func TestSymlinkedFileIsReadAsALink(t *testing.T) {
 	}
 	second, _ := comparison(t, dir, cache)
 	sort.Strings(second.Changed)
-	want := []string{"a.txt", "target.txt"}
+	// The symlink's identity moves; the file it points at is untouched.
+	want := []string{"a.txt"}
 	if !reflect.DeepEqual(second.Changed, want) {
 		t.Fatalf("change list after replacing the file with a symlink = %v, want %v", second.Changed, want)
 	}

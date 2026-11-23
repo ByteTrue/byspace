@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/filewatch"
 	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/workspace"
 	"github.com/ByteTrue/byspace/internal/workspace/gitmeta"
 )
 
@@ -32,12 +34,16 @@ func TestGitObservationRoutesOwnerChangesToTheOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("watchGit(linked): %v", err)
 	}
+	mainWorktree, mainCommon, err := workspace.ResolveGitDirs(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("ResolveGitDirs(main): %v", err)
+	}
 	// One shared directory plus the linked worktree's own administrative directory.
 	if got := fake.Diagnostics().Subscriptions; got != 2 {
 		t.Fatalf("subscriptions = %d, want 2", got)
 	}
 
-	fake.Write(filepath.Join(repo, ".git", "index"))
+	fake.Write(filepath.Join(mainWorktree, "index"))
 	if events, _ := main.snapshot(); len(events) != 1 {
 		t.Fatalf("main checkout saw %v, want its index change", events)
 	}
@@ -45,8 +51,8 @@ func TestGitObservationRoutesOwnerChangesToTheOwner(t *testing.T) {
 		t.Fatalf("linked worktree saw %v, want nothing from the main checkout's index", events)
 	}
 
-	fake.Write(filepath.Join(repo, ".git", "config"))
-	fake.Write(filepath.Join(repo, ".git", "refs", "heads", "feature"))
+	fake.Write(filepath.Join(mainCommon, "config"))
+	fake.Write(filepath.Join(mainCommon, "refs", "heads", "feature"))
 	if _, effects := main.snapshot(); len(effects) != 3 {
 		t.Fatalf("main checkout effects = %+v, want index, config and the ref", effects)
 	}
