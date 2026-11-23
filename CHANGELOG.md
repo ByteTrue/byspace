@@ -5,6 +5,35 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.28.0 - 2026-11-23
+
+### Added
+
+- Added native session history and archive for Claude Code, Codex, OpenCode, Pi, and ACP providers, so importing and archiving a session reaches the provider instead of stopping at BySpace
+- Added background activity reporting for Claude Code background tasks, Pi background terminals, and OpenCode v2 shells, with stop, retry, and dismiss for a track that never resolves
+- Added keyboard navigation to the background tracks popover with arrow keys, Home, and End
+- Added a Copy setup prompt action under Settings → Agents → Add provider, which copies a provider adapter setup prompt pointing at the adapter template on the daemon host
+
+### Changed
+
+- Changed agent rewind to rewind the provider's own session and its session-scoped files instead of the whole workspace
+- Changed Codex agents to carry approvals, goals, custom prompts, slash commands, and collaboration tasks
+- Changed ACP providers to forward configured MCP servers, with filesystem capabilities left off unless you enable them
+- Changed agent attachments to follow the provider's reported input modes, so an unsupported image is rejected instead of silently dropped
+- Changed background tracks to show readable titles, status, and elapsed time, and to hide the trigger when no track is active or unresolved
+- Changed AskUser question text to be selectable and copyable
+
+### Removed
+
+- Removed the in-app ACP provider catalog and its searchable presets; adding a provider is the setup prompt now
+- Removed the provider adapter template installed as a skill into `~/.agents/skills` and `~/.claude/skills`
+
+### Fixed
+
+- Fixed removing a project failing when a provider could not archive its native session, which left the project stuck in the sidebar
+- Fixed rewinding a conversation to the first prompt emptying the timeline instead of leaving it ready to resend
+- Fixed Pi aborting a turn while queued prompts kept running, and Pi dropping images from tool results and compaction
+
 ## 0.27.2 - 2026-11-21
 
 ### Added
