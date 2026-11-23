@@ -26,7 +26,9 @@ func TestCheckoutFactsFollowGitWithoutPolling(t *testing.T) {
 		t.Fatal(err)
 	}
 	addTestClient(srv)
-	newCheckoutObserver(srv).reconcile()
+	observer := newCheckoutObserver(srv)
+	observer.reconcile()
+	defer observer.releaseAll()
 	srv.refreshCheckoutDiffStat(context.Background(), repo)
 	srv.broadcastCheckoutStatusIfChanged(context.Background(), repo)
 	waitForFacts(t, srv, repo, "baseline")
