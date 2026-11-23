@@ -70,3 +70,22 @@ func TestHeadFingerprint(t *testing.T) {
 		t.Fatalf("a plain directory has fingerprint %q", got)
 	}
 }
+
+// A push moves the upstream ref without touching HEAD, and the checkout's diff stat is measured
+// against that upstream, so the fingerprint has to move with it.
+func TestHeadFingerprintFollowsUpstream(t *testing.T) {
+	origin := t.TempDir()
+	runGitIn(t, origin, "init", "-q", "--bare", "-b", "main")
+	repo := t.TempDir()
+	runGitIn(t, repo, "init", "-q", "-b", "main")
+	runGitIn(t, repo, "commit", "-q", "--allow-empty", "-m", "one")
+	runGitIn(t, repo, "remote", "add", "origin", origin)
+	runGitIn(t, repo, "push", "-q", "-u", "origin", "main")
+
+	runGitIn(t, repo, "commit", "-q", "--allow-empty", "-m", "two")
+	unpushed := HeadFingerprint(repo)
+	runGitIn(t, repo, "push", "-q", "origin", "main")
+	if pushed := HeadFingerprint(repo); pushed == unpushed {
+		t.Fatal("a push did not move the fingerprint")
+	}
+}

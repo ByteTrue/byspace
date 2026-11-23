@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// HeadFingerprint is a cheap reading of where a checkout's HEAD points: the HEAD file and, on a
-// branch, the branch's ref. It moves on a branch switch, a commit, a reset, a rebase or a pull, and
-// it is read without starting git, so it can be taken for every checkout every few seconds. ""
-// means the directory is not in a git repository.
+// HeadFingerprint is a cheap reading of where a checkout's HEAD points: the HEAD file, on a
+// branch the branch's ref, and that branch's upstream ref. It moves on a branch switch, a commit, a
+// reset, a rebase, a pull, a fetch or a push, and it is read without starting git, so it can be
+// taken for every checkout every few seconds. "" means the directory is not in a git repository.
 func HeadFingerprint(cwd string) string {
 	gitDir, commonDir := findGitDirs(cwd)
 	if gitDir == "" {
@@ -25,14 +25,22 @@ func HeadFingerprint(cwd string) string {
 	if !symbolic {
 		return fingerprint
 	}
+	ref = strings.TrimSpace(ref)
 	// Branch refs live in the common dir, shared by every worktree of the repository. A ref that
 	// is not a loose file is packed: packed-refs changes when it does.
-	loose, err := os.ReadFile(filepath.Join(commonDir, filepath.FromSlash(strings.TrimSpace(ref))))
+	loose, err := os.ReadFile(filepath.Join(commonDir, filepath.FromSlash(ref)))
 	if err == nil {
-		return fingerprint + "|" + strings.TrimSpace(string(loose))
+		fingerprint += "|" + strings.TrimSpace(string(loose))
+	} else if info, err := os.Stat(filepath.Join(commonDir, "packed-refs")); err == nil {
+		fingerprint += fmt.Sprintf("|packed:%d:%d", info.ModTime().UnixNano(), info.Size())
 	}
-	if info, err := os.Stat(filepath.Join(commonDir, "packed-refs")); err == nil {
-		return fmt.Sprintf("%s|packed:%d:%d", fingerprint, info.ModTime().UnixNano(), info.Size())
+	// A push or a fetch moves the upstream ref while HEAD stands still, and the diff stat is
+	// measured against the upstream: without this reading the sidebar keeps reporting a range the
+	// branch has already pushed.
+	if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+		if upstream, err := os.ReadFile(filepath.Join(commonDir, filepath.FromSlash("refs/remotes/origin/"+branch))); err == nil {
+			fingerprint += "|" + strings.TrimSpace(string(upstream))
+		}
 	}
 	return fingerprint
 }

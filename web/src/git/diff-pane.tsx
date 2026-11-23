@@ -112,7 +112,9 @@ function computeSelectedDiffStat(
   files: ParsedDiffFile[],
   isLoading: boolean,
 ): { additions: number; deletions: number } | null {
-  if (isLoading) {
+  // An empty comparison has nothing to count: "+0 -0" next to "No changes to display" reads as a
+  // broken count rather than as an empty diff.
+  if (isLoading || files.length === 0) {
     return null;
   }
   return files.reduce(
