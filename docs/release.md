@@ -172,41 +172,34 @@ release-bound work out of the current release, not as a guarded branch.
 
 If `main` contains changes you do not want to release, branch from the affected release tag and cherry-pick only the required fixes. Run CI on that branch, then use the normal release flow with it as the explicit source, choosing a new patch or beta version. Ensure the fixes and changelog also reach `main` and any active `next`, preserving newer development and version changes there. This is a short-lived hotfix branch, not another maintained release track.
 
-## Release completion and heartbeat
+## Release completion
 
 A release is **in progress** after the tag push. Report it as **shipped** only
 after every applicable build, publication, asset, and deployment passes the
 completion checklist.
 
-Immediately after every beta, stable, or promotion tag push, create a heartbeat
-that resumes the release in the current conversation. Create it automatically
-with `create_heartbeat`. The heartbeat owns the release until it either reaches
-the completion checklist or finds a failure that needs new user authority.
+Watch the tag to completion in the session that cut it. The tag push starts
+**Release Binaries**, **Docker**, **Deploy App**, and **Release Notes Sync**; poll
+their runs, then read the Release body and assets:
 
-Each heartbeat checks the release tag commit, all GitHub Actions runs for the
-release tag, the GitHub Release body and assets, and the deployed web app. The
-npm package is not published, so there are no dist-tags to check; the tarball is
-a local dry-run artifact and the Release carries the container descriptor with
-its `.sha256` sibling.
-
-Delete the heartbeat only after every applicable checklist item passes, then
-report the release as shipped.
-
-Pattern:
-
-```jsonc
-// byspace heartbeat create arguments
-{
-  "name": "vX.Y.Z release babysit heartbeat",
-  "cron": "*/10 * * * *",
-  "timezone": "UTC",
-  "maxRuns": 120,
-  "expiresIn": "24h",
-}
+```sh
+gh run list --branch vX.Y.Z --limit 10   # the tag's runs and their conclusions
+gh run watch <run-id> --exit-status      # waits, non-zero exit when the run failed
+gh release view vX.Y.Z --json body,assets
 ```
 
-Run an immediate status check after creating the heartbeat. The heartbeat handles
-later transitions and stops itself when the release is complete.
+Use a background task when the agent harness has one; otherwise run the loop in the
+foreground. Either way the release is shipped when that watch reports the checklist
+below, not when the tag lands.
+
+The watch checks the release tag commit, all GitHub Actions runs for the release tag,
+the GitHub Release body and assets, and the deployed web app. The npm package is not
+published, so there are no dist-tags to check; the tarball is a local dry-run artifact
+and the Release carries the container descriptor with its `.sha256` sibling.
+
+`gh` calls fail intermittently on a bad connection (`EOF`, dropped TLS handshake) and
+the tag push itself can fail the same way. Retry the command; an API failure is not
+evidence about the release.
 
 ## Release notes on GitHub
 
@@ -414,7 +407,7 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] The GitHub prerelease is marked as a prerelease
 - [ ] Docker published the versioned beta image without moving `latest`
 - [ ] **Release Notes Sync** overwrote the prerelease body with the changelog entry
-- [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
+- [ ] The tag's runs were watched to completion in the release session
 
 ### Stable release
 
@@ -433,4 +426,4 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] Docker published both the versioned and `latest` images
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
 - [ ] **Release Notes Sync** overwrote the Release body with the changelog entry
-- [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
+- [ ] The tag's **Release Binaries**, **Docker**, **Deploy App**, and **Release Notes Sync** runs were watched to completion in the release session
