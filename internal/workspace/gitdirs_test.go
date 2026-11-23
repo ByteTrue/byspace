@@ -18,7 +18,7 @@ func TestResolveGitDirsForMainWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveGitDirs() error = %v", err)
 	}
-	want := filepath.Join(dir, ".git")
+	want := resolvedGitDir(t, filepath.Join(dir, ".git"))
 	if worktree != want || common != want {
 		t.Fatalf("ResolveGitDirs() = (%q, %q), want (%q, %q)", worktree, common, want, want)
 	}
@@ -37,22 +37,27 @@ func TestResolveGitDirsSeparatesLinkedWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveGitDirs() error = %v", err)
 	}
-	wantCommon := filepath.Join(repo, ".git")
-	commonInfo, commonErr := os.Stat(common)
-	wantInfo, wantErr := os.Stat(wantCommon)
-	if commonErr != nil || wantErr != nil || !os.SameFile(commonInfo, wantInfo) {
-		t.Fatalf("common = %q, want the same directory as %q", common, wantCommon)
+	wantCommon := resolvedGitDir(t, filepath.Join(repo, ".git"))
+	if common != wantCommon {
+		t.Fatalf("common = %q, want %q", common, wantCommon)
 	}
-	// Git may expand Windows short names in one answer but not the other; compare the location,
-	// not the spelling.
-	resolvedWorktree, _ := filepath.EvalSymlinks(worktree)
-	resolvedCommon, _ := filepath.EvalSymlinks(common)
+	resolvedWorktree := resolvedGitDir(t, worktree)
+	resolvedCommon := resolvedGitDir(t, common)
 	if worktree == common || !strings.HasPrefix(resolvedWorktree, filepath.Join(resolvedCommon, "worktrees")) {
 		t.Fatalf("worktree = %q, want a directory under %q", worktree, common)
 	}
 	if _, err := os.Stat(worktree); err != nil {
 		t.Fatalf("worktree directory missing: %v", err)
 	}
+}
+
+func resolvedGitDir(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", path, err)
+	}
+	return filepath.Clean(resolved)
 }
 
 func TestResolveGitDirsRejectsPlainDirectory(t *testing.T) {

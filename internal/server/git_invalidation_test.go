@@ -113,15 +113,19 @@ func TestGitObservationRefreshesOnBranchRefChange(t *testing.T) {
 		t.Fatalf("branch = %q before any event, want the unresolved record", got)
 	}
 
-	fake.Write(filepath.Join(repo, ".git", "objects", "pack", "pack-1.pack"))
+	worktreeDir, commonDir, err := workspace.ResolveGitDirs(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.Write(filepath.Join(commonDir, "objects", "pack", "pack-1.pack"))
 	time.Sleep(2 * gitInvalidationDebounce)
 	if got := branch(); got != "" {
 		t.Fatalf("branch = %q after a pack write, want no refresh", got)
 	}
 
 	gitIn(t, repo, "checkout", "-q", "-b", "topic")
-	fake.Write(filepath.Join(repo, ".git", "HEAD"))
-	fake.Write(filepath.Join(repo, ".git", "refs", "heads", "topic"))
+	fake.Write(filepath.Join(worktreeDir, "HEAD"))
+	fake.Write(filepath.Join(commonDir, "refs", "heads", "topic"))
 
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) && branch() != "topic" {
@@ -147,8 +151,8 @@ func TestGitObservationRefreshesOnBranchRefChange(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	fake.Write(filepath.Join(repo, ".git", "HEAD"))
-	fake.Write(filepath.Join(repo, ".git", "refs", "heads", "topic"))
+	fake.Write(filepath.Join(worktreeDir, "HEAD"))
+	fake.Write(filepath.Join(commonDir, "refs", "heads", "topic"))
 	time.Sleep(3 * gitInvalidationDebounce)
 	if got := branch(); got != "sentinel" {
 		t.Fatalf("branch = %q after an unchanged ref rewrite, want the record untouched", got)

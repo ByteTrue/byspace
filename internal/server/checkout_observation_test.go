@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/filewatch"
+	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
 // pushToOrigin gives a test checkout an upstream, which is the ref the diff stat compares against.
@@ -116,9 +117,13 @@ func TestCheckoutObservationFollowsLiveClients(t *testing.T) {
 		t.Fatalf("subscriptions = %d, want the working tree and the git directory", got)
 	}
 
+	worktreeDir, commonDir, err := workspace.ResolveGitDirs(t.Context(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	gitIn(t, repo, "checkout", "-q", "-b", "feature")
-	fake.Write(filepath.Join(repo, ".git", "HEAD"))
-	fake.Write(filepath.Join(repo, ".git", "refs", "heads", "feature"))
+	fake.Write(filepath.Join(worktreeDir, "HEAD"))
+	fake.Write(filepath.Join(commonDir, "refs", "heads", "feature"))
 	waitForStoredBranch(t, srv, ws.WorkspaceID, "feature")
 
 	waitForPushedBranch(t, sink, ws.WorkspaceID, "feature")
