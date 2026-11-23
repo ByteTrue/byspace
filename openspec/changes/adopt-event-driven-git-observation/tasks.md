@@ -11,7 +11,7 @@
 
 ## 2. Observation service: macOS and Windows
 
-- [ ] 2.1 Implement the macOS backend on kqueue over the shared topology code, sharing restart, pruning and degradation with Linux; verify the same real-filesystem tests run under `GOOS=darwin` in CI.
+- [x] 2.1 Implement the macOS backend on kqueue over the shared topology code, sharing restart, pruning and degradation with Linux; the real-filesystem conformance suite passed on `macos-latest` in CI run 45264106243.
 - [x] 2.2 Implement the Windows backend on one `ReadDirectoryChangesW` handle per root with subtree watching and a serialized drain goroutine; verify create/write/rename/delete in a real-filesystem test on `windows-latest`.
 - [x] 2.3 Select the backend by platform behind the same interface and fail subscribe (rather than panic) on an unsupported platform; verify the selection test and that `GOOS=js`/`plan9` builds still compile the package.
 - [x] 2.4 Implement degraded polling for a subscription: on install failure or a reported watch error, switch that root to identity-stamped polling with backoff (5 s → 60 s), and return to events when a watch can be re-established; verify with a fake clock test that a degraded root still reports a change and recovers.
@@ -27,7 +27,7 @@
 ## 4. Differential validation of the observation layer
 
 - [x] 4.1 Run the new invalidation path in shadow mode next to the existing 1 s diff poll and 2 s HEAD poll, recording every place the two disagree; verify over a scripted scenario set (edit, stage, commit, push, pull, branch switch, stash, rebase, `branch -f`, attribute change) that no scenario leaves the shadow path stale while the poller is fresh.
-- [ ] 4.2 Fix every disagreement found by 4.1 at the classification or invalidation layer, not by keeping the fingerprint; verify the scenario set reports zero disagreements on Linux, macOS and Windows CI.
+- [x] 4.2 Fix every disagreement found by 4.1 at the classification or invalidation layer, not by keeping the fingerprint; the scenario set reported zero disagreements on Linux, macOS and Windows in CI run 45264106243.
 - [x] 4.3 Sidebar freshness is covered by a dedicated e2e spec. No existing spec asserted freshness — every one calls `checkoutRefresh` first — so `web/e2e/browser/checkout-observation.spec.ts` writes a file in the seeded checkout and waits for the composer's diff pill to appear on its own. Verified: the spec passes with observation on (`1 passed`, 5.7 s) and fails with `BYSPACE_DISABLE_FILE_OBSERVATION=1` (`1 failed`); that switch removes the watcher outright, which is the same absence of pushes a long polling backoff produces.
 
 ## 5. Diff engine: shared target and per-file identity
