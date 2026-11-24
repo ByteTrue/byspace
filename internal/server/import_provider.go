@@ -51,7 +51,7 @@ func (s *Server) importProviderTranscript(provider, handle, requestedCwd string)
 	if cwd == "" {
 		return importedTranscript{}, errors.New("the Claude transcript does not record a working directory")
 	}
-	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	_, ws, err := s.ensureWorkspaceForCwd(cwd)
 	if err != nil {
 		return importedTranscript{}, err
 	}
@@ -145,7 +145,7 @@ func (s *Server) importHandleOnlyRecord(provider, handle, requestedCwd string) (
 	if cwd == "" {
 		return importedTranscript{}, errors.New("an import needs the working directory of the session")
 	}
-	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	_, ws, err := s.ensureWorkspaceForCwd(cwd)
 	if err != nil {
 		return importedTranscript{}, err
 	}

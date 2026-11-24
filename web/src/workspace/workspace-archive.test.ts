@@ -8,8 +8,10 @@ import {
 } from "@/contexts/session-workspace-upserts";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
+  applyWorktreeCleanupOutcome,
   archiveWorkspaceOptimistically,
   archiveWorkspacesOptimistically,
+  worktreeCleanupToastId,
   type WorkspaceArchiveTarget,
 } from "@/workspace/workspace-archive";
 
@@ -22,12 +24,16 @@ function archivePayload(input: {
   workspaceId: string;
   error?: string | null;
   directoryError?: string | null;
+  directoryCleanupPending?: boolean;
+  directoryCleanupKey?: string;
 }): ArchiveWorkspacePayload {
   return {
     requestId: "request",
     workspaceId: input.workspaceId,
     archivedAt: null,
     error: input.error ?? null,
+    directoryCleanupPending: input.directoryCleanupPending ?? false,
+    directoryCleanupKey: input.directoryCleanupKey ?? "",
     ...(input.directoryError ? { directoryError: input.directoryError } : {}),
   };
 }
@@ -186,6 +192,7 @@ describe("archiveWorkspaceOptimistically", () => {
         archivePayload({
           workspaceId,
           directoryError: "Directory still present after rm: C:/repo/.byspace/worktrees/x",
+          directoryCleanupPending: true,
         }),
       ),
     );
@@ -195,10 +202,38 @@ describe("archiveWorkspaceOptimistically", () => {
         client,
         workspace: target(),
       }),
-    ).rejects.toThrow("Directory still present after rm");
+    ).rejects.toMatchObject({
+      name: "WorkspaceDirectoryRemovalError",
+      message: expect.stringContaining("Directory still present after rm"),
+      cleanupPending: true,
+      cleanupKey: "",
+    });
 
     // The archive is authoritative: the workspace stays out of the sidebar even
     // though its folder is still on disk. The residue is reported, not restored.
+    expect(storedWorkspace(archived.id)).toBeUndefined();
+  });
+
+  it("distinguishes a directory error without deferred cleanup", async () => {
+    const archived = workspace();
+    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);
+    const client = createClient(
+      vi.fn(async (workspaceId) =>
+        archivePayload({
+          workspaceId,
+          directoryError: "teardown command failed: pnpm teardown",
+          directoryCleanupPending: false,
+        }),
+      ),
+    );
+
+    const archive = archiveWorkspaceOptimistically({ client, workspace: target() });
+    await expect(archive).rejects.toEqual(
+      expect.objectContaining({
+        cleanupPending: false,
+        message: "teardown command failed: pnpm teardown",
+      }),
+    );
     expect(storedWorkspace(archived.id)).toBeUndefined();
   });
 });
@@ -273,5 +308,54 @@ describe("archiveWorkspacesOptimistically", () => {
     );
     expect(storedWorkspaceOn(SERVER_ID, first.id)).toBeUndefined();
     expect(storedWorkspaceOn(SECOND_SERVER_ID, second.id)).toBeUndefined();
+  });
+});
+
+describe("worktree cleanup toasts", () => {
+  it("uses the daemon's canonical key for path aliases and duplicate workspaces", () => {
+    const first = worktreeCleanupToastId({
+      serverId: SERVER_ID,
+      cleanupKey: "c:/resolved/worktrees/shared",
+    });
+    const second = worktreeCleanupToastId({
+      serverId: SERVER_ID,
+      cleanupKey: "c:/resolved/worktrees/shared",
+    });
+    expect(first).toBe(second);
+  });
+
+  it("dismisses the shared pending toast when cleanup is cancelled", () => {
+    const toast = { show: vi.fn(), dismiss: vi.fn() };
+    const cleanupKey = "c:/resolved/worktrees/shared";
+    applyWorktreeCleanupOutcome({
+      serverId: SERVER_ID,
+      cleanupKey,
+      status: "cancelled",
+      successMessage: "done",
+      failureMessage: "failed",
+      toast,
+    });
+    expect(toast.dismiss).toHaveBeenCalledWith(
+      worktreeCleanupToastId({ serverId: SERVER_ID, cleanupKey }),
+    );
+    expect(toast.show).not.toHaveBeenCalled();
+  });
+
+  it("replaces the canonically keyed pending toast with the final outcome", () => {
+    const toast = { show: vi.fn(), dismiss: vi.fn() };
+    const cleanupKey = "c:/resolved/worktrees/shared";
+    applyWorktreeCleanupOutcome({
+      serverId: SERVER_ID,
+      cleanupKey,
+      status: "failed",
+      successMessage: "done",
+      failureMessage: "failed",
+      toast,
+    });
+    expect(toast.show).toHaveBeenCalledWith("failed", {
+      id: worktreeCleanupToastId({ serverId: SERVER_ID, cleanupKey }),
+      variant: "error",
+      durationMs: 3200,
+    });
   });
 });

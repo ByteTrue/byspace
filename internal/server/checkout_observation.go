@@ -1,12 +1,15 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/filewatch"
+	"github.com/ByteTrue/byspace/internal/pathutil"
+	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
 	"github.com/ByteTrue/byspace/internal/workspace/gitmeta"
 )
@@ -27,18 +30,46 @@ const checkoutObservationInterval = 30 * time.Second
 // checkoutObserver holds one watch per live checkout. The map belongs to the reconciling
 // goroutine; nothing else touches it.
 type checkoutObserver struct {
-	srv     *Server
-	watches map[string]func()
+	srv      *Server
+	watches  map[string]func()
+	releases chan checkoutReleaseRequest
+}
+
+type checkoutReleaseRequest struct {
+	workspaceID string
+	done        chan struct{}
 }
 
 func newCheckoutObserver(srv *Server) *checkoutObserver {
-	return &checkoutObserver{srv: srv, watches: map[string]func(){}}
+	return &checkoutObserver{srv: srv, watches: map[string]func(){}, releases: make(chan checkoutReleaseRequest)}
 }
 
 // startCheckoutObservation follows every live checkout until the server closes.
 func (s *Server) startCheckoutObservation() {
 	s.checkoutSetWake = make(chan struct{}, 1)
-	go newCheckoutObserver(s).run()
+	s.checkoutObserver = newCheckoutObserver(s)
+	go s.checkoutObserver.run()
+}
+
+// releaseArchivedWorkspaceObservation waits until the observer has dropped this checkout's native
+// watches. Archiving the records first prevents the next reconciliation from adding them back.
+func (s *Server) releaseArchivedWorkspaceObservation(ctx context.Context, workspaceID string) {
+	if s.checkoutObserver == nil {
+		return
+	}
+	request := checkoutReleaseRequest{workspaceID: workspaceID, done: make(chan struct{})}
+	select {
+	case s.checkoutObserver.releases <- request:
+	case <-ctx.Done():
+		return
+	case <-s.pollStop:
+		return
+	}
+	select {
+	case <-request.done:
+	case <-ctx.Done():
+	case <-s.pollStop:
+	}
 }
 
 // noteCheckoutSetChanged asks the observer to re-read the checkouts it follows instead of waiting
@@ -66,8 +97,43 @@ func (o *checkoutObserver) run() {
 		case <-ticker.C:
 			o.pollDegraded()
 		case <-o.srv.checkoutSetWake:
+		case request := <-o.releases:
+			o.releaseWorkspace(request.workspaceID)
+			close(request.done)
 		}
 	}
+}
+
+// releaseWorkspace drops the observer's consumer for an archived checkout. An active sibling on
+// the same path still needs it, so in that case there is nothing to release.
+func (o *checkoutObserver) releaseWorkspace(workspaceID string) {
+	rec, ok := o.srv.workspaceRecord(workspaceID)
+	if !ok {
+		return
+	}
+	records, err := o.srv.store.ListWorkspaces()
+	if err != nil || checkoutStillReferenced(records, rec.Cwd) {
+		return
+	}
+	cwd := workspace.CanonicalCwd(rec.Cwd)
+	if release, watched := o.watches[cwd]; watched {
+		release()
+		delete(o.watches, cwd)
+	}
+}
+
+// checkoutStillReferenced is exact by design: a nested workspace does not consume its parent's
+// checkout observation, although it still blocks deleting the parent worktree.
+func checkoutStillReferenced(records []store.WorkspaceRecord, path string) bool {
+	for _, rec := range records {
+		if rec.ArchivedAt != nil {
+			continue
+		}
+		if pathutil.AreEquivalent(rec.Cwd, path) {
+			return true
+		}
+	}
+	return false
 }
 
 // reconcile subscribes to checkouts that gained a client and releases the ones that lost theirs.

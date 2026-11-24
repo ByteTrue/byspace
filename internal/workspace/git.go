@@ -1466,19 +1466,87 @@ func RemoveWorktreeFromDisk(ctx context.Context, worktreePath string) error {
 //
 // A directory that is already gone counts as success: the caller asked for it to be absent.
 func DeleteOwnedWorktree(ctx context.Context, repoRoot, worktreePath string) error {
+	return DeleteOwnedWorktreeWithGuard(ctx, repoRoot, worktreePath, nil)
+}
+
+// DeleteOwnedWorktreeWithGuard rechecks guard before every destructive Git or filesystem operation.
+// Archive uses it to stop if the path leaves BySpace ownership or gains an active workspace.
+func DeleteOwnedWorktreeWithGuard(ctx context.Context, repoRoot, worktreePath string, guard func() error) error {
+	return deleteOwnedWorktreeGuarded(ctx, repoRoot, worktreePath, os.RemoveAll, []time.Duration{0, 100 * time.Millisecond, 300 * time.Millisecond, 700 * time.Millisecond, 1500 * time.Millisecond}, guard)
+}
+
+func deleteOwnedWorktree(ctx context.Context, repoRoot, worktreePath string, removeAll func(string) error, delays []time.Duration) error {
+	return deleteOwnedWorktreeGuarded(ctx, repoRoot, worktreePath, removeAll, delays, nil)
+}
+
+func deleteOwnedWorktreeGuarded(ctx context.Context, repoRoot, worktreePath string, removeAll func(string) error, delays []time.Duration, guard func() error) error {
 	if strings.TrimSpace(worktreePath) == "" {
 		return nil
 	}
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+	check := func() error {
+		if guard != nil {
+			return guard()
+		}
 		return nil
 	}
-	if strings.TrimSpace(repoRoot) != "" {
-		if _, err := runGit(ctx, repoRoot, "worktree", "remove", "--force", "--force", worktreePath); err == nil {
+	if err := check(); err != nil {
+		return err
+	}
+	prune := func() error {
+		if err := check(); err != nil {
+			return err
+		}
+		if strings.TrimSpace(repoRoot) != "" {
 			_, _ = runGit(ctx, repoRoot, "worktree", "prune")
-			return nil
+		}
+		return nil
+	}
+	if pathAbsent(worktreePath) {
+		return prune()
+	}
+	if strings.TrimSpace(repoRoot) != "" {
+		if err := check(); err != nil {
+			return err
+		}
+		if _, err := runGit(ctx, repoRoot, "worktree", "remove", "--force", "--force", worktreePath); err == nil && pathAbsent(worktreePath) {
+			return prune()
 		}
 	}
-	return os.RemoveAll(worktreePath)
+
+	var lastErr error
+	for attempt, delay := range delays {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		if err := check(); err != nil {
+			return err
+		}
+		removeErr := removeAll(worktreePath)
+		if pathAbsent(worktreePath) {
+			return prune()
+		}
+		lastErr = removeErr
+		if lastErr == nil {
+			lastErr = fmt.Errorf("directory still exists")
+		}
+		if attempt == len(delays)-1 {
+			return fmt.Errorf("remove worktree %s after %d attempts: %w", worktreePath, len(delays), lastErr)
+		}
+	}
+	return nil
+}
+
+func pathAbsent(path string) bool {
+	_, err := os.Lstat(path)
+	return os.IsNotExist(err)
 }
 
 // PruneWorktrees drops worktree admin entries whose directory no longer exists.
@@ -1560,6 +1628,13 @@ func AssertSafeWorktreeSlug(slug string) error {
 		return fmt.Errorf("invalid worktree slug: %q must not start with '-'", slug)
 	}
 	return nil
+}
+
+// WorktreePath resolves the future checkout path without creating it, so lifecycle synchronization
+// can begin before git materializes the directory.
+func WorktreePath(ctx context.Context, repoCwd, worktreesBaseDir, slug string) (string, string, error) {
+	_, path, cleanSlug, err := worktreeLayout(ctx, repoCwd, worktreesBaseDir, slug)
+	return path, cleanSlug, err
 }
 
 // worktreeLayout resolves the target directory and validates the slug.

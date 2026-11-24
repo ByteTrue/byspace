@@ -16,6 +16,7 @@ import (
 	"github.com/aymanbagabas/go-pty"
 
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/proc"
 )
 
 type OutputEvent struct {
@@ -34,8 +35,9 @@ type Session struct {
 	WorkspaceID   string
 	ActivityToken string
 
-	mu  sync.Mutex
-	cmd *pty.Cmd
+	mu              sync.Mutex
+	cmd             *pty.Cmd
+	processIdentity string
 	// ptmx is the master side of the pseudo-terminal. On Unix it is the pty master; on Windows it
 	// is the ConPTY pseudo console. Read, Write, Resize and Close all go through the library so one
 	// code path serves both — a bare *os.File only exists on Unix, which is why Windows had no
@@ -109,6 +111,7 @@ func StartSession(opts StartOptions) (*Session, error) {
 		return nil, fmt.Errorf("terminal: create pseudo-terminal: %w", err)
 	}
 	cmd := term.Command(shell, args...)
+	cmd.SysProcAttr = proc.OwnProcessGroup(cmd.SysProcAttr)
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}
@@ -166,6 +169,7 @@ func StartSession(opts StartOptions) (*Session, error) {
 		ActivityToken:    actToken,
 		Title:            strings.TrimSpace(opts.Title),
 		cmd:              cmd,
+		processIdentity:  proc.CaptureProcessIdentity(cmd.Process.Pid),
 		ptmx:             term,
 		activityState:    "idle",
 		onActivityChange: opts.OnActivityChange,
@@ -401,22 +405,33 @@ func (s *Session) SetActivity(state string) bool {
 	return true
 }
 
-func (s *Session) Close() error {
+// Terminate stops the process tree and waits through bounded graceful and forceful phases.
+func (s *Session) Terminate() {
 	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil
-	}
-	s.closed = true
-	ptmx := s.ptmx
 	cmd := s.cmd
 	s.mu.Unlock()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	proc.ShutdownProcessTree(cmd.Process.Pid, s.done, s.processIdentity)
+}
 
+func (s *Session) Close() error {
+	s.mu.Lock()
+	alreadyClosed := s.closed
+	s.closed = true
+	s.mu.Unlock()
+	if alreadyClosed {
+		<-s.done
+		return nil
+	}
+
+	s.Terminate()
+	s.mu.Lock()
+	ptmx := s.ptmx
+	s.mu.Unlock()
 	if ptmx != nil {
 		_ = ptmx.Close()
-	}
-	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
 	}
 	<-s.done
 	return nil

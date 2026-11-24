@@ -692,6 +692,13 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	}
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
+	prj, _, err := s.ensureWorkspaceForCwd(req.Cwd)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+			"workspace": nil, "error": err.Error(), "errorCode": "project_register_failed", "setupTerminalId": nil, "requestId": req.RequestID,
+		})
+		return
+	}
 	intentInput := workspace.WorktreeIntentInput{
 		WorktreeSlug: req.WorktreeSlug,
 		BranchName:   req.BranchName,
@@ -720,26 +727,26 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		})
 		return
 	}
-	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, req.Cwd, wtBase, intent, req.WorktreeSlug)
+	wtPath, slug, err := workspace.WorktreePath(ctx, req.Cwd, wtBase, req.WorktreeSlug)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+			"workspace": nil, "error": err.Error(), "errorCode": "worktree_create_failed", "setupTerminalId": nil, "requestId": req.RequestID,
+		})
+		return
+	}
+	unlock := s.lockWorktreeLifecycle(wtPath)
+	locked := true
+	defer func() {
+		if locked {
+			unlock()
+		}
+	}()
+	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, req.Cwd, wtBase, intent, slug)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
 			"workspace":       nil,
 			"error":           err.Error(),
 			"errorCode":       "worktree_create_failed",
-			"setupTerminalId": nil,
-			"requestId":       req.RequestID,
-		})
-		return
-	}
-
-	prj, _, err := s.store.EnsureWorkspaceForCwd(req.Cwd)
-	if err != nil {
-		// `errorCode` / `setupSkippedReason` are optional, not nullable: sending null makes the
-		// client reject the whole response, so the user sees nothing instead of the error.
-		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-			"workspace":       nil,
-			"error":           err.Error(),
-			"errorCode":       "project_register_failed",
 			"setupTerminalId": nil,
 			"requestId":       req.RequestID,
 		})
@@ -772,7 +779,12 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 			HeadRepository: intent.HeadRepository,
 		}
 	}
+	if s.beforeWorktreeWorkspaceRegister != nil {
+		s.beforeWorktreeWorkspaceRegister(wtPath)
+	}
 	_ = s.store.UpsertWorkspace(wsRec)
+	unlock()
+	locked = false
 	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(req.FirstAgentContext))
 	s.writeCreatedWorktreeMetadata(wtPath, intent, branch)
 	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)

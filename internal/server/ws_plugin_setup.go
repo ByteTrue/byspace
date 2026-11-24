@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/proc"
 	"net"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +24,13 @@ import (
 )
 
 // setupSnapshot is the in-memory record of a worktree setup run (matches WorkspaceSetupSnapshotSchema).
+type workspaceSetupRun struct {
+	done     chan struct{}
+	cmd      *exec.Cmd
+	identity string
+	stopping bool
+}
+
 type setupSnapshot struct {
 	WorkspaceID string
 	Status      string // "running" | "completed" | "failed" | "blocked"
@@ -142,17 +151,19 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	// A duplicate request is dropped rather than queued: the caller wanted the setup done, and it is.
 	s.setupRunsMu.Lock()
 	if s.setupRuns == nil {
-		s.setupRuns = make(map[string]bool)
+		s.setupRuns = make(map[string]*workspaceSetupRun)
 	}
-	if s.setupRuns[workspaceID] {
+	if s.setupRuns[workspaceID] != nil {
 		s.setupRunsMu.Unlock()
 		return
 	}
-	s.setupRuns[workspaceID] = true
+	run := &workspaceSetupRun{done: make(chan struct{})}
+	s.setupRuns[workspaceID] = run
 	s.setupRunsMu.Unlock()
 	defer func() {
 		s.setupRunsMu.Lock()
 		delete(s.setupRuns, workspaceID)
+		close(run.done)
 		s.setupRunsMu.Unlock()
 	}()
 
@@ -192,6 +203,10 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 
 	fail := func(msg string) {
 		snap.mu.Lock()
+		if snap.Error != nil && *snap.Error == "workspace archived" {
+			snap.mu.Unlock()
+			return
+		}
 		snap.Status = "failed"
 		snap.Error = &msg
 		snap.mu.Unlock()
@@ -199,6 +214,12 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	}
 
 	for index, command := range commands {
+		s.setupRunsMu.Lock()
+		stopping := run.stopping
+		s.setupRunsMu.Unlock()
+		if stopping {
+			return
+		}
 		startedAt := time.Now()
 		snap.mu.Lock()
 		snap.Log.WriteString("$ " + command + "\n")
@@ -217,11 +238,34 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		// shell files, which can change PATH or cd elsewhere.
 		invocation := workspace.BuildShellInvocation(command)
 		cmd := proc.Command(invocation.Shell, invocation.Args...)
+		cmd.SysProcAttr = proc.OwnProcessGroup(cmd.SysProcAttr)
 		cmd.Dir = cwd
 		// SanitizedShellEnv after ExternalProcessEnv: BASH_ENV would make a non-interactive
 		// bash source an arbitrary file before the project command runs.
 		cmd.Env = workspace.SanitizedShellEnv(home.ExternalProcessEnv(os.Environ(), map[string]string{"CI": "1", "BYSPACE_WORKSPACE_SETUP": "1"}, identityEnv))
-		out, err := cmd.CombinedOutput()
+		var output bytes.Buffer
+		cmd.Stdout = &output
+		cmd.Stderr = &output
+		// Publishing and starting under the same lock closes the stop-versus-start race: archive
+		// either prevents this command from starting or sees its live PID.
+		s.setupRunsMu.Lock()
+		if run.stopping {
+			s.setupRunsMu.Unlock()
+			return
+		}
+		run.cmd = cmd
+		err := cmd.Start()
+		if err == nil {
+			run.identity = proc.CaptureProcessIdentity(cmd.Process.Pid)
+		}
+		s.setupRunsMu.Unlock()
+		if err == nil {
+			err = cmd.Wait()
+		}
+		s.setupRunsMu.Lock()
+		run.cmd = nil
+		s.setupRunsMu.Unlock()
+		out := output.Bytes()
 		snap.mu.Lock()
 		snap.Log.Write(out)
 		exitCode := 0
@@ -253,7 +297,9 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	}
 
 	snap.mu.Lock()
-	snap.Status = "completed"
+	if snap.Status == "running" {
+		snap.Status = "completed"
+	}
 	snap.mu.Unlock()
 	s.broadcastSetupProgress(snap)
 }
@@ -528,18 +574,7 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 	s.mu.Unlock()
 
 	if sess != nil && wasRunning {
-		// Signal the whole process group, not just the shell: `sleep 60` (or `vite`, or
-		// `npm run dev`) is a child of the shell, and signalling only the shell leaves the
-		// actual work running with its port held.
-		if pid := sess.Pid(); pid > 0 {
-			terminateProcessGroup(pid)
-			go func() {
-				// Escalate if the group has not exited. A build ignoring SIGTERM must not keep
-				// its port for the rest of the session.
-				time.Sleep(3 * time.Second)
-				killProcessGroup(pid)
-			}()
-		}
+		sess.Terminate()
 	}
 }
 

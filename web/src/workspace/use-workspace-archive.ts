@@ -13,6 +13,7 @@ import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import {
   archiveWorkspaceOptimistically,
   WorkspaceDirectoryRemovalError,
+  worktreeCleanupToastId,
 } from "@/workspace/workspace-archive";
 
 function purgeArchivedWorkspaceState(input: { serverId: string; workspaceId: string }): void {
@@ -26,6 +27,7 @@ export interface ArchiveWorkspaceInput {
   serverId: string;
   workspaceId: string;
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
+  path: string;
   name: string;
   isDirty?: boolean | null;
   aheadOfOrigin?: number | null;
@@ -44,6 +46,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     serverId,
     workspaceId,
     workspaceKind,
+    path,
     name,
     isDirty,
     aheadOfOrigin,
@@ -73,8 +76,12 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
       });
       purgeArchivedWorkspaceState({ serverId, workspaceId });
     } catch (error) {
-      if (error instanceof WorkspaceDirectoryRemovalError) {
-        toast.error(t("sidebar.workspace.toasts.archiveDirectoryRemovalFailed"));
+      if (error instanceof WorkspaceDirectoryRemovalError && error.cleanupPending) {
+        toast.show(t("sidebar.workspace.toasts.archiveDirectoryCleanupPending", { path }), {
+          id: worktreeCleanupToastId({ serverId, cleanupKey: error.cleanupKey }),
+          variant: "warning",
+          durationMs: null,
+        });
       } else {
         toast.error(
           error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
@@ -83,7 +90,7 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     } finally {
       onSetHiding?.(false);
     }
-  }, [onArchiveStarted, onSetHiding, serverId, t, toast, workspaceId]);
+  }, [onArchiveStarted, onSetHiding, path, serverId, t, toast, workspaceId]);
 
   const archive = useCallback(() => {
     void (async () => {

@@ -49,7 +49,7 @@ func TestArchiveWorkspacesDeletesUnreferencedWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if message, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
+	if message, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
 		t.Fatalf("archiveWorkspaces() error = %v", err)
 	} else if message != nil {
 		t.Fatalf("directory left behind: %s", *message)
@@ -79,7 +79,7 @@ func TestArchiveWorkspacesKeepsWorktreeWithSiblingWorkspace(t *testing.T) {
 		}
 	}
 
-	if message, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
+	if message, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
 		t.Fatalf("archiveWorkspaces() error = %v", err)
 	} else if message != nil {
 		t.Fatalf("no delete was expected, got: %s", *message)
@@ -89,7 +89,7 @@ func TestArchiveWorkspacesKeepsWorktreeWithSiblingWorkspace(t *testing.T) {
 	}
 
 	// The last reference is gone now, so the directory is garbage.
-	if message, err := srv.archiveWorkspaces(context.Background(), []string{"ws_2"}, "2026-02-02T00:00:00Z"); err != nil {
+	if message, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_2"}, "2026-02-02T00:00:00Z"); err != nil {
 		t.Fatalf("archiveWorkspaces() error = %v", err)
 	} else if message != nil {
 		t.Fatalf("directory left behind: %s", *message)
@@ -112,7 +112,7 @@ func TestArchiveWorkspacesKeepsForeignCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if message, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
+	if message, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err != nil {
 		t.Fatalf("archiveWorkspaces() error = %v", err)
 	} else if message != nil {
 		t.Fatalf("no delete was expected, got: %s", *message)

@@ -1,5 +1,6 @@
 import { useRef, ReactNode, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/contexts/use-client-activity";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { startPushNotifications } from "@/push-notifications";
@@ -50,6 +51,7 @@ import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache"
 import { useProviderSubagentStore } from "@/subagents/provider-store";
 import { revalidateSessionAfterResume } from "@/contexts/session-resume-revalidation";
 import { AppState } from "@/platform/app-state";
+import { applyWorktreeCleanupOutcome } from "@/workspace/workspace-archive";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -167,6 +169,7 @@ export function SessionProvider(props: SessionProviderProps) {
 }
 
 function SessionProviderInternal({ children, serverId, client }: SessionProviderClientProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const toast = useToast();
@@ -517,6 +520,19 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       },
     );
 
+    const unsubWorktreeCleanup = client.on("workspace.worktree.cleanup", (message) => {
+      if (message.type !== "workspace.worktree.cleanup") return;
+      const { path, cleanupKey, status } = message.payload;
+      applyWorktreeCleanupOutcome({
+        serverId,
+        cleanupKey,
+        status,
+        successMessage: t("sidebar.workspace.toasts.archiveDirectoryCleanupSucceeded", { path }),
+        failureMessage: t("sidebar.workspace.toasts.archiveDirectoryCleanupFailed", { path }),
+        toast,
+      });
+    });
+
     const unsubStatus = client.on("status", (message) => {
       if (message.type !== "status") return;
       const serverInfo = parseServerInfoStatusPayload(message.payload);
@@ -599,6 +615,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       unsubCheckoutStatusUpdate();
       unsubWorkspaceSetupProgress();
       unsubWorkspaceSetupStatusResponse();
+      unsubWorktreeCleanup();
       unsubStatus();
       unsubPermissionRequest();
       unsubPermissionResolved();
@@ -620,6 +637,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     applyWorkspaceSetupProgress,
     applyTimelineResponse,
     updateSessionServerInfo,
+    t,
     toast,
   ]);
 

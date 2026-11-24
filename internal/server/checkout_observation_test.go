@@ -135,6 +135,53 @@ func TestCheckoutObservationFollowsLiveClients(t *testing.T) {
 	}
 }
 
+func TestCheckoutObservationReleaseArchivedWorkspace(t *testing.T) {
+	repo := t.TempDir()
+	gitInit(t, repo)
+	srv := newTestServer(t, repo)
+	_, first, err := srv.store.EnsureWorkspaceForCwd(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.WorkspaceID = "ws_second"
+	if err := srv.store.UpsertWorkspace(second); err != nil {
+		t.Fatal(err)
+	}
+	nested := first
+	nested.WorkspaceID = "ws_nested"
+	nested.Cwd = filepath.Join(repo, "nested")
+	nested.WorktreeRoot = &repo
+	if err := srv.store.UpsertWorkspace(nested); err != nil {
+		t.Fatal(err)
+	}
+
+	observer := newCheckoutObserver(srv)
+	t.Cleanup(observer.releaseAll)
+	release, err := srv.watchCheckoutChanges(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd := workspace.CanonicalCwd(repo)
+	observer.watches[cwd] = release
+
+	if _, err := srv.store.ArchiveWorkspace(first.WorkspaceID, "2026-02-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	observer.releaseWorkspace(first.WorkspaceID)
+	if _, watched := observer.watches[cwd]; !watched {
+		t.Fatal("archiving one sibling released the shared checkout watch")
+	}
+
+	if _, err := srv.store.ArchiveWorkspace(second.WorkspaceID, "2026-02-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	observer.releaseWorkspace(second.WorkspaceID)
+	if _, watched := observer.watches[cwd]; watched {
+		t.Fatal("archiving the last sibling left its checkout watch subscribed")
+	}
+}
+
 // An edit in the working tree is what the diff stat and the dirty state come from; the git
 // directory cannot report it.
 func TestCheckoutObservationRefreshesTheWorkingDiff(t *testing.T) {

@@ -10,12 +10,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/pathutil"
+	"github.com/ByteTrue/byspace/internal/proc"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -390,7 +392,7 @@ func (s *Server) handleOpenProject(ctx context.Context, sink frameSink, raw json
 		})
 		return
 	}
-	prj, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	prj, ws, err := s.ensureWorkspaceForCwd(cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "open_project_response", map[string]any{
 			"requestId": req.RequestID,
@@ -507,7 +509,7 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 		// the same checkout. Node's worktree RPC used to ignore scope entirely, so "worktree"
 		// behaves as "every active workspace on this directory" and "workspace" as one record.
 		targets := s.worktreeArchiveTargets(req.WorktreePath, req.RepoRoot, req.BranchName, req.WorkspaceID, req.Scope)
-		directoryError, archiveErr := s.archiveWorkspaces(ctx, targets, now)
+		directoryError, _, _, archiveErr := s.archiveWorkspaces(ctx, targets, now)
 		if archiveErr != nil {
 			_ = sendSessionMsg(ctx, sink, "byspace_worktree_archive_response", map[string]any{
 				"requestId": req.RequestID, "success": false, "removedAgents": []string{}, "error": archiveErr.Error(),
@@ -536,31 +538,35 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 	_ = json.Unmarshal(raw, &req)
 	// Archiving one workspace removes its worktree only when nothing else references it, which is
 	// what keeps a sibling workspace on the same checkout alive.
-	directoryError, archiveErr := s.archiveWorkspaces(ctx, []string{req.WorkspaceID}, now)
+	directoryError, directoryCleanupPending, directoryCleanupKey, archiveErr := s.archiveWorkspaces(ctx, []string{req.WorkspaceID}, now)
 	if archiveErr != nil {
 		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
 			"requestId": req.RequestID, "workspaceId": req.WorkspaceID, "archivedAt": nil,
-			"directoryError": nil, "error": archiveErr.Error(),
+			"directoryError": nil, "directoryCleanupPending": false, "directoryCleanupKey": "", "error": archiveErr.Error(),
 		})
 		return
 	}
 	_, found := s.workspaceRecord(req.WorkspaceID)
 	if !found {
 		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
-			"requestId":      req.RequestID,
-			"workspaceId":    req.WorkspaceID,
-			"archivedAt":     nil,
-			"directoryError": nil,
-			"error":          "Workspace not found: " + req.WorkspaceID,
+			"requestId":               req.RequestID,
+			"workspaceId":             req.WorkspaceID,
+			"archivedAt":              nil,
+			"directoryError":          nil,
+			"directoryCleanupPending": false,
+			"directoryCleanupKey":     "",
+			"error":                   "Workspace not found: " + req.WorkspaceID,
 		})
 		return
 	}
 	_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
-		"requestId":      req.RequestID,
-		"workspaceId":    req.WorkspaceID,
-		"archivedAt":     now,
-		"directoryError": directoryError,
-		"error":          nil,
+		"requestId":               req.RequestID,
+		"workspaceId":             req.WorkspaceID,
+		"archivedAt":              now,
+		"directoryError":          directoryError,
+		"directoryCleanupPending": directoryCleanupPending,
+		"directoryCleanupKey":     directoryCleanupKey,
+		"error":                   nil,
 	})
 }
 
@@ -1628,33 +1634,53 @@ func (s *Server) stopWorkspaceTerminals(workspaceID string) {
 	}
 }
 
-// stopWorkspaceSetup marks a running setup as stopped.
-//
-// The goroutine running the commands is not killed: it holds an exec.Cmd chain whose children are the
-// project's own build tools, and the honest outcome is that the snapshot says stopped while whatever
-// already started finishes. What matters is that the UI stops claiming it is running.
+var setupRunCompletionTimeout = 2 * time.Second
+
+// stopWorkspaceSetup prevents later commands, terminates the active process tree, and waits for
+// the run to finish before archive proceeds to filesystem deletion.
 func (s *Server) stopWorkspaceSetup(workspaceID string) {
 	s.setupRunsMu.Lock()
-	delete(s.setupRuns, workspaceID)
+	run := s.setupRuns[workspaceID]
+	var cmd *exec.Cmd
+	var identity string
+	if run != nil {
+		run.stopping = true
+		cmd = run.cmd
+		identity = run.identity
+	}
 	s.setupRunsMu.Unlock()
 
 	s.mu.Lock()
-	snap, ok := s.setupSnapshots[workspaceID]
+	snap := s.setupSnapshots[workspaceID]
 	s.mu.Unlock()
-	if !ok || snap == nil {
+	if snap != nil {
+		snap.mu.Lock()
+		if snap.Status == "running" {
+			// "stopped" is not on the wire: WorkspaceSetupSnapshotSchema accepts only
+			// running/completed/failed/blocked, and an unknown status makes the client drop the whole
+			// message — leaving the setup tab claiming it is still running.
+			reason := "workspace archived"
+			snap.Status = "failed"
+			snap.Error = &reason
+		}
+		snap.mu.Unlock()
+		s.broadcastSetupProgress(snap)
+	}
+
+	if run == nil {
 		return
 	}
-	snap.mu.Lock()
-	if snap.Status == "running" {
-		// "stopped" is not on the wire: WorkspaceSetupSnapshotSchema accepts only
-		// running/completed/failed/blocked, and an unknown status makes the client drop the whole
-		// message — leaving the setup tab claiming it is still running.
-		reason := "workspace archived"
-		snap.Status = "failed"
-		snap.Error = &reason
+	if cmd != nil && cmd.Process != nil {
+		proc.ShutdownProcessTree(cmd.Process.Pid, run.done, identity)
 	}
-	snap.mu.Unlock()
-	s.broadcastSetupProgress(snap)
+	if run.done != nil {
+		timer := time.NewTimer(setupRunCompletionTimeout)
+		defer timer.Stop()
+		select {
+		case <-run.done:
+		case <-timer.C:
+		}
+	}
 }
 
 // normalizeClientMessageID trims a client message id, returning "" when it carries nothing.
@@ -1803,6 +1829,10 @@ func (s *Server) createWorktreeWorkspace(
 	intentInput workspace.WorktreeIntentInput,
 	firstAgentContext any,
 ) (store.WorkspaceRecord, store.ProjectRecord, error) {
+	prj, _, err := s.ensureWorkspaceForCwd(projectRoot)
+	if err != nil {
+		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
+	}
 	// Resolve through the same resolver the worktree RPCs use: the client speaks action + refName +
 	// checkoutSource, and reading only some of those fields silently dropped the branch the user
 	// picked in the starting-ref picker.
@@ -1815,12 +1845,18 @@ func (s *Server) createWorktreeWorkspace(
 	}
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
-	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, intentInput.WorktreeSlug)
+	wtPath, slug, err := workspace.WorktreePath(ctx, projectRoot, wtBase, intentInput.WorktreeSlug)
 	if err != nil {
 		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
 	}
-
-	prj, _, err := s.store.EnsureWorkspaceForCwd(projectRoot)
+	unlock := s.lockWorktreeLifecycle(wtPath)
+	locked := true
+	defer func() {
+		if locked {
+			unlock()
+		}
+	}()
+	wtPath, branch, err := workspace.CreateWorktreeFromIntent(ctx, projectRoot, wtBase, intent, slug)
 	if err != nil {
 		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
 	}
@@ -1855,7 +1891,12 @@ func (s *Server) createWorktreeWorkspace(
 			HeadRepository: intent.HeadRepository,
 		}
 	}
+	if s.beforeWorktreeWorkspaceRegister != nil {
+		s.beforeWorktreeWorkspaceRegister(wtPath)
+	}
 	_ = s.store.UpsertWorkspace(wsRec)
+	unlock()
+	locked = false
 	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(firstAgentContext))
 
 	// Record what the worktree was cut from, inside the worktree. Both create paths must write it:

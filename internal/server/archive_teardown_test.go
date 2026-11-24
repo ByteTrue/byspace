@@ -97,7 +97,7 @@ func TestWorkspaceArchiveDoesNotMutateLocalRecordsAfterNativeFailure(t *testing.
 	if err := srv.store.UpsertWorkspace(store.WorkspaceRecord{WorkspaceID: "ws_1", Cwd: dir}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err == nil {
+	if _, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1"}, "2026-02-01T00:00:00Z"); err == nil {
 		t.Fatal("workspace archive hid the native failure")
 	}
 	workspace, found := srv.workspaceRecord("ws_1")
@@ -149,7 +149,7 @@ func TestNativeArchiveFailureArchiveTeardown(t *testing.T) {
 
 	t.Run("workspace batch", func(t *testing.T) {
 		srv := setup(t)
-		if _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1", "ws_2"}, "2026-02-01T00:00:00Z"); err == nil {
+		if _, _, _, err := srv.archiveWorkspaces(context.Background(), []string{"ws_1", "ws_2"}, "2026-02-01T00:00:00Z"); err == nil {
 			t.Fatal("expected native archive failure")
 		}
 		assertUntouched(t, srv)
@@ -191,7 +191,9 @@ func TestStopWorkspaceSetupMarksFailed(t *testing.T) {
 	srv.mu.Unlock()
 
 	srv.setupRunsMu.Lock()
-	srv.setupRuns = map[string]bool{"ws_1": true}
+	run := &workspaceSetupRun{done: make(chan struct{})}
+	close(run.done)
+	srv.setupRuns = map[string]*workspaceSetupRun{"ws_1": run}
 	srv.setupRunsMu.Unlock()
 
 	srv.stopWorkspaceSetup("ws_1")
@@ -207,10 +209,10 @@ func TestStopWorkspaceSetupMarksFailed(t *testing.T) {
 		t.Fatalf("error = %v", errText)
 	}
 	srv.setupRunsMu.Lock()
-	stillRunning := srv.setupRuns["ws_1"]
+	stopping := run.stopping
 	srv.setupRunsMu.Unlock()
-	if stillRunning {
-		t.Fatal("the setup guard still blocks a future run")
+	if !stopping {
+		t.Fatal("the setup run was not marked as stopping")
 	}
 }
 
@@ -229,7 +231,7 @@ func TestSetupRunsAreDeduplicated(t *testing.T) {
 	// Hold the guard as an in-flight run would, then confirm a second call returns immediately
 	// without launching anything.
 	srv.setupRunsMu.Lock()
-	srv.setupRuns = map[string]bool{"ws_1": true}
+	srv.setupRuns = map[string]*workspaceSetupRun{"ws_1": {done: make(chan struct{})}}
 	srv.setupRunsMu.Unlock()
 
 	done := make(chan struct{})

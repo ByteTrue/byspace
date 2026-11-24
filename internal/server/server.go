@@ -238,7 +238,8 @@ type Server struct {
 	pollStop           chan struct{}
 	// checkoutSetWake asks the checkout observer to re-read which checkouts it follows. It is
 	// buffered to one so a burst of new workspaces costs one pass.
-	checkoutSetWake chan struct{}
+	checkoutSetWake  chan struct{}
+	checkoutObserver *checkoutObserver
 	// observation watches working trees and git metadata. Nil on a platform with no backend.
 	observation *observationService
 	// gitInvalidations coalesces classified git metadata changes into refreshes.
@@ -321,7 +322,14 @@ type Server struct {
 	projectIcons sync.Map
 	// setupRuns guards against two concurrent setup runs for one workspace.
 	setupRunsMu sync.Mutex
-	setupRuns   map[string]bool
+	setupRuns   map[string]*workspaceSetupRun
+	// deleteOwnedWorktree and waitWorktreeCleanup are focused-test overrides.
+	deleteOwnedWorktree             func(context.Context, string, string, func() error) error
+	waitWorktreeCleanup             func(context.Context, time.Duration) error
+	beforeWorktreeWorkspaceRegister func(string)
+	worktreeLifecycleLocks          sync.Map
+	worktreeCleanupMu               sync.Mutex
+	worktreeCleanups                map[string]*worktreeCleanup
 	// controlRequests receives a client's restart/stop ask. The process owner listens: the CLI's
 	// `serve` loop, or the desktop app whose daemon runs in-process. A server cannot restart itself.
 	controlRequests      chan ControlRequest
@@ -2191,7 +2199,7 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		})
 		return
 	}
-	prj, ws, err := s.store.CreateWorkspaceForDirectory(cwd, workspaceCreateTitle(req.Title, req.FirstAgentContext), req.Source.ProjectID)
+	prj, ws, err := s.createWorkspaceForDirectory(cwd, workspaceCreateTitle(req.Title, req.FirstAgentContext), req.Source.ProjectID)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
 			"requestId":       req.RequestID,
@@ -2515,9 +2523,38 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		cwd = resolveChildCwd(parentCwd, cwd)
 	}
 
+	worktreeRequested := (req.Worktree != nil && strings.TrimSpace(req.Worktree.Mode) != "") || strings.TrimSpace(req.WorktreeName) != ""
+	if worktreeRequested && cwd != "" {
+		if _, _, ensureErr := s.ensureWorkspaceForCwd(cwd); ensureErr != nil {
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status": "agent_create_failed", "requestId": req.RequestID, "error": ensureErr.Error(),
+			})
+			return
+		}
+	}
+
+	var worktreeUnlock func()
+	worktreeLocked := false
+	defer func() {
+		if worktreeLocked {
+			worktreeUnlock()
+		}
+	}()
+
 	// A structured worktree intent wins over the simple name: it says which branch to be on, and
 	// the whole point of a worktree is that the branch is not the default one.
 	if req.Worktree != nil && strings.TrimSpace(req.Worktree.Mode) != "" {
+		slug := workspace.NormalizeWorktreeSlug(req.Worktree.NewBranch)
+		if slug == "" {
+			slug = workspace.NormalizeWorktreeSlug(req.Worktree.Branch)
+		}
+		if slug == "" {
+			slug = fmt.Sprintf("pr-%d", req.Worktree.PrNumber)
+		}
+		if target, _, pathErr := workspace.WorktreePath(ctx, cwd, s.worktreesBaseDir(), slug); pathErr == nil {
+			worktreeUnlock = s.lockWorktreeLifecycle(target)
+			worktreeLocked = true
+		}
 		if created, createErr := s.createWorktreeForIntent(ctx, cwd, req.Worktree); createErr == nil && created != "" {
 			cwd = created
 		}
@@ -2526,7 +2563,13 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	// `worktreeName` asks for a BySpace-owned worktree for this agent. Without it a request to
 	// work on a branch shares the main checkout with every other agent, so two agents on two
 	// branches fight over one working tree — which is the reason worktrees exist.
-	if name := strings.TrimSpace(req.WorktreeName); name != "" {
+	if name := strings.TrimSpace(req.WorktreeName); name != "" && (req.Worktree == nil || strings.TrimSpace(req.Worktree.Mode) == "") {
+		if !worktreeLocked {
+			if target, _, pathErr := workspace.WorktreePath(ctx, cwd, s.worktreesBaseDir(), workspace.NormalizeWorktreeSlug(name)); pathErr == nil {
+				worktreeUnlock = s.lockWorktreeLifecycle(target)
+				worktreeLocked = true
+			}
+		}
 		if created, createErr := s.createWorktreeForAgent(ctx, cwd, name); createErr == nil && created != "" {
 			cwd = created
 		}
@@ -2538,6 +2581,14 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	absCwd, err := filepath.Abs(cwd)
 	if err == nil {
 		cwd = absCwd
+	}
+	if worktreeLocked && strings.TrimSpace(req.WorkspaceID) != "" {
+		if _, _, ensureErr := s.store.EnsureWorkspaceForCwd(cwd); ensureErr != nil {
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status": "agent_create_failed", "requestId": req.RequestID, "error": ensureErr.Error(),
+			})
+			return
+		}
 	}
 
 	// An explicit workspace wins over the one inferred from cwd. Ignoring it put the agent in
@@ -2557,7 +2608,11 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 	}
 	if ws == nil {
-		_, inferred, ensureErr := s.store.EnsureWorkspaceForCwd(cwd)
+		ensureWorkspace := s.ensureWorkspaceForCwd
+		if worktreeLocked {
+			ensureWorkspace = s.store.EnsureWorkspaceForCwd
+		}
+		_, inferred, ensureErr := ensureWorkspace(cwd)
 		if ensureErr != nil {
 			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 				"status":    "agent_create_failed",
@@ -2568,6 +2623,10 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 		inferredCopy := inferred
 		ws = &inferredCopy
+	}
+	if worktreeLocked {
+		worktreeUnlock()
+		worktreeLocked = false
 	}
 
 	provider := strings.TrimSpace(req.Config.Provider)

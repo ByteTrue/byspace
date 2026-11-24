@@ -242,6 +242,7 @@ function useRowArchive(
     serverId: workspace.serverId,
     workspaceId: workspace.workspaceId,
     workspaceKind: workspace.workspaceKind,
+    path: workspace.workspaceDirectory,
     name: workspace.name,
     ...toWorktreeArchiveRisk(workspace),
     onArchiveStarted: () =>

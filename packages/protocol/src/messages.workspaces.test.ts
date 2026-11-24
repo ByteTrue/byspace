@@ -9,6 +9,51 @@ import {
 } from "./messages.js";
 
 describe("workspace message schemas", () => {
+  test("parses deferred worktree cleanup outcomes", () => {
+    const succeeded = SessionOutboundMessageSchema.parse({
+      type: "workspace.worktree.cleanup",
+      payload: {
+        workspaceId: "workspace-1",
+        path: "C:\\worktrees\\repo\\feature",
+        cleanupKey: "c:/worktrees/repo/feature",
+        status: "succeeded",
+      },
+    });
+    expect(succeeded).toEqual({
+      type: "workspace.worktree.cleanup",
+      payload: {
+        workspaceId: "workspace-1",
+        path: "C:\\worktrees\\repo\\feature",
+        cleanupKey: "c:/worktrees/repo/feature",
+        status: "succeeded",
+      },
+    });
+
+    const failed = SessionOutboundMessageSchema.parse({
+      type: "workspace.worktree.cleanup",
+      payload: {
+        workspaceId: "workspace-1",
+        path: "C:\\worktrees\\repo\\feature",
+        cleanupKey: "c:/worktrees/repo/feature",
+        status: "failed",
+        error: "directory locked",
+      },
+    });
+    expect(failed).toMatchObject({
+      payload: { status: "failed", error: "directory locked" },
+    });
+
+    const cancelled = SessionOutboundMessageSchema.parse({
+      type: "workspace.worktree.cleanup",
+      payload: {
+        workspaceId: "workspace-1",
+        path: "C:\\worktrees\\repo\\feature",
+        cleanupKey: "c:/worktrees/repo/feature",
+        status: "cancelled",
+      },
+    });
+    expect(cancelled).toMatchObject({ payload: { status: "cancelled" } });
+  });
   test("parses mark-unread request and response", () => {
     expect(
       SessionInboundMessageSchema.parse({

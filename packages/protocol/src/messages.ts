@@ -3915,6 +3915,17 @@ export const WorkspaceScriptStopResponseMessageSchema = z.object({
   payload: WorkspaceScriptOperationPayloadSchema,
 });
 
+export const WorkspaceWorktreeCleanupMessageSchema = z.object({
+  type: z.literal("workspace.worktree.cleanup"),
+  payload: z.object({
+    workspaceId: z.string(),
+    path: z.string(),
+    cleanupKey: z.string(),
+    status: z.enum(["succeeded", "failed", "cancelled"]),
+    error: z.string().optional(),
+  }),
+});
+
 export const ArchiveWorkspaceResponseMessageSchema = z.object({
   type: z.literal("archive_workspace_response"),
   payload: z.object({
@@ -3925,6 +3936,10 @@ export const ArchiveWorkspaceResponseMessageSchema = z.object({
     // Set when the workspace was archived but its backing directory could not
     // be removed from disk. Optional so older daemons stay wire-compatible.
     directoryError: z.string().nullable().optional(),
+    // True only when the daemon scheduled deferred cleanup for directoryError.
+    directoryCleanupPending: z.boolean(),
+    // Canonical daemon cleanup identity; empty unless deferred cleanup is pending.
+    directoryCleanupKey: z.string(),
   }),
 });
 
@@ -5696,6 +5711,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectListResponseMessageSchema,
   ScriptStatusUpdateMessageSchema,
   WorkspaceSetupProgressMessageSchema,
+  WorkspaceWorktreeCleanupMessageSchema,
   WorkspaceSetupStatusResponseMessageSchema,
   WorkspaceSetupRunResponseMessageSchema,
   AgentStreamMessageSchema,
@@ -5912,6 +5928,7 @@ export type WorkspaceScriptStartResponseMessage = z.infer<
 export type WorkspaceScriptStopResponseMessage = z.infer<
   typeof WorkspaceScriptStopResponseMessageSchema
 >;
+export type WorkspaceWorktreeCleanupMessage = z.infer<typeof WorkspaceWorktreeCleanupMessageSchema>;
 export type ArchiveWorkspaceResponseMessage = z.infer<typeof ArchiveWorkspaceResponseMessageSchema>;
 export type FetchAgentResponseMessage = z.infer<typeof FetchAgentResponseMessageSchema>;
 export type FetchAgentTimelineResponseMessage = z.infer<

@@ -65,6 +65,12 @@ exact ref also resolves through its stored branch name.
 
 Worktrees inherit committed Git state only; uncommitted source-checkout changes are not copied.
 
+## Worktree archive cleanup
+
+Archiving a worktree is a successful soft delete even when its directory cannot be removed. The daemon first stops the processes and observation it owns, then retries deletion with delays of 0, 100, 300, 700, and 1500 ms. Only an actual removal failure schedules deferred attempts after 5 s, 15 s, 30 s, 1 min, 2 min, and 5 min; teardown and safety-check errors keep the directory and report their error without promising background cleanup. Reclaiming the path cancels deferred cleanup and dismisses the pending notification. Final failure keeps that path in the cleanup notification for manual resolution.
+
+Deferred cleanup lives only in the running daemon. Restarting the daemon abandons pending attempts; BySpace does not resume them on startup or remove leftover directories automatically. Every attempt rechecks managed-worktree ownership and active workspace references, and stops silently if the path has been reclaimed. External applications can still hold Windows handles after all retries.
+
 ## byspace.json service scripts
 
 `worktree.setup` and `worktree.teardown` in `byspace.json` accept either a multiline shell script or an array

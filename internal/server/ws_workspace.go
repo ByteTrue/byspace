@@ -536,7 +536,7 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		if cwd == "" {
 			cwd = desc.Cwd
 		}
-		_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+		_, ws, err := s.ensureWorkspaceForCwd(cwd)
 		if err != nil {
 			failImport(err.Error())
 			return

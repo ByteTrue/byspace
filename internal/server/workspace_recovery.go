@@ -132,12 +132,14 @@ func (s *Server) restoreWorkspace(ctx context.Context, workspaceID string) error
 	if !ok {
 		return fmt.Errorf("Workspace not found: %s", workspaceID)
 	}
-	if state["action"] == recoveryActionRestore {
-		if err := s.recreateArchivedWorktree(ctx, rec); err != nil {
-			return err
+	return s.withWorktreeLifecycle(rec.Cwd, func() error {
+		if state["action"] == recoveryActionRestore {
+			if err := s.recreateArchivedWorktree(ctx, rec); err != nil {
+				return err
+			}
 		}
-	}
-	return s.unarchiveWorkspaceRecord(ctx, rec)
+		return s.unarchiveWorkspaceRecord(ctx, rec)
+	})
 }
 
 // recreateArchivedWorktree rebuilds the checkout for an archived worktree from its branch.

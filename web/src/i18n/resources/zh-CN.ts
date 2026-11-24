@@ -1167,8 +1167,10 @@ export const zhCN: TranslationResources = {
         hostDisconnected: "Host 未连接",
         hideFailed: "隐藏 workspace 失败",
         archiveFailed: "归档工作区失败",
-        archiveDirectoryRemovalFailed:
-          "工作区已归档，但其文件夹未能完全删除。请关闭占用它的程序后手动删除该文件夹。",
+        archiveDirectoryCleanupPending: "工作区已归档，BySpace 仍在后台清理 {{path}}。",
+        archiveDirectoryCleanupSucceeded: "已删除归档工作区文件夹 {{path}}。",
+        archiveDirectoryCleanupFailed:
+          "后台清理 {{path}} 失败。请关闭占用它的程序，然后手动删除该文件夹。",
       },
     },
   },

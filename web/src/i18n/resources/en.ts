@@ -1190,8 +1190,11 @@ export const en = {
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive workspace",
-        archiveDirectoryRemovalFailed:
-          "Workspace archived, but its folder could not be fully removed. Close programs using it and delete the folder manually.",
+        archiveDirectoryCleanupPending:
+          "Workspace archived. BySpace is still cleaning up {{path}} in the background.",
+        archiveDirectoryCleanupSucceeded: "Removed archived workspace folder {{path}}.",
+        archiveDirectoryCleanupFailed:
+          "Background cleanup failed for {{path}}. Close programs using it, then delete the folder manually.",
       },
     },
   },

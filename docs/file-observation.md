@@ -5,7 +5,7 @@
 ## Contract
 
 - `Event.Kind` is `Created`, `Written`, `Renamed` (with `From`), or `Removed`. Paths are absolute and already cleaned.
-- `Release` is a barrier. Once it returns, no callback, queued event, or descriptor for that subscription remains, including when the root was renamed or deleted. Workspace archive removes worktrees while releasing subscriptions, so teardown cannot assume the root still exists.
+- `Release` is a barrier. Once it returns, no callback, queued event, or descriptor for that subscription remains, including when the root was renamed or deleted. Teardown cannot assume the root still exists. Workspace archive releases the archived checkout observation before deletion; a native subscription shared with another workspace remains until its final consumer leaves.
 - `UpdateExclusions` is an exclusion barrier: once it returns, no event below a newly excluded root is delivered. Re-including a root rebuilds its watch quietly, without announcing the files that already exist there.
 - Git owns ignore evaluation. The observer takes the resulting absolute roots and prunes them from the watch set in place; it never reads ignore files itself.
 - A watch failure or the entry cap degrades the subscription instead of silently dropping events. `Degraded()` closes once when that happens, and stays closed. A degraded subscription may miss events, so its consumer polls until observation is re-established, and the observer retries the native watch itself. `Diagnostics()` reports subscription count, tracked directories, pending callbacks, degraded subscriptions, and failure count.

@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
-	"github.com/ByteTrue/byspace/internal/proc"
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/ByteTrue/byspace/internal/proc"
 
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/pathutil"
@@ -27,7 +30,7 @@ import (
 //
 // Returns a message describing why the directory is still on disk, or nil when it is gone (or was
 // never ours to remove).
-func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string) (*string, error) {
+func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string) (*string, bool, string, error) {
 	// Native archival is the fallible remote phase. Finish it for every workspace before
 	// mutating any local records, so a later failure cannot leave a half-archived batch.
 	for _, id := range ids {
@@ -36,7 +39,7 @@ func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string
 			continue
 		}
 		if err := s.prepareArchivedWorkspaceNative(ctx, id); err != nil {
-			return nil, err
+			return nil, false, "", err
 		}
 	}
 	archived := make([]store.WorkspaceRecord, 0, len(ids))
@@ -49,19 +52,21 @@ func (s *Server) archiveWorkspaces(ctx context.Context, ids []string, now string
 		if !already {
 			s.teardownArchivedWorkspaceLocal(id, now)
 			if _, err := s.store.ArchiveWorkspace(id, now); err != nil {
-				return nil, err
+				return nil, false, "", err
 			}
 			rec.ArchivedAt = &now
 			if prj, ok := s.projectForWorkspace(rec.ProjectID); ok {
 				s.broadcastWorkspaceUpsert(rec, prj)
 			}
+			s.releaseArchivedWorkspaceObservation(ctx, id)
 		}
 		archived = append(archived, rec)
 	}
 	if len(archived) == 0 {
-		return nil, nil
+		return nil, false, "", nil
 	}
-	return s.removeArchivedWorktree(ctx, archived[0]), nil
+	directoryError, cleanupPending, cleanupKey := s.removeArchivedWorktree(ctx, archived[0])
+	return directoryError, cleanupPending, cleanupKey, nil
 }
 
 // adoptWorktreePlacement gives a workspace created on a BySpace worktree directory the worktree
@@ -98,49 +103,89 @@ func (s *Server) workspaceRecord(workspaceID string) (store.WorkspaceRecord, boo
 	return store.WorkspaceRecord{}, false
 }
 
-// removeArchivedWorktree deletes the BySpace-owned worktree behind an archived workspace when no
-// active workspace still uses it.
-func (s *Server) removeArchivedWorktree(ctx context.Context, rec store.WorkspaceRecord) *string {
+var errWorktreeStillReferenced = errors.New("worktree has an active workspace reference")
+
+type worktreeCleanupTarget struct {
+	workspaceID string
+	path        string
+	repoRoot    string
+}
+
+// removeArchivedWorktree performs one-time archive preparation, then deletes an immutable target.
+// Deferred cleanup reuses only the target and its safety checks, never project teardown hooks.
+func (s *Server) removeArchivedWorktree(ctx context.Context, rec store.WorkspaceRecord) (*string, bool, string) {
 	ownership := workspace.ResolveWorktreeOwnership(s.worktreesBaseDir(), rec.Cwd)
-	if !ownership.Owned && !rec.IsBySpaceOwnedWorktree {
-		return nil
-	}
-	path := ownership.Path
-	if path == "" {
-		if rec.WorktreeRoot != nil && strings.TrimSpace(*rec.WorktreeRoot) != "" {
-			path = *rec.WorktreeRoot
-		} else {
-			path = rec.Cwd
+	if !ownership.Owned {
+		if !rec.IsBySpaceOwnedWorktree {
+			return nil, false, ""
 		}
+		message := "refusing to remove worktree outside BySpace management: " + filepath.Clean(rec.Cwd)
+		return &message, false, ""
 	}
-
-	// A second workspace can be created on the same checkout (Model B). Deleting the directory
-	// while one of them is still open destroys a working tree nothing archived.
-	remaining, err := s.store.ListWorkspaces()
-	if err != nil {
-		message := "cannot read workspaces: " + err.Error()
-		return &message
+	target := worktreeCleanupTarget{
+		workspaceID: rec.WorkspaceID,
+		path:        filepath.Clean(ownership.Path),
 	}
-	if worktreeStillReferenced(remaining, path) {
-		return nil
-	}
-
-	if message := s.runWorktreeTeardownCommands(ctx, path, rec.WorkspaceID); message != nil {
-		return message
-	}
-
-	repoRoot := ""
-	if rec.MainRepoRoot != nil {
-		repoRoot = strings.TrimSpace(*rec.MainRepoRoot)
-	}
-	if repoRoot == "" {
-		repoRoot = workspace.WorktreeMainRepoRoot(ctx, path)
-	}
-	if err := workspace.DeleteOwnedWorktree(ctx, repoRoot, path); err != nil {
+	if err := s.checkWorktreeCleanupTarget(target); err != nil {
+		if errors.Is(err, errWorktreeStillReferenced) {
+			return nil, false, ""
+		}
 		message := err.Error()
-		return &message
+		return &message, false, ""
+	}
+
+	if message := s.runWorktreeTeardownCommands(ctx, target.path, rec.WorkspaceID); message != nil {
+		return message, false, ""
+	}
+
+	if rec.MainRepoRoot != nil {
+		target.repoRoot = strings.TrimSpace(*rec.MainRepoRoot)
+	}
+	if target.repoRoot == "" {
+		target.repoRoot = workspace.WorktreeMainRepoRoot(ctx, target.path)
+	}
+	if target.repoRoot != "" {
+		target.repoRoot = filepath.Clean(target.repoRoot)
+	}
+	var deleteErr error
+	_ = s.withWorktreeLifecycle(target.path, func() error {
+		deleteErr = s.deleteWorktreeCleanupTarget(ctx, target)
+		return nil
+	})
+	if deleteErr != nil {
+		if errors.Is(deleteErr, errWorktreeStillReferenced) {
+			return nil, false, ""
+		}
+		s.scheduleWorktreeCleanup(target)
+		message := deleteErr.Error()
+		return &message, true, worktreeCleanupKey(target.path)
+	}
+	return nil, false, ""
+}
+
+func (s *Server) checkWorktreeCleanupTarget(target worktreeCleanupTarget) error {
+	ownership := workspace.ResolveWorktreeOwnership(s.worktreesBaseDir(), target.path)
+	if !ownership.Owned || !pathutil.AreEquivalent(ownership.Path, target.path) {
+		return errors.New("refusing to remove worktree outside BySpace management: " + target.path)
+	}
+	records, err := s.store.ListWorkspaces()
+	if err != nil {
+		return errors.New("cannot read workspaces: " + err.Error())
+	}
+	if worktreeStillReferenced(records, target.path) {
+		return errWorktreeStillReferenced
 	}
 	return nil
+}
+
+func (s *Server) deleteWorktreeCleanupTarget(ctx context.Context, target worktreeCleanupTarget) error {
+	deleteWorktree := s.deleteOwnedWorktree
+	if deleteWorktree == nil {
+		deleteWorktree = workspace.DeleteOwnedWorktreeWithGuard
+	}
+	return deleteWorktree(ctx, target.repoRoot, target.path, func() error {
+		return s.checkWorktreeCleanupTarget(target)
+	})
 }
 
 // worktreeStillReferenced reports whether an active workspace is checked out at path.
@@ -153,7 +198,7 @@ func worktreeStillReferenced(records []store.WorkspaceRecord, path string) bool 
 		if rec.ArchivedAt != nil {
 			continue
 		}
-		if pathutil.AreEquivalent(rec.Cwd, path) {
+		if pathutil.AreEquivalent(rec.Cwd, path) || pathutil.IsWithin(path, rec.Cwd) {
 			return true
 		}
 		if rec.WorktreeRoot != nil && pathutil.AreEquivalent(*rec.WorktreeRoot, path) {

@@ -6,16 +6,44 @@ import {
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 import { i18n } from "@/i18n/i18next";
+import type { ToastApi } from "@/widgets/toast-host";
 
 export interface WorkspaceArchiveTarget {
   serverId: string;
   workspaceId: string;
 }
 
+export function worktreeCleanupToastId(input: { serverId: string; cleanupKey: string }): string {
+  return `workspace-worktree-cleanup:${input.serverId}:${input.cleanupKey}`;
+}
+
+export function applyWorktreeCleanupOutcome(input: {
+  serverId: string;
+  cleanupKey: string;
+  status: "succeeded" | "failed" | "cancelled";
+  successMessage: string;
+  failureMessage: string;
+  toast: Pick<ToastApi, "show" | "dismiss">;
+}): void {
+  const id = worktreeCleanupToastId(input);
+  if (input.status === "cancelled") {
+    input.toast.dismiss(id);
+    return;
+  }
+  const succeeded = input.status === "succeeded";
+  input.toast.show(succeeded ? input.successMessage : input.failureMessage, {
+    id,
+    variant: succeeded ? "success" : "error",
+    ...(succeeded ? {} : { durationMs: 3200 }),
+  });
+}
+
 interface WorkspaceArchiveClient {
   archiveWorkspace: (workspaceId: string) => Promise<{
     error: string | null;
     directoryError?: string | null;
+    directoryCleanupPending: boolean;
+    directoryCleanupKey: string;
   }>;
 }
 
@@ -41,7 +69,11 @@ class WorkspaceArchiveRejectedError extends Error {
 
 /** Archive succeeded; only the on-disk removal failed. Not a reason to restore the workspace. */
 export class WorkspaceDirectoryRemovalError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly cleanupPending: boolean,
+    readonly cleanupKey: string,
+  ) {
     super(message);
     this.name = "WorkspaceDirectoryRemovalError";
   }
@@ -108,7 +140,11 @@ async function archiveWorkspaceOrThrow(input: {
   // deleted (a file handle kept the tree busy on Windows). The workspace is
   // gone from the sidebar either way; surface the residue so the user can act.
   if (payload.directoryError) {
-    throw new WorkspaceDirectoryRemovalError(payload.directoryError);
+    throw new WorkspaceDirectoryRemovalError(
+      payload.directoryError,
+      payload.directoryCleanupPending,
+      payload.directoryCleanupKey,
+    );
   }
 }
 

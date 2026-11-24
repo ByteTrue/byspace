@@ -60,16 +60,15 @@ func descendants(pid uint32) []uint32 {
 	for len(queue) > 0 {
 		p := queue[0]
 		queue = queue[1:]
-		born, ok := procStartTime(p)
-		if !ok {
-			continue
-		}
+		born, rootAlive := procStartTime(p)
 		for _, k := range kids[p] {
 			if seen[k] {
 				continue
 			}
-			if t, ok := procStartTime(k); !ok || t < born {
-				continue
+			if rootAlive {
+				if t, ok := procStartTime(k); !ok || t < born {
+					continue
+				}
 			}
 			seen[k] = true
 			out = append(out, k)

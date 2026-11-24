@@ -287,6 +287,7 @@ function useWorkspaceScreenArchiveController({
     serverId,
     workspaceId: workspaceDescriptor?.id ?? "",
     workspaceKind: workspaceDescriptor?.workspaceKind ?? "directory",
+    path: workspaceDescriptor?.workspaceDirectory ?? workspaceDirectory ?? "",
     name: workspaceDescriptor?.name ?? branchLabel,
     isDirty: archiveRisk.isDirty,
     aheadOfOrigin: archiveRisk.aheadOfOrigin,

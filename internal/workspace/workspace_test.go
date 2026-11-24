@@ -123,3 +123,35 @@ func TestGitCheckoutStatusAndCommits(t *testing.T) {
 		t.Fatalf("expected at least 2 worktrees, got %+v (%v)", wts, err)
 	}
 }
+
+func TestCreateWorktreeUsesWorktreePathGeneratedSlug(t *testing.T) {
+	ctx := context.Background()
+	repo := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v (%s)", args, err, string(out))
+		}
+	}
+	run("init", "-b", "main")
+	run("config", "user.name", "Tester")
+	run("config", "user.email", "tester@example.com")
+	if res := WriteFile(repo, "README.md", "# Test\n", "", ""); res.Status != "written" {
+		t.Fatalf("write failed: %+v", res)
+	}
+	run("add", "README.md")
+	run("commit", "-m", "initial")
+
+	predicted, slug, err := WorktreePath(ctx, repo, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, _, err := CreateWorktree(ctx, repo, filepath.Dir(filepath.Dir(predicted)), slug, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual != predicted {
+		t.Fatalf("CreateWorktree path = %q, WorktreePath predicted %q", actual, predicted)
+	}
+}
