@@ -1,0 +1,3 @@
+{
+  "install": "npm ci --no-audit --no-fund && go mod download && make build && npm run build:app-deps && npm run build:relay"
+}
