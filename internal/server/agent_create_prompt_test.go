@@ -1,8 +1,13 @@
 package server
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/store"
 )
 
 func TestCreateAgentSubmitsImageOnlyInitialPrompt(t *testing.T) {
@@ -80,5 +85,56 @@ func TestCreateAgentFailsWhenInitialPromptIsRejected(t *testing.T) {
 	}
 	if len(agents) != 0 {
 		t.Fatalf("persisted agents = %+v, want none", agents)
+	}
+}
+
+type gatedStateSession struct {
+	providers.ManagedSession
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *gatedStateSession) GetState(ctx context.Context) (*sdk.SessionState, error) {
+	close(s.entered)
+	select {
+	case <-s.release:
+		return s.ManagedSession.GetState(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestDiscardedAgentCannotBeRecreatedByPersistenceSync(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	cwd := t.TempDir()
+	session := &gatedStateSession{
+		ManagedSession: providers.StartMockSession(providers.MockLaunchOptions{Cwd: cwd, Model: "e2e-fast-stream"}),
+		entered:        make(chan struct{}),
+		release:        make(chan struct{}),
+	}
+	mp := &managedPi{
+		record:  store.AgentRecord{ID: "discarded-during-sync", Provider: "mock", Cwd: cwd},
+		session: session,
+	}
+	srv.agents[mp.record.ID] = mp
+	if err := srv.store.UpsertAgent(mp.record); err != nil {
+		t.Fatal(err)
+	}
+
+	syncDone := make(chan error, 1)
+	go func() { syncDone <- srv.syncPiPersistenceChecked(mp) }()
+	<-session.entered
+	srv.discardCreatedAgent(mp, mp.record.ID)
+	close(session.release)
+	if err := <-syncDone; err != nil {
+		t.Fatal(err)
+	}
+
+	persisted, err := srv.store.GetAgent(mp.record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted != nil {
+		t.Fatalf("persistence sync recreated discarded agent: %+v", persisted)
 	}
 }

@@ -3912,14 +3912,18 @@ func (s *Server) syncPiPersistenceChecked(mp *managedPi) error {
 		handle = st.SessionID
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A failed create can discard the agent while GetState is in flight. Keep the liveness check
+	// and the write under the same lock so that background sync cannot recreate the deleted record.
+	if s.agents[mp.record.ID] != mp {
+		return nil
+	}
 	mp.record.Persistence = &store.AgentPersistenceHandle{
 		Provider:     "pi",
 		SessionID:    sid,
 		NativeHandle: handle,
 	}
-	recCopy := mp.record
-	s.mu.Unlock()
-	return s.store.UpsertAgent(recCopy)
+	return s.store.UpsertAgent(mp.record)
 }
 
 func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
