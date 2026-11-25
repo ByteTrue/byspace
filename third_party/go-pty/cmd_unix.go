@@ -43,6 +43,9 @@ func (c *Cmd) start() error {
 	cmd.Stdout = pty.slave
 	cmd.Stderr = pty.slave
 	cmd.SysProcAttr.Setsid = true
+	// setsid already creates the child's process group. A following setpgid on that session
+	// leader fails with EPERM on Linux, so discard an inherited Setpgid request.
+	cmd.SysProcAttr.Setpgid = false
 	cmd.SysProcAttr.Setctty = true
 	if err := cmd.Start(); err != nil {
 		return err

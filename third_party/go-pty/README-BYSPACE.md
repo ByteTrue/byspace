@@ -15,6 +15,7 @@ path as the fallback when the payload is absent or cannot be created.
   named pipes (node-pty's layout: the pseudo console owns the server ends, the terminal reads and
   writes client ends) and `afterStart` releases the pseudo console after `CreateProcess`.
 - `cmd_windows.go` — calls `afterStart` once the client process is attached.
+- `cmd_unix.go` — clears `Setpgid` before starting because `Setsid` already creates the process group.
 - `conpty_dll_windows.go` (new) — loads `ConptyCreatePseudoConsole`, `ConptyResizePseudoConsole`,
   `ConptyClosePseudoConsole`, `ConptyReleasePseudoConsole` from the payload.
 
