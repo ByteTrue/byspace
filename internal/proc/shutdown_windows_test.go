@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -118,6 +119,25 @@ func TestProcessTreeAliveDoesNotTrustFailedDescendantSnapshot(t *testing.T) {
 	}
 }
 
+func parentProcessIDForTest(pid uint32) (uint32, error) {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.CloseHandle(snap)
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	for err = windows.Process32First(snap, &entry); err == nil; err = windows.Process32Next(snap, &entry) {
+		if entry.ProcessID == pid {
+			return entry.ParentProcessID, nil
+		}
+	}
+	if errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+		return 0, os.ErrNotExist
+	}
+	return 0, err
+}
+
 func TestShutdownProcessTreeKillsDescendantAfterRootExits(t *testing.T) {
 	pidPath := filepath.Join(t.TempDir(), "child.pid")
 	quoted := "'" + strings.ReplaceAll(pidPath, "'", "''") + "'"
@@ -164,5 +184,12 @@ func TestShutdownProcessTreeKillsDescendantAfterRootExits(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("descendant %d survived after root exited", pid)
+	rootPID := cmd.Process.Pid
+	remaining, descendantsErr := descendants(uint32(rootPID))
+	parent, parentErr := parentProcessIDForTest(uint32(pid))
+	currentIdentity, rootExists, identityErr := queryProcessIdentityPlatform(rootPID)
+	t.Fatalf(
+		"descendant %d survived after root %d exited; parent=%d (err=%v), descendants=%v (err=%v), root identity=%q (want %q, exists=%v, err=%v)",
+		pid, rootPID, parent, parentErr, remaining, descendantsErr, currentIdentity, identity, rootExists, identityErr,
+	)
 }
