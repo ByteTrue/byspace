@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -68,16 +67,17 @@ func (s *Store) DaemonPasswordHash() string {
 func (s *Store) SetDaemonPasswordHash(hash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cfgPath := filepath.Join(s.homeDir, "config.json")
-	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
-	if b, err := os.ReadFile(cfgPath); err == nil {
-		var existing map[string]any
-		if json.Unmarshal(stripBOM(b), &existing) == nil {
-			disk = existing
-			if _, ok := disk["version"]; !ok {
-				disk["version"] = 1
-			}
-		}
+	unlock, err := lockDaemonConfig(s.homeDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	disk, err := readDaemonConfigDisk(s.homeDir)
+	if err != nil {
+		return err
+	}
+	if _, ok := disk["version"]; !ok {
+		disk["version"] = 1
 	}
 	daemon, _ := disk["daemon"].(map[string]any)
 	if daemon == nil {
@@ -93,7 +93,7 @@ func (s *Store) SetDaemonPasswordHash(hash string) error {
 	if err != nil {
 		return err
 	}
-	return home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)
+	return home.WriteAtomic(filepath.Join(s.homeDir, "config.json"), append(b, '\n'), 0o600)
 }
 
 // DaemonAuthFingerprint returns a digest of the stored hash, or "" when no password is set.

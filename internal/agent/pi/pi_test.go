@@ -274,13 +274,10 @@ func TestPromptForwardsImageBlocksToPi(t *testing.T) {
 	tmp := t.TempDir()
 	fakePi := filepath.Join(tmp, "fake-pi-echo-images.sh")
 	// Echo back the raw prompt command line so the test can assert image blocks survived.
-	// get_state negotiates a model that accepts images; Prompt refuses them for a text-only model.
+	// No get_state response precedes the prompt, so its model capabilities are still unknown.
 	script := `#!/bin/sh
 while read line; do
   case "$line" in
-    *'"type":"get_state"'*)
-      echo '{"type":"response","id":"req_1","command":"get_state","success":true,"data":{"sessionId":"pi_images","model":{"id":"m","input":["text","image"]}}}'
-      ;;
     *'"type":"prompt"'*)
       echo "{\"type\":\"response\",\"id\":\"r1\",\"command\":\"prompt\",\"success\":true,\"data\":{\"agentInvoked\":true}}"
       echo '{"type":"agent_start"}'
@@ -304,10 +301,6 @@ done
 	}
 	defer sess.Close()
 
-	if _, err := sess.GetState(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
 	const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 	if err := sess.Prompt(context.Background(), "what colour", []ImageContent{
 		{Type: "image", Data: b64, MimeType: "image/png"},
@@ -326,6 +319,39 @@ done
 	}
 	if !strings.Contains(text, `"type":"image"`) || !strings.Contains(text, b64) || !strings.Contains(text, `"mimeType":"image/png"`) {
 		t.Fatalf("image block was not forwarded to pi prompt: %s", text)
+	}
+}
+
+func TestModelInputDistinguishesUnknownFromExplicitEmpty(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		input     []string
+		wantKnown bool
+	}{
+		{name: "omitted", input: nil, wantKnown: false},
+		{name: "explicit empty", input: []string{}, wantKnown: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			copied := cloneModelInput(testCase.input)
+			if (copied == nil) != (testCase.input == nil) {
+				t.Fatalf("cloneModelInput nil-ness = %v, want %v", copied == nil, testCase.input == nil)
+			}
+			sess := &Session{modelInput: copied}
+			known, supported := sess.imageInputSupport()
+			if known != testCase.wantKnown || supported {
+				t.Fatalf("imageInputSupport() = (%v, %v), want (%v, false)", known, supported, testCase.wantKnown)
+			}
+		})
+	}
+}
+
+func TestPromptRejectsImagesForNegotiatedTextOnlyModel(t *testing.T) {
+	sess := &Session{modelInput: []string{"text"}}
+	err := sess.Prompt(context.Background(), "what colour", []ImageContent{
+		{Type: "image", Data: "aGVsbG8=", MimeType: "image/png"},
+	})
+	if err == nil || err.Error() != "the selected Pi model does not support image input" {
+		t.Fatalf("Prompt error = %v, want text-only rejection", err)
 	}
 }
 

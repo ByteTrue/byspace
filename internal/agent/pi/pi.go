@@ -940,8 +940,12 @@ func (s *Session) SetNextClientMessageID(id string) {
 
 // Prompt sends a user prompt to Pi and appends the user_message to the timeline.
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
-	if len(images) > 0 && !s.supportsImages() {
-		return errors.New("the selected Pi model does not support image input")
+	if len(images) > 0 {
+		known, supported := s.imageInputSupport()
+		// Nil capabilities mean startup has not negotiated input kinds yet; let Pi decide then.
+		if known && !supported {
+			return errors.New("the selected Pi model does not support image input")
+		}
 	}
 	// Held until the prompt's row is delivered, so its seq reaches subscribers in order with the
 	// frames around it. What is still merging goes out first: it arrived before the prompt.
@@ -1086,14 +1090,27 @@ func (s *Session) Capabilities() sdk.AgentCapabilities {
 }
 
 func (s *Session) supportsImages() bool {
+	_, supported := s.imageInputSupport()
+	return supported
+}
+
+func cloneModelInput(input []string) []string {
+	if input == nil {
+		return nil
+	}
+	return append([]string{}, input...)
+}
+
+func (s *Session) imageInputSupport() (known, supported bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	known = s.modelInput != nil
 	for _, input := range s.modelInput {
 		if input == "image" {
-			return true
+			return known, true
 		}
 	}
-	return false
+	return known, false
 }
 
 // Pi handles some slash commands locally and successfully answers without starting an agent turn.
@@ -1193,7 +1210,7 @@ func (s *Session) GetState(ctx context.Context) (*SessionState, error) {
 	}
 	if st.Model != nil {
 		s.mu.Lock()
-		s.modelInput = append([]string(nil), st.Model.Input...)
+		s.modelInput = cloneModelInput(st.Model.Input)
 		s.mu.Unlock()
 	}
 	return &st, nil
@@ -1275,7 +1292,7 @@ func (s *Session) SetModel(ctx context.Context, provider, modelID string) (*Mode
 		return nil, err
 	}
 	s.mu.Lock()
-	s.modelInput = append([]string(nil), m.Input...)
+	s.modelInput = cloneModelInput(m.Input)
 	s.mu.Unlock()
 	return &m, nil
 }

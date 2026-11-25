@@ -34,7 +34,9 @@ export async function requestWorkspaceDraftAgent(
     config: request.config,
     workspaceId: request.workspaceId,
     clientMessageId: request.clientMessageId,
-    ...(request.text ? { initialPrompt: request.text } : {}),
+    ...(request.text || budgeted.images.length > 0 || budgeted.attachments.length > 0
+      ? { initialPrompt: request.text }
+      : {}),
     ...(budgeted.images.length > 0 ? { images: budgeted.images } : {}),
     ...(budgeted.attachments.length > 0 ? { attachments: budgeted.attachments } : {}),
   });

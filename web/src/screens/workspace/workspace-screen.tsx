@@ -41,6 +41,7 @@ import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-bu
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useNavigateToImportedAgent } from "@/hooks/use-import-session";
 import { useToast } from "@/contexts/toast-context";
+import { runAgentReloadWithToast } from "@/screens/workspace/agent-reload-toast";
 import { getOrCreateClientId } from "@/utils/client-id";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { toggleDesktopSidebarsWithCheckoutIntent } from "@/screens/desktop-sidebar-toggle";
@@ -2624,28 +2625,31 @@ function WorkspaceScreenContent({
         return;
       }
 
-      toast.show(t("workspace.tabs.toasts.reloadingAgent"), { durationMs: null });
-      try {
-        await client.refreshAgent(agentId);
-        // Send the existing cursor so the server detects the new epoch and
-        // returns reset:true. Without a cursor, the server returns reset:false
-        // and the client takes the incremental path, where new-epoch rows are
-        // dropped against the stale cursor.
-        const sessionState = useSessionStore.getState().sessions[normalizedServerId];
-        const currentCursor = sessionState?.agentTimelineCursor.get(agentId);
-        await getHostRuntimeStore().fetchAgentTimeline(normalizedServerId, agentId, {
-          direction: "tail",
-          projection: "projected",
-          ...(currentCursor
-            ? { cursor: { epoch: currentCursor.epoch, seq: currentCursor.endSeq } }
-            : {}),
-        });
-        toast.show(t("workspace.tabs.toasts.reloadedAgent"), { variant: "success" });
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : t("workspace.tabs.toasts.failedToReloadAgent"),
-        );
-      }
+      await runAgentReloadWithToast(
+        toast,
+        agentId,
+        {
+          loading: t("workspace.tabs.toasts.reloadingAgent"),
+          success: t("workspace.tabs.toasts.reloadedAgent"),
+          failure: t("workspace.tabs.toasts.failedToReloadAgent"),
+        },
+        async () => {
+          await client.refreshAgent(agentId);
+          // Send the existing cursor so the server detects the new epoch and
+          // returns reset:true. Without a cursor, the server returns reset:false
+          // and the client takes the incremental path, where new-epoch rows are
+          // dropped against the stale cursor.
+          const sessionState = useSessionStore.getState().sessions[normalizedServerId];
+          const currentCursor = sessionState?.agentTimelineCursor.get(agentId);
+          await getHostRuntimeStore().fetchAgentTimeline(normalizedServerId, agentId, {
+            direction: "tail",
+            projection: "projected",
+            ...(currentCursor
+              ? { cursor: { epoch: currentCursor.epoch, seq: currentCursor.endSeq } }
+              : {}),
+          });
+        },
+      );
     },
     [client, isConnected, normalizedServerId, toast, t],
   );

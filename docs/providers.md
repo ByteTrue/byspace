@@ -18,11 +18,12 @@ Four providers are built in, each with a native adapter under `internal/agent/pr
 Every other agent — GitHub Copilot, Cursor, Kimi, Kiro, Trae, and any ACP-compatible binary — connects
 through the generic ACP host (`acp.go`), not a built-in adapter. There are two ways in:
 
-- **Copy setup prompt** (Settings → Agents → Add provider): copies a prompt whose absolute template
-  path points into `$BYSPACE_HOME/resources/byspace-provider-adapter`. An agent reads that template
-  on demand and writes the provider config; BySpace does not install it as a skill.
-- **Manual config**: `extends: "acp"` plus a `command` in `config.json`. See
-  [custom-providers.md](custom-providers.md#adding-a-generic-acp-provider).
+- **Copy setup prompt** (Settings → Agents → Add provider): copies a prompt whose absolute guide
+  path points into `$BYSPACE_HOME/resources/byspace-provider-adapter`. An agent reads that guide
+  on demand and uses the canonical CLI writer; BySpace does not install it as a skill.
+- **Canonical CLI**: `byspace provider add acp --id <id> --label <label> -- <argv...>` writes the
+  minimal entry, and `byspace provider check <id>` verifies the negotiated protocol. Advanced manual
+  fields remain available. See [custom-providers.md](custom-providers.md#adding-a-generic-acp-provider).
 
 `GetProviderSpec` (`internal/agent/providers/driver.go`) resolves a provider id: a built-in returns its
 `ProviderSpec`; anything else falls through to a generic ACP spec (`Protocol: "acp"`,

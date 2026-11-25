@@ -2443,6 +2443,15 @@ export const zhCN: TranslationResources = {
         copyFailed: "无法复制接入提示词",
         promptUnavailable: "接入提示词不可用",
       },
+      catalog: {
+        search: "搜索 Providers",
+        noProviders: "未找到 Providers",
+        add: "添加",
+        addProvider: "添加 {{provider}}",
+        adding: "正在添加",
+        installInstructions: "安装说明",
+        installInstructionsFor: "{{provider}} 安装说明",
+      },
       updateErrorTitle: "无法更新 Provider",
       actions: {
         menu: "{{name}} actions",

@@ -27,7 +27,7 @@ export function ComposerTrackBar({ children }: { children: ReactNode }): ReactEl
       className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center px-4 pb-2 md:pb-2.5"
       data-testid="composer-track-bar"
     >
-      <div className="pointer-events-auto flex w-full max-w-[820px] items-center gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-12px),transparent)] [scrollbar-width:none]">
+      <div className="pointer-events-auto flex w-full max-w-[820px] items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {children}
       </div>
     </div>

@@ -5,63 +5,73 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
-import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
+import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@bytetrue/protocol/messages";
 
-const { theme, snapshotState, configState, patchConfigMock, openProviderSettingsMock } = vi.hoisted(
-  () => ({
-    theme: {
-      spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
-      iconSize: { sm: 14, md: 20 },
-      fontSize: { xs: 11, sm: 13, base: 15 },
-      fontWeight: { normal: "400" },
-      borderRadius: { lg: 8 },
-      opacity: { 50: 0.5 },
-      shadow: {
-        sm: {
-          shadowColor: "rgba(0, 0, 0, 0.25)",
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 4,
-          elevation: 2,
-        },
-        md: {
-          shadowColor: "rgba(0, 0, 0, 0.2)",
-          shadowOffset: { width: 0, height: 4 },
-          shadowRadius: 8,
-          elevation: 8,
-        },
-        lg: {
-          shadowColor: "rgba(0, 0, 0, 0.4)",
-          shadowOffset: { width: 0, height: 12 },
-          shadowRadius: 24,
-          elevation: 8,
-        },
+const {
+  theme,
+  snapshotState,
+  configState,
+  patchConfigMock,
+  refreshMock,
+  openProviderSettingsMock,
+  toastErrorMock,
+} = vi.hoisted(() => ({
+  theme: {
+    spacing: { 1: 4, "1.5": 6, 2: 8, 3: 12, 4: 16, 6: 24 },
+    iconSize: { sm: 14, md: 20 },
+    fontSize: { xs: 11, sm: 13, base: 15 },
+    fontWeight: { normal: "400" },
+    borderRadius: { lg: 8 },
+    opacity: { 50: 0.5 },
+    shadow: {
+      sm: {
+        shadowColor: "rgba(0, 0, 0, 0.25)",
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+        elevation: 2,
       },
-      colors: {
-        surface1: "#111",
-        surface2: "#222",
-        surface3: "#333",
-        foreground: "#fff",
-        foregroundMuted: "#aaa",
-        border: "#555",
-        accent: "#0a84ff",
-        statusSuccess: "#00ff00",
-        statusWarning: "#ff9500",
-        statusDanger: "#ff0000",
-        palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
+      md: {
+        shadowColor: "rgba(0, 0, 0, 0.2)",
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 8,
+        elevation: 8,
+      },
+      lg: {
+        shadowColor: "rgba(0, 0, 0, 0.4)",
+        shadowOffset: { width: 0, height: 12 },
+        shadowRadius: 24,
+        elevation: 8,
       },
     },
-    snapshotState: {
-      entries: undefined as ProviderSnapshotEntry[] | undefined,
-      isLoading: false,
-      isRefreshing: false,
+    colors: {
+      surface1: "#111",
+      surface2: "#222",
+      surface3: "#333",
+      foreground: "#fff",
+      foregroundMuted: "#aaa",
+      border: "#555",
+      accent: "#0a84ff",
+      statusSuccess: "#00ff00",
+      statusWarning: "#ff9500",
+      statusDanger: "#ff0000",
+      palette: { red: { 300: "#ff6b6b" }, white: "#fff" },
     },
-    configState: {
-      config: null as MutableDaemonConfig | null,
-    },
-    patchConfigMock: vi.fn(async () => undefined),
-    openProviderSettingsMock: vi.fn(),
-  }),
-);
+  },
+  snapshotState: {
+    entries: undefined as ProviderSnapshotEntry[] | undefined,
+    isLoading: false,
+    isRefreshing: false,
+  },
+  configState: {
+    config: null as MutableDaemonConfig | null,
+  },
+  patchConfigMock: vi.fn(
+    async (_patch: MutableDaemonConfigPatch): Promise<MutableDaemonConfig | undefined> => undefined,
+  ),
+  refreshMock: vi.fn(async () => {}),
+  openProviderSettingsMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+}));
 
 vi.mock("@/app/theme-object", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/app/theme-object")>()),
@@ -78,6 +88,11 @@ vi.mock("lucide-react", () => {
     ChevronRight: icon("ChevronRight"),
     MoreHorizontal: icon("MoreHorizontal"),
     Trash2: icon("Trash2"),
+    Copy: icon("Copy"),
+    ExternalLink: icon("ExternalLink"),
+    PackagePlus: icon("PackagePlus"),
+    Search: icon("Search"),
+    Loader2Icon: icon("Loader2Icon"),
   };
 });
 
@@ -139,7 +154,7 @@ vi.mock("@/hooks/use-providers-snapshot", () => ({
     isRefreshing: snapshotState.isRefreshing,
     error: null,
     supportsSnapshot: true,
-    refresh: vi.fn(async () => {}),
+    refresh: refreshMock,
     refetchIfStale: vi.fn(),
   }),
 }));
@@ -154,6 +169,11 @@ vi.mock("@/hooks/use-daemon-config", () => ({
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeIsConnected: () => true,
+  useHostRuntimeClient: () => null,
+}));
+
+vi.mock("@/contexts/toast-context", () => ({
+  useToast: () => ({ error: toastErrorMock, copied: vi.fn() }),
 }));
 
 vi.mock("@/runtime/host-features", () => ({
@@ -164,7 +184,7 @@ vi.mock("@/utils/confirm-dialog", () => ({
   confirmDialog: vi.fn(async () => true),
 }));
 
-import { ProvidersSection } from "./providers-section";
+import { AddProviderSection, ProvidersSection } from "./providers-section";
 
 const claudeEntry: ProviderSnapshotEntry = {
   provider: "claude",
@@ -228,7 +248,10 @@ describe("ProvidersSection", () => {
     configState.config = null;
     patchConfigMock.mockReset();
     patchConfigMock.mockResolvedValue(undefined);
+    refreshMock.mockReset();
+    refreshMock.mockResolvedValue(undefined);
     openProviderSettingsMock.mockReset();
+    toastErrorMock.mockReset();
   });
 
   afterEach(() => {
@@ -330,6 +353,106 @@ describe("ProvidersSection", () => {
       serverId: "server-1",
       provider: "codex",
     });
+  });
+
+  function renderAdd(): void {
+    act(() => {
+      root?.render(<AddProviderSection serverId="server-1" />);
+    });
+    const toggle = container?.querySelector<HTMLElement>(
+      '[data-testid="host-page-add-provider-card-toggle"]',
+    );
+    if (!toggle) throw new Error("Expected the add-provider section toggle");
+    act(() => toggle.click());
+  }
+
+  function clickInstall(provider: string): void {
+    const button = container?.querySelector<HTMLElement>(
+      `[data-testid="install-provider-${provider}"]`,
+    );
+    if (!button) throw new Error(`Expected install button for ${provider}`);
+    act(() => {
+      button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  it("renders the searchable catalog and retains Copy prompt", async () => {
+    snapshotState.entries = [];
+    renderAdd();
+
+    expect(container?.textContent).toContain("settings.providers.acpOnboarding.copyPrompt");
+    const search = container?.querySelector<HTMLInputElement>(
+      '[data-testid="provider-catalog-search"]',
+    );
+    if (!search) throw new Error("Expected provider catalog search");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setValue?.call(search, "auggie");
+      search.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+
+    expect(container?.querySelector('[data-testid="install-provider-auggie"]')).not.toBeNull();
+    expect(container?.querySelector('[data-testid="install-provider-cursor"]')).toBeNull();
+  });
+
+  it("does not offer installs before the configured-provider snapshot resolves", () => {
+    snapshotState.entries = undefined;
+    configState.config = makeConfig({
+      auggie: { extends: "acp", label: "Custom Auggie", enabled: false },
+    });
+    renderAdd();
+
+    expect(container?.querySelector('[data-testid="install-provider-auggie"]')).toBeNull();
+    expect(patchConfigMock).not.toHaveBeenCalled();
+  });
+
+  it("serializes patch, refresh, and provider-detail navigation", async () => {
+    snapshotState.entries = [];
+    patchConfigMock.mockResolvedValue(makeConfig());
+    renderAdd();
+
+    clickInstall("auggie");
+    await act(async () => {});
+
+    expect(patchConfigMock).toHaveBeenCalledTimes(1);
+    expect(patchConfigMock.mock.calls[0]?.[0]).toMatchObject({
+      providers: { auggie: { extends: "acp", label: "Auggie CLI" } },
+    });
+    expect(refreshMock).toHaveBeenCalledWith(["auggie"]);
+    expect(openProviderSettingsMock).toHaveBeenCalledWith({
+      serverId: "server-1",
+      provider: "auggie",
+    });
+    expect(patchConfigMock.mock.invocationCallOrder[0]).toBeLessThan(
+      refreshMock.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(refreshMock.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      openProviderSettingsMock.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("ignores concurrent submissions and leaves the form reusable after failure", async () => {
+    snapshotState.entries = [];
+    let resolvePatch: ((value: MutableDaemonConfig) => void) | undefined;
+    patchConfigMock.mockImplementationOnce(
+      () =>
+        new Promise<MutableDaemonConfig>((resolve) => {
+          resolvePatch = resolve;
+        }),
+    );
+    renderAdd();
+
+    clickInstall("auggie");
+    clickInstall("cursor");
+    expect(patchConfigMock).toHaveBeenCalledTimes(1);
+    await act(async () => resolvePatch?.(makeConfig()));
+
+    patchConfigMock.mockRejectedValueOnce(new Error("write failed"));
+    clickInstall("cursor");
+    await act(async () => {});
+    expect(toastErrorMock).toHaveBeenCalledWith("write failed");
+    expect(openProviderSettingsMock).toHaveBeenCalledTimes(1);
+    expect(container?.querySelector('[data-testid="install-provider-cursor"]')).not.toBeNull();
   });
 
   it("toggles the provider enabled flag through patchConfig when the switch is pressed", async () => {

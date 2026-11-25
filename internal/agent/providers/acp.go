@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/execres"
 	"github.com/ByteTrue/byspace/internal/proc"
@@ -19,6 +20,9 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
+
+// ErrACPTurnCanceled distinguishes a provider-cancelled turn from a wait deadline.
+var ErrACPTurnCanceled = errors.New("ACP turn cancelled")
 
 // ACPSession hosts any Agent Client Protocol (ACP) JSON-RPC 2.0 agent
 // (Copilot, Cursor, Kimi, Kiro, Trae, or any custom ACP binary a user connects).
@@ -62,28 +66,58 @@ type ACPSession struct {
 	// commandsUpdatedAt is when the agent last published part of its command inventory, and
 	// commandsSettled records that the first listing already waited for it. ACP agents publish in
 	// batches, so a read right after startup returns one batch and none of the skills.
-	commandsUpdatedAt  time.Time
-	commandsSettled    bool
-	pendingPermissions map[string]map[string]any
-	permissionRPCIDs   map[string]any
-	finishWaiters      []chan error
-	promptCancel       context.CancelFunc
-	eventSubscribers   map[int]func(map[string]any)
-	nextSubID          int
-	closed             bool
-	delivering         int
-	closeRequested     bool
-	agentCapabilities  map[string]any
-	configOptions      []any
-	nativeModels       []sdk.Model
-	nativeModes        []ModeDefinition
-	waitDone           chan struct{}
-	currentTitle       string
-	lastActivityAt     string
+	commandsUpdatedAt            time.Time
+	commandsSettled              bool
+	pendingPermissions           map[string]map[string]any
+	permissionRPCIDs             map[string]any
+	finishWaiters                []chan error
+	finishErr                    error
+	promptCancel                 context.CancelFunc
+	eventSubscribers             map[int]func(map[string]any)
+	nextSubID                    int
+	closed                       bool
+	delivering                   int
+	closeRequested               bool
+	agentCapabilities            map[string]any
+	configOptions                []any
+	negotiatedSelections         map[string]string
+	negotiatedSelectionRevisions map[string]uint64
+	nextNegotiatedRevision       uint64
+	nativeModels                 []sdk.Model
+	nativeModes                  []ModeDefinition
+	waitDone                     chan struct{}
+	currentTitle                 string
+	lastActivityAt               string
 }
+
+// ACPStartupStage identifies the startup operation that failed.
+type ACPStartupStage string
+
+const (
+	ACPStartupLaunch     ACPStartupStage = "launch"
+	ACPStartupInitialize ACPStartupStage = "initialize"
+	ACPStartupSession    ACPStartupStage = "session"
+)
+
+// ACPStartupError preserves the failed stage for diagnostics without changing the native error text.
+type ACPStartupError struct {
+	Stage ACPStartupStage
+	Err   error
+}
+
+func (e *ACPStartupError) Error() string { return e.Err.Error() }
+func (e *ACPStartupError) Unwrap() error { return e.Err }
 
 // StartACPSession spawns an ACP agent process and completes `initialize` + `session/new` (or `session/load`).
 func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*ACPSession, error) {
+	return startACPSessionWithNegotiationTimeout(context.Background(), 3*time.Second, cfg, spec, cmdOverride)
+}
+
+func startACPSession(ctx context.Context, cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*ACPSession, error) {
+	return startACPSessionWithNegotiationTimeout(ctx, 0, cfg, spec, cmdOverride)
+}
+
+func startACPSessionWithNegotiationTimeout(ctx context.Context, negotiationTimeout time.Duration, cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*ACPSession, error) {
 	bin := strings.TrimSpace(cmdOverride)
 	args := append([]string(nil), spec.DefaultArgs...)
 	if bin == "" {
@@ -95,7 +129,7 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 		args = []string{"acp"}
 		bin = strings.TrimSuffix(bin, " acp")
 	}
-	if resolved := execres.Find(context.Background(), bin); resolved != "" {
+	if resolved := execres.Find(ctx, bin); resolved != "" {
 		bin = resolved
 	}
 
@@ -112,14 +146,21 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, err
+		return nil, &ACPStartupError{Stage: ACPStartupLaunch, Err: err}
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, &ACPStartupError{Stage: ACPStartupLaunch, Err: err}
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, &ACPStartupError{Stage: ACPStartupLaunch, Err: err}
+	}
+	// Executable discovery can probe several candidates. Keep the interactive negotiation budget
+	// intact by starting it only after the process has launched.
+	if negotiationTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, negotiationTimeout)
+		defer cancel()
 	}
 
 	s := &ACPSession{
@@ -148,29 +189,27 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 	s.frames = sdk.NewStreamFrames(s.flushFramesOnTimer)
 	go s.readLoop(stdout)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	failStart := func(err error) (*ACPSession, error) {
+	failStart := func(stage ACPStartupStage, err error) (*ACPSession, error) {
 		_ = s.Close()
-		return nil, err
+		return nil, &ACPStartupError{Stage: stage, Err: err}
 	}
 	initializeResult, err := s.rpcCall(ctx, "initialize", map[string]any{
 		"protocolVersion":    1,
 		"clientCapabilities": acpClientCapabilities(cfg.ProviderConfig),
 	})
 	if err != nil {
-		return failStart(fmt.Errorf("acp initialize: %w", err))
+		return failStart(ACPStartupInitialize, fmt.Errorf("acp initialize: %w", err))
 	}
 	s.agentCapabilities, _ = initializeResult["agentCapabilities"].(map[string]any)
 	mcpServers, err := normalizeACPMCPServers(cfg.MCPServers)
 	if err != nil {
-		return failStart(err)
+		return failStart(ACPStartupSession, err)
 	}
 
 	if cfg.SessionHandle != "" {
 		method, err := acpResumeMethod(s.agentCapabilities)
 		if err != nil {
-			return failStart(err)
+			return failStart(ACPStartupSession, err)
 		}
 		// Replay belongs to the existing native session, so its id must be set before updates arrive.
 		s.sessionID = cfg.SessionHandle
@@ -180,7 +219,7 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 			"mcpServers": mcpServers,
 		})
 		if err != nil {
-			return failStart(fmt.Errorf("acp %s: %w", method, err))
+			return failStart(ACPStartupSession, fmt.Errorf("acp %s: %w", method, err))
 		}
 		s.applyACPSessionCatalog(res)
 	} else {
@@ -189,11 +228,11 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 			"mcpServers": mcpServers,
 		})
 		if err != nil {
-			return failStart(fmt.Errorf("acp session/new: %w", err))
+			return failStart(ACPStartupSession, fmt.Errorf("acp session/new: %w", err))
 		}
 		sid, _ := res["sessionId"].(string)
 		if sid == "" {
-			return failStart(fmt.Errorf("acp session/new: response has no sessionId"))
+			return failStart(ACPStartupSession, fmt.Errorf("acp session/new: response has no sessionId"))
 		}
 		s.sessionID = sid
 		s.applyACPSessionCatalog(res)
@@ -202,17 +241,17 @@ func StartACPSession(cfg LaunchConfig, spec ProviderSpec, cmdOverride string) (*
 	// Native catalogs use their dedicated RPCs; config-only agents use set_config_option.
 	if value := strings.TrimSpace(cfg.Model); value != "" && value != "default" {
 		if _, err := s.SetModel(ctx, cfg.Provider, value); err != nil {
-			return failStart(err)
+			return failStart(ACPStartupSession, err)
 		}
 	}
 	if value := strings.TrimSpace(cfg.ModeID); value != "" && value != "default" {
 		if err := s.SetMode(ctx, value); err != nil {
-			return failStart(err)
+			return failStart(ACPStartupSession, err)
 		}
 	}
 	if value := strings.TrimSpace(cfg.ThinkingOptionID); value != "" && value != "default" {
 		if err := s.SetThinkingLevel(ctx, value); err != nil {
-			return failStart(err)
+			return failStart(ACPStartupSession, err)
 		}
 	}
 
@@ -249,6 +288,9 @@ func (s *ACPSession) applyACPSessionCatalog(result map[string]any) {
 			}
 		}
 	}
+	if options, ok := result["configOptions"].([]any); ok {
+		s.configOptions = options
+	}
 }
 
 // acpClientCapabilities builds the `initialize` capability advertisement from the provider's
@@ -263,6 +305,12 @@ func acpResumeMethod(capabilities map[string]any) (string, error) {
 		return "session/resume", nil
 	}
 	return "", fmt.Errorf("ACP agent does not support session resume")
+}
+
+func acpSupportsImages(capabilities map[string]any) bool {
+	promptCapabilities, _ := capabilities["promptCapabilities"].(map[string]any)
+	supported, _ := promptCapabilities["image"].(bool)
+	return supported
 }
 
 func acpClientCapabilities(providerConfig map[string]any) map[string]any {
@@ -650,24 +698,23 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 	case "current_mode_update":
 		if modeID, ok := upd["currentModeId"].(string); ok {
 			s.modeID = modeID
+			s.recordNegotiatedSelectionLocked("mode", modeID)
 		}
 		extraEvents = append(extraEvents, map[string]any{"type": "mode_changed", "provider": s.provider, "currentModeId": s.modeID})
 
 	case "config_option_update":
-		s.configOptions, _ = upd["configOptions"].([]any)
-		for _, raw := range s.configOptions {
+		options, _ := upd["configOptions"].([]any)
+		s.applyNegotiatedConfigOptionsLocked(options)
+		for _, raw := range options {
 			option, _ := raw.(map[string]any)
 			category, _ := option["category"].(string)
 			value, _ := option["currentValue"].(string)
 			switch category {
 			case "mode":
-				s.modeID = value
 				extraEvents = append(extraEvents, map[string]any{"type": "mode_changed", "provider": s.provider, "currentModeId": value})
 			case "model":
-				s.model = value
 				extraEvents = append(extraEvents, map[string]any{"type": "model_changed", "provider": s.provider, "modelId": value})
 			case "thought_level":
-				s.thinking = value
 				extraEvents = append(extraEvents, map[string]any{"type": "thinking_option_changed", "provider": s.provider, "thinkingOptionId": value})
 			}
 		}
@@ -881,7 +928,45 @@ func (s *ACPSession) flushTailOnExit() {
 	}
 }
 
+// applyNegotiatedConfigOptionsLocked records state returned by the agent, separately from the
+// optimistic fields assigned by setters. Conformance uses this distinction to verify selection.
+func (s *ACPSession) recordNegotiatedSelectionLocked(kind, value string) {
+	if s.negotiatedSelections == nil {
+		s.negotiatedSelections = make(map[string]string)
+	}
+	if s.negotiatedSelectionRevisions == nil {
+		s.negotiatedSelectionRevisions = make(map[string]uint64)
+	}
+	s.nextNegotiatedRevision++
+	s.negotiatedSelections[kind] = value
+	s.negotiatedSelectionRevisions[kind] = s.nextNegotiatedRevision
+}
+
+func (s *ACPSession) applyNegotiatedConfigOptionsLocked(options []any) {
+	s.configOptions = options
+	for _, raw := range options {
+		option, _ := raw.(map[string]any)
+		category, _ := option["category"].(string)
+		if category == "" {
+			category, _ = option["id"].(string)
+		}
+		value, _ := option["currentValue"].(string)
+		switch category {
+		case "mode":
+			s.modeID = value
+			s.recordNegotiatedSelectionLocked("mode", value)
+		case "model":
+			s.model = value
+			s.recordNegotiatedSelectionLocked("model", value)
+		case "thought_level":
+			s.thinking = value
+			s.recordNegotiatedSelectionLocked("thinking", value)
+		}
+	}
+}
+
 func (s *ACPSession) notifyFinishLocked(err error) {
+	s.finishErr = err
 	waiters := s.finishWaiters
 	s.finishWaiters = nil
 	for _, ch := range waiters {
@@ -974,12 +1059,17 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 	s.emitMu.Lock()
 	defer s.emitMu.Unlock()
 	s.mu.Lock()
+	if len(images) > 0 && !acpSupportsImages(s.agentCapabilities) {
+		s.mu.Unlock()
+		return fmt.Errorf("ACP agent does not support image input")
+	}
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	turnID := s.activeTurnID
 	promptCtx, promptCancel := context.WithCancel(context.Background())
 	s.promptCancel = promptCancel
 	s.status = "running"
+	s.finishErr = nil
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
 	s.activeUserTextIdx = -1
@@ -1012,7 +1102,11 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.Im
 			}
 			s.mu.Unlock()
 		}
-		if stopReason, _ := res["stopReason"].(string); stopReason == "cancelled" {
+		stopReason, _ := res["stopReason"].(string)
+		if err == nil && stopReason == "" {
+			err = fmt.Errorf("acp session/prompt: response has no stopReason")
+		}
+		if stopReason == "cancelled" {
 			s.cancelPromptForID(turnID, "Cancelled by agent")
 			return
 		}
@@ -1150,7 +1244,7 @@ func (s *ACPSession) finishCancellationLocked(reason string) []map[string]any {
 	s.activeThinkIdx = -1
 	s.activeUserTextIdx = -1
 	s.activeUserMessageID = ""
-	s.notifyFinishLocked(nil)
+	s.notifyFinishLocked(fmt.Errorf("%w: %s", ErrACPTurnCanceled, reason))
 	if turnID != "" {
 		events = append(events, map[string]any{
 			"type": "byspace_turn_canceled", "turnId": turnID, "reason": reason,
@@ -1162,8 +1256,9 @@ func (s *ACPSession) finishCancellationLocked(reason string) []map[string]any {
 func (s *ACPSession) WaitForFinish(ctx context.Context) error {
 	s.mu.Lock()
 	if s.status != "running" {
+		err := s.finishErr
 		s.mu.Unlock()
-		return nil
+		return err
 	}
 	ch := make(chan error, 1)
 	s.finishWaiters = append(s.finishWaiters, ch)
@@ -1191,7 +1286,7 @@ func (s *ACPSession) Capabilities() sdk.AgentCapabilities {
 		SupportsStreaming: true, SupportsSessionPersistence: true, SupportsDynamicModes: len(s.nativeModes) > 0,
 		SupportsMcpServers: true, SupportsReasoningStream: true, SupportsToolInvocations: true,
 		CanCancel: true, CanSelectModel: len(s.nativeModels) > 0 || modelConfig, CanSelectThinking: true,
-		SupportsImages: true, SupportsAttachments: true,
+		SupportsImages: acpSupportsImages(s.agentCapabilities), SupportsAttachments: true,
 	}
 }
 
@@ -1224,11 +1319,16 @@ func (s *ACPSession) SetModel(ctx context.Context, provider, modelID string) (*s
 		method = "session/set_model"
 		params = map[string]any{"sessionId": sid, "modelId": modelID}
 	}
-	if _, err := s.rpcCall(ctx, method, params); err != nil {
+	result, err := s.rpcCall(ctx, method, params)
+	if err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
-	s.model = modelID
+	if options, ok := result["configOptions"].([]any); ok {
+		s.applyNegotiatedConfigOptionsLocked(options)
+	} else {
+		s.model = modelID
+	}
 	s.mu.Unlock()
 	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
@@ -1248,11 +1348,16 @@ func (s *ACPSession) SetMode(ctx context.Context, modeID string) error {
 		method = "session/set_mode"
 		params = map[string]any{"sessionId": sid, "modeId": modeID}
 	}
-	if _, err := s.rpcCall(ctx, method, params); err != nil {
+	result, err := s.rpcCall(ctx, method, params)
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
-	s.modeID = modeID
+	if options, ok := result["configOptions"].([]any); ok {
+		s.applyNegotiatedConfigOptionsLocked(options)
+	} else {
+		s.modeID = modeID
+	}
 	s.mu.Unlock()
 	return nil
 }
@@ -1261,15 +1366,20 @@ func (s *ACPSession) SetThinkingLevel(ctx context.Context, level string) error {
 	s.mu.Lock()
 	sid := s.sessionID
 	s.mu.Unlock()
-	if _, err := s.rpcCall(ctx, "session/set_config_option", map[string]any{
+	result, err := s.rpcCall(ctx, "session/set_config_option", map[string]any{
 		"sessionId": sid,
 		"configId":  "thought_level",
 		"value":     level,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
-	s.thinking = level
+	if options, ok := result["configOptions"].([]any); ok {
+		s.applyNegotiatedConfigOptionsLocked(options)
+	} else {
+		s.thinking = level
+	}
 	s.mu.Unlock()
 	return nil
 }

@@ -846,6 +846,12 @@ func runTerminalGroupCmd(args []string, stdout io.Writer) error {
 }
 
 func runProviderGroupCmd(args []string, stdout io.Writer) error {
+	if len(args) > 0 && args[0] == "add" {
+		return runProviderAddCmd(args[1:], stdout)
+	}
+	if len(args) > 0 && args[0] == "check" {
+		return runProviderCheckCmd(args[1:], stdout)
+	}
 	sub := "ls"
 	rest := args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {

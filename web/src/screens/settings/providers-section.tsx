@@ -5,12 +5,19 @@ import type { Theme } from "@/styles/theme";
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import { AcpOnboardingCopyPrompt } from "@/screens/acp-onboarding-copy-prompt";
+import { ProviderCatalogList } from "@/screens/provider-catalog-list";
+import {
+  buildAcpProviderConfigPatch,
+  type AcpProviderCatalogItem,
+} from "@/screens/use-acp-provider-catalog";
+import { useToast } from "@/contexts/toast-context";
 import { getProviderIcon } from "@/widgets/provider-icons";
 import { Spinner } from "@/ui/spinner";
 import { Switch } from "@/ui/switch";
@@ -435,11 +442,36 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   );
 }
 
-/** ACP onboarding is a guided copy-prompt action, not a preset catalog. */
 export function AddProviderSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const openProviderSettings = useProviderSettingsStore((state) => state.open);
+  const { refresh } = useProvidersSnapshot(serverId);
+  const { patchConfig } = useDaemonConfig(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const hasServer = serverId.length > 0;
+  const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
+  const installingRef = useRef(false);
+
+  const installProvider = useCallback(
+    async (entry: AcpProviderCatalogItem) => {
+      if (installingRef.current) return;
+      installingRef.current = true;
+      setInstallingProviderId(entry.id);
+      try {
+        const saved = await patchConfig(buildAcpProviderConfigPatch(entry));
+        if (!saved) throw new Error(t("workspace.terminal.hostDisconnected"));
+        await refresh([entry.id as AgentProvider]);
+        openProviderSettings({ serverId, provider: entry.id });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("settings.providers.addErrorTitle"));
+      } finally {
+        installingRef.current = false;
+        setInstallingProviderId(null);
+      }
+    },
+    [openProviderSettings, patchConfig, refresh, serverId, t, toast],
+  );
 
   if (!hasServer || !isConnected) {
     return null;
@@ -453,7 +485,14 @@ export function AddProviderSection({ serverId }: ProvidersSectionProps) {
       collapsible
       defaultCollapsed
     >
-      <AcpOnboardingCopyPrompt serverId={serverId} />
+      <div className="space-y-6">
+        <ProviderCatalogList
+          serverId={serverId}
+          installingProviderId={installingProviderId}
+          onInstall={installProvider}
+        />
+        <AcpOnboardingCopyPrompt serverId={serverId} />
+      </div>
     </SettingsSection>
   );
 }

@@ -16,9 +16,6 @@ const providerSnapshotIconSvgsByServer = new Map<string, ReadonlyMap<string, str
 
 export const ACP_PROVIDER_ICON_ALIASES: Readonly<Record<string, string>> = {
   copilot: "github-copilot-cli",
-  devin: "dimcode",
-  hermes: "junie",
-  kiro: "kimi",
 };
 
 export function replaceProviderSnapshotIcons(

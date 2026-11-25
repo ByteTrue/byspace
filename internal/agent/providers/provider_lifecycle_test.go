@@ -1,11 +1,14 @@
 package providers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,6 +21,8 @@ func TestMain(m *testing.M) {
 	case "claude-prompt":
 		runClaudePromptHelper()
 		return
+	case "acp-conformance":
+		os.Exit(runACPConformanceHelper())
 	}
 	os.Exit(m.Run())
 }
@@ -92,6 +97,45 @@ func TestACPStartReturnsNativeHandshakeErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestACPStartReportsStartupStage(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method string
+		stage  ACPStartupStage
+	}{
+		{method: "initialize", stage: ACPStartupInitialize},
+		{method: "session/new", stage: ACPStartupSession},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			env := append(os.Environ(),
+				"BYSPACE_PROVIDER_HELPER=jsonrpc-error",
+				"BYSPACE_PROVIDER_HELPER_FAIL_METHOD="+tc.method,
+			)
+			_, err := startACPSession(context.Background(), LaunchConfig{Cwd: t.TempDir(), Env: env}, ProviderSpec{
+				ID: "acp-test", Binary: exe,
+			}, exe)
+			var startupErr *ACPStartupError
+			if !errors.As(err, &startupErr) || startupErr.Stage != tc.stage {
+				t.Fatalf("startACPSession() error = %v, want stage %q", err, tc.stage)
+			}
+		})
+	}
+
+	t.Run("launch", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing-acp")
+		_, err := startACPSession(context.Background(), LaunchConfig{Cwd: t.TempDir()}, ProviderSpec{
+			ID: "acp-test", Binary: missing,
+		}, missing)
+		var startupErr *ACPStartupError
+		if !errors.As(err, &startupErr) || startupErr.Stage != ACPStartupLaunch {
+			t.Fatalf("startACPSession() error = %v, want launch stage", err)
+		}
+	})
 }
 
 func TestCodexStartReturnsNativeHandshakeErrors(t *testing.T) {

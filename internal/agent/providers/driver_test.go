@@ -47,12 +47,12 @@ func TestExplicitDisableOverridesTheDefault(t *testing.T) {
 // at all, because that would spawn a CLI the user switched off.
 func TestSnapshotUsesDiscoveredModelsOnlyForReadyProviders(t *testing.T) {
 	probed := make(map[string]bool)
-	entries := BuildSnapshotEntries(func(providerID string) []sdk.CatalogModel {
+	entries := BuildSnapshotEntries(func(providerID string) ProviderCatalog {
 		probed[providerID] = true
 		if providerID == "pi" {
-			return []sdk.CatalogModel{{ID: "probe/one", Label: "Probe One", Provider: "pi"}}
+			return ProviderCatalog{Models: []sdk.CatalogModel{{ID: "probe/one", Label: "Probe One", Provider: "pi"}}}
 		}
-		return nil
+		return ProviderCatalog{}
 	}, "fake-pi", map[string]any{"codex": map[string]any{"enabled": false}})
 
 	if !probed["pi"] {

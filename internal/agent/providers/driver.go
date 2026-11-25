@@ -273,11 +273,9 @@ func ServedProviderIDs() map[string]bool {
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
 // including the 4 built-in providers plus any custom/derived providers configured in config.json.
 //
-// discoverModels is called only for a built-in that is enabled and whose binary resolved, and may
-// be nil. It is where a provider's own runtime catalog wins over the static spec list: OpenCode's
-// models come from its config and credentials, Claude's from the user's settings.json. A provider
-// with no runtime discovery (or a failed probe) keeps its spec models.
-func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
+// discoverCatalog is called only for an enabled provider whose binary resolved, and may be nil.
+// Runtime metadata wins over the static spec list; a failed or empty probe keeps the configured fallback.
+func BuildSnapshotEntries(discoverCatalog func(providerID string) ProviderCatalog, piCommandOverride string, customProviders map[string]any) []map[string]any {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	entries := make([]map[string]any, 0, len(BuiltinProviders)+len(customProviders))
 	builtinSet := make(map[string]bool, len(BuiltinProviders))
@@ -299,9 +297,9 @@ func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogMo
 		models := spec.Models
 		if enabled && avail {
 			status = "ready"
-			if discoverModels != nil {
-				if discovered := discoverModels(spec.ID); len(discovered) > 0 {
-					models = discovered
+			if discoverCatalog != nil {
+				if discovered := discoverCatalog(spec.ID); len(discovered.Models) > 0 {
+					models = discovered.Models
 				}
 			}
 		}
@@ -360,9 +358,10 @@ func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogMo
 		// Ignoring them offered only the generic "<id> Default" row, so the picker could not select the model the
 		// config named. A pi-derived provider merges onto pi's probed catalog rather than the placeholder spec.
 		runtimeModels := spec.Models
-		if spec.Protocol == "pi-rpc" && discoverModels != nil {
-			if discovered := discoverModels("pi"); len(discovered) > 0 {
-				runtimeModels = discovered
+		runtimeModes := spec.Modes
+		if spec.Protocol == "pi-rpc" && discoverCatalog != nil {
+			if discovered := discoverCatalog("pi"); len(discovered.Models) > 0 {
+				runtimeModels = discovered.Models
 			}
 		}
 		label, _ := cfgMap["label"].(string)
@@ -386,6 +385,15 @@ func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogMo
 		} else if binary := customProviderBinary(cfgMap, spec); binary != "" && !execres.IsCommandAvailable(context.Background(), binary) {
 			status = "unavailable"
 		}
+		if status == "ready" && spec.Protocol == "acp" && discoverCatalog != nil {
+			discovered := discoverCatalog(id)
+			if len(discovered.Models) > 0 {
+				runtimeModels = discovered.Models
+			}
+			if len(discovered.Modes) > 0 {
+				runtimeModes = discovered.Modes
+			}
+		}
 		entries = append(entries, withCatalog(map[string]any{
 			"provider":    id,
 			"label":       label,
@@ -394,7 +402,7 @@ func BuildSnapshotEntries(discoverModels func(providerID string) []sdk.CatalogMo
 			"source":      "custom",
 			"fetchedAt":   now,
 			"description": desc,
-		}, MergeProviderModels(id, cfgMap, runtimeModels), spec.Modes))
+		}, MergeProviderModels(id, cfgMap, runtimeModels), runtimeModes))
 	}
 	return entries
 }

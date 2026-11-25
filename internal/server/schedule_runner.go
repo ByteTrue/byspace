@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentmode "github.com/ByteTrue/byspace/internal/agent/mode"
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	agenttitle "github.com/ByteTrue/byspace/internal/agent/title"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -297,6 +298,9 @@ func (s *Server) runScheduledTurn(ctx context.Context, mp *managedPi, text strin
 	_ = s.store.UpsertAgent(record)
 
 	if err := mp.session.WaitForFinish(ctx); err != nil {
+		if errors.Is(err, providers.ErrACPTurnCanceled) {
+			return true, nil
+		}
 		return false, err
 	}
 	return canceled.Load(), nil

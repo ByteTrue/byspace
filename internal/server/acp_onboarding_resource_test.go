@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,15 @@ func TestACPOnboardingResourceIsStableAndNotAnOrdinarySkill(t *testing.T) {
 	}
 	if string(data) == "stale" || !strings.Contains(string(data), "read on demand") {
 		t.Fatal("resource was not refreshed")
+	}
+	assertACPOnboardingCommandSequence(t, string(data))
+	reference, err := os.ReadFile(filepath.Join(filepath.Dir(second), "references", "acp-config.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(reference), "`fs.readTextFile` and `fs.writeTextFile` default to `false`; `terminal` defaults to `true`") ||
+		strings.Contains(string(reference), "| `order`") {
+		t.Fatal("ACP reference does not match the negotiated capability defaults and supported fields")
 	}
 	if slices.Contains(listBundledSkills(extractBundledSkills()), "byspace-provider-adapter") {
 		t.Fatal("ACP onboarding resource must not appear in ordinary skill discovery")
@@ -76,6 +86,27 @@ func TestACPOnboardingPromptUsesTheCorrelatedResponsePayload(t *testing.T) {
 		response.Message.Payload.Prompt == nil ||
 		response.Message.Payload.Error != nil {
 		t.Fatalf("unexpected response: %s", sink.frame)
+	}
+	path, err := materializeACPOnboardingResource(server.homeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := *response.Message.Payload.Prompt
+	if !filepath.IsAbs(path) || !strings.Contains(prompt, strconv.Quote(path)) {
+		t.Fatalf("prompt does not contain absolute guide path %q: %q", path, prompt)
+	}
+	assertACPOnboardingCommandSequence(t, prompt)
+}
+
+func assertACPOnboardingCommandSequence(t *testing.T, text string) {
+	t.Helper()
+	previous := -1
+	for _, command := range []string{"byspace provider add acp", "byspace daemon reload", "byspace provider diagnostic", "byspace provider check"} {
+		index := strings.Index(text, command)
+		if index <= previous {
+			t.Fatalf("command %q is missing or out of order in %q", command, text)
+		}
+		previous = index
 	}
 }
 

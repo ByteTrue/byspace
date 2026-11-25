@@ -2764,7 +2764,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		return
 	}
 
-	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
+	if req.InitialPrompt != nil && (strings.TrimSpace(*req.InitialPrompt) != "" || len(req.Images) > 0 || len(req.Attachments) > 0) {
 		// `byspace run --output-schema` constrains the reply. Codex and OpenCode honour it; a provider
 		// that cannot fails the request instead of running the turn and printing prose as if the
 		// schema had been applied — the caller asked for a JSON object and would parse the answer.
@@ -2799,7 +2799,15 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			createdImages = append(createdImages, pi.ImageContent{Type: "image", Data: img.Data, MimeType: img.MimeType})
 		}
 		createdText := appendAttachmentHints(*req.InitialPrompt, req.Attachments)
-		_ = mp.session.Prompt(ctx, createdText, createdImages)
+		if err := mp.session.Prompt(ctx, createdText, createdImages); err != nil {
+			s.discardCreatedAgent(mp, rec.ID)
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status":    "agent_create_failed",
+				"requestId": req.RequestID,
+				"error":     err.Error(),
+			})
+			return
+		}
 		s.appendSubmittedPromptRow(mp.record, mp.session, initialClientMessageID, createdText)
 		s.mu.Lock()
 		mp.record.LastStatus = resolveAgentStatus(mp.record.LastStatus, mp.session.Status())
@@ -3208,6 +3216,13 @@ func selectTimelinePage(all []projectedEntry, direction string, cursorSeq, limit
 	}
 }
 
+func waitForFinishFailureStatus(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "error"
+}
+
 func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string `json:"requestId"`
@@ -3237,9 +3252,10 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 	}
 
 	if err := mp.session.WaitForFinish(wctx); err != nil {
+		status := waitForFinishFailureStatus(err)
 		_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
 			"requestId":   req.RequestID,
-			"status":      "timeout",
+			"status":      status,
 			"final":       nil,
 			"error":       err.Error(),
 			"lastMessage": mp.session.LastAssistantText(),

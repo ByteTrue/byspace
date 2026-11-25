@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -42,9 +43,15 @@ func TestACPCancellationSettlesInteractions(t *testing.T) {
 		t.Fatalf("native permission was not cancelled: %s", native.String())
 	}
 	select {
-	case <-waiter:
+	case err := <-waiter:
+		if err == nil {
+			t.Fatal("cancelled ACP turn reported successful completion")
+		}
 	default:
 		t.Fatal("WaitForFinish was not released")
+	}
+	if err := s.WaitForFinish(t.Context()); !errors.Is(err, ErrACPTurnCanceled) {
+		t.Fatalf("WaitForFinish after cancellation = %v, want ErrACPTurnCanceled", err)
 	}
 	if len(events) == 0 || events[len(events)-1]["type"] != "byspace_turn_canceled" {
 		t.Fatalf("terminal events = %+v, want cancellation", events)

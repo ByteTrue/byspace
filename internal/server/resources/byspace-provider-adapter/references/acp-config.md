@@ -6,6 +6,14 @@ The contract for connecting an agent to BySpace through the Agent Client Protoco
 
 `$BYSPACE_HOME/config.json`, under `agents.providers.<id>`. The daemon reads this nested shape; a flat top-level `providers` map is lifted into the same place on load. Merge into the existing map — never replace unrelated entries.
 
+Create a standard entry with the canonical writer instead of editing JSON:
+
+```bash
+byspace provider add acp --id agy --label Antigravity -- agy acp
+```
+
+The writer saves exactly `extends: "acp"`, `label: "Antigravity"`, and `command: ["agy", "acp"]`. An identical rerun is a no-op; a different existing entry is rejected. Add advanced fields separately only when required.
+
 ## Fields
 
 | Field                         | Required  | Meaning                                                                                                                                                                        |
@@ -18,7 +26,6 @@ The contract for connecting an agent to BySpace through the Agent Client Protoco
 | `params.clientCapabilities`   | no        | Which operations BySpace hosts. See below.                                                                                                                                     |
 | `models` / `additionalModels` | no        | Override or extend the agent's model list.                                                                                                                                     |
 | `enabled`                     | no        | `false` hides the provider without deleting it.                                                                                                                                |
-| `order`                       | no        | Sort position in the picker.                                                                                                                                                   |
 
 Validation rules (rejected on load if violated):
 
@@ -48,7 +55,7 @@ Prefer the agent's own auth flow over copying secrets. Gemini CLI authenticates 
 
 ## Client capabilities
 
-By default BySpace advertises that it hosts filesystem reads/writes and terminals: the agent delegates those operations to the daemon. An agent that manages its own environment (a container, a remote box) overrides this so it keeps the operations to itself:
+By default the agent handles filesystem reads/writes in its own environment and BySpace hosts terminals. An agent that manages its own terminal (a container, a remote box) can disable that delegation. It can instead opt into hosted filesystem operations when both sides share paths:
 
 ```json
 "params": {
@@ -59,7 +66,7 @@ By default BySpace advertises that it hosts filesystem reads/writes and terminal
 }
 ```
 
-Each flag defaults to `true`; a partial override changes only the named flags. Delegating fs to BySpace (`readTextFile`/`writeTextFile: true`) requires the agent and the daemon to share equivalent absolute workspace paths.
+`fs.readTextFile` and `fs.writeTextFile` default to `false`; `terminal` defaults to `true`. A partial override changes only the named flags. Delegating fs to BySpace (`readTextFile`/`writeTextFile: true`) requires the agent and the daemon to share equivalent absolute workspace paths.
 
 ## Worked templates
 
@@ -142,11 +149,12 @@ The version probe keeps the package spec (`npx -y @google/gemini-cli --version`)
 ## Validate
 
 ```bash
-byspace provider diagnostic <id>   # command, resolved path, version, PATH — not an ACP session
 byspace daemon reload              # apply config without restarting
-byspace provider models <id>       # model list, if the agent exposes one
-byspace run --provider <id> "Say hello"   # the only end-to-end proof: initialize + session/new + a turn
+byspace provider diagnostic <id>   # command, resolved path, version, PATH — not an ACP session
+byspace provider check <id>        # real ACP session, text turn, and advertised capabilities
 ```
+
+`provider check` prints stable `PASS`/`FAIL`/`SKIP` lines and exits non-zero on any failure. It uses a temporary directory and leaves BySpace agents and workspaces untouched. `SKIP` means an optional capability was not advertised.
 
 `Resolved path: not found` means the daemon cannot see the binary — fix PATH or use an absolute path in `command[0]`. A `<PROVIDER>_COMMAND` environment variable beats the configured binary (e.g. `GEMINI_COMMAND`).
 

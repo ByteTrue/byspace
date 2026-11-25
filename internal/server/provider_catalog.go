@@ -41,11 +41,11 @@ func providerCatalogKey(cwd string) string {
 	return absolute
 }
 
-// buildCatalog assembles a catalog from the models the caller already has.
+// buildCatalog assembles a catalog from the runtime metadata the caller already has.
 //
-// A nil discover func means "spec models only": the runtime model-discovery probes do not run,
+// A nil discover func means "spec metadata only": runtime discovery probes do not run,
 // which is what a request can afford while the probing build is still in flight.
-func (s *Server) buildCatalog(cfg map[string]any, discover func(providerID string) []sdk.CatalogModel) *providerCatalog {
+func (s *Server) buildCatalog(cfg map[string]any, discover func(providerID string) providers.ProviderCatalog) *providerCatalog {
 	entries := providers.BuildSnapshotEntries(discover, s.piCommand, providersFromConfig(cfg))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &providerCatalog{
@@ -62,13 +62,27 @@ func (s *Server) buildCatalog(cfg map[string]any, discover func(providerID strin
 // This is the expensive path; it runs in the background, never in a request handler.
 func (s *Server) buildProviderCatalog(ctx context.Context, cfg map[string]any, cwd string) *providerCatalog {
 	piModels := s.probePiModelsInCwd(ctx, cwd)
-	return s.buildCatalog(cfg, func(providerID string) []sdk.CatalogModel {
+	return s.buildCatalog(cfg, func(providerID string) providers.ProviderCatalog {
 		// Pi was just probed (its catalog drives the naming model too); do not spawn it twice.
 		if providerID == "pi" {
-			return piModels
+			return providers.ProviderCatalog{Models: piModels}
 		}
-		return s.discoveredModels(ctx, providerID, cwd)
+		return s.discoveredProviderCatalog(ctx, providerID, cwd)
 	})
+}
+
+func (s *Server) discoveredProviderCatalog(ctx context.Context, providerID, cwd string) providers.ProviderCatalog {
+	switch providerID {
+	case "pi", "claude", "codex", "opencode":
+		return providers.ProviderCatalog{Models: s.discoveredModels(ctx, providerID, cwd)}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	catalog, err := providers.FetchACPProviderCatalog(probeCtx, providerID, s.providerConfigFor(providerID), cwd)
+	if err != nil {
+		return providers.ProviderCatalog{}
+	}
+	return catalog
 }
 
 // discoveredModels asks a provider for the models it actually offers right now.

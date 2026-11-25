@@ -6,6 +6,9 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // The snapshot has to be a read, not a probe. Building one runs every provider CLI, and a client
@@ -158,6 +161,41 @@ func TestProviderCatalogScopesByCwd(t *testing.T) {
 // win by finishing last: it was probed from the config before the edit, and caching and
 // broadcasting it put back a provider list without the provider just added (an e2e caught the
 // added provider's row vanishing half a second after it appeared).
+func TestProviderCatalogBuildsGenericACPRuntimeMetadata(t *testing.T) {
+	executable := "/bin/sh"
+	if runtime.GOOS == "windows" {
+		executable = "cmd.exe"
+	}
+	srv, err := New(Options{HomeDir: filepath.Join(t.TempDir(), "home"), Version: "test", PiCommand: writeFaithfulFakePi(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	catalog := srv.buildCatalog(map[string]any{"providers": map[string]any{
+		"fake": map[string]any{"extends": "acp", "command": []any{executable}},
+	}}, func(providerID string) providers.ProviderCatalog {
+		if providerID != "fake" {
+			return providers.ProviderCatalog{}
+		}
+		return providers.ProviderCatalog{
+			Models: []sdk.CatalogModel{{ID: "native", Label: "Native"}},
+			Modes:  []providers.ModeDefinition{{ID: "native-mode", Label: "Native mode"}},
+		}
+	})
+	for _, entry := range catalog.entries {
+		if entry["provider"] != "fake" {
+			continue
+		}
+		models := entry["models"].([]sdk.CatalogModel)
+		modes := entry["modes"].([]providers.ModeDefinition)
+		if len(models) != 1 || models[0].ID != "native" || len(modes) != 1 || modes[0].ID != "native-mode" {
+			t.Fatalf("runtime ACP metadata missing from server catalog: %#v", entry)
+		}
+		return
+	}
+	t.Fatal("generic ACP provider missing from server catalog")
+}
+
 func TestProviderCatalogDropsBuildsOvertakenByNewerOnes(t *testing.T) {
 	tmp := t.TempDir()
 	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "test", PiCommand: writeFaithfulFakePi(t)})

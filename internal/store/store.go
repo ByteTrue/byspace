@@ -1158,16 +1158,35 @@ func stripBOM(b []byte) []byte {
 func (s *Store) loadDaemonConfigRaw() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	cfg := daemonConfigDefaults()
-	b, err := os.ReadFile(filepath.Join(s.homeDir, "config.json"))
+	disk, err := readDaemonConfigDisk(s.homeDir)
 	if err != nil {
-		return cfg
+		return daemonConfigDefaults()
 	}
-	b = stripBOM(b)
+	return daemonConfigFromDisk(disk)
+}
+
+// readDaemonConfigDisk distinguishes an absent config from a damaged one. Read-only callers can
+// keep their historical defaults fallback, but a write must never replace malformed JSON with them.
+func readDaemonConfigDisk(homeDir string) (map[string]any, error) {
+	b, err := os.ReadFile(filepath.Join(homeDir, "config.json"))
+	if os.IsNotExist(err) {
+		return map[string]any{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	var disk map[string]any
-	if json.Unmarshal(b, &disk) != nil {
-		return cfg
+	if err := json.Unmarshal(stripBOM(b), &disk); err != nil {
+		return nil, fmt.Errorf("parse config.json: %w", err)
 	}
+	if disk == nil {
+		disk = map[string]any{}
+	}
+	return disk, nil
+}
+
+func daemonConfigFromDisk(disk map[string]any) map[string]any {
+	cfg := daemonConfigDefaults()
 	// `daemon` is where every real setting lives. A root-level key is honoured only when
 	// `daemon` does not carry the same one, which keeps hand-written configs working.
 	for k, v := range disk {
@@ -1287,9 +1306,26 @@ func daemonConfigDefaults() map[string]any {
 // SaveDaemonConfig merges patch into the `daemon` section of $BYSPACE_HOME/config.json
 // and returns the resulting flattened config.
 func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
-	cur := s.LoadDaemonConfig()
+	cur, _ := s.SaveDaemonConfigChecked(patch)
+	return cur
+}
+
+// SaveDaemonConfigChecked is SaveDaemonConfig with persistence failures surfaced to callers
+// that must not report success before the configuration is durable.
+func (s *Store) SaveDaemonConfigChecked(patch map[string]any) (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := lockDaemonConfig(s.homeDir)
+	if err != nil {
+		return nil, fmt.Errorf("lock daemon config: %w", err)
+	}
+	defer unlock()
+	disk, err := readDaemonConfigDisk(s.homeDir)
+	if err != nil {
+		return nil, err
+	}
+	cur := daemonConfigFromDisk(disk)
+	cur["auth"] = daemonAuthView(cur["auth"])
 	// Deep, not shallow. Node's daemon-config-store deep-merges the patch, and the providers map
 	// needs it: the settings switch sends `{providers: {codex: {enabled: false}}}`, and replacing
 	// the whole map dropped every other provider entry — a custom provider vanished from the picker
@@ -1298,15 +1334,8 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	cur = dropRemovedProviders(cur)
 
 	cfgPath := filepath.Join(s.homeDir, "config.json")
-	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
-	if b, err := os.ReadFile(cfgPath); err == nil {
-		var existing map[string]any
-		if json.Unmarshal(stripBOM(b), &existing) == nil {
-			disk = existing
-			if _, ok := disk["version"]; !ok {
-				disk["version"] = 1
-			}
-		}
+	if _, ok := disk["version"]; !ok {
+		disk["version"] = 1
 	}
 	daemon, _ := disk["daemon"].(map[string]any)
 	if daemon == nil {
@@ -1371,8 +1400,10 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	}
 
 	b, _ := json.MarshalIndent(disk, "", "  ")
-	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)
-	return cur
+	if err := home.WriteAtomic(cfgPath, append(b, '\n'), 0o600); err != nil {
+		return cur, err
+	}
+	return cur, nil
 }
 
 // mergeConfigPatch deep-merges a patch into a config, matching the node daemon's deepMerge.

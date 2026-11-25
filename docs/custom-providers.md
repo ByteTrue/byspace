@@ -237,30 +237,50 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com) is an open st
 talking to AI coding agents — think LSP for agents. Any agent that speaks ACP over JSON-RPC 2.0 on
 stdio can be added with `extends: "acp"`.
 
-Settings → Agents → Add provider has one **Copy setup prompt** action. Paste it into an agent on the
-daemon host. The prompt contains the absolute path to BySpace's on-demand ACP configuration template;
-the agent reads that file and writes the config below. BySpace does not install the template in an
-agent skill directory. Existing ACP provider configs keep working.
+Settings → Agents → Add provider lists official presets for common ACP CLIs. Search by name or ID,
+then add only the providers you use; adding saves the preset's declarative configuration and refreshes
+its runtime models and modes. Unchosen presets remain inactive, and the four primary built-ins are
+unchanged.
+
+For providers outside the catalog, use **Copy setup prompt** and paste it into an agent on the daemon
+host. The prompt contains the absolute path to BySpace's on-demand ACP configuration guide; the agent
+reads that file and uses the canonical CLI writer below. Antigravity's `agy` is not an official preset,
+so its example stays on this path. BySpace does not install the guide in an agent skill directory.
+Existing ACP provider configs keep working.
 
 ### Adding a generic ACP provider
+
+Use the canonical writer with the agent's documented ACP argv. For Antigravity's `agy` CLI:
+
+```bash
+byspace provider add acp --id agy --label Antigravity -- agy acp
+byspace daemon reload
+byspace provider diagnostic agy
+byspace provider check agy
+```
+
+The writer validates the ID, label, and complete argv, then saves exactly this minimal entry while
+preserving sibling configuration:
 
 ```json
 {
   "agents": {
     "providers": {
-      "my-agent": {
+      "agy": {
         "extends": "acp",
-        "label": "My Agent",
-        "command": ["my-agent-binary", "--acp"],
-        "env": { "MY_API_KEY": "..." }
+        "label": "Antigravity",
+        "command": ["agy", "acp"]
       }
     }
   }
 }
 ```
 
+An identical rerun is a no-op; a conflicting existing ID is rejected. Add `env`, `params`, or model
+overrides separately only when the agent requires them.
+
 The whole `command` argv matters: the first element is the launcher, the rest are passed verbatim.
-An ACP flag can be a flag (`gemini --acp`), a subcommand (`hermes acp`), or a package runner
+An ACP flag can be a flag (`gemini --acp`), a subcommand (`agy acp`), or a package runner
 (`npx -y @google/gemini-cli --acp`).
 
 When you launch an ACP agent, BySpace spawns the process, sends an `initialize` JSON-RPC request,
@@ -313,8 +333,13 @@ probe keeps the package spec (`npx -y @google/gemini-cli --version`), diagnosing
 rather than just proving `npx` exists.
 
 The diagnostic does **not** start an ACP session — it proves the launcher resolves and reports a
-version, not that the agent answers `initialize`. To check the protocol end to end, create an agent
-on the provider (`byspace run --provider <id> "Say hello"`) and send a message.
+version, not that the agent answers `initialize`. Run `byspace provider check <id>` for the protocol
+check: launch, initialization, a temporary session, a real text turn, assistant output, and terminal
+completion. Image, native continuation, and model/mode/thinking checks run only when advertised.
+Each operation prints `PASS`, `FAIL`, or `SKIP`; any failure makes the command exit non-zero. For agy,
+the model check currently reports `FAIL` because agy does not return fresh negotiated-state evidence
+after `session/set_model`; the other advertised checks can still pass. The check uses a temporary
+directory and does not create BySpace agents or workspaces.
 
 ### Examples
 

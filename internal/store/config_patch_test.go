@@ -2,9 +2,12 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // A provider toggle must not delete the other providers' saved settings.
@@ -36,6 +39,117 @@ func TestSaveDaemonConfigKeepsSiblingProviderEntries(t *testing.T) {
 	}
 	if codex["enabled"] != false {
 		t.Fatalf("codex enabled = %v, want the toggle itself to apply", codex["enabled"])
+	}
+}
+
+func TestSaveDaemonConfigCheckedRefusesMalformedConfig(t *testing.T) {
+	homeDir := t.TempDir()
+	path := filepath.Join(homeDir, "config.json")
+	original := []byte("{not valid json\n")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := New(homeDir).SaveDaemonConfigChecked(map[string]any{
+		"providers": map[string]any{"agy": map[string]any{"extends": "acp", "command": []any{"agy", "acp"}}},
+	}); err == nil {
+		t.Fatal("SaveDaemonConfigChecked replaced malformed config with defaults")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(original) {
+		t.Fatalf("config changed after rejected write:\n%s", got)
+	}
+}
+
+func TestSaveDaemonConfigCheckedSerializesProcesses(t *testing.T) {
+	if os.Getenv("BYSPACE_TEST_CONFIG_WRITER") == "1" {
+		id := os.Getenv("BYSPACE_TEST_CONFIG_PROVIDER")
+		_, err := New(os.Getenv("BYSPACE_TEST_CONFIG_HOME")).SaveDaemonConfigChecked(map[string]any{
+			"providers": map[string]any{id: map[string]any{"extends": "acp", "command": []any{"acp-agent"}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	homeDir := t.TempDir()
+	const writers = 6
+	commands := make([]*exec.Cmd, 0, writers)
+	for i := 0; i < writers; i++ {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestSaveDaemonConfigCheckedSerializesProcesses$")
+		cmd.Env = append(os.Environ(),
+			"BYSPACE_TEST_CONFIG_WRITER=1",
+			fmt.Sprintf("BYSPACE_TEST_CONFIG_HOME=%s", homeDir),
+			fmt.Sprintf("BYSPACE_TEST_CONFIG_PROVIDER=writer-%d", i),
+		)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		commands = append(commands, cmd)
+	}
+	for _, cmd := range commands {
+		if err := cmd.Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	disk := readConfigFile(t, homeDir)
+	agents, _ := disk["agents"].(map[string]any)
+	providers, _ := agents["providers"].(map[string]any)
+	for i := 0; i < writers; i++ {
+		id := fmt.Sprintf("writer-%d", i)
+		if providers[id] == nil {
+			t.Fatalf("concurrent write lost provider %q: %#v", id, providers)
+		}
+	}
+}
+
+func TestSetDaemonPasswordHashSharesConfigLock(t *testing.T) {
+	homeDir := t.TempDir()
+	New(homeDir).SaveDaemonConfig(map[string]any{
+		"providers": map[string]any{"agy": map[string]any{"extends": "acp", "command": []any{"agy", "acp"}}},
+	})
+	unlock, err := lockDaemonConfig(homeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- New(homeDir).SetDaemonPasswordHash("new-hash") }()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("password write did not wait for the config lock: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	disk := readConfigFile(t, homeDir)
+	agents, _ := disk["agents"].(map[string]any)
+	providers, _ := agents["providers"].(map[string]any)
+	if providers["agy"] == nil {
+		t.Fatalf("password write dropped provider config: %#v", providers)
+	}
+	daemon, _ := disk["daemon"].(map[string]any)
+	auth, _ := daemon["auth"].(map[string]any)
+	if auth[daemonPasswordHashKey] != "new-hash" {
+		t.Fatalf("password hash was not saved: %#v", auth)
+	}
+}
+
+func TestSaveDaemonConfigCheckedReportsAtomicWriteFailure(t *testing.T) {
+	homeDir := t.TempDir()
+	// A directory at config.json makes the final rename fail on every supported OS.
+	if err := os.Mkdir(filepath.Join(homeDir, "config.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(homeDir).SaveDaemonConfigChecked(map[string]any{"appendSystemPrompt": "not durable"}); err == nil {
+		t.Fatal("SaveDaemonConfigChecked succeeded with config.json blocked by a directory")
 	}
 }
 

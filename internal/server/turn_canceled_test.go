@@ -7,8 +7,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/store"
 )
+
+func TestWaitForFinishFailureStatus(t *testing.T) {
+	if got := waitForFinishFailureStatus(providers.ErrACPTurnCanceled); got != "error" {
+		t.Fatalf("cancelled turn status = %q, want error", got)
+	}
+	if got := waitForFinishFailureStatus(context.DeadlineExceeded); got != "timeout" {
+		t.Fatalf("deadline status = %q, want timeout", got)
+	}
+}
 
 // A close mid-turn must release every waiter. Without this a `wait_for_finish` blocks until its
 // own timeout even though the agent is already gone.

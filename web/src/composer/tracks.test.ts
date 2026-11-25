@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import type { KeyboardEvent } from "react";
-import { describe, expect, it } from "vitest";
-import { handleTrackNavigation } from "./tracks";
+import { act, createElement, type KeyboardEvent } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, vi } from "vitest";
+import { ComposerTrackBar, handleTrackNavigation } from "./tracks";
 
 function dispatch(target: HTMLElement, currentTarget: HTMLElement, key: string) {
   let prevented = false;
@@ -15,6 +16,24 @@ function dispatch(target: HTMLElement, currentTarget: HTMLElement, key: string) 
   } as unknown as KeyboardEvent<HTMLDivElement>);
   return prevented;
 }
+
+describe("composer track presentation", () => {
+  it("keeps non-overflowing accessories opaque without an edge mask", () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() => {
+      root.render(createElement(ComposerTrackBar, null, createElement("span", null, "+2.9k -225")));
+    });
+
+    const track = container.querySelector<HTMLElement>("[data-testid=composer-track-bar] > div");
+    expect(track?.className).toContain("overflow-x-auto");
+    expect(track?.className).not.toContain("mask-image");
+
+    act(() => root.unmount());
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("composer track keyboard navigation", () => {
   it("moves between rows, wraps, and honors Home and End", () => {

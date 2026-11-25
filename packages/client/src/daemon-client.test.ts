@@ -2405,6 +2405,47 @@ test("sends worktree target and autoArchive in create_agent_request", async () =
   await expect(createPromise).rejects.toThrow("worktree auto archive sentinel");
 });
 
+test("preserves an empty initial prompt when create_agent_request has images", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const createPromise = client.createAgent({
+    provider: "pi",
+    cwd: "/tmp/project",
+    initialPrompt: "",
+    images: [{ data: "aGVsbG8=", mimeType: "image/png" }],
+  });
+
+  expect(mock.sent).toHaveLength(1);
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request.initialPrompt).toBe("");
+  expect(request.images).toEqual([{ data: "aGVsbG8=", mimeType: "image/png" }]);
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "status",
+      payload: {
+        status: "agent_create_failed",
+        requestId: request.requestId,
+        error: "image-only test sentinel",
+      },
+    }),
+  );
+  await expect(createPromise).rejects.toThrow("image-only test sentinel");
+});
+
 test("sends structured attachments with create_agent_request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

@@ -2491,6 +2491,15 @@ export const en = {
         copyFailed: "Unable to copy the onboarding prompt",
         promptUnavailable: "The onboarding prompt is unavailable",
       },
+      catalog: {
+        search: "Search providers",
+        noProviders: "No providers found",
+        add: "Add",
+        addProvider: "Add {{provider}}",
+        adding: "Adding",
+        installInstructions: "Install instructions",
+        installInstructionsFor: "{{provider}} install instructions",
+      },
       updateErrorTitle: "Unable to update provider",
       actions: {
         menu: "{{name}} actions",
