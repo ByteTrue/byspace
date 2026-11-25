@@ -5,6 +5,7 @@ package proc
 import (
 	"strconv"
 	"syscall"
+	"time"
 )
 
 // OwnProcessGroup keeps console signals for the child separate from the daemon. Windows tree
@@ -24,7 +25,12 @@ func processTreeAlivePlatform(pid int, rootComplete bool, identity string) bool 
 	if !rootComplete && processAlive(pid) {
 		return true
 	}
-	for _, descendant := range descendants(uint32(pid)) {
+	descendants, err := listDescendants(uint32(pid))
+	if err != nil {
+		// A failed snapshot is not evidence that the tree exited; the force phase must still run.
+		return true
+	}
+	for _, descendant := range descendants {
 		if processAlive(int(descendant)) {
 			return true
 		}
@@ -48,6 +54,29 @@ func processAlive(pid int) bool {
 	return code == 259 // STILL_ACTIVE
 }
 
+func forceKillDescendants(pid int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for {
+		pids, err := listDescendants(uint32(pid))
+		if err == nil {
+			live := make([]uint32, 0, len(pids))
+			for _, descendant := range pids {
+				if processAlive(int(descendant)) {
+					live = append(live, descendant)
+				}
+			}
+			if len(live) == 0 {
+				return
+			}
+			terminateProcesses(live)
+		}
+		if time.Now().After(deadline) {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func signalOwnedProcessTree(pid int, force bool, identity string) {
 	if !processIdentityMatches(pid, identity) {
 		return
@@ -63,11 +92,13 @@ func SignalProcessTree(pid int, force bool) {
 	}
 	args := []string{"/PID", strconv.Itoa(pid), "/T"}
 	if force {
-		// A root that already exited cannot anchor taskkill /T; enumerate its remaining descendants.
-		killDescendants(pid)
 		args = append(args, "/F")
 	}
 	cmd := Command("taskkill", args...)
 	cmd.SysProcAttr = OwnProcessGroup(cmd.SysProcAttr)
 	_ = cmd.Run()
+	if force {
+		// An exited root cannot anchor taskkill /T. Keep retrying snapshots through the bounded force phase.
+		forceKillDescendants(pid, processTreeShutdownPhase)
+	}
 }

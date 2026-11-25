@@ -3,7 +3,9 @@
 package proc
 
 import (
+	"errors"
 	"os/exec"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -25,8 +27,16 @@ func cancelTree(cmd *exec.Cmd) {
 	}
 }
 
+var createProcessSnapshot = windows.CreateToolhelp32Snapshot
+var listDescendants = descendants
+var terminateProcesses = killAll
+
 func killDescendants(pid int) {
-	killAll(descendants(uint32(pid)))
+	pids, err := listDescendants(uint32(pid))
+	if err != nil {
+		return
+	}
+	terminateProcesses(pids)
 }
 
 func killAll(pids []uint32) {
@@ -40,10 +50,19 @@ func killAll(pids []uint32) {
 	}
 }
 
-func descendants(pid uint32) []uint32 {
-	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+func descendants(pid uint32) ([]uint32, error) {
+	var snap windows.Handle
+	var err error
+	// Windows documents ERROR_BAD_LENGTH as transient while processes are being created or exited.
+	for attempt := 0; attempt < 3; attempt++ {
+		snap, err = createProcessSnapshot(windows.TH32CS_SNAPPROCESS, 0)
+		if !errors.Is(err, windows.ERROR_BAD_LENGTH) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer windows.CloseHandle(snap)
 	kids := map[uint32][]uint32{}
@@ -53,6 +72,9 @@ func descendants(pid uint32) []uint32 {
 		if e.ProcessID != e.ParentProcessID {
 			kids[e.ParentProcessID] = append(kids[e.ParentProcessID], e.ProcessID)
 		}
+	}
+	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+		return nil, err
 	}
 	var out []uint32
 	seen := map[uint32]bool{pid: true}
@@ -75,7 +97,7 @@ func descendants(pid uint32) []uint32 {
 			queue = append(queue, k)
 		}
 	}
-	return out
+	return out, nil
 }
 
 func procStartTime(pid uint32) (int64, bool) {
