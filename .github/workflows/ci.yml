@@ -125,7 +125,7 @@ jobs:
 
       - name: Check Go formatting
         run: |
-          unformatted="$(gofmt -l main.go internal workers)"
+          unformatted="$(gofmt -l main.go internal workers third_party/go-pty)"
           if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
 
   lint:

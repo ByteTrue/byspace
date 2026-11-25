@@ -25,6 +25,7 @@ quality:
 go:
   - "main.go"
   - "internal/**"
+  - "third_party/**"
   - "workers/**"
   - "go.mod"
   - "go.sum"
@@ -40,6 +41,7 @@ sdk:
 
 browser:
   - "internal/**"
+  - "third_party/**"
   - "packages/client/src/compat/normalize-provider-models.ts"
   - "web/**"
 

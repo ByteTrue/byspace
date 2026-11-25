@@ -145,6 +145,16 @@ test("ci-paths routing globs name trees that exist", () => {
   );
 });
 
+test("vendored Go runtime changes route to daemon and browser checks", () => {
+  const filters = contracts(".github/ci-paths.yml");
+  for (const contract of ["go", "browser"]) {
+    assert.ok(
+      filters[contract].includes("third_party/**"),
+      `${contract} must run when the PTY runtime under third_party changes`,
+    );
+  }
+});
+
 test("every ci-paths contract is consumed by the CI workflow", () => {
   const filters = contracts(".github/ci-paths.yml");
   const workflow = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
@@ -236,8 +246,9 @@ test("lefthook globs cover every extension the tools process", () => {
 });
 
 // oxfmt handles JS/TS/JSON/MD; Go has its own formatter, and CI's format job runs `gofmt -l` over
-// main.go, internal and workers. A hook that only calls oxfmt lets Go changes commit unformatted —
-// d5519d14e reached main that way and CI went red on two files nobody had touched in that commit.
+// main.go, internal, workers and the vendored PTY module. A hook that only calls oxfmt lets Go
+// changes commit unformatted — d5519d14e reached main that way and CI went red on two files nobody
+// had touched in that commit.
 test("lefthook checks Go formatting the way CI does", () => {
   const jobs = hookJobs();
   const go = Object.values(jobs).find((job) => /\bgofmt\b/.test(job.run ?? ""));
