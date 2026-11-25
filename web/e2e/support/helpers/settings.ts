@@ -332,7 +332,7 @@ export async function serveJson(page: Page, url: string, body: unknown): Promise
 
 export async function openAddProviderArea(page: Page): Promise<void> {
   // The add-provider card sits last on the Agents page and is collapsed by default: adding
-  // a provider is a once-per-install errand. It offers the copy-prompt handoff, not a catalog.
+  // a provider is a once-per-install errand. It offers presets and the copy-prompt handoff.
   await page.getByTestId("host-page-add-provider-card").scrollIntoViewIfNeeded();
   await page.getByTestId("host-page-add-provider-card-toggle").click();
   await expect(

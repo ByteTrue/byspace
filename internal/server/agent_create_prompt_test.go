@@ -13,7 +13,7 @@ func TestCreateAgentSubmitsImageOnlyInitialPrompt(t *testing.T) {
 		"initialPrompt": "",
 		"images": [{"data": "aGVsbG8=", "mimeType": "image/png"}],
 		"config": {
-			"provider": "mock-native",
+			"provider": "mock",
 			"cwd": "` + strings.ReplaceAll(t.TempDir(), `\`, `\\`) + `",
 			"featureValues": {"mockPromptRejections": 1}
 		}
@@ -37,7 +37,7 @@ func TestCreateAgentFailsWhenInitialPromptIsRejected(t *testing.T) {
 		"requestId": "reject-initial-prompt",
 		"initialPrompt": "start work",
 		"config": {
-			"provider": "mock-native",
+			"provider": "mock",
 			"cwd": "` + strings.ReplaceAll(t.TempDir(), `\`, `\\`) + `",
 			"featureValues": {"mockPromptRejections": 1}
 		}
