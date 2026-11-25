@@ -6,6 +6,7 @@ import (
 )
 
 func TestCreateAgentSubmitsImageOnlyInitialPrompt(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
 	srv := newTunnelTestServer(t, nil)
 	sink := &recordingSink{}
 	raw := []byte(`{
@@ -31,6 +32,7 @@ func TestCreateAgentSubmitsImageOnlyInitialPrompt(t *testing.T) {
 }
 
 func TestCreateAgentFailsWhenInitialPromptIsRejected(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
 	srv := newTunnelTestServer(t, nil)
 	sink := &recordingSink{}
 	raw := []byte(`{
