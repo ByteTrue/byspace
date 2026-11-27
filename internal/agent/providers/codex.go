@@ -72,25 +72,27 @@ type CodexSession struct {
 	turnIDs []string
 	// nativeTurnID is Codex's own turn id, which `turn/steer` requires. activeTurnID is ours and
 	// means nothing to the provider.
-	nativeTurnID       string
-	activeTextIdx      int
-	activeThinkIdx     int
-	streamSeq          int
-	frames             *sdk.StreamFrames
-	emitMu             sync.Mutex
-	timeline           []sdk.TimelineEntry
-	toolIndexByID      map[string]int
-	pendingPermissions map[string]map[string]any
-	permissionRPCIDs   map[string]any
-	subagents          map[string]sdk.SubagentDescriptor
-	subagentTimelines  map[string][]sdk.TimelineEntry
-	subagentOutputIdx  map[string]int
-	finishWaiters      []chan error
-	eventSubscribers   map[int]func(map[string]any)
-	nextSubID          int
-	closed             bool
-	delivering         int
-	closeRequested     bool
+	nativeTurnID        string
+	activeTextIdx       int
+	activeThinkIdx      int
+	streamSeq           int
+	frames              *sdk.StreamFrames
+	emitMu              sync.Mutex
+	timeline            []sdk.TimelineEntry
+	toolIndexByID       map[string]int
+	pendingPermissions  map[string]map[string]any
+	permissionRPCIDs    map[string]any
+	subagents           map[string]sdk.SubagentDescriptor
+	subagentTimelines   map[string][]sdk.TimelineEntry
+	subagentOutputIdx   map[string]int
+	finishWaiters       []chan error
+	eventSubscribers    map[int]func(map[string]any)
+	nextSubID           int
+	closed              bool
+	delivering          int
+	deliveryCond        *sync.Cond
+	beforeEventDelivery func() // test gate for the terminal snapshot/delivery handoff
+	closeRequested      bool
 }
 
 // StartCodexSession launches `codex app-server` and initializes a thread.
@@ -648,9 +650,13 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 	for _, fn := range s.eventSubscribers {
 		subs = append(subs, fn)
 	}
+	s.delivering++
 	s.mu.Unlock()
+	if s.beforeEventDelivery != nil {
+		s.beforeEventDelivery()
+	}
 
-	s.deliverEvents(subs, extraEvents)
+	s.deliverRegisteredEvents(subs, extraEvents)
 }
 
 // AppendTimelineItem stores one item in the session's own timeline and returns the entry.
@@ -1415,17 +1421,47 @@ func (s *CodexSession) deliverEvents(subs []func(map[string]any), events []map[s
 	s.mu.Lock()
 	s.delivering++
 	s.mu.Unlock()
+	s.deliverRegisteredEvents(subs, events)
+}
+
+func (s *CodexSession) deliverRegisteredEvents(subs []func(map[string]any), events []map[string]any) {
+	defer func() {
+		s.mu.Lock()
+		s.delivering--
+		if s.delivering == 0 && s.deliveryCond != nil {
+			s.deliveryCond.Broadcast()
+		}
+		closeRequested := s.closeRequested && s.delivering == 0
+		s.mu.Unlock()
+		if closeRequested {
+			_ = s.Close()
+		}
+	}()
 	for _, fn := range subs {
 		for _, event := range events {
 			fn(event)
 		}
 	}
-	s.mu.Lock()
-	s.delivering--
-	closeRequested := s.closeRequested && s.delivering == 0
-	s.mu.Unlock()
-	if closeRequested {
-		_ = s.Close()
+}
+
+// CloseAndWait drains active subscriber callbacks without changing Close's reentrant semantics.
+func (s *CodexSession) CloseAndWait() error {
+	for {
+		s.mu.Lock()
+		if s.deliveryCond == nil {
+			s.deliveryCond = sync.NewCond(&s.mu)
+		}
+		for s.delivering > 0 {
+			s.deliveryCond.Wait()
+		}
+		s.mu.Unlock()
+		err := s.Close()
+		s.mu.Lock()
+		drained := s.closed && s.delivering == 0
+		s.mu.Unlock()
+		if drained || err != nil {
+			return err
+		}
 	}
 }
 

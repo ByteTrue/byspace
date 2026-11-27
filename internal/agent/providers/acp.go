@@ -77,6 +77,8 @@ type ACPSession struct {
 	nextSubID                    int
 	closed                       bool
 	delivering                   int
+	deliveryCond                 *sync.Cond
+	beforeEventDelivery          func() // test gate for the terminal snapshot/delivery handoff
 	closeRequested               bool
 	agentCapabilities            map[string]any
 	configOptions                []any
@@ -1170,27 +1172,28 @@ func (s *ACPSession) finishPromptForID(expectedTurnID string, err error) {
 	s.activeUserMessageID = ""
 	s.notifyFinishLocked(err)
 	endSubs := s.copySubscribersLocked()
+	s.delivering++
 	s.mu.Unlock()
-
-	for _, fn := range endSubs {
-		for _, event := range tail {
-			fn(event)
-		}
-		if hadText {
-			fn(map[string]any{"type": "message_end"})
-		}
-		if err != nil {
-			// A prompt the agent refused (auth, quota, a rejected request) is a failed turn. Reporting
-			// agent_end made the daemon call it completed and write no [System Error] row.
-			fn(map[string]any{
-				"type":   "byspace_turn_failed",
-				"turnId": finishedTurnID,
-				"error":  err.Error(),
-			})
-			continue
-		}
-		fn(map[string]any{"type": "agent_end"})
+	if s.beforeEventDelivery != nil {
+		s.beforeEventDelivery()
 	}
+
+	events := append([]map[string]any(nil), tail...)
+	if hadText {
+		events = append(events, map[string]any{"type": "message_end"})
+	}
+	if err != nil {
+		// A prompt the agent refused (auth, quota, a rejected request) is a failed turn. Reporting
+		// agent_end made the daemon call it completed and write no [System Error] row.
+		events = append(events, map[string]any{
+			"type":   "byspace_turn_failed",
+			"turnId": finishedTurnID,
+			"error":  err.Error(),
+		})
+	} else {
+		events = append(events, map[string]any{"type": "agent_end"})
+	}
+	s.deliverRegisteredEvents(endSubs, events)
 }
 
 func (s *ACPSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
@@ -1681,17 +1684,47 @@ func (s *ACPSession) deliverEvents(subs []func(map[string]any), events []map[str
 	s.mu.Lock()
 	s.delivering++
 	s.mu.Unlock()
+	s.deliverRegisteredEvents(subs, events)
+}
+
+func (s *ACPSession) deliverRegisteredEvents(subs []func(map[string]any), events []map[string]any) {
+	defer func() {
+		s.mu.Lock()
+		s.delivering--
+		if s.delivering == 0 && s.deliveryCond != nil {
+			s.deliveryCond.Broadcast()
+		}
+		closeRequested := s.closeRequested && s.delivering == 0
+		s.mu.Unlock()
+		if closeRequested {
+			_ = s.Close()
+		}
+	}()
 	for _, fn := range subs {
 		for _, event := range events {
 			fn(event)
 		}
 	}
-	s.mu.Lock()
-	s.delivering--
-	closeRequested := s.closeRequested && s.delivering == 0
-	s.mu.Unlock()
-	if closeRequested {
-		_ = s.Close()
+}
+
+// CloseAndWait drains active subscriber callbacks without changing Close's reentrant semantics.
+func (s *ACPSession) CloseAndWait() error {
+	for {
+		s.mu.Lock()
+		if s.deliveryCond == nil {
+			s.deliveryCond = sync.NewCond(&s.mu)
+		}
+		for s.delivering > 0 {
+			s.deliveryCond.Wait()
+		}
+		s.mu.Unlock()
+		err := s.Close()
+		s.mu.Lock()
+		drained := s.closed && s.delivering == 0
+		s.mu.Unlock()
+		if drained || err != nil {
+			return err
+		}
 	}
 }
 

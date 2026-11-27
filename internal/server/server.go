@@ -261,6 +261,13 @@ type Server struct {
 	allowedHostnames []string
 	// agentLoads deduplicates concurrent cold-start attempts for one agent.
 	agentLoads map[string]*agentLoad
+	// closing rejects new session loads before the final agent snapshot.
+	closing bool
+	// agentPersistenceClosing is set only after active provider event deliveries drain.
+	agentPersistenceMu      sync.Mutex
+	agentPersistenceClosing bool
+	// agentPersistence keeps native-handle writes from outliving server shutdown.
+	agentPersistence sync.WaitGroup
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
 	// subscribe leaked a permanent callback.
 	terminalUnsubscribers map[frameSink]map[string][]func()
@@ -567,6 +574,7 @@ func (s *Server) Close() error {
 	}
 	s.diffEngine.Close()
 	s.mu.Lock()
+	s.closing = true
 	agents := make([]*managedPi, 0, len(s.agents))
 	for _, a := range s.agents {
 		agents = append(agents, a)
@@ -588,15 +596,31 @@ func (s *Server) Close() error {
 		go func(sk frameSink) { _ = sk.Close(wsCloseServerShutdown, "Server shutting down") }(sink)
 	}
 
+	var closeErrors []error
 	for _, a := range agents {
-		if a.session != nil {
-			_ = a.session.Close()
+		if a.session == nil {
+			continue
+		}
+		// ACP and Codex Close is deliberately nonblocking inside an event callback. Drain that
+		// callback before closing the launch gate so its valid completion persistence is counted.
+		if session, ok := a.session.(interface{ CloseAndWait() error }); ok {
+			if err := session.CloseAndWait(); err != nil {
+				closeErrors = append(closeErrors, err)
+			}
+		} else if err := a.session.Close(); err != nil {
+			closeErrors = append(closeErrors, err)
 		}
 	}
+	s.agentPersistenceMu.Lock()
+	s.agentPersistenceClosing = true
+	s.agentPersistenceMu.Unlock()
+	// No Add can race this Wait now. No server mutex is held: persistence needs it for its
+	// liveness check, and already-registered writes are still allowed to finish.
+	s.agentPersistence.Wait()
 	for _, t := range terms {
 		_ = t.Close()
 	}
-	return nil
+	return errors.Join(closeErrors...)
 }
 
 // SetDesktopSettingsHandler installs the loopback-only /_byspace/desktop/settings HTTP handler.
@@ -3367,6 +3391,10 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 
 func (s *Server) ensureAgentLoaded(agentID string) (*managedPi, error) {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return nil, errors.New("server is closing")
+	}
 	if mp, ok := s.agents[agentID]; ok {
 		s.mu.Unlock()
 		return mp, nil
@@ -3378,6 +3406,10 @@ func (s *Server) ensureAgentLoaded(agentID string) (*managedPi, error) {
 		s.mu.Unlock()
 		<-pending.done
 		s.mu.Lock()
+		if s.closing {
+			s.mu.Unlock()
+			return nil, errors.New("server is closing")
+		}
 		mp, exists := s.agents[agentID]
 		loadErr := pending.err
 		delete(s.agentLoads, agentID)
@@ -3432,6 +3464,10 @@ func (s *Server) loadAgent(agentID string) (*managedPi, error) {
 
 func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return nil, errors.New("server is closing")
+	}
 	if existing, ok := s.agents[rec.ID]; ok {
 		s.mu.Unlock()
 		return existing, nil
@@ -3519,22 +3555,22 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	}
 
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		var closeErr error
+		if session, ok := sess.(interface{ CloseAndWait() error }); ok {
+			closeErr = session.CloseAndWait()
+		} else {
+			closeErr = sess.Close()
+		}
+		return nil, errors.Join(errors.New("server is closing"), closeErr)
+	}
+	persistInitially := rec.Persistence == nil && s.registerAgentPersistence()
 	s.agents[rec.ID] = mp
 	s.mu.Unlock()
 
-	if rec.Persistence == nil {
-		// Deferred slightly: the startup sync asks pi for its state, and pi does not answer
-		// before its runtime is listening. Sending it immediately left the stdio queue stuck
-		// and the agent never produced a turn.
-		go func() {
-			for i := 0; i < 100; i++ {
-				if ready, ok := sess.(interface{ Ready() bool }); !ok || ready.Ready() {
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
-			s.syncPiPersistence(mp)
-		}()
+	if persistInitially {
+		s.launchInitialAgentPersistenceSync(mp)
 	}
 
 	sess.OnEvent(func(ev map[string]any) {
@@ -4017,7 +4053,7 @@ func (s *Server) handleTurnCompleted(mp *managedPi, sess providers.ManagedSessio
 	s.mu.Lock()
 	recCopy = mp.record
 	s.mu.Unlock()
-	go s.syncPiPersistence(mp)
+	s.startAgentPersistenceSync(mp)
 
 	event := map[string]any{
 		"type":     "turn_completed",
@@ -4036,6 +4072,51 @@ func (s *Server) handleTurnCompleted(mp *managedPi, sess providers.ManagedSessio
 	if s.chief != nil {
 		go s.chief.OnAgentTurnCompleted(s.bgCtx, recCopy, turnID)
 	}
+}
+
+func (s *Server) registerAgentPersistence() bool {
+	s.agentPersistenceMu.Lock()
+	defer s.agentPersistenceMu.Unlock()
+	if s.agentPersistenceClosing {
+		return false
+	}
+	s.agentPersistence.Add(1)
+	return true
+}
+
+func (s *Server) startInitialAgentPersistenceSync(mp *managedPi) {
+	if !s.registerAgentPersistence() {
+		return
+	}
+	s.launchInitialAgentPersistenceSync(mp)
+}
+
+// launchInitialAgentPersistenceSync uses the registration made with the session-map insertion.
+func (s *Server) launchInitialAgentPersistenceSync(mp *managedPi) {
+	sess := mp.session
+	// Deferred slightly: the startup sync asks pi for its state, and pi does not answer
+	// before its runtime is listening. Sending it immediately left the stdio queue stuck
+	// and the agent never produced a turn.
+	go func() {
+		defer s.agentPersistence.Done()
+		for i := 0; i < 100; i++ {
+			if ready, ok := sess.(interface{ Ready() bool }); !ok || ready.Ready() {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		s.syncPiPersistence(mp)
+	}()
+}
+
+func (s *Server) startAgentPersistenceSync(mp *managedPi) {
+	if !s.registerAgentPersistence() {
+		return
+	}
+	go func() {
+		defer s.agentPersistence.Done()
+		s.syncPiPersistence(mp)
+	}()
 }
 
 func (s *Server) syncPiPersistence(mp *managedPi) {
