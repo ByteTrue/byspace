@@ -266,7 +266,7 @@ type Server struct {
 	// agentPersistenceClosing is set only after active provider event deliveries drain.
 	agentPersistenceMu      sync.Mutex
 	agentPersistenceClosing bool
-	// agentPersistence keeps native-handle writes from outliving server shutdown.
+	// agentPersistence keeps native-handle writes and Chief post-event work from outliving shutdown.
 	agentPersistence sync.WaitGroup
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
 	// subscribe leaked a permanent callback.
@@ -3778,7 +3778,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				s.markAgentAttention(rec.ID, AttentionReasonPermission, nowStr)
 				if s.chief != nil {
 					recSnap := s.currentRecordSnapshot(rec)
-					go s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, perm)
+					s.startChiefEventTask(func() { s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, perm) })
 				}
 			}
 
@@ -3827,7 +3827,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			})
 			s.broadcastAgentUpdate(recCanceledCopy)
 			if s.chief != nil {
-				go s.chief.OnAgentTurnInterrupted(s.bgCtx, rec.ID)
+				s.startChiefEventTask(func() { s.chief.OnAgentTurnInterrupted(s.bgCtx, rec.ID) })
 			}
 
 		case "byspace_turn_failed":
@@ -3874,7 +3874,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				if errMsg == "" {
 					errMsg, _ = ev["error"].(string)
 				}
-				go s.chief.OnAgentTurnFailed(s.bgCtx, recFailedCopy, errMsg)
+				s.startChiefEventTask(func() { s.chief.OnAgentTurnFailed(s.bgCtx, recFailedCopy, errMsg) })
 			}
 
 		case "permission_requested":
@@ -3901,7 +3901,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				s.markAgentAttention(rec.ID, AttentionReasonPermission, nowStr)
 				if s.chief != nil {
 					recSnap := s.currentRecordSnapshot(rec)
-					go s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, request)
+					s.startChiefEventTask(func() { s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, request) })
 				}
 			}
 
@@ -3921,7 +3921,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					s.clearAgentPermissionAttention(rec.ID)
 				}
 				if s.chief != nil {
-					go s.chief.OnAgentPermissionResolved(s.bgCtx, rec.ID)
+					s.startChiefEventTask(func() { s.chief.OnAgentPermissionResolved(s.bgCtx, rec.ID) })
 				}
 			}
 
@@ -4070,7 +4070,7 @@ func (s *Server) handleTurnCompleted(mp *managedPi, sess providers.ManagedSessio
 	})
 	s.broadcastAgentUpdate(recCopy)
 	if s.chief != nil {
-		go s.chief.OnAgentTurnCompleted(s.bgCtx, recCopy, turnID)
+		s.startChiefEventTask(func() { s.chief.OnAgentTurnCompleted(s.bgCtx, recCopy, turnID) })
 	}
 }
 
@@ -4082,6 +4082,16 @@ func (s *Server) registerAgentPersistence() bool {
 	}
 	s.agentPersistence.Add(1)
 	return true
+}
+
+func (s *Server) startChiefEventTask(fn func()) {
+	if !s.registerAgentPersistence() {
+		return
+	}
+	go func() {
+		defer s.agentPersistence.Done()
+		fn()
+	}()
 }
 
 func (s *Server) startInitialAgentPersistenceSync(mp *managedPi) {
