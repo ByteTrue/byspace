@@ -35,6 +35,7 @@ func initTestGitRepo(t *testing.T, dir string) {
 	run("init", "-b", "main")
 	run("config", "user.email", "test@byspace.local")
 	run("config", "user.name", "BySpace Test")
+	run("config", "core.autocrlf", "false")
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("seed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -524,6 +525,7 @@ func TestChiefUniversalVerifierMutationAuditAcrossProviders(t *testing.T) {
 	initTestGitRepo(t, repo)
 
 	srv := newTestServer(t, t.TempDir())
+	srv.store.SaveDaemonConfig(map[string]any{"defaultProvider": "mock"})
 	createResp := callChiefRPC(t, srv, "chief.mission.create.request", map[string]any{
 		"requestId": "req_create",
 		"goal":      "Verify read-only enforcement",

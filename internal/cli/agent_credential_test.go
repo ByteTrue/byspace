@@ -2,7 +2,6 @@ package cli
 
 import (
 	"net"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -34,19 +33,6 @@ func TestChiefCLIUnixSocketBindsAgentIdentity(t *testing.T) {
 	}
 
 	socketPath := filepath.Join(t.TempDir(), "d")
-	if runtime.GOOS == "windows" {
-		// The CLI's Unix-address detector predates Windows absolute paths; a relative path uses the
-		// same socket transport without changing that unrelated behavior.
-		cwd, err := os.Getwd()
-		if err != nil {
-			t.Fatal(err)
-		}
-		relative, err := filepath.Rel(cwd, socketPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		socketPath = filepath.ToSlash(relative)
-	}
 	listener, err := net.Listen("unix", socketPath)
 	if runtime.GOOS == "windows" && err != nil {
 		t.Skipf("unix sockets are unavailable on this Windows host: %v", err)

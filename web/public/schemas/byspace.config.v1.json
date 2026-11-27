@@ -201,6 +201,96 @@
             "additionalProperties": {}
           }
         },
+        "chief": {
+          "type": "object",
+          "properties": {
+            "defaultTier": {
+              "type": "string",
+              "enum": [
+                "L0",
+                "L1",
+                "L2"
+              ]
+            },
+            "roles": {
+              "type": "object",
+              "propertyNames": {
+                "enum": [
+                  "chief",
+                  "author",
+                  "verifier",
+                  "integrator"
+                ]
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "primaryProfileId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "fallbackProfileIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "primaryProfileId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "stall": {
+              "type": "object",
+              "properties": {
+                "softWarningSec": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "hardRecoverySec": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            "landing": {
+              "type": "object",
+              "properties": {
+                "requireHumanApproval": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "merge_local",
+                    "open_pr"
+                  ]
+                },
+                "strategy": {
+                  "type": "string",
+                  "enum": [
+                    "squash",
+                    "merge",
+                    "rebase"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "cors": {
           "type": "object",
           "properties": {

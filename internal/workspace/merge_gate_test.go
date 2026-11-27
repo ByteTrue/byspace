@@ -20,12 +20,16 @@ type mergeGateFixture struct {
 
 func newMergeGateFixture(t *testing.T) mergeGateFixture {
 	t.Helper()
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	root := t.TempDir()
 	target := filepath.Join(root, "target")
 	if err := os.Mkdir(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	mergeGateGit(t, target, "init", "-b", "main")
+	mergeGateGit(t, target, "config", "user.name", "Merge Gate Test")
+	mergeGateGit(t, target, "config", "user.email", "merge-gate@example.com")
 	mergeGateWrite(t, target, "shared.txt", "base\n")
 	mergeGateGit(t, target, "add", "shared.txt")
 	mergeGateGit(t, target, "commit", "-m", "base")
@@ -782,8 +786,15 @@ func TestLandBranchRestoresRebasedSourceWhenTargetUpdateFails(t *testing.T) {
 			}
 			mergeGateFailTargetUpdate(t)
 
-			if _, err := LandBranch(context.Background(), f.landOptions("rebase")); err == nil {
+			_, landErr := LandBranch(context.Background(), f.landOptions("rebase"))
+			if landErr == nil {
 				t.Fatal("expected forced target update failure")
+			}
+			if !strings.Contains(landErr.Error(), "compare-and-swap target branch") {
+				t.Fatalf("landing failed before the forced target update: %v", landErr)
+			}
+			if externalEdit && !strings.Contains(landErr.Error(), "source changed externally after rebase") {
+				t.Fatalf("landing did not preserve the external edit: %v", landErr)
 			}
 			if got := mergeGateHead(t, f.target); got != targetSha {
 				t.Errorf("target moved to %s", got)

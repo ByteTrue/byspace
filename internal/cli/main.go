@@ -1997,7 +1997,7 @@ func unixSocketPath(addr string) (string, bool) {
 	if trimmed == "" || strings.Contains(trimmed, "://") {
 		return "", false
 	}
-	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, `\\.\pipe\`) {
+	if filepath.IsAbs(trimmed) || strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, `\\.\pipe\`) {
 		return trimmed, true
 	}
 	// A relative path with a separator is a socket too; a bare "host:port" is not.

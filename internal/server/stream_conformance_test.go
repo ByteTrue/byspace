@@ -717,13 +717,23 @@ done
 		"type": "session",
 		"message": map[string]any{
 			"type": "create_agent_request", "requestId": "s1", "clientMessageId": "m1",
-			"initialPrompt": "first", "config": map[string]any{"provider": "pi", "cwd": workDir},
+			"config": map[string]any{"provider": "pi", "cwd": workDir},
 		},
 	})
 	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
 		t.Fatal(err)
 	}
-	subscribeTimelineAndWait(t, ctx, ws)
+	agentID, _ := subscribeTimelineOnly(t, ctx, ws)
+	firstReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "send_agent_message_request", "requestId": "s1_prompt", "agentId": agentID,
+			"text": "first", "messageId": "first-message",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, firstReq); err != nil {
+		t.Fatal(err)
+	}
 
 	waitTurnCompleted := func(label string) string {
 		t.Helper()
@@ -760,7 +770,7 @@ done
 		return ""
 	}
 
-	agentID := waitTurnCompleted("first turn")
+	waitTurnCompleted("first turn")
 
 	// The app always sends activeTurnBehavior:"steer" (default sendBehavior), including when
 	// no turn is live. This must start a fresh turn instead of a no-op steer.
