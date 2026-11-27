@@ -375,6 +375,8 @@ type Server struct {
 	// providerCatalogBuilding marks the scopes a background probe is filling, so a burst of cold
 	// requests starts one build instead of one per request (provider_catalog.go).
 	providerCatalogBuilding map[string]bool
+	// providerCatalogProbeTimeout shortens a probe attempt in tests; zero uses the 30s default.
+	providerCatalogProbeTimeout time.Duration
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.

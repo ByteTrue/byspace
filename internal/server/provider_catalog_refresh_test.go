@@ -24,35 +24,60 @@ func TestProviderCatalogHostFallbackStartsWorkspaceBuild(t *testing.T) {
 	defer srv.Close()
 
 	firstHost := srv.providerCatalogOrBuild("")
-	deadline := time.Now().Add(10 * time.Second)
-	for srv.cachedProviderCatalog("") == firstHost && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog("") != firstHost
+	}, "host provider catalog probe")
 	host := &providerCatalog{hash: "psh_host"}
 	srv.storeProviderCatalog("", host)
 	project := t.TempDir()
 	if got := srv.providerCatalogOrBuild(project); got != host {
 		t.Fatalf("workspace cold read did not use the host fast path: %#v", got)
 	}
-	for srv.cachedProviderCatalog(project) == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog(project) != nil
+	}, "workspace provider catalog probe")
 	catalog := srv.cachedProviderCatalog(project)
-	if catalog == nil {
-		t.Fatal("workspace read reused the host catalog without starting its own build")
-	}
 	wantModel := "anthropic/" + filepath.Base(project)
 	for _, entry := range catalog.entries {
 		if entry["provider"] != "pi" {
 			continue
 		}
 		models := entry["models"].([]sdk.CatalogModel)
-		if len(models) != 1 || models[0].ID != wantModel {
+		hasExpectedModel := len(models) == 1 && models[0].ID == wantModel
+		if !hasExpectedModel {
 			t.Fatalf("workspace probe reused another cwd's Pi models: got %#v, want %q", models, wantModel)
 		}
 		return
 	}
 	t.Fatal("workspace catalog has no Pi entry")
+}
+
+func TestPiCatalogCacheTracksWorkspaceHostWorkspace(t *testing.T) {
+	tmp := t.TempDir()
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "test", PiCommand: writeCwdCatalogFakePi(t, tmp)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	project := t.TempDir()
+	projectModel := "anthropic/" + filepath.Base(project)
+	requirePiModel(t, srv, project, projectModel)
+	hostCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirePiModel(t, srv, "", "anthropic/"+filepath.Base(hostCwd))
+	requirePiModel(t, srv, project, projectModel)
+}
+
+func requirePiModel(t *testing.T, srv *Server, cwd, want string) {
+	t.Helper()
+	models := srv.probePiModelsInCwd(t.Context(), cwd)
+	hasExpectedModel := len(models) == 1 && models[0].ID == want
+	if !hasExpectedModel {
+		t.Fatalf("Pi models for %q = %#v, want only %q", cwd, models, want)
+	}
 }
 
 func writeCwdCatalogFakePi(t *testing.T, dir string) string {
@@ -96,10 +121,9 @@ func TestProviderCatalogRetriesBuildInvalidatedWhileProbing(t *testing.T) {
 	defer srv.Close()
 
 	firstHost := srv.providerCatalogOrBuild("")
-	deadline := time.Now().Add(10 * time.Second)
-	for srv.cachedProviderCatalog("") == firstHost && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog("") != firstHost
+	}, "host provider catalog probe")
 	host := srv.cachedProviderCatalog("")
 	if host == firstHost {
 		t.Fatal("host probe did not finish")
@@ -107,16 +131,9 @@ func TestProviderCatalogRetriesBuildInvalidatedWhileProbing(t *testing.T) {
 	if got := srv.providerCatalogOrBuild(project); got != host {
 		t.Fatal("workspace cold read did not use the host catalog")
 	}
-	probeDeadline := time.Now().Add(10 * time.Second)
-	for {
-		if _, err := os.Stat(started); err == nil {
-			break
-		}
-		if time.Now().After(probeDeadline) {
-			t.Fatal("workspace probe did not start")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return hasFile(started)
+	}, "workspace probe to start")
 
 	// A home refresh invalidates W1 and publishes a fresh host catalog. The client's workspace
 	// refetch arrives while W1 still owns the build marker.
@@ -130,13 +147,51 @@ func TestProviderCatalogRetriesBuildInvalidatedWhileProbing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	retryDeadline := time.Now().Add(10 * time.Second)
-	for srv.cachedProviderCatalog(project) == nil && time.Now().Before(retryDeadline) {
-		time.Sleep(10 * time.Millisecond)
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog(project) != nil
+	}, "replacement workspace provider catalog")
+}
+
+func TestProviderCatalogRetriesWithFreshProbeDeadline(t *testing.T) {
+	tmp := t.TempDir()
+	project := t.TempDir()
+	piCommand, started, _ := writeBlockingCwdCatalogFakePi(t, tmp, project)
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "test", PiCommand: piCommand})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if srv.cachedProviderCatalog(project) == nil {
-		t.Fatal("invalidated workspace build was dropped without a replacement")
+	defer srv.Close()
+
+	firstHost := srv.providerCatalogOrBuild("")
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog("") != firstHost
+	}, "host provider catalog probe")
+	srv.providerCatalogProbeTimeout = 50 * time.Millisecond
+	host := srv.cachedProviderCatalog("")
+	if got := srv.providerCatalogOrBuild(project); got != host {
+		t.Fatal("workspace cold read did not use the host catalog")
 	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return hasFile(started)
+	}, "workspace probe to start")
+
+	srv.invalidateProviderCatalogs()
+	refreshedHost := &providerCatalog{hash: "psh_refreshed_host"}
+	srv.storeProviderCatalog("", refreshedHost)
+	if got := srv.providerCatalogOrBuild(project); got != refreshedHost {
+		t.Fatal("workspace refetch did not use the refreshed host catalog")
+	}
+	waitForCondition(t, 10*time.Second, func() bool {
+		return hasFile(started + ".retry")
+	}, "replacement probe after the first attempt timed out")
+	waitForCondition(t, 10*time.Second, func() bool {
+		return srv.cachedProviderCatalog(project) != nil
+	}, "workspace catalog after the first attempt timed out")
+}
+
+func hasFile(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func writeBlockingCwdCatalogFakePi(t *testing.T, dir, project string) (string, string, string) {
@@ -146,12 +201,16 @@ func writeBlockingCwdCatalogFakePi(t *testing.T, dir, project string) (string, s
 	release := filepath.Join(dir, "workspace-probe-release")
 	path := filepath.Join(dir, "blocking-cwd-catalog-pi.sh")
 	script := fmt.Sprintf(`#!/bin/sh
-if [ "$(basename "$PWD")" = %q ] && [ ! -f %q ]; then
-  : > %q
-  while [ ! -f %q ]; do sleep 0.01; done
+if [ "$(basename "$PWD")" = %q ]; then
+  if [ -f %q ]; then
+    : > %q
+  else
+    : > %q
+    while [ ! -f %q ]; do sleep 0.01; done
+  fi
 fi
 exec %q "$@"
-`, filepath.Base(project), release, started, release, inner)
+`, filepath.Base(project), started, started+".retry", started, release, inner)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +240,9 @@ func TestProviderSettingsRefreshInvalidatesWorkspaceCatalogs(t *testing.T) {
 	if cached := srv.cachedProviderCatalog(project); cached != nil {
 		t.Fatalf("settings refresh kept the stale workspace catalog: %#v", cached)
 	}
-	if cached := srv.cachedProviderCatalog(""); cached == nil || cached.hash == "psh_old_host" {
+	cached := srv.cachedProviderCatalog("")
+	hasRefreshedHost := cached != nil && cached.hash != "psh_old_host"
+	if !hasRefreshedHost {
 		t.Fatalf("settings refresh did not rebuild the host catalog: %#v", cached)
 	}
 }

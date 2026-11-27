@@ -32,7 +32,9 @@ import (
 // model list probed in one project is not valid in another.
 func (s *Server) probePiModelsInCwd(ctx context.Context, cwd string) []pi.CatalogModel {
 	s.mu.Lock()
-	if s.cachedPiModels != nil && s.cachedPiModelsCwd == cwd {
+	hasCachedPiModels := s.cachedPiModels != nil
+	isSameCwd := s.cachedPiModelsCwd == cwd
+	if hasCachedPiModels && isSameCwd {
 		out := s.cachedPiModels
 		s.mu.Unlock()
 		return out

@@ -268,11 +268,18 @@ func (s *Server) startProviderCatalogBuild(cwd string) {
 			s.providerCatalogMu.Unlock()
 		}()
 		ctx := s.backgroundContext()
-		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
+		probeTimeout := s.providerCatalogProbeTimeout
+		if probeTimeout == 0 {
+			probeTimeout = 30 * time.Second
+		}
 		for {
-			current := s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
-			if current || probeCtx.Err() != nil || s.cachedProviderCatalog(cwd) != nil {
+			// An invalidated attempt may have consumed its deadline, so each retry gets a fresh one.
+			probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			isCurrent := s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+			cancel()
+			isServerStopped := ctx.Err() != nil
+			hasReplacement := s.cachedProviderCatalog(cwd) != nil
+			if isCurrent || isServerStopped || hasReplacement {
 				return
 			}
 			// The invalidation that made this build stale also cleared its scope. Retry while this

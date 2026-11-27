@@ -188,6 +188,10 @@ export function invalidateServerDataQueriesAfterReconnect(input: {
   }
 }
 
+function isProjectQuery(query: Query): boolean {
+  return query.queryKey[2] === "cwd";
+}
+
 export async function applyProvidersSnapshotUpdate(input: {
   serverId: string;
   queryClient: QueryClient;
@@ -220,15 +224,14 @@ export async function applyProvidersSnapshotUpdate(input: {
   if (cwd === null) {
     // The daemon may not know a browser-only cwd scope. Active projects refetch now; inactive
     // projects leave the cache because invalidation alone would keep their stale payload forever.
-    const projectQuery = (query: Query) => query.queryKey[2] === "cwd";
     void input.queryClient.invalidateQueries({
       queryKey: providersSnapshotQueryRoot(input.serverId),
-      predicate: projectQuery,
+      predicate: isProjectQuery,
       type: "active",
     });
     input.queryClient.removeQueries({
       queryKey: providersSnapshotQueryRoot(input.serverId),
-      predicate: projectQuery,
+      predicate: isProjectQuery,
       type: "inactive",
     });
   }

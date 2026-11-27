@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import { z } from "zod";
 import { expect, test } from "../support/fixtures";
 import { openModelPicker } from "../support/helpers/agent-profiles";
 import { expectComposerVisible } from "../support/helpers/composer";
@@ -10,6 +11,19 @@ import { seedWorkspace } from "../support/helpers/seed-client";
 
 const PROVIDER = "refresh-catalog";
 const LABEL = "Refresh Catalog";
+const catalogConfigSchema = z
+  .object({
+    agents: z
+      .object({
+        providers: z
+          .object({
+            [PROVIDER]: z.object({ models: z.array(z.unknown()) }).passthrough(),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 function models(count: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -40,7 +54,8 @@ async function writeCatalogModels(count: number): Promise<void> {
   const home = process.env.E2E_BYSPACE_HOME;
   if (!home) throw new Error("E2E_BYSPACE_HOME is not set");
   const configPath = path.join(home, "config.json");
-  const config = JSON.parse(await readFile(configPath, "utf8"));
+  const rawConfig = await readFile(configPath, "utf8");
+  const config = catalogConfigSchema.parse(JSON.parse(rawConfig));
   config.agents.providers[PROVIDER].models = models(count);
   // Change only the catalog source. Going through patchDaemonConfig would invalidate every scope
   // before the Refresh button under test is clicked and would not reproduce the stale-cache bug.
