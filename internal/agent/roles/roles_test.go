@@ -5,14 +5,41 @@ import (
 	"testing"
 )
 
-// The label carries Chief's prompt and privileges, so a client that can set it can forge them.
-func TestStripReservedRemovesRoleLabel(t *testing.T) {
+func TestStripReservedRemovesRoleAndDaemonLabels(t *testing.T) {
 	got := StripReserved(map[string]string{
-		RoleLabel: "chief",
-		"team":    "infra",
+		RoleLabel:                        "chief",
+		AutoArchiveLabel:                 "true",
+		"byspace.schedule-id":            "sch_1",
+		"byspace.schedule-run":           "run_1",
+		OrchestrationMissionIDLabel:      "msn_1",
+		OrchestrationThreadIDLabel:       "thr_1",
+		OrchestrationRoleLabel:           "verifier",
+		OrchestrationChatterShieldLabel:  "true",
+		"BYSPACE.ORCHESTRATION.CUSTOM":   "forged",
+		"byspace.parent-agent-id":        "agt_parent",
+		"byspace.open-agent-tab.client1": "true",
+		"team":                           "infra",
 	})
-	if _, present := got[RoleLabel]; present {
-		t.Fatal("the role label survived")
+	for _, forbidden := range []string{
+		RoleLabel,
+		AutoArchiveLabel,
+		"byspace.schedule-id",
+		"byspace.schedule-run",
+		OrchestrationMissionIDLabel,
+		OrchestrationThreadIDLabel,
+		OrchestrationRoleLabel,
+		OrchestrationChatterShieldLabel,
+		"BYSPACE.ORCHESTRATION.CUSTOM",
+	} {
+		if _, present := got[forbidden]; present {
+			t.Fatalf("reserved label %q survived StripReserved: %+v", forbidden, got)
+		}
+	}
+	if got["byspace.parent-agent-id"] != "agt_parent" {
+		t.Fatalf("parent-agent-id was dropped: %+v", got)
+	}
+	if got["byspace.open-agent-tab.client1"] != "true" {
+		t.Fatalf("open-agent-tab label was dropped: %+v", got)
 	}
 	if got["team"] != "infra" {
 		t.Fatalf("an ordinary label was dropped: %+v", got)
@@ -36,9 +63,54 @@ func TestChiefHasAPrompt(t *testing.T) {
 		"Never answer by naming the feature or workspace they should go find",
 		"$BYSPACE_HOME/chief",
 		"schedules and heartbeats can wake you later",
+		"byspace chief mission create",
+		"byspace chief mission upgrade",
+		"byspace chief thread create",
+		"byspace chief thread merge-check",
+		"byspace chief thread land",
+		"byspace chief thread cancel",
+		"byspace chief agent hotswap",
+		"wait for human landing approval",
+		"open_pr",
+		"unsupported",
+		"never edit repository files",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("the prompt lost %q", want)
+		}
+	}
+}
+
+func TestOrchestrationPromptsStayDaemonOnlyAndSelfSufficient(t *testing.T) {
+	author := OrchestrationPrompt("author")
+	for _, want := range []string{"ownedPaths", "byspace chief thread submit", "BYSPACE_AGENT_ID"} {
+		if !strings.Contains(author, want) {
+			t.Fatalf("author prompt missing %q", want)
+		}
+	}
+
+	verifier := OrchestrationPrompt(" VERIFIER ")
+	for _, want := range []string{"Do NOT edit", "byspace chief thread verdict", "--pass|--reject", "read-only"} {
+		if !strings.Contains(verifier, want) {
+			t.Fatalf("verifier prompt missing %q", want)
+		}
+	}
+
+	integrator := OrchestrationPrompt("integrator")
+	for _, want := range []string{"worktree", "byspace chief thread submit", "Verifier", "Never land directly", "human landing approval"} {
+		if !strings.Contains(integrator, want) {
+			t.Fatalf("integrator prompt missing %q", want)
+		}
+	}
+
+	for _, nonWorker := range []string{"", "chief", "unknown"} {
+		if got := OrchestrationPrompt(nonWorker); got != "" {
+			t.Fatalf("OrchestrationPrompt(%q) = %q, want empty", nonWorker, got)
+		}
+	}
+	for _, name := range Names() {
+		if name != "chief" {
+			t.Fatalf("unexpected public built-in role %q", name)
 		}
 	}
 }

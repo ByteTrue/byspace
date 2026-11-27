@@ -9,6 +9,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/chief"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -40,15 +41,12 @@ const (
 //
 // Called from the places a turn ends. Failures are logged and dropped: a notification that could
 // not be delivered must not fail the child's turn, which has already completed.
-func (s *Server) notifyParentChildFinished(ctx context.Context, childID, reason string) {
-	// One notification per child per terminal state. A turn that both completes and then has its
-	// process exit would otherwise prompt the parent twice, and the second prompt is noise that
-	// costs a parent turn.
+func (s *Server) notifyParentChildFinished(ctx context.Context, childID, turnKey, reason string) {
 	s.notifiedChildrenMu.Lock()
 	if s.notifiedChildren == nil {
 		s.notifiedChildren = make(map[string]bool)
 	}
-	key := childID + "\x00" + reason
+	key := childID + "\x00" + turnKey + "\x00" + reason
 	if s.notifiedChildren[key] {
 		s.notifiedChildrenMu.Unlock()
 		return
@@ -58,6 +56,12 @@ func (s *Server) notifyParentChildFinished(ctx context.Context, childID, reason 
 
 	record, err := s.store.GetAgent(childID)
 	if err != nil || record == nil {
+		return
+	}
+	if _, _, _, isOrch := chief.OrchestrationMetaFromLabels(record.Labels); isOrch {
+		if s.chief != nil {
+			s.chief.HandleWorkerNotification(ctx, *record, reason)
+		}
 		return
 	}
 	parentID := record.ParentAgentID

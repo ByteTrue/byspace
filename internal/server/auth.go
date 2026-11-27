@@ -160,6 +160,13 @@ func (s *Server) cliCredentialAccepted(homeDir, presented string) bool {
 }
 
 // authorizedByDaemonCredential checks a bearer against both the password and the CLI credential.
+func requestBearerToken(r *http.Request) (string, bool) {
+	if token, ok := ExtractHTTPBearerToken(r.Header.Get("Authorization")); ok {
+		return token, true
+	}
+	return ExtractWSBearerToken(strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ","))
+}
+
 func (s *Server) authorizedByDaemonCredential(homeDir, presented string) bool {
 	if s.cliCredentialAccepted(homeDir, presented) {
 		return true

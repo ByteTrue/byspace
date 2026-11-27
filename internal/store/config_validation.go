@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -15,6 +16,31 @@ import (
 // Unknown keys are allowed on purpose: this build does not know every field a newer client may
 // send, and rejecting them would make the daemon refuse a config the UI itself produced.
 
+var validProfileTiers = map[string]int{
+	"fast":     1,
+	"standard": 2,
+	"strong":   3,
+}
+
+var validChiefMissionTiers = map[string]bool{
+	"L0": true,
+	"L1": true,
+	"L2": true,
+}
+
+var validChiefLandingModes = map[string]bool{
+	"merge_local": true,
+	"open_pr":     true,
+}
+
+var validChiefLandingStrategies = map[string]bool{
+	"squash": true,
+	"merge":  true,
+	"rebase": true,
+}
+
+var chiefRoleKeys = []string{"chief", "author", "verifier", "integrator"}
+
 // ValidateDaemonConfig checks the parts the daemon acts on.
 func ValidateDaemonConfig(patch map[string]any) error {
 	return ValidateDaemonConfigForProviders(patch, nil)
@@ -27,79 +53,408 @@ func ValidateDaemonConfig(patch map[string]any) error {
 // "providers.mock: needs one of command, extends or baseUrl" and the user saw a provider they could
 // not turn off.
 func ValidateDaemonConfigForProviders(patch map[string]any, served map[string]bool) error {
-	if patch == nil {
+	return validateDaemonConfigMap(patch, served, false)
+}
+
+// ValidateEffectiveDaemonConfig merges patch over existing using daemon config merge semantics
+// before running full validation, including cross-field chief.roles profile existence and the hard
+// Verifier.tier >= Author.tier invariant.
+//
+// Validating only the patch misses two bypasses: editing `chief.roles` without resending
+// `agentProfiles`, and downgrading an `agentProfiles` entry's `tier` (or removing a profile) without
+// resending `chief`.
+func ValidateEffectiveDaemonConfig(existing, patch map[string]any, served map[string]bool) error {
+	effective := mergeEffectiveDaemonConfig(existing, patch)
+	return validateDaemonConfigMap(effective, served, true)
+}
+
+func validateDaemonConfigMap(cfg map[string]any, served map[string]bool, requireChiefProfileRefs bool) error {
+	if cfg == nil {
 		return nil
 	}
 
-	if raw, ok := patch["agentProfiles"]; ok && raw != nil {
-		if err := validateAgentProfiles(raw); err != nil {
+	var (
+		profileTiers map[string]string
+		hasProfiles  bool
+	)
+	if raw, ok := cfg["agentProfiles"]; ok && raw != nil {
+		var err error
+		profileTiers, err = validateAgentProfiles(raw)
+		if err != nil {
 			return err
 		}
+		hasProfiles = true
 	}
-	if raw, ok := patch["providers"]; ok && raw != nil {
+	if raw, ok := cfg["providers"]; ok && raw != nil {
 		if err := validateProviders(raw, served); err != nil {
 			return err
 		}
 	}
-	if raw, ok := patch["autoArchiveAfterMerge"]; ok && raw != nil {
+	if raw, ok := cfg["autoArchiveAfterMerge"]; ok && raw != nil {
 		if _, isBool := raw.(bool); !isBool {
 			return fmt.Errorf("autoArchiveAfterMerge: must be a boolean")
 		}
 	}
-	if raw, ok := patch["network"]; ok && raw != nil {
+	if raw, ok := cfg["network"]; ok && raw != nil {
 		if err := validateNetwork(raw); err != nil {
 			return err
 		}
 	}
-	if raw, ok := patch["relay"]; ok && raw != nil {
+	if raw, ok := cfg["relay"]; ok && raw != nil {
 		if err := validateRelay(raw); err != nil {
+			return err
+		}
+	}
+	if raw, ok := cfg["chief"]; ok && raw != nil {
+		checkRefs := requireChiefProfileRefs || hasProfiles
+		if err := validateChiefConfig(raw, profileTiers, checkRefs); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// validateAgentProfiles checks each profile has the fields that select a provider.
-func validateAgentProfiles(raw any) error {
+func mergeEffectiveDaemonConfig(existing, patch map[string]any) map[string]any {
+	base := cloneConfigMap(existing)
+	if base == nil {
+		base = map[string]any{}
+	}
+	if patch != nil {
+		base = mergeConfigPatch(base, cloneConfigMap(patch))
+	}
+	return dropRemovedProviders(base)
+}
+
+func cloneConfigMap(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = cloneConfigValue(v)
+	}
+	return out
+}
+
+func cloneConfigValue(val any) any {
+	switch typed := val.(type) {
+	case map[string]any:
+		return cloneConfigMap(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = cloneConfigValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), typed...)
+	default:
+		return val
+	}
+}
+
+func validateAgentProfiles(raw any) (map[string]string, error) {
 	profiles, isList := raw.([]any)
 	if !isList {
 		// The settings page also sends a keyed object; accept either.
 		keyed, isObject := raw.(map[string]any)
 		if !isObject {
-			return fmt.Errorf("agentProfiles: must be a list or an object")
+			return nil, fmt.Errorf("agentProfiles: must be a list or an object")
 		}
-		for name := range keyed {
-			if strings.TrimSpace(name) == "" {
-				return fmt.Errorf("agentProfiles: profile name cannot be empty")
+		tiers := make(map[string]string, len(keyed)*2)
+		for name, entry := range keyed {
+			trimmedName := strings.TrimSpace(name)
+			if trimmedName == "" {
+				return nil, fmt.Errorf("agentProfiles: profile name cannot be empty")
+			}
+			profile, isMap := entry.(map[string]any)
+			if !isMap {
+				return nil, fmt.Errorf("agentProfiles.%s: must be an object", name)
+			}
+			tier, err := validateProfileTierField(profile, fmt.Sprintf("agentProfiles.%s", name))
+			if err != nil {
+				return nil, err
+			}
+			if idRaw, ok := profile["id"]; ok && idRaw != nil {
+				idStr, isString := idRaw.(string)
+				if !isString {
+					return nil, fmt.Errorf("agentProfiles.%s: id must be a string", name)
+				}
+				if trimmedID := strings.TrimSpace(idStr); trimmedID != "" {
+					tiers[trimmedID] = tier
+				}
+			}
+			if pNameRaw, ok := profile["name"]; ok && pNameRaw != nil {
+				pNameStr, isString := pNameRaw.(string)
+				if !isString {
+					return nil, fmt.Errorf("agentProfiles.%s: name must be a string", name)
+				}
+				if trimmedPName := strings.TrimSpace(pNameStr); trimmedPName != "" {
+					if _, exists := tiers[trimmedPName]; !exists {
+						tiers[trimmedPName] = tier
+					}
+				}
+			}
+			if _, exists := tiers[trimmedName]; !exists {
+				tiers[trimmedName] = tier
 			}
 		}
-		return nil
+		return tiers, nil
 	}
 
-	seen := make(map[string]bool, len(profiles))
+	seenNames := make(map[string]bool, len(profiles))
+	seenIDs := make(map[string]bool, len(profiles))
+	tiers := make(map[string]string, len(profiles)*2)
 	for index, entry := range profiles {
 		profile, isObject := entry.(map[string]any)
 		if !isObject {
-			return fmt.Errorf("agentProfiles[%d]: must be an object", index)
+			return nil, fmt.Errorf("agentProfiles[%d]: must be an object", index)
 		}
 		name, _ := profile["name"].(string)
 		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("agentProfiles[%d]: name is required", index)
+			return nil, fmt.Errorf("agentProfiles[%d]: name is required", index)
 		}
-		if seen[name] {
+		if seenNames[name] {
 			// A duplicate id silently shadows the earlier profile, and the user edits one and
 			// watches the other take effect.
-			return fmt.Errorf("agentProfiles: duplicate profile name %q", name)
+			return nil, fmt.Errorf("agentProfiles: duplicate profile name %q", name)
 		}
-		seen[name] = true
+		seenNames[name] = true
+
+		var trimmedID string
+		if idRaw, ok := profile["id"]; ok && idRaw != nil {
+			idStr, isString := idRaw.(string)
+			if !isString {
+				return nil, fmt.Errorf("agentProfiles[%d] (%s): id must be a string", index, name)
+			}
+			trimmedID = strings.TrimSpace(idStr)
+			if trimmedID != "" {
+				if seenIDs[trimmedID] {
+					return nil, fmt.Errorf("agentProfiles: duplicate profile id %q", trimmedID)
+				}
+				seenIDs[trimmedID] = true
+			}
+		}
+
 		if provider, ok := profile["provider"]; ok {
 			providerName, isString := provider.(string)
 			if !isString || strings.TrimSpace(providerName) == "" {
-				return fmt.Errorf("agentProfiles[%d] (%s): provider must be a non-empty string", index, name)
+				return nil, fmt.Errorf("agentProfiles[%d] (%s): provider must be a non-empty string", index, name)
+			}
+		}
+
+		tier, err := validateProfileTierField(profile, fmt.Sprintf("agentProfiles[%d] (%s)", index, name))
+		if err != nil {
+			return nil, err
+		}
+		if trimmedID != "" {
+			tiers[trimmedID] = tier
+		}
+		trimmedName := strings.TrimSpace(name)
+		if _, exists := tiers[trimmedName]; !exists {
+			tiers[trimmedName] = tier
+		}
+	}
+	return tiers, nil
+}
+
+func validateProfileTierField(profile map[string]any, prefix string) (string, error) {
+	rawTier, ok := profile["tier"]
+	if !ok || rawTier == nil {
+		return "standard", nil
+	}
+	tier, isString := rawTier.(string)
+	if !isString || validProfileTiers[tier] == 0 {
+		return "", fmt.Errorf("%s: tier must be one of fast, standard, strong", prefix)
+	}
+	return tier, nil
+}
+
+func validateChiefConfig(raw any, profileTiers map[string]string, checkProfileRefs bool) error {
+	chief, isObject := raw.(map[string]any)
+	if !isObject {
+		return fmt.Errorf("chief: must be an object")
+	}
+
+	if rawTier, ok := chief["defaultTier"]; ok && rawTier != nil {
+		tier, isString := rawTier.(string)
+		if !isString || !validChiefMissionTiers[tier] {
+			return fmt.Errorf("chief.defaultTier: must be one of L0, L1, L2")
+		}
+	}
+
+	if rawStall, ok := chief["stall"]; ok && rawStall != nil {
+		if err := validateChiefStall(rawStall); err != nil {
+			return err
+		}
+	}
+
+	if rawLanding, ok := chief["landing"]; ok && rawLanding != nil {
+		if err := validateChiefLanding(rawLanding); err != nil {
+			return err
+		}
+	}
+
+	if rawRoles, ok := chief["roles"]; ok && rawRoles != nil {
+		if err := validateChiefRoles(rawRoles, profileTiers, checkProfileRefs); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateChiefStall(raw any) error {
+	stall, isObject := raw.(map[string]any)
+	if !isObject {
+		return fmt.Errorf("chief.stall: must be an object")
+	}
+	soft := 600
+	hard := 1200
+	if val, ok := stall["softWarningSec"]; ok && val != nil {
+		parsed, ok := toPositiveIntValue(val)
+		if !ok {
+			return fmt.Errorf("chief.stall.softWarningSec: must be a positive integer")
+		}
+		soft = parsed
+	}
+	if val, ok := stall["hardRecoverySec"]; ok && val != nil {
+		parsed, ok := toPositiveIntValue(val)
+		if !ok {
+			return fmt.Errorf("chief.stall.hardRecoverySec: must be a positive integer")
+		}
+		hard = parsed
+	}
+	if hard < soft {
+		return fmt.Errorf("chief.stall.hardRecoverySec: must be >= softWarningSec (%d < %d)", hard, soft)
+	}
+	return nil
+}
+
+func validateChiefLanding(raw any) error {
+	landing, isObject := raw.(map[string]any)
+	if !isObject {
+		return fmt.Errorf("chief.landing: must be an object")
+	}
+	if val, ok := landing["requireHumanApproval"]; ok && val != nil {
+		if _, isBool := val.(bool); !isBool {
+			return fmt.Errorf("chief.landing.requireHumanApproval: must be a boolean")
+		}
+	}
+	if val, ok := landing["mode"]; ok && val != nil {
+		mode, isString := val.(string)
+		if !isString || !validChiefLandingModes[mode] {
+			return fmt.Errorf("chief.landing.mode: must be one of merge_local, open_pr")
+		}
+	}
+	if val, ok := landing["strategy"]; ok && val != nil {
+		strategy, isString := val.(string)
+		if !isString || !validChiefLandingStrategies[strategy] {
+			return fmt.Errorf("chief.landing.strategy: must be one of squash, merge, rebase")
+		}
+	}
+	return nil
+}
+
+func validateChiefRoles(raw any, profileTiers map[string]string, checkProfileRefs bool) error {
+	roles, isObject := raw.(map[string]any)
+	if !isObject {
+		return fmt.Errorf("chief.roles: must be an object")
+	}
+
+	primaries := make(map[string]string, len(chiefRoleKeys))
+	for _, role := range chiefRoleKeys {
+		rawEntry, present := roles[role]
+		if !present || rawEntry == nil {
+			continue
+		}
+		entry, isObj := rawEntry.(map[string]any)
+		if !isObj {
+			return fmt.Errorf("chief.roles.%s: must be an object", role)
+		}
+		primaryRaw, hasPrimary := entry["primaryProfileId"]
+		primary, isString := primaryRaw.(string)
+		primary = strings.TrimSpace(primary)
+		if !hasPrimary || !isString || primary == "" {
+			return fmt.Errorf("chief.roles.%s.primaryProfileId: must be a non-empty string", role)
+		}
+		fallbacks, err := validateProfileIDList(entry["fallbackProfileIds"], fmt.Sprintf("chief.roles.%s.fallbackProfileIds", role))
+		if err != nil {
+			return err
+		}
+
+		if checkProfileRefs {
+			if _, ok := profileTiers[primary]; !ok {
+				return fmt.Errorf("chief.roles.%s.primaryProfileId: unknown profile %q", role, primary)
+			}
+			for i, fb := range fallbacks {
+				if _, ok := profileTiers[fb]; !ok {
+					return fmt.Errorf("chief.roles.%s.fallbackProfileIds[%d]: unknown profile %q", role, i, fb)
+				}
+			}
+		}
+		primaries[role] = primary
+	}
+
+	if checkProfileRefs {
+		authorID, hasAuthor := primaries["author"]
+		verifierID, hasVerifier := primaries["verifier"]
+		if hasAuthor && hasVerifier {
+			authorTier := profileTiers[authorID]
+			verifierTier := profileTiers[verifierID]
+			if validProfileTiers[verifierTier] < validProfileTiers[authorTier] {
+				return fmt.Errorf("chief.roles.verifier: profile %q (tier %s) cannot be lower than author profile %q (tier %s)", verifierID, verifierTier, authorID, authorTier)
 			}
 		}
 	}
 	return nil
+}
+
+func validateProfileIDList(raw any, fieldPath string) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	switch list := raw.(type) {
+	case []string:
+		out := make([]string, 0, len(list))
+		for i, item := range list {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				return nil, fmt.Errorf("%s[%d]: must be a non-empty string", fieldPath, i)
+			}
+			out = append(out, trimmed)
+		}
+		return out, nil
+	case []any:
+		out := make([]string, 0, len(list))
+		for i, item := range list {
+			str, isString := item.(string)
+			trimmed := strings.TrimSpace(str)
+			if !isString || trimmed == "" {
+				return nil, fmt.Errorf("%s[%d]: must be a non-empty string", fieldPath, i)
+			}
+			out = append(out, trimmed)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("%s: must be a list of profile ids", fieldPath)
+	}
+}
+
+func toPositiveIntValue(value any) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, v > 0
+	case int64:
+		return int(v), v > 0
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 || v != math.Trunc(v) {
+			return 0, false
+		}
+		return int(v), true
+	default:
+		return 0, false
+	}
 }
 
 // builtinProviderIDs are the providers the product ships. A custom provider needs a way to be

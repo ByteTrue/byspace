@@ -1,6 +1,10 @@
 package server
 
-import "testing"
+import (
+	"os"
+	"runtime"
+	"testing"
+)
 
 func TestParsePortRange(t *testing.T) {
 	r, err := ParsePortRange("3000-3010")
@@ -53,26 +57,49 @@ func TestAllocateFromRangeExhausted(t *testing.T) {
 	}
 }
 
+func TestAllocatePortFromScriptHelper(_ *testing.T) {
+	if os.Getenv("BYSPACE_TEST_PORT_HELPER") != "1" {
+		return
+	}
+	for i, arg := range os.Args {
+		if arg != "--" || i+1 >= len(os.Args) {
+			continue
+		}
+		if os.Args[i+1] == "fail" {
+			os.Exit(3)
+		}
+		_, _ = os.Stdout.WriteString(os.Args[i+1])
+		os.Exit(0)
+	}
+	os.Exit(2)
+}
+
+func portScriptHelperCommand(argument string) string {
+	if runtime.GOOS == "windows" {
+		return "& $env:BYSPACE_TEST_PORT_BINARY '-test.run=^TestAllocatePortFromScriptHelper$' -- " + argument
+	}
+	return "\"$BYSPACE_TEST_PORT_BINARY\" '-test.run=^TestAllocatePortFromScriptHelper$' -- " + argument
+}
+
 // The script's output is untrusted and becomes a bind port.
 func TestAllocatePortFromScriptValidates(t *testing.T) {
-	// The cwd must be a real directory: /tmp does not exist on Windows.
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BYSPACE_TEST_PORT_HELPER", "1")
+	t.Setenv("BYSPACE_TEST_PORT_BINARY", executable)
 	scratch := t.TempDir()
-	// `printf` rather than `echo`: the script is handed four positional arguments, so a bare
-	// `echo 4321` would print them too. That is node's contract and a project script has to ignore
-	// them, exactly as it must there.
-	if p, err := AllocatePortFromScript(t.Context(), "printf 4321", scratch, "web", "w1", "main"); err != nil || p != 4321 {
+	if p, err := AllocatePortFromScript(t.Context(), portScriptHelperCommand("4321"), scratch, "web", "w1", "main"); err != nil || p != 4321 {
 		t.Fatalf("got %d %v", p, err)
 	}
-	// Out of range.
-	if _, err := AllocatePortFromScript(t.Context(), "printf 99999", scratch, "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), portScriptHelperCommand("99999"), scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("out-of-range port must be rejected")
 	}
-	// Not a number.
-	if _, err := AllocatePortFromScript(t.Context(), "printf hello", scratch, "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), portScriptHelperCommand("hello"), scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("non-numeric output must be rejected")
 	}
-	// Failing script.
-	if _, err := AllocatePortFromScript(t.Context(), "exit 3", scratch, "web", "w1", "main"); err == nil {
+	if _, err := AllocatePortFromScript(t.Context(), portScriptHelperCommand("fail"), scratch, "web", "w1", "main"); err == nil {
 		t.Fatal("a failing script must be reported")
 	}
 }

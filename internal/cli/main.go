@@ -62,6 +62,8 @@ const usageText = `byspace — single-binary AI coding agent host, desktop & mob
                                   prompt the agent this runs in on a cadence
   byspace worktree <create|list|archive> [options]
                                   create, list and archive git worktree workspaces
+  byspace chief <mission|thread> ...
+                                  manage Chief Secretary missions and verification threads
   byspace pair [--home <dir>] [--relay <host:port>] [--app-url <url>]
                                   print a remote pairing offer URL (#offer=...)
   byspace status                  alias for "byspace daemon status"
@@ -364,6 +366,12 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 	case "hooks":
 		if err := runHooks(rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace hooks:", err)
+			return 1
+		}
+		return 0
+	case "chief":
+		if err := runChiefCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace chief:", err)
 			return 1
 		}
 		return 0
@@ -1781,6 +1789,35 @@ func dialDaemonWS(ctx context.Context, addr string) (*websocket.Conn, error) {
 }
 
 // dialDaemonWSAt connects to one address.
+func cliTransportCredential(shared string) string {
+	if credential := strings.TrimSpace(os.Getenv("BYSPACE_AGENT_CREDENTIAL")); credential != "" {
+		return credential
+	}
+	return shared
+}
+
+func cliWSDialOptions(transport *http.Transport) *websocket.DialOptions {
+	dialOptions := &websocket.DialOptions{
+		HTTPClient: &http.Client{Transport: transport},
+	}
+	// A launched agent uses its own credential; an ordinary human CLI uses the home credential.
+	// BYSPACE_PASSWORD supports a CLI whose home credential file is not reachable.
+	credential := ""
+	if homeDir := homeDirForClientID(); homeDir != "" {
+		credential = server.LoadCLICredential(homeDir)
+	}
+	if credential == "" {
+		credential = strings.TrimSpace(os.Getenv("BYSPACE_PASSWORD"))
+	}
+	credential = cliTransportCredential(credential)
+	if credential != "" {
+		dialOptions.HTTPHeader = http.Header{"Authorization": []string{"Bearer " + credential}}
+		// The daemon also accepts the bearer as a subprotocol for proxies that strip Authorization.
+		dialOptions.Subprotocols = []string{"byspace.bearer." + credential}
+	}
+	return dialOptions
+}
+
 func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 	// A unix socket address (an absolute path, or named pipe on Windows) has no host to dial.
 	// The daemon supports listening on one for restricted environments, and without this every
@@ -1796,31 +1833,8 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 		// A wildcard bind is dialed through loopback; 0.0.0.0 is not a connectable address.
 		wsURL = "ws://" + daemon.DialAddress(strings.TrimRight(wsURL, "/")) + "/ws"
 	}
-	// A daemon with a password rejects the upgrade outright, so a bearer has to ride on the
-	// handshake.
-	//
-	// The home's own CLI credential comes first: it exists on every home this daemon serves, so
-	// the CLI works without the user exporting anything. `BYSPACE_PASSWORD` stays supported for a
-	// CLI pointed at a home it does not own — a container, a remote host — where no credential file
-	// is reachable.
-	dialOptions := &websocket.DialOptions{
-		HTTPClient: &http.Client{
-			Transport: &http.Transport{Proxy: nil},
-		},
-	}
-	credential := ""
-	if homeDir := homeDirForClientID(); homeDir != "" {
-		credential = server.LoadCLICredential(homeDir)
-	}
-	if credential == "" {
-		credential = strings.TrimSpace(os.Getenv("BYSPACE_PASSWORD"))
-	}
-	if credential != "" {
-		dialOptions.HTTPHeader = http.Header{"Authorization": []string{"Bearer " + credential}}
-		// The daemon also accepts the bearer as a subprotocol, which is the form that survives
-		// proxies that strip Authorization.
-		dialOptions.Subprotocols = []string{"byspace.bearer." + credential}
-	}
+	// A daemon with a password rejects the upgrade outright, so a bearer has to ride on the handshake.
+	dialOptions := cliWSDialOptions(&http.Transport{Proxy: nil})
 	ws, _, err := websocket.Dial(ctx, wsURL, dialOptions)
 	if err != nil {
 		return nil, err
@@ -2004,9 +2018,7 @@ func dialUnixSocket(ctx context.Context, socketPath string) (*websocket.Conn, er
 	}
 	// The Host header is checked by the daemon's allowed-hosts rule; a socket connection has no
 	// meaningful host, so it uses loopback, which the daemon always accepts.
-	ws, _, err := websocket.Dial(ctx, "ws://localhost/ws", &websocket.DialOptions{
-		HTTPClient: &http.Client{Transport: transport},
-	})
+	ws, _, err := websocket.Dial(ctx, "ws://localhost/ws", cliWSDialOptions(transport))
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to daemon socket %s: %w", socketPath, err)
 	}

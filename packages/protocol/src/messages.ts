@@ -115,6 +115,125 @@ export const TerminalProfileSchema = z
 
 export type TerminalProfile = z.infer<typeof TerminalProfileSchema>;
 
+export const AGENT_PROFILE_TIERS = ["fast", "standard", "strong"] as const;
+export const AgentProfileTierSchema = z.enum(AGENT_PROFILE_TIERS);
+export type AgentProfileTier = z.infer<typeof AgentProfileTierSchema>;
+export const DEFAULT_AGENT_PROFILE_TIER: AgentProfileTier = "standard";
+
+export const AGENT_PROFILE_TIER_RANKS: Record<AgentProfileTier, number> = {
+  fast: 1,
+  standard: 2,
+  strong: 3,
+};
+
+export function resolveAgentProfileTier(
+  profile: { tier?: AgentProfileTier } | null | undefined,
+): AgentProfileTier {
+  return profile?.tier ?? DEFAULT_AGENT_PROFILE_TIER;
+}
+
+export const CHIEF_MISSION_TIERS = ["L0", "L1", "L2"] as const;
+export const ChiefMissionTierSchema = z.enum(CHIEF_MISSION_TIERS);
+export type ChiefMissionTier = z.infer<typeof ChiefMissionTierSchema>;
+
+export const CHIEF_ROLE_KEYS = ["chief", "author", "verifier", "integrator"] as const;
+export const ChiefRoleKeySchema = z.enum(CHIEF_ROLE_KEYS);
+export type ChiefRoleKey = z.infer<typeof ChiefRoleKeySchema>;
+
+export const CHIEF_LANDING_MODES = ["merge_local", "open_pr"] as const;
+export const ChiefLandingModeSchema = z.enum(CHIEF_LANDING_MODES);
+export type ChiefLandingMode = z.infer<typeof ChiefLandingModeSchema>;
+
+export const CHIEF_LANDING_STRATEGIES = ["squash", "merge", "rebase"] as const;
+export const ChiefLandingStrategySchema = z.enum(CHIEF_LANDING_STRATEGIES);
+export type ChiefLandingStrategy = z.infer<typeof ChiefLandingStrategySchema>;
+
+export const ChiefRoleRoutingEntrySchema = z
+  .object({
+    primaryProfileId: z.string().min(1),
+    fallbackProfileIds: z.array(z.string().min(1)).optional(),
+  })
+  .passthrough();
+
+export type ChiefRoleRoutingEntry = z.infer<typeof ChiefRoleRoutingEntrySchema>;
+
+export const ChiefRoleRoutingPatchEntrySchema = z
+  .object({
+    primaryProfileId: z.string().min(1).optional(),
+    fallbackProfileIds: z.array(z.string().min(1)).optional(),
+  })
+  .passthrough();
+
+export const ChiefRolesConfigSchema = z
+  .object({
+    chief: ChiefRoleRoutingEntrySchema.nullable().optional(),
+    author: ChiefRoleRoutingEntrySchema.nullable().optional(),
+    verifier: ChiefRoleRoutingEntrySchema.nullable().optional(),
+    integrator: ChiefRoleRoutingEntrySchema.nullable().optional(),
+  })
+  .passthrough();
+
+export const ChiefRolesPatchConfigSchema = z
+  .object({
+    chief: ChiefRoleRoutingPatchEntrySchema.nullable().optional(),
+    author: ChiefRoleRoutingPatchEntrySchema.nullable().optional(),
+    verifier: ChiefRoleRoutingPatchEntrySchema.nullable().optional(),
+    integrator: ChiefRoleRoutingPatchEntrySchema.nullable().optional(),
+  })
+  .passthrough();
+
+export const ChiefStallConfigSchema = z
+  .object({
+    softWarningSec: z.number().int().positive().default(600),
+    hardRecoverySec: z.number().int().positive().default(1200),
+  })
+  .passthrough();
+
+export const ChiefStallPatchConfigSchema = z
+  .object({
+    softWarningSec: z.number().int().positive().optional(),
+    hardRecoverySec: z.number().int().positive().optional(),
+  })
+  .passthrough();
+
+export const ChiefLandingConfigSchema = z
+  .object({
+    requireHumanApproval: z.boolean().default(true),
+    mode: ChiefLandingModeSchema.default("merge_local"),
+    strategy: ChiefLandingStrategySchema.default("squash"),
+  })
+  .passthrough();
+
+export const ChiefLandingPatchConfigSchema = z
+  .object({
+    requireHumanApproval: z.boolean().optional(),
+    mode: ChiefLandingModeSchema.optional(),
+    strategy: ChiefLandingStrategySchema.optional(),
+  })
+  .passthrough();
+
+export const ChiefConfigSchema = z
+  .object({
+    defaultTier: ChiefMissionTierSchema.optional(),
+    roles: ChiefRolesConfigSchema.optional(),
+    stall: ChiefStallConfigSchema.optional(),
+    landing: ChiefLandingConfigSchema.optional(),
+  })
+  .passthrough();
+
+export type ChiefConfig = z.infer<typeof ChiefConfigSchema>;
+
+export const ChiefConfigPatchSchema = z
+  .object({
+    defaultTier: ChiefMissionTierSchema.optional(),
+    roles: ChiefRolesPatchConfigSchema.optional(),
+    stall: ChiefStallPatchConfigSchema.optional(),
+    landing: ChiefLandingPatchConfigSchema.optional(),
+  })
+  .passthrough();
+
+export type ChiefConfigPatch = z.infer<typeof ChiefConfigPatchSchema>;
+
 /**
  * A named launch bundle: a provider plus the agent-config values a client would
  * otherwise set one control at a time. Field names mirror `AgentSessionConfig`
@@ -137,6 +256,8 @@ export const AgentProfileSchema = z
     modeId: z.string().optional(),
     thinkingOptionId: z.string().optional(),
     featureValues: z.record(z.string(), z.unknown()).optional(),
+    /** Explicit capability tier used by Chief routing; omitted resolves to "standard". */
+    tier: AgentProfileTierSchema.optional(),
     /** Free text, surfaced to orchestrating agents by the `list_profiles` MCP tool. */
     notes: z.string().optional(),
   })
@@ -208,6 +329,7 @@ export const MutableDaemonConfigSchema = z
     // pre-config behavior.
     terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    chief: ChiefConfigSchema.optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
     // Which agent homes a convergence writes. Top-level rather than a sibling of
     // `skills.selection`, because that object is `.strict()`: a nested field would
@@ -274,6 +396,7 @@ export const MutableDaemonConfigPatchSchema = z
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    chief: ChiefConfigPatchSchema.optional(),
     skillTargets: AgentSkillTargetsSchema.optional(),
     network: z
       .object({
@@ -2909,6 +3032,363 @@ export const CaptureTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CHIEF_MISSION_STATUSES = [
+  "active",
+  "waiting_human",
+  "completed",
+  "failed",
+  "canceled",
+] as const;
+export const ChiefMissionStatusSchema = z.enum(CHIEF_MISSION_STATUSES);
+export type ChiefMissionStatus = z.infer<typeof ChiefMissionStatusSchema>;
+
+export const CHIEF_THREAD_ISOLATIONS = ["none", "worktree"] as const;
+export const ChiefThreadIsolationSchema = z.enum(CHIEF_THREAD_ISOLATIONS);
+export type ChiefThreadIsolation = z.infer<typeof ChiefThreadIsolationSchema>;
+
+export const CHIEF_THREAD_STATUSES = [
+  "queued",
+  "authoring",
+  "verifying",
+  "needs_rebase",
+  "merge_checking",
+  "ready_to_land",
+  "landed",
+  "blocked",
+  "failed",
+  "canceled",
+] as const;
+export const ChiefThreadStatusSchema = z.enum(CHIEF_THREAD_STATUSES);
+export type ChiefThreadStatus = z.infer<typeof ChiefThreadStatusSchema>;
+
+export const CHIEF_EVENT_KINDS = [
+  "mission_created",
+  "tier_upgraded",
+  "mission_completed",
+  "mission_failed",
+  "mission_canceled",
+  "thread_created",
+  "author_submitted",
+  "unreported_turn_reminded",
+  "verify_passed",
+  "verify_rejected",
+  "ownership_violation",
+  "verifier_mutation_violation",
+  "merge_dryrun_passed",
+  "merge_dryrun_conflict",
+  "rebase_requested",
+  "integrator_spawned",
+  "thread_landed",
+  "thread_canceled",
+  "hot_swap_applied",
+  "provider_error",
+  "stall_warning",
+  "stall_hard",
+  "process_crashed",
+  "permission_blocked",
+  "verifier_tier_blocked",
+  "escalated_to_chief",
+  "decision_requested",
+  "decision_resolved",
+] as const;
+export const ChiefEventKindSchema = z.enum(CHIEF_EVENT_KINDS);
+export type ChiefEventKind = z.infer<typeof ChiefEventKindSchema>;
+
+export const CHIEF_SYSTEM_ATTENTION_KINDS = [
+  "quota_exhausted",
+  "rate_limited",
+  "auth_error",
+  "process_crash",
+  "stall",
+  "permission_blocked",
+  "merge_conflict",
+  "verify_escalated",
+  "verifier_tier_blocked",
+] as const;
+export const ChiefSystemAttentionKindSchema = z.enum(CHIEF_SYSTEM_ATTENTION_KINDS);
+export type ChiefSystemAttentionKind = z.infer<typeof ChiefSystemAttentionKindSchema>;
+
+export const ChiefSystemAttentionSeveritySchema = z.enum(["warning", "fatal"]);
+export type ChiefSystemAttentionSeverity = z.infer<typeof ChiefSystemAttentionSeveritySchema>;
+
+export const ChiefSystemAttentionSchema = z.object({
+  kind: ChiefSystemAttentionKindSchema,
+  severity: ChiefSystemAttentionSeveritySchema,
+  summary: z.string(),
+  agentId: z.string().nullable().optional(),
+  threadId: z.string().nullable().optional(),
+  since: z.string(),
+  autoActionTaken: z.string().nullable().optional(),
+  incidentNotified: z.boolean().optional(),
+  resolvedAt: z.string().nullable().optional(),
+});
+export type ChiefSystemAttention = z.infer<typeof ChiefSystemAttentionSchema>;
+
+export const ChiefHumanDecisionOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string().nullable().optional(),
+  style: z.enum(["primary", "secondary", "danger"]).optional(),
+});
+export type ChiefHumanDecisionOption = z.infer<typeof ChiefHumanDecisionOptionSchema>;
+
+export const ChiefHumanDecisionSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  threadId: z.string().nullable().optional(),
+  options: z.array(ChiefHumanDecisionOptionSchema).optional(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable().optional(),
+  selectedOptionId: z.string().nullable().optional(),
+  resolutionNote: z.string().nullable().optional(),
+  landingStrategy: ChiefLandingStrategySchema.optional(),
+  landingCommitMessage: z.string().min(1).optional(),
+  landingError: z.string().min(1).optional(),
+});
+export type ChiefHumanDecision = z.infer<typeof ChiefHumanDecisionSchema>;
+
+export const ChiefVerifyVerdictSchema = z.object({
+  outcome: z.enum(["pass", "reject"]),
+  summary: z.string(),
+  issues: z.array(z.string()).optional(),
+  checkedCommands: z.array(z.string()).optional(),
+  verifiedAt: z.string(),
+  verifierAgentId: z.string().nullable().optional(),
+  commitSha: z.string().nullable().optional(),
+  tainted: z.boolean().optional(),
+});
+export type ChiefVerifyVerdict = z.infer<typeof ChiefVerifyVerdictSchema>;
+
+export const ChiefMergeDryRunResultSchema = z.object({
+  clean: z.boolean(),
+  targetRef: z.string(),
+  targetSha: z.string().nullable().optional(),
+  sourceRef: z.string(),
+  sourceSha: z.string().nullable().optional(),
+  mergeTreeSha: z.string().nullable().optional(),
+  conflictingFiles: z.array(z.string()).optional(),
+  dirtyWorktree: z.boolean().optional(),
+  aheadCount: z.number().int().nonnegative().optional(),
+  checkedAt: z.string(),
+});
+export type ChiefMergeDryRunResult = z.infer<typeof ChiefMergeDryRunResultSchema>;
+
+export const ChiefThreadSnapshotSchema = z.object({
+  id: z.string(),
+  missionId: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  acceptanceCriteria: z.array(z.string()),
+  ownedPaths: z.array(z.string()),
+  workspaceId: z.string().nullable().optional(),
+  cwd: z.string(),
+  branch: z.string().nullable().optional(),
+  baseRef: z.string().nullable().optional(),
+  isolation: ChiefThreadIsolationSchema,
+  status: ChiefThreadStatusSchema,
+  authorAgentId: z.string().nullable().optional(),
+  verifierAgentId: z.string().nullable().optional(),
+  integratorAgentId: z.string().nullable().optional(),
+  authorProfileId: z.string().nullable().optional(),
+  verifierProfileId: z.string().nullable().optional(),
+  authorTier: AgentProfileTierSchema.optional(),
+  verifierTier: AgentProfileTierSchema.optional(),
+  authorAgentStatus: AgentStatusSchema.nullable().optional(),
+  verifierAgentStatus: AgentStatusSchema.nullable().optional(),
+  integratorAgentStatus: AgentStatusSchema.nullable().optional(),
+  verifyRejectCount: z.number().int().nonnegative(),
+  rebaseAttempts: z.number().int().nonnegative(),
+  lastVerdict: ChiefVerifyVerdictSchema.nullable().optional(),
+  mergeCheck: ChiefMergeDryRunResultSchema.nullable().optional(),
+  systemAttention: ChiefSystemAttentionSchema.nullable().optional(),
+  lastProgressAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ChiefThreadSnapshot = z.infer<typeof ChiefThreadSnapshotSchema>;
+
+export const ChiefEventSchema = z.object({
+  seq: z.number().int().nonnegative(),
+  ts: z.string(),
+  missionId: z.string(),
+  threadId: z.string().nullable().optional(),
+  kind: ChiefEventKindSchema,
+  actorAgentId: z.string().nullable().optional(),
+  targetAgentId: z.string().nullable().optional(),
+  summary: z.string(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+});
+export type ChiefEvent = z.infer<typeof ChiefEventSchema>;
+
+export const ChiefMissionSnapshotSchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  goal: z.string().optional(),
+  chiefAgentId: z.string(),
+  chiefAgentStatus: AgentStatusSchema.nullable().optional(),
+  projectId: z.string().nullable().optional(),
+  baseWorkspaceId: z.string().nullable().optional(),
+  baseCwd: z.string(),
+  baseBranch: z.string().nullable().optional(),
+  tier: ChiefMissionTierSchema,
+  status: ChiefMissionStatusSchema,
+  sharedLocks: z.record(z.string(), z.string()).optional(),
+  cursors: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  pendingDecision: ChiefHumanDecisionSchema.nullable().optional(),
+  systemAttention: ChiefSystemAttentionSchema.nullable().optional(),
+  threads: z.array(ChiefThreadSnapshotSchema),
+  headSeq: z.number().int().nonnegative().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ChiefMissionSnapshot = z.infer<typeof ChiefMissionSnapshotSchema>;
+
+export const ChiefMissionListRequestSchema = z.object({
+  type: z.literal("chief.mission.list.request"),
+  requestId: z.string(),
+  chiefAgentId: z.string().optional(),
+  projectId: z.string().optional(),
+  baseWorkspaceId: z.string().optional(),
+  statuses: z.array(ChiefMissionStatusSchema).optional(),
+  includeCompleted: z.boolean().optional(),
+});
+
+export const ChiefMissionGetRequestSchema = z.object({
+  type: z.literal("chief.mission.get.request"),
+  requestId: z.string(),
+  missionId: z.string().min(1),
+  includeEvents: z.boolean().optional(),
+  eventsLimit: z.number().int().positive().max(500).optional(),
+  afterSeq: z.number().int().nonnegative().optional(),
+});
+
+export const ChiefMissionCreateRequestSchema = z.object({
+  type: z.literal("chief.mission.create.request"),
+  requestId: z.string(),
+  goal: z.string().min(1),
+  title: z.string().optional(),
+  tier: ChiefMissionTierSchema.optional(),
+  chiefAgentId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  projectId: z.string().optional(),
+  baseWorkspaceId: z.string().optional(),
+  baseCwd: z.string().optional(),
+  baseBranch: z.string().optional(),
+});
+
+export const ChiefMissionUpgradeDirtyPolicySchema = z.enum([
+  "fail_if_dirty",
+  "carry_into_thread_1",
+]);
+export type ChiefMissionUpgradeDirtyPolicy = z.infer<typeof ChiefMissionUpgradeDirtyPolicySchema>;
+
+export const ChiefMissionUpgradeRequestSchema = z.object({
+  type: z.literal("chief.mission.upgrade.request"),
+  requestId: z.string(),
+  missionId: z.string().min(1).optional(),
+  soloAgentId: z.string().min(1).optional(),
+  callerAgentId: z.string().optional(),
+  targetTier: z.enum(["L1", "L2"]),
+  dirtyPolicy: ChiefMissionUpgradeDirtyPolicySchema.optional(),
+  title: z.string().optional(),
+  goal: z.string().optional(),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  ownedPaths: z.array(z.string()).optional(),
+  authorProfileId: z.string().optional(),
+  verifierProfileId: z.string().optional(),
+});
+
+export const ChiefMissionResolveDecisionRequestSchema = z.object({
+  type: z.literal("chief.mission.resolve_decision.request"),
+  requestId: z.string(),
+  missionId: z.string().min(1),
+  decisionId: z.string().optional(),
+  optionId: z.string().min(1),
+  note: z.string().optional(),
+});
+
+export const ChiefThreadCreateRequestSchema = z.object({
+  type: z.literal("chief.thread.create.request"),
+  requestId: z.string(),
+  missionId: z.string().min(1),
+  callerAgentId: z.string().optional(),
+  title: z.string().min(1),
+  goal: z.string().min(1),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  ownedPaths: z.array(z.string()).optional(),
+  isolation: ChiefThreadIsolationSchema.optional(),
+  baseRef: z.string().optional(),
+  branch: z.string().optional(),
+  authorProfileId: z.string().optional(),
+  verifierProfileId: z.string().optional(),
+  authorAgentId: z.string().optional(),
+  initialPrompt: z.string().optional(),
+});
+
+export const ChiefThreadSubmitRequestSchema = z.object({
+  type: z.literal("chief.thread.submit.request"),
+  requestId: z.string(),
+  threadId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  summary: z.string().min(1),
+  tests: z.string().optional(),
+  changedFiles: z.array(z.string()).optional(),
+  commitSha: z.string().optional(),
+});
+
+export const ChiefThreadVerdictRequestSchema = z.object({
+  type: z.literal("chief.thread.verdict.request"),
+  requestId: z.string(),
+  threadId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  outcome: z.enum(["pass", "reject"]),
+  summary: z.string().min(1),
+  issues: z.array(z.string()).optional(),
+  checkedCommands: z.array(z.string()).optional(),
+});
+
+export const ChiefThreadMergeCheckRequestSchema = z.object({
+  type: z.literal("chief.thread.merge_check.request"),
+  requestId: z.string(),
+  threadId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+});
+
+export const ChiefThreadLandRequestSchema = z.object({
+  type: z.literal("chief.thread.land.request"),
+  requestId: z.string(),
+  threadId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  strategy: ChiefLandingStrategySchema,
+  commitMessage: z.string().min(1),
+});
+
+export const ChiefThreadCancelRequestSchema = z.object({
+  type: z.literal("chief.thread.cancel.request"),
+  requestId: z.string(),
+  threadId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  reason: z.string().min(1),
+});
+
+export const ChiefAgentHotswapRequestSchema = z.object({
+  type: z.literal("chief.agent.hotswap.request"),
+  requestId: z.string(),
+  agentId: z.string().min(1),
+  threadId: z.string().min(1),
+  profileId: z.string().min(1),
+  missionId: z.string().optional(),
+  callerAgentId: z.string().optional(),
+  reason: z.string().min(1),
+});
+
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AbortRequestMessageSchema,
   FetchAgentsRequestMessageSchema,
@@ -3073,6 +3553,18 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
+  ChiefMissionListRequestSchema,
+  ChiefMissionGetRequestSchema,
+  ChiefMissionCreateRequestSchema,
+  ChiefMissionUpgradeRequestSchema,
+  ChiefMissionResolveDecisionRequestSchema,
+  ChiefThreadCreateRequestSchema,
+  ChiefThreadSubmitRequestSchema,
+  ChiefThreadVerdictRequestSchema,
+  ChiefThreadMergeCheckRequestSchema,
+  ChiefThreadLandRequestSchema,
+  ChiefThreadCancelRequestSchema,
+  ChiefAgentHotswapRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -5687,6 +6179,146 @@ export const AgentSkillsSaveSelectionResponseSchema = z.object({
   type: z.literal("agent.skills.save_selection.response"),
   payload: AgentSkillsSaveResultSchema.extend({ requestId: z.string() }),
 });
+
+export const ChiefMissionListResponseSchema = z.object({
+  type: z.literal("chief.mission.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    missions: z.array(ChiefMissionSnapshotSchema),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefMissionGetResponseSchema = z.object({
+  type: z.literal("chief.mission.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    events: z.array(ChiefEventSchema).optional(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefMissionCreateResponseSchema = z.object({
+  type: z.literal("chief.mission.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefMissionUpgradeResponseSchema = z.object({
+  type: z.literal("chief.mission.upgrade.response"),
+  payload: z.object({
+    requestId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    createdThreadId: z.string().nullable().optional(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefMissionResolveDecisionResponseSchema = z.object({
+  type: z.literal("chief.mission.resolve_decision.response"),
+  payload: z.object({
+    requestId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadCreateResponseSchema = z.object({
+  type: z.literal("chief.thread.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    thread: ChiefThreadSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadSubmitResponseSchema = z.object({
+  type: z.literal("chief.thread.submit.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    thread: ChiefThreadSnapshotSchema.nullable(),
+    ownershipViolations: z.array(z.string()).optional(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadVerdictResponseSchema = z.object({
+  type: z.literal("chief.thread.verdict.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    escalatedToChief: z.boolean().optional(),
+    thread: ChiefThreadSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadMergeCheckResponseSchema = z.object({
+  type: z.literal("chief.thread.merge_check.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    mergeCheck: ChiefMergeDryRunResultSchema.nullable(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadLandResponseSchema = z.object({
+  type: z.literal("chief.thread.land.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    approvalRequired: z.boolean(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefThreadCancelResponseSchema = z.object({
+  type: z.literal("chief.thread.cancel.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefAgentHotswapResponseSchema = z.object({
+  type: z.literal("chief.agent.hotswap.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    previousAgentId: z.string(),
+    replacementAgentId: z.string().nullable(),
+    profileId: z.string(),
+    mission: ChiefMissionSnapshotSchema.nullable(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const ChiefMissionUpdateMessageSchema = z.object({
+  type: z.literal("chief.mission.update"),
+  payload: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("upsert"),
+      mission: ChiefMissionSnapshotSchema,
+      latestEvent: ChiefEventSchema.optional(),
+    }),
+    z.object({
+      kind: z.literal("remove"),
+      missionId: z.string(),
+    }),
+  ]),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsGetStatusResponseSchema,
   AgentSkillsReconcileResponseSchema,
@@ -5863,6 +6495,19 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleUpdateResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
+  ChiefMissionListResponseSchema,
+  ChiefMissionGetResponseSchema,
+  ChiefMissionCreateResponseSchema,
+  ChiefMissionUpgradeResponseSchema,
+  ChiefMissionResolveDecisionResponseSchema,
+  ChiefThreadCreateResponseSchema,
+  ChiefThreadSubmitResponseSchema,
+  ChiefThreadVerdictResponseSchema,
+  ChiefThreadMergeCheckResponseSchema,
+  ChiefThreadLandResponseSchema,
+  ChiefThreadCancelResponseSchema,
+  ChiefAgentHotswapResponseSchema,
+  ChiefMissionUpdateMessageSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;
@@ -6228,6 +6873,36 @@ export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
 export type PushUnregisterRequest = z.infer<typeof PushUnregisterRequestSchema>;
 export type PushUnregisterResponse = z.infer<typeof PushUnregisterResponseSchema>;
+
+export type ChiefMissionListRequest = z.infer<typeof ChiefMissionListRequestSchema>;
+export type ChiefMissionListResponse = z.infer<typeof ChiefMissionListResponseSchema>;
+export type ChiefMissionGetRequest = z.infer<typeof ChiefMissionGetRequestSchema>;
+export type ChiefMissionGetResponse = z.infer<typeof ChiefMissionGetResponseSchema>;
+export type ChiefMissionCreateRequest = z.infer<typeof ChiefMissionCreateRequestSchema>;
+export type ChiefMissionCreateResponse = z.infer<typeof ChiefMissionCreateResponseSchema>;
+export type ChiefMissionUpgradeRequest = z.infer<typeof ChiefMissionUpgradeRequestSchema>;
+export type ChiefMissionUpgradeResponse = z.infer<typeof ChiefMissionUpgradeResponseSchema>;
+export type ChiefMissionResolveDecisionRequest = z.infer<
+  typeof ChiefMissionResolveDecisionRequestSchema
+>;
+export type ChiefMissionResolveDecisionResponse = z.infer<
+  typeof ChiefMissionResolveDecisionResponseSchema
+>;
+export type ChiefThreadCreateRequest = z.infer<typeof ChiefThreadCreateRequestSchema>;
+export type ChiefThreadCreateResponse = z.infer<typeof ChiefThreadCreateResponseSchema>;
+export type ChiefThreadSubmitRequest = z.infer<typeof ChiefThreadSubmitRequestSchema>;
+export type ChiefThreadSubmitResponse = z.infer<typeof ChiefThreadSubmitResponseSchema>;
+export type ChiefThreadVerdictRequest = z.infer<typeof ChiefThreadVerdictRequestSchema>;
+export type ChiefThreadVerdictResponse = z.infer<typeof ChiefThreadVerdictResponseSchema>;
+export type ChiefThreadMergeCheckRequest = z.infer<typeof ChiefThreadMergeCheckRequestSchema>;
+export type ChiefThreadMergeCheckResponse = z.infer<typeof ChiefThreadMergeCheckResponseSchema>;
+export type ChiefThreadLandRequest = z.infer<typeof ChiefThreadLandRequestSchema>;
+export type ChiefThreadLandResponse = z.infer<typeof ChiefThreadLandResponseSchema>;
+export type ChiefThreadCancelRequest = z.infer<typeof ChiefThreadCancelRequestSchema>;
+export type ChiefThreadCancelResponse = z.infer<typeof ChiefThreadCancelResponseSchema>;
+export type ChiefAgentHotswapRequest = z.infer<typeof ChiefAgentHotswapRequestSchema>;
+export type ChiefAgentHotswapResponse = z.infer<typeof ChiefAgentHotswapResponseSchema>;
+export type ChiefMissionUpdateMessage = z.infer<typeof ChiefMissionUpdateMessageSchema>;
 
 // Terminal message types
 export type ListTerminalsRequest = z.infer<typeof ListTerminalsRequestSchema>;

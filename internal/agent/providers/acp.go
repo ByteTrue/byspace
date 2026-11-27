@@ -447,9 +447,18 @@ func (s *ACPSession) readLoop(stdout io.Reader) {
 	}
 
 	s.flushTailOnExit()
+	exitErr := fmt.Errorf("acp process exited")
+	if scErr := sc.Err(); scErr != nil {
+		exitErr = fmt.Errorf("acp process exited: %w", scErr)
+	}
 	s.mu.Lock()
+	alreadyClosed := s.closed || s.closeRequested
 	s.closed = true
 	s.status = "closed"
+	s.activeTurnID = ""
+	if !alreadyClosed {
+		s.lastError = exitErr.Error()
+	}
 	if s.promptCancel != nil {
 		s.promptCancel()
 		s.promptCancel = nil
@@ -458,8 +467,17 @@ func (s *ACPSession) readLoop(stdout io.Reader) {
 		delete(s.pending, id)
 		ch <- map[string]any{"error": map[string]any{"message": "process exited"}}
 	}
-	s.notifyFinishLocked(fmt.Errorf("acp process exited"))
+	if !alreadyClosed || len(s.finishWaiters) > 0 {
+		s.notifyFinishLocked(exitErr)
+	}
+	var subs []func(map[string]any)
+	if !alreadyClosed {
+		subs = s.copySubscribersLocked()
+	}
 	s.mu.Unlock()
+	if len(subs) > 0 {
+		s.deliverEvents(subs, []map[string]any{{"type": "process_exit", "error": exitErr.Error()}})
+	}
 }
 
 func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg map[string]any) {

@@ -159,6 +159,34 @@ describe("openAgentProfileForm", () => {
       provider: "codex",
       model: "gpt-5.2-codex",
       modeId: "read-only",
+      tier: "standard",
+    });
+  });
+
+  describe("tier", () => {
+    it("defaults tier to standard in create and edit mode when omitted", () => {
+      const created = openWithCatalog({ mode: "create" });
+      expect(created.getState().tier).toBe("standard");
+
+      const edited = openAgentProfileForm({
+        mode: "edit",
+        profile: { id: "p1", name: "Default", provider: "claude" },
+      });
+      expect(edited.getState().tier).toBe("standard");
+      expect(edited.getState().submitValue?.tier).toBe("standard");
+    });
+
+    it("seeds tier from an existing profile and updates submitValue on change", () => {
+      const model = openAgentProfileForm({
+        mode: "edit",
+        profile: { id: "p1", name: "Reviewer", provider: "claude", tier: "strong" },
+      });
+      expect(model.getState().tier).toBe("strong");
+      expect(model.getState().submitValue?.tier).toBe("strong");
+
+      model.setTier("fast");
+      expect(model.getState().tier).toBe("fast");
+      expect(model.getState().submitValue?.tier).toBe("fast");
     });
   });
 

@@ -2,6 +2,8 @@
 // lookup states, reconnect toast, attention clearing, history sync, archive, tracks, rewind
 // restore); the view is DOM and Tailwind. Keep the two in step until the cutover.
 // Converted from the Expo file by archive/expo-app:web/scripts/port/agent-panel.py; edit it directly.
+import { AGENT_ROLE_LABEL, getOrchestrationInfoFromLabels } from "@bytetrue/protocol/agent-labels";
+import { ChiefMissionPanel, SoloAgentUpgradeAction } from "@/chief/chief-mission-panel";
 import { Alert, AlertAction, AlertDescription } from "@/ui/alert";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { Button } from "@/ui/button";
@@ -1276,11 +1278,25 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     () => streamViewRef.current?.scrollToBottom(),
     [streamViewRef],
   );
+  const agentLabels = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    return (
+      session?.agents.get(agentId)?.labels ?? session?.agentDetails.get(agentId)?.labels ?? null
+    );
+  });
+  const isChiefAgent = agentLabels?.[AGENT_ROLE_LABEL] === "chief";
+  const orchestrationInfo = useMemo(
+    () => getOrchestrationInfoFromLabels(agentLabels),
+    [agentLabels],
+  );
   const showComposerActions = hasActiveComposer && isPaneVisible;
   const composerActions = useMemo(
     () =>
       showComposerActions ? (
         <>
+          {!isChiefAgent && !orchestrationInfo.missionId ? (
+            <SoloAgentUpgradeAction serverId={serverId} agentId={agentId} />
+          ) : null}
           <PiBackgroundTerminalTrack serverId={serverId} agentId={agentId} />
           <AgentStreamHeaderControls
             showScrollToBottom={showScrollToBottom}
@@ -1293,6 +1309,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       agentId,
       handleCollapseAll,
       handleScrollToBottom,
+      isChiefAgent,
+      orchestrationInfo.missionId,
       serverId,
       showComposerActions,
       showScrollToBottom,
@@ -1414,6 +1432,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     >
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
         <DockedChatSurface disabled={isArchivingCurrentAgent}>
+          {isChiefAgent ? <ChiefMissionPanel serverId={serverId} chiefAgentId={agentId} /> : null}
           {contentContainer}
 
           {showHistorySyncError ? (
@@ -1476,8 +1495,6 @@ function DockedChatSurface({ children, disabled }: { children: ReactNode; disabl
   );
 }
 
-const CHIEF_ROLE_LABEL = "byspace.agent-role";
-
 const AgentStreamSection = memo(function AgentStreamSection({
   streamViewRef,
   serverId,
@@ -1515,7 +1532,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
     if (!agentId) return null;
     return state.sessions[serverId]?.agents.get(agentId)?.labels ?? null;
   });
-  const isChiefAgent = agentLabels?.[CHIEF_ROLE_LABEL] === "chief";
+  const isChiefAgent = agentLabels?.[AGENT_ROLE_LABEL] === "chief";
   const handleSuggestionSelect = useCallback(
     (prompt: string) => {
       if (!client || !agentId) return;

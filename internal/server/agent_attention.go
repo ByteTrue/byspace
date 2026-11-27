@@ -45,49 +45,29 @@ func (s *Server) markAgentUnread(agentID string) bool {
 func (s *Server) setAgentAttention(agentID, reason, timestamp string, notify bool) bool {
 	s.mu.Lock()
 	mp, live := s.agents[agentID]
-	if !live || mp == nil {
-		s.mu.Unlock()
-		return s.markStoredAgentAttention(agentID, reason, timestamp)
+	var rec store.AgentRecord
+	if live && mp != nil {
+		rec = mp.record
+	} else {
+		stored, err := s.store.GetAgent(agentID)
+		if err != nil || stored == nil || stored.ArchivedAt != nil {
+			s.mu.Unlock()
+			return false
+		}
+		live = false
+		rec = *stored
+		if reason == AttentionReasonFinished && rec.LastStatus != "idle" && rec.LastStatus != "closed" {
+			s.mu.Unlock()
+			return false
+		}
 	}
-	// Already flagged: keep the original timestamp so the badge does not jump.
-	if mp.record.RequiresAttention {
-		s.mu.Unlock()
-		return false
-	}
-	ts := timestamp
-	if ts == "" {
-		ts = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	r := reason
-	mp.record.RequiresAttention = true
-	mp.record.AttentionReason = &r
-	mp.record.AttentionTimestamp = &ts
-	rec := mp.record
-	s.mu.Unlock()
-
-	_ = s.store.UpsertAgent(rec)
-	s.broadcastAgentUpdate(rec)
-	if notify {
-		s.broadcastAgentAttention(rec, reason, ts)
-	}
-	return true
-}
-
-// markStoredAgentAttention covers an agent with no live session.
-//
-// Node applies the same "finished" precondition here: a stored record that is still running
-// belongs to another daemon's session or a stale process, and marking it unread would be a lie.
-func (s *Server) markStoredAgentAttention(agentID, reason, timestamp string) bool {
-	rec, err := s.store.GetAgent(agentID)
-	if err != nil || rec == nil {
-		return false
-	}
-	if rec.ArchivedAt != nil || rec.RequiresAttention {
-		return false
-	}
-	switch reason {
-	case AttentionReasonFinished:
-		if rec.LastStatus != "idle" && rec.LastStatus != "closed" {
+	if rec.RequiresAttention {
+		existingPermission := rec.AttentionReason != nil && *rec.AttentionReason == AttentionReasonPermission
+		if existingPermission || reason != AttentionReasonPermission {
+			if live && existingPermission {
+				_ = s.store.UpsertAgent(rec)
+			}
+			s.mu.Unlock()
 			return false
 		}
 	}
@@ -99,9 +79,18 @@ func (s *Server) markStoredAgentAttention(agentID, reason, timestamp string) boo
 	rec.RequiresAttention = true
 	rec.AttentionReason = &r
 	rec.AttentionTimestamp = &ts
-	rec.UpdatedAt = ts
-	_ = s.store.UpsertAgent(*rec)
-	s.broadcastAgentUpdate(*rec)
+	if live {
+		mp.record = rec
+	} else {
+		rec.UpdatedAt = ts
+	}
+	_ = s.store.UpsertAgent(rec)
+	s.mu.Unlock()
+
+	s.broadcastAgentUpdate(rec)
+	if notify && live {
+		s.broadcastAgentAttention(rec, reason, ts)
+	}
 	return true
 }
 
@@ -109,27 +98,26 @@ func (s *Server) markStoredAgentAttention(agentID, reason, timestamp string) boo
 func (s *Server) clearAgentAttention(agentID string) bool {
 	s.mu.Lock()
 	mp, live := s.agents[agentID]
+	var rec store.AgentRecord
 	if live && mp != nil && mp.record.RequiresAttention {
 		mp.record.RequiresAttention = false
 		mp.record.AttentionReason = nil
 		mp.record.AttentionTimestamp = nil
-		rec := mp.record
-		s.mu.Unlock()
-		_ = s.store.UpsertAgent(rec)
-		s.broadcastAgentUpdate(rec)
-		return true
+		rec = mp.record
+	} else {
+		stored, err := s.store.GetAgent(agentID)
+		if err != nil || stored == nil || !stored.RequiresAttention {
+			s.mu.Unlock()
+			return false
+		}
+		rec = *stored
+		rec.RequiresAttention = false
+		rec.AttentionReason = nil
+		rec.AttentionTimestamp = nil
 	}
+	_ = s.store.UpsertAgent(rec)
 	s.mu.Unlock()
-
-	rec, err := s.store.GetAgent(agentID)
-	if err != nil || rec == nil || !rec.RequiresAttention {
-		return false
-	}
-	rec.RequiresAttention = false
-	rec.AttentionReason = nil
-	rec.AttentionTimestamp = nil
-	_ = s.store.UpsertAgent(*rec)
-	s.broadcastAgentUpdate(*rec)
+	s.broadcastAgentUpdate(rec)
 	return true
 }
 

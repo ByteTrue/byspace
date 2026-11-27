@@ -1,6 +1,9 @@
 package server
 
-import "github.com/ByteTrue/byspace/internal/store"
+import (
+	"github.com/ByteTrue/byspace/internal/chief"
+	"github.com/ByteTrue/byspace/internal/store"
+)
 
 // Workspace state buckets, ported from packages/protocol/src/agent-state-bucket.ts.
 //
@@ -100,7 +103,68 @@ func (s *Server) computeWorkspaceStatusBuckets() map[string]string {
 			buckets[root.WorkspaceID] = bucket
 		}
 	}
+	if s.chief != nil {
+		s.applyChiefWorkspaceStatusBuckets(active, buckets)
+	}
 	return buckets
+}
+
+func (s *Server) applyChiefWorkspaceStatusBuckets(active map[string]store.AgentRecord, buckets map[string]string) {
+	if s.chief == nil || s.chief.store == nil {
+		return
+	}
+	missions, err := s.chief.store.ListMissions()
+	if err != nil {
+		return
+	}
+	for _, m := range missions {
+		if m.Status == chief.MissionStatusCompleted || m.Status == chief.MissionStatusCanceled {
+			continue
+		}
+		chiefRec, ok := active[m.ChiefAgentID]
+		if !ok {
+			continue
+		}
+		wsID := chiefRec.WorkspaceID
+		if root := resolveWorkspaceRootAgent(chiefRec, active); root != nil && root.WorkspaceID != "" {
+			wsID = root.WorkspaceID
+		}
+		if wsID == "" {
+			continue
+		}
+		elevated := chiefMissionBucketContribution(m)
+		if elevated == "" {
+			continue
+		}
+		existing, seen := buckets[wsID]
+		if !seen || workspaceStateBucketPriority(elevated) < workspaceStateBucketPriority(existing) {
+			buckets[wsID] = elevated
+		}
+	}
+}
+
+func chiefMissionBucketContribution(m chief.Mission) string {
+	if m.Status == chief.MissionStatusWaitingHuman || (m.PendingDecision != nil && m.PendingDecision.ResolvedAt == nil) {
+		return bucketNeedsInput
+	}
+	elevated := ""
+	consider := func(att *chief.SystemAttention) {
+		if att == nil || att.ResolvedAt != nil {
+			return
+		}
+		if att.Kind == chief.AttentionKindPermissionBlocked {
+			elevated = bucketNeedsInput
+			return
+		}
+		if att.Severity == chief.SeverityFatal && elevated != bucketNeedsInput {
+			elevated = bucketFailed
+		}
+	}
+	consider(m.SystemAttention)
+	for i := range m.Threads {
+		consider(m.Threads[i].SystemAttention)
+	}
+	return elevated
 }
 
 // overlayLoadedAgentRecords replaces stored records with the live ones and returns how many

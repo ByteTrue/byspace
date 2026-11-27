@@ -1829,6 +1829,17 @@ func (s *Server) createWorktreeWorkspace(
 	intentInput workspace.WorktreeIntentInput,
 	firstAgentContext any,
 ) (store.WorkspaceRecord, store.ProjectRecord, error) {
+	return s.createWorktreeWorkspaceWithSetup(ctx, projectRoot, title, intentInput, firstAgentContext, true)
+}
+
+func (s *Server) createWorktreeWorkspaceWithSetup(
+	ctx context.Context,
+	projectRoot string,
+	title *string,
+	intentInput workspace.WorktreeIntentInput,
+	firstAgentContext any,
+	startSetup bool,
+) (store.WorkspaceRecord, store.ProjectRecord, error) {
 	prj, _, err := s.ensureWorkspaceForCwd(projectRoot)
 	if err != nil {
 		return store.WorkspaceRecord{}, store.ProjectRecord{}, err
@@ -1894,7 +1905,13 @@ func (s *Server) createWorktreeWorkspace(
 	if s.beforeWorktreeWorkspaceRegister != nil {
 		s.beforeWorktreeWorkspaceRegister(wtPath)
 	}
-	_ = s.store.UpsertWorkspace(wsRec)
+	if err := s.store.UpsertWorkspace(wsRec); err != nil {
+		cleanupErr := workspace.RemoveWorktreeFromDisk(ctx, wtPath)
+		if cleanupErr != nil {
+			cleanupErr = fmt.Errorf("remove unregistered worktree %s: %w", wtPath, cleanupErr)
+		}
+		return store.WorkspaceRecord{}, prj, errors.Join(fmt.Errorf("register worktree workspace: %w", err), cleanupErr)
+	}
 	unlock()
 	locked = false
 	s.broadcastWorkspaceUpsertStatus(wsRec, prj, createdWorkspaceStatusOverride(firstAgentContext))
@@ -1910,8 +1927,18 @@ func (s *Server) createWorktreeWorkspace(
 	// Run even when there is nothing to run: a project with no setup still needs a "completed"
 	// snapshot, otherwise a client waiting for progress waits forever. Node emits the empty
 	// completed progress for exactly this case.
-	go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, workspace.ReadSetupCommands(wtPath))
+	if startSetup {
+		s.startWorkspaceSetup(wsRec)
+	}
 	return wsRec, prj, nil
+}
+
+func (s *Server) startWorkspaceSetup(wsRec store.WorkspaceRecord) {
+	branch := ""
+	if wsRec.Branch != nil {
+		branch = *wsRec.Branch
+	}
+	go s.runWorkspaceSetup(wsRec.WorkspaceID, wsRec.Cwd, branch, workspace.ReadSetupCommands(wsRec.Cwd))
 }
 
 // writeCreatedWorktreeMetadata records what a fresh worktree was cut from.

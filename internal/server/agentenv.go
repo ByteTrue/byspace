@@ -19,9 +19,25 @@ import (
 // The user's per-agent environment goes on top of the daemon's, and the BySpace identity below is
 // applied last: an agent that could rewrite BYSPACE_AGENT_ID could act as another agent.
 //
-// No credential is passed here. The CLI reads the home's own `cli-credential` file, the same
-// principal the user's shell uses; an agent needs no second auth scheme for this.
+// The per-agent credential is private to the daemon and the launched agent. It authenticates
+// Chief role calls without placing the credential in public agent records or protocol snapshots.
 func (s *Server) agentEnv(rec store.AgentRecord) []string {
+	credential := ""
+	if rec.ID != "" {
+		credential, _ = s.ensureAgentCredential(rec.ID)
+	}
+	return s.agentEnvWithCredential(rec, credential)
+}
+
+func (s *Server) agentEnvForLaunch(rec store.AgentRecord) ([]string, error) {
+	credential, err := s.ensureAgentCredential(rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	return s.agentEnvWithCredential(rec, credential), nil
+}
+
+func (s *Server) agentEnvWithCredential(rec store.AgentRecord, credential string) []string {
 	env := os.Environ()
 	set := func(key, value string) { env = setEnv(env, key, value) }
 
@@ -58,6 +74,7 @@ func (s *Server) agentEnv(rec store.AgentRecord) []string {
 	if rec.ID != "" {
 		set("BYSPACE_AGENT_ID", rec.ID)
 	}
+	set(agentCredentialEnv, credential)
 	// `byspace` has to resolve in the agent's shell: the bundled skill tells the agent to run it,
 	// and a shell that cannot find the binary leaves the agent with no orchestration tools at all.
 	// The daemon's own executable is the build that matches this daemon.

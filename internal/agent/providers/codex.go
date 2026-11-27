@@ -32,7 +32,8 @@ type CodexSession struct {
 	// lastUsage is the token accounting from the most recent turn, for the context ring.
 	lastUsage *sdk.AgentUsage
 	// lastError is the provider's own text for the most recent failure.
-	lastError string
+	lastError   string
+	terminalErr error
 
 	mu              sync.Mutex
 	pending         map[int64]chan map[string]any
@@ -307,15 +308,33 @@ func (s *CodexSession) readLoop(stdout io.Reader) {
 	}
 
 	s.flushTailOnExit()
+	exitErr := fmt.Errorf("codex process exited")
+	if scErr := sc.Err(); scErr != nil {
+		exitErr = fmt.Errorf("codex process exited: %w", scErr)
+	}
 	s.mu.Lock()
+	alreadyClosed := s.closed || s.closeRequested
 	s.closed = true
 	s.status = "closed"
+	s.activeTurnID = ""
+	s.nativeTurnID = ""
+	if !alreadyClosed {
+		s.lastError = exitErr.Error()
+		s.terminalErr = exitErr
+	}
 	for id, ch := range s.pending {
 		delete(s.pending, id)
 		ch <- map[string]any{"error": map[string]any{"message": "process exited"}}
 	}
-	s.notifyFinishLocked(fmt.Errorf("codex process exited"))
+	s.notifyFinishLocked(exitErr)
+	var subs []func(map[string]any)
+	if !alreadyClosed {
+		subs = s.copySubscribersLocked()
+	}
 	s.mu.Unlock()
+	if len(subs) > 0 {
+		s.deliverEvents(subs, []map[string]any{{"type": "process_exit", "error": exitErr.Error()}})
+	}
 }
 
 func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg map[string]any) {
@@ -981,6 +1000,11 @@ func (s *CodexSession) finishCancellationLocked(reason string) []map[string]any 
 
 func (s *CodexSession) WaitForFinish(ctx context.Context) error {
 	s.mu.Lock()
+	if s.terminalErr != nil {
+		err := s.terminalErr
+		s.mu.Unlock()
+		return err
+	}
 	if s.status != "running" {
 		s.mu.Unlock()
 		return nil

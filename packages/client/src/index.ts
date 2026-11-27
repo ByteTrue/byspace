@@ -23,6 +23,21 @@ import type {
   SessionOutboundMessage,
   WorkspaceDescriptorPayload,
   WorkspaceCreateRequest,
+  ChiefMissionSnapshot,
+  ChiefThreadSnapshot,
+  ChiefEvent,
+  ChiefMissionListResponse,
+  ChiefMissionGetResponse,
+  ChiefMissionCreateResponse,
+  ChiefMissionUpgradeResponse,
+  ChiefMissionResolveDecisionResponse,
+  ChiefThreadCreateResponse,
+  ChiefThreadSubmitResponse,
+  ChiefThreadVerdictResponse,
+  ChiefThreadMergeCheckResponse,
+  ChiefThreadLandResponse,
+  ChiefThreadCancelResponse,
+  ChiefAgentHotswapResponse,
 } from "@bytetrue/protocol/messages";
 import { DaemonClient } from "./daemon-client.js";
 import {
@@ -42,6 +57,18 @@ export type {
   BySpaceWorkspaceTerminalActions,
 } from "./terminals/index.js";
 import type {
+  ChiefMissionCreateOptions,
+  ChiefMissionGetOptions,
+  ChiefMissionListOptions,
+  ChiefMissionResolveDecisionOptions,
+  ChiefMissionUpgradeOptions,
+  ChiefThreadCreateOptions,
+  ChiefThreadSubmitOptions,
+  ChiefThreadVerdictOptions,
+  ChiefThreadMergeCheckOptions,
+  ChiefThreadLandOptions,
+  ChiefThreadCancelOptions,
+  ChiefAgentHotswapOptions,
   FetchAgentsEntry,
   FetchAgentsOptions,
   FetchAgentsPageInfo,
@@ -444,6 +471,66 @@ export interface BySpaceConfigActions {
   ): Promise<{ requestId: string; config: MutableDaemonConfig }>;
 }
 
+export type BySpaceChiefMission = ChiefMissionSnapshot;
+export type BySpaceChiefThread = ChiefThreadSnapshot;
+export type BySpaceChiefEvent = ChiefEvent;
+export type BySpaceChiefMissionUpdate = Extract<
+  SessionOutboundMessage,
+  { type: "chief.mission.update" }
+>["payload"];
+export type BySpaceChiefMissionUpdateHandler = (update: BySpaceChiefMissionUpdate) => void;
+export type BySpaceChiefMissionListOptions = ChiefMissionListOptions;
+export type BySpaceChiefMissionGetOptions = ChiefMissionGetOptions;
+export type BySpaceChiefMissionCreateOptions = ChiefMissionCreateOptions;
+export type BySpaceChiefMissionUpgradeOptions = ChiefMissionUpgradeOptions;
+export type BySpaceChiefMissionResolveDecisionOptions = ChiefMissionResolveDecisionOptions;
+export type BySpaceChiefThreadCreateOptions = ChiefThreadCreateOptions;
+export type BySpaceChiefThreadSubmitOptions = ChiefThreadSubmitOptions;
+export type BySpaceChiefThreadVerdictOptions = ChiefThreadVerdictOptions;
+export type BySpaceChiefThreadMergeCheckOptions = ChiefThreadMergeCheckOptions;
+export type BySpaceChiefThreadLandOptions = ChiefThreadLandOptions;
+export type BySpaceChiefThreadCancelOptions = ChiefThreadCancelOptions;
+export type BySpaceChiefAgentHotswapOptions = ChiefAgentHotswapOptions;
+export type BySpaceChiefMissionListResult = ChiefMissionListResponse["payload"];
+export type BySpaceChiefMissionGetResult = ChiefMissionGetResponse["payload"];
+export type BySpaceChiefMissionCreateResult = ChiefMissionCreateResponse["payload"];
+export type BySpaceChiefMissionUpgradeResult = ChiefMissionUpgradeResponse["payload"];
+export type BySpaceChiefMissionResolveDecisionResult =
+  ChiefMissionResolveDecisionResponse["payload"];
+export type BySpaceChiefThreadCreateResult = ChiefThreadCreateResponse["payload"];
+export type BySpaceChiefThreadSubmitResult = ChiefThreadSubmitResponse["payload"];
+export type BySpaceChiefThreadVerdictResult = ChiefThreadVerdictResponse["payload"];
+export type BySpaceChiefThreadMergeCheckResult = ChiefThreadMergeCheckResponse["payload"];
+export type BySpaceChiefThreadLandResult = ChiefThreadLandResponse["payload"];
+export type BySpaceChiefThreadCancelResult = ChiefThreadCancelResponse["payload"];
+export type BySpaceChiefAgentHotswapResult = ChiefAgentHotswapResponse["payload"];
+
+export interface BySpaceChiefActions {
+  listMissions(options?: BySpaceChiefMissionListOptions): Promise<BySpaceChiefMissionListResult>;
+  getMission(options: BySpaceChiefMissionGetOptions): Promise<BySpaceChiefMissionGetResult>;
+  createMission(
+    options: BySpaceChiefMissionCreateOptions,
+  ): Promise<BySpaceChiefMissionCreateResult>;
+  upgradeMission(
+    options: BySpaceChiefMissionUpgradeOptions,
+  ): Promise<BySpaceChiefMissionUpgradeResult>;
+  resolveDecision(
+    options: BySpaceChiefMissionResolveDecisionOptions,
+  ): Promise<BySpaceChiefMissionResolveDecisionResult>;
+  createThread(options: BySpaceChiefThreadCreateOptions): Promise<BySpaceChiefThreadCreateResult>;
+  submitThread(options: BySpaceChiefThreadSubmitOptions): Promise<BySpaceChiefThreadSubmitResult>;
+  verdictThread(
+    options: BySpaceChiefThreadVerdictOptions,
+  ): Promise<BySpaceChiefThreadVerdictResult>;
+  mergeCheckThread(
+    options: BySpaceChiefThreadMergeCheckOptions,
+  ): Promise<BySpaceChiefThreadMergeCheckResult>;
+  landThread(options: BySpaceChiefThreadLandOptions): Promise<BySpaceChiefThreadLandResult>;
+  cancelThread(options: BySpaceChiefThreadCancelOptions): Promise<BySpaceChiefThreadCancelResult>;
+  hotswapAgent(options: BySpaceChiefAgentHotswapOptions): Promise<BySpaceChiefAgentHotswapResult>;
+  subscribe(handler: BySpaceChiefMissionUpdateHandler): () => void;
+}
+
 export interface BySpaceApi {
   readonly terminals: BySpaceTerminalActions;
   readonly workspaces: BySpaceWorkspaceActions;
@@ -451,6 +538,7 @@ export interface BySpaceApi {
   readonly agents: BySpaceAgentActions;
   readonly providers: BySpaceProviderActions;
   readonly config: BySpaceConfigActions;
+  readonly chief: BySpaceChiefActions;
 }
 
 export interface BySpaceClient extends BySpaceApi {
@@ -567,6 +655,24 @@ export function createBySpaceApi(daemonClient: DaemonClient): BySpaceApi {
     config: {
       get: (requestId) => daemonClient.getDaemonConfig(requestId),
       patch: (patch, requestId) => daemonClient.patchDaemonConfig(patch, requestId),
+    },
+    chief: {
+      listMissions: (options) => daemonClient.listChiefMissions(options),
+      getMission: (options) => daemonClient.getChiefMission(options),
+      createMission: (options) => daemonClient.createChiefMission(options),
+      upgradeMission: (options) => daemonClient.upgradeChiefMission(options),
+      resolveDecision: (options) => daemonClient.resolveChiefDecision(options),
+      createThread: (options) => daemonClient.createChiefThread(options),
+      submitThread: (options) => daemonClient.submitChiefThread(options),
+      verdictThread: (options) => daemonClient.verdictChiefThread(options),
+      mergeCheckThread: (options) => daemonClient.mergeCheckChiefThread(options),
+      landThread: (options) => daemonClient.landChiefThread(options),
+      cancelThread: (options) => daemonClient.cancelChiefThread(options),
+      hotswapAgent: (options) => daemonClient.hotswapChiefAgent(options),
+      subscribe: (handler) =>
+        daemonClient.on("chief.mission.update", (message) => {
+          handler(message.payload);
+        }),
     },
   };
 }

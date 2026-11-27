@@ -30,6 +30,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/title"
 	"github.com/ByteTrue/byspace/internal/attachment"
 	"github.com/ByteTrue/byspace/internal/attention"
+	"github.com/ByteTrue/byspace/internal/chief"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/gitdiff"
 	"github.com/ByteTrue/byspace/internal/home"
@@ -83,6 +84,7 @@ type managedPi struct {
 	session providers.ManagedSession
 	// usageStop closes the in-flight usage sampler for this turn.
 	usageStop chan struct{}
+	turnSeq   int64
 }
 
 type downloadTokenEntry struct {
@@ -184,6 +186,7 @@ type Server struct {
 	vapidKeys home.VAPIDKeys
 	store     *store.Store
 	schedules *schedule.Service
+	chief     *chiefBridge
 	// prStatus keeps the PR status of every live checkout fresh while a client is connected.
 	prStatus               *prStatusState
 	webUI                  *webui.Handler
@@ -281,6 +284,10 @@ type Server struct {
 	// sinkPermissions holds the granted permissions per connection. A connection absent from
 	// this map acts as the owner, which is how a direct local connection behaves.
 	sinkPermissions map[frameSink][]string
+	// sinkAgentIDs is the authenticated per-agent identity for a socket.
+	sinkAgentIDs      map[frameSink]string
+	agentCredentialMu sync.Mutex
+	agentCredentials  *agentCredentialStore
 	// relayAuthPending_ marks relay connections that have not yet proven a password inside the
 	// encrypted channel. They hold nothing until they do (see authz.go).
 	relayAuthPending_ map[frameSink]bool
@@ -504,6 +511,8 @@ func New(opts Options) (*Server, error) {
 	srv.startBackgroundGitFetch()
 	srv.startObservation()
 	srv.startCheckoutObservation()
+	srv.chief = newChiefBridge(srv)
+	srv.chief.Start()
 	// Last: recovering an interrupted run archives its workspace, which needs the rest of the
 	// server. Then the clock fires due schedules every second.
 	srv.schedules.Start()
@@ -519,6 +528,9 @@ func (s *Server) Store() *store.Store  { return s.store }
 func (s *Server) Close() error {
 	if s.bgCancel != nil {
 		s.bgCancel()
+	}
+	if s.chief != nil {
+		s.chief.Close()
 	}
 	if s.schedules != nil {
 		s.schedules.Stop()
@@ -640,16 +652,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// "auth is on" would 401 the browser app on every password-less home, because only the
 		// CLI can read the file.
 		if s.daemonPasswordHash() != "" {
-			token, ok := ExtractHTTPBearerToken(r.Header.Get("Authorization"))
-			if !ok {
-				// A browser cannot set an Authorization header on a WebSocket, so the client
-				// sends the same token as the `byspace.bearer.<token>` subprotocol. Reading
-				// only the header rejected every browser connection to a protected daemon,
-				// which looked like the app being logged out for no reason.
-				token, ok = ExtractWSBearerToken(strings.Split(
-					r.Header.Get("Sec-WebSocket-Protocol"), ","))
-			}
-			if !ok || !s.authorizedByDaemonCredential(s.homeDir, token) {
+			token, ok := requestBearerToken(r)
+			_, agentCredential := s.agentIDForCredential(token)
+			if !ok || (!s.authorizedByDaemonCredential(s.homeDir, token) && !(path == "/ws" && agentCredential)) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))
@@ -746,6 +751,9 @@ func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
 	ws.SetReadLimit(64 * 1024 * 1024)
 
 	sink := &wsSink{ws: ws}
+	if token, ok := requestBearerToken(r); ok {
+		s.bindAgentCredential(sink, token)
+	}
 	s.serveSessionOnSink(r.Context(), sink, func(ctx context.Context) (e2ee.Frame, error) {
 		msgType, data, err := ws.Read(ctx)
 		if err != nil {
@@ -1024,6 +1032,7 @@ func (s *Server) serveSessionOnSinkGreeted(
 		// Permissions outlive nothing: a socket that proved the password and then dropped must not
 		// leave its grant behind for a future sink pointer to inherit.
 		delete(s.sinkPermissions, sink)
+		delete(s.sinkAgentIDs, sink)
 		s.mu.Unlock()
 		s.relayAuthForget(sink)
 		s.notePRStatusClientsChanged()
@@ -2005,6 +2014,30 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"hub.management.daemon.disconnect.request",
 		"hub.management.daemon.permissions.update.request":
 		s.handleSystemParityOps(ctx, sink, base.Type, raw)
+	case "chief.mission.list.request":
+		s.handleChiefMissionList(ctx, sink, raw)
+	case "chief.mission.get.request":
+		s.handleChiefMissionGet(ctx, sink, raw)
+	case "chief.mission.create.request":
+		s.handleChiefMissionCreate(ctx, sink, raw)
+	case "chief.mission.upgrade.request":
+		s.handleChiefMissionUpgrade(ctx, sink, raw)
+	case "chief.mission.resolve_decision.request":
+		s.handleChiefMissionResolveDecision(ctx, sink, raw)
+	case "chief.thread.create.request":
+		s.handleChiefThreadCreate(ctx, sink, raw)
+	case "chief.thread.submit.request":
+		s.handleChiefThreadSubmit(ctx, sink, raw)
+	case "chief.thread.verdict.request":
+		s.handleChiefThreadVerdict(ctx, sink, raw)
+	case "chief.thread.merge_check.request":
+		s.handleChiefThreadMergeCheck(ctx, sink, raw)
+	case "chief.thread.land.request":
+		s.handleChiefThreadLand(ctx, sink, raw)
+	case "chief.thread.cancel.request":
+		s.handleChiefThreadCancel(ctx, sink, raw)
+	case "chief.agent.hotswap.request":
+		s.handleChiefAgentHotSwap(ctx, sink, raw)
 	}
 }
 
@@ -2799,6 +2832,9 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			createdImages = append(createdImages, pi.ImageContent{Type: "image", Data: img.Data, MimeType: img.MimeType})
 		}
 		createdText := appendAttachmentHints(*req.InitialPrompt, req.Attachments)
+		if s.chief != nil {
+			s.chief.capturePreTurnBaseline(mp.record)
+		}
 		if err := mp.session.Prompt(ctx, createdText, createdImages); err != nil {
 			s.discardCreatedAgent(mp, rec.ID)
 			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
@@ -2921,6 +2957,9 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			joinRunningTurn = true
 			promptErr = mp.session.Steer(ctx, text, images)
 		} else {
+			if s.chief != nil {
+				s.chief.capturePreTurnBaseline(mp.record)
+			}
 			promptErr = mp.session.Prompt(ctx, text, images)
 		}
 	} else {
@@ -2937,6 +2976,9 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
 			_ = mp.session.WaitForFinish(waitCtx)
 			waitCancel()
+		}
+		if s.chief != nil {
+			s.chief.capturePreTurnBaseline(mp.record)
 		}
 		promptErr = mp.session.Prompt(ctx, text, images)
 	}
@@ -3231,6 +3273,22 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 	}
 	_ = json.Unmarshal(raw, &req)
 
+	if rec, recErr := s.store.GetAgent(req.AgentID); recErr == nil && rec != nil && rec.LastStatus == "error" && rec.LastError != nil && strings.TrimSpace(*rec.LastError) != "" {
+		s.mu.Lock()
+		loaded := s.agents[req.AgentID] != nil
+		s.mu.Unlock()
+		if !loaded {
+			_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
+				"requestId":   req.RequestID,
+				"status":      "error",
+				"final":       s.buildAgentSnapshotPayload(*rec),
+				"error":       *rec.LastError,
+				"lastMessage": nil,
+			})
+			return
+		}
+	}
+
 	mp, err := s.ensureAgentLoaded(req.AgentID)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
@@ -3380,6 +3438,8 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	}
 	s.mu.Unlock()
 
+	applyReadOnlyVerifierPostureWithConfig(&rec, s.providerConfigFor(rec.Provider))
+
 	var model, modeID, thinking, sessionPath string
 	if rec.Config != nil {
 		if rec.Config.Model != nil {
@@ -3408,7 +3468,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	// each string value into `key=value` in the child environment gave the provider nothing it
 	// understood and polluted every process it started. What does belong in the environment is how
 	// the agent finds this daemon; see agentEnv.
-	providerEnv := s.agentEnv(rec)
+	providerEnv, err := s.agentEnvForLaunch(rec)
+	if err != nil {
+		return nil, fmt.Errorf("issue agent credential: %w", err)
+	}
 	sess, err := providers.StartProviderSession(providers.LaunchConfig{
 		Provider:         rec.Provider,
 		ProviderConfig:   s.providerConfigFor(rec.Provider),
@@ -3487,6 +3550,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			// the same cadence as PiUsagePoller (every 3s).
 			mp.startUsagePolling(s, sess)
 			s.mu.Lock()
+			mp.turnSeq++
 			mp.record.LastStatus = "running"
 			mp.record.UpdatedAt = nowStr
 			// LastActivityAt is "when did this agent last do work", which is not the same as
@@ -3495,6 +3559,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			mp.record.LastActivityAt = nowStr
 			recStartCopy := mp.record
 			s.mu.Unlock()
+			if s.chief != nil {
+				s.chief.RecordAgentProgress(recStartCopy.ID)
+				s.chief.EnsureTurnBaseline(recStartCopy)
+			}
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
@@ -3510,11 +3578,16 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		case "turn_start":
 			if !isPi {
 				s.mu.Lock()
+				mp.turnSeq++
 				mp.record.LastStatus = "running"
 				mp.record.UpdatedAt = nowStr
 				mp.record.LastActivityAt = nowStr
 				recStartCopy := mp.record
 				s.mu.Unlock()
+				if s.chief != nil {
+					s.chief.RecordAgentProgress(recStartCopy.ID)
+					s.chief.EnsureTurnBaseline(recStartCopy)
+				}
 				s.broadcastSessionMsg("agent_stream", map[string]any{
 					"agentId":   rec.ID,
 					"provider":  rec.Provider,
@@ -3567,6 +3640,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"kind":     "upsert",
 					"subagent": sub,
 				})
+			}
+			if s.chief != nil {
+				s.chief.RecordAgentProgress(rec.ID)
 			}
 
 		case "message_end":
@@ -3624,6 +3700,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					})
 				}
 			}
+			if s.chief != nil {
+				s.chief.RecordAgentProgress(rec.ID)
+			}
 
 		case "byspace_provider_subagents", "subagent_upsert":
 			// The provider finished tracking a subagent (subagent-exit). Pi sessions only broadcast
@@ -3660,6 +3739,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"agentId": rec.ID,
 					"request": perm,
 				})
+				s.markAgentAttention(rec.ID, AttentionReasonPermission, nowStr)
+				if s.chief != nil {
+					recSnap := s.currentRecordSnapshot(rec)
+					go s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, perm)
+				}
 			}
 
 		case "usage_updated", "mode_changed", "model_changed", "thinking_option_changed":
@@ -3680,6 +3764,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				event["thinkingOptionId"] = ev["thinkingOptionId"]
 			}
 			s.broadcastSessionMsg("agent_stream", map[string]any{"agentId": rec.ID, "provider": rec.Provider, "timestamp": nowStr, "event": event})
+			if ev["type"] == "usage_updated" && s.chief != nil {
+				s.chief.RecordUsageProgress(rec.ID, ev["usage"])
+			}
 
 		case "byspace_turn_canceled":
 			// The client ends its "running" affordance on this, so a cancelled turn that never reports it leaves the
@@ -3703,6 +3790,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				},
 			})
 			s.broadcastAgentUpdate(recCanceledCopy)
+			if s.chief != nil {
+				go s.chief.OnAgentTurnInterrupted(s.bgCtx, rec.ID)
+			}
 
 		case "byspace_turn_failed":
 			// Same stale-event rule as a completion: a failure that arrives after the next turn has
@@ -3723,6 +3813,13 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			mp.record.UpdatedAt = nowStr
 			recFailedCopy := mp.record
 			s.mu.Unlock()
+			_ = s.store.UpsertAgent(recFailedCopy)
+			if !chief.ShouldSuppressWorkerAttention(recFailedCopy.Labels, AttentionReasonError) {
+				s.markAgentAttention(recFailedCopy.ID, AttentionReasonError, nowStr)
+			}
+			s.mu.Lock()
+			recFailedCopy = mp.record
+			s.mu.Unlock()
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
@@ -3730,12 +3827,19 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				"event": map[string]any{
 					"type":     "turn_failed",
 					"provider": rec.Provider,
-					"error":    mp.record.LastError,
+					"error":    recFailedCopy.LastError,
 					"turnId":   ev["turnId"],
 				},
 			})
 			s.appendSystemErrorRow(rec, mp.session, ev)
 			s.broadcastAgentUpdate(recFailedCopy)
+			if s.chief != nil {
+				errMsg := derefStr(recFailedCopy.LastError)
+				if errMsg == "" {
+					errMsg, _ = ev["error"].(string)
+				}
+				go s.chief.OnAgentTurnFailed(s.bgCtx, recFailedCopy, errMsg)
+			}
 
 		case "permission_requested":
 			// A provider reporting a permission request in its own vocabulary (the scripted provider does this;
@@ -3758,6 +3862,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"agentId": rec.ID,
 					"request": request,
 				})
+				s.markAgentAttention(rec.ID, AttentionReasonPermission, nowStr)
+				if s.chief != nil {
+					recSnap := s.currentRecordSnapshot(rec)
+					go s.chief.OnAgentPermissionRequested(s.bgCtx, recSnap, request)
+				}
 			}
 
 		case "permission_resolved":
@@ -3772,6 +3881,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				s.broadcastSessionMsg("agent_permission_resolved", map[string]any{
 					"agentId": rec.ID, "requestId": requestID, "resolution": ev["resolution"],
 				})
+				if len(sess.PendingPermissions()) == 0 {
+					s.clearAgentPermissionAttention(rec.ID)
+				}
+				if s.chief != nil {
+					go s.chief.OnAgentPermissionResolved(s.bgCtx, rec.ID)
+				}
 			}
 
 		case "byspace_turn_completed":
@@ -3782,105 +3897,145 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			if token, _ := ev["turnToken"].(string); token != "" && token != sess.TurnToken() {
 				break
 			}
+			s.handleTurnCompleted(mp, sess, rec, turnID, nowStr)
+
+		case "agent_end":
+			if !isPi {
+				turnID, _ := ev["turnId"].(string)
+				if token, _ := ev["turnToken"].(string); token != "" && token != sess.TurnToken() {
+					break
+				}
+				s.handleTurnCompleted(mp, sess, rec, turnID, nowStr)
+			}
+
+		case "agent_settled":
+			if !isPi {
+				s.mu.Lock()
+				mp.record.LastStatus = sess.Status()
+				mp.record.UpdatedAt = nowStr
+				recCopy := mp.record
+				s.mu.Unlock()
+				_ = s.store.UpsertAgent(recCopy)
+				s.broadcastAgentUpdate(recCopy)
+			}
+
+		case "process_exit":
 			mp.stopUsagePolling()
-			// pi does not answer get_session_stats while it is still producing tokens, so the
-			// final sample has to wait until the provider settles. captureFinalUsage retries.
-			go s.captureFinalUsage(mp, sess)
-			// Tell the parent this child finished. A parent that delegated work has no other
-			// way to learn the outcome: the child is a separate agent with its own turn.
-			go s.notifyParentChildFinished(context.Background(), rec.ID, finishReasonFinished)
+			reason := "provider process exited"
+			if mp.session != nil {
+				if detail := mp.session.LastError(); detail != "" {
+					reason = detail
+				}
+			}
 			s.mu.Lock()
-			mp.record.LastStatus = "idle"
+			turnSeq := mp.turnSeq
+			mp.record.LastStatus = "error"
+			mp.record.LastError = &reason
 			mp.record.UpdatedAt = nowStr
 			recCopy := mp.record
+			delete(s.agents, rec.ID)
 			s.mu.Unlock()
-			// A finished turn always flags the agent, as Node's checkAndSetAttention does: the
-			// client clears the flag for the agent it is showing, and the presence policy only
-			// decides who is notified (broadcastAgentAttention). Gating the flag on presence too
-			// left a turn that finished while viewed with nothing to clear on leaving.
 			_ = s.store.UpsertAgent(recCopy)
-			s.markAgentAttention(mp.record.ID, AttentionReasonFinished, nowStr)
-			// recCopy predates the attention flag, and the snapshot below is the last word the
-			// client hears about this turn: sending the stale copy retracted the badge that
-			// markAgentAttention just published, leaving the row with nothing to clear.
-			s.mu.Lock()
-			recCopy = mp.record
-			s.mu.Unlock()
-			go s.syncPiPersistence(mp)
+			turnKey := fmt.Sprintf("seq:%d", turnSeq)
+			go s.notifyParentChildFinished(context.Background(), rec.ID, turnKey, finishReasonErrored)
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
 				"timestamp": nowStr,
 				"event": map[string]any{
-					"type":     "turn_completed",
+					"type":     "turn_failed",
 					"provider": rec.Provider,
-					"turnId":   turnID,
+					"error":    reason,
 				},
 			})
-			// Emit turn_completed first, then the terminal snapshot. Clients key the
-			// "stop" affordance off turn_completed and read the snapshot for status, so
-			// the order matters: a trailing running snapshot would re-arm the spinner.
-			s.broadcastAgentUpdate(recCopy)
-
-		case "agent_end", "agent_settled", "process_exit":
-			if !isPi || evType == "process_exit" {
-				s.mu.Lock()
-				mp.record.LastStatus = sess.Status()
-				mp.record.UpdatedAt = nowStr
-				recCopy := mp.record
-				// Only a process exit makes the runtime unusable. A normal agent_end is
-				// turn completion for Claude/Codex/OpenCode, not process death; unloading
-				// there discards canonical message IDs and provider mappings before rewind.
-				if evType == "process_exit" {
-					delete(s.agents, rec.ID)
-				}
-				s.mu.Unlock()
-				_ = s.store.UpsertAgent(recCopy)
-				if evType == "process_exit" {
-					// A provider that dies mid-run ends the turn in `turn_failed`, not
-					// `turn_completed`: the client must surface the failure instead of
-					// waiting forever for output that will never arrive.
-					reason := "provider process exited"
-					if mp.session != nil {
-						if detail := mp.session.LastError(); detail != "" {
-							reason = detail
-						}
+			s.appendSystemErrorRow(rec, mp.session, map[string]any{"error": reason})
+			if !chief.ShouldSuppressWorkerAttention(recCopy.Labels, AttentionReasonError) {
+				if s.markAgentAttention(rec.ID, AttentionReasonError, nowStr) {
+					if latest, err := s.store.GetAgent(rec.ID); err == nil && latest != nil {
+						recCopy = *latest
 					}
-					// A child that died must tell its parent, or the parent waits forever for a
-					// result that will never arrive.
-					go s.notifyParentChildFinished(context.Background(), rec.ID, finishReasonErrored)
-					s.broadcastSessionMsg("agent_stream", map[string]any{
-						"agentId":   rec.ID,
-						"provider":  rec.Provider,
-						"timestamp": nowStr,
-						"event": map[string]any{
-							"type":     "turn_failed",
-							"provider": rec.Provider,
-							"error":    reason,
-						},
-					})
-					// The process is gone but its timeline is still in memory, and this row is what a
-					// reader sees after a reload: the failure itself is otherwise only a state change.
-					s.appendSystemErrorRow(rec, mp.session, map[string]any{"error": reason})
 				}
-				if evType == "agent_end" {
-					go s.syncPiPersistence(mp)
-					s.broadcastSessionMsg("agent_stream", map[string]any{
-						"agentId":   rec.ID,
-						"provider":  rec.Provider,
-						"timestamp": nowStr,
-						"event": map[string]any{
-							"type":     "turn_completed",
-							"provider": rec.Provider,
-						},
-					})
-				}
-				s.broadcastAgentUpdate(recCopy)
 			}
+			s.broadcastAgentUpdate(recCopy)
 		}
 	})
 
 	return mp, nil
+}
+
+func (s *Server) currentRecordSnapshot(fallback store.AgentRecord) store.AgentRecord {
+	s.mu.Lock()
+	mp := s.agents[fallback.ID]
+	if mp != nil {
+		rec := mp.record
+		s.mu.Unlock()
+		return rec
+	}
+	s.mu.Unlock()
+	if latest, err := s.store.GetAgent(fallback.ID); err == nil && latest != nil {
+		return *latest
+	}
+	return fallback
+}
+
+func (s *Server) clearAgentPermissionAttention(agentID string) {
+	s.mu.Lock()
+	mp := s.agents[agentID]
+	shouldClear := mp != nil && mp.record.RequiresAttention && mp.record.AttentionReason != nil && *mp.record.AttentionReason == AttentionReasonPermission
+	s.mu.Unlock()
+	if !shouldClear {
+		if rec, err := s.store.GetAgent(agentID); err == nil && rec != nil && rec.RequiresAttention && rec.AttentionReason != nil && *rec.AttentionReason == AttentionReasonPermission {
+			shouldClear = true
+		}
+	}
+	if shouldClear {
+		s.clearAgentAttention(agentID)
+	}
+}
+
+func (s *Server) handleTurnCompleted(mp *managedPi, sess providers.ManagedSession, rec store.AgentRecord, turnID, nowStr string) {
+	mp.stopUsagePolling()
+	go s.captureFinalUsage(mp, sess)
+
+	s.mu.Lock()
+	turnSeq := mp.turnSeq
+	mp.record.LastStatus = "idle"
+	mp.record.UpdatedAt = nowStr
+	recCopy := mp.record
+	s.mu.Unlock()
+
+	turnKey := strings.TrimSpace(turnID)
+	if turnKey == "" {
+		turnKey = fmt.Sprintf("seq:%d", turnSeq)
+	}
+	go s.notifyParentChildFinished(context.Background(), rec.ID, turnKey, finishReasonFinished)
+
+	_ = s.store.UpsertAgent(recCopy)
+	if !chief.ShouldSuppressWorkerAttention(recCopy.Labels, AttentionReasonFinished) {
+		s.markAgentAttention(rec.ID, AttentionReasonFinished, nowStr)
+	}
+	s.mu.Lock()
+	recCopy = mp.record
+	s.mu.Unlock()
+	go s.syncPiPersistence(mp)
+
+	event := map[string]any{
+		"type":     "turn_completed",
+		"provider": rec.Provider,
+	}
+	if turnID != "" || rec.Provider == "pi" || rec.Provider == "" {
+		event["turnId"] = turnID
+	}
+	s.broadcastSessionMsg("agent_stream", map[string]any{
+		"agentId":   rec.ID,
+		"provider":  rec.Provider,
+		"timestamp": nowStr,
+		"event":     event,
+	})
+	s.broadcastAgentUpdate(recCopy)
+	if s.chief != nil {
+		go s.chief.OnAgentTurnCompleted(s.bgCtx, recCopy, turnID)
+	}
 }
 
 func (s *Server) syncPiPersistence(mp *managedPi) {
@@ -3918,10 +4073,28 @@ func (s *Server) syncPiPersistenceChecked(mp *managedPi) error {
 	if s.agents[mp.record.ID] != mp {
 		return nil
 	}
+	provider := strings.TrimSpace(mp.record.Provider)
+	var existingMeta map[string]any
+	if prev := mp.record.Persistence; prev != nil {
+		if provider == "" {
+			provider = strings.TrimSpace(prev.Provider)
+		}
+		if handle == nil || handle == "" {
+			handle = prev.NativeHandle
+		}
+		if sid == "" {
+			sid = prev.SessionID
+		}
+		existingMeta = prev.Metadata
+	}
+	if provider == "" {
+		provider = "pi"
+	}
 	mp.record.Persistence = &store.AgentPersistenceHandle{
-		Provider:     "pi",
+		Provider:     provider,
 		SessionID:    sid,
 		NativeHandle: handle,
+		Metadata:     existingMeta,
 	}
 	return s.store.UpsertAgent(mp.record)
 }
@@ -4632,6 +4805,9 @@ func (mp *managedPi) startUsagePolling(s *Server, sess providers.ManagedSession)
 				recCopy := mp.record
 				s.mu.Unlock()
 				s.broadcastAgentUpdate(recCopy)
+				if s.chief != nil {
+					s.chief.RecordUsageProgress(recCopy.ID, usage)
+				}
 			}
 		}
 	}()

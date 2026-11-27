@@ -174,6 +174,10 @@ func Git(ctx context.Context, cwd string, args ...string) (string, error) {
 	return runGit(ctx, cwd, args...)
 }
 
+func GitRawOutput(ctx context.Context, cwd string, args ...string) (string, error) {
+	return runGitInputMode(ctx, cwd, "", false, args...)
+}
+
 // GitWithInput is Git with input on stdin, for the commands that batch paths
 // (`hash-object --stdin-paths`).
 func GitWithInput(ctx context.Context, cwd, input string, args ...string) (string, error) {
@@ -185,6 +189,10 @@ func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
 }
 
 func runGitInput(ctx context.Context, cwd, input string, args ...string) (string, error) {
+	return runGitInputMode(ctx, cwd, input, true, args...)
+}
+
+func runGitInputMode(ctx context.Context, cwd, input string, trimSpace bool, args ...string) (string, error) {
 	timeout := gitLocalTimeout
 	if len(args) > 0 && gitNetworkCommands[args[0]] {
 		timeout = gitNetworkTimeout
@@ -215,7 +223,10 @@ func runGitInput(ctx context.Context, cwd, input string, args ...string) (string
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(out.String()), nil
+	if trimSpace {
+		return strings.TrimSpace(out.String()), nil
+	}
+	return out.String(), nil
 }
 
 // traceGitCommand appends one JSON line per git invocation when BYSPACE_GIT_TRACE_FILE is set.

@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"strings"
 
 	"github.com/ByteTrue/byspace/internal/authz"
 )
@@ -22,6 +24,50 @@ func (s *Server) authorizationForSink(sink frameSink) *authz.Authorization {
 		return authz.New(perms)
 	}
 	return authz.NewOwner()
+}
+
+var agentCredentialPermissions = []string{"workspace.read", "workspace.write"}
+
+func (s *Server) bindSinkAgentIdentity(sink frameSink, agentID string) {
+	s.mu.Lock()
+	if s.sinkAgentIDs == nil {
+		s.sinkAgentIDs = make(map[frameSink]string)
+	}
+	if s.sinkPermissions == nil {
+		s.sinkPermissions = make(map[frameSink][]string)
+	}
+	s.sinkAgentIDs[sink] = agentID
+	s.sinkPermissions[sink] = append([]string(nil), agentCredentialPermissions...)
+	s.mu.Unlock()
+}
+
+func (s *Server) bindAgentCredential(sink frameSink, credential string) bool {
+	agentID, ok := s.agentIDForCredential(credential)
+	if !ok {
+		return false
+	}
+	s.bindSinkAgentIdentity(sink, agentID)
+	return true
+}
+
+func (s *Server) verifiedChiefActor(sink frameSink, claimed string, requireBound bool) (string, error) {
+	s.mu.Lock()
+	agentID := s.sinkAgentIDs[sink]
+	s.mu.Unlock()
+	claimed = strings.TrimSpace(claimed)
+	if agentID != "" {
+		if claimed != "" && claimed != agentID {
+			return "", errors.New("callerAgentId does not match authenticated agent identity")
+		}
+		return agentID, nil
+	}
+	if claimed != "" {
+		return "", errors.New("callerAgentId requires an authenticated agent identity")
+	}
+	if requireBound {
+		return "", errors.New("authenticated agent identity required")
+	}
+	return "", nil
 }
 
 // SetSinkPermissions grants a connection a permission set, replacing the owner default.
@@ -58,8 +104,8 @@ func (s *Server) relayAuthResolved(sink frameSink) bool {
 
 // relayAuthIsPending reports whether this socket still has to prove a password.
 //
-// Relay sockets always do, and a host with no password has nothing to prove, so it refuses
-// relay sessions outright in handleRelayPassword.
+// Relay sockets always do. A host with no daemon password still accepts a private agent
+// credential, but refuses unauthenticated operator sessions in handleRelayPassword.
 func (s *Server) relayAuthIsPending(sink frameSink) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -72,6 +118,7 @@ func (s *Server) relayAuthForget(sink frameSink) {
 	delete(s.relayAuthPending_, sink)
 	delete(s.relayPeerKey, sink)
 	delete(s.relayPasswordAuthed, sink)
+	delete(s.sinkAgentIDs, sink)
 	s.mu.Unlock()
 }
 
@@ -103,11 +150,10 @@ func (s *Server) relayPeerKeyOf(sink frameSink) string {
 
 // handleRelayPassword checks the password a relay connection sent inside the encrypted channel.
 //
-// A daemon with no password set refuses the connection outright: relay reachability is exactly
-// the case a password exists to cover, and a passwordless daemon would otherwise be controllable
-// by anyone holding its pairing offer. The right password grants the owner set, because a relay
-// client that knows the password is the operator. A wrong one closes the socket rather than
-// leaving it half-authenticated.
+// An agent credential binds only that agent identity. Without one, a daemon with no password
+// refuses operator access because its pairing offer would otherwise be sufficient for control.
+// The right daemon password grants the owner set. A wrong credential closes the socket rather
+// than leaving it half-authenticated.
 func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID string `json:"requestId"`
@@ -115,6 +161,20 @@ func (s *Server) handleRelayPassword(ctx context.Context, sink frameSink, raw js
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
 		_ = sink.Close(wsCloseRelayAuthRequired, "Password required")
+		return
+	}
+	if agentID, ok := s.agentIDForCredential(req.Password); ok {
+		s.relayAuthResolved(sink)
+		s.bindSinkAgentIdentity(sink, agentID)
+		s.mu.Lock()
+		if _, tracked := s.clients[sink]; tracked {
+			s.clients[sink] = true
+		}
+		s.mu.Unlock()
+		_ = sendSessionMsg(ctx, sink, "auth.password.submit.response", map[string]any{
+			"requestId": req.RequestID,
+			"ok":        true,
+		})
 		return
 	}
 	hash := s.daemonPasswordHash()

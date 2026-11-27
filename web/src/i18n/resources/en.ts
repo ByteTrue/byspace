@@ -216,6 +216,119 @@ export const en = {
       checkWorkspaces: "Check my workspaces",
       recentActivity: "Any recent activity?",
     },
+    panel: {
+      untitledMission: "Mission",
+      loadError: "Unable to load missions",
+      noThreads: "No execution threads yet.",
+      recentActivity: "Recent activity",
+      noEvents: "No activity recorded yet.",
+    },
+    missionStatus: {
+      active: "Active",
+      waiting_human: "Needs decision",
+      completed: "Completed",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
+    threadStatus: {
+      queued: "Queued",
+      authoring: "Authoring",
+      verifying: "Verifying",
+      needs_rebase: "Needs rebase",
+      merge_checking: "Merge checking",
+      ready_to_land: "Ready to land",
+      landed: "Landed",
+      blocked: "Blocked",
+      failed: "Failed",
+      canceled: "Canceled",
+    },
+    isolation: {
+      none: "Shared",
+      worktree: "Worktree",
+    },
+    groups: {
+      needsAttention: "Needs attention ({{count}})",
+      readyToLand: "Ready to land ({{count}})",
+      inProgress: "In progress ({{count}})",
+      completed: "Completed ({{count}})",
+    },
+    roles: {
+      author: "Author",
+      verifier: "Verifier",
+      integrator: "Integrator",
+    },
+    thread: {
+      ownedPaths: "Owns {{paths}}{{extra}}",
+      rejectCount: "{{count}} rejected",
+      rebaseCount: "{{count}} rebase",
+    },
+    verdict: {
+      pass: "Verified",
+      reject: "Rejected",
+      tainted: "Mutated",
+    },
+    mergeCheck: {
+      dirtyWorktree: "Target worktree has uncommitted changes",
+      conflict: "Merge conflicts: {{files}}",
+    },
+    attention: {
+      severity: {
+        warning: "Warning",
+        fatal: "Action required",
+      },
+      kinds: {
+        quota_exhausted: "Quota exhausted",
+        rate_limited: "Rate limited",
+        auth_error: "Authentication error",
+        process_crash: "Process crashed",
+        stall: "Stalled",
+        permission_blocked: "Permission required",
+        merge_conflict: "Merge conflict",
+        verify_escalated: "Verification escalated",
+        verifier_tier_blocked: "Verifier tier blocked",
+      },
+    },
+    decision: {
+      badge: "Decision",
+      approveFallback: "Approve",
+      notePlaceholder: "Optional note...",
+      addNote: "Add note",
+      hideNote: "Hide note",
+      landingFailedTitle: "Landing failed",
+      landingFailedHelp:
+        "This approval is resolved. Use Land on a ready thread to request new approval.",
+    },
+    actions: {
+      openConversation: "Open",
+      upgradeToL1: "Add verifier (L1)",
+      upgradeToL2: "Split worktrees (L2)",
+      carryChangesToThread1: "Carry changes into Thread 1",
+      toggleActivity: "Toggle activity",
+      refresh: "Refresh",
+      hideCompleted: "Hide",
+      showCompleted: "Show",
+      recheck: "Recheck",
+      land: "Land",
+      cancelThread: "Cancel",
+      landConfirmTitle: "Land this thread?",
+      landConfirmMessage:
+        "Land {{title}} into the base branch using local {{strategy}}? If required, you will approve the landing separately.",
+      cancelConfirmTitle: "Cancel this thread?",
+      cancelConfirmMessage:
+        "Stop the workers for {{title}} and mark it canceled? The worktree and uncommitted changes will be kept.",
+      orchestrate: "Orchestrate",
+      upgradeSoloToL1: "Add shadow verifier (L1)",
+      upgradeSoloToL2: "Escalate to Chief worktrees (L2)",
+      dirtyUpgradeConfirmTitle: "Uncommitted changes detected",
+      dirtyUpgradeConfirmMessage:
+        "This workspace has uncommitted changes. Carry them into Thread 1's isolated worktree?",
+      upgrading: "Upgrading...",
+    },
+    errors: {
+      upgradeFailed: "Unable to upgrade mission",
+      threadActionFailed: "Thread action failed",
+      unknownError: "Unknown error",
+    },
   },
   agentPanel: {
     states: {
@@ -2334,6 +2447,13 @@ export const en = {
         featuresLabel: "Features",
         featureCount: "{{count}} features",
         featureCountOne: "{{count}} feature",
+        tierLabel: "Capability tier",
+        tierHint: "Used by Chief routing to ensure Verifiers are at least as capable as Authors",
+        tiers: {
+          fast: "Fast",
+          standard: "Standard",
+          strong: "Strong",
+        },
         notesLabel: "When to use",
         notesPlaceholder: "Use for UI work — components, layout and design tokens.",
         notesHint: "Helps agents choose this profile when starting another agent.",
@@ -2344,6 +2464,98 @@ export const en = {
         removeConfirmMessage: 'Remove "{{name}}"?',
         moveUp: "Move up",
         moveDown: "Move down",
+      },
+      chief: {
+        sectionTitle: "Chief routing",
+        sectionHint:
+          "Default execution tier, role profile routing, stall recovery, and landing policy for Chief orchestration.",
+        defaultTier: {
+          label: "Default tier",
+          options: {
+            L0: "L0 Solo",
+            L1: "L1 Verify",
+            L2: "L2 Chief",
+          },
+          descriptions: {
+            L0: "Direct solo agent without verification overhead",
+            L1: "Solo author paired with a read-only verifier",
+            L2: "Chief coordinator with isolated worktree threads",
+          },
+        },
+        landing: {
+          requireApprovalTitle: "Require human approval before landing",
+          requireApprovalHint: "Ask for explicit confirmation before merging verified threads",
+          modeTitle: "Landing mode",
+          modeOptions: {
+            merge_local: "Merge local",
+            open_pr: "Open PR",
+          },
+          modeDescriptions: {
+            merge_local: "Land verified threads directly into the target branch",
+            open_pr: "Open a pull request instead of merging locally",
+          },
+          strategyTitle: "Landing strategy",
+          strategyOptions: {
+            squash: "Squash",
+            merge: "Merge",
+            rebase: "Rebase",
+          },
+          strategyDescriptions: {
+            squash: "Squash commits into one clean commit on target",
+            merge: "Create a non-fast-forward merge commit",
+            rebase: "Rebase feature branch and fast-forward target",
+          },
+        },
+        stall: {
+          softWarningTitle: "Soft stall warning (seconds)",
+          softWarningHint: "Warn when a worker shows no progress for this long",
+          hardRecoveryTitle: "Hard stall recovery (seconds)",
+          hardRecoveryHint: "Trigger fallback recovery after this much idle time",
+        },
+        roles: {
+          unassigned: "Automatic",
+          unassignedHint: "Use host default provider routing",
+          noProfiles: "Add agent profiles above to assign role routing",
+          fallbacksLabel: "Fallback profiles",
+          addFallback: "Add fallback",
+          noMoreFallbacks: "No additional profiles available",
+          noFallbacksSelected: "No fallbacks configured",
+          removeFallback: "Remove {{name}}",
+          chief: {
+            label: "Chief",
+            hint: "Non-coding mission coordinator",
+          },
+          author: {
+            label: "Author",
+            hint: "Implements scoped thread changes",
+          },
+          verifier: {
+            label: "Verifier",
+            hint: "Read-only reviewer (tier must be >= Author)",
+          },
+          integrator: {
+            label: "Integrator",
+            hint: "Resolves complex rebase conflicts in isolated worktrees",
+          },
+        },
+        actions: {
+          save: "Save",
+          saving: "Saving...",
+          reset: "Reset",
+        },
+        errors: {
+          verifierTierTitle: "Verifier tier requirement not met",
+          saveTitle: "Unable to save Chief routing",
+          invalidSoftStall: "Soft warning must be a positive whole number of seconds.",
+          invalidHardStall: "Hard recovery must be a positive whole number of seconds.",
+          hardBelowSoft:
+            "Hard recovery ({{hard}}s) must be greater than or equal to soft warning ({{soft}}s).",
+          unknownProfile: "Referenced profile {{id}} does not exist.",
+          verifierTierBelowAuthor:
+            "Verifier {{verifierName}} ({{verifierTier}}) cannot have a lower tier than Author {{authorName}} ({{authorTier}}).",
+          verifierFallbackBelowAuthor:
+            "Fallback profiles ({{names}}) are below Author tier {{authorTier}} and will be skipped.",
+        },
       },
       daemon: {
         rename: {

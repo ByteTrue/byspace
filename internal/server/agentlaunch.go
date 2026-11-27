@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	agentroles "github.com/ByteTrue/byspace/internal/agent/roles"
+	"github.com/ByteTrue/byspace/internal/chief"
 	"github.com/ByteTrue/byspace/internal/store"
 )
 
@@ -15,6 +16,11 @@ func (s *Server) systemPromptFor(rec store.AgentRecord) string {
 	// and the behaviour did not.
 	if roleName := rec.Labels[agentroles.RoleLabel]; roleName != "" {
 		if prompt := agentroles.SystemPrompt(roleName); prompt != "" {
+			parts = append(parts, prompt)
+		}
+	}
+	if _, _, orchRole, ok := chief.OrchestrationMetaFromLabels(rec.Labels); ok {
+		if prompt := agentroles.OrchestrationPrompt(orchRole); prompt != "" {
 			parts = append(parts, prompt)
 		}
 	}

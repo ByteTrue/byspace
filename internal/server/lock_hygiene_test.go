@@ -56,6 +56,19 @@ var selfLockingMethods = map[string]bool{
 	"syncPRStatusTargets":               true,
 	"broadcastWorkspaceForCwd":          true,
 	"storeCheckoutGitRuntimeFromStatus": true,
+	"handleTurnCompleted":               true,
+	"currentRecordSnapshot":             true,
+	"clearAgentPermissionAttention":     true,
+	"agentRuntimeState":                 true,
+	"currentAgentRecord":                true,
+	"probeAgent":                        true,
+	"notifyHuman":                       true,
+	"recoverOrEscalateAgent":            true,
+	"SendPrompt":                        true,
+	"promptAgentWithText":               true,
+	"adoptExistingAuthor":               true,
+	"tryHotSwapProfile":                 true,
+	"seedContextFromAgent":              true,
 }
 
 // TestNoReentrantServerLocks parses every non-test file in this package and reports a call to a

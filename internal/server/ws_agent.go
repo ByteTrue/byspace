@@ -16,6 +16,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/notices"
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	agentroles "github.com/ByteTrue/byspace/internal/agent/roles"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/naming"
@@ -481,7 +482,7 @@ func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json
 		rec.Title = req.Name
 	}
 	if req.Labels != nil {
-		rec.Labels = mergeLabelPatch(rec.Labels, req.Labels)
+		rec.Labels = mergeLabelPatch(rec.Labels, agentroles.StripReserved(req.Labels))
 	}
 	rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	_ = s.store.UpsertAgent(*rec)

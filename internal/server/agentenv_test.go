@@ -13,10 +13,11 @@ import (
 // daemon, so a repo home on 6778 would otherwise be a different daemon than the one that
 // launched the agent.
 func TestAgentEnvNamesThisDaemonAndCaller(t *testing.T) {
-	s := &Server{homeDir: "/tmp/home", listenAddr: "0.0.0.0:6778"}
+	homeDir := filepath.Join(t.TempDir(), "home")
+	s := &Server{homeDir: homeDir, listenAddr: "0.0.0.0:6778"}
 	env := s.agentEnv(store.AgentRecord{ID: "agt_1"})
 
-	if got := envValue(env, "BYSPACE_HOME"); got != "/tmp/home" {
+	if got := envValue(env, "BYSPACE_HOME"); got != homeDir {
 		t.Errorf("BYSPACE_HOME = %q", got)
 	}
 	if got := envValue(env, "BYSPACE_AGENT_ID"); got != "agt_1" {
@@ -32,10 +33,23 @@ func TestAgentEnvNamesThisDaemonAndCaller(t *testing.T) {
 	if dir := filepath.Dir(exe); !strings.Contains(envValue(env, "PATH"), dir) {
 		t.Errorf("PATH %q does not lead with %q", envValue(env, "PATH"), dir)
 	}
-	// The credential is the home's own file, read by the CLI. Putting a second secret in the
-	// environment is how two auth paths drift apart.
-	if got := envValue(env, "BYSPACE_AGENT_CREDENTIAL"); got != "" {
-		t.Errorf("agent env carries a credential: %q", got)
+	if got := envValue(env, "BYSPACE_AGENT_CREDENTIAL"); got == "" {
+		t.Error("agent env is missing its private credential")
+	}
+}
+
+func TestAgentEnvWithCredentialPreservesChiefCLIIdentity(t *testing.T) {
+	s := &Server{homeDir: t.TempDir(), listenAddr: "127.0.0.1:6778"}
+	rec := store.AgentRecord{ID: "agt_chief", Config: &store.AgentConfig{Env: map[string]string{
+		"BYSPACE_AGENT_ID":         "agt_spoofed",
+		"BYSPACE_AGENT_CREDENTIAL": "attacker-controlled",
+	}}}
+	env := s.agentEnvWithCredential(rec, "generated-agent-credential")
+	if got := envValue(env, "BYSPACE_AGENT_ID"); got != "agt_chief" {
+		t.Fatalf("BYSPACE_AGENT_ID = %q, want agt_chief", got)
+	}
+	if got := envValue(env, "BYSPACE_AGENT_CREDENTIAL"); got != "generated-agent-credential" {
+		t.Fatalf("BYSPACE_AGENT_CREDENTIAL = %q, want generated-agent-credential", got)
 	}
 }
 
@@ -86,7 +100,7 @@ func TestPrependPathDirLeavesAnExistingEntryAlone(t *testing.T) {
 // A per-agent environment reaches the provider process, and it cannot rewrite the identity BySpace
 // puts there: an agent that could change BYSPACE_AGENT_ID could act as another agent.
 func TestAgentEnvAppliesUserVariablesWithoutLosingIdentity(t *testing.T) {
-	s := &Server{homeDir: "/tmp/home", listenAddr: "127.0.0.1:6778"}
+	s := &Server{homeDir: t.TempDir(), listenAddr: "127.0.0.1:6778"}
 	rec := store.AgentRecord{ID: "agt_1"}
 	rec.Config = &store.AgentConfig{Env: map[string]string{
 		"ANTHROPIC_BASE_URL": "https://proxy.example",

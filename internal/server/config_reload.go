@@ -32,6 +32,7 @@ var reloadablePaths = []string{
 	"daemon.appendSystemPrompt",
 	"daemon.terminalProfiles",
 	"daemon.agentProfiles",
+	"daemon.chief",
 	"app.baseUrl",
 	"agents.providers",
 	"agents.metadataGeneration",

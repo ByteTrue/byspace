@@ -110,6 +110,24 @@ import type {
   HostSyncRecord,
   HostSyncChange,
   HostSyncExchangeResponse,
+  ChiefMissionStatus,
+  ChiefMissionTier,
+  ChiefThreadIsolation,
+  ChiefLandingStrategy,
+  ChiefMissionUpgradeDirtyPolicy,
+  ChiefMissionUpgradeRequest,
+  ChiefMissionListResponse,
+  ChiefMissionGetResponse,
+  ChiefMissionCreateResponse,
+  ChiefMissionUpgradeResponse,
+  ChiefMissionResolveDecisionResponse,
+  ChiefThreadCreateResponse,
+  ChiefThreadSubmitResponse,
+  ChiefThreadVerdictResponse,
+  ChiefThreadMergeCheckResponse,
+  ChiefThreadLandResponse,
+  ChiefThreadCancelResponse,
+  ChiefAgentHotswapResponse,
 } from "@bytetrue/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -319,6 +337,10 @@ export type DaemonEvent =
   | {
       type: "providers_snapshot_update";
       payload: Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>["payload"];
+    }
+  | {
+      type: "chief.mission.update";
+      payload: Extract<SessionOutboundMessage, { type: "chief.mission.update" }>["payload"];
     }
   | { type: "error"; message: string };
 
@@ -757,6 +779,146 @@ export interface UpdateScheduleOptions {
   expiresAt?: string | null;
   requestId?: string;
 }
+
+export type ChiefMissionListPayload = ChiefMissionListResponse["payload"];
+export type ChiefMissionGetPayload = ChiefMissionGetResponse["payload"];
+export type ChiefMissionCreatePayload = ChiefMissionCreateResponse["payload"];
+export type ChiefMissionUpgradePayload = ChiefMissionUpgradeResponse["payload"];
+export type ChiefMissionResolveDecisionPayload = ChiefMissionResolveDecisionResponse["payload"];
+export type ChiefThreadCreatePayload = ChiefThreadCreateResponse["payload"];
+export type ChiefThreadSubmitPayload = ChiefThreadSubmitResponse["payload"];
+export type ChiefThreadVerdictPayload = ChiefThreadVerdictResponse["payload"];
+export type ChiefThreadMergeCheckPayload = ChiefThreadMergeCheckResponse["payload"];
+export type ChiefThreadLandPayload = ChiefThreadLandResponse["payload"];
+export type ChiefThreadCancelPayload = ChiefThreadCancelResponse["payload"];
+export type ChiefAgentHotswapPayload = ChiefAgentHotswapResponse["payload"];
+
+export interface ChiefMissionListOptions {
+  chiefAgentId?: string;
+  projectId?: string;
+  baseWorkspaceId?: string;
+  statuses?: ChiefMissionStatus[];
+  includeCompleted?: boolean;
+  requestId?: string;
+}
+
+export interface ChiefMissionGetOptions {
+  missionId: string;
+  includeEvents?: boolean;
+  eventsLimit?: number;
+  afterSeq?: number;
+  requestId?: string;
+}
+
+export interface ChiefMissionCreateOptions {
+  goal: string;
+  title?: string;
+  tier?: ChiefMissionTier;
+  chiefAgentId?: string;
+  callerAgentId?: string;
+  projectId?: string;
+  baseWorkspaceId?: string;
+  baseCwd?: string;
+  baseBranch?: string;
+  requestId?: string;
+}
+
+export interface ChiefMissionUpgradeOptions {
+  missionId?: string;
+  soloAgentId?: string;
+  callerAgentId?: string;
+  targetTier: ChiefMissionUpgradeRequest["targetTier"];
+  dirtyPolicy?: ChiefMissionUpgradeDirtyPolicy;
+  title?: string;
+  goal?: string;
+  acceptanceCriteria?: string[];
+  ownedPaths?: string[];
+  authorProfileId?: string;
+  verifierProfileId?: string;
+  requestId?: string;
+}
+
+export interface ChiefMissionResolveDecisionOptions {
+  missionId: string;
+  decisionId?: string;
+  optionId: string;
+  note?: string;
+  requestId?: string;
+}
+
+export interface ChiefThreadCreateOptions {
+  missionId: string;
+  callerAgentId?: string;
+  title: string;
+  goal: string;
+  acceptanceCriteria?: string[];
+  ownedPaths?: string[];
+  isolation?: ChiefThreadIsolation;
+  baseRef?: string;
+  branch?: string;
+  authorProfileId?: string;
+  verifierProfileId?: string;
+  authorAgentId?: string;
+  initialPrompt?: string;
+  requestId?: string;
+}
+
+export interface ChiefThreadSubmitOptions {
+  threadId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  summary: string;
+  tests?: string;
+  changedFiles?: string[];
+  commitSha?: string;
+  requestId?: string;
+}
+
+export interface ChiefThreadVerdictOptions {
+  threadId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  outcome: "pass" | "reject";
+  summary: string;
+  issues?: string[];
+  checkedCommands?: string[];
+  requestId?: string;
+}
+
+export interface ChiefThreadMergeCheckOptions {
+  threadId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  requestId?: string;
+}
+
+export interface ChiefThreadLandOptions {
+  threadId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  strategy: ChiefLandingStrategy;
+  commitMessage: string;
+  requestId?: string;
+}
+
+export interface ChiefThreadCancelOptions {
+  threadId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  reason: string;
+  requestId?: string;
+}
+
+export interface ChiefAgentHotswapOptions {
+  agentId: string;
+  threadId: string;
+  profileId: string;
+  missionId?: string;
+  callerAgentId?: string;
+  reason: string;
+  requestId?: string;
+}
+
 export interface RenameBranchInput {
   cwd: string;
   branch: string;
@@ -5384,6 +5546,220 @@ export class DaemonClient {
     });
   }
 
+  async listChiefMissions(options?: ChiefMissionListOptions): Promise<ChiefMissionListPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.mission.list.response">({
+      requestId: options?.requestId,
+      message: {
+        type: "chief.mission.list.request",
+        ...(options?.chiefAgentId !== undefined ? { chiefAgentId: options.chiefAgentId } : {}),
+        ...(options?.projectId !== undefined ? { projectId: options.projectId } : {}),
+        ...(options?.baseWorkspaceId !== undefined
+          ? { baseWorkspaceId: options.baseWorkspaceId }
+          : {}),
+        ...(options?.statuses !== undefined ? { statuses: options.statuses } : {}),
+        ...(options?.includeCompleted !== undefined
+          ? { includeCompleted: options.includeCompleted }
+          : {}),
+      },
+    });
+  }
+
+  async getChiefMission(options: ChiefMissionGetOptions): Promise<ChiefMissionGetPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.mission.get.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.mission.get.request",
+        missionId: options.missionId,
+        ...(options.includeEvents !== undefined ? { includeEvents: options.includeEvents } : {}),
+        ...(options.eventsLimit !== undefined ? { eventsLimit: options.eventsLimit } : {}),
+        ...(options.afterSeq !== undefined ? { afterSeq: options.afterSeq } : {}),
+      },
+    });
+  }
+
+  async createChiefMission(options: ChiefMissionCreateOptions): Promise<ChiefMissionCreatePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.mission.create.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.mission.create.request",
+        goal: options.goal,
+        ...(options.title !== undefined ? { title: options.title } : {}),
+        ...(options.tier !== undefined ? { tier: options.tier } : {}),
+        ...(options.chiefAgentId !== undefined ? { chiefAgentId: options.chiefAgentId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+        ...(options.projectId !== undefined ? { projectId: options.projectId } : {}),
+        ...(options.baseWorkspaceId !== undefined
+          ? { baseWorkspaceId: options.baseWorkspaceId }
+          : {}),
+        ...(options.baseCwd !== undefined ? { baseCwd: options.baseCwd } : {}),
+        ...(options.baseBranch !== undefined ? { baseBranch: options.baseBranch } : {}),
+      },
+    });
+  }
+
+  async upgradeChiefMission(
+    options: ChiefMissionUpgradeOptions,
+  ): Promise<ChiefMissionUpgradePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.mission.upgrade.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.mission.upgrade.request",
+        targetTier: options.targetTier,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.soloAgentId !== undefined ? { soloAgentId: options.soloAgentId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+        ...(options.dirtyPolicy !== undefined ? { dirtyPolicy: options.dirtyPolicy } : {}),
+        ...(options.title !== undefined ? { title: options.title } : {}),
+        ...(options.goal !== undefined ? { goal: options.goal } : {}),
+        ...(options.acceptanceCriteria !== undefined
+          ? { acceptanceCriteria: options.acceptanceCriteria }
+          : {}),
+        ...(options.ownedPaths !== undefined ? { ownedPaths: options.ownedPaths } : {}),
+        ...(options.authorProfileId !== undefined
+          ? { authorProfileId: options.authorProfileId }
+          : {}),
+        ...(options.verifierProfileId !== undefined
+          ? { verifierProfileId: options.verifierProfileId }
+          : {}),
+      },
+    });
+  }
+
+  async resolveChiefDecision(
+    options: ChiefMissionResolveDecisionOptions,
+  ): Promise<ChiefMissionResolveDecisionPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.mission.resolve_decision.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.mission.resolve_decision.request",
+        missionId: options.missionId,
+        optionId: options.optionId,
+        ...(options.decisionId !== undefined ? { decisionId: options.decisionId } : {}),
+        ...(options.note !== undefined ? { note: options.note } : {}),
+      },
+    });
+  }
+
+  async createChiefThread(options: ChiefThreadCreateOptions): Promise<ChiefThreadCreatePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.create.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.create.request",
+        missionId: options.missionId,
+        title: options.title,
+        goal: options.goal,
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+        ...(options.acceptanceCriteria !== undefined
+          ? { acceptanceCriteria: options.acceptanceCriteria }
+          : {}),
+        ...(options.ownedPaths !== undefined ? { ownedPaths: options.ownedPaths } : {}),
+        ...(options.isolation !== undefined ? { isolation: options.isolation } : {}),
+        ...(options.baseRef !== undefined ? { baseRef: options.baseRef } : {}),
+        ...(options.branch !== undefined ? { branch: options.branch } : {}),
+        ...(options.authorProfileId !== undefined
+          ? { authorProfileId: options.authorProfileId }
+          : {}),
+        ...(options.verifierProfileId !== undefined
+          ? { verifierProfileId: options.verifierProfileId }
+          : {}),
+        ...(options.authorAgentId !== undefined ? { authorAgentId: options.authorAgentId } : {}),
+        ...(options.initialPrompt !== undefined ? { initialPrompt: options.initialPrompt } : {}),
+      },
+    });
+  }
+
+  async submitChiefThread(options: ChiefThreadSubmitOptions): Promise<ChiefThreadSubmitPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.submit.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.submit.request",
+        threadId: options.threadId,
+        summary: options.summary,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+        ...(options.tests !== undefined ? { tests: options.tests } : {}),
+        ...(options.changedFiles !== undefined ? { changedFiles: options.changedFiles } : {}),
+        ...(options.commitSha !== undefined ? { commitSha: options.commitSha } : {}),
+      },
+    });
+  }
+
+  async verdictChiefThread(options: ChiefThreadVerdictOptions): Promise<ChiefThreadVerdictPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.verdict.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.verdict.request",
+        threadId: options.threadId,
+        outcome: options.outcome,
+        summary: options.summary,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+        ...(options.issues !== undefined ? { issues: options.issues } : {}),
+        ...(options.checkedCommands !== undefined
+          ? { checkedCommands: options.checkedCommands }
+          : {}),
+      },
+    });
+  }
+
+  async mergeCheckChiefThread(
+    options: ChiefThreadMergeCheckOptions,
+  ): Promise<ChiefThreadMergeCheckPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.merge_check.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.merge_check.request",
+        threadId: options.threadId,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+      },
+    });
+  }
+
+  async landChiefThread(options: ChiefThreadLandOptions): Promise<ChiefThreadLandPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.land.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.land.request",
+        threadId: options.threadId,
+        strategy: options.strategy,
+        commitMessage: options.commitMessage,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+      },
+      timeout: 120_000,
+    });
+  }
+
+  async cancelChiefThread(options: ChiefThreadCancelOptions): Promise<ChiefThreadCancelPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.thread.cancel.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.thread.cancel.request",
+        threadId: options.threadId,
+        reason: options.reason,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+      },
+    });
+  }
+
+  async hotswapChiefAgent(options: ChiefAgentHotswapOptions): Promise<ChiefAgentHotswapPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"chief.agent.hotswap.response">({
+      requestId: options.requestId,
+      message: {
+        type: "chief.agent.hotswap.request",
+        agentId: options.agentId,
+        threadId: options.threadId,
+        profileId: options.profileId,
+        reason: options.reason,
+        ...(options.missionId !== undefined ? { missionId: options.missionId } : {}),
+        ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
+      },
+      timeout: 180_000,
+    });
+  }
+
   onTerminalStreamEvent(handler: (event: TerminalStreamEvent) => void): () => void {
     return this.terminalStreams.onEvent(handler);
   }
@@ -6106,6 +6482,11 @@ export class DaemonClient {
       case "providers_snapshot_update":
         return {
           type: "providers_snapshot_update",
+          payload: msg.payload,
+        };
+      case "chief.mission.update":
+        return {
+          type: "chief.mission.update",
           payload: msg.payload,
         };
       default:

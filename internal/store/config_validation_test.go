@@ -62,6 +62,28 @@ func TestValidateDaemonConfigRejectsBadShapes(t *testing.T) {
 	}
 }
 
+func TestValidateDaemonConfigRejectsNonObjectKeyedProfiles(t *testing.T) {
+	entries := []struct {
+		name  string
+		value any
+	}{
+		{name: "null", value: nil},
+		{name: "string", value: "pi"},
+		{name: "list", value: []any{map[string]any{"provider": "pi"}}},
+		{name: "number", value: float64(42)},
+	}
+	for _, entry := range entries {
+		t.Run(entry.name, func(t *testing.T) {
+			err := ValidateDaemonConfig(map[string]any{
+				"agentProfiles": map[string]any{"fast": entry.value},
+			})
+			if err == nil || !strings.Contains(err.Error(), "agentProfiles.fast: must be an object") {
+				t.Fatalf("expected keyed profile object error, got %v", err)
+			}
+		})
+	}
+}
+
 // A duplicate profile id silently shadows the earlier one: the user edits one and watches the
 // other take effect.
 func TestValidateDaemonConfigNamesTheDuplicate(t *testing.T) {

@@ -1,7 +1,12 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { createBySpaceApi, createBySpaceClient } from "./index.js";
 import { DaemonClient } from "./daemon-client.js";
-import type { BySpaceAgent, BySpaceClient, BySpaceWorkspace } from "./index.js";
+import type {
+  BySpaceAgent,
+  BySpaceChiefMissionUpgradeOptions,
+  BySpaceClient,
+  BySpaceWorkspace,
+} from "./index.js";
 
 type FakeWebSocketHandler = (...args: unknown[]) => void;
 
@@ -213,7 +218,7 @@ test("createBySpaceClient exposes workspace list through the daemon client", asy
   await client.close();
 });
 
-test("createBySpaceApi borrows daemon capabilities without exposing connection ownership", () => {
+test("createBySpaceApi borrows daemon capabilities without exposing connection ownership", async () => {
   const daemonClient = new DaemonClient({
     url: "ws://daemon.test",
     clientId: "borrowed-api",
@@ -224,6 +229,7 @@ test("createBySpaceApi borrows daemon capabilities without exposing connection o
 
   expect(Object.keys(byspace).sort()).toEqual([
     "agents",
+    "chief",
     "config",
     "projects",
     "providers",
@@ -233,6 +239,19 @@ test("createBySpaceApi borrows daemon capabilities without exposing connection o
   expect("connect" in byspace).toBe(false);
   expect("close" in byspace).toBe(false);
   expect("skills" in byspace.agents).toBe(false);
+
+  const listChiefMissions = vi.spyOn(daemonClient, "listChiefMissions").mockResolvedValue({
+    requestId: "chief-list",
+    missions: [],
+    error: null,
+  });
+  await expect(byspace.chief.listMissions({ includeCompleted: true })).resolves.toEqual({
+    requestId: "chief-list",
+    missions: [],
+    error: null,
+  });
+  expect(listChiefMissions).toHaveBeenCalledWith({ includeCompleted: true });
+  expectTypeOf<BySpaceChiefMissionUpgradeOptions["targetTier"]>().toEqualTypeOf<"L1" | "L2">();
 });
 
 test("agent handles send permission responses for their agent", async () => {

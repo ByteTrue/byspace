@@ -33,6 +33,7 @@ import {
 } from "@bytetrue/protocol/terminal-profiles";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
+import { ChiefRoutingSection } from "@/screens/settings/chief-routing-section";
 import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { SettingsTextArea } from "@/widgets/settings-textarea";
 import { Button } from "@/ui/button";
@@ -352,6 +353,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       <AgentSkillsSection serverId={serverId} />
       <TerminalProfilesSection serverId={serverId} />
       <AgentProfilesSection serverId={serverId} />
+      <ChiefRoutingSection serverId={serverId} />
       <MetadataGenerationPage serverId={serverId} />
       <AddProviderSection serverId={serverId} />
     </div>

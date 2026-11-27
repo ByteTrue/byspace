@@ -47,6 +47,102 @@ type OpenCodeServer struct {
 	generation int
 	// retired marks a server that has been replaced and must not be handed out again.
 	retired bool
+
+	mu             sync.Mutex
+	intentional    bool
+	hasExited      bool
+	exitErr        error
+	exitListeners  map[int]func(error)
+	nextListenerID int
+	watchOnce      sync.Once
+}
+
+// OnExit registers a callback invoked once if the backing server process exits unexpectedly.
+func (s *OpenCodeServer) OnExit(fn func(error)) func() {
+	if s == nil || fn == nil {
+		return func() {}
+	}
+	s.ensureExitWatcher()
+	s.mu.Lock()
+	if s.hasExited {
+		intentional := s.intentional
+		exitErr := s.exitErr
+		s.mu.Unlock()
+		if !intentional {
+			fn(exitErr)
+		}
+		return func() {}
+	}
+	if s.exitListeners == nil {
+		s.exitListeners = make(map[int]func(error))
+	}
+	id := s.nextListenerID
+	s.nextListenerID++
+	s.exitListeners[id] = fn
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		delete(s.exitListeners, id)
+		s.mu.Unlock()
+	}
+}
+
+func (s *OpenCodeServer) ensureExitWatcher() {
+	if s == nil || s.exited == nil {
+		return
+	}
+	s.watchOnce.Do(func() {
+		ch := s.exited
+		go func() {
+			err := <-ch
+			s.notifyExit(err)
+		}()
+	})
+}
+
+func (s *OpenCodeServer) markIntentionalStop() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.intentional = true
+	s.exitListeners = nil
+	s.mu.Unlock()
+}
+
+func (s *OpenCodeServer) exitedAlready() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hasExited
+}
+
+func (s *OpenCodeServer) notifyExit(err error) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.hasExited {
+		s.mu.Unlock()
+		return
+	}
+	s.hasExited = true
+	s.exitErr = err
+	intentional := s.intentional
+	var listeners []func(error)
+	if !intentional {
+		listeners = make([]func(error), 0, len(s.exitListeners))
+		for _, fn := range s.exitListeners {
+			listeners = append(listeners, fn)
+		}
+	}
+	s.exitListeners = nil
+	s.mu.Unlock()
+	for _, fn := range listeners {
+		fn(err)
+	}
 }
 
 // OpenCodePool starts and reuses `opencode serve` processes.
@@ -124,7 +220,7 @@ func (p *OpenCodePool) SetEnv(env map[string]string) {
 // multiply the ports and the memory for no benefit.
 func (p *OpenCodePool) Acquire(ctx context.Context) (*OpenCodeServer, error) {
 	p.mu.Lock()
-	if p.current != nil && !p.current.retired && p.serverAlive(p.current) {
+	if p.current != nil && !p.current.retired && !p.current.exitedAlready() && p.serverAlive(p.current) {
 		server := p.current
 		p.mu.Unlock()
 		return server, nil
@@ -193,6 +289,7 @@ func (p *OpenCodePool) Shutdown() {
 	p.current = nil
 	if server != nil {
 		server.retired = true
+		server.markIntentionalStop()
 	}
 	p.mu.Unlock()
 	if server != nil {
@@ -255,8 +352,9 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 		return nil, fmt.Errorf("opencode serve: %w", err)
 	}
 
-	exited := make(chan error, 1)
+	var exited chan error
 	if cmd != nil && cmd.Process != nil {
+		exited = make(chan error, 1)
 		go func() {
 			exited <- cmd.Wait()
 			close(exited)
@@ -278,6 +376,7 @@ func (p *OpenCodePool) startServer(ctx context.Context) (*OpenCodeServer, error)
 		p.stopServer(server)
 		return nil, err
 	}
+	server.ensureExitWatcher()
 	return server, nil
 }
 
@@ -344,6 +443,7 @@ func (p *OpenCodePool) stopServer(server *OpenCodeServer) {
 	if server == nil || server.cmd == nil || server.cmd.Process == nil {
 		return
 	}
+	server.markIntentionalStop()
 	// A process that never started has pid 0; signalling the group would hit our own.
 	if server.cmd.Process.Pid <= 0 {
 		return
@@ -399,6 +499,16 @@ var (
 
 // sharedOpenCodePool returns the pool for one environment.
 func sharedOpenCodePool(homeDir, command string, args []string, env map[string]string) *OpenCodePool {
+	// Agent credentials authenticate CLI sessions, not the shared server process.
+	if _, ok := env["BYSPACE_AGENT_CREDENTIAL"]; ok {
+		filtered := make(map[string]string, len(env)-1)
+		for key, value := range env {
+			if key != "BYSPACE_AGENT_CREDENTIAL" {
+				filtered[key] = value
+			}
+		}
+		env = filtered
+	}
 	key := openCodePoolKey(homeDir, command, args, env)
 	sharedPoolsMu.Lock()
 	defer sharedPoolsMu.Unlock()
@@ -421,6 +531,9 @@ func openCodePoolKey(homeDir, command string, args []string, env map[string]stri
 	builder.WriteString(strings.Join(args, "\x00"))
 	keys := make([]string, 0, len(env))
 	for key := range env {
+		if key == "BYSPACE_AGENT_CREDENTIAL" {
+			continue
+		}
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)

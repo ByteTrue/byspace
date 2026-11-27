@@ -6,7 +6,7 @@ import { useRetainedOpenProps } from "@/platform/use-retained-open-props";
 import { useCallback, useMemo, type ReactElement, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentFeature } from "@bytetrue/protocol/agent-types";
-import type { AgentProfile } from "@bytetrue/protocol/messages";
+import { AGENT_PROFILE_TIERS, type AgentProfile } from "@bytetrue/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/widgets/adaptive-modal-sheet";
 import { Button } from "@/ui/button";
 import {
@@ -33,6 +33,7 @@ import {
 } from "@/agent-profiles/internal/use-profile-form-model";
 import { Input } from "@/ui/input";
 import { Field, FieldDescription, FieldLabel } from "@/ui/field";
+import { Tabs, TabsList, TabsTrigger } from "@/ui/tabs";
 import { Textarea } from "@/ui/textarea";
 
 export interface AgentProfileEditModalProps {
@@ -156,6 +157,15 @@ function OpenAgentProfileEditModal({
   const handleThinkingChange = useCallback(
     (value: string, display: SelectFieldDisplay) =>
       model.setThinking(value, value ? display : null),
+    [model],
+  );
+  const handleTierChange = useCallback(
+    (value: string) => {
+      const next = AGENT_PROFILE_TIERS.find((tier) => tier === value);
+      if (next) {
+        model.setTier(next);
+      }
+    },
     [model],
   );
 
@@ -308,6 +318,27 @@ function OpenAgentProfileEditModal({
             </ItemGroup>
           </Field>
         ) : null}
+
+        <Field data-testid="agent-profile-tier-field">
+          <FieldLabel>{t("settings.host.agentProfiles.tierLabel")}</FieldLabel>
+          <Tabs value={state.tier} onValueChange={handleTierChange}>
+            <TabsList className="w-full">
+              {AGENT_PROFILE_TIERS.map((tier) => (
+                <TabsTrigger
+                  key={tier}
+                  value={tier}
+                  disabled={state.isSubmitting}
+                  data-testid={`agent-profile-tier-option-${tier}`}
+                >
+                  {t(`settings.host.agentProfiles.tiers.${tier}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <FieldDescription data-testid="agent-profile-tier-field-hint">
+            {t("settings.host.agentProfiles.tierHint")}
+          </FieldDescription>
+        </Field>
 
         <Field data-testid="agent-profile-notes-field">
           <FieldLabel>{t("settings.host.agentProfiles.notesLabel")}</FieldLabel>

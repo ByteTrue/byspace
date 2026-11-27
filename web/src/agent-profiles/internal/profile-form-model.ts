@@ -5,7 +5,11 @@ import type {
   AgentSelectOption,
   ProviderSnapshotEntry,
 } from "@bytetrue/protocol/agent-types";
-import type { AgentProfile } from "@bytetrue/protocol/messages";
+import {
+  type AgentProfile,
+  type AgentProfileTier,
+  resolveAgentProfileTier,
+} from "@bytetrue/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/agent-profiles/feature-preferences";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
@@ -86,6 +90,7 @@ export interface AgentProfileFormState {
   modelId: string;
   modeId: string;
   thinkingOptionId: string;
+  tier: AgentProfileTier;
   featureValues: Record<string, unknown>;
 
   providerOptions: AgentProfileFormOption[];
@@ -128,6 +133,7 @@ export interface AgentProfileFormModel {
   setModel: (modelId: string, display: AgentProfileFormDisplay | null) => void;
   setMode: (modeId: string, display: AgentProfileFormDisplay | null) => void;
   setThinking: (thinkingOptionId: string, display: AgentProfileFormDisplay | null) => void;
+  setTier: (tier: AgentProfileTier) => void;
   setFeatureValue: (featureId: string, value: unknown) => void;
   setSubmitting: (value: boolean) => void;
   setSubmitError: (value: string | null) => void;
@@ -350,6 +356,7 @@ function buildSubmitValue(state: AgentProfileFormState): AgentProfileValue | nul
     ...(state.modelId ? { model: state.modelId } : {}),
     ...(state.modeId ? { modeId: state.modeId } : {}),
     ...(state.thinkingOptionId ? { thinkingOptionId: state.thinkingOptionId } : {}),
+    tier: state.tier,
     ...(Object.keys(state.featureValues).length > 0 ? { featureValues: state.featureValues } : {}),
     ...(notes ? { notes } : {}),
   };
@@ -392,6 +399,7 @@ function buildInitialState(snapshot: AgentProfileFormSnapshot): AgentProfileForm
     modelId,
     modeId: profile.modeId ?? "",
     thinkingOptionId: profile.thinkingOptionId ?? "",
+    tier: resolveAgentProfileTier(snapshot.mode === "edit" ? snapshot.profile : undefined),
     featureValues: { ...profile.featureValues },
     providerOptions: [],
     modelOptions: [],
@@ -598,6 +606,8 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
       publish((current) => ({ ...current, modeId, modeDisplay: display })),
     setThinking: (thinkingOptionId, display) =>
       publish((current) => ({ ...current, thinkingOptionId, thinkingDisplay: display })),
+    setTier: (tier) =>
+      publish((current) => (current.tier === tier ? current : { ...current, tier })),
     setFeatureValue: (featureId, value) =>
       publish((current) => ({
         ...current,

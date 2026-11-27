@@ -49,10 +49,12 @@ type OpenCodeSession struct {
 	lastUsage *sdk.AgentUsage
 	// lastError is the provider's own text for the most recent failure.
 	lastError          string
+	terminalErr        error
 	eventSubscribers   map[int]func(map[string]any)
 	nextSubID          int
 	eventCancel        context.CancelFunc
 	dispatchCancel     context.CancelFunc
+	stopServerWatch    func()
 	closed             bool
 	partTypes          map[string]string
 	messageRoles       map[string]string
@@ -87,7 +89,11 @@ func startOpenCodeSessionWithArgs(cfg LaunchConfig, cmdOverride string, commandA
 		pool := sharedOpenCodePool(cfg.HomeDir, cmdOverride, commandArgs, openCodePoolEnv(cfg.Env))
 		server, err := pool.Acquire(context.Background())
 		if err == nil && server != nil {
-			return newHTTPOpenCodeSessionForVersion(cfg, server.URL, server.Version, server.Password)
+			sess, sessErr := newHTTPOpenCodeSessionForVersion(cfg, server.URL, server.Version, server.Password)
+			if sessErr == nil && sess != nil {
+				sess.attachServer(server)
+			}
+			return sess, sessErr
 		}
 		// Fall through to ACP: a machine without the server binary can still drive the agent through
 		// stdio, and that is better than failing the create.
@@ -347,7 +353,11 @@ func (s *OpenCodeSession) finishOpenCodeTurnForID(expectedTurnID string, turnErr
 	if turnErr != nil {
 		s.lastError = turnErr.Error()
 	}
-	s.status = "idle"
+	if !s.closed {
+		s.status = "idle"
+	} else {
+		s.status = "closed"
+	}
 	s.activeTurnID = ""
 	waiters := s.finishWaiters
 	s.finishWaiters = nil
@@ -433,6 +443,11 @@ func (s *OpenCodeSession) Abort(ctx context.Context) error {
 
 func (s *OpenCodeSession) WaitForFinish(ctx context.Context) error {
 	s.mu.Lock()
+	if s.terminalErr != nil {
+		err := s.terminalErr
+		s.mu.Unlock()
+		return err
+	}
 	if s.status != "running" {
 		s.mu.Unlock()
 		return nil
@@ -692,6 +707,79 @@ func (s *OpenCodeSession) OnEvent(fn func(map[string]any)) func() {
 	}
 }
 
+func (s *OpenCodeSession) attachServer(server *OpenCodeServer) {
+	if s == nil || server == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	if prev := s.stopServerWatch; prev != nil {
+		s.stopServerWatch = nil
+		s.mu.Unlock()
+		prev()
+	} else {
+		s.mu.Unlock()
+	}
+
+	stop := server.OnExit(s.handleServerExit)
+
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		stop()
+		return
+	}
+	s.stopServerWatch = stop
+	s.mu.Unlock()
+}
+
+func (s *OpenCodeSession) handleServerExit(exitErr error) {
+	errMsg := "opencode server exited"
+	if exitErr != nil {
+		errMsg = fmt.Sprintf("opencode server exited: %v", exitErr)
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	s.status = "closed"
+	s.lastError = errMsg
+	s.terminalErr = errors.New(errMsg)
+	s.activeTurnID = ""
+	eventCancel := s.eventCancel
+	s.eventCancel = nil
+	dispatchCancel := s.dispatchCancel
+	s.dispatchCancel = nil
+	s.stopServerWatch = nil
+	waiters := s.finishWaiters
+	s.finishWaiters = nil
+	subs := s.copyOpenCodeSubscribersLocked()
+	s.mu.Unlock()
+
+	if eventCancel != nil {
+		eventCancel()
+	}
+	if dispatchCancel != nil {
+		dispatchCancel()
+	}
+	for _, ch := range waiters {
+		ch <- s.terminalErr
+		close(ch)
+	}
+	ev := map[string]any{
+		"type":  "process_exit",
+		"error": errMsg,
+	}
+	for _, fn := range subs {
+		fn(ev)
+	}
+}
+
 func (s *OpenCodeSession) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -699,13 +787,24 @@ func (s *OpenCodeSession) Close() error {
 		return nil
 	}
 	s.closed = true
+	s.status = "closed"
 	turnID := s.activeTurnID
 	cmd := s.cmd
+	eventCancel := s.eventCancel
+	s.eventCancel = nil
+	stopServerWatch := s.stopServerWatch
+	s.stopServerWatch = nil
 	s.mu.Unlock()
-	if s.eventCancel != nil {
-		s.eventCancel()
+	if stopServerWatch != nil {
+		stopServerWatch()
+	}
+	if eventCancel != nil {
+		eventCancel()
 	}
 	s.finishOpenCodeTurnForID(turnID, fmt.Errorf("OpenCode session is closed"), false)
+	s.mu.Lock()
+	s.eventSubscribers = make(map[int]func(map[string]any))
+	s.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
