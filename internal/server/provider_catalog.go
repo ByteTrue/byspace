@@ -270,7 +270,14 @@ func (s *Server) startProviderCatalogBuild(cwd string) {
 		ctx := s.backgroundContext()
 		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+		for {
+			current := s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+			if current || probeCtx.Err() != nil || s.cachedProviderCatalog(cwd) != nil {
+				return
+			}
+			// The invalidation that made this build stale also cleared its scope. Retry while this
+			// goroutine owns the marker; a request arriving now cannot start the replacement itself.
+		}
 	}()
 }
 

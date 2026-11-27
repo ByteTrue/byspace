@@ -218,11 +218,18 @@ export async function applyProvidersSnapshotUpdate(input: {
     },
   });
   if (cwd === null) {
-    // The daemon may not know a browser-only cwd scope. Refetch active project queries so a home
-    // refresh cannot leave their persisted catalogs stale after the settings sheet updates.
+    // The daemon may not know a browser-only cwd scope. Active projects refetch now; inactive
+    // projects leave the cache because invalidation alone would keep their stale payload forever.
+    const projectQuery = (query: Query) => query.queryKey[2] === "cwd";
     void input.queryClient.invalidateQueries({
       queryKey: providersSnapshotQueryRoot(input.serverId),
-      predicate: (query) => query.queryKey[2] === "cwd",
+      predicate: projectQuery,
+      type: "active",
+    });
+    input.queryClient.removeQueries({
+      queryKey: providersSnapshotQueryRoot(input.serverId),
+      predicate: projectQuery,
+      type: "inactive",
     });
   }
   if (!snapshot.snapshotHash || previous?.snapshotHash !== snapshot.snapshotHash) {
