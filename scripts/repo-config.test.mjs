@@ -293,8 +293,8 @@ test("AGENTS.md names every root directory and every doc", () => {
   const roots = new Set(
     tracked.filter((path) => path.includes("/")).map((path) => path.split("/")[0]),
   );
-  // Not repo structure: tool state and the vendored PTY's own build dir.
-  const skip = new Set([".github", ".agents"]);
+  // Tool state and third-party workflow records are not product repo structure.
+  const skip = new Set([".github", ".agents", ".bywork", "bywork", "openspec"]);
   const unnamed = [...roots]
     .filter(
       (root) =>

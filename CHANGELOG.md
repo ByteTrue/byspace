@@ -5,6 +5,36 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.29.0 - 2026-11-28
+
+### Added
+
+- Added Chief missions with adaptive L0/L1/L2 orchestration
+- Added read-only Verifiers and isolated worktree Threads for Chief missions
+- Added approval-gated local landing with merge checks for Chief missions
+- Added a searchable catalog of officially preconfigured ACP providers
+- Added runtime model and mode discovery for configured ACP providers
+- Added `byspace provider add acp` for canonical generic ACP provider configuration
+- Added `byspace provider check` for end-to-end generic ACP provider validation
+
+### Changed
+
+- Replaced periodic Git polling with shared, event-driven Changes updates and bounded polling fallback
+
+### Fixed
+
+- Fixed Workspace model catalogs remaining stale after provider refreshes, cold reads, inactive Workspace revisits, and races with in-flight probes ([#50](https://github.com/ByteTrue/byspace/pull/50))
+- Fixed pushed branches retaining stale diff ranges when only the upstream ref moved
+- Improved archived worktree cleanup with process-tree shutdown and bounded retries
+- Fixed Pi rejecting initial images before model capabilities arrived
+- Fixed ACP accepting images without negotiated image prompt support
+- Fixed agent creation reporting success when initial prompt submission failed
+- Fixed ACP/Codex cancellation leaving permissions, tools, and finish waiters pending
+- Fixed Linux PTY startup failures caused by applying `setpgid` after `setsid`
+- Fixed discarded agents being recreated by an in-flight persistence sync
+- Improved Windows process-tree cleanup when snapshots fail transiently or the root process has exited
+- Fixed daemon shutdown losing provider events and persistence writes
+
 ## 0.28.0 - 2026-11-23
 
 ### Added
