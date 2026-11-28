@@ -15,13 +15,14 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "@playwright/test";
+import { normalizeRelayEndpointHostPort } from "@bytetrue/protocol/daemon-endpoints";
 
 // Throwaway: the temp home is deleted, and the password only guards a daemon that lives for this
 // run. Keeping it fixed makes the log easy to read when the step fails.
 const PASSWORD = "deploy-pairing-smoke";
 const origin = (process.env.DEPLOY_WEB_ORIGIN ?? "").trim().replace(/\/+$/, "");
 if (!origin) throw new Error("DEPLOY_WEB_ORIGIN is required");
-const relayHost = new URL(origin).host;
+const relayHost = normalizeRelayEndpointHostPort(new URL(origin).host, true);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const binary = path.join(repoRoot, ".dev", "bin", "byspace");
 const keepHome = process.env.DEPLOY_SMOKE_KEEP_HOME === "1";
