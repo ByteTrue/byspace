@@ -685,7 +685,10 @@ func (s *Store) DeleteAgent(agentID string) error {
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			// Windows can report a regular file at agents/ as missing when it is read as a directory.
+			if _, statErr := os.Stat(base); os.IsNotExist(statErr) {
+				return nil
+			}
 		}
 		return err
 	}
