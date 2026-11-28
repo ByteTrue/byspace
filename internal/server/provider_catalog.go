@@ -211,10 +211,11 @@ func (s *Server) providerCatalogOrBuild(cwd string) *providerCatalog {
 	if catalog := s.cachedProviderCatalog(cwd); catalog != nil {
 		return catalog
 	}
-	// A workspace without its own catalog reads the host one rather than paying a probe: the two
-	// differ only when a refresh narrowed a scope, and the client keeps its per-cwd cache anyway.
+	// A workspace without its own catalog reads the host one without waiting for a probe. Build its
+	// own snapshot in the background because provider discovery can differ between checkouts.
 	if cwd != "" {
 		if catalog := s.cachedProviderCatalog(""); catalog != nil {
+			s.startProviderCatalogBuild(cwd)
 			return catalog
 		}
 	}
@@ -267,9 +268,24 @@ func (s *Server) startProviderCatalogBuild(cwd string) {
 			s.providerCatalogMu.Unlock()
 		}()
 		ctx := s.backgroundContext()
-		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+		probeTimeout := s.providerCatalogProbeTimeout
+		if probeTimeout == 0 {
+			probeTimeout = 30 * time.Second
+		}
+		for {
+			// An invalidated attempt may have consumed its deadline, so each retry gets a fresh one.
+			probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			isCurrent := s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
+			cancel()
+			isServerStopped := ctx.Err() != nil
+			isHostBuild := cwd == ""
+			hasReplacement := s.cachedProviderCatalog(cwd) != nil
+			if isCurrent || isServerStopped || isHostBuild || hasReplacement {
+				return
+			}
+			// Host invalidation is followed by a synchronous refresh. Workspace fallback has no such
+			// replacement, so retry while this goroutine owns the single-flight marker.
+		}
 	}()
 }
 

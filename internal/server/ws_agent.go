@@ -29,11 +29,12 @@ import (
 // probePiModelsInCwd probes with an explicit working directory.
 //
 // The cache is keyed on the directory: a checkout can carry repo-local provider config, so a
-// model list probed in one project is not valid in another. An empty cwd reuses whatever was
-// cached, which is the common case.
+// model list probed in one project is not valid in another.
 func (s *Server) probePiModelsInCwd(ctx context.Context, cwd string) []pi.CatalogModel {
 	s.mu.Lock()
-	if s.cachedPiModels != nil && (cwd == "" || s.cachedPiModelsCwd == "" || s.cachedPiModelsCwd == cwd) {
+	hasCachedPiModels := s.cachedPiModels != nil
+	isSameCwd := s.cachedPiModelsCwd == cwd
+	if hasCachedPiModels && isSameCwd {
 		out := s.cachedPiModels
 		s.mu.Unlock()
 		return out
@@ -58,9 +59,7 @@ func (s *Server) probePiModelsInCwd(ctx context.Context, cwd string) []pi.Catalo
 	s.mu.Lock()
 	s.cachedPiModels = models
 	s.cachedPiCommands = cmds
-	if cwd != "" {
-		s.cachedPiModelsCwd = cwd
-	}
+	s.cachedPiModelsCwd = cwd
 	s.mu.Unlock()
 	return models
 }

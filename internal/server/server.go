@@ -375,6 +375,8 @@ type Server struct {
 	// providerCatalogBuilding marks the scopes a background probe is filling, so a burst of cold
 	// requests starts one build instead of one per request (provider_catalog.go).
 	providerCatalogBuilding map[string]bool
+	// providerCatalogProbeTimeout shortens a probe attempt in tests; zero uses the 30s default.
+	providerCatalogProbeTimeout time.Duration
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -1544,9 +1546,13 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		s.mu.Unlock()
 		_ = s.probePiModelsInCwd(ctx, refreshReq.Cwd)
-		// A refresh means the user asked for a fresh probe, so drop the cached catalog rather than
-		// letting it answer the rebuild.
-		s.storeProviderCatalog(refreshReq.Cwd, nil)
+		// A settings refresh has no cwd, but workspace composers have their own cached snapshots.
+		// Drop every scope so those clients cannot reload the old project catalog after the host push.
+		if strings.TrimSpace(refreshReq.Cwd) == "" {
+			s.invalidateProviderCatalogs()
+		} else {
+			s.storeProviderCatalog(refreshReq.Cwd, nil)
+		}
 		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
 		// catalog on this message; sending only the response left open sheets stale.
 		s.pushProviderSnapshot(ctx, s.store.LoadDaemonConfig(), refreshReq.Providers, refreshReq.Cwd)

@@ -908,12 +908,12 @@ func (s *Server) runPlacementTick() {
 //
 // The rebuilt catalog also replaces the cached one, so a sheet that reconnects right after gets the
 // same entries the push carried instead of re-probing every provider CLI.
-func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string, cwd string) {
+func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, only []string, cwd string) bool {
 	catalog, current := s.rebuildProviderCatalog(ctx, cfg, cwd)
 	if !current {
 		// A newer build or a providers edit overtook this one while it probed: broadcasting it
 		// would put back a provider the user just removed, or take away one just added.
-		return
+		return false
 	}
 	entries := catalog.entries
 	if len(only) > 0 {
@@ -934,6 +934,7 @@ func (s *Server) pushProviderSnapshot(ctx context.Context, cfg map[string]any, o
 		payload["cwd"] = key
 	}
 	s.broadcastSessionMsg("providers_snapshot_update", payload)
+	return true
 }
 
 // patchTouchesProviders reports whether a config patch can change the provider catalog. A removal
