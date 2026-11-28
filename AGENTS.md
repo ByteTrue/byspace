@@ -23,9 +23,6 @@ This is an npm workspace monorepo with a unified Go single binary:
 - `design/` — The component sheet and its vendored shadcn reference (`design/references/shadcn`), the only component reference the UI is built against
 - `assets/` — Logo and README mockups
 - `public-docs/` — User-facing docs, rendered into the app's `/docs` routes by `scripts/build-public-docs.mjs`. Internal knowledge lives in `docs/` instead
-- `bywork/` — Working records: `work/` for in-flight changes, `memory/` for cross-task judgments, `vision/` for direction, `archive/v1/` for the frozen v1 history
-- `.bywork/` — Repository-local bywork state; this personal repository tracks `work/` for cross-session recovery
-- `openspec/` — OpenSpec workspace (`changes/`, `specs/`, `config.yaml`); specs describe planned changes before they reach `docs/`
 - `.agents/skills/` — Release skills for the coding agent working in this repo. Not the skills the daemon ships to agents; those are `internal/server/skills/`
 
 ## Docs
