@@ -278,12 +278,13 @@ func (s *Server) startProviderCatalogBuild(cwd string) {
 			isCurrent := s.pushProviderSnapshot(probeCtx, s.store.LoadDaemonConfig(), nil, cwd)
 			cancel()
 			isServerStopped := ctx.Err() != nil
+			isHostBuild := cwd == ""
 			hasReplacement := s.cachedProviderCatalog(cwd) != nil
-			if isCurrent || isServerStopped || hasReplacement {
+			if isCurrent || isServerStopped || isHostBuild || hasReplacement {
 				return
 			}
-			// The invalidation that made this build stale also cleared its scope. Retry while this
-			// goroutine owns the marker; a request arriving now cannot start the replacement itself.
+			// Host invalidation is followed by a synchronous refresh. Workspace fallback has no such
+			// replacement, so retry while this goroutine owns the single-flight marker.
 		}
 	}()
 }
