@@ -390,6 +390,34 @@ describe("chief protocol schemas & orchestration labels", () => {
     }
   });
 
+  it("preserves an initial prompt warning on a committed thread", () => {
+    const message = {
+      type: "chief.thread.create.response",
+      payload: {
+        requestId: "req-prompt-warning",
+        mission: sampleMission(),
+        thread: sampleThread(),
+        initialPromptError: "provider unavailable",
+        error: null,
+      },
+    };
+
+    expect(SessionOutboundMessageSchema.parse(message)).toMatchObject({
+      payload: {
+        initialPromptError: "provider unavailable",
+        thread: { id: "thr_0123456789abcdef" },
+      },
+    });
+    expect(GeneratedWSOutboundMessageSchema.parse({ type: "session", message })).toMatchObject({
+      message: {
+        payload: {
+          initialPromptError: "provider unavailable",
+          thread: { id: "thr_0123456789abcdef" },
+        },
+      },
+    });
+  });
+
   it("preserves landing approval parameters in outbound and generated schemas", () => {
     const pendingDecision = {
       id: "dec_landing",

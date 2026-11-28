@@ -77,12 +77,17 @@ type recordingSink struct {
 	binaries     int
 	binaryFrames [][]byte
 	onBinary     func([]byte)
+	onText       func(string)
 }
 
 func (r *recordingSink) SendText(_ context.Context, text string) error {
 	r.mu.Lock()
 	r.texts = append(r.texts, text)
+	onText := r.onText
 	r.mu.Unlock()
+	if onText != nil {
+		onText(text)
+	}
 	return nil
 }
 

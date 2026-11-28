@@ -7,6 +7,8 @@ import (
 	"time"
 
 	diffframes "github.com/ByteTrue/byspace/internal/diff"
+	"github.com/ByteTrue/byspace/internal/gitdiff"
+	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
 // diffUpdatePayloads returns the payload of every checkout_diff_update sent to sink.
@@ -148,6 +150,84 @@ func waitForDiffUpdate(t *testing.T, sink *recordingSink, match func(map[string]
 	return nil
 }
 
+func TestDiffSubscriptionSerializesConcurrentRevisions(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir)
+	srv := newTestServer(t, t.TempDir())
+	sink := addTestClient(srv)
+	defer removeTestClient(srv, sink)
+
+	const subID = "diff_concurrent"
+	srv.mu.Lock()
+	srv.diffSubs[subID] = diffSubscription{id: subID, sink: sink, cwd: dir, generation: 1}
+	if srv.diffSent == nil {
+		srv.diffSent = make(map[string]map[string]uint64)
+	}
+	srv.diffSent[subID] = map[string]uint64{}
+	srv.mu.Unlock()
+
+	firstBegin := make(chan struct{})
+	secondBegin := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	sink.onBinary = func(frame []byte) {
+		if len(frame) < 2 || frame[0] != diffframes.OpcodeBegin {
+			return
+		}
+		var header diffframes.BeginHeader
+		if json.Unmarshal(frame[2+int(frame[1]):], &header) != nil {
+			return
+		}
+		switch header.Revision {
+		case 1:
+			close(firstBegin)
+			<-releaseFirst
+		case 2:
+			close(secondBegin)
+		}
+	}
+
+	result := func(revision uint64, path string) gitdiff.Result {
+		return gitdiff.Result{
+			Revision: revision,
+			Files:    []workspace.ParsedDiffFile{{Path: path, Additions: int(revision)}},
+			Changed:  []string{path},
+		}
+	}
+	key := gitdiff.Key{Cwd: dir}
+	firstDone := make(chan struct{})
+	go func() {
+		srv.deliverDiffUpdate(subID, sink, dir, map[string]any{"mode": "uncommitted"}, key, 1, result(1, "one.txt"))
+		close(firstDone)
+	}()
+	<-firstBegin
+	secondDone := make(chan struct{})
+	go func() {
+		srv.deliverDiffUpdate(subID, sink, dir, map[string]any{"mode": "uncommitted"}, key, 1, result(2, "two.txt"))
+		close(secondDone)
+	}()
+	select {
+	case <-secondBegin:
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(releaseFirst)
+	<-firstDone
+	<-secondDone
+
+	frames := sink.binarySnapshot()
+	if len(frames) != 6 {
+		t.Fatalf("frame count = %d, want two complete revision groups", len(frames))
+	}
+	wantOpcodes := []byte{diffframes.OpcodeBegin, diffframes.OpcodeBodies, diffframes.OpcodeEnd, diffframes.OpcodeBegin, diffframes.OpcodeBodies, diffframes.OpcodeEnd}
+	for i, want := range wantOpcodes {
+		if frames[i][0] != want {
+			t.Fatalf("frame %d opcode = %d, want %d; concurrent revisions interleaved", i, frames[i][0], want)
+		}
+	}
+	if payloads := diffPayloadsFromFrames(t, frames); len(payloads) != 2 {
+		t.Fatalf("client assembled %d revisions, want 2", len(payloads))
+	}
+}
+
 // A subscribed pane is served by the diff engine: the first answer arrives on its own, and a write
 // reaches the pane without anyone calling PollSubscriptionsOnce.
 func TestDiffSubscriptionDeliversChangesWithoutPolling(t *testing.T) {
@@ -181,6 +261,88 @@ func TestDiffSubscriptionDeliversChangesWithoutPolling(t *testing.T) {
 	})
 	if second["error"] != nil {
 		t.Fatalf("error = %v", second["error"])
+	}
+}
+
+func TestDiffSubscriptionSerializesUnregisterAndReregister(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir)
+	writeRepoFile(t, dir, "a.txt", "one\n")
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-m", "one")
+	writeRepoFile(t, dir, "a.txt", "one\ntwo\n")
+
+	srv := newTestServer(t, t.TempDir())
+	compare := map[string]any{"mode": "uncommitted"}
+	anchor := addTestClient(srv)
+	defer removeTestClient(srv, anchor)
+	srv.RegisterDiffSubscription("diff_anchor", anchor, dir, compare)
+	defer srv.UnregisterDiffSubscription("diff_anchor")
+	waitForDiffUpdate(t, anchor, func(map[string]any) bool { return true })
+	sink := addTestClient(srv)
+	defer removeTestClient(srv, sink)
+	srv.RegisterDiffSubscription("diff_lifecycle", sink, dir, compare)
+	defer srv.UnregisterDiffSubscription("diff_lifecycle")
+	waitForDiffUpdate(t, sink, func(map[string]any) bool { return true })
+	baseline := len(sink.binarySnapshot())
+
+	blockDelivery := make(chan struct{})
+	firstBegin := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	sink.onBinary = func(frame []byte) {
+		if len(frame) < 2 || frame[0] != diffframes.OpcodeBegin {
+			return
+		}
+		var header diffframes.BeginHeader
+		if json.Unmarshal(frame[2+int(frame[1]):], &header) != nil || header.Revision != 2 {
+			return
+		}
+		select {
+		case <-blockDelivery:
+		default:
+			return
+		}
+		close(firstBegin)
+		<-releaseFirst
+	}
+	close(blockDelivery)
+	firstDone := make(chan struct{})
+	key := diffKey(dir, compare)
+	srv.mu.Lock()
+	generation := srv.diffSubs["diff_lifecycle"].generation
+	srv.mu.Unlock()
+	go func() {
+		srv.deliverDiffUpdate("diff_lifecycle", sink, dir, compare, key, generation, gitdiff.Result{
+			Revision: 2,
+			Files:    []workspace.ParsedDiffFile{{Path: "two.txt", Additions: 2}},
+			Changed:  []string{"two.txt"},
+		})
+		close(firstDone)
+	}()
+	<-firstBegin
+	replaced := make(chan struct{})
+	go func() {
+		srv.UnregisterDiffSubscription("diff_lifecycle")
+		srv.RegisterDiffSubscription("diff_lifecycle", sink, dir, compare)
+		close(replaced)
+	}()
+	select {
+	case <-replaced:
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(releaseFirst)
+	<-firstDone
+	<-replaced
+
+	frames := sink.binarySnapshot()[baseline:]
+	if len(frames) != 6 {
+		t.Fatalf("frame count = %d, want the in-flight revision and the replacement replay", len(frames))
+	}
+	wantOpcodes := []byte{diffframes.OpcodeBegin, diffframes.OpcodeBodies, diffframes.OpcodeEnd, diffframes.OpcodeBegin, diffframes.OpcodeBodies, diffframes.OpcodeEnd}
+	for i, want := range wantOpcodes {
+		if frames[i][0] != want {
+			t.Fatalf("frame %d opcode = %d, want %d; lifecycle replacement interleaved deliveries", i, frames[i][0], want)
+		}
 	}
 }
 

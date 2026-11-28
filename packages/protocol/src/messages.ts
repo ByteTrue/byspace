@@ -6233,6 +6233,7 @@ export const ChiefThreadCreateResponseSchema = z.object({
     requestId: z.string(),
     mission: ChiefMissionSnapshotSchema.nullable(),
     thread: ChiefThreadSnapshotSchema.nullable(),
+    initialPromptError: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
   }),
 });

@@ -715,6 +715,9 @@ func runChiefThreadCreate(args []string, stdout io.Writer) error {
 		stringField(thread, "status"),
 		stringField(thread, "isolation"),
 	)
+	if promptErr, _ := resp["initialPromptError"].(string); strings.TrimSpace(promptErr) != "" {
+		fmt.Fprintln(stdout, "initial prompt failed: "+promptErr)
+	}
 	return nil
 }
 

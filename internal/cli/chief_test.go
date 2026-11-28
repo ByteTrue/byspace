@@ -550,10 +550,11 @@ func TestChiefThreadSubcommandsMockRPC(t *testing.T) {
 			return mockChiefResponse{
 				MessageType: "chief.thread.create.response",
 				Payload: map[string]any{
-					"requestId": reqID,
-					"mission":   sampleMissionMap(nil),
-					"thread":    sampleThreadMap(map[string]any{"status": "authoring", "isolation": "worktree"}),
-					"error":     nil,
+					"requestId":          reqID,
+					"mission":            sampleMissionMap(nil),
+					"thread":             sampleThreadMap(map[string]any{"status": "authoring", "isolation": "worktree"}),
+					"initialPromptError": "provider unavailable",
+					"error":              nil,
 				},
 			}
 		case "chief.thread.submit.request":
@@ -632,6 +633,9 @@ func TestChiefThreadSubcommandsMockRPC(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "created thread thr_1 (mission=msn_1, status=authoring, isolation=worktree)") {
 		t.Fatalf("thread create stdout = %q", stdout)
+	}
+	if !strings.Contains(stdout, "initial prompt failed: provider unavailable") {
+		t.Fatalf("thread create warning stdout = %q", stdout)
 	}
 	rec := mock.lastRequest(t)
 	if rec.Request["missionId"] != "msn_1" ||

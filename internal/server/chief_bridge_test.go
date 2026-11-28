@@ -519,6 +519,262 @@ func TestChiefUnifiedTurnCompletedChatterShieldAndPerTurnFinishKey(t *testing.T)
 	}
 }
 
+func TestChiefThreadCreateRollsBackWorkersWhenMissionUpdateFails(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
+	repo := t.TempDir()
+	initTestGitRepo(t, repo)
+
+	homeDir := t.TempDir()
+	srv := newTestServer(t, homeDir)
+	srv.store.SaveDaemonConfig(map[string]any{"defaultProvider": "mock"})
+	createResp := callChiefRPC(t, srv, "chief.mission.create.request", map[string]any{
+		"requestId": "req_mission_rollback",
+		"goal":      "Rollback a partially created thread",
+		"tier":      "L2",
+		"baseCwd":   repo,
+	})
+	missionMap := createResp["mission"].(map[string]any)
+	missionID := missionMap["id"].(string)
+	missionPath := filepath.Join(homeDir, "orchestration", "missions", missionID, "mission.json")
+	missionRaw, err := os.ReadFile(missionPath)
+	if err != nil {
+		t.Fatalf("read mission: %v", err)
+	}
+
+	type workerBroadcast struct {
+		id  string
+		cwd string
+	}
+	workers := map[string]workerBroadcast{}
+	removals := map[string]bool{}
+	sabotaged := false
+	sink := addTestClient(srv)
+	defer removeTestClient(srv, sink)
+	sink.onText = func(text string) {
+		var frame struct {
+			Message struct {
+				Type    string `json:"type"`
+				Payload struct {
+					Kind    string `json:"kind"`
+					AgentID string `json:"agentId"`
+					Agent   struct {
+						ID     string            `json:"id"`
+						Cwd    string            `json:"cwd"`
+						Labels map[string]string `json:"labels"`
+					} `json:"agent"`
+				} `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(text), &frame) != nil || frame.Message.Type != "agent_update" {
+			return
+		}
+		if frame.Message.Payload.Kind == "remove" {
+			removals[frame.Message.Payload.AgentID] = true
+			return
+		}
+		agent := frame.Message.Payload.Agent
+		role := agent.Labels[chief.LabelRole]
+		if role != chief.RoleAuthor && role != chief.RoleVerifier {
+			return
+		}
+		workers[role] = workerBroadcast{id: agent.ID, cwd: agent.Cwd}
+		if role == chief.RoleVerifier && !sabotaged {
+			sabotaged = true
+			if removeErr := os.Remove(missionPath); removeErr != nil {
+				t.Errorf("sabotage mission remove: %v", removeErr)
+				return
+			}
+			if mkdirErr := os.Mkdir(missionPath, 0o755); mkdirErr != nil {
+				t.Errorf("sabotage mission mkdir: %v", mkdirErr)
+			}
+		}
+	}
+
+	thResp := callChiefRPC(t, srv, "chief.thread.create.request", map[string]any{
+		"requestId": "req_thread_rollback",
+		"missionId": missionID,
+		"title":     "Rollback failed create",
+		"goal":      "Leave no workers behind",
+		"isolation": "worktree",
+	})
+	if removeErr := os.Remove(missionPath); removeErr != nil {
+		t.Fatalf("restore mission remove: %v", removeErr)
+	}
+	if writeErr := os.WriteFile(missionPath, missionRaw, 0o644); writeErr != nil {
+		t.Fatalf("restore mission: %v", writeErr)
+	}
+	if !sabotaged {
+		t.Fatal("the verifier broadcast did not reach the failure injection point")
+	}
+
+	if errorText, _ := thResp["error"].(string); errorText == "" || thResp["mission"] != nil || thResp["thread"] != nil {
+		t.Fatalf("partial create response = %+v, want a clean create failure", thResp)
+	}
+	for _, role := range []string{chief.RoleAuthor, chief.RoleVerifier} {
+		worker, ok := workers[role]
+		if !ok {
+			t.Fatalf("missing %s worker broadcast", role)
+		}
+		persisted, getErr := srv.store.GetAgent(worker.id)
+		if getErr != nil {
+			t.Fatalf("get rolled-back %s: %v", role, getErr)
+		}
+		if persisted != nil {
+			t.Errorf("%s worker %s survived failed create", role, worker.id)
+		}
+		if !removals[worker.id] {
+			t.Errorf("%s worker %s did not broadcast a compensating removal", role, worker.id)
+		}
+		if _, statErr := os.Stat(worker.cwd); !os.IsNotExist(statErr) {
+			t.Errorf("%s worktree still exists after failed create: %s", role, worker.cwd)
+		}
+	}
+}
+
+func TestChiefThreadCreateReportsRollbackFailure(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
+	repo := t.TempDir()
+	initTestGitRepo(t, repo)
+	homeDir := t.TempDir()
+	srv := newTestServer(t, homeDir)
+	srv.store.SaveDaemonConfig(map[string]any{"defaultProvider": "mock"})
+	createResp := callChiefRPC(t, srv, "chief.mission.create.request", map[string]any{
+		"requestId": "req_mission_rollback_failure",
+		"goal":      "Surface incomplete rollback",
+		"tier":      "L2",
+		"baseCwd":   repo,
+	})
+	missionID := createResp["mission"].(map[string]any)["id"].(string)
+	missionPath := filepath.Join(homeDir, "orchestration", "missions", missionID, "mission.json")
+	missionRaw, err := os.ReadFile(missionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workers := map[string]string{}
+	sink := addTestClient(srv)
+	defer removeTestClient(srv, sink)
+	sink.onText = func(text string) {
+		var frame struct {
+			Message struct {
+				Type    string `json:"type"`
+				Payload struct {
+					Kind  string `json:"kind"`
+					Agent struct {
+						ID     string            `json:"id"`
+						Labels map[string]string `json:"labels"`
+					} `json:"agent"`
+				} `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(text), &frame) != nil || frame.Message.Type != "agent_update" || frame.Message.Payload.Kind != "upsert" {
+			return
+		}
+		agent := frame.Message.Payload.Agent
+		role := agent.Labels[chief.LabelRole]
+		if role != chief.RoleAuthor && role != chief.RoleVerifier {
+			return
+		}
+		workers[role] = agent.ID
+		if role != chief.RoleVerifier {
+			return
+		}
+		if err := os.Remove(missionPath); err != nil {
+			t.Errorf("sabotage mission: %v", err)
+			return
+		}
+		if err := os.Mkdir(missionPath, 0o755); err != nil {
+			t.Errorf("sabotage mission directory: %v", err)
+			return
+		}
+		agentsPath := filepath.Join(homeDir, "agents")
+		if err := os.Rename(agentsPath, agentsPath+".held"); err != nil {
+			t.Errorf("hold agent store: %v", err)
+			return
+		}
+		if err := os.WriteFile(agentsPath, []byte("not a directory"), 0o600); err != nil {
+			t.Errorf("block agent store: %v", err)
+		}
+	}
+
+	thResp := callChiefRPC(t, srv, "chief.thread.create.request", map[string]any{
+		"requestId": "req_thread_rollback_failure",
+		"missionId": missionID,
+		"title":     "Rollback failure",
+		"goal":      "Report resources that could not be cleaned",
+		"isolation": "none",
+	})
+	if err := os.Remove(missionPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(missionPath, missionRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(homeDir, "agents")
+	if err := os.Remove(agentsPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(agentsPath+".held", agentsPath); err != nil {
+		t.Fatal(err)
+	}
+	errorText, _ := thResp["error"].(string)
+	if !strings.Contains(errorText, "rollback incomplete") {
+		t.Fatalf("create error %q does not report the failed rollback", errorText)
+	}
+}
+
+func TestChiefThreadCreateReportsInitialPromptFailureWithoutDiscardingThread(t *testing.T) {
+	t.Setenv("BYSPACE_NODE_ENV", "development")
+	repo := t.TempDir()
+	initTestGitRepo(t, repo)
+
+	srv := newTestServer(t, t.TempDir())
+	srv.store.SaveDaemonConfig(map[string]any{"defaultProvider": "mock"})
+	createResp := callChiefRPC(t, srv, "chief.mission.create.request", map[string]any{
+		"requestId": "req_mission",
+		"goal":      "Preserve a committed thread when its initial prompt fails",
+		"tier":      "L1",
+		"baseCwd":   repo,
+	})
+	missionMap := createResp["mission"].(map[string]any)
+	missionID := missionMap["id"].(string)
+	author := store.AgentRecord{
+		ID:         "agt_initial_prompt_failure",
+		Provider:   "provider-that-cannot-load",
+		Cwd:        repo,
+		LastStatus: "idle",
+	}
+	if err := srv.store.UpsertAgent(author); err != nil {
+		t.Fatal(err)
+	}
+
+	thResp := callChiefRPC(t, srv, "chief.thread.create.request", map[string]any{
+		"requestId":     "req_thread",
+		"missionId":     missionID,
+		"title":         "Recoverable prompt failure",
+		"goal":          "Return the committed thread",
+		"authorAgentId": author.ID,
+		"initialPrompt": "Start the task",
+	})
+	if thResp["error"] != nil {
+		t.Fatalf("committed thread returned create error: %+v", thResp)
+	}
+	if promptErr, _ := thResp["initialPromptError"].(string); promptErr == "" {
+		t.Fatalf("missing initial prompt warning: %+v", thResp)
+	}
+	thMap, ok := thResp["thread"].(map[string]any)
+	if !ok || thMap == nil {
+		t.Fatalf("committed thread missing from response: %+v", thResp)
+	}
+	persisted, err := srv.chief.store.GetMission(missionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted.Threads) != 1 || persisted.Threads[0].ID != thMap["id"] {
+		t.Fatalf("persisted threads = %+v, response thread = %+v", persisted.Threads, thMap)
+	}
+}
+
 func TestChiefUniversalVerifierMutationAuditAcrossProviders(t *testing.T) {
 	t.Setenv("BYSPACE_NODE_ENV", "development")
 	repo := t.TempDir()

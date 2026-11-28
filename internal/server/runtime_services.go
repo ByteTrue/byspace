@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/skip2/go-qrcode"
@@ -45,6 +46,8 @@ type diffSubscription struct {
 	// sub is the engine subscription behind this pane. The engine, not this poller, decides when
 	// a comparison changed: it reads only the files whose identity moved.
 	sub *gitdiff.Subscription
+	// generation rejects callbacks from a subscription replaced under the same client ID.
+	generation uint64
 	// delivered is the last revision this pane received. A body is sent only when the file changed
 	// since that revision; the client keeps the rest.
 	delivered uint64
@@ -215,25 +218,30 @@ func (s *Server) RegisterDiffSubscription(subID string, sink frameSink, cwd stri
 	key := diffKey(cwd, compare)
 	// The entry is installed before subscribing: a shared comparison replays its committed result
 	// from inside Subscribe, and a delivery that found no entry would be dropped.
+	deliveryMu := s.diffDeliveryLock(subID)
+	deliveryMu.Lock()
 	s.mu.Lock()
 	if s.diffSubs == nil {
 		s.diffSubs = make(map[string]diffSubscription)
 	}
 	previous := s.diffSubs[subID]
-	s.diffSubs[subID] = diffSubscription{id: subID, sink: sink, cwd: cwd, compare: compare}
+	s.diffGeneration++
+	generation := s.diffGeneration
+	s.diffSubs[subID] = diffSubscription{id: subID, sink: sink, cwd: cwd, compare: compare, generation: generation}
 	if s.diffSent == nil {
 		s.diffSent = make(map[string]map[string]uint64)
 	}
 	s.diffSent[subID] = make(map[string]uint64)
 	s.mu.Unlock()
+	deliveryMu.Unlock()
 
 	sub := s.diffEngine.Subscribe(key, func(res gitdiff.Result) {
-		s.deliverDiffUpdate(subID, sink, cwd, compare, key, res)
+		s.deliverDiffUpdate(subID, sink, cwd, compare, key, generation, res)
 	})
 
 	s.mu.Lock()
 	installed := false
-	if cur, ok := s.diffSubs[subID]; ok && cur.sink == sink {
+	if cur, ok := s.diffSubs[subID]; ok && cur.sink == sink && cur.generation == generation {
 		cur.sub = sub
 		s.diffSubs[subID] = cur
 		installed = true
@@ -250,11 +258,14 @@ func (s *Server) RegisterDiffSubscription(subID string, sink frameSink, cwd stri
 
 // UnregisterDiffSubscription removes a git diff subscription.
 func (s *Server) UnregisterDiffSubscription(subID string) {
+	deliveryMu := s.diffDeliveryLock(subID)
+	deliveryMu.Lock()
 	s.mu.Lock()
 	ds, ok := s.diffSubs[subID]
 	delete(s.diffSubs, subID)
 	delete(s.diffSent, subID)
 	s.mu.Unlock()
+	deliveryMu.Unlock()
 	// Released outside the lock: releasing the last subscriber closes the comparison, and the
 	// engine delivers nothing to a pane that is gone.
 	if ok && ds.sub != nil {
@@ -265,10 +276,18 @@ func (s *Server) UnregisterDiffSubscription(subID string) {
 // deliverDiffUpdate pushes one revision of a comparison to one pane. Every revision travels as
 // binary Begin/Bodies/End frames whose Bodies carry only the files this pane has not seen at the
 // current revision; the client keeps the rest of the previous revision.
-func (s *Server) deliverDiffUpdate(subID string, sink frameSink, cwd string, compare map[string]any, key gitdiff.Key, res gitdiff.Result) {
+func (s *Server) diffDeliveryLock(subID string) *sync.Mutex {
+	sum := sha256.Sum256([]byte(subID))
+	return &s.diffDeliveryLocks[sum[0]]
+}
+
+func (s *Server) deliverDiffUpdate(subID string, sink frameSink, cwd string, compare map[string]any, key gitdiff.Key, generation uint64, res gitdiff.Result) {
+	deliveryMu := s.diffDeliveryLock(subID)
+	deliveryMu.Lock()
+	defer deliveryMu.Unlock()
 	s.mu.Lock()
 	ds, ok := s.diffSubs[subID]
-	if !ok || ds.sink != sink || ds.delivered >= res.Revision {
+	if !ok || ds.sink != sink || ds.generation != generation || ds.delivered >= res.Revision {
 		s.mu.Unlock()
 		return
 	}

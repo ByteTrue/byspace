@@ -201,6 +201,9 @@ type Server struct {
 	downloadTokens    map[string]downloadTokenEntry
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
+	diffGeneration    uint64
+	// Fixed stripes keep a subscription ID on one delivery lock across unregister/re-register.
+	diffDeliveryLocks [256]sync.Mutex
 	// checkoutStatusFingerprints remembers the last pushed dirty/branch state per checkout so the
 	// poller does not re-broadcast an unchanged status every second.
 	checkoutStatusFingerprints map[string]string

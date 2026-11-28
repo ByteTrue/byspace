@@ -1551,10 +1551,20 @@ func (p *l2WorktreePreparation) deleteWorkerRecord(agentID string) error {
 	var errs []error
 	if err := p.srv.store.DeleteAgent(agentID); err != nil {
 		errs = append(errs, fmt.Errorf("delete new worker record %s: %w", agentID, err))
-	} else if rec, err := p.srv.store.GetAgent(agentID); err != nil {
-		errs = append(errs, fmt.Errorf("verify new worker record removal %s: %w", agentID, err))
-	} else if rec != nil {
-		errs = append(errs, fmt.Errorf("new worker record remains after rollback: %s", agentID))
+	} else {
+		// createWorkerRecord already published an upsert; rollback must remove that client-side row too.
+		p.srv.broadcastDirectoryUpdate("agent_update", func(includeSequence bool) map[string]any {
+			return p.srv.directory.SequenceAgentUpdate(map[string]any{
+				"kind":    "remove",
+				"agentId": agentID,
+			}, nil, agentID, includeSequence)
+		})
+		p.srv.publishWorkspaceStatusChanges()
+		if rec, err := p.srv.store.GetAgent(agentID); err != nil {
+			errs = append(errs, fmt.Errorf("verify new worker record removal %s: %w", agentID, err))
+		} else if rec != nil {
+			errs = append(errs, fmt.Errorf("new worker record remains after rollback: %s", agentID))
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -2572,6 +2582,42 @@ func (s *Server) handleChiefThreadCreate(ctx context.Context, sink frameSink, ra
 	branch := firstNonEmptyStr(req.Branch, m.BaseBranch)
 	baseRef := firstNonEmptyStr(req.BaseRef, m.BaseBranch)
 
+	prep := &l2WorktreePreparation{srv: s, baseCwd: m.BaseCwd}
+	var adoptedAuthor *store.AgentRecord
+	committed := false
+	rollbackDone := false
+	rollback := func() error {
+		if committed || rollbackDone {
+			return nil
+		}
+		rollbackDone = true
+		var errs []error
+		if adoptedAuthor != nil {
+			restored := *adoptedAuthor
+			s.mu.Lock()
+			if mp := s.agents[restored.ID]; mp != nil {
+				mp.record = restored
+			}
+			s.mu.Unlock()
+			if err := s.store.UpsertAgent(restored); err != nil {
+				errs = append(errs, fmt.Errorf("restore adopted author: %w", err))
+			} else {
+				s.broadcastAgentUpdate(restored)
+			}
+		}
+		if err := prep.abort(ctx); err != nil {
+			errs = append(errs, err)
+		}
+		return errors.Join(errs...)
+	}
+	defer func() { _ = rollback() }()
+	failCreate := func(cause error) {
+		if rollbackErr := rollback(); rollbackErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("rollback incomplete: %w", rollbackErr))
+		}
+		replyErr(cause.Error())
+	}
+
 	if isolation == chief.IsolationWorktree {
 		slug := workspace.NormalizeWorktreeSlug(firstNonEmptyStr(req.Branch, title, threadID))
 		intent := workspace.WorktreeIntentInput{
@@ -2584,36 +2630,43 @@ func (s *Server) handleChiefThreadCreate(ctx context.Context, sink frameSink, ra
 		}
 		wtWs, _, wtErr := s.createWorktreeWorkspace(ctx, m.BaseCwd, &title, intent, nil)
 		if wtErr != nil {
-			replyErr(wtErr.Error())
+			failCreate(wtErr)
 			return
 		}
 		wsID = wtWs.WorkspaceID
 		cwd = wtWs.Cwd
 		branch = derefStr(wtWs.Branch)
+		prep.workspace = wtWs
 	}
 
 	var authorRec store.AgentRecord
 	if aid := strings.TrimSpace(req.AuthorAgentID); aid != "" {
+		if existing, err := s.store.GetAgent(aid); err == nil && existing != nil {
+			original := *existing
+			adoptedAuthor = &original
+		}
 		adopted, aErr := s.chief.adoptExistingAuthor(aid, m.ID, threadID, m.ChiefAgentID)
 		if aErr != nil {
-			replyErr(aErr.Error())
+			failCreate(aErr)
 			return
 		}
 		authorRec = adopted
 	} else {
 		createdAuthor, aErr := s.chief.createWorkerRecord(m.ID, threadID, chief.RoleAuthor, m.ChiefAgentID, wsID, cwd, title+" Author", authorProf)
 		if aErr != nil {
-			replyErr(aErr.Error())
+			failCreate(aErr)
 			return
 		}
 		authorRec = createdAuthor
+		prep.trackWorker(authorRec.ID)
 	}
 
 	verifierRec, vErr := s.chief.createWorkerRecord(m.ID, threadID, chief.RoleVerifier, m.ChiefAgentID, wsID, cwd, title+" Verifier", verifierProf)
 	if vErr != nil {
-		replyErr(vErr.Error())
+		failCreate(vErr)
 		return
 	}
+	prep.trackWorker(verifierRec.ID)
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	th := chief.Thread{
@@ -2646,9 +2699,10 @@ func (s *Server) handleChiefThreadCreate(ctx context.Context, sink frameSink, ra
 		return nil
 	})
 	if uErr != nil {
-		replyErr(uErr.Error())
+		failCreate(uErr)
 		return
 	}
+	committed = true
 	ev, _ := s.chief.store.AppendEvent(m.ID, chief.Event{
 		ThreadID:      chiefStrPtr(th.ID),
 		Kind:          chief.EventThreadCreated,
@@ -2658,10 +2712,10 @@ func (s *Server) handleChiefThreadCreate(ctx context.Context, sink frameSink, ra
 		Ts:            now,
 	})
 
+	var initialPromptError any
 	if initPrompt := strings.TrimSpace(req.InitialPrompt); initPrompt != "" {
 		if pErr := s.chief.promptAgentWithText(ctx, authorRec.ID, initPrompt, nil); pErr != nil {
-			replyErr(pErr.Error())
-			return
+			initialPromptError = pErr.Error()
 		}
 	}
 
@@ -2680,10 +2734,11 @@ func (s *Server) handleChiefThreadCreate(ctx context.Context, sink frameSink, ra
 		}
 	}
 	_ = sendSessionMsg(ctx, sink, "chief.thread.create.response", map[string]any{
-		"requestId": req.RequestID,
-		"mission":   &snap,
-		"thread":    thSnap,
-		"error":     nil,
+		"requestId":          req.RequestID,
+		"mission":            &snap,
+		"thread":             thSnap,
+		"initialPromptError": initialPromptError,
+		"error":              nil,
 	})
 }
 
